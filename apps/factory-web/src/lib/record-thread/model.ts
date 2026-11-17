@@ -24,6 +24,21 @@ export interface ThreadApiMessage {
   attachments: ReadonlyArray<{ id: string; originalName: string; contentType: string; sizeBytes: number; status: CardFileStatus; locked?: 'MEASUREMENTS' | undefined }>
   /** B-TH-231 (B-TH-029): the message's files the reader may not see (counted, never dropped). */
   hiddenAttachments?: number | undefined
+  // ---- B-TH-236 (B-TH-049, B-TH-050): the typed amount (price grain only), what it answers or corrects, its newest correction.
+  amount?: { value: number; currency: string } | null | undefined
+  replyTo?: LinkedApiMessage | null | undefined
+  corrects?: LinkedApiMessage | null | undefined
+  correctedBy?: { id: string; at: string } | null | undefined
+  // ---- end B-TH-236
+  at: string
+}
+
+/** B-TH-236 (B-TH-050): a message another one points at, as the API sums it up. */
+export interface LinkedApiMessage {
+  id: string
+  /** Null: a floor worker the site's gate keeps back. */
+  authorName: string | null
+  excerpt: string
   at: string
 }
 
@@ -33,6 +48,12 @@ export interface ThreadApiEmail {
   to: readonly string[]
   subject: string
   status: Delivery
+  // ---- B-TH-236 (B-TH-048): the mail's id, its copies, until when its sender may take it back, and who sent it.
+  id?: string | undefined
+  cc?: readonly string[] | undefined
+  undoUntil?: string | null | undefined
+  sentById?: string | null | undefined
+  // ---- end B-TH-236
 }
 
 /** A mail's delivery (GET /email/delivery-status): the task its bounce made. */
@@ -63,6 +84,11 @@ export interface CardSources {
   names: ReadonlyMap<string, string>
   /** Where a task opens (the company's Home › My tasks). */
   taskHref?: (taskId: string) => string
+  // ---- B-TH-236: the reader (their own messages may be corrected; their own mail taken back) and the mails this screen just sent
+  // (the POST's answer: its mail and until when it may be taken back, before the next read of the mail list says so).
+  me?: string | undefined
+  undo?: ReadonlyMap<string, { emailId: string; until: string }> | undefined
+  // ---- end B-TH-236
 }
 
 /** An API message as a card, by its audience. */
@@ -85,10 +111,36 @@ export function cardOf(message: ThreadApiMessage, sources: CardSources): CardMes
     files: message.attachments.filter((file) => !file.locked).map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, status: file.status })),
     ...(message.hiddenAttachments ? { hiddenFiles: message.hiddenAttachments } : {}),
     ...(message.attachments.some((file) => file.locked) ? { lockedSheets: message.attachments.filter((file) => file.locked).length } : {}),
-    email: email ? { to: email.to, subject: email.subject, status: email.status } : null,
+    email: email ? { to: email.to, subject: email.subject, status: email.status, ...mailExtras(message, email, sources) } : null,
     bounceTask: email?.status === 'BOUNCED' && delivery?.task && delivery.task.status === 'OPEN' && sources.taskHref ? { href: sources.taskHref(delivery.task.id) } : null,
+    ...linksOf(message, sources),
   }
 }
+
+// ---- B-TH-236 (B-TH-048, B-TH-049, B-TH-050) -----------------------------------------------------------------------------------
+
+/** The mail's id and copies, and its Undo while it waits — only for the person who sent it (the API refuses anyone else: NOT_YOURS). */
+function mailExtras(message: ThreadApiMessage, email: ThreadApiEmail, sources: CardSources): { id?: string; cc?: readonly string[]; undoUntil?: string } {
+  const just = sources.undo?.get(message.id)
+  const mine = sources.me !== undefined && (email.sentById ? email.sentById === sources.me : message.author.id === sources.me)
+  const until = email.status === 'QUEUED' && mine ? (email.undoUntil ?? just?.until ?? null) : null
+  const id = email.id ?? just?.emailId
+  return { ...(id ? { id } : {}), ...(email.cc && email.cc.length > 0 ? { cc: email.cc } : {}), ...(until ? { undoUntil: until } : {}) }
+}
+
+/** The amount, the links to other messages, and whether the reader wrote it (a card offers Correct on one's own message only). */
+function linksOf(message: ThreadApiMessage, sources: CardSources): Pick<CardMessage, 'amount' | 'replyTo' | 'corrects' | 'correctedBy' | 'mine'> {
+  const link = (linked: LinkedApiMessage | null | undefined) => (linked ? { id: linked.id, author: linked.authorName, excerpt: linked.excerpt, at: linked.at } : null)
+  const mine = sources.me !== undefined && message.author.kind === 'USER' && message.author.id === sources.me
+  return {
+    ...(message.amount ? { amount: { value: message.amount.value, currency: message.amount.currency } } : {}),
+    ...(message.replyTo ? { replyTo: link(message.replyTo) } : {}),
+    ...(message.corrects ? { corrects: link(message.corrects) } : {}),
+    ...(message.correctedBy ? { correctedBy: { id: message.correctedBy.id, at: message.correctedBy.at } } : {}),
+    ...(mine ? { mine: true } : {}),
+  }
+}
+// ---- end B-TH-236
 
 /** A history change as a quiet line of the feed; a message or a file entry is not (the card and the files line show them). */
 export function eventOf(entry: ThreadApiChange, names: ReadonlyMap<string, string>): FeedEvent {

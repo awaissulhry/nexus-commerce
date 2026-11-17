@@ -53,6 +53,22 @@ describe('where a result opens (B-W2a-32)', () => {
     expect(SEARCH_VIEW_PERMISSIONS).toContain('inventory.stock.view')
   })
 
+  // B-TH-261 follow-up (B-TH-040's indexer, #1545): a catalogue order a customer sent from its portal is a search type with its words and
+  // statuses, and opens beside the Incoming list with its thread (never "Record", never its panels).
+  it('opens a catalogue order beside Sales › Incoming, said as a catalogue order, with its statuses in words', () => {
+    expect(SEARCH_TYPES).toContain('PortalOrderRequest')
+    expect(resultHref(result({ recordType: 'PortalOrderRequest', area: 'sales' }), place)).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&catalogue=r1')
+    expect(typeKey('PortalOrderRequest')).toBe('type.PortalOrderRequest')
+    expect(chipKey('PortalOrderRequest')).toBe('chip.PortalOrderRequest')
+    for (const status of ['SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN']) expect(statusKey(status), status).not.toBeNull()
+    expect(statusTone('REFUSED')).toBe('danger')
+    expect(SEARCH_VIEW_PERMISSIONS).toContain('orders.view')
+    for (const locale of ['it', 'en'] as const) {
+      expect(CATALOGUE[locale].search!['type.PortalOrderRequest'], locale).toBeTruthy()
+      expect(CATALOGUE[locale].search!['status.REFUSED'], locale).toBeTruthy()
+    }
+  })
+
   it('opens a record type without a page of its own in its panels', () => {
     expect(resultHref(result({ recordType: 'Gizmo', number: 'GZ-1' }), place)).toBe('/w/DEMO/records/Gizmo/r1?label=GZ-1')
   })

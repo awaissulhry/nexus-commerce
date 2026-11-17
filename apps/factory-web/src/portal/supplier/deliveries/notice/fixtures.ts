@@ -3,7 +3,9 @@ import type { Locale } from '../../../../lib/i18n/locales'
 import type { Notice, NoticePage } from '../api'
 import { noticeBandOf } from '../band'
 import { at, HIDES, leatherLine, liningLine, noticePage, PREFIX, shellOf, words } from '../design-data'
-import { DeliveriesCase, type DeliveriesCaseBuilder } from '../view/DeliveriesCase'
+import { DeliveriesCase, type DeliveriesCaseBuilder, type DeliveriesCaseThread } from '../view/DeliveriesCase'
+// B-TH-277: the order's conversation docked beside the notice (made-up, the same as the PO page's).
+import { threadOf } from '../../orders/design-data'
 import type { CancelModel } from '../view/Dialogs'
 import type { NoticeViewModel } from '../view/NoticeView'
 
@@ -11,15 +13,18 @@ import type { NoticeViewModel } from '../view/NoticeView'
  * SCR-227 › one ship notice (design portal.supplier.asn sec:asn-grid "Row → ship notice view; editable until received", live
  * "Received / Received with differences with the lines that differ", pop:cancel-asn, pop:row-detail; B-W2b-186), MADE-UP
  * data only: in transit, announced, received, received with differences, cancelled, the cancel pop-up, a hide's detail, a
- * colleague who may only read, loading, error, a notice that is not here.
+ * colleague who may only read, loading, error, a notice that is not here. B-TH-277: the order's conversation docked beside the
+ * notice (the portal record frame, instead of the Ask modal), and on a phone behind "Messages (2 new)".
  */
 
-function noticeCase(build: (locale: Locale) => { page?: NoticePage; over?: Partial<NoticeViewModel>; held?: string | null }): DeliveriesCaseBuilder {
+function noticeCase(build: (locale: Locale) => { page?: NoticePage; over?: Partial<NoticeViewModel>; held?: string | null; frame?: DeliveriesCaseThread['frame'] }): DeliveriesCaseBuilder {
   return (locale) => {
     const t = words(locale)
-    const { page = noticePage(), over = {}, held = null } = build(locale)
+    const { page = noticePage(), over = {}, held = null, frame } = build(locale)
     const view: NoticeViewModel = { state: 'ready', page, prefix: PREFIX, dialog: null, problem: null, ...over }
-    return { shell: shellOf(locale, { band: noticeBandOf({ t, locale, prefix: PREFIX, page, stepping: false, changeHeld: held ? t(held) : null }) }), body: { kind: 'notice', model: view } }
+    // B-TH-277: the order's conversation docks once the notice is read (none while it loads, fails or is not here).
+    const thread = view.page && view.state === 'ready' ? { model: threadOf(locale), number: view.page.notice.purchaseOrder.number } : null
+    return { shell: shellOf(locale, { band: noticeBandOf({ t, locale, prefix: PREFIX, page, stepping: false, changeHeld: held ? t(held) : null }) }), body: { kind: 'notice', model: view, thread, ...(frame ? { frame } : {}) } }
   }
 }
 
@@ -43,7 +48,7 @@ export const designScreen = defineDesignScreen<DeliveriesCaseBuilder>({
   title: 'Supplier Ship notices › one ship notice (portal.supplier.asn)',
   view: DeliveriesCase,
   cases: [
-    { id: 'in-transit', label: 'In transit', model: noticeCase(() => ({})), note: 'The terms, the lines with their checks, the packing list per hide with its verdicts (Enter opens a hide’s detail). Band: Change (editable until received); ⋯ Cancel this ship notice…, the order, the template, Ask a question.' },
+    { id: 'in-transit', label: 'In transit', model: noticeCase(() => ({})), note: 'The terms, the lines with their checks, the packing list per hide with its verdicts (Enter opens a hide’s detail). Band: Change (editable until received); ⋯ Cancel this ship notice…, the order, the template, Ask a question (focuses the docked order conversation).' },
     { id: 'announced', label: 'Announced (ships later)', model: noticeCase(() => ({ page: noticePage({}, { state: 'ANNOUNCED' }) })) },
     { id: 'received', label: 'Received as announced', model: noticeCase(() => ({ page: noticePage({ canEdit: false, canCancel: false }, received(false)) })) },
     { id: 'received-differences', label: 'Received with differences', model: noticeCase(() => ({ page: noticePage({ canEdit: false, canCancel: false }, received(true)) })), note: 'The line that differs: announced and received side by side.' },
@@ -52,6 +57,9 @@ export const designScreen = defineDesignScreen<DeliveriesCaseBuilder>({
     { id: 'row-detail', label: 'Pop-up: Hide 2231-017', model: noticeCase(() => ({ over: { openHide: HIDES[4]!.id } })) },
     { id: 'viewer', label: 'A colleague who may only read', model: noticeCase(() => ({ page: noticePage({ mayWrite: false, canEdit: false, canCancel: false }), held: 'held.mayWrite' })), note: 'Change and Cancel are held with the reason.' },
     { id: 'refused', label: 'A change refused', model: noticeCase(() => ({ over: { problem: 'forbidden' } })) },
+    // B-TH-277
+    { id: 'phone', label: 'Phone: Messages (2 new)', model: noticeCase(() => ({ frame: { mode: 'stacked', newCount: 2 } })), note: 'Under 1280 px the notice leads; “Messages (2 new)” opens the order’s conversation full width.' },
+    { id: 'phone-messages', label: 'Phone: the order’s conversation open', model: noticeCase(() => ({ frame: { mode: 'stacked', viewOpen: true } })), note: 'The order’s conversation (not the notice’s own): a delivery is the order’s talk.' },
     { id: 'loading', label: 'Loading', model: noticeCase(() => ({ over: { state: 'loading', page: null } })) },
     { id: 'error', label: 'The notice could not be read', model: noticeCase(() => ({ over: { state: 'error', page: null } })) },
     { id: 'missing', label: 'Not here (discarded, or another organisation’s)', model: noticeCase(() => ({ over: { state: 'missing', page: null } })) },

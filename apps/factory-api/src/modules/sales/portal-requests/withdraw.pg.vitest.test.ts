@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
-import { WITHDRAW_WORDS } from '@nexus/factory-domain/sales/portal-requests/state'
+import { REQUEST_STATE_WORDS, WITHDRAW_WORDS } from '@nexus/factory-domain/sales/portal-requests/state'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedSalesIntake } from '../../../../../../packages/factory-db/seed/sales-intake'
@@ -144,6 +144,20 @@ describe('B-TH-095 the customer withdraws a request', { timeout: SLOW_TEST_TIMEO
     await expect(declineInquiry(office(), id, { version: inquiry.version, reason: 'CAPACITY' }, `th095-decline-${newId()}`)).rejects.toThrow()
     expect(await statusOf(id)).toBe('WITHDRAWN')
   })
+
+  // ---- th3-web-c follow-up: the customer's own search says its own word for a withdrawn request, as its request page does.
+  it('the portal search reads a withdrawn request as WITHDRAWN (“Withdrawn”), never the office’s words; the other customer finds nothing', async () => {
+    const sent = await ok('buyer', 'POST', '/portal/inquiries', { message: 'Made-up: five team caps.', customerRef: 'BA-PO-WD-5' }, 201)
+    const id = sent.request.id as string
+    const page = (await ok('buyer', 'GET', `/portal/inquiries/${id}`)).request
+    await ok('buyer', 'POST', `/portal/inquiries/${id}/withdraw`, { version: page.version })
+    const answer = await ok('buyer', 'GET', `/portal/search?q=${encodeURIComponent('BA-PO-WD-5')}`)
+    const hit = (answer.groups as Json[]).flatMap((group) => group.results as Json[]).find((result) => result.recordId === id)
+    expect(hit).toMatchObject({ recordType: 'Inquiry', status: 'WITHDRAWN', ourRef: expect.stringMatching(/^#\d+$/) })
+    expect(REQUEST_STATE_WORDS.WITHDRAWN).toEqual({ en: 'Withdrawn', it: 'Ritirata' })
+    expect(JSON.stringify((await ok('other', 'GET', `/portal/search?q=${encodeURIComponent('BA-PO-WD-5')}`)))).not.toContain(id)
+  })
+  // ---- end th3-web-c follow-up
 
   it('T37: the other customer cannot withdraw, nor read, the request — not found; nothing changes', async () => {
     const sent = await ok('buyer', 'POST', '/portal/inquiries', { message: 'Made-up: five rain covers.' }, 201)

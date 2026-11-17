@@ -1027,5 +1027,30 @@
       "notFound": "This mail is no longer here.",
       "unavailable": "The factory server did not answer. Check the connection and try again."
     }
+  },
+  "myProjects": {
+    "title": "My projects",
+    "all": "All my projects",
+    "allCount": "All my projects ({count})",
+    "officeOnly": "Office only",
+    "youLead": "You lead it",
+    "target": "Target {date}",
+    "stale": "Past its target date and quiet: close or update it",
+    "staleHint": "Past its target date and no message for 14 days. Open it to close it with its outcome or to update it.",
+    "muted": "Muted: its news does not reach you (mentions still do)",
+    "new_one": "{count} new",
+    "new_other": "{count} new",
+    "newLabel_one": "{name}: {count} new message, open it",
+    "newLabel_other": "{name}: {count} new messages, open the first",
+    "error": "Your projects could not be read",
+    "retry": "Retry",
+    "problem": {
+      "unavailable": "The service does not answer right now. Try again in a moment.",
+      "forbidden": "Your role does not open projects here.",
+      "notFound": "Nothing to show.",
+      "signedOut": "Your session ended: sign in again.",
+      "contract": "The answer was not what this page expects: reload the page.",
+      "rateLimited": "Too many requests in a short time: wait a moment."
+    }
   }
 }

@@ -1,30 +1,36 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Download, ExternalLink, Users } from 'lucide-react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { Download, ExternalLink, Files as FilesIcon, Info, Paperclip, Users } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
 import { PartnerThread, type PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
 import { Button, Skeleton, Spinner, Toggle } from '@nexus/ui/primitives'
-import { FileDropzone, FileRow, useDsWords } from '../../../lib/i18n/ds-parts'
+import { FileDropzone, FileRow, Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { SharePage } from '../api'
 import { acceptOf, BODY_LIMIT, daysLeft, fieldValueOf, heldKey, LINK_NS, mayKeys, shownFields, sizeText, threadOldestFirst, type InviteActions, type InviteViewModel, type Words } from '../model'
+// B-TH-274: the files strip of the thread (the old Shared files card merged in).
+import { filesStrip } from '../model'
 import '../invite.css'
 
 export type { InviteViewModel, InviteActions } from '../model'
 
 /**
  * SCR-270 — Join a record (design links.invite; 00 §2.9 one-off link page; COL-061, COL-062): the link frame (the sender,
- * the language, whom to ask, the privacy notice) around the ONE record a partner was invited to, in the design's order —
- * Why you are here (who invited you to what, what you can do: read · write · upload, until when), The record (only the
- * fields shared with partners: never a price, a cost or an office person), Shared files (open one in a new tab; Upload when
- * the invitation allows it), Messages (the record's shared thread: PartnerThread, ⌘Enter posts, the shared files ticked go with it; held with the reason when
- * the invitation does not allow writing), and E-mail me (new messages by e-mail, a switch). No rail, no menu: a link page's
- * only way out is Contact. Loading = skeleton cards + "Still loading…" after about a second; a failed read = our words +
- * Try again; a revoked or ended invitation = the frame's dead link (whom to ask; a new invitation is the office's).
+ * the language, whom to ask, the privacy notice) around the ONE record a partner was invited to.
+ * B-TH-274 (threads plan TH-6, PL7; L-INVITE.side, L-INVITE.thread): the five stacked cards became two columns. The record's shared
+ * thread is the MAIN column (~2/3): its files strip on top (every file shared with the person, by name, Open in a new tab; "All
+ * files" opens the Files view — the old Shared files card merged in, files in one place), the conversation (PartnerThread, the
+ * partner version: two sides, never an office note; ⌘Enter posts, the shared files ticked go with it; held with the reason when the
+ * invitation does not allow writing) and, under it, Add files when the invitation allows it (the link's own upload, as before). From
+ * 1280 px the SIDE column (~1/3, sticky) holds Why you are here (who invited you to what, what you can do, until when), The record
+ * (only the fields shared with partners: never a price, a cost or an office person) and E-mail me (their own switch, on by default).
+ * Narrower, the thread is the whole page and the side column waits behind "i" (a sheet). No rail, no menu: a link page's only way
+ * out is Contact. Loading = skeleton + "Still loading…" after about a second; a failed read = our words + Try again; a revoked or
+ * ended invitation = the frame's dead link (whom to ask; a new invitation is the office's).
  */
 export function InviteView({ model, actions }: { model: InviteViewModel; actions?: InviteActions }) {
   return (
@@ -68,16 +74,25 @@ function Loading() {
     return () => clearTimeout(timer)
   }, [])
   return (
-    <div className="fw-inv-stack" aria-busy="true">
-      {[48, 96, 72, 160].map((height, index) => (
-        <Card padded className="fw-inv-card" key={index}>
+    <div className="fw-inv-page" aria-busy="true">
+      <div className="fw-inv-main">
+        <Skeleton width="60%" height={28} />
+        <Card padded className="fw-inv-card">
           <Skeleton width="40%" height={20} />
-          <Skeleton width="100%" height={height} />
+          <Skeleton width="100%" height={220} />
         </Card>
-      ))}
-      <p className="fw-inv-muted" role="status">
-        {slow ? t('loading.slow') : t('loading.now')}
-      </p>
+        <p className="fw-inv-muted" role="status">
+          {slow ? t('loading.slow') : t('loading.now')}
+        </p>
+      </div>
+      <div className="fw-inv-side">
+        {[96, 72, 48].map((height, index) => (
+          <Card padded className="fw-inv-card" key={index}>
+            <Skeleton width="40%" height={20} />
+            <Skeleton width="100%" height={height} />
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }
@@ -100,17 +115,52 @@ function ReadProblem({ model, actions }: { model: InviteViewModel; actions?: Inv
   )
 }
 
+// ---- B-TH-274 (PL7-F01): the thread as the main column; the side column beside it from 1280 px, behind "i" narrower ----------
 function Body({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
+  const { t } = useSay()
+  return (
+    <div className="fw-inv-page">
+      <div className="fw-inv-main">
+        {/* Narrower than 1280 px: the side column waits behind "i" (CSS shows this row only there). */}
+        <div className="fw-inv-bar">
+          <Button size="sm" variant="secondary" aria-haspopup="dialog" onClick={() => actions?.onSheet?.('side')}>
+            <Info size={14} aria-hidden /> {t('side.open')}
+          </Button>
+        </div>
+        <FilesStrip page={page} model={model} actions={actions} />
+        <Messages page={page} model={model} actions={actions} />
+        <Upload page={page} model={model} actions={actions} />
+      </div>
+      <aside className="fw-inv-side" aria-label={t('side.title')}>
+        <Side page={page} model={model} actions={actions} />
+      </aside>
+      {model.sheet === 'side' && (
+        <Modal open sheet size="md" title={t('side.title')} onClose={() => actions?.onSheet?.(null)}>
+          <div className="fw-inv-sheet">
+            <Side page={page} model={model} actions={actions} />
+          </div>
+        </Modal>
+      )}
+      {model.sheet === 'files' && (
+        <Modal open sheet size="lg" title={t('files.viewTitle')} onClose={() => actions?.onSheet?.(null)}>
+          <FilesView page={page} model={model} actions={actions} />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+/** The side column: why you are here, the record, E-mail me (the same parts in the "i" sheet on a narrow screen). */
+function Side({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
   return (
     <div className="fw-inv-stack">
       <Why page={page} model={model} />
       <Summary page={page} model={model} />
-      <Files page={page} model={model} actions={actions} />
-      <Messages page={page} model={model} actions={actions} />
       <Notify page={page} model={model} actions={actions} />
     </div>
   )
 }
+// ---- end B-TH-274
 
 /** sec:why — who invited you to what; what you can do (COL-062) and until when. */
 function Why({ page, model }: { page: SharePage; model: InviteViewModel }) {
@@ -124,7 +174,6 @@ function Why({ page, model }: { page: SharePage; model: InviteViewModel }) {
       <Banner tone="info" icon={<Users size={16} aria-hidden />} title={page.share.invitedBy ? t('why.by', { name: page.share.invitedBy, company: page.from.companyName, record }) : t('why.byCompany', { company: page.from.companyName, record })} />
       <KeyValue
         labelCase="sentence"
-        columns={2}
         items={[
           { label: t('why.may'), value: mayKeys(page.share.permissions).map((key) => t(key)).join(' · ') },
           { label: t('why.until'), value: `${formatDate(page.share.expiresAt, { locale, timeZone: model.timeZone })} · ${days === 0 ? t('why.lastDay') : t('why.daysLeft', { count: days })}` },
@@ -149,7 +198,6 @@ function Summary({ page, model }: { page: SharePage; model: InviteViewModel }) {
       ) : (
         <KeyValue
           labelCase="sentence"
-          columns={2}
           items={fields.map((field) => {
             const value = fieldValueOf(field)
             const text =
@@ -170,63 +218,110 @@ function Summary({ page, model }: { page: SharePage; model: InviteViewModel }) {
   )
 }
 
-/** sec:files — the files shared with you on this record (open one in a new tab), and Upload when allowed. */
-function Files({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
+// ---- B-TH-274 (PL7-F01 "one place for files"; L-INVITE.thread): the old Shared files card merged into the thread's files strip and
+// its Files view; Add files sits under the conversation (the link's own upload, as before: B-TH-305's upload slot in the box waits).
+
+/** One shared file: Open (a new tab), held while another file opens. */
+function OpenFile({ file, model, actions, quiet = false }: { file: SharePage['files'][number]; model: InviteViewModel; actions?: InviteActions; quiet?: boolean }) {
+  const { t } = useSay()
+  return (
+    <Button size="sm" variant={quiet ? 'quiet' : 'secondary'} heldReason={model.opening && model.opening !== file.id ? t('files.held.opening') : null} aria-label={t('files.openNamed', { name: file.originalName })} onClick={() => actions?.onOpenFile?.(file.id)}>
+      {model.opening === file.id ? <Spinner size={14} /> : quiet ? <Paperclip size={14} aria-hidden /> : <ExternalLink size={14} aria-hidden />} {quiet ? file.originalName : t('files.open')}
+    </Button>
+  )
+}
+
+/** The thread's files strip: the newest files by name (each opens in a new tab), "All files (N)" for the Files view. */
+function FilesStrip({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
+  const { t, say } = useSay()
+  const strip = filesStrip(page.files)
+  return (
+    <section className="fw-inv-strip" aria-label={t('files.title')}>
+      <span className="fw-inv-strip-title">
+        <FilesIcon size={14} aria-hidden /> {t('files.title')}
+      </span>
+      {strip.all.length === 0 ? (
+        <span className="fw-inv-muted">{t('files.empty')}</span>
+      ) : (
+        <>
+          <ul className="fw-inv-strip-files">
+            {strip.shown.map((file) => (
+              <li key={file.id}>
+                <OpenFile file={file} model={model} actions={actions} quiet />
+              </li>
+            ))}
+          </ul>
+          <Button size="sm" variant="quiet" aria-haspopup="dialog" onClick={() => actions?.onSheet?.('files')}>
+            {strip.more > 0 ? t('files.allMore', { count: strip.all.length, more: strip.more }) : t('files.all', { count: strip.all.length })}
+          </Button>
+        </>
+      )}
+      {model.fileProblem && model.sheet !== 'files' && <Banner tone="danger" title={say(model.fileProblem)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('file')}>{t('dismiss')}</Button>} />}
+    </section>
+  )
+}
+
+/** The Files view: every file shared with the person on this record, newest first, each with Open. */
+function FilesView({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
   const { t, say } = useSay()
   const locale = useLocale()
   const ds = useDsWords()
-  const held = heldKey(page.upload.held)
+  const { all } = filesStrip(page.files)
   return (
-    <Card padded className="fw-inv-card">
-      <h2 className="fw-inv-h2">{t('files.title')}</h2>
+    <div className="fw-inv-stack">
       {model.fileProblem && <Banner tone="danger" title={say(model.fileProblem)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('file')}>{t('dismiss')}</Button>} />}
-      {page.files.length === 0 ? (
+      {all.length === 0 ? (
         <EmptyState icon={<Download size={20} aria-hidden />} title={t('files.empty')} description={t('files.emptyBody')} />
       ) : (
-        <ul className="fw-inv-files" aria-label={t('files.title')}>
-          {page.files.map((file) => (
+        <ul className="fw-inv-files" aria-label={t('files.viewTitle')}>
+          {all.map((file) => (
             <li key={file.id}>
               <FileRow
                 name={file.originalName}
                 size={file.sizeBytes}
                 status={file.mine ? t('files.yours', { at: formatDate(file.at, { locale, timeZone: model.timeZone }) }) : formatDate(file.at, { locale, timeZone: model.timeZone })}
                 labels={ds.fileRow}
-                actions={
-                  <Button size="sm" variant="secondary" heldReason={model.opening && model.opening !== file.id ? t('files.held.opening') : null} aria-label={t('files.openNamed', { name: file.originalName })} onClick={() => actions?.onOpenFile?.(file.id)}>
-                    {model.opening === file.id ? <Spinner size={14} /> : <ExternalLink size={14} aria-hidden />} {t('files.open')}
-                  </Button>
-                }
+                actions={<OpenFile file={file} model={model} actions={actions} />}
               />
             </li>
           ))}
         </ul>
       )}
-      {page.upload.canUpload ? (
-        <div className="fw-inv-upload">
-          <h3 className="fw-inv-h3">{t('files.upload')}</h3>
-          <FileDropzone
-            multiple
-            accept={acceptOf(page.upload.contentTypes)}
-            maxBytes={page.upload.maxBytes}
-            disabled={model.upload.busy}
-            labels={ds.fileDropzone}
-            hint={t('files.uploadHint', { mb: Math.round(page.upload.maxBytes / 1_048_576) })}
-            onFiles={(files) => actions?.onFiles?.(files)}
-          />
-          {model.upload.busy && (
-            <p className="fw-inv-muted" role="status">
-              <Spinner size={14} /> {t('files.uploading', { name: model.upload.name ?? '' })}
-            </p>
-          )}
-          {model.upload.problem && <Banner tone="danger" title={say(model.upload.problem)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('upload')}>{t('dismiss')}</Button>} />}
-          {model.upload.done && <Banner tone="success" title={say(model.upload.done)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('upload')}>{t('dismiss')}</Button>} />}
-        </div>
-      ) : (
-        held && <p className="fw-inv-muted">{t(held)}</p>
+    </div>
+  )
+}
+
+/** Add files under the conversation when the invitation allows it (the link's own upload); else why not, in words. */
+function Upload({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
+  const { t, say } = useSay()
+  const ds = useDsWords()
+  const held = heldKey(page.upload.held)
+  if (!page.upload.canUpload) return held ? <p className="fw-inv-muted">{t(held)}</p> : null
+  return (
+    <Card padded className="fw-inv-card">
+      <section className="fw-inv-upload" aria-label={t('files.upload')}>
+      <h3 className="fw-inv-h3">{t('files.upload')}</h3>
+      <FileDropzone
+        multiple
+        accept={acceptOf(page.upload.contentTypes)}
+        maxBytes={page.upload.maxBytes}
+        disabled={model.upload.busy}
+        labels={ds.fileDropzone}
+        hint={t('files.uploadHint', { mb: Math.round(page.upload.maxBytes / 1_048_576) })}
+        onFiles={(files) => actions?.onFiles?.(files)}
+      />
+      {model.upload.busy && (
+        <p className="fw-inv-muted" role="status">
+          <Spinner size={14} /> {t('files.uploading', { name: model.upload.name ?? '' })}
+        </p>
       )}
+      {model.upload.problem && <Banner tone="danger" title={say(model.upload.problem)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('upload')}>{t('dismiss')}</Button>} />}
+      {model.upload.done && <Banner tone="success" title={say(model.upload.done)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('upload')}>{t('dismiss')}</Button>} />}
+      </section>
     </Card>
   )
 }
+// ---- end B-TH-274
 
 /** sec:thread — the record's shared thread (messages and files; e-mail replies land here); post with ⌘Enter. */
 function Messages({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
@@ -282,7 +377,8 @@ function Messages({ page, model, actions }: { page: SharePage; model: InviteView
 /** sec:notify — new messages by e-mail (a switch, on until the person turns it off). */
 function Notify({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
   const { t, say } = useSay()
-  const id = 'fw-inv-notify'
+  // B-TH-274: drawn in the side column and again in the "i" sheet: each copy its own ids.
+  const id = `fw-inv-notify-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`
   return (
     <Card padded className="fw-inv-card">
       <h2 className="fw-inv-h2">{t('notify.title')}</h2>

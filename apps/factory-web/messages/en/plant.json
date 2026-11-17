@@ -263,7 +263,8 @@
     "lastJobs": "Last jobs",
     "noJobs": "No jobs yet.",
     "machineRecord": "Machine record",
-    "jobRecord": "Job {number}"
+    "jobRecord": "Job {number}",
+    "threadLabel": "Notes on the {machine} request"
   },
   "trail": {
     "reported": "Reported by {who}",

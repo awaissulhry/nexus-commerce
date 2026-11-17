@@ -89,6 +89,13 @@ export const designScreen = defineDesignScreen<ReturnsCaseBuilder>({
     { id: 'loading', label: 'Loading', model: listCase(() => ({ state: 'loading', read: null, complaints: { state: 'loading', read: null } })) },
     { id: 'error', label: 'The cases could not be read', model: listCase(() => ({ state: 'error', read: null, complaints: { state: 'error', read: null } })), note: 'A failed read is never drawn as an empty list; the complaints say so too.' },
     { id: 'updates', label: 'Changes waiting', model: listCase(() => ({ updates: 2 })), note: 'Rows never move under the pointer: “2 updates · Show”.' },
+    // ---- B-TH-275 (P-CUS-RET-LIST.list): the person's own new messages per case; the cell opens the case with its conversation shown.
+    {
+      id: 'th-275-new-messages',
+      label: 'New messages: "● 2 new" on a return, "● 1 new" on a claim',
+      model: listCase(() => ({ unread: { [CASES[0]!.id]: { newCount: 2, lastAt: at(-1) }, [CASES[2]!.id]: { newCount: 1, lastAt: at(-30) } } })),
+      note: 'One read for the rows shown: only messages shared with this customer, on its own cases. The cell and the row’s Messages open the case with its docked conversation shown and the box focused.',
+    },
     { id: 'offline', label: 'No connection', model: listCase(() => ({ offlineSince: at(-1) }), (locale) => words(locale)('held.offline')), note: '“No connection — showing what was loaded at …”; Start is held with the reason.' },
     { id: 'keys', label: 'The keys in the footer’s info icon', model: listCase(() => ({ keysOpen: true })), note: 'Key hints only in the table footer (Owner rule 2026-10-29).' },
     {

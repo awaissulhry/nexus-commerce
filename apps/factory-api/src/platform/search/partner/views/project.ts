@@ -1,6 +1,6 @@
 import { can } from '@nexus/factory-domain/core/permissions'
 import { PORTAL_PROJECTS_VIEW } from '@nexus/factory-domain/projects/permissions'
-import { definePartnerView, equalsTyped, holdsTyped, idsOf, type PartnerReader, type PartnerRecord } from '../view'
+import { definePartnerView, holdsTyped, idsOf, type PartnerReader, type PartnerRecord } from '../view'
 
 /**
  * A project of the partner's organisation (B-TH-069; threads plan TH-5, PROJ-G07, PROJ.portal-F01…F04, F08; walls W09, W38; the
@@ -13,8 +13,10 @@ import { definePartnerView, equalsTyped, holdsTyped, idsOf, type PartnerReader, 
  * another company reads no row at all (the party wall: Project.partyId, the database's). A supplier's project shows in the
  * supplier portal the same way and never names a customer (one outside company per project).
  *
- * Read in the PARTNER scope: its number, name, status, target date and season — never the lead, the goal, the outcome or its
- * words, who made or closed it (hidden columns, never selected). No money anywhere.
+ * Read in the PARTNER scope: its name, status, target date and season — never the lead, the goal, the outcome or its words, who
+ * made or closed it (hidden columns, never selected). No money anywhere. TH-5 follow-up (B-TH-303's rule, B-TH-253): `ourRef` is
+ * null and the number is none of the words a partner may type — the office's PRJ series counts every customer's projects, so the
+ * portal names and finds a project by its name (and season), never by that number.
  */
 export default definePartnerView({
   recordType: 'Project',
@@ -26,13 +28,13 @@ export default definePartnerView({
     if (memberOf.length === 0) return []
     const rows = await client.project.findMany({
       where: { id: { in: memberOf.map((row) => row.recordId) } },
-      select: { id: true, companyId: true, partyId: true, number: true, name: true, status: true, targetDate: true, seasonCode: true },
+      select: { id: true, companyId: true, partyId: true, name: true, status: true, targetDate: true, seasonCode: true },
     })
     return rows
       .filter((row) => row.partyId !== null && can(reader.actor, PORTAL_PROJECTS_VIEW, { companyId: row.companyId, partyId: row.partyId }))
-      .map((row) => ({ id: row.id, companyId: row.companyId, theirRef: null, ourRef: row.number, subtitle: row.name, status: row.status, date: row.targetDate, words: [row.name, row.seasonCode] }))
+      .map((row) => ({ id: row.id, companyId: row.companyId, theirRef: null, ourRef: null, subtitle: row.name, status: row.status, date: row.targetDate, words: [row.name, row.seasonCode] }))
   },
   async lookup(client, typed, take) {
-    return idsOf(await client.project.findMany({ where: { OR: [{ number: equalsTyped(typed) }, { name: holdsTyped(typed) }] }, select: { id: true }, orderBy: { createdAt: 'desc' }, take }))
+    return idsOf(await client.project.findMany({ where: { name: holdsTyped(typed) }, select: { id: true }, orderBy: { createdAt: 'desc' }, take }))
   },
 })

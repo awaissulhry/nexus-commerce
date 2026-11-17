@@ -253,7 +253,8 @@
     "callNote": "Cosa è stato detto",
     "skipped": "Saltato",
     "cancelled": "Annullato",
-    "cancel": "Annulla sollecito"
+    "cancel": "Annulla sollecito",
+    "threadLabel": "Conversazione del sollecito {level} · {customer}"
   },
   "emailStatus": {
     "QUEUED": "In coda",

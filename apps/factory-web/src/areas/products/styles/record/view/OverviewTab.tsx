@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, CircleCheck, CircleX } from 'lucide-react'
+import { CircleCheck, CircleX, MessageSquare } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, Select, Tag, Toggle } from '@nexus/ui/primitives'
 import { EditModeBar, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -11,7 +11,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StylePatch, StyleView } from '../../api'
 import { countryName, countryOptions } from '../../../../parties/_shared/model'
 import { PpeFields, settlePpe, type PpeValue } from '../../forms'
-import { complianceAfterRelease, decimalText, draftOf, issueTab, issueWords, nextRevisionNumber, releasedOf, REVISION_TONE, revisionInView, startRevisionHeld, STATUS_TONE } from '../../model'
+import { complianceAfterRelease, decimalText, draftOf, issueHash, issueTab, issueWords, nextRevisionNumber, releasedOf, REVISION_TONE, revisionInView, startRevisionHeld, STATUS_TONE, VARIANTS_ANCHOR } from '../../model'
+// B-TH-261: "Thread and history" shows the docked thread (the Activity tab is gone).
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { customsDraftOf, customsErrors, customsPatch, hsCodeText, refusedCustoms, type CustomsDraft, type CustomsField } from '../customs'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 // B-W2b-237: the depth's parts (identity in depth, the lifecycle, completeness, where-used).
@@ -277,7 +279,8 @@ function applyDesignDraft(base: Identity, patch: StylePatch): Partial<Identity> 
 function WarningsCard({ style, model }: { style: StyleView; model: StyleRecordViewModel }) {
   const t = useT('products')
   if (style.warnings.length === 0) return null
-  const href = (code: string) => `${model.prefix}/products/styles/${style.id}?tab=${['NO_PPE_STANDARD', 'NO_PPE_CLASS', 'NO_MEASUREMENT_TEMPLATE'].includes(code) ? 'overview' : 'variants'}`
+  // B-TH-261: the range and colourways are on this same tab now (Overview & variants): Fix scrolls to them.
+  const fixHref = `${model.prefix}/products/styles/${style.id}?tab=overview${model.revisionId ? `&rev=${model.revisionId}` : ''}#${VARIANTS_ANCHOR}`
   return (
     <Banner tone="warning" title={t('warning.title', { count: style.warnings.length })}>
       <ul className="fw-st-list">
@@ -285,7 +288,7 @@ function WarningsCard({ style, model }: { style: StyleView; model: StyleRecordVi
           <li key={warning.code}>
             {t(`warning.${warning.code}`)}{' '}
             {!['NO_PPE_STANDARD', 'NO_PPE_CLASS', 'NO_MEASUREMENT_TEMPLATE'].includes(warning.code) && (
-              <Link className="fw-st-link" href={href(warning.code)}>
+              <Link className="fw-st-link" href={fixHref}>
                 {t('warning.fix')}
               </Link>
             )}
@@ -299,6 +302,8 @@ function WarningsCard({ style, model }: { style: StyleView; model: StyleRecordVi
 function StateCard({ style, model }: { style: StyleView; model: StyleRecordViewModel }) {
   const t = useT('products')
   const locale = useLocale()
+  // B-TH-261 (R-ACT): the thread docks beside every tab; this line shows it (docked) or opens it full width (narrower).
+  const frame = useRecordFrame()
   return (
     <Card header={t('side.state')}>
       <div className="fw-st-stack">
@@ -316,10 +321,10 @@ function StateCard({ style, model }: { style: StyleView; model: StyleRecordViewM
             { label: t('side.updated'), value: formatDateTime(style.updatedAt, { locale }) },
           ]}
         />
-        {model.can.thread && (
-          <Link className="fw-st-link" href={`${model.prefix}/products/styles/${style.id}?tab=activity`}>
-            {t('side.activity')} <ArrowRight size={12} aria-hidden />
-          </Link>
+        {model.can.thread && frame?.showThread && (
+          <Button size="sm" variant="link" className="fw-st-link" onClick={() => frame.showThread?.()}>
+            <MessageSquare size={12} aria-hidden /> {t('side.activity')}
+          </Button>
         )}
       </div>
     </Card>
@@ -357,7 +362,7 @@ function ReleaseCheckCard({ style, model, actions, gate }: { style: StyleView; m
             <li key={`${issue.code}-${index}`} className="fw-st-check is-blocked">
               <CircleX size={14} aria-hidden />
               <span>{t(words.key, words.params)}</span>
-              <Link className="fw-st-link" href={tabHref(issueTab(issue))}>
+              <Link className="fw-st-link" href={`${tabHref(issueTab(issue))}${issueHash(issue) /* B-TH-261 */}`}>
                 {t('check.showMe')}
               </Link>
             </li>

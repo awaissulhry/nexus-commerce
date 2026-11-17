@@ -61,16 +61,24 @@ const MINE: DispatchEntry[] = [
   { ...ENTRIES[2]!, station: FAR, bundles: 0, current: false },
 ]
 
-const message = (id: string, number: string, from: WorkMessage['from'], text: string, at: string, cut = false): WorkMessage => ({ id, workOrder: { id: `wo-${id}`, number }, from, text, cut, at })
+// B-TH-278: a note names its work order by the id the queue's entries carry (`wo-s1` is WO-DEMO-0051's), so a card finds its own notes.
+const message = (id: string, number: string, from: WorkMessage['from'], text: string, at: string, cut = false, workOrderId = `wo-${id}`): WorkMessage => ({ id, workOrder: { id: workOrderId, number }, from, text, cut, at })
 
 const MESSAGES: MyMessages = {
   asOf: AS_OF,
   messages: [
-    message('m1', 'WO-DEMO-0051', 'OFFICE', 'Per questa commessa usate il filo rinforzato: la scatola nuova è sul carrello 3.\nSe manca, chiamate il magazzino.', '2026-10-29T08:12:00.000Z'),
-    message('m2', 'WO-DEMO-0042', 'FLOOR', 'Cuciture diverse (B-000123 a Op 20 Cucire fianchi): manica sinistra', '2026-10-29T07:41:00.000Z'),
-    message('m3', 'WO-DEMO-0047', 'OFFICE', 'Le taglie 52 vanno controllate una a una prima di passarle avanti.', '2026-10-28T15:30:00.000Z'),
+    message('m1', 'WO-DEMO-0051', 'OFFICE', 'Per questa commessa usate il filo rinforzato: la scatola nuova è sul carrello 3.\nSe manca, chiamate il magazzino.', '2026-10-29T08:12:00.000Z', false, 'wo-s1'),
+    message('m2', 'WO-DEMO-0042', 'FLOOR', 'Cuciture diverse (B-000123 a Op 20 Cucire fianchi): manica sinistra', '2026-10-29T07:41:00.000Z', false, 'wo-s2'),
+    message('m3', 'WO-DEMO-0047', 'OFFICE', 'Le taglie 52 vanno controllate una a una prima di passarle avanti.', '2026-10-28T15:30:00.000Z', false, 'wo-s3'),
   ],
 }
+
+// ---- B-TH-278: WO-DEMO-0051 holds two floor notes (one written in English: shown as written, never translated).
+const CARD_MESSAGES: MyMessages = {
+  asOf: AS_OF,
+  messages: [message('m4', 'WO-DEMO-0051', 'OFFICE', 'Left sleeve first on this one, please (demo).\nThe pattern changed on Monday.', '2026-10-29T08:30:00.000Z', false, 'wo-s1'), ...MESSAGES.messages],
+}
+// ---- end B-TH-278
 
 const list = (extra: Partial<DispatchList> = {}): DispatchList => ({
   site: { id: 'site-a', code: 'A1', name: 'Stabilimento Demo Nord', timeZone: 'Europe/Rome' },
@@ -194,7 +202,7 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
       model: model({ messages: MESSAGES }),
       note: 'COL-036: the chip counts the open messages on my work orders not opened on this tablet, above Next: on a tablet the card fills the screen, so below it nobody would see it. Hidden at zero. "New instructions" joins it with W2b-4.',
     },
-    { id: 'messages', label: 'Messages: the list', model: model({ step: { kind: 'messages' }, messages: MESSAGES, seen: ['m3'] }), note: 'Newest first: the work order, the first words, where it comes from (the office or another station: never who) and when. Arrows move rows, Enter opens one, Esc goes back.' },
+    { id: 'messages', label: 'Messages: the list', model: model({ step: { kind: 'messages' }, messages: MESSAGES, seen: ['m3'] }), note: 'Newest first: the work order, the first words, where it comes from (the office or another station: never who) and when. Not opened on this tablet: New; opened: nothing (no Read, no Seen — B-TH-278). Arrows move rows, Enter opens one, Esc goes back.' },
     { id: 'message', label: 'One message', model: model({ step: { kind: 'message', id: 'm1' }, messages: MESSAGES, seen: ['m1'] }), note: 'The whole text, Read aloud where the tablet has a voice for the language. Opening it marks it on this tablet only: nothing records who read what (art. 4).' },
     {
       id: 'message-cut',
@@ -211,6 +219,26 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
       note: 'Read earlier in this visit: shown as of then; opening one still works.',
     },
     { id: 'messages-failed', label: 'The messages could not be read', model: model({ messagesFailed: true }), note: 'Hidden at zero must not read as "no messages": it says so, in one quiet line, and the work goes on.' },
+    // ---- B-TH-278 (PL8, X-FLOOR-WO.notes): a work order's floor notes on its own card, and only there.
+    {
+      id: 'th-278-card',
+      label: 'TH: a task\'s card with its own notes',
+      model: model({ step: { kind: 'entry', slotId: 's1' }, messages: CARD_MESSAGES, seen: ['m1'] }),
+      note: 'PL8: the card of WO-DEMO-0051 says "2 messages on this work order" — its own notes only, opened or not (the wall agreed with the production lane: a floor note shows only on its work order\'s own tablet views). One big button inside the card; the queue\'s other work orders keep theirs.',
+    },
+    {
+      id: 'th-278-one-work-order',
+      label: 'TH: one work order\'s notes',
+      model: model({ step: { kind: 'messages', workOrderId: 'wo-s1' }, messages: CARD_MESSAGES, seen: ['m1'] }),
+      note: 'Opened from the card: "Messages on WO-DEMO-0051", that work order\'s notes and no other. A note not opened on this tablet says New; an opened one says nothing — no Read, no Seen: nothing records who read what (Statuto dei Lavoratori art. 4). Back returns to the list.',
+    },
+    {
+      id: 'th-278-as-written',
+      label: 'TH: a note as written',
+      model: model({ step: { kind: 'message', id: 'm4', workOrderId: 'wo-s1' }, messages: CARD_MESSAGES, seen: ['m1', 'm4'] }),
+      note: 'The office wrote it in English on an Italian tablet: the words stay as written, never translated, with their lines; the screen\'s own words are the worker\'s language. Where from, never who; no amount, no customer.',
+    },
+    // ---- end B-TH-278
     { id: 'cant-find', label: 'Can\'t find it?', model: model({ cantFind: 's1' }), note: 'Design main action: Call for help: Material, one tap through the tablet\'s queue; or Put it last with a reason tile; or Back. Esc closes.' },
     { id: 'help-reading', label: 'Call for help: checking who to call', model: model({ cantFind: 's1', helpHeld: 'reading' }) },
     { id: 'help-offline', label: 'Call for help held: offline, never read', model: model({ frame: frame({ online: false }), cantFind: 's1', helpHeld: 'offline' }), note: 'Offline the call still goes through the queue when this tablet read the site\'s help types in this visit; only a tablet that never did is held.' },

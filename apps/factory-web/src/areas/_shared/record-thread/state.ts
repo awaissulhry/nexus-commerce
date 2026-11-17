@@ -5,6 +5,7 @@ import { settleOutbox, type OutboxItem } from '../../../lib/record-thread/model'
 import type { Recipient } from '../../../lib/record-thread/send-check/model'
 import type { ApiMessage } from '../../../record-panels/api'
 import type { Reading, ThreadHead } from './api'
+import type { OfficeMessage, WaitingMail } from './api' // B-TH-255
 
 /**
  * The office thread's state and its pure steps (B-TH-212): what the server said (the messages, page by page) and what the person
@@ -15,8 +16,8 @@ import type { Reading, ThreadHead } from './api'
 export interface ServerThread {
   status: 'loading' | 'ready' | 'error' | 'forbidden'
   thread: { status: 'OPEN' | 'CLOSED'; version: number; partyId: string | null } | null
-  /** Oldest first. */
-  messages: ApiMessage[]
+  /** Oldest first. B-TH-255: the office read's messages (erased, an inbound mail's files not kept). */
+  messages: OfficeMessage[]
   cursor: string | null
   more: boolean
   older: 'idle' | 'loading' | 'failed'
@@ -24,6 +25,8 @@ export interface ServerThread {
   reading?: Reading | null
   head?: ThreadHead
   // ---- end B-TH-229
+  /** B-TH-255 (B-TH-079, T4-F10): the mail for this conversation that waits for a person, as the newest read said (null: none). */
+  waitingMail?: WaitingMail | null
 }
 
 export interface Work {
@@ -44,7 +47,7 @@ const byTime = (a: ApiMessage, b: ApiMessage) => (a.at === b.at ? a.id.localeCom
  * The newest page read again (on arrival, after a send, on a live hint): the newest messages are replaced, the older pages the
  * person already loaded stay; the work is not part of it.
  */
-export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly ApiMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead }): ServerThread {
+export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly OfficeMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead; /* B-TH-255 */ waitingMail?: WaitingMail | null }): ServerThread {
   const fresh = new Map(page.messages.map((message) => [message.id, message]))
   const oldestFresh = page.messages.length > 0 ? [...page.messages].sort(byTime)[0].at : null
   const kept = server.status === 'ready' && oldestFresh !== null ? server.messages.filter((message) => !fresh.has(message.id) && message.at < oldestFresh) : []
@@ -59,11 +62,13 @@ export function applyNewest(server: ServerThread, page: { thread: ServerThread['
     // B-TH-229
     reading: page.reading === undefined ? server.reading : page.reading,
     head: page.head ?? server.head,
+    // B-TH-255: a read that says nothing of it keeps what the last one said.
+    waitingMail: page.waitingMail === undefined ? server.waitingMail : page.waitingMail,
   }
 }
 
 /** An older page ("Show 50 earlier"): added at the top. */
-export function applyOlder(server: ServerThread, page: { messages: readonly ApiMessage[]; nextCursor: string | null }): ServerThread {
+export function applyOlder(server: ServerThread, page: { messages: readonly OfficeMessage[]; nextCursor: string | null }): ServerThread {
   const ids = new Set(server.messages.map((message) => message.id))
   return { ...server, messages: [...page.messages.filter((message) => !ids.has(message.id)), ...server.messages].sort(byTime), cursor: page.nextCursor, more: page.nextCursor !== null, older: 'idle' }
 }
@@ -190,3 +195,33 @@ export function uploadReason(error: unknown, storeFailed: boolean): string {
   if (error.kind === 'forbidden' || error.kind === 'step_up') return 'failed.forbidden'
   return 'failed.failed'
 }
+
+// ---- B-TH-236 / B-TH-237: refusals in this app's words, by the API's code at `refusal/<CODE>` -----------------------------------
+
+/** The code of a refusal at `refusal/<CODE>` (a 409 or 403 with words), or null. */
+export function refusalCode(error: unknown): string | null {
+  if (!isApiError(error)) return null
+  const path = paths(error).find((one) => one.startsWith('refusal/'))
+  return path ? path.slice('refusal/'.length) : null
+}
+
+/** B-TH-237 (B-TH-044): why a portal reply did not go, as a key of record-thread `notice.portal.*`, or null (a fault: Retry). */
+export function portalRefusal(error: unknown): string | null {
+  const code = refusalCode(error)
+  if (code === 'NO_PARTY' || code === 'NO_PORTAL' || code === 'CLOSED' || code === 'NOT_SHAREABLE') return `notice.portal.${code}`
+  if (isApiError(error) && (error.kind === 'invalid' || error.kind === 'conflict')) return 'notice.portal.other'
+  return null
+}
+
+/** B-TH-236 (B-TH-049): a note for the floor held by the API's price check (409 refusal/FLOOR_PRICE). */
+export const floorPriceRefused = (error: unknown): boolean => refusalCode(error) === 'FLOOR_PRICE'
+
+/** B-TH-236 (B-TH-048): why a mail was not taken back, as a key of record-thread-send `notice.undo.*` (else `notice.undoFailed`). */
+export function undoRefusalKey(error: unknown): string {
+  const code = refusalCode(error)
+  return code === 'NO_WINDOW' || code === 'LEFT' || code === 'NOT_SENT' || code === 'NOT_YOURS' ? `notice.undo.${code}` : 'notice.undoFailed'
+}
+
+/** B-TH-237: the record types whose thread is never shared with a customer (factory-api platform/threads/records NOT_SHAREABLE). */
+export const NOT_SHAREABLE_TYPES: ReadonlySet<string> = new Set(['WorkOrder', 'QualityHold', 'Nonconformance'])
+// ---- end B-TH-236 / B-TH-237

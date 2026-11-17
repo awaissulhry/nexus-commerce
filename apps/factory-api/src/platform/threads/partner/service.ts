@@ -37,6 +37,12 @@ import type { PartnerMessageView } from './contract'
 // ---- B-TH-027: the person's own read mark (their post moves it; "New since your last visit"; the list's new counts).
 import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
 // ---- end B-TH-027
+// ---- B-TH-079: a message erased after a privacy request is told apart from one that only carries files.
+import { erasedForOutside } from '../feed-depth'
+// ---- B-TH-092: the person's draft of the record goes with their post.
+import { clearDraftInCommand } from '../draft-keys'
+// ---- B-TH-093: their post makes a conversation marked done open work again (the same bookkeeping as its last activity).
+import { reopenOnSharedMessage } from '../work-state'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -110,7 +116,12 @@ async function openRecord(client: FactoryClient, caller: PartnerCaller, ref: Rec
   return { record, scope }
 }
 
-const recordViewOf = (type: string, record: PartnerRecord) => ({ type, id: record.id, theirRef: record.theirRef, ourRef: record.ourRef, subtitle: record.subtitle, status: record.status })
+// ---- B-TH-092: the portal's drafts open a record the same way (../drafts.ts).
+export { openRecord as openPartnerRecord }
+// ---- end B-TH-092
+
+// TH-5 follow-up (B-TH-253): + the record's date as its partner view gives it (a project's target date; the search already sends it).
+const recordViewOf = (type: string, record: PartnerRecord) => ({ type, id: record.id, theirRef: record.theirRef, ourRef: record.ourRef, subtitle: record.subtitle, status: record.status, date: record.date ? toUtcIso(record.date) : null })
 
 /** The attached files the partner may see: shared with its party's portal, available, and files.read over them. */
 async function visibleAttachments(client: FactoryClient | CommandTx, caller: PartnerCaller, fileIds: readonly string[]): Promise<Map<string, AttachmentView>> {
@@ -218,10 +229,11 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
   })
   const mine = await minePosts(request, caller, read.shown)
   const last = read.shown.at(-1)
+  const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, read.shown) // B-TH-079
   return {
     record: recordViewOf(ref.type, read.record),
     thread: read.thread ? { id: read.thread.id, status: read.thread.status } : null,
-    messages: read.shown.map((row) => messageViewOf(caller, row, read.attachments, mine, read.links)),
+    messages: read.shown.map((row) => ({ ...messageViewOf(caller, row, read.attachments, mine, read.links), ...(erased.has(row.id) ? { erased: true } : {}) })),
     nextCursor: read.rows.length > page.limit && last ? encodeCursor(last) : null,
     composer: read.composer,
     reading: read.reading,
@@ -403,6 +415,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
       // ---- B-TH-027: the person's own post is read by them (their mark moves to it; a preview writes none).
       if (!caller.session.preview) await moveMark(tools, current, { userId: caller.context.actorId, office: false }, { id, at: tools.now }, true)
       // ---- end B-TH-027
+      if (!caller.session.preview) await clearDraftInCommand(tools, caller.context.actorId, ref) // B-TH-092
       const attachments = await visibleAttachments(tools.tx, caller, row.attachmentFileIds)
       return { thread: { id: current.id, status: current.status as ThreadStatus }, message: messageViewOf(caller, row, attachments, new Set([id])) }
     },
@@ -435,9 +448,10 @@ async function openThreadFor(request: FastifyRequest, caller: PartnerCaller, ref
  * writeMessage does inside its own.
  */
 async function touchThread(request: FastifyRequest, caller: PartnerCaller, threadId: string, at: Date): Promise<void> {
-  await systemCallerOf(request)(caller.context.tenantId).withClient((client) =>
-    client.thread.updateMany({ where: { id: threadId, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } }),
-  )
+  await systemCallerOf(request)(caller.context.tenantId).withClient(async (client) => {
+    await client.thread.updateMany({ where: { id: threadId, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } })
+    await reopenOnSharedMessage(client, threadId) // B-TH-093
+  })
 }
 
 // ---- B-TH-085 (threads plan TH-7, the rest of G1; T6-F01…F08, P-CUS-NEW.files, X-P-CUS-REQ.thread; walls W25 and W37) ------------
@@ -487,7 +501,9 @@ async function uploadPlace(request: FastifyRequest, caller: PartnerCaller, ref: 
   const locale = caller.session.person.locale
   const company = caller.session.company.name
   return request.withClient(async (client) => {
-    const { record, scope } = await openRecord(client, caller, ref)
+    // B-TH-081 (found while giving the repair its portal thread): the person the partner view reads for, as every other caller of
+    // openRecord passes it since B-TH-069 (a project opens to its members only).
+    const { record, scope } = await openRecord(client, caller, ref, partnerReaderOf(request, caller))
     if (caller.session.preview) throw new ForbiddenError(partnerThreadWords('PREVIEW', locale, company))
     if (!options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', locale, company))
     if (!can(caller.actor, PORTAL_UPLOAD, scope)) {

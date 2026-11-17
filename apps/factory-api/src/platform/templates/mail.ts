@@ -10,6 +10,9 @@ import { isTemplateLanguage, TEMPLATE_LANGUAGES, type TemplateLanguage } from '@
 import { companyValues, emailTemplateProblems, fillMail, isMailEvent, MAIL_EVENT_DEFINITIONS, MAIL_EVENTS, type MailEvent, type MailWords } from '@nexus/factory-domain/templates/mail'
 import { DOCUMENT_TEMPLATES_MANAGE } from '@nexus/factory-domain/templates/permissions'
 import { missingValues } from '@nexus/factory-domain/templates/placeholders'
+// ---- B-TH-098: each event's German, French and Spanish drafts and each drafted language's reading.
+import { MAIL_DRAFTS } from '@nexus/factory-domain/templates/mail'
+import { LANGUAGE_REVIEW, MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import type { EmailTemplateView } from './contract'
@@ -121,9 +124,12 @@ export function mailEvents() {
   return {
     events: MAIL_EVENTS.map((event) => {
       const definition = MAIL_EVENT_DEFINITIONS[event]
-      return { event, recordType: definition.recordType, placeholders: [...definition.placeholders], words: { ...definition.words } }
+      return { event, recordType: definition.recordType, placeholders: [...definition.placeholders], words: { ...definition.words }, drafts: { ...MAIL_DRAFTS[event] } /* B-TH-098 */ }
     }),
     languages: [...TEMPLATE_LANGUAGES],
+    // ---- B-TH-098
+    messageLanguages: [...MESSAGE_LANGUAGES],
+    review: { ...LANGUAGE_REVIEW },
   }
 }
 

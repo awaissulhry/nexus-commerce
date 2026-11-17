@@ -18,6 +18,9 @@ import { messagesCardOf } from './model'
 import { BRAND_BETA } from '../../../lib/testing/two-brands'
 import type { RequestRow } from '../requests/api'
 import { betaShellOf, PREFIX as BETA_PREFIX, REQUESTS as BETA_REQUESTS } from '../requests/design-data'
+// B-TH-253: brand B's projects (made up; the office's numbers in the data are never drawn).
+import type { PortalProject } from '../projects/api'
+import { BETA_PROJECTS } from '../projects/design-data'
 import type { ApproveDialogModel } from './view/ApproveDialog'
 import type { CustomerHomeViewModel } from './view/CustomerHomeView'
 import { HomeCase, type HomeCaseBuilder } from './view/HomeCase'
@@ -229,7 +232,8 @@ function conversations(locale: Locale): Conversation[] {
 // ---- B-TH-238: the Messages card (what needs the customer first, then new messages, the account's conversation) -----------------
 const ALPHA_PARTY = id(990)
 const COMPANY = 'Pelletteria Esempio'
-const recordPage = (type: string, recordId: string) => (type === 'SalesOrder' ? `/orders/${recordId}` : type === 'Inquiry' ? `/orders/requests/${recordId}` : null)
+// B-TH-253: a project opens its own page (RECORD_PAGES.Project).
+const recordPage = (type: string, recordId: string) => (type === 'SalesOrder' ? `/orders/${recordId}` : type === 'Inquiry' ? `/orders/requests/${recordId}` : type === 'Project' ? `/projects/${recordId}` : null)
 function messagesOf(locale: Locale, over: { conversations?: Conversation[]; state?: 'loading' | 'error' | 'ready' } = {}): NonNullable<CustomerHomeViewModel['messages']> {
   const state = over.state ?? 'ready'
   return {
@@ -259,15 +263,26 @@ function betaConversations(locale: Locale): Conversation[] {
     line('04', 'Party', BETA_PARTY, null, BRAND_BETA.code, 'COMPANY', 'Il listino nuovo arriva a gennaio.', 'The new price list comes in January.', -70, 0),
   ]
 }
-export function betaMessagesOf(locale: Locale, over: { conversations?: Conversation[]; waiting?: readonly RequestRow[]; unread?: Record<string, number> } = {}): NonNullable<CustomerHomeViewModel['messages']> {
+export function betaMessagesOf(locale: Locale, over: { conversations?: Conversation[]; waiting?: readonly RequestRow[]; unread?: Record<string, number>; projects?: readonly PortalProject[] } = {}): NonNullable<CustomerHomeViewModel['messages']> {
   const waiting = over.waiting ?? BETA_REQUESTS.filter((row) => row.state.open)
   return {
     state: 'ready',
     company: COMPANY,
-    card: messagesCardOf({ prefix: BETA_PREFIX, partyId: BETA_PARTY, locale, waiting, needsYouCount: waiting.filter((row) => row.state.needsYou).length, conversations: over.conversations ?? betaConversations(locale), unread: over.unread ?? {}, recordPage }),
+    card: messagesCardOf({ prefix: BETA_PREFIX, partyId: BETA_PARTY, locale, waiting, needsYouCount: waiting.filter((row) => row.state.needsYou).length, conversations: over.conversations ?? betaConversations(locale), unread: over.unread ?? {}, recordPage, ...(over.projects ? { projects: over.projects } : {}) }),
     needsYouHref: `${BETA_PREFIX}/orders?chip=NEEDS_YOU`,
   }
 }
+// ---- B-TH-253: brand B's project conversation (its last message ours, 1 new; the API's ourRef is the office's number, never drawn).
+export function betaProjectConversation(locale: Locale): Conversation {
+  const project = BETA_PROJECTS[0]!
+  return {
+    record: { type: 'Project', id: project.id, theirRef: null, ourRef: project.number, subtitle: project.name, status: project.status },
+    thread: { id: 'b2b2b2b2-0000-4000-8000-000000000611', status: 'OPEN' },
+    last: { id: 'b2b2b2b2-0000-4000-8000-000000000711', side: 'COMPANY', channel: 'PORTAL', authorName: null, excerpt: locale === 'it' ? 'Il giro di prova 2 è partito oggi.' : 'Fit round 2 left today.', attachmentCount: 0, at: at(-3) },
+    newCount: 1,
+  }
+}
+// ---- end B-TH-253
 function betaHomeCase(build: (locale: Locale) => Partial<CustomerHomeViewModel> = () => ({})): HomeCaseBuilder {
   return (locale) => {
     const t = words(locale)
@@ -499,6 +514,14 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
     // ---- B-TH-238 (P-HOME.messages): Brand Beta's Messages card — what needs it first, then new messages, its account's conversation
     { id: 'th-238-messages', label: 'Messages (Brand Beta): we need something from you first, then new messages, the account', model: betaHomeCase(), note: 'Request 7 waits for its answer (2 new) → Answer opens the request; an order with 1 new message; a quote whose last message is theirs; the account’s conversation last. Only Beta’s own numbers (#12, Your request 7) and PO.' },
     { id: 'th-238-messages-new', label: 'Messages (Brand Beta): new messages come before older ones', model: betaHomeCase((locale) => ({ messages: betaMessagesOf(locale, { waiting: [] }) })), note: 'No request waits: the request’s conversation is a conversation like the others; new ones first.' },
+    // ---- B-TH-253 (PROJ.portal-F01): the projects Brand Beta was added to in its Messages card
+    {
+      id: 'th-253-projects',
+      label: 'Messages (Brand Beta): the projects we added you to',
+      model: betaHomeCase((locale) => ({ messages: betaMessagesOf(locale, { projects: BETA_PROJECTS, conversations: [...betaConversations(locale), betaProjectConversation(locale)] }) })),
+      note: 'After what needs the customer: Winter touring line (1 new, the last message ours) and Club vests (On hold, no message yet) — each by its name, never PRJ-…; a closed project without a recent message is not listed; its conversation is not repeated among the others.',
+    },
+    // ---- end B-TH-253
     { id: 'th-238-messages-none', label: 'Messages (Brand Beta): nothing yet — the account is still offered', model: betaHomeCase((locale) => ({ messages: betaMessagesOf(locale, { waiting: [], conversations: [] }) })), note: '“No messages yet.” and “Your conversation with Pelletteria Esempio · Write to us”.' },
     { id: 'designer', label: 'A designer (no orders, documents or prices)', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'Sections the role cannot open are not drawn (fails closed); what waits and our messages remain.' },
     {

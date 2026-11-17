@@ -168,7 +168,8 @@
       "unavailable": "No connection: your message was not sent. Your text is still here; send it again.",
       "other": "Your message was not sent. Your text is still here; send it again.",
       "more": "The earlier messages could not be read."
-    }
+    },
+    "erased": "Message removed after a privacy request"
   },
   "record": {
     "tabs": "Sections of the record",
@@ -190,7 +191,30 @@
       "Complaint": "Complaint",
       "RepairOrder": "Repair",
       "Inquiry": "Request",
+      "Project": "Project",
+      "Style": "Style",
+      "SampleRound": "Sample round",
       "other": "Record"
+    },
+    "frame": {
+      "messages": "Messages",
+      "messagesNew_one": "Messages ({count} new)",
+      "messagesNew_other": "Messages ({count} new)",
+      "messagesMany": "Messages ({count}+ new)",
+      "messagesNewLabel_one": "Messages, {count} new",
+      "messagesNewLabel_other": "Messages, {count} new",
+      "back": "Back"
+    },
+    "summary": {
+      "title": "About this record",
+      "details": "Details of this record",
+      "type": "Type",
+      "number": "Number",
+      "theirRef": "Your reference",
+      "state": "State",
+      "partOf": "Belongs to",
+      "open": "Open the {type} page",
+      "failed": "The details of this record could not be read."
     }
   },
   "terms": {
@@ -220,7 +244,8 @@
     "saving": "Saving…",
     "failed": "The e-mail settings could not be read.",
     "refused": "These settings could not be saved: order, delivery and invoice e-mails always come as they happen.",
-    "saveFailed": "The settings were not saved. Try again."
+    "saveFailed": "The settings were not saved. Try again.",
+    "defaultInstant": "As it happens by default: a message from us often waits for your answer."
   },
   "still": {
     "title": "Still there?",
@@ -313,7 +338,8 @@
       "portal_approvals_view": "See what we ask you to approve",
       "portal_samples_view": "See your samples, your styles in development and their tech packs",
       "portal_production_view": "See your orders in production: stage, expected date, health and who acts next",
-      "portal_production_urgency": "Mark your orders in production urgent or regular, within your urgent quota"
+      "portal_production_urgency": "Mark your orders in production urgent or regular, within your urgent quota",
+      "portal_projects_view": "See the projects of your organisation we added you to, with your own records linked to them and the messages shared with you"
     }
   },
   "display": {

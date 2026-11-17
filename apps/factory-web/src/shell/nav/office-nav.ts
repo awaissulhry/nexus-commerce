@@ -524,6 +524,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/products/changes',
   '/products/changes/requests/[id]',
   '/products/changes/orders/[id]',
+  // B-TH-248 (threads plan TH-5): Products › Development › Projects (SCR-700) and a project (SCR-701, B-TH-249).
+  '/products/projects',
+  '/products/projects/[id]',
 ])
 
 /**

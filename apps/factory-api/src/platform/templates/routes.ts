@@ -28,6 +28,8 @@ import {
   updateDocumentTemplateContract,
   updateEmailTemplateContract,
   updateReplyContract,
+  // B-TH-098 / B-TH-279
+  fillMailEventContract,
 } from './contract'
 import {
   createDocumentTemplate,
@@ -44,7 +46,7 @@ import { contactLanguages, recipientLanguage } from './language'
 import { createEmailTemplate, deleteEmailTemplate, getEmailTemplate, listEmailTemplates, mailEvents, previewEmailTemplate, publishEmailTemplate, retireEmailTemplate, updateEmailTemplate } from './mail'
 import { manifest } from './manifest'
 import { officeOf } from './store'
-import { createReply, deleteReply, fillReply, listReplies, updateReply } from './replies'
+import { createReply, deleteReply, fillReply, listReplies, updateReply, fillMailEvent } from './replies'
 
 /**
  * Templates (B-W2b-422; PLT-131, PLT-231, PLT-232, COL-016): document templates per company, kind and language with their
@@ -86,6 +88,8 @@ export default defineRoutes('templates', manifest, async (app) => {
   app.put('/templates/replies/:replyId', { schema: updateReplyContract }, async (request) => updateReply(request, request.params.replyId, request.body, idempotencyKeyFrom(request)))
   app.delete('/templates/replies/:replyId', { schema: deleteReplyContract }, async (request) => deleteReply(request, request.params.replyId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/templates/replies/:replyId/fill', { schema: fillReplyContract }, async (request) => fillReply(request, request.params.replyId, request.body))
+  // ---- B-TH-098 / B-TH-279
+  app.post('/templates/mail/events/:event/fill', { schema: fillMailEventContract }, async (request) => fillMailEvent(request, request.params.event, request.body, idempotencyKeyFrom(request)))
 
   app.get('/templates/language', { schema: recipientLanguageContract }, async (request) => recipientLanguage(request, request.query))
   app.get('/templates/languages/contacts', { schema: contactLanguagesContract }, async (request) => contactLanguages(request, request.query))

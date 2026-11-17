@@ -101,9 +101,11 @@ describe('addresses and tabs', () => {
     expect(listQuery('OPEN', '  ')).toBe('')
     expect(listQuery('DATE_MOVED', ' BA-PO ', { print: '1' })).toBe('?chip=DATE_MOVED&q=BA-PO&print=1')
     expect(recordHref('/p/X', 'o1')).toBe('/p/X/orders/o1?tab=status')
-    expect(recordHref('/p/X', 'o1', 'messages')).toBe('/p/X/orders/o1?tab=messages#messages')
+    // B-TH-275: no Messages tab — the list's "Messages" opens the order with its docked conversation shown (the frame's arrival term).
+    expect(recordHref('/p/X', 'o1', 'lines')).toBe('/p/X/orders/o1?tab=lines')
     expect(tabOf('shipments')).toBe('shipments')
     expect(tabOf('nope')).toBe('status')
+    expect(tabOf('messages')).toBe('status')
   })
 
   it('a request not decided yet opens nothing (it is not an order yet)', () => {

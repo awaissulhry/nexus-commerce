@@ -24,6 +24,10 @@ export const partnerRecordView = output({
   subtitle: z.string().nullable(),
   /** Its status code (the portal says it in the partner's words). */
   status: z.string().nullable(),
+  // ---- TH-5 follow-up (B-TH-253): the record's date as its partner view gives it (a project's target date, an order's date; the
+  // portal search already sends the same one), null when it has none. Optional for older answers.
+  date: instant().nullable().optional(),
+  // ---- end TH-5 follow-up
 })
 
 /** A message as the partner reads it. */
@@ -50,6 +54,8 @@ export const partnerMessageView = output({
   corrects: linkedMessageView.nullable().optional(),
   correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
   // ---- end B-TH-050
+  // ---- B-TH-079 (thread-G09): its writer was erased after a privacy request ("Message removed after a privacy request").
+  erased: z.boolean().optional(),
   at: instant(),
 })
 export type PartnerMessageView = z.infer<typeof partnerMessageView>

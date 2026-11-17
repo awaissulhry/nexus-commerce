@@ -1166,5 +1166,120 @@
       "noDomain": "Configura prima il dominio di posta",
       "setUp": "Admin › Connessioni"
     }
+  },
+  "project": {
+    "open": "Avvia un progetto…",
+    "openHint": "Lavoro di sviluppo per questo cliente (una collezione, una famiglia di modelli, un programma): la richiesta vi viene collegata",
+    "held": {
+      "read": "Serve il permesso di leggere le conversazioni.",
+      "right": "Serve il permesso di gestire i progetti.",
+      "prospect": "La richiesta non ha ancora un cliente: associala prima al suo cliente (l’azienda esterna di un progetto non cambia più dopo).",
+      "offline": "Sei offline: riprova quando torna la rete."
+    },
+    "title": "Avvia un progetto da questa richiesta",
+    "rule": "Un progetto è per un lavoro su più modelli, campionature o ordini, o su un lavoro che non ha ancora un record. Riguarda solo questo ordine? Rispondi alla richiesta.",
+    "customer": "Azienda esterna",
+    "customerHint": "Nel progetto ci saranno solo {customer} e il nostro team. Non si potrà cambiare dopo.",
+    "name": "Nome",
+    "nameHint": "L’oggetto della richiesta, se non scrivi un altro nome.",
+    "target": "Data obiettivo",
+    "targetHint": "Quando dovrebbe essere concluso; al responsabile viene ricordato quando la data è passata e non ci sono messaggi.",
+    "goal": "Obiettivo",
+    "goalHint": "Un paragrafo: cosa deve raggiungere il progetto.",
+    "files_one": "Porta {count} file nel progetto",
+    "files_other": "Porta {count} file nel progetto",
+    "noFiles": "La richiesta non ha file da portare.",
+    "after": "La richiesta viene collegata al progetto e resta com’è: rispondi, prepara il preventivo o rifiutala come prima. Il responsabile del progetto sei tu; aggiungi colleghi e persone di {customer} nella sua pagina.",
+    "go": "Avvia il progetto",
+    "problem": {
+      "name": "Il nome è una riga di massimo 200 caratteri.",
+      "target": "Scegli la data obiettivo.",
+      "targetPast": "La data obiettivo è passata: scegli oggi o un giorno successivo.",
+      "goal": "L’obiettivo è di massimo 4000 caratteri.",
+      "invalid": "Controlla i campi: il progetto non può essere creato così.",
+      "forbidden": "Il tuo ruolo non può avviare un progetto per questo cliente.",
+      "notFound": "La richiesta non c’è più.",
+      "unavailable": "Il servizio non risponde ora. Riprova tra poco."
+    },
+    "refusal": {
+      "NO_PARTY_REQUEST": "La richiesta non ha ancora un cliente: associala prima al suo cliente (l’azienda esterna di un progetto non cambia più dopo).",
+      "PARTY_BLOCKED": "Questo cliente è bloccato o archiviato: un nuovo progetto non può essere condiviso con lui.",
+      "SEASON": "Questa stagione non è una stagione della società della richiesta.",
+      "LEAD": "Il responsabile di un progetto è una persona attiva dell’ufficio che può leggerlo."
+    }
+  },
+  "production": {
+    "col": "Produzione",
+    "colHint": "La risposta della produzione: si può fare, o non prima di quale settimana",
+    "cell": {
+      "OK": "OK",
+      "notBefore": "Non prima della settimana {week}",
+      "notBeforeYear": "Non prima della settimana {week} del {year}"
+    },
+    "late_one": "{count} giorno dopo la data voluta",
+    "late_other": "{count} giorni dopo la data voluta",
+    "lateWeeks_one": "{count} settimana dopo la data voluta",
+    "lateWeeks_other": "{count} settimane dopo la data voluta",
+    "title": "Produzione",
+    "none": "La produzione non ha ancora risposto.",
+    "whoTypes": "La scrive qui la pianificazione o il responsabile di produzione; chiedilo con una nota interna.",
+    "by": "Risposta di {name}, {when}",
+    "byNobody": "Risposta del {when}",
+    "officeOnly": "Solo per l'ufficio: il cliente non la vede mai.",
+    "answer": "Rispondi per la produzione",
+    "change": "Cambia la risposta",
+    "menu": "Risposta della produzione…",
+    "menuHint": "OK, o non prima di quale settimana (la pianificazione ne propone una)",
+    "chipHint": "aprila nei Dettagli",
+    "editor": "Risposta della produzione",
+    "kind": {
+      "label": "Risposta",
+      "OK": "OK, si può fare",
+      "NOT_BEFORE": "Non prima di una settimana"
+    },
+    "week": "Non prima della settimana",
+    "weekHint": "La prima settimana in cui può essere pronta (questa o una successiva).",
+    "weekPick": "Scegli la settimana",
+    "weekOption": "Settimana {week} · {from} – {to}",
+    "weekOptionYear": "Settimana {week} del {year} · {from} – {to}",
+    "suggest": {
+      "title": "Proposta della pianificazione",
+      "asking": "Chiedo alla pianificazione…",
+      "again": "Chiedi di nuovo",
+      "use": "Usa questa proposta",
+      "used": "Proposta in uso",
+      "at": "Presso {plant}",
+      "line": "Riga {seq}: pronta il {date}",
+      "linePart": "Riga {seq}: alcune taglie pronte il {date}, non tutte",
+      "lineNone": "Riga {seq}: nessuna data che la pianificazione possa promettere",
+      "leftOut": "Riga {seq}: {why}",
+      "plant": "Stabilimento",
+      "plantPick": "Scegli lo stabilimento che la produce",
+      "several": "L'azienda ha più stabilimenti: scegli quello che la produce.",
+      "noPlant": "L'azienda non ha uno stabilimento attivo per produrla: rispondi tu.",
+      "forbidden": "Il tuo ruolo non legge le date promesse in questo stabilimento: rispondi tu.",
+      "failed": "Non è stato possibile chiedere alla pianificazione: riprova, o rispondi tu.",
+      "noRight": "La proposta della pianificazione richiede il diritto di leggere le date promesse: rispondi tu."
+    },
+    "save": "Salva la risposta",
+    "takeBack": "Ritira la risposta",
+    "cancel": "Annulla",
+    "problem": {
+      "pick": "Scegli OK o una settimana.",
+      "week": "Scegli la prima settimana in cui può essere pronta.",
+      "past": "Questa settimana è già passata: scegli questa settimana o una successiva.",
+      "invalid": "La risposta è stata rifiutata: scegli di nuovo la settimana.",
+      "noAnswer": "La produzione non aveva risposto a questa richiesta: non c'è niente da ritirare.",
+      "stale": "Qualcuno ha cambiato la richiesta nel frattempo: è stata riletta. Controlla la risposta e salva di nuovo.",
+      "unavailable": "Non è stato possibile salvare la risposta ora: riprova."
+    },
+    "held": {
+      "notProduction": "La risposta della produzione la scrive chi registra le date promesse (pianificazione o responsabile di produzione)."
+    },
+    "done": {
+      "savedOk": "Risposta della produzione su {number}: OK.",
+      "savedWeek": "Risposta della produzione su {number}: non prima della settimana {week}.",
+      "takenBack": "Risposta della produzione su {number} ritirata."
+    }
   }
 }

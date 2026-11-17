@@ -3,7 +3,8 @@ import { CAN, recordModel, REV, REVISIONS, SIZES, STYLE_ID } from '../../demo/fi
 import { demoPieces } from '../pieces/fixtures'
 import { NO_PIECES } from '../pieces/pieces-model'
 import type { StyleRecordViewModel } from '../record-model'
-import { StyleRecordView } from '../view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../../demo/fixtures'
 import type { PatternFilesView, PatternFileView } from './api'
 import { NO_PATTERNS, type PatternsModel } from './patterns-model'
 
@@ -71,12 +72,12 @@ function releasedView(): PatternFilesView {
 
 const ready = (value: PatternFilesView = draftView(), extra: Partial<PatternsModel> = {}): PatternsModel => ({ ...NO_PATTERNS, canManage: true, canEdit: true, part: { status: 'ready', value }, ...extra })
 const pieces = { ...NO_PIECES, part: { status: 'ready' as const, value: demoPieces() } }
-const files = (patternFiles: PatternsModel, role: 'owner' | 'production' | 'sales' | 'product' = 'owner', extra: Partial<StyleRecordViewModel> = {}): StyleRecordViewModel => recordModel(role, { tab: 'files', patternFiles, pieces, ...extra })
+const files = (patternFiles: PatternsModel, role: 'owner' | 'production' | 'sales' | 'product' = 'owner', extra: Partial<StyleRecordViewModel> = {}): StyleRecordViewModel => recordModel(role, { tab: 'patterns', patternFiles, pieces, ...extra })
 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-304-patterns',
   title: 'Style studio: Files & patterns › Pattern files per revision and size range',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Pattern files of draft revision 3', model: files(ready()), note: 'The DXF pattern is in its second version (the files platform’s series); the marker is for 46–50; the CAD drawing is a PDF.' },
     { id: 'released', label: 'Released revision 2: the pattern frozen, a marker added', model: files(ready(releasedView()), 'owner', { revisionId: REV.r2 }), note: 'Remove N and ⋯ say why a frozen row does not change; a new marker can still be added.' },

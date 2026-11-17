@@ -4,6 +4,7 @@ import type { Rma } from '../api'
 import { inShell, RMA_RECEIVED, type RoleCase } from '../demo/fixtures'
 import { rmaModel } from '../record/fixtures'
 import { RmaRecordView } from '../record/view/RmaRecordView'
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import type { RmaModel } from '../view-model'
 import type { RemakeView } from './api'
 import { remakePartOf, type Phrase } from './model'
@@ -65,7 +66,10 @@ function caseOf(role: RoleCase, rma: Rma, remake: RemakeView | null, options: { 
 }
 
 function RemakeDesign({ model }: { model: Case }) {
-  return inShell('/sales/returns', createElement(RmaRecordView, { model: model.model }), model.role)
+  // B-TH-259: the return's thread docked beside the tab (its customer's only).
+  const rma = model.model.rma
+  const thread = designDockedThread({ recordType: 'ReturnAuthorisation', record: rma.number, party: rma.party ? { name: rma.party.legalName, role: 'customer' } : null })
+  return inShell('/sales/returns', createElement(RmaRecordView, { model: model.model, thread }), model.role)
 }
 
 export const designScreen = defineDesignScreen<Case>({

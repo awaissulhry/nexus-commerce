@@ -181,8 +181,6 @@
     "lines": "Lines",
     "confirm": "Confirm or propose",
     "asn": "Ship notices",
-    "documents": "Documents",
-    "messages": "Messages",
     "toAnswer": "To answer"
   },
   "order": {
@@ -355,16 +353,12 @@
     "notConfirmed": "Confirm the order first: then announce what you ship."
   },
   "docs": {
-    "title": "Documents",
     "asSent": "{number} as sent",
     "sentOn": "Sent on {at} · no prices",
     "pdf": "PDF",
     "openPdf": "Open the PDF of {number} (no prices) in a new tab",
-    "ddt": "Your DDT {number}",
-    "ddtOf": "With ship notice {notice}",
     "noPrices": "Our copy of the order shows what and when, never prices.",
-    "requests": "What we ask for",
-    "noRequests": "We ask for nothing on this order now."
+    "requests": "What we ask for"
   },
   "messages": {
     "priceTalk": "Questions about prices belong here: this conversation is only between you and us."
@@ -443,5 +437,8 @@
     "ROLL": "rolls",
     "CONE": "cones",
     "BOX": "boxes"
+  },
+  "thread": {
+    "label": "Messages about order {number}"
   }
 }

@@ -32,6 +32,8 @@ import {
   type PanelState,
   type PayRow,
 } from './model'
+// B-TH-276: an old `?invoice=&tab=messages` → the invoice's conversation page.
+import { oldMessagesHref } from './model'
 import type { CustomerDocument } from './preview/api'
 import { useDocumentPreview } from './preview/usePreview'
 import { DocumentsClosedView, DocumentsView } from './view/DocumentsView'
@@ -44,7 +46,9 @@ import { useDocumentWords } from './words'
  * conformity per style received (B-W2b-178; Quality, Buyer, Viewer), each on its own (one failing never empties another).
  * Every open is the API's logged command (preview, download, a file in a new tab); paying is the API's start and the FAKE
  * provider's own fields, then the page follows the payment until the bank answers. `?invoice=<id>` (an invoice's record
- * opens here) opens its Pay pop-up; with `tab=messages` its conversation. Nothing reaches a real payment provider.
+ * opens here) opens its Pay pop-up; with `tab=messages` (an old address) the invoice's conversation page replaces it (B-TH-276:
+ * `/open/Invoice/<id>?view=conversation`, the same page an invoice row's "Ask about this invoice" opens). Nothing reaches a real
+ * payment provider.
  */
 export function CustomerDocumentsRoute() {
   return (
@@ -340,11 +344,15 @@ function DocumentsContainer() {
   useEffect(() => {
     const id = address.invoice
     if (!id || handled.current === id) return
-    if (address.messages) {
+    // ---- B-TH-276 (P-CUS-DOCS [P10]): an old address of the invoice's conversation goes to the conversation's own page (the portal's
+    // generic page: its summary and its thread as the main column), replacing this address — no pop-up, Back does not bounce.
+    const conversation = oldMessagesHref(frame.prefix, address)
+    if (conversation) {
       handled.current = id
-      frame.ask({ type: 'Invoice', id })
+      router.replace(conversation)
       return
     }
+    // ---- end B-TH-276
     if (!seesToPay) {
       handled.current = id
       setNotice({ key: admins.length > 0 ? 'invoice.notYoursAsk' : 'invoice.notYours', params: { names: admins.join(', ') }, tone: 'info' })
@@ -407,6 +415,7 @@ function DocumentsContainer() {
               selected: paySelected,
               busy: viewer.busy ?? bulkBusy,
               held,
+              prefix: frame.prefix, // B-TH-276: an invoice row's "Ask about this invoice"
             }
           : null,
         library: {

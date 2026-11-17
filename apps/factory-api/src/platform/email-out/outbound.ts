@@ -59,6 +59,8 @@ import { processEmail, type EmailRuntime } from './service'
 import { mayOnThread } from '../threads/records'
 // B-TH-048: undo send (a thread mail waits 10 s and may be taken back meanwhile).
 import { isDue, sendAfterOf, UNDO_REFUSALS, undoRefusal, undoUntilOf, waitMsOf, type UndoRefusal } from '@nexus/factory-domain/email/undo-send'
+// B-TH-092: the sender's draft of the record goes with the mail sent from its thread.
+import { clearDraftInCommand } from '../threads/draft-keys'
 
 /**
  * Mail out on record threads (plan A1 §3.3 `email-out`, §3.7; features PLT-139, PLT-149, COL-024):
@@ -416,6 +418,7 @@ export async function sendFromThread(caller: CommandCaller, record: RecordRef, b
     const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
     // B-TH-048: the composer's Send waits 10 s, so its sender can take it back (POST …/emails/:emailId/undo).
     const sent = await sendEmail(tools, { ...body, record, sender: { userId: context.actorId, name: user.displayName, email: user.email }, undoWindow: true })
+    await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
     // The thread as it is now (made by this command or a racing one): its scope decides.
     if (!can(actor, EMAIL_SEND, scopeOfThread(sent.thread))) throw new ForbiddenError()
     return { thread: threadViewOf(sent.thread), messageId: sent.messageId, email: emailViewOf(sent.outbound, tools.now) }
@@ -495,10 +498,11 @@ export async function takeBackEmail(caller: CommandCaller, record: RecordRef, em
       before: { status: row.status },
       after: { status: 'WITHDRAWN', messageId: row.messageId, ...(row.status === 'WITHDRAWN' ? { unchanged: true } : {}) },
     })
-    const message = await tools.tx.message.findUniqueOrThrow({ where: { id: row.messageId }, select: { bodyText: true, attachmentFileIds: true } })
+    // th3-web-c follow-up (B-TH-236): the message it answered or corrected comes back too, so the composer reopens "Replying to …".
+    const message = await tools.tx.message.findUniqueOrThrow({ where: { id: row.messageId }, select: { bodyText: true, attachmentFileIds: true, replyToMessageId: true, correctsMessageId: true } })
     return {
       email: emailViewOf(current, tools.now),
-      text: { to: current.to, cc: current.cc, bcc: current.bcc, subject: current.subject, body: message.bodyText, attachments: message.attachmentFileIds },
+      text: { to: current.to, cc: current.cc, bcc: current.bcc, subject: current.subject, body: message.bodyText, attachments: message.attachmentFileIds, replyToMessageId: message.replyToMessageId, correctsMessageId: message.correctsMessageId },
     }
   })
   return result

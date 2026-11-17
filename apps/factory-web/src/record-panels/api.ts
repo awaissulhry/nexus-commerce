@@ -44,6 +44,9 @@ export const attachmentSchema = z.object({
   locked: z.literal('MEASUREMENTS').optional(),
 })
 
+/** B-TH-236 (B-TH-050): a message another points at ("In reply to Anna, 14 Nov: …"); the author is null for a floor worker kept back. */
+const linkedSchema = z.object({ id: z.string(), authorName: z.string().nullable(), excerpt: z.string(), at: z.string() })
+
 export const messageSchema = z.object({
   id: z.string(),
   direction: z.enum(MESSAGE_DIRECTIONS),
@@ -58,6 +61,13 @@ export const messageSchema = z.object({
   attachments: z.array(attachmentSchema),
   // B-TH-231 (B-TH-029): files of the message the reader may not see, counted ("One file you cannot open").
   hiddenAttachments: z.number().int().optional(),
+  // ---- B-TH-236 (B-TH-049, B-TH-050): the price typed in the amount field (office, price grain only: the API drops it otherwise),
+  // what the message answers or corrects, and the newest message that corrects it ("Corrected below").
+  amount: z.object({ value: z.number().int(), currency: z.string() }).nullable().optional(),
+  replyTo: linkedSchema.nullable().optional(),
+  corrects: linkedSchema.nullable().optional(),
+  correctedBy: z.object({ id: z.string(), at: z.string() }).nullable().optional(),
+  // ---- end B-TH-236
   at: z.string(),
 })
 export type ApiMessage = z.infer<typeof messageSchema>
@@ -105,6 +115,11 @@ const emailSchema = z.object({
   to: z.array(z.string()),
   subject: z.string(),
   status: z.enum(EMAIL_STATUSES),
+  // ---- B-TH-236 (B-TH-048): until when its sender may still take it back ("Sending… · Undo"), and who sent it (the Undo is theirs).
+  cc: z.array(z.string()).optional(),
+  undoUntil: z.string().nullable().optional(),
+  sentById: z.string().nullable().optional(),
+  // ---- end B-TH-236
 })
 export type ApiEmail = z.infer<typeof emailSchema>
 

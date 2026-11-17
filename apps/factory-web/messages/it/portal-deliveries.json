@@ -417,5 +417,8 @@
     "ROLL": "rotoli",
     "CONE": "coni",
     "BOX": "scatole"
+  },
+  "thread": {
+    "label": "Messaggi sull'ordine {number}"
   }
 }

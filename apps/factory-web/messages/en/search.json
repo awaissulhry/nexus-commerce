@@ -100,6 +100,8 @@
     "ServiceCase": "Service case",
     "ProductSafetyReport": "Product-safety report",
     "TransferOrder": "Transfer",
+    "Project": "Project",
+    "PortalOrderRequest": "Catalogue order",
     "other": "Record"
   },
   "chip": {
@@ -150,6 +152,8 @@
     "ServiceCase": "Service cases",
     "ProductSafetyReport": "Product-safety reports",
     "TransferOrder": "Transfers",
+    "Project": "Projects",
+    "PortalOrderRequest": "Catalogue orders",
     "other": "Other records"
   },
   "status": {
@@ -248,6 +252,7 @@
     "WAITING_CUSTOMER": "Waiting for the customer",
     "WAITING_PART": "Waiting for a part",
     "RESOLVED": "Resolved",
-    "ASSESSING": "Being assessed"
+    "ASSESSING": "Being assessed",
+    "REFUSED": "Refused"
   }
 }

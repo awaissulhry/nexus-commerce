@@ -1,0 +1,121 @@
+{
+  "block": {
+    "heading": "Linked records ({count})",
+    "headingNone": "Linked records",
+    "link": "Link…",
+    "linkLabel": "Link a record to the project",
+    "none": "No records linked. Link a style, sample or order.",
+    "noneRead": "No records linked.",
+    "group": "{group} ({count})",
+    "showAll": "Show all {count}",
+    "showFewer": "Show fewer",
+    "cannotOpen": "{type} — you cannot open it",
+    "linkedBy": "Linked by {name} · {date}",
+    "linkedOn": "Linked {date}",
+    "note": "Why: {note}",
+    "rowMenu": "Actions for {label}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "unlink": "Unlink…",
+    "scopeParty": "Only records of {party}, or of no outside company, can join.",
+    "scopeOffice": "Office-only project: only records of no outside company can join.",
+    "statusOnly": "Status in words only: never an amount."
+  },
+  "type": {
+    "Style": "Style",
+    "SampleRound": "Sample round",
+    "Quote": "Quote",
+    "SalesOrder": "Order",
+    "PurchaseOrder": "Purchase order",
+    "SubcontractOrder": "Subcontract order",
+    "ChangeRequest": "Change request",
+    "Certificate": "Certificate",
+    "Inquiry": "Request",
+    "Shipment": "Shipment",
+    "MeasurementProfile": "Measurement profile",
+    "other": "Record"
+  },
+  "link": {
+    "title": "Link a record to {project}",
+    "search": "Number or name",
+    "searchLabel": "Search records to link",
+    "kind": "Kind of record",
+    "allKinds": "Every kind that can join",
+    "idle": "Type a number or a name.",
+    "tooShort": "Type at least 2 letters.",
+    "loading": "Searching…",
+    "none": "Nothing found that can join this project.",
+    "failed": "The search did not answer.",
+    "retry": "Retry",
+    "already": "Linked already",
+    "results": "Results",
+    "picked": "Will link: {label}",
+    "note": "Why (optional)",
+    "noteHint": "One line, up to 500 characters.",
+    "noteTooLong": "The note is longer than 500 characters.",
+    "noteOneLine": "The note is one line.",
+    "submit": "Link",
+    "cancel": "Cancel",
+    "pickFirst": "Pick a record first."
+  },
+  "refused": {
+    "party": "{label} belongs to another outside company: it cannot join this project.",
+    "label": "{label} cannot join this project.",
+    "already": "{label} is linked to this project already.",
+    "notFound": "{label} was not found, or you may not open it."
+  },
+  "unlink": {
+    "title": "Unlink {label}?",
+    "body": "The record stays as it is; the project no longer lists it, and a line in the thread says who unlinked it.",
+    "confirm": "Unlink",
+    "cancel": "Keep it"
+  },
+  "notice": {
+    "linked": "Linked {label}.",
+    "unlinked": "Unlinked {label}.",
+    "unlinkedHidden": "Unlinked a record you cannot open."
+  },
+  "addTo": {
+    "button": "Add to project",
+    "buttonCount_one": "Add {count} to project",
+    "buttonCount_other": "Add {count} to project",
+    "titleStyle_one": "Add {count} style to a project",
+    "titleStyle_other": "Add {count} styles to a project",
+    "titleSampleRound_one": "Add {count} sample round to a project",
+    "titleSampleRound_other": "Add {count} sample rounds to a project",
+    "intro": "A project groups work on several styles, samples and orders. Only records of its own outside company, or of none, join it.",
+    "search": "Find a project by number or name",
+    "projects": "Open projects",
+    "loading": "Reading the open projects…",
+    "none": "No open project matches.",
+    "noneAtAll": "No open project yet: make one in Products › Development › Projects.",
+    "failed": "The projects could not be read.",
+    "retry": "Retry",
+    "officeOnly": "Office only",
+    "choice": "{number} · {name}",
+    "note": "Why (optional)",
+    "noteHint": "One line, up to 500 characters, on every record linked.",
+    "submit": "Add to project",
+    "cancel": "Cancel",
+    "held": {
+      "tooMany": "Up to {count} records at a time.",
+      "pick": "Pick a project first."
+    },
+    "result": {
+      "title": "Added to {project}",
+      "linked_one": "{count} linked",
+      "linked_other": "{count} linked",
+      "skipped_one": "{count} skipped",
+      "skipped_other": "{count} skipped",
+      "skippedTitle": "Skipped, and why",
+      "row": "{number}: {reason}",
+      "open": "Open the project",
+      "done": "Done"
+    },
+    "skip": {
+      "LINK_PARTY": "belongs to another outside company: it cannot join this project",
+      "ALREADY_LINKED": "is linked to this project already",
+      "MISSING": "not found, or you may not open it"
+    }
+  }
+}

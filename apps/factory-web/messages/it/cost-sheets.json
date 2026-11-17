@@ -12,7 +12,7 @@
     "loading": "Lettura delle voci di costo…",
     "failed": "Impossibile leggere le voci di costo",
     "noSizes": "Nessuna taglia da costare",
-    "noSizesBody": "Il modello non ha ancora una scala taglie: assegnala in Varianti e taglie.",
+    "noSizesBody": "Il modello non ha ancora una scala taglie: assegnala in Panoramica e varianti.",
     "noGrain": "I costi non sono nel tuo ruolo: le voci mostrano righe e quantità, nessun importo.",
     "size": "Taglia",
     "baseSizeOption": "{size} · taglia base",

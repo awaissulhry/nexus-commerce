@@ -9,7 +9,7 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
 import { answerApproval, approvalFileBytes, fetchApproval } from '../home/api'
 import { fetchSamples, techPackBytes, type RoundRead, type SamplesRead, type StyleRead } from './api'
-import { addressOf, addressQuery, answerProblem, answerRefusal, decisionHeld, isPdf, isPicture, neighbourOf, NS, PAGE_PERMISSION, roundsShown, samplesBandOf, type DialogFile, type SamplesAddress } from './model'
+import { addressOf, addressQuery, answerProblem, answerRefusal, decisionHeld, isPdf, isPicture, neighbourOf, NS, PAGE_PERMISSION, projectBlockOf, roundsShown, samplesBandOf, type DialogFile, type SamplesAddress } from './model'
 import type { DecisionDialogModel } from './view/DecisionDialog'
 import { SamplesClosedView, SamplesView } from './view/SamplesView'
 import { useSamplesWords } from './words'
@@ -308,6 +308,10 @@ function SamplesContainer() {
         busyPack,
         admins,
         problem,
+        // B-TH-253: the projects the person was added to (null without portal.projects.view: no block); B-TH-073: "Discuss" on a
+        // style and a round for a person who reads conversations.
+        projects: projectBlockOf(value ?? null, frame.prefix),
+        discuss: frame.me.permissions.includes('threads.read'),
         decision: dialog
           ? {
               ...dialog,

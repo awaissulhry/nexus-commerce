@@ -86,6 +86,15 @@ function caseOf(input: CaseInput = {}): AccountantCaseBuilder {
   }
 }
 
+/** B-TH-276: the normal room at another width of the portal record frame (the narrow page, its view open). */
+function frameCase(frame: { mode: 'docked' | 'stacked'; viewOpen?: boolean; newCount?: number }): AccountantCaseBuilder {
+  const build = caseOf()
+  return (locale) => {
+    const built = build(locale)
+    return built.page.kind === 'page' ? { ...built, page: { ...built.page, frame } } : built
+  }
+}
+
 const OCTOBER = INVOICES['2026-10']!
 const sale = OCTOBER[0]!
 const purchase = OCTOBER[5]!
@@ -99,8 +108,17 @@ export const designScreen = defineDesignScreen<AccountantCaseBuilder>({
       id: 'normal',
       label: 'October 2026, handed over',
       model: caseOf(),
-      note: 'Your access at rest (whose books, given by whom, until when, every download recorded). Period: Month / Quarter / Year and the month, its lock marked. Exports: EXP-2026-0012 amended by EXP-2026-0014 (a re-export carries only the changes). E-invoices: sales and purchases, XML and PDF, a rejected sale and one not deliverable; a purchase typed in has no file and cannot be chosen. Registers: the VAT registers (sales, purchases, totals) and the Intrastat file, the older one replaced. Ask finance at the foot. Band: Download period (zip). No amount anywhere.',
+      note: 'Your access at rest (whose books, given by whom, until when, every download recorded). Period: Month / Quarter / Year and the month, its lock marked. Exports: EXP-2026-0012 amended by EXP-2026-0014 (a re-export carries only the changes). E-invoices: sales and purchases, XML and PDF, a rejected sale and one not deliverable; a purchase typed in has no file and cannot be chosen. Registers: the VAT registers (sales, purchases, totals) and the Intrastat file, the older one replaced. Ask finance DOCKED on the right (~40 % from 1280 px, sticky; B-TH-276) — no copy at the foot. Band: Download period (zip). No amount anywhere.',
     },
+    // ---- B-TH-276 (P-ACC.thread [P2]): Ask finance docked like every portal record page.
+    {
+      id: 'narrow',
+      label: 'Narrower than 1280 px: the "Messages (2 new)" button',
+      model: frameCase({ mode: 'stacked', newCount: 2 }),
+      note: 'The room leads; Ask finance waits behind "Messages (2 new)" (the person’s own new messages). The band’s ⋯ "Ask a question" opens it full width with the box focused.',
+    },
+    { id: 'narrow-open', label: 'Narrower than 1280 px: Ask finance open full width', model: frameCase({ mode: 'stacked', viewOpen: true }), note: 'The conversation alone with its Back (the browser’s Back too): the room comes back at the same scroll.' },
+    // ---- end B-TH-276
     { id: 'quarter', label: 'A quarter: two months not handed over yet', model: caseOf({ period: '2026-Q4' }), note: 'Q4 2026 covers October only; November and December say “Not handed over yet” and the line under the picker says to ask finance.' },
     { id: 'quarter-locked', label: 'A quarter closed for good', model: caseOf({ period: '2026-Q3' }), note: 'July, August, September: each “Closed for good on …” (a HARD lock).' },
     { id: 'year', label: 'A year', model: caseOf({ period: '2026' }) },

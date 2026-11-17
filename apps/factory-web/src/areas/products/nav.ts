@@ -3,6 +3,8 @@ import { Clock, FlaskConical, Layers, ListChecks, Palette, Ruler, Shirt } from '
 import { GitPullRequestArrow } from 'lucide-react'
 // B-W2b-239: Settings › Product settings.
 import { SlidersHorizontal } from 'lucide-react'
+// B-TH-248 (threads plan TH-5): Development › Projects' row icon.
+import { FolderKanban } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -42,6 +44,9 @@ export const officeArea: OfficeAreaNav = {
           { id: 'products-samples', label: 'shell:nav.products.samples', href: '/products/samples', icon: FlaskConical, permission: 'sales.samples.view' },
           // B-W2b-244 SCR-117: change requests and orders, the SMV changes waiting, released versions (product.changes.view).
           { id: 'products-changes', label: 'shell:nav.products.changes', href: '/products/changes', icon: GitPullRequestArrow, permission: 'product.changes.view' },
+          // B-TH-248 (threads plan TH-5, PROJ.list): projects — work on several styles, samples and orders, or work with no record yet.
+          // GET /projects reads with threads.read: every office person who reads threads opens it (decision 14).
+          { id: 'products-projects', label: 'shell:nav.products.projects', href: '/products/projects', icon: FolderKanban, permission: 'threads.read' },
         ],
       },
       {

@@ -14,6 +14,10 @@ import { PaneActions } from './actions/PaneActions'
 import { Closed, fromLine, MadeFrom, MailCard, ProspectFields, RecordDialogs, RequestEditor } from './sections'
 // B-TH-228: what was made from it — the order and the style drafts.
 import { MadeThings } from './sections'
+// B-TH-252: "Start a project…" in ⋯ (never a sixth main action) and its dialog.
+import { StartProjectDialog } from './actions/StartProjectDialog'
+// B-TH-290: production's answer — row 1's chip, Details' Production section, ⋯ "Production answer…".
+import { ProductionChip, ProductionSection } from './production/ProductionAnswer'
 import './pane.css'
 
 /**
@@ -169,10 +173,23 @@ function Loaded({ model, actions, slots, nav, onClose, picture, companyName, han
 
   const index = nav ? nav.ids.indexOf(view.id) : -1
   const label = detailsLabel(view, say, dayWords(say))
-  const facts = <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} />
+  // ---- B-TH-290: row 1's chip and ⋯ "Production answer…" unfold Details at its Production section (the sheet on a phone); ⋯ opens the editor.
+  const productionId = `fw-rp-production-${view.id}`
+  const revealProduction = (edit: boolean) => {
+    setFolded(false)
+    if (edit) actions?.production?.onOpen?.()
+    requestAnimationFrame(() => {
+      const section = document.getElementById(productionId)
+      if (!section || section.offsetParent === null) return setSheet(true)
+      section.scrollIntoView({ block: 'nearest' })
+      section.focus({ preventScroll: true })
+    })
+  }
+  // ---- end B-TH-290
+  const facts = <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} production={model.production ? { model: model.production, actions: actions?.production, id: productionId } : null} />
   return (
     <div className={`fw-rp is-${place}`} data-place={place}>
-      <PaneHead model={model} view={view} nav={nav ?? null} index={index} picture={picture ?? null} onClose={onClose} rights={rights} onErase={onErase} onCloseThread={onCloseThread} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} place={place} fullHref={fullHref} onInfo={() => setSheet(true)} />
+      <PaneHead model={model} view={view} nav={nav ?? null} index={index} picture={picture ?? null} onClose={onClose} rights={rights} onErase={onErase} onCloseThread={onCloseThread} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} place={place} fullHref={fullHref} onInfo={() => setSheet(true)} startProject={model.startProject ? { held: model.startProject.held, onOpen: actions?.startProject?.onOpen } : undefined} production={model.production ? { answers: model.production.answers, held: say(model.production.held), onChip: () => revealProduction(false), onOpen: () => revealProduction(true) } : undefined} />
       {handled && (
         <Banner
           tone="warning"
@@ -213,26 +230,33 @@ function Loaded({ model, actions, slots, nav, onClose, picture, companyName, han
       {editing && <RequestEditor model={model} view={view} actions={actions} onClose={() => setEditing(false)} />}
       {sheet && (
         <Modal open sheet size="md" onClose={() => setSheet(false)} title={t('pane.details')} subtitle={`${view.number} · ${fromLine(view, t)}`}>
-          {facts}
+          {/* B-TH-290: the sheet's own copy of Details (its Production section with its own id). */}
+          <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} production={model.production ? { model: model.production, actions: actions?.production, id: `${productionId}-sheet` } : null} />
         </Modal>
       )}
       <RecordDialogs model={model} view={view} actions={actions} />
+      {/* B-TH-252 */}
+      {model.startProject?.dialog && <StartProjectDialog model={model.startProject.dialog} actions={actions?.startProject} />}
     </div>
   )
 }
 
-export type PaneMenuItem = 'full' | 'print' | 'edit' | 'erase' | 'close-thread' | 'copy'
+export type PaneMenuItem = 'full' | 'print' | 'edit' | 'erase' | 'close-thread' | 'copy' | /* B-TH-252 */ 'project' | /* B-TH-290 */ 'production'
 
 /**
  * Row 1's ⋯ (pane-head-F02): Open full page (the pane only), Print, Edit the request (who may), "Start an erasure request…" only
  * for a privacy admin and a prospect not yet erased (C14: a customer's contact is erased from the contact), "Close thread…" only
  * with threads.manage (C5; never the pane itself: × and Esc do that), Copy number.
  */
-export function paneMenu(view: Pick<InquiryView, 'prospect' | 'prospectDetails'>, place: 'pane' | 'page', rights: RequestPaneProps['rights'], canEdit: boolean): PaneMenuItem[] {
+export function paneMenu(view: Pick<InquiryView, 'prospect' | 'prospectDetails'>, place: 'pane' | 'page', rights: RequestPaneProps['rights'], canEdit: boolean, startProject = false, production = false): PaneMenuItem[] {
   return [
     ...(place === 'pane' ? (['full'] as const) : []),
     'print',
     ...(canEdit ? (['edit'] as const) : []),
+    // B-TH-290 (pane-facts): "Production answer…" for who types it (planning, the production manager; held with why on a closed request).
+    ...(production ? (['production'] as const) : []),
+    // B-TH-252 (PROJ.new-F07): "Start a project…" for a person who reads projects (held with why when they may not start one here).
+    ...(startProject ? (['project'] as const) : []),
     ...(rights?.erase && view.prospect && !view.prospectDetails?.erased ? (['erase'] as const) : []),
     ...(rights?.closeThread ? (['close-thread'] as const) : []),
     'copy',
@@ -268,7 +292,7 @@ const dayWords = (say: (phrase: Phrase) => string | null) => (value: string | nu
 
 // ---- row 1: the request's identity -----------------------------------------------------------------------------------------------
 
-function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, onCloseThread, onEdit, place, fullHref, onInfo }: { model: InquiryRecordModel; view: InquiryView; nav: PaneNav | null; index: number; picture: string | null; onClose?: () => void; rights?: RequestPaneProps['rights']; onErase?: () => void; onCloseThread?: () => void; onEdit?: () => void; place: 'pane' | 'page'; fullHref?: string; onInfo?: () => void }) {
+function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, onCloseThread, onEdit, place, fullHref, onInfo, startProject, production }: { model: InquiryRecordModel; view: InquiryView; nav: PaneNav | null; index: number; picture: string | null; onClose?: () => void; rights?: RequestPaneProps['rights']; onErase?: () => void; onCloseThread?: () => void; onEdit?: () => void; place: 'pane' | 'page'; fullHref?: string; onInfo?: () => void; startProject?: { held: string | null; onOpen?: () => void }; production?: { answers: boolean; held: string | null; onChip: () => void; onOpen: () => void } }) {
   const { t, say } = useWords()
   const who = fromLine(view, t)
   const waiting = waitingShort(view)
@@ -281,8 +305,12 @@ function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, 
     erase: { id: 'erase', label: t('pane.erase'), description: t('pane.eraseHint'), onSelect: () => onErase?.() },
     'close-thread': { id: 'close-thread', label: t('pane.closeThread'), onSelect: () => onCloseThread?.() },
     copy: { id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(view.number).catch(() => undefined) },
+    // B-TH-252: its customer becomes the project's outside company (never another); held with why (a prospect: match it first).
+    project: { id: 'project', label: t('project.open'), disabled: !!startProject?.held, description: startProject?.held ? t(startProject.held) : t('project.openHint'), onSelect: () => startProject?.onOpen?.() },
+    // B-TH-290: Details' Production section with its editor open (held with why: a closed request keeps its answer).
+    production: { id: 'production', label: t('production.menu'), disabled: !!production?.held, description: production?.held ?? t('production.menuHint'), onSelect: () => production?.onOpen() },
   }
-  const items = paneMenu(view, place, rights, !!onEdit).map((id) => make[id])
+  const items = paneMenu(view, place, rights, !!onEdit, !!startProject && startProject.held !== 'project.held.read', !!production?.answers).map((id) => make[id])
   return (
     <header className="fw-rp-head">
       <span className="fw-rp-pic" aria-hidden>
@@ -303,6 +331,8 @@ function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, 
       <span className="fw-rp-state">
         <StatusPill status={view.status} />
         {waiting && <span className={view.waiting.overdue ? 'fw-rp-wait is-late' : 'fw-rp-wait'}>{say(waiting)}</span>}
+        {/* B-TH-290 (pane-head-F07): "Production: OK" / "not before week 14" once production answered; a click opens it in Details. */}
+        <ProductionChip view={model.production?.current} onOpen={production?.onChip} />
       </span>
       <span className="fw-rp-owner" title={t('col.owner')}>
         {owner}
@@ -387,7 +417,7 @@ function FirstWords({ model, view, actions }: { model: InquiryRecordModel; view:
  * made from it (the quote with ITS own status), the prospect block with its lawful basis (e-mail and phone only for who answers
  * requests, PR-30), the request note.
  */
-function Details({ model, view, companyName, onEdit }: { model: InquiryRecordModel; view: InquiryView; companyName: string | null; onEdit?: () => void }) {
+function Details({ model, view, companyName, onEdit, production }: { model: InquiryRecordModel; view: InquiryView; companyName: string | null; onEdit?: () => void; production?: { model: NonNullable<InquiryRecordModel['production']>; actions?: NonNullable<InquiryRecordActions['production']>; id: string } | null }) {
   const { t, day, when, locale } = useWords()
   const target = view.targetUnitPrice as string | null | undefined
   const ship = view.shipTo ?? null
@@ -430,6 +460,8 @@ function Details({ model, view, companyName, onEdit }: { model: InquiryRecordMod
         </div>
         <KeyValue items={items} labelCase="sentence" />
       </section>
+      {/* B-TH-290: production's answer — typed here by planning or the production manager, offered from planning's promise read. */}
+      {production && <ProductionSection model={production.model} actions={production.actions} id={production.id} />}
       {!view.party && (
         <section className="fw-rp-sec">
           <h3 className="fw-rp-h3">{t('pane.facts.prospect')}</h3>

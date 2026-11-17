@@ -60,7 +60,7 @@ export interface ServiceCan {
   returns: boolean
   /** The customer pickers (parties.view). */
   parties: boolean
-  /** The Activity tab's thread (threads.read). */
+  /** The case's docked thread (threads.read; B-TH-259: Activity went to it). */
   threads: boolean
 }
 
@@ -199,8 +199,19 @@ export function rowVerbHeld(row: Pick<CaseRow, 'status' | 'party' | 'kind' | 'co
 
 // ---- the case's address -----------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['case', 'warranty', 'linked', 'actions', 'activity'] as const
+// ---- B-TH-259 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-SAL-SVC): the case on RecordFrame — tabs
+// 5 → 3: Case (it takes the status mails sent to the customer, R1-G04), Warranty check, Linked records & actions ('linked': each
+// action makes a record that lands in the list above it). Activity goes: the case's thread docks beside every tab, its tools in its
+// "⋯" (R-ACT).
+export const RECORD_TABS = ['case', 'warranty', 'linked'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Actions → Linked records & actions, Activity → Case (RecordFrame opens the thread). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ actions: 'linked', activity: 'case' })
+export function recordTabOf(asked: string | null | undefined): RecordTab {
+  if (asked && (RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return asked && Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'case'
+}
+// ---- end B-TH-259
 /** What a row's verb opens on the case (`?do=`): its dialog. */
 export const RECORD_DOS = ['repair', 'return', 'close', 'decide', 'link'] as const
 export type RecordDo = (typeof RECORD_DOS)[number]

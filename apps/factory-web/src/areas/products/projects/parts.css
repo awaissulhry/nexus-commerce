@@ -1,0 +1,14 @@
+/*
+ * The parts every project screen shares (parts.tsx) LAYOUT only: a target date with its words beside it, numbers in tabular figures.
+ * Semantic tokens only.
+ */
+.fw-prj-target {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-prj-num {
+  font-variant-numeric: tabular-nums;
+}

@@ -7,6 +7,13 @@ import { PortalShellView, type PortalShellViewModel } from '../../../shell/view/
 import { NotInAccess } from '../../orders/parts'
 import { NS as ORDERS_NS } from '../../orders/model'
 import { NS } from '../model'
+import { useDeliveryWords } from '../words'
+// ---- B-TH-277: the order's conversation docked beside the notice and its steps (the portal record frame), as the live page draws it.
+import { ThreadView, type ThreadViewModel } from '../../../shell/view/ThreadView'
+import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
+import type { PortalFrameMode } from '../../../shell/record/model'
+import type { ReactNode } from 'react'
+// ---- end B-TH-277
 import { AnnounceView, type AnnounceViewModel } from './AnnounceView'
 import { DeliveriesListView, type DeliveriesListViewModel } from './DeliveriesListView'
 import { CancelDialog, type CancelModel } from './Dialogs'
@@ -18,10 +25,19 @@ import { NoticeView, type NoticeViewModel } from './NoticeView'
  * live pages compose the same views.
  */
 
+/**
+ * B-TH-277: the order's conversation (null: no order yet — no dock) and its frame — absent, the review frame's own width decides
+ * (docked from 1280 px, the "Messages" button below); given, the narrow page whatever the width.
+ */
+export interface DeliveriesCaseThread {
+  thread?: { model: ThreadViewModel; number: string } | null
+  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
+}
+
 export type DeliveriesCaseBody =
   | { kind: 'list'; model: DeliveriesListViewModel }
-  | { kind: 'announce'; model: AnnounceViewModel; dialog?: CancelModel | null }
-  | { kind: 'notice'; model: NoticeViewModel }
+  | ({ kind: 'announce'; model: AnnounceViewModel; dialog?: CancelModel | null } & DeliveriesCaseThread)
+  | ({ kind: 'notice'; model: NoticeViewModel } & DeliveriesCaseThread)
   | { kind: 'noAccess'; admins: readonly string[] }
 
 export interface DeliveriesCaseModel {
@@ -42,16 +58,28 @@ export function DeliveriesCase({ model: build }: { model: DeliveriesCaseBuilder 
         {body.kind === 'list' ? (
           <DeliveriesListView model={body.model} />
         ) : body.kind === 'announce' ? (
-          <>
+          <Docked body={body}>
             <AnnounceView model={body.model} />
             {body.dialog ? <CancelDialog model={body.dialog} /> : null}
-          </>
+          </Docked>
         ) : body.kind === 'notice' ? (
-          <NoticeView model={body.model} />
+          <Docked body={body}>
+            <NoticeView model={body.model} />
+          </Docked>
         ) : (
           <NotInAccess admins={body.admins} homeHref={model.shell.prefix} />
         )}
       </PortalShellView>
     </WithMessages>
+  )
+}
+
+/** B-TH-277: the notice (or its steps) in the portal record frame, the order's conversation docked beside it. */
+function Docked({ body, children }: { body: DeliveriesCaseThread; children: ReactNode }) {
+  const { t } = useDeliveryWords()
+  return (
+    <PortalRecordFrame thread={body.thread ? <ThreadView model={body.thread.model} /> : null} threadLabel={t('thread.label', { number: body.thread?.number ?? '' })} design={body.frame}>
+      {children}
+    </PortalRecordFrame>
   )
 }

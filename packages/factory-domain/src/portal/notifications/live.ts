@@ -13,6 +13,8 @@ import { PORTAL_COLLEAGUES_VIEW } from '../../auth/partners/permissions'
 import { PORTAL_ADDRESSES_VIEW } from '../../sales/portal-ordering/permissions'
 // B-TH-011: a customer's requests (its list, tiles and request page update).
 import { PORTAL_SALES_ORDERS_VIEW } from '../../sales/portal-orders/permissions'
+// B-PR-16: the customer's own production (stage, health, urgency, hold).
+import { PORTAL_PRODUCTION_VIEW } from '../../production-brand/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -72,6 +74,15 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'delivery_address.checked': { permission: PORTAL_ADDRESSES_VIEW, party: 'partyId', fields: ['addressId', 'partyId', 'decision'] },
   'partner_user.invited': { permission: PORTAL_COLLEAGUES_VIEW, party: 'partyId', fields: ['userId', 'partyId'] },
   'partner_user.changed': { permission: PORTAL_COLLEAGUES_VIEW, party: 'partyId', fields: ['userId', 'partyId', 'status'] },
+  // ── B-PR-16 (production plan §6; PW-P07, PW-15; R-41, R-48): My production updates — a stage reached, the health, its own
+  // urgency (marked, put in order, or changed by us) and a hold, each only to the party it names, ids and states only. Never
+  // brand_production.supervisor_changed (the customer is never told who supervises), production_issue.* (office only) or
+  // work_order_hold.* (the customer reads a hold through hold_changed); never an office person, an urgent place or a count.
+  'brand_production.stage_reached': { permission: PORTAL_PRODUCTION_VIEW, party: 'partyId', fields: ['orderId', 'partyId', 'stage'] },
+  'brand_production.health_changed': { permission: PORTAL_PRODUCTION_VIEW, party: 'partyId', fields: ['orderId', 'partyId', 'health'] },
+  'brand_production.urgency_changed': { permission: PORTAL_PRODUCTION_VIEW, party: 'partyId', fields: ['partyId', 'orderIds', 'urgency', 'by', 'change', 'locked', 'batchId'] },
+  'brand_production.hold_changed': { permission: PORTAL_PRODUCTION_VIEW, party: 'partyId', fields: ['orderId', 'partyId', 'held'] },
+  // ── end B-PR-16
 })
 
 /**

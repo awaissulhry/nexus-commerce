@@ -10,12 +10,15 @@ import { dayIn } from '../../../lib/po-answer/quantities'
 import { usePortalTasks } from '../../shell/PortalShell'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
 import { PortalThread } from '../../shell/thread/PortalThread'
+// ---- B-TH-277: the PO's conversation docks beside every tab (no Messages tab, no Ask modal).
+import { PortalRecordFrame } from '../../shell/record/PortalRecordFrame'
+// ---- end B-TH-277
 import { orderBandOf } from './band'
 import { confirmOrder, declineOrder, fetchNotices, fetchOrder, fetchRevisions, type AnswerEnd, type NoticeRow, type OrderPage, type PortalDeclineReason } from './api'
 import { answerLines, lineRequestOf } from '../../../lib/po-answer/lines'
 import { confirmAllBody, confirmBodyOf, declineHeld, NS, problemOf, recordHref, requestsAbout, reviewOf, seenKey, tabOf, type AnswerDraft, type AnswerProblem, type DeclineDraft, type RecordTab } from './model'
 import { mayApprove, NotInAccessHere, useOffline } from './parts'
-import { OrderRecordView, type AnswerDone, type OrderRecordViewModel } from './view/OrderRecordView'
+import { OrderRecordView, PriceTalkHint, type AnswerDone, type OrderRecordViewModel } from './view/OrderRecordView'
 import type { VersionModel } from './view/Dialogs'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { useOrderWords } from './words'
@@ -23,7 +26,8 @@ import { useOrderWords } from './words'
 /**
  * `/p/<party>/orders/<id>?tab=…` for a supplier (B-W2b-179; design portal.supplier.orders rec "Purchase order"): reads the
  * order (GET /portal/purchase-orders/:id), fills the band (title, their reference first, the state, "Confirm all as asked",
- * the ⋯ with Decline, What changed, the PO PDF and Ask a question, the five tabs), keeps the answer being typed (guarded:
+ * the ⋯ with Decline, What changed, the PO PDF and Ask a question, the three tabs — B-TH-277), docks the PO's conversation
+ * beside every tab (the portal record frame: price talk lives there, C2), keeps the answer being typed (guarded:
  * leaving asks first), sends it for the version shown with ONE Idempotency-Key per answer, and reads again on the live
  * channel's task events. The ship notices of the order come from B-W2b-182's list (portal.shipNotices.view).
  */
@@ -237,60 +241,68 @@ function OrderContainer({ id }: { id: string }) {
         ? { kind: 'decline', model: { documentNumber: page.order.documentNumber, reasons: page.answer.declineReasons, draft: dialog.draft, busy, heldReason: declineHeld(dialog.draft, facts), problem } }
         : { kind: 'version', model: dialog.model }
 
+  // B-TH-277: the PO's conversation, docked beside every tab once the order is read (none while it loads, fails or is not theirs).
+  const thread =
+    page && state === 'ready' ? (
+      <>
+        <PriceTalkHint />
+        <PortalThread type="PurchaseOrder" id={page.order.id} showRecord={false} />
+      </>
+    ) : null
   return (
-    <OrderRecordView
-      model={{
-        state,
-        page,
-        tab,
-        prefix: frame.prefix,
-        today: dayIn(new Date()),
-        highlight,
-        draft,
-        facts: { preview: frame.me.preview, offline },
-        busy,
-        problem,
-        done,
-        changesOpen,
-        notices,
-        // B-W2b-186: "Announce delivery" opens the new ship notice from this order (held with the reason).
-        announce: canNotices && page ? { href: `${frame.prefix}/deliveries/new?po=${encodeURIComponent(page.order.id)}`, heldReason: frame.me.preview ? t('held.preview') : notices.mayWrite === false ? t('asn.mayWrite') : page.order.state !== 'CONFIRMED' && page.order.state !== 'PARTLY_DELIVERED' ? t('asn.notConfirmed') : offline ? t('held.offline') : null } : null,
-        requests: orderRequests,
-        dialog: dialogModel,
-      }}
-      actions={{
-        onAnswer: (lineId: string, answer: LineDraft | null) =>
-          setDraft((current) => {
-            const answers = { ...current.answers }
-            if (answer && answer.kind !== 'AS_ASKED') answers[lineId] = answer
-            else delete answers[lineId]
-            return { ...current, answers }
-          }),
-        onAllAsAsked: () => setDraft((current) => ({ ...current, answers: {} })),
-        onField: (field, value) => setDraft((current) => ({ ...current, [field]: value })),
-        onSend: send,
-        onDecline: () => setDialog({ kind: 'decline', draft: DECLINE }),
-        onRetry: () => {
-          setState('loading')
-          void load()
-        },
-        onRetryNotices: () => {
-          setNotices({ state: 'loading', items: [] })
-          void loadNotices()
-        },
-        onChangesToggle: setChangesOpen,
-        onTab: (next: RecordTab) => router.push(recordHref(frame.prefix, id, next)),
-        dialog: {
-          onRef: (value) => setDialog((current) => (current?.kind === 'confirmAll' ? { ...current, supplierRef: value } : current)),
-          onConfirm: () => (dialog?.kind === 'confirmAll' ? confirmAll(dialog.supplierRef) : undefined),
-          onDeclineDraft: (reason: PortalDeclineReason, note: string) => setDialog((current) => (current?.kind === 'decline' ? { kind: 'decline', draft: { ...current.draft, reason, note } } : current)),
-          onDeclineSend: declineSend,
-          onVersionRetry: () => (dialog?.kind === 'version' ? openVersion(dialog.model.revision) : undefined),
-          onClose: () => (busy ? undefined : (setDialog(null), setProblem(null))),
-        },
-      }}
-    >
-      {tab === 'messages' && page ? <PortalThread type="PurchaseOrder" id={page.order.id} showRecord={false} /> : null}
-    </OrderRecordView>
+    <PortalRecordFrame thread={thread} threadLabel={t('thread.label', { number: page?.order.documentNumber ?? '' })}>
+      <OrderRecordView
+        model={{
+          state,
+          page,
+          tab,
+          prefix: frame.prefix,
+          today: dayIn(new Date()),
+          highlight,
+          draft,
+          facts: { preview: frame.me.preview, offline },
+          busy,
+          problem,
+          done,
+          changesOpen,
+          notices,
+          // B-W2b-186: "Announce delivery" opens the new ship notice from this order (held with the reason).
+          announce: canNotices && page ? { href: `${frame.prefix}/deliveries/new?po=${encodeURIComponent(page.order.id)}`, heldReason: frame.me.preview ? t('held.preview') : notices.mayWrite === false ? t('asn.mayWrite') : page.order.state !== 'CONFIRMED' && page.order.state !== 'PARTLY_DELIVERED' ? t('asn.notConfirmed') : offline ? t('held.offline') : null } : null,
+          requests: orderRequests,
+          dialog: dialogModel,
+        }}
+        actions={{
+          onAnswer: (lineId: string, answer: LineDraft | null) =>
+            setDraft((current) => {
+              const answers = { ...current.answers }
+              if (answer && answer.kind !== 'AS_ASKED') answers[lineId] = answer
+              else delete answers[lineId]
+              return { ...current, answers }
+            }),
+          onAllAsAsked: () => setDraft((current) => ({ ...current, answers: {} })),
+          onField: (field, value) => setDraft((current) => ({ ...current, [field]: value })),
+          onSend: send,
+          onDecline: () => setDialog({ kind: 'decline', draft: DECLINE }),
+          onRetry: () => {
+            setState('loading')
+            void load()
+          },
+          onRetryNotices: () => {
+            setNotices({ state: 'loading', items: [] })
+            void loadNotices()
+          },
+          onChangesToggle: setChangesOpen,
+          onTab: (next: RecordTab) => router.push(recordHref(frame.prefix, id, next)),
+          dialog: {
+            onRef: (value) => setDialog((current) => (current?.kind === 'confirmAll' ? { ...current, supplierRef: value } : current)),
+            onConfirm: () => (dialog?.kind === 'confirmAll' ? confirmAll(dialog.supplierRef) : undefined),
+            onDeclineDraft: (reason: PortalDeclineReason, note: string) => setDialog((current) => (current?.kind === 'decline' ? { kind: 'decline', draft: { ...current.draft, reason, note } } : current)),
+            onDeclineSend: declineSend,
+            onVersionRetry: () => (dialog?.kind === 'version' ? openVersion(dialog.model.revision) : undefined),
+            onClose: () => (busy ? undefined : (setDialog(null), setProblem(null))),
+          },
+        }}
+      />
+    </PortalRecordFrame>
   )
 }

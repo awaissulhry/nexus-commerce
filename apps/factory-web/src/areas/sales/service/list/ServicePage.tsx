@@ -198,7 +198,8 @@ export function ServicePage() {
     }
   }, [newCase, companyId, api, router, prefix])
 
-  const verbTarget = (row: CaseRow, verb: RowVerb) => (verb === 'repair' ? recordHref(prefix, row.id, 'actions', 'repair') : verb === 'return' ? recordHref(prefix, row.id, 'actions', 'return') : recordHref(prefix, row.id, 'case', 'close'))
+  // B-TH-259: Make repair / Make RMA open on Linked records & actions (the Actions tab is part of it).
+  const verbTarget = (row: CaseRow, verb: RowVerb) => (verb === 'repair' ? recordHref(prefix, row.id, 'linked', 'repair') : verb === 'return' ? recordHref(prefix, row.id, 'linked', 'return') : recordHref(prefix, row.id, 'case', 'close'))
 
   const model: ServiceListModel = {
     prefix,

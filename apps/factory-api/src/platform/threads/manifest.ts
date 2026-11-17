@@ -30,4 +30,25 @@ export const manifest = defineManifest({
   // ---- B-TH-047: the conversations waiting on us across records (Customer replies, Supplier replies) — office only; each row also
   // asks its record type's own view permission over the record (factory-domain threads/view-gates).
   'GET /threads/waiting': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  // ---- B-TH-076: one summary row for any record (type, label, state, parent) — the office in its scope (threads.read over the
+  // record), a portal session through the record type's partner view only.
+  'GET /records/:recordType/:recordId/summary': { audiences: ['office', 'partner'], permission: 'threads.read', scope: 'record' },
+  // ---- end B-TH-076
+  // ---- B-TH-091: pins — read by the office and a portal reader (its own customer's pins only); pinned and unpinned by whoever may
+  // write on the record (threads.post); a request's note moved into a pinned office note (threads.post, and the handler asks
+  // sales.inquiries.manage over the request).
+  'GET /threads/:recordType/:recordId/pins': { audiences: ['office', 'partner'], permission: 'threads.read', scope: 'record' },
+  'PUT /threads/:recordType/:recordId/pins/:messageId': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'DELETE /threads/:recordType/:recordId/pins/:messageId': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'POST /threads/Inquiry/:recordId/pins/note': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- end B-TH-091
+  // ---- B-TH-092: the person's own draft of a record they may write on (threads.post over it), and their drafts (the lists' "Draft").
+  'GET /threads/drafts': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'GET /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'PUT /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'DELETE /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- end B-TH-092
+  // ---- B-TH-093: Done — whoever may write on the conversation marks it done or opens it again (office only).
+  'PUT /threads/:recordType/:recordId/done': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- end B-TH-093
 })

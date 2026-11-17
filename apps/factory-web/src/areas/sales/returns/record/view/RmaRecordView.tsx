@@ -3,13 +3,16 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MoreHorizontal, PackageCheck, Wrench } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Kbd, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
 import { CellSaveMark } from '../../../../../lib/i18n/ds-parts'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
-import { Freshness, RecordFrame, Section } from '../../../../quality/_shared/parts'
+import { Freshness, Section } from '../../../../quality/_shared/parts'
+// ---- B-TH-259: the return on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import type { ReturnLine } from '../../api'
 import {
   decisionDraftProblems,
@@ -41,7 +44,9 @@ import { AddLinesModal } from './AddLinesModal'
 import { RmaDialogs } from './RmaDialogs'
 
 /**
- * A return's record (SCR-112, design sales.returns › Return (RMA), `?tab=lines|inspection|credit|shipments|activity`): the
+ * A return's record (SCR-112, design sales.returns › Return (RMA), `?tab=lines|inspection|credit|shipments`; B-TH-259: on RecordFrame,
+ * the band in the shell's row with ONE pill, the return's thread docked beside every tab — its customer's only —, Activity's tools
+ * in its "⋯" (R-ACT), ONE notice; an old `?tab=activity` opens the thread): the
  * band (‹ Returns & repairs, the RMA number, the customer and order, the status; Receive goods (r) and ⋯ Close, Cancel,
  * Copy number), the MilestoneTracker (asked for · authorised · back with us · inspected · outcome, each with its date),
  * then the tabs: Lines (what comes back, autosaved per cell until the goods arrive; a quantity above what was sold is
@@ -54,19 +59,20 @@ import { RmaDialogs } from './RmaDialogs'
  * fee on Inspection & decision; Credit without return and the restocking or handling fee on Replacement & credit.
  */
 // B-W2b-398: `returnLabels` is the Shipments tab's return labels (its container reads them; the design cases need no session).
-export function RmaRecordView({ model, actions, panels, returnLabels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode; returnLabels?: ReactNode }) {
+// B-TH-259: `thread` is the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function RmaRecordView({ model, actions, thread, printThread, returnLabels }: { model: RmaModel; actions?: RmaActions; thread?: ReactNode; printThread?: ReactNode; returnLabels?: ReactNode }) {
   return (
     <ReturnsMessages>
-      <RmaRecord model={model} actions={actions} panels={panels} returnLabels={returnLabels} />
+      <RmaRecord model={model} actions={actions} thread={thread} printThread={printThread} returnLabels={returnLabels} />
     </ReturnsMessages>
   )
 }
 
-function RmaRecord({ model, actions, panels, returnLabels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode; returnLabels?: ReactNode }) {
+function RmaRecord({ model, actions, thread, printThread, returnLabels }: { model: RmaModel; actions?: RmaActions; thread?: ReactNode; printThread?: ReactNode; returnLabels?: ReactNode }) {
   const t = useWords()
   const dayWords = useDayWords()
   const { rma, prefix, can } = model
-  const tab: RmaTab = model.tab === 'activity' && !panels ? 'lines' : model.tab
+  const tab: RmaTab = model.tab
   const base = returnHref(prefix, rma.id)
   const held = (action: Parameters<typeof returnStep>[0]) => {
     const words = returnStep(action, rma, can, model.offline)
@@ -103,12 +109,12 @@ function RmaRecord({ model, actions, panels, returnLabels }: { model: RmaModel; 
     { id: 'link', label: t('record.copyLink'), onSelect: () => actions?.onCopy?.(typeof window === 'undefined' ? base : `${window.location.origin}${base}`) },
   ]
 
-  const tabs = [
-    { id: 'lines', label: t('tab.lines'), count: counts.lines },
-    { id: 'inspection', label: t('tab.inspection'), count: counts.toDecide },
-    { id: 'credit', label: t('tab.credit') },
-    { id: 'shipments', label: t('tab.shipments'), count: counts.shipments },
-    ...(panels ? [{ id: 'activity', label: t('tab.activity') }] : []),
+  // B-TH-259: tabs 5 → 4 — Activity went to the docked thread.
+  const tabs: TabItem[] = [
+    { id: 'lines', label: t('tab.lines'), count: counts.lines, href: `${base}?tab=lines` },
+    { id: 'inspection', label: t('tab.inspection'), count: counts.toDecide, href: `${base}?tab=inspection` },
+    { id: 'credit', label: t('tab.credit'), href: `${base}?tab=credit` },
+    { id: 'shipments', label: t('tab.shipments'), count: counts.shipments, href: `${base}?tab=shipments` },
   ]
   const owner = ownerName(model.people, rma.ownerId, model.me)
   const milestones = rma.tracking.map((step) => ({ id: step.step, label: t(`track.${step.step}`), state: step.state, at: step.at, sub: say(t, trackingWords(step, rma), dayWords) }))
@@ -116,37 +122,43 @@ function RmaRecord({ model, actions, panels, returnLabels }: { model: RmaModel; 
   return (
     <>
       <RecordFrame
-        back={{ href: `${prefix}/sales/returns`, label: t('record.back') }}
-        title={<span className="fw-q-code">{rma.number}</span>}
-        meta={
-          <span className="fw-q-cell-row">
-            <span>{rma.party?.legalName ?? '—'}</span>
-            {rma.salesOrder && (
-              <Link className="fw-q-link fw-q-code" href={`${prefix}/sales/orders/${encodeURIComponent(rma.salesOrder.id)}`}>
-                {rma.salesOrder.number}
-              </Link>
-            )}
-            {rma.customerRef && <span className="fw-q-hint">{t('row.theirRef', { ref: rma.customerRef })}</span>}
-            <Freshness asOf={model.asOf} live={model.live} />
-          </span>
-        }
-        status={<ReturnStatusPill status={rma.status} />}
-        actions={
-          <>
+        recordType="ReturnAuthorisation"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabelOf', { number: rma.number })}
+        thread={thread ?? null}
+        printThread={printThread}
+        wide={tab === 'lines'}
+        band={{
+          back: <Link href={`${prefix}/sales/returns`}>{t('record.back')}</Link>,
+          title: <span className="fw-q-code">{rma.number}</span>,
+          status: <ReturnStatusPill status={rma.status} />,
+          meta: (
+            <span className="fw-q-cell-row">
+              <span>{rma.party?.legalName ?? '—'}</span>
+              {rma.salesOrder && (
+                <Link className="fw-q-link fw-q-code" href={`${prefix}/sales/orders/${encodeURIComponent(rma.salesOrder.id)}`}>
+                  {rma.salesOrder.number}
+                </Link>
+              )}
+              {rma.customerRef && <span className="fw-q-hint">{t('row.theirRef', { ref: rma.customerRef })}</span>}
+              <Freshness asOf={model.asOf} live={model.live} />
+            </span>
+          ),
+          primary: (
             <Button size="sm" variant="primary" heldReason={held('receive')} aria-keyshortcuts="r" onClick={() => actions?.onDialog?.({ kind: 'receive', draft: receiptDraftOf(rma) })}>
-              <PackageCheck size={14} aria-hidden /> {t('action.receive')} <Kbd>R</Kbd>
+              <PackageCheck size={14} aria-hidden /> {t('action.receive')}
             </Button>
-            <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={moreItems} />
-          </>
-        }
-        tabs={tabs}
-        active={tab}
-        tabHref={(id) => `${base}?tab=${id}`}
-        dock={panels}
-        dockOpen={model.dockOpen}
-        onDock={() => actions?.onDock?.()}
+          ),
+          more: moreItems,
+          moreLabel: t('record.more'),
+          // PR-14: the record's own key in the band menu's ONE Keyboard line.
+          keys: [{ keys: ['R'], label: t('action.receive') }],
+        }}
       >
         <div className="fw-q-stack">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+          {/* B-TH-259: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
           {model.offline && <Banner tone="warning" title={t('offline.title')}>{t('offline.body')}</Banner>}
           {model.changedAt && (
             <Banner
@@ -183,6 +195,7 @@ function RmaRecord({ model, actions, panels, returnLabels }: { model: RmaModel; 
               {rma.statusReason ?? null}
             </Banner>
           )}
+          </RecordNotices>
           <Card padded>
             <MilestoneTracker steps={milestones} label={t('track.label')} />
           </Card>
@@ -201,7 +214,6 @@ function RmaRecord({ model, actions, panels, returnLabels }: { model: RmaModel; 
           {tab === 'inspection' && <InspectionTab model={model} actions={actions} />}
           {tab === 'credit' && <CreditTab model={model} actions={actions} />}
           {tab === 'shipments' && <ShipmentsTab model={model} actions={actions} returnLabels={returnLabels} />}
-          {tab === 'activity' && panels}
         </div>
       </RecordFrame>
       <RmaDialogs model={model} actions={actions} />

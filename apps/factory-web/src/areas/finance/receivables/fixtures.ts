@@ -3,6 +3,8 @@ import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { AGEING, canAs, GAMMA, inShell, NOW, PREFIX, REMINDERS, ROWS, STATEMENT, SWITCH_OFF, SWITCH_ON, TODAY, withoutPrice, type Role } from './demo/fixtures'
 import { addressOf, rowStatement, statementKey } from './model'
 import { ReceivablesView, type ReceivablesModel } from './view/ReceivablesView'
+// ---- B-TH-271 (PL6): the reminder's made-up thread docked in its window (its customer's only) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 
 /**
  * SCR-151 — Finance › Receivables & credit (design finance.receivables) with made-up data only: What customers owe (the
@@ -17,6 +19,8 @@ import { ReceivablesView, type ReceivablesModel } from './view/ReceivablesView'
 interface Case {
   role: Role
   page: ReceivablesModel
+  /** B-TH-271: no thread beside the open reminder (the person does not read threads). */
+  noThread?: boolean
 }
 
 const ADDRESS = addressOf(null)
@@ -58,7 +62,10 @@ const base = (role: Role, over: Partial<ReceivablesModel> = {}): Case => {
 }
 
 function ReceivablesDesign({ model }: { model: Case }) {
-  return inShell('/finance/receivables', createElement(ReceivablesView, { model: model.page }), model.role)
+  // B-TH-271: the open reminder's thread in its customer's own (made-up) words: "Reply to <customer>", this customer only.
+  const open = model.page.reminder?.value ?? null
+  const reminderThread = open && !model.noThread ? designDockedThread({ recordType: 'PaymentReminder', record: `${open.customer.code} · ${open.level}`, party: { name: open.customer.name, role: 'customer' } }) : null
+  return inShell('/finance/receivables', createElement(ReceivablesView, { model: model.page, depth: { reminderThread } }), model.role)
 }
 
 const gamma = ROWS[0]!
@@ -194,6 +201,14 @@ export const designScreen = defineDesignScreen<Case>({
       label: 'A reminder: a letter, 30 days late, a warning (payment being processed)',
       model: base('finance', reminderOpen(0, 'finance')),
     },
+    // ---- B-TH-271 (PL6, picture 40): the reminder's own thread docked in the window — a customer's answer to it is seen here.
+    {
+      id: 'reminder-thread',
+      label: 'B-TH-271 · The reminder’s thread docked in its window: the customer’s answer is seen where the reminder is approved',
+      model: base('finance', reminderOpen(1, 'finance')),
+    },
+    { id: 'reminder-no-thread', label: 'B-TH-271 · Without threads.read: the window is the reminder alone', model: { ...base('finance', reminderOpen(1, 'finance')), noThread: true } },
+    // ---- end B-TH-271
     {
       id: 'reminder-edit',
       label: "Edit text in the customer's language",

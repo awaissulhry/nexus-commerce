@@ -47,7 +47,9 @@
     "link": "Copia il link al messaggio",
     "linkHint": "apre il record con questo messaggio aperto",
     "useOn": "Usa su un altro record…",
-    "useOnHint": "Copia i suoi file su un ordine, un preventivo o un modello dello stesso cliente"
+    "useOnHint": "Copia i suoi file su un ordine, un preventivo o un modello dello stesso cliente",
+    "correct": "Correggi",
+    "correctHint": "un nuovo messaggio legato a questo; nulla viene modificato"
   },
   "body": {
     "showAll": "Mostra tutto ({count} righe)",
@@ -105,5 +107,38 @@
     "unavailable": "Nexus non è raggiungibile",
     "outside": "un indirizzo è di un altro cliente",
     "failed": "qualcosa non è andato"
+  },
+  "link": {
+    "replyTo": "In risposta a {who}, {when}: “{excerpt}”",
+    "correction": "Correzione delle {time}",
+    "correctedBelow": "Corretto più sotto · {time}"
+  },
+  "amount": {
+    "line": "Importo: {amount} · solo ufficio, per chi vede i prezzi"
+  },
+  "undo": {
+    "sending": "Invio a {party} in corso…",
+    "button": "Annulla ({seconds})",
+    "label": "Riprendi la mail: restano {seconds} secondi"
+  },
+  "erased": {
+    "line": "Messaggio rimosso dopo una richiesta di privacy",
+    "short": "Messaggio rimosso (richiesta di privacy)"
+  },
+  "skipped": {
+    "line_one": "{count} file di questa e-mail non è stato tenuto: {files}",
+    "line_other": "{count} file di questa e-mail non sono stati tenuti: {files}",
+    "item": "{name} ({reason})",
+    "reason": {
+      "type_not_allowed": "tipo non accettato",
+      "too_large": "troppo grande",
+      "empty": "file vuoto",
+      "too_many": "troppi file in una sola e-mail",
+      "other": "non tenuto"
+    }
+  },
+  "filesOnly": {
+    "line_one": "{count} file",
+    "line_other": "{count} file"
   }
 }

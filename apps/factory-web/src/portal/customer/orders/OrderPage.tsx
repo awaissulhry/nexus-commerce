@@ -9,6 +9,9 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { readFromStore, storeUrl } from '../../../record-panels/store'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
 import { PortalThread } from '../../shell/thread/PortalThread'
+// ---- B-TH-275: what the order was made from (the summary read, B-TH-076: its parent, only when the customer opens it too).
+import { fetchRecordSummary } from '../../shell/record/api'
+// ---- end B-TH-275
 import {
   answerApproval,
   askRequest,
@@ -65,6 +68,10 @@ import {
   recordHref,
   shipToLines,
   tabOf,
+  // B-TH-275
+  madeFromOf,
+  orderRefOf,
+  type SummaryParent,
   type CancelDraft,
   type ChangeDraft,
   type ReconfirmDecision,
@@ -76,8 +83,9 @@ import { useOrderWords } from './words'
 import { PortalLineOptions } from './options/PortalLineOptions'
 
 /**
- * `/p/<party>/orders/<id>?tab=status|lines|shipments|documents|messages&line=` for a customer (B-W2b-191; design
- * portal.customer.orders rec "Order"): reads the order (GET /portal/sales-orders/:id) and each part on its own — the
+ * `/p/<party>/orders/<id>?tab=status|lines|shipments|documents&line=` for a customer (B-W2b-191; design portal.customer.orders rec
+ * "Order"; B-TH-275: the conversation docks beside the four tabs — an old `?tab=messages` opens Status & progress with it shown and
+ * focused; "Made from your request" from the order's summary): reads the order (GET /portal/sales-orders/:id) and each part on its own — the
  * revised version that waits (B-W2b-184), progress while shared (polled every `refreshSeconds`), the change and cancel
  * requests and their rules (B-W2b-183), shipments, documents (B-W2b-178), the deposit's open item (B-W2b-185) — fills the
  * band, runs the pop-ups (each write one Idempotency-Key per body), guards a typed change, reads again on the live
@@ -235,6 +243,25 @@ function OrderContainer({ id }: { id: string }) {
     void loadRequests()
     void loadRules()
   }, [load, loadRequests, loadRules])
+
+  // ---- B-TH-275 (P-CUS-ORD.body "Made from your request"): the order read does not name its source; its summary does (its parent,
+  // through the partner views only) — a request directly, or a quote whose own summary names the request. A failed read draws nothing.
+  const [madeFrom, setMadeFrom] = useState<OrderRecordViewModel['madeFrom']>(null)
+  useEffect(() => {
+    const abort = new AbortController()
+    const parentOf = (answer: { summary: { parent: SummaryParent | null } }): SummaryParent | null => answer.summary.parent
+    void (async () => {
+      try {
+        const order = parentOf(await fetchRecordSummary(api, 'SalesOrder', id, abort.signal))
+        const quote = order?.recordType === 'Quote' ? await fetchRecordSummary(api, 'Quote', order.recordId, abort.signal).then(parentOf, () => null) : null
+        setMadeFrom(madeFromOf(frame.prefix, order, quote))
+      } catch {
+        setMadeFrom(null)
+      }
+    })()
+    return () => abort.abort()
+  }, [api, id, frame.prefix])
+  // ---- end B-TH-275
 
   const number = record?.order.number ?? null
   const reconfirmNeeded = record?.order.reconfirmNeeded ?? false
@@ -603,7 +630,8 @@ function OrderContainer({ id }: { id: string }) {
           kind: 'change',
           model: {
             state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading',
-            number: record.order.number,
+            // B-TH-275: the customer's own reference (#12), never the office's SO- series.
+            number: orderRefOf(record.order, t),
             rules: rules.read,
             draft: dialog.draft,
             held: changeHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }),
@@ -615,11 +643,11 @@ function OrderContainer({ id }: { id: string }) {
           },
         }
       : dialog.kind === 'cancel'
-        ? { kind: 'cancel', model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: record.order.number, rules: rules.read, draft: dialog.draft, held: cancelHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }), busy: dialog.busy, problem: dialog.problem } }
+        ? { kind: 'cancel', model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: cancelHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }), busy: dialog.busy, problem: dialog.problem } }
         : dialog.kind === 'reconfirm'
           ? {
               kind: 'reconfirm',
-              model: { state: dialog.state, page: dialog.page, number: record.order.number, decision: dialog.decision, comment: dialog.comment, held: dialog.done ? null : reconfirmHeld(dialog.page, { preview, mayApprove, offline }), problem: dialog.problem, busy: dialog.busy, done: dialog.done },
+              model: { state: dialog.state, page: dialog.page, number: orderRefOf(record.order, t), decision: dialog.decision, comment: dialog.comment, held: dialog.done ? null : reconfirmHeld(dialog.page, { preview, mayApprove, offline }), problem: dialog.problem, busy: dialog.busy, done: dialog.done },
             }
           : dialog.kind === 'pay'
             ? (() => {
@@ -631,7 +659,7 @@ function OrderContainer({ id }: { id: string }) {
                   kind: 'pay' as const,
                   model: {
                     amount: words.money(item?.open ?? deposit?.amount ?? null, deposit?.currency ?? record.order.currency),
-                    number: record.order.number,
+                    number: orderRefOf(record.order, t),
                     methods: openItems?.card.methods ?? [],
                     method: dialog.method,
                     state: paymentStateOf(dialog.phase, dialog.intent),
@@ -653,6 +681,8 @@ function OrderContainer({ id }: { id: string }) {
         prefix: frame.prefix,
         // B-W2b-194: a line's ⋯ "Reorder this line" opens New order's reorder of this order.
         reorderHref: frame.me.permissions.includes('portal.orderRequests.manage') && !preview ? `${frame.prefix}/orders/new?reorder=${encodeURIComponent(id)}` : null,
+        // B-TH-275
+        madeFrom,
         offlineSince: offline ? loadedAt : null,
         notice,
         revision,
@@ -750,7 +780,8 @@ function OrderContainer({ id }: { id: string }) {
         },
       }}
     >
-      {tab === 'messages' && record ? <PortalThread type="SalesOrder" id={record.order.id} showRecord={false} /> : null}
+      {/* B-TH-275: the order's ONE conversation, docked by the frame beside every tab. */}
+      {record ? <PortalThread type="SalesOrder" id={record.order.id} showRecord={false} /> : null}
     </OrderRecordView>
   )
 }

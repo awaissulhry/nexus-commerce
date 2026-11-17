@@ -2,8 +2,6 @@ import { createElement, type ReactNode } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { caseActions, CASE_ACTIONS, type CaseAction as DomainAction } from '@nexus/factory-domain/sales/service/rules'
 import { permissionCheck } from '../../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
@@ -233,11 +231,4 @@ export const LINK_FOUND: LinkCandidate[] = [
   { recordType: 'SalesOrder', recordId: uid('5405', 2), number: 'DEMO-SO-0019', title: RIDER.legalName },
 ]
 
-// ---- the record panels of the Activity tab (the panels' own made-up case) ------------------------------------------------------
-
-const panelsCase = (id: string): RecordPanelsViewModel => (panelsScreen.cases.find((one) => one.id === id) ?? panelsScreen.cases[0]!).model
-export const panelsOf = (record: CaseRecord): RecordPanelsViewModel => ({
-  ...panelsCase('conversation'),
-  record: { type: 'ServiceCase', id: record.id, companyId: record.companyId, siteId: null },
-  title: record.number,
-})
+// B-TH-259: the record panels' stand-in of the Activity tab went: the case's thread docks beside every tab (designDockedThread).

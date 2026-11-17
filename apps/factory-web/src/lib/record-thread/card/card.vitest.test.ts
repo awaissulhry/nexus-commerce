@@ -20,7 +20,12 @@ import {
   type CardContext,
   type CardMessage,
 } from './model'
+// B-TH-236
+import { amountWords, correctionWay, excerptOf, showsUndo, undoLeft } from './model'
 import { MessageCard } from './view/MessageCard'
+// B-TH-255
+import { SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { bodyKind, cardDepth, SKIP_REASON_CODES, skippedLine, skipReasonKey } from './model'
 
 /** B-TH-298 — the message card (T3): each kind, its audience in words and colour, the folds, the files, Retry keeps the text. */
 
@@ -190,3 +195,154 @@ describe('B-TH-231: hidden files counted, a sheet named as locked, “Use on ano
   })
 })
 // ---- end B-TH-231
+
+// ---- B-TH-236 (B-TH-048, B-TH-049, B-TH-050): Correct on one's own message, the links, the office amount, Undo for 10 seconds.
+describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amount, Undo', () => {
+  const CAN = { note: true, email: true, portal: true }
+  const MINE_MAIL: CardMessage = { ...OURS, mine: true }
+  const MINE_NOTE: CardMessage = { ...NOTE, mine: true }
+
+  it('Correct only on one’s own message, the way it went, with the right that way needs; never the customer’s or the floor’s', () => {
+    expect(correctionWay(MINE_MAIL, { canCorrect: CAN })).toBe('reply')
+    expect(correctionWay(MINE_NOTE, { canCorrect: CAN })).toBe('note')
+    expect(correctionWay({ ...MINE_MAIL, channel: 'PORTAL', email: null }, { canCorrect: CAN })).toBe('portal')
+    expect(correctionWay(OURS, { canCorrect: CAN })).toBeNull() // a colleague's mail
+    expect(correctionWay({ ...MAIL, mine: true }, { canCorrect: CAN })).toBeNull() // the customer corrects their own
+    expect(correctionWay({ ...STATION, mine: true }, { canCorrect: CAN })).toBeNull()
+    expect(correctionWay(MINE_MAIL, { canCorrect: { ...CAN, email: false } })).toBeNull()
+    expect(correctionWay(MINE_NOTE, {})).toBeNull()
+    // A mail still in its 10 seconds is taken back, not corrected; one taken back or not sent never reached them.
+    expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'QUEUED', undoUntil: '2026-11-17T10:00:07Z' } }, { canCorrect: CAN })).toBeNull()
+    expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'WITHDRAWN' } }, { canCorrect: CAN })).toBeNull()
+    expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'FAILED' } }, { canCorrect: CAN })).toBeNull()
+    expect(cardActions(MINE_MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['correct', 'task', 'link'])
+    expect(cardActions(MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['reply', 'task', 'link'])
+    expect(textOf(card(MINE_MAIL, { ...CONTEXT, canCorrect: CAN }))).not.toContain('Correction of')
+  })
+
+  it('the correction says “Correction of 09:12” in its head (two marks at most); the old one “Corrected below”', () => {
+    const correction: CardMessage = { ...MINE_MAIL, id: 'c-1', at: '2026-11-17T08:20:00.000Z', body: 'Sorry, one change: Thursday.', files: [], corrects: { id: OURS.id, author: 'Alex Demo', excerpt: 'Good morning', at: OURS.at } }
+    const text = textOf(card(correction))
+    expect(text).toContain('Correction of 09:12')
+    expect(card(correction)).toContain(`href="#message-${OURS.id}"`)
+    expect(textOf(card({ ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }))).toContain('Corrected below · 09:20')
+    expect(textOf(card({ ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }, CONTEXT, 'it'))).toContain('Corretto più sotto · 09:20')
+    // A corrected floor note: the audience mark stays in the head, "Also on the floor" moves to the details line.
+    const floorFix = textOf(card({ ...FLOOR_NOTE, corrects: { id: 'n-1', author: 'Carlo Prova', excerpt: 'grey mesh', at: FLOOR_NOTE.at } }))
+    expect(floorFix).toContain('Office note · Office only Correction of')
+    expect(floorFix).toContain('Also on the floor')
+  })
+
+  it('a reply names the message it answers above its words (W08: only this thread’s message, its excerpt)', () => {
+    const reply: CardMessage = { ...MINE_MAIL, id: 'r-1', channel: 'PORTAL', email: null, body: 'Yes, both sizes.', files: [], replyTo: { id: MAIL.id, author: BRAND_ALPHA.portalPerson.name, excerpt: 'Is the label 3 cm from the hem on both sizes?', at: '2026-11-17T09:41:00.000Z' } }
+    const text = textOf(card(reply))
+    expect(text).toContain(`In reply to ${BRAND_ALPHA.portalPerson.name}, 17 Nov`)
+    expect(text).toContain('“Is the label 3 cm from the hem on both sizes?”')
+    expect(text).toContain(`In the portal · ${BRAND_ALPHA.tradeName}`)
+    expect(excerptOf('x'.repeat(200)).length).toBe(90)
+    expect(scanText(text, BRAND_BETA)).toEqual([])
+  })
+
+  it('an office note’s amount in the reader’s numbers, said office only (the API sends it to price readers only)', () => {
+    expect(amountWords({ value: 1_845_000, currency: 'EUR' }, 'en-GB')).toBe('€18,450.00')
+    expect(amountWords({ value: 1_845_000, currency: 'EUR' }, 'it-IT')).toMatch(/18\.450,00\s?€/)
+    const text = textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }))
+    expect(text).toContain('Amount: €1,250.00 · office only, for those who see prices')
+    expect(textOf(card(NOTE))).not.toContain('Amount:')
+  })
+
+  it('Undo for 10 seconds: “Sending to <customer>… · Undo (7)” for the sender only, gone when the window passed', () => {
+    const now = Date.parse('2026-11-17T10:00:00.000Z')
+    const waiting: CardMessage = { ...MINE_MAIL, files: [], email: { to: [BRAND_ALPHA.contact.email], subject: 'Re: sizes', status: 'QUEUED', id: 'mail-1', undoUntil: '2026-11-17T10:00:07.000Z' } }
+    expect(undoLeft(waiting.email!.undoUntil, now)).toBe(7)
+    expect(undoLeft('2026-11-17T09:59:59.000Z', now)).toBe(0)
+    expect(undoLeft(null, now)).toBe(0)
+    expect(showsUndo(waiting, now)).toBe(true)
+    expect(showsUndo({ ...waiting, email: { ...waiting.email!, status: 'SENT' } }, now)).toBe(false)
+    expect(showsUndo({ ...waiting, email: { ...waiting.email!, undoUntil: undefined } }, now)).toBe(false)
+    const html = render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }))
+    expect(textOf(html)).toContain(`Sending to ${BRAND_ALPHA.tradeName}… Undo (7)`)
+    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }), 'it'))).toContain(`Invio a ${BRAND_ALPHA.tradeName} in corso… Annulla (7)`)
+    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now: now + 8_000 }, actions: { onUndo: () => undefined } })))).not.toContain('Undo (')
+  })
+
+  it('the new cases draw with no key left on screen; Brand Beta’s copy stays clean', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) expect(leftKeys(html, ['link', 'amount', 'undo', 'menu']), `${locale} ${id}`).toEqual([])
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['corrected', 'reply-link', 'amount', 'undo']))
+  })
+})
+// ---- end B-TH-236
+
+// ---- B-TH-255 (B-TH-079; T3-F14, T3-F15): the erased card, told apart from a message of files only; an e-mail’s files not kept ------
+describe('B-TH-255 — erased after a privacy request vs files only; the files an e-mail did not keep', () => {
+  const card = (message: CardMessage, locale: 'en' | 'it' = 'en') => render(createElement(MessageCard, { message, context: CONTEXT }), locale)
+  const PHOTO = { id: 'p-1', name: 'collar.jpg', sizeBytes: 820_000, contentType: 'image/jpeg', status: 'AVAILABLE' as const }
+
+  it('bodyKind: erased says so; empty words with files is files (NEVER erased); words are words; nothing is nothing', () => {
+    expect(bodyKind({ erased: true, body: '', files: [] })).toBe('erased')
+    expect(bodyKind({ erased: false, body: '', files: [PHOTO] })).toBe('files')
+    expect(bodyKind({ body: '', files: [] })).toBe('empty')
+    expect(bodyKind({ body: '', files: [], hiddenFiles: 1 })).toBe('files')
+    expect(bodyKind({ body: '  ', files: [], lockedSheets: 1 })).toBe('files')
+    expect(bodyKind({ body: 'Hello', files: [PHOTO] })).toBe('text')
+  })
+
+  it('the erased card: "Message removed after a privacy request", no empty body, in it and en', () => {
+    const erased: CardMessage = { ...MAIL, id: 'e-1', author: null, body: '', files: [], erased: true }
+    const html = card(erased)
+    expect(textOf(html)).toContain('Message removed after a privacy request')
+    expect(html).toContain('fw-rt-msg is-theirs is-erased')
+    expect(html).not.toContain('class="fw-rt-body')
+    expect(textOf(card(erased, 'it'))).toContain('Messaggio rimosso dopo una richiesta di privacy')
+  })
+
+  it('a message of files only is NOT the erased card: its files, no removal words, no empty body', () => {
+    const filesOnly: CardMessage = { ...MAIL, id: 'fo-1', body: '', files: [PHOTO] }
+    const html = card(filesOnly)
+    expect(textOf(html)).not.toContain('removed')
+    expect(html).not.toContain('is-erased')
+    expect(html).not.toContain('class="fw-rt-body')
+    expect(textOf(html)).toContain('collar.jpg')
+  })
+
+  it('the files an e-mail did not keep, by name and why; a signature logo is never listed (the codes are factory-domain’s)', () => {
+    expect([...SKIP_REASON_CODES].sort()).toEqual(SKIP_REASONS.filter((reason) => reason !== 'inline').sort())
+    expect(skipReasonKey('too_large')).toBe('skipped.reason.too_large')
+    expect(skipReasonKey('something_new')).toBe('skipped.reason.other')
+    expect(skippedLine(undefined)).toBeNull()
+    expect(skippedLine([{ name: 'sig.png', contentType: 'image/png', sizeBytes: 900, reason: 'inline' }])).toBeNull()
+    const mail: CardMessage = {
+      ...MAIL,
+      id: 's-1',
+      skipped: [
+        { name: 'logo.ai', contentType: 'application/postscript', sizeBytes: 2_400_000, reason: 'type_not_allowed' },
+        { name: 'clip.mov', contentType: 'video/quicktime', sizeBytes: 61_000_000, reason: 'too_large' },
+        { name: 'sig.png', contentType: 'image/png', sizeBytes: 900, reason: 'inline' },
+      ],
+    }
+    const text = textOf(card(mail))
+    expect(text).toContain('2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too large)')
+    expect(text).not.toContain('sig.png')
+    expect(textOf(card({ ...mail, skipped: [mail.skipped![1]!] }, 'it'))).toContain('1 file di questa e-mail non è stato tenuto: clip.mov (troppo grande)')
+    expect(textOf(card(MAIL))).not.toContain('were not kept')
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['record-thread-card'] ?? {}
+      for (const code of [...SKIP_REASON_CODES, 'other']) expect(words[`skipped.reason.${code}`], `${locale} ${code}`).toBeTruthy()
+    }
+  })
+
+  it('cardDepth carries the API’s flags onto the card; none when the API said nothing', () => {
+    expect(cardDepth({})).toEqual({})
+    expect(cardDepth({ erased: false, skippedAttachments: [] })).toEqual({})
+    expect(cardDepth({ erased: true, skippedAttachments: [{ name: 'a.zip', contentType: 'application/zip', sizeBytes: 1, reason: 'type_not_allowed' }] })).toEqual({ erased: true, skipped: [{ name: 'a.zip', contentType: 'application/zip', sizeBytes: 1, reason: 'type_not_allowed' }] })
+  })
+
+  it('the B-TH-255 cases draw with no key left; Brand Beta never shows on Brand Alpha’s cards', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) {
+      expect(leftKeys(html, ['erased', 'skipped', 'filesOnly']), `${locale} ${id}`).toEqual([])
+      if (id === 'erased' || id === 'skipped') expect(scanText(textOf(html), BRAND_BETA), `${locale} ${id}`).toEqual([])
+    }
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['erased', 'skipped']))
+  })
+})
+// ---- end B-TH-255

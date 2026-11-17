@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { NOTICE_STATES as DOMAIN_STATES, REASON_CODES, VERDICTS as DOMAIN_VERDICTS } from '@nexus/factory-domain/purchasing/ship-notices/rules'
 import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
 import { NOTICE_STATES, VERDICTS } from './api'
-import { draftPage, HIDES, noticePage, noticesRead, ROWS, sheetRead, SHIPPABLE } from './design-data'
+import { draftPage, HIDES, noticePage, noticesRead, ORDER, ROWS, sheetRead, SHIPPABLE } from './design-data'
 import {
   cancelHeld,
   chipsOf,
+  dockedOrderOf, // B-TH-277
   hidesOfSheet,
   issueKeysOf,
   KNOWN_REASONS,
@@ -168,3 +169,20 @@ describe('refusals, cancel, the list', () => {
     expect(csv).not.toMatch(/€|price|prezzo/i)
   })
 })
+
+// ---- B-TH-277 (threads plan TH-6, P-SUP-DEL.thread): the ORDER's conversation docks beside the notice and its steps (instead of the
+// Ask modal); none before an order is chosen; never a notice that is not here.
+describe('B-TH-277 — the order’s conversation docked beside the notice', () => {
+  it('a read notice docks its order’s conversation; a new notice its chosen order; no order yet, or a missing notice, no dock', () => {
+    const page = noticePage()
+    expect(dockedOrderOf({ page, order: null, missing: false })).toEqual({ id: page.notice.purchaseOrder.id, number: page.notice.purchaseOrder.number })
+    expect(dockedOrderOf({ page: null, order: ORDER, missing: false })).toEqual(ORDER)
+    expect(dockedOrderOf({ page: null, order: null, missing: false })).toBeNull()
+    expect(dockedOrderOf({ page, order: null, missing: true })).toBeNull()
+  })
+
+  it('the conversation’s region has words in both languages', () => {
+    for (const locale of ['it', 'en'] as const) expect(CATALOGUE[locale][NS]?.['thread.label'], locale).toContain('{number}')
+  })
+})
+// ---- end B-TH-277

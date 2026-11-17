@@ -8,6 +8,10 @@ import { everyCase, leftKeys, renderView, textOf } from '../parts/testing'
 import { designScreen } from './fixtures'
 import { arrivedAtEnd, feedRows, foldedIds, gistOf, isFieldChange, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from './model'
 import { FeedCase } from './view/FeedCase'
+// B-TH-255
+import { HELD_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { CATALOGUE } from '../../i18n/messages'
+import { foldedGist, HELD_REASON_CODES, hiddenNewLine, waitingMailLine } from './model'
 
 /** B-TH-204 — the feed (T4): the order, folding by age (all but the last 3), day lines, grouping, every state. */
 
@@ -233,3 +237,79 @@ describe('SCR-006-feed: every state in words, both languages', () => {
     }
   })
 })
+
+// ---- B-TH-255 (B-TH-079; T1-F05, T4-F10): the quiet lines at the end — what the View hides, the mail that waits for a person ------
+describe('B-TH-255 — the held-mail line by right, the hidden-new line, folded erased and files-only messages', () => {
+  const REVIEW = '/w/demo/home/mail-to-sort'
+  const base = designScreen.cases[0]!.model
+  const html = (model: typeof base, locale: 'en' | 'it' = 'en') => renderView(FeedCase, model, locale)
+
+  it('the codes are factory-domain’s (HELD_REASONS + TRIAGE); every reason and line has words in it and en', () => {
+    expect([...HELD_REASON_CODES].sort()).toEqual([...HELD_REASONS, 'TRIAGE'].sort())
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['record-thread-feed'] ?? {}
+      for (const code of [...HELD_REASON_CODES, 'other']) expect(words[`waiting.reason.${code}`], `${locale} ${code}`).toBeTruthy()
+      for (const key of ['waiting.review_one', 'waiting.reviewWhy_other', 'waiting.reviewMany', 'waiting.colleague_one', 'waiting.colleague_other', 'waiting.colleagueMany', 'waiting.open', 'hidden.line_one', 'hidden.showAll']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+
+  it('with email.triage: how many, why (each reason once, in words) and Review → Home › Mail to sort', () => {
+    expect(waitingMailLine(null)).toBeNull()
+    expect(waitingMailLine({ count: 0, reasons: [], mayReview: true, reviewHref: REVIEW })).toBeNull()
+    expect(waitingMailLine({ count: 2, reasons: ['UNKNOWN_SENDER', 'THREAD_CLOSED', 'UNKNOWN_SENDER', 'NEW_CODE'], mayReview: true, reviewHref: REVIEW })).toEqual({
+      key: 'waiting.review',
+      count: 2,
+      reasons: ['waiting.reason.UNKNOWN_SENDER', 'waiting.reason.THREAD_CLOSED', 'waiting.reason.other'],
+      href: REVIEW,
+    })
+    expect(waitingMailLine({ count: 50, reasons: ['SPAM'], mayReview: true, reviewHref: REVIEW })?.key).toBe('waiting.reviewMany')
+    const text = textOf(html({ ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: true, reviewHref: REVIEW } }))
+    expect(text).toContain('1 mail for this conversation waits in Mail to sort — sender not a contact · Review')
+    expect(html({ ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: true, reviewHref: REVIEW } })).toContain(`href="${REVIEW}"`)
+    expect(textOf(html({ ...base, waitingMail: { count: 2, reasons: ['UNKNOWN_SENDER', 'THREAD_CLOSED'], mayReview: true, reviewHref: REVIEW } }, 'it'))).toContain('2 e-mail per questa conversazione attendono in Posta da smistare — mittente non tra i contatti, questa conversazione è chiusa · Controlla')
+  })
+
+  it('without email.triage: "A reply waits for a colleague to check it" — never why, never a sender, never a link (W07, W08, W22, W34)', () => {
+    const line = waitingMailLine({ count: 1, reasons: ['UNKNOWN_SENDER', 'DMARC_FAIL'], mayReview: false, reviewHref: REVIEW })
+    expect(line).toEqual({ key: 'waiting.colleague', count: 1, reasons: [], href: null })
+    const rendered = html({ ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER', 'DMARC_FAIL'], mayReview: false, reviewHref: REVIEW } })
+    const text = textOf(rendered)
+    expect(text).toContain('A reply waits for a colleague to check it')
+    for (const reason of ['sender not a contact', 'failed its check', 'Mail to sort', 'Review']) expect(text).not.toContain(reason)
+    expect(rendered).not.toContain('mail-to-sort')
+    expect(text).not.toMatch(/@/)
+    expect(textOf(html({ ...base, waitingMail: { count: 3, reasons: ['SPAM'], mayReview: false, reviewHref: null } }))).toContain('3 replies wait for a colleague to check them')
+  })
+
+  it('a view that hides news says so at the end: "1 new message hidden by this view · Show all"; nothing on All', () => {
+    expect(hiddenNewLine(0)).toBeNull()
+    expect(hiddenNewLine(undefined)).toBeNull()
+    expect(hiddenNewLine(3)).toEqual({ count: 3 })
+    const shown = renderView(FeedCase, { ...base, hiddenNew: 1 })
+    expect(textOf(shown)).toContain('1 new message hidden by this view · Show all')
+    expect(textOf(renderView(FeedCase, { ...base, hiddenNew: 2 }, 'it'))).toContain('2 nuovi messaggi nascosti da questa vista')
+    expect(textOf(renderView(FeedCase, base))).not.toContain('hidden by this view')
+    // Even a view that hides every message (an empty feed) still says what it hides.
+    expect(textOf(renderView(FeedCase, { ...base, messages: [], events: [], more: false, hiddenNew: 4 }))).toContain('4 new messages hidden by this view')
+  })
+
+  it('a folded erased message says so; a folded message of files only names its files — never an empty line that looks erased', () => {
+    expect(foldedGist({ body: '', files: [], erased: true })).toEqual({ key: 'erased.short' })
+    expect(foldedGist({ body: '', files: [{ id: 'f', name: 'a.jpg', sizeBytes: 1, contentType: 'image/jpeg', status: 'AVAILABLE' }] })).toEqual({ key: 'filesOnly.line', count: 1 })
+    expect(foldedGist({ body: '', files: [], hiddenFiles: 2 })).toEqual({ key: 'filesOnly.line', count: 2 })
+    expect(foldedGist({ body: 'Hello\nthere', files: [] })).toEqual({ text: 'Hello' })
+    const depth = designScreen.cases.find((item) => item.id === 'folded-depth')!
+    const text = textOf(renderView(FeedCase, depth.model))
+    expect(text).toContain('Message removed (privacy request)')
+    expect(text).toContain('2 files')
+  })
+
+  it('the B-TH-255 cases draw with no key left; Brand Beta never shows in Brand Alpha’s lines', () => {
+    for (const [locale, id, rendered] of everyCase(designScreen)) {
+      expect(leftKeys(rendered, ['waiting', 'hidden', 'erased', 'filesOnly']), `${locale} ${id}`).toEqual([])
+      if (id.startsWith('waiting') || id === 'hidden-new' || id === 'folded-depth') expect(scanText(textOf(rendered), BRAND_BETA), `${locale} ${id}`).toEqual([])
+    }
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['waiting-review', 'waiting-two', 'waiting-colleague', 'hidden-new', 'folded-depth']))
+  })
+})
+// ---- end B-TH-255

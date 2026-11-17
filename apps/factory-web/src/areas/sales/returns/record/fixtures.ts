@@ -6,6 +6,8 @@ import { canFor, CREDIT_NOTES, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR
 import type { RepairModel, RmaModel } from '../view-model'
 import { RepairRecordView } from '../repair/view/RepairRecordView'
 import { RmaRecordView } from './view/RmaRecordView'
+// ---- B-TH-259: the record's made-up docked thread (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { DEPTH_AUTHORISED, DEPTH_CREDIT_WAITING, DEPTH_INSPECTED, DEPTH_RECEIVED, DEPTH_RECEIVED_LATE, depthModel, FEES_DRAFTED, OUTCOMES_AUTHORISED, OUTCOMES_INSPECTED, OUTCOMES_PART_RECEIVED, OUTCOMES_RECEIVED, OUTCOMES_REMAKE, POLICY_CHECK, RMA_PART_RECEIVED, RMA_RECEIVED_LATE } from '../depth/demo/fixtures'
 import { finishOptionsOf } from '../depth/model'
 import type { RmaDepthModel } from '../depth/view-model'
@@ -57,7 +59,7 @@ export function rmaModel(role: RoleCase, over: Partial<RmaModel> = {}): RmaModel
     dialogProblem: null,
     close: null,
     newRepair: null,
-    dockOpen: false,
+    personId: ME, // B-TH-259
     depth: depthFor(over.rma ?? RMA_AUTHORISED),
     ...over,
   }
@@ -87,7 +89,7 @@ function repairModel(role: RoleCase, over: Partial<RepairModel> = {}): RepairMod
     dialog: null,
     dialogBusy: false,
     dialogProblem: null,
-    dockOpen: false,
+    personId: ME, // B-TH-259
     estimate: estimateModel(),
     ...over,
   }
@@ -99,10 +101,14 @@ function RecordDesign({ model }: { model: DesignModel }) {
   useEffect(() => setState(model), [model])
   if (state.kind === 'rma') {
     const set = (patch: Partial<RmaModel>) => setState((current) => (current.kind === 'rma' ? { ...current, model: { ...current.model, ...patch } } : current))
+    // B-TH-259: the return's thread in its own words — its customer's only; none without threads.read.
+    const rma = state.model.rma
+    const thread = state.model.can.threadsRead ? designDockedThread({ recordType: 'ReturnAuthorisation', record: rma.number, party: rma.party ? { name: rma.party.legalName, role: 'customer' } : null }) : null
     return inShell(
       '/sales/returns',
       createElement(RmaRecordView, {
         model: state.model,
+        thread,
         actions: {
           onDialog: (dialog) => set({ dialog }),
           onDecision: (lineId, patch) => set({ decisions: { ...state.model.decisions, [lineId]: { ...(state.model.decisions[lineId] ?? { disposition: '', outcome: '', credit: '' }), ...patch } } }),
@@ -120,10 +126,14 @@ function RecordDesign({ model }: { model: DesignModel }) {
     )
   }
   const set = (patch: Partial<RepairModel>) => setState((current) => (current.kind === 'repair' ? { ...current, model: { ...current.model, ...patch } } : current))
+  // B-TH-259: the repair's thread in its own words — shared with its customer (B-TH-081); none without threads.read.
+  const repair = state.model.repair
+  const repairThread = state.model.can.threadsRead ? designDockedThread({ recordType: 'RepairOrder', record: repair.number, party: { name: repair.party.legalName, role: 'customer' } }) : null
   return inShell(
     '/sales/returns',
     createElement(RepairRecordView, {
       model: state.model,
+      thread: repairThread,
       actions: {
         onDialog: (dialog) => set({ dialog }),
         onChecklist: (patch) => set({ checklist: { ...state.model.checklist, ...patch } }),
@@ -155,6 +165,9 @@ export const designScreen = defineDesignScreen<DesignModel>({
   cases: [
     { id: 'rma-lines', label: 'RMA authorised: Lines autosaved per cell, the MilestoneTracker', model: { kind: 'rma', role: 'owner', model: rmaModel('owner') }, note: 'Enter edits the pieces; the reason is a menu in the cell; ⋯ removes a line (never the last).' },
     { id: 'rma-saving', label: 'RMA Lines: a cell saving and a cell refused with the numbers', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { marks: { [`${RMA_AUTHORISED.lines[0]!.id}:quantity`]: { state: 'refused', words: { key: 'refusal.aboveSoldMax', params: { max: 1, sold: 2 } } }, [`${RMA_AUTHORISED.lines[1]!.id}:reasonCode`]: { state: 'saving' } } }) } },
+    // ---- B-TH-259 (the rule of picture 38): the thread docked; Activity is gone, its tools in the thread's "⋯" (R-ACT).
+    { id: 'rma-thread', label: 'TH-6 · The return’s thread docked beside Lines (one third under 1600 px): its customer only', model: { kind: 'rma', role: 'owner', model: rmaModel('owner') }, note: 'The band sits in the shell’s band row with ONE pill; Receive goods is the primary (R in the band menu’s Keyboard line). Its "⋯" holds Activity’s tools. An old ?tab=activity lands on Lines with the thread open.' },
+    { id: 'rma-no-thread', label: 'TH-6 · Without threads.read: no thread beside the tabs', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { can: { ...canFor('owner'), threadsRead: false } }) } },
     { id: 'rma-lines-read-only', label: 'RMA Lines read-only: the goods arrived (info banner says why)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_RECEIVED }) } },
     { id: 'rma-receive', label: 'Receive goods (r): parcels, state, customer DDT, pieces per line', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { dialog: { kind: 'receive', draft: receiptDraftOf(RMA_AUTHORISED) } }) } },
     { id: 'rma-receive-held', label: 'Sales: Receive goods held with its reason (the warehouse receives)', model: { kind: 'rma', role: 'sales', model: rmaModel('sales') } },
@@ -233,6 +246,8 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'rma-read-only', label: 'RMA for a read-only person: every step held with the permission', model: { kind: 'rma', role: 'readOnly', model: rmaModel('readOnly', { rma: RMA_RECEIVED, tab: 'inspection' }) } },
     { id: 'repair-intake', label: 'Repair received: Intake & photos, the serial’s other repair', model: { kind: 'repair', role: 'owner', model: repairModel('owner') } },
     { id: 'repair-intake-edit', label: 'Intake edited with the edit bar (⌘S)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { edit: { draft: { kind: 'REPAIR', problem: REPAIR_RECEIVED.problem, inboundDdtNumber: 'C-DDT-DEMO-12', inboundDdtDate: '2026-10-28', internalNote: '' }, busy: false, problem: null } }) } },
+    { id: 'repair-thread', label: 'TH-6 · The repair’s thread docked: shared with its customer (the portal repair page reads it, B-TH-081)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate' }) } },
+    { id: 'repair-no-thread', label: 'TH-6 · Without threads.read: no thread beside the tabs', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { can: { ...canFor('owner'), threadsRead: false } }) } },
     { id: 'repair-work', label: 'Work: the stepper, the moves held with their reason', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'work' }) } },
     { id: 'repair-estimate', label: 'Estimated…: the note it needs', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'work', dialog: { kind: 'move', action: 'estimate', note: '' } }) } },
     {

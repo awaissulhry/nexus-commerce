@@ -1,14 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { useLive, useRecordTab } from '../../../quality/_shared/hooks'
+import { useLive } from '../../../quality/_shared/hooks'
+// ---- B-TH-259: the case's thread docked beside every tab (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 import {
   caseOwners,
   changeCase,
@@ -40,7 +43,7 @@ import {
   movedNotice,
   moveNeeds,
   readProblem,
-  RECORD_TABS,
+  recordTabOf,
   refusalOf,
   repairDraftOf,
   serviceCan,
@@ -77,7 +80,9 @@ function Container({ caseId }: { caseId: string }) {
   const prefix = companyPrefix(session.company?.code ?? '')
   const me = session.user.id
   const can = useMemo(() => serviceCan(session.permissions), [session.permissions])
-  const tab = useRecordTab(RECORD_TABS)
+  // B-TH-259 (R-8): an old `?tab=actions` lands on Linked records & actions, `?tab=activity` on Case (the frame opens the thread).
+  const tab = recordTabOf(params?.get('tab'))
+  const pathname = usePathname()
   const [opened] = useState(() => new Date().toISOString())
   const today = todayOf(opened)
 
@@ -347,12 +352,22 @@ function Container({ caseId }: { caseId: string }) {
   )
 
   const model: ServiceRecordModel = { prefix, me, today, can, tab, loaded, live, asOf, owners, customers, contacts, draft, saving, dialog, notice, stale, busy, copied }
-  const panels = record && can.threads ? <RecordPanels record={{ type: 'ServiceCase', id: record.id, companyId: record.companyId, siteId: null }} title={record.number} party={record.party ? { id: record.party.id, name: record.party.legalName, emails: record.contact?.email ? [record.contact.email] : [] } : null} /> : undefined
+  // ---- B-TH-259: the case's thread docked beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print view
+  // keeps the record panels' print form. Brand wall (W08, W20, W25, W34): the case's own customer only (a rider's case: notes only).
+  const threadRecord = record ? { type: 'ServiceCase', id: record.id, companyId: record.companyId, siteId: null } : null
+  const threadParty = record?.party ? { id: record.party.id, name: record.party.legalName } : null
+  const thread =
+    record && threadRecord && can.threads ? (
+      <OfficeRecordThread docked record={threadRecord} title={threadParty ? `${record.number} · ${threadParty.name}` : record.number} recordLabel={record.number} party={threadParty} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
+    ) : null
+  const printThread = record && threadRecord && can.threads ? <RecordPanels record={threadRecord} title={record.number} party={threadParty ? { ...threadParty, emails: record.contact?.email ? [record.contact.email] : [] } : null} /> : null
+  // ---- end B-TH-259
 
   return (
     <ServiceRecordView
       model={{ ...model, live: offline ? 'offline' : live }}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onReload: () => {

@@ -382,6 +382,10 @@
         }
       },
       "production": {
+        "brandKeeper": {
+          "name": "Stato di produzione per il cliente",
+          "what": "Ogni notte: per ogni ordine aperto si ricalcolano fase, stato e chi deve agire, così una data superata risulta in ritardo."
+        },
         "dailyReport": {
           "name": "Report giornaliero di produzione",
           "what": "Ogni 15 minuti: il report giornaliero va agli iscritti, alla loro ora."

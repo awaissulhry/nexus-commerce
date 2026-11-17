@@ -7,6 +7,8 @@ import type { QuoteBody, SourceQuery } from '@nexus/factory-domain/sales/inquiri
 import { SALES_INQUIRIES_MANAGE, SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import { quotableLines, quoteRefusal, sizesOf, type InquirySource, type InquiryStatus } from '@nexus/factory-domain/sales/inquiries/rules'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+// B-TH-261: the style a request's draft is (GET /sales/inquiries/source?styleId=).
+import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceBasisOf, versionTaxModeOf } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, type CommandCaller } from '../../../core/command'
@@ -96,16 +98,27 @@ export async function quoteInquiry(caller: CommandCaller, inquiryId: string, bod
   return result
 }
 
-/** GET /sales/inquiries/source?quoteId=|salesOrderId=: the inquiry it came from, with the tech pack in force (null: none). */
+/**
+ * GET /sales/inquiries/source?quoteId=|salesOrderId=|styleId=: the inquiry it came from, with the tech pack in force (null: none).
+ * B-TH-261: a style draft made from a request (B-TH-026) — the style must be one the reader may see (its company and its brand, as
+ * the style's own read: another brand's style is "not found", never "exists"); the request is answered only to a reader of it.
+ */
 export async function inquirySource(caller: CommandCaller, query: SourceQuery) {
   const context = officeOf(caller)
   const actor = actorOf(context)
-  if ((query.quoteId === undefined) === (query.salesOrderId === undefined)) throw new ValidationError('Name the quote or the order (one of the two).', [{ path: 'query', message: 'quoteId or salesOrderId, one of the two.' }])
+  const named = [query.quoteId, query.salesOrderId, query.styleId].filter((value) => value !== undefined).length
+  if (named !== 1) throw new ValidationError('Name the quote, the order or the style (one of them).', [{ path: 'query', message: 'quoteId, salesOrderId or styleId, one of them.' }])
   return caller.withClient(async (db) => {
     let quoteId: string | null = null
     // B-TH-025: an order made straight from a request names it itself (Inquiry.salesOrderId), no quote between.
     let orderId: string | null = null
-    if (query.quoteId) {
+    // ---- B-TH-261: the request that named this style among its drafts (the first one, if a style was ever named twice) ----
+    let styleId: string | null = null
+    if (query.styleId) {
+      const style = isUuid(query.styleId) ? await db.style.findUnique({ where: { id: query.styleId }, select: { id: true, companyId: true, brandPartyId: true } }) : null
+      if (!style || !can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId, partyId: style.brandPartyId })) throw new NotFoundError('Style not found.')
+      styleId = style.id
+    } else if (query.quoteId) {
       const quote = isUuid(query.quoteId) ? await db.quote.findUnique({ where: { id: query.quoteId }, select: { id: true, companyId: true, partyId: true } }) : null
       if (!quote || !can(actor, QUOTES_VIEW, { companyId: quote.companyId, partyId: quote.partyId })) throw new NotFoundError('Quote not found.')
       quoteId = quote.id
@@ -116,7 +129,13 @@ export async function inquirySource(caller: CommandCaller, query: SourceQuery) {
       quoteId = version?.quoteId ?? null
       orderId = order.id
     }
-    const row = quoteId ? await db.inquiry.findFirst({ where: { quoteId }, select: INQUIRY_COLUMNS }) : orderId ? await db.inquiry.findFirst({ where: { salesOrderId: orderId }, select: INQUIRY_COLUMNS }) : null
+    const row = styleId
+      ? await db.inquiry.findFirst({ where: { styleIds: { has: styleId } }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }], select: INQUIRY_COLUMNS }) // B-TH-261
+      : quoteId
+        ? await db.inquiry.findFirst({ where: { quoteId }, select: INQUIRY_COLUMNS })
+        : orderId
+          ? await db.inquiry.findFirst({ where: { salesOrderId: orderId }, select: INQUIRY_COLUMNS })
+          : null
     if (!row || !may(context, SALES_INQUIRIES_VIEW, row)) return { inquiry: null }
     return {
       inquiry: {

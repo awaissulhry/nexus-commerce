@@ -1,0 +1,65 @@
+{
+  "people": {
+    "title": "People ({count})",
+    "team": "Our team ({count})",
+    "outside": "{company} ({count})",
+    "invited": "Invited by link ({count})",
+    "org": {
+      "team": "Our team",
+      "invited": "By link"
+    },
+    "you": "{name} (you)",
+    "lead": "Lead",
+    "muted": "Muted",
+    "since": "since {date}",
+    "until": "until {date}",
+    "ended": "Ended",
+    "onlyYou": "Only you. Add a colleague.",
+    "more": "Showing the first {shown} of {count}.",
+    "outsideNone": "No one from {company} yet.",
+    "outsideInvite": "A contact of {company} without a portal account is invited by link from the thread's Share door."
+  },
+  "why": {
+    "CREATOR": "made it",
+    "ASSIGNEE": "was given something on it",
+    "MENTIONED": "was mentioned",
+    "CHOSE": "chose to follow",
+    "ADDED": "was added",
+    "addedBy": "added by {name}"
+  },
+  "add": {
+    "team": "Add a colleague",
+    "outside": "Add {company} people",
+    "teamTitle": "Add a colleague to {project}",
+    "outsideTitle": "Add {company} people to {project}",
+    "teamIntro": "Only colleagues who may read this project are offered. The person you add is told.",
+    "outsideIntro": "Only {company}'s portal people are offered. They see this project in their portal and read only the messages sent to {company}.",
+    "search": "Search by name",
+    "pick": "Add",
+    "pickLabel": "Add {name}",
+    "reading": "Reading who can be added…",
+    "nobodyTeam": "Everyone who may see this project is in it already.",
+    "nobodyOutside": "No portal people of {company} left to add.",
+    "noMatch": "Nobody matches “{q}”.",
+    "close": "Close"
+  },
+  "out": {
+    "remove": "Take out",
+    "removeLabel": "Take {name} out of the project",
+    "removeTitle": "Take {name} out of {project}?",
+    "removeBodyTeam": "Removing does not hide the project from them: it stops the news. They are told once.",
+    "removeBodyOutside": "They no longer see the project in {company}'s portal. What they wrote stays.",
+    "removeConfirm": "Take out",
+    "leave": "Leave",
+    "leaveLabel": "Leave the project",
+    "leaveTitle": "Leave {project}?",
+    "leaveBody": "You will still be told when someone mentions you.",
+    "leaveConfirm": "Leave the project"
+  },
+  "notice": {
+    "addedTeam": "{name} was added and told.",
+    "addedOutside": "{name} was added: they see the project in their portal.",
+    "removed": "{name} was taken out of the project.",
+    "left": "You left the project. You will still be told when someone mentions you."
+  }
+}

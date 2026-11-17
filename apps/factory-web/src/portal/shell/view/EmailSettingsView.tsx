@@ -23,6 +23,8 @@ export interface EmailTopicRow {
   locked: boolean
   /** Why it is locked, in words. */
   reason: string | null
+  /** B-TH-273 (PL3-F05): a note beside the setting ("As it happens by default: …"), or null. */
+  note?: string | null
 }
 
 export interface EmailSettingsViewModel {
@@ -107,6 +109,8 @@ export function EmailSettingsView({ model, onClose, onChange, onAllOff, onSave, 
                       <Lock size={13} aria-hidden /> {row.reason}
                     </span>
                   ) : null}
+                  {/* B-TH-273 (PL3-F05) */}
+                  {!row.locked && row.note ? <span className="fw-pemail-locked">{row.note}</span> : null}
                 </span>
                 {row.locked ? (
                   <span className="fw-pemail-fixed">{t(`email.frequency.${row.frequency}`)}</span>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useMemo, useRef } from 'react'
 import { AlertCircle, FileText, Truck } from 'lucide-react'
 import { Banner, Card, Disclosure, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
@@ -31,10 +31,13 @@ import { ChangesList, ConfirmAllDialog, DeclineDialog, VersionDialog, type Confi
 import '../supplier-orders.css'
 
 /**
- * SCR-189 › one purchase order (design portal.supplier.orders rec "Purchase order": Lines, Confirm or propose, Ship notices,
- * Documents, Messages). The frame's band holds the title, their reference first, the state, "Confirm all as asked" and the
- * ⋯ (Decline, What changed, the PO PDF, Ask a question); this view draws the tab's content and the pop-ups. No price,
- * cost or amount anywhere (Owner answer C2): the order's copy is price-free and price talk belongs in Messages.
+ * SCR-189 › one purchase order (design portal.supplier.orders rec "Purchase order"; B-TH-277: tabs 5 → 3 — Lines, Confirm or
+ * propose, Ship notices). The frame's band holds the title, their reference first, the state, "Confirm all as asked" and the
+ * ⋯ (Decline, What changed, the PO PDF, Ask a question); this view draws the tab's content and the pop-ups. The PO's
+ * conversation is not drawn here: the page docks it beside every tab (the portal record frame). What the Documents tab held
+ * moved to where it does work: the order as sent (its price-free PDF) on the Lines tab's facts, each DDT on its ship notice's
+ * row, what we ask for about the order on Confirm or propose. No price, cost or amount anywhere (Owner answer C2): the
+ * order's copy is price-free and price talk belongs in the order's Messages (the docked conversation).
  */
 
 export interface AnswerDone {
@@ -88,7 +91,7 @@ export interface OrderRecordActions {
   }
 }
 
-export function OrderRecordView({ model, actions, children }: { model: OrderRecordViewModel; actions?: OrderRecordActions; children?: ReactNode }) {
+export function OrderRecordView({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
   const { t } = useOrderWords()
   if (model.state === 'loading') {
     return (
@@ -129,13 +132,6 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
       {model.tab === 'lines' ? <LinesTab model={model} page={page} actions={actions} /> : null}
       {model.tab === 'confirm' ? <ConfirmTab model={model} page={page} actions={actions} /> : null}
       {model.tab === 'asn' ? <NoticesTab model={model} actions={actions} /> : null}
-      {model.tab === 'documents' ? <DocumentsTab model={model} page={page} /> : null}
-      {model.tab === 'messages' ? (
-        <section id="messages" className="fw-pso-section" aria-label={t('tabs.messages')}>
-          <p className="fw-pso-hint">{t('messages.priceTalk')}</p>
-          {children}
-        </section>
-      ) : null}
       {dialog?.kind === 'confirmAll' ? <ConfirmAllDialog model={dialog.model} actions={{ onRef: actions?.dialog?.onRef, onConfirm: actions?.dialog?.onConfirm, onClose: actions?.dialog?.onClose }} /> : null}
       {dialog?.kind === 'decline' ? <DeclineDialog model={dialog.model} onDraft={actions?.dialog?.onDeclineDraft} onSend={actions?.dialog?.onDeclineSend} onClose={actions?.dialog?.onClose} /> : null}
       {dialog?.kind === 'version' ? <VersionDialog model={dialog.model} onRetry={actions?.dialog?.onVersionRetry} onClose={actions?.dialog?.onClose} /> : null}
@@ -214,6 +210,8 @@ function LinesTab({ model, page, actions }: { model: OrderRecordViewModel; page:
     <div className="fw-pso-stack">
       <Card padded className="fw-pso-card">
         <OrderFacts page={page} />
+        {/* B-TH-277: the Documents tab's first file — the order as sent, price-free, in a new tab (also in the band's ⋯). */}
+        <AsSent page={page} />
       </Card>
       {changes ? (
         <Card padded className="fw-pso-card">
@@ -250,6 +248,8 @@ function ConfirmTab({ model, page, actions }: { model: OrderRecordViewModel; pag
   const editable = page.answer.canAnswer && page.answer.mayAnswer && !model.facts.preview && !model.busy && !model.done
   const steps = historySteps(page.history)
 
+  // B-TH-277: what we ask for about this order (the Documents tab's last card) sits where the supplier answers the order.
+  const asks = <Requests model={model} />
   const history = (
     <Card padded className="fw-pso-card">
       <h2 className="fw-pso-h2">{t('history.title')}</h2>
@@ -286,6 +286,7 @@ function ConfirmTab({ model, page, actions }: { model: OrderRecordViewModel; pag
             labels={ds.endState}
           />
         </Card>
+        {asks}
         {history}
       </div>
     )
@@ -306,6 +307,7 @@ function ConfirmTab({ model, page, actions }: { model: OrderRecordViewModel; pag
             <LineResponseList lines={requests} answers={proposed} editable={false} kinds={kindsOf(page.answer.lineAnswers)} today={model.today} parseQuantity={parseQuantityIn(locale)} formatDate={day} locale={INTL_LOCALE[locale]} showSummary={false} labels={ds.lineResponseList} />
           </Card>
         ) : null}
+        {asks}
         {history}
       </div>
     )
@@ -360,6 +362,7 @@ function ConfirmTab({ model, page, actions }: { model: OrderRecordViewModel; pag
         </div>
         <p className="fw-pso-hint">{t('answer.noPrices')}</p>
       </Card>
+      {asks}
       {history}
     </div>
   )
@@ -417,57 +420,51 @@ function NoticesTab({ model, actions }: { model: OrderRecordViewModel; actions?:
   )
 }
 
-// ── Documents ────────────────────────────────────────────────────────────────────────────────────────────────────────
-function DocumentsTab({ model, page }: { model: OrderRecordViewModel; page: OrderPage }) {
+// ── B-TH-277: the line above the docked conversation (the Messages tab's hint): price talk lives there (C2) ───────────
+export function PriceTalkHint() {
+  const { t } = useOrderWords()
+  return <p className="fw-pso-thread-hint">{t('messages.priceTalk')}</p>
+}
+
+// ── B-TH-277: what the Documents tab held, where it does work now ──────────────────────────────────────────────────
+/** The order as sent: its price-free PDF in a new tab (Lines' facts card; the band's ⋯ has it too). */
+function AsSent({ page }: { page: OrderPage }) {
   const { t, locale, at } = useOrderWords()
-  const ddts = model.notices.state === 'ready' ? model.notices.items.filter((notice) => notice.ddtNumber) : []
   return (
-    <div className="fw-pso-stack">
-      <Card padded className="fw-pso-card">
-        <h2 className="fw-pso-h2">{t('docs.title')}</h2>
-        <ul className="fw-pso-rows" aria-label={t('docs.title')}>
-          <li className="fw-pso-row">
+    <div className="fw-pso-row fw-pso-assent">
+      <span className="fw-pso-row-main">
+        <strong>{t('docs.asSent', { number: page.order.documentNumber })}</strong>
+        <span className="fw-pso-sub">{page.order.sentAt ? t('docs.sentOn', { at: at(page.order.sentAt) }) : t('docs.noPrices')}</span>
+      </span>
+      <Button size="sm" asChild>
+        <a href={copyHref(page.order.id, locale)} target="_blank" rel="noopener noreferrer" aria-label={t('docs.openPdf', { number: page.order.documentNumber })}>
+          <FileText size={13} aria-hidden /> {t('docs.pdf')}
+        </a>
+      </Button>
+    </div>
+  )
+}
+
+/** What we ask for about this order (the task list's rows), on Confirm or propose; nothing asked: not drawn. */
+function Requests({ model }: { model: OrderRecordViewModel }) {
+  const { t } = useOrderWords()
+  if (model.requests.length === 0) return null
+  return (
+    <Card padded className="fw-pso-card">
+      <h2 className="fw-pso-h2">{t('docs.requests')}</h2>
+      <ul className="fw-pso-rows" aria-label={t('docs.requests')}>
+        {model.requests.map((request) => (
+          <li key={request.id} className="fw-pso-row">
             <span className="fw-pso-row-main">
-              <strong>{t('docs.asSent', { number: page.order.documentNumber })}</strong>
-              <span className="fw-pso-sub">{page.order.sentAt ? t('docs.sentOn', { at: at(page.order.sentAt) }) : t('docs.noPrices')}</span>
+              <strong>{request.title}</strong>
             </span>
             <Button size="sm" asChild>
-              <a href={copyHref(page.order.id, locale)} target="_blank" rel="noopener noreferrer" aria-label={t('docs.openPdf', { number: page.order.documentNumber })}>
-                <FileText size={13} aria-hidden /> {t('docs.pdf')}
-              </a>
+              <a href={request.href}>{request.verb}</a>
             </Button>
           </li>
-          {ddts.map((notice) => (
-            <li key={notice.id} className="fw-pso-row">
-              <span className="fw-pso-row-main">
-                <strong>{t('docs.ddt', { number: notice.ddtNumber ?? '' })}</strong>
-                <span className="fw-pso-sub">{t('docs.ddtOf', { notice: notice.number ?? t('asn.draft') })}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="fw-pso-hint">{t('docs.noPrices')}</p>
-      </Card>
-      <Card padded className="fw-pso-card">
-        <h2 className="fw-pso-h2">{t('docs.requests')}</h2>
-        {model.requests.length === 0 ? (
-          <p className="fw-pso-hint">{t('docs.noRequests')}</p>
-        ) : (
-          <ul className="fw-pso-rows" aria-label={t('docs.requests')}>
-            {model.requests.map((request) => (
-              <li key={request.id} className="fw-pso-row">
-                <span className="fw-pso-row-main">
-                  <strong>{request.title}</strong>
-                </span>
-                <Button size="sm" asChild>
-                  <a href={request.href}>{request.verb}</a>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
+        ))}
+      </ul>
+    </Card>
   )
 }
 

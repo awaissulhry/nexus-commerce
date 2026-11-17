@@ -5,6 +5,10 @@ import type { DeclineDraft, InquiriesCan, LineDraft, Loaded, Notice, OrderDraft,
 import type { CustomerCheck } from './api'
 import type { CustomerChoice, TaskDraft } from './model'
 import type { StyleRead } from './view/LinesEditor'
+// B-TH-252: "Start a project…" from the request (⋯ of the pane and the full page).
+import type { StartProjectActions, StartProjectModel } from './start-project'
+// B-TH-290: production's answer (Details, the head's chip, ⋯).
+import type { ProductionActions, ProductionModel } from './production-answer'
 
 /**
  * The inquiry's record as its views draw it (design sales.inquiries rec:Inquiry — Request, Files & specs, Quote, Activity):
@@ -49,6 +53,10 @@ export interface InquiryRecordModel {
   readonly dialog: RecordDialog | null
   /** The mail's remote pictures were allowed (Show pictures). */
   readonly pictures: boolean
+  // ---- B-TH-252: "Start a project…" — why the ⋯ line is held (a key of `sales-incoming-pane`, null: it may) and its dialog when open.
+  readonly startProject?: { readonly held: string | null; readonly dialog: StartProjectModel | null }
+  // ---- B-TH-290: production's answer — the answer, who types it (held with why) and the editor in Details; absent: not read.
+  readonly production?: ProductionModel | null
 }
 
 export interface InquiryRecordActions {
@@ -66,6 +74,10 @@ export interface InquiryRecordActions {
   onOpenFile?: (fileId: string) => void
   onCopy?: () => void
   onDismissNotice?: () => void
+  // ---- B-TH-252: "Start a project…" (open the dialog; its draft, Start, close).
+  startProject?: StartProjectActions & { readonly onOpen?: () => void }
+  // ---- B-TH-290: production's answer (open the editor, the draft, ask planning, use its suggestion, save, take back, close).
+  production?: ProductionActions
   dialog?: {
     onAssign?: (assigneeId: string | null) => void
     onRetryPeople?: () => void

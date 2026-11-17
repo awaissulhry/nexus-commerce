@@ -27,6 +27,9 @@ import { StylesGallery, ViewSwitch } from '../../gallery/view/StylesGallery'
 import { cardsOf } from '../../gallery/gallery-model'
 // B-W2b-237 (SCR-343): the release column's completeness and Set season.
 import { ReleaseCell, SetSeasonDialog } from '../depth/view/ListDepth'
+// B-TH-251: "Add to project" on the selected styles.
+import { addToHeld } from '../../../projects/add-to/model'
+import { AddToProjectButton, AddToProjectDialog } from '../../../projects/add-to/view/AddToProjectDialog'
 import '../../styles.css'
 
 export type { StylesListViewModel, StylesListActions } from '../list-model'
@@ -169,7 +172,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           items={[
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
-            { id: 'variants', label: t('list.openVariants'), href: `${recordHref(data)}?tab=variants` },
+            { id: 'variants', label: t('list.openVariants'), href: `${recordHref(data)}?tab=overview#style-variants` /* B-TH-261: Colourways & sizes is part of Overview & variants */ },
             { id: 'duplicate', label: t('list.duplicate'), disabled: !!duplicateHeld, description: duplicateHeld ?? undefined, onSelect: () => latest.current.actions?.onDuplicate?.(data) },
             ...(techPackHref ? [{ id: 'techpack', label: t('list.techPackPdf'), href: techPackHref(data), target: '_blank' as const }] : []),
           ]}
@@ -274,6 +277,14 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
         <Button size="sm" aria-label={td('season.bulk', { count: picked.length })} heldReason={seasonHeld} onClick={() => setDialog('season')}>
           <CalendarRange size={13} aria-hidden /> <SelectionLabel>{td('season.bulk', { count: picked.length })}</SelectionLabel>
         </Button>
+      )}
+      {/* B-TH-251 (X-PRD-STY-LIST.grid): Add to project — held with why without projects.manage, past 200 rows, offline. */}
+      {model.addToProject && (
+        <AddToProjectButton
+          count={picked.length}
+          held={addToHeld({ manage: model.addToProject.manage, count: picked.length, offline: model.addToProject.offline })}
+          onClick={() => actions?.onAddToProject?.(picked.map((row) => ({ id: row.id, number: row.code })))}
+        />
       )}
     </>
   )
@@ -505,6 +516,19 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
             if (model.season?.result) setSelected([])
             actions?.onSeasonClosed?.()
             setDialog(null)
+          }}
+        />
+      )}
+      {/* B-TH-251: the Add to project dialog; after its answer, closing it clears the selection. */}
+      {model.addToProject?.dialog && (
+        <AddToProjectDialog
+          model={model.addToProject.dialog}
+          actions={{
+            ...actions?.addToProject,
+            onClose: () => {
+              if (model.addToProject?.dialog?.result) setSelected([])
+              actions?.addToProject?.onClose?.()
+            },
           }}
         />
       )}

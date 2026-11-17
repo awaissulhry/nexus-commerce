@@ -206,7 +206,7 @@ export function GlanceStatus({ model }: { model: GlanceModel }) {
         ))}
       </ul>
       <p className="fw-cdp-hint">{t('status.holdStops')}</p>
-      <Link className="fw-cdp-link" href={`${model.recordHref}?tab=tax`}>
+      <Link className="fw-cdp-link" href={`${model.recordHref}?tab=terms` /* B-TH-260: Terms & requirements */}>
         {t('status.openHold')}
       </Link>
     </div>
@@ -243,7 +243,7 @@ export function GlanceAside({ model }: { model: GlanceModel }) {
             ))}
           </ul>
         )}
-        <Link className="fw-cdp-link" href={`${model.recordHref}?tab=requirements`}>
+        <Link className="fw-cdp-link" href={`${model.recordHref}?tab=terms#party-requirements` /* B-TH-260: Terms & requirements */}>
           {glance.requirements.count > 0 ? t('reqSide.all', { count: glance.requirements.count }) : t('reqSide.open')}
         </Link>
       </DepthCard>

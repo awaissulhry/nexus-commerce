@@ -360,3 +360,22 @@
     white-space: nowrap;
   }
 }
+
+/* ---- B-TH-276: To pay — an invoice row's "Ask about this invoice" beside its kind, on the same quiet line (the link colour). */
+.fw-pdoc-subrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.fw-pdoc-asklink {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+/* ---- end B-TH-276 */

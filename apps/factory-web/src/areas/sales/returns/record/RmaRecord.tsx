@@ -7,7 +7,7 @@ import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hooks'
+import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { problemKey } from '../../../quality/_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import {
@@ -47,14 +47,13 @@ import {
   receiptBody,
   refusalOf,
   repairHref,
-  returnHref,
   returnsCan,
   romeToday,
   takenOf,
   type DecisionDraft,
   type Words,
 } from '../model'
-import { RMA_TABS, type AddLinesModel, type CloseModel, type NewRepairModel, type RmaDialog, type RmaModel } from '../view-model'
+import { MERGED_RMA_TABS, RMA_TABS, tabOfAddress, type AddLinesModel, type CloseModel, type NewRepairModel, type RmaDialog, type RmaModel } from '../view-model'
 import { ReturnsMessages, useWords } from '../view/parts'
 import { finishReturn } from '../depth/api'
 import { finishOptionsOf } from '../depth/model'
@@ -64,6 +63,11 @@ import { ReturnLabels } from './return-label/ReturnLabels'
 // B-W2b-368 (XF1:03): a remake as a return outcome (the unit, its revision, Make the remake order).
 import { useRemakeOutcome } from '../outcome-remake/use-remake-outcome'
 import { RmaRecordView } from './view/RmaRecordView'
+// ---- B-TH-259: the return on RecordFrame — the docked thread (Activity's tools in its "⋯"); the states before the read in the frame ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { printHref } from '../../../../shell/print/print-model'
+import Link from 'next/link'
 
 /**
  * A return's container (`/w/<company>/sales/returns/<id>?tab=…`, SCR-112): reads the RMA (its steps answered by the API,
@@ -71,7 +75,7 @@ import { RmaRecordView } from './view/RmaRecordView'
  * lines (sales.repairs.view); runs ONE write at a time with the version read (a stale one reads the RMA again and says
  * so); a line's cell edits queue so each carries the previous answer's version. Live return events of this RMA read it
  * again, or, while a dialog is open, say it changed with Reload. `?do=receive` opens Receive goods; `?created=1` says the
- * RMA was made. The thread dock (O1) and Activity mount the record panels. B-W2b-352: the W2b parts (`useRmaDepth`: the
+ * RMA was made. B-TH-259: the return's thread is docked beside every tab (RecordFrame; Activity went to its "⋯"). B-W2b-352: the W2b parts (`useRmaDepth`: the
  * return in depth and its outcomes, the fees of the drafted decisions, a credit without the goods, the policy, split, the
  * papers) and the close through `POST …/finish` with the outcomes' reasons.
  */
@@ -83,9 +87,6 @@ export function RmaRecord({ returnId }: { returnId: string }) {
   )
 }
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.returns.dock'
-
 function Container({ returnId }: { returnId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -96,7 +97,8 @@ function Container({ returnId }: { returnId: string }) {
   const locale = useLocale()
   const can = useMemo(() => returnsCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(RMA_TABS)
+  // B-TH-259 (R-8): an old `?tab=activity` lands on Lines (the frame opens the thread).
+  const tab = tabOfAddress(RMA_TABS, MERGED_RMA_TABS, params?.get('tab'))
   const today = romeToday()
   const [offline, setOffline] = useState(false)
   useEffect(() => {
@@ -129,7 +131,6 @@ function Container({ returnId }: { returnId: string }) {
   const [close, setClose] = useState<CloseModel | null>(null)
   const [newRepair, setNewRepair] = useState<NewRepairModel | null>(null)
   const [addLines, setAddLines] = useState<AddLinesModel | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   const latest = useRef<Rma | null>(null)
   latest.current = rma
   const depthReload = useRef<() => void>(() => undefined)
@@ -187,14 +188,6 @@ function Container({ returnId }: { returnId: string }) {
         .then((list) => setPeople((current) => [...list, ...current.filter((person) => !list.some((known) => known.id === person.id))]))
         .catch(() => undefined)
   }, [api, can.people])
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
-
   const live = useLive(
     (change) => {
       if (!liveMatches(change, ['return.', 'invoice.return_credit_drafted', 'invoice.sdi_status_changed', 'repair.'])) return
@@ -486,10 +479,21 @@ function Container({ returnId }: { returnId: string }) {
     }
   }
 
-  if (problem && !rma) return <RecordProblem problem={problem} back={<a className="fw-q-link" href={`${prefix}/sales/returns`}>{t('record.back')}</a>} onRetry={() => void load()} />
-  if (!rma) return <RecordSkeleton />
+  // B-TH-259: a failed read and the first read sit in the frame with the way back and no thread.
+  if (!rma)
+    return (
+      <RecordFrame recordType="ReturnAuthorisation" personId={session.user.id} band={{ back: <Link href={`${prefix}/sales/returns`}>{t('record.back')}</Link>, title: t('record.title'), moreLabel: t('record.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+        {problem ? <RecordProblem problem={problem} back={<Link className="fw-q-link" href={`${prefix}/sales/returns`}>{t('record.back')}</Link>} onRetry={() => void load()} /> : <RecordSkeleton />}
+      </RecordFrame>
+    )
 
-  const panels = can.threadsRead ? <RecordPanels record={{ type: 'ReturnAuthorisation', id: rma.id, companyId: rma.companyId, siteId: rma.siteId }} title={rma.number} party={rma.party ? { id: rma.party.id, name: rma.party.legalName, emails: [] } : null} /> : undefined
+  // ---- B-TH-259: the return's thread docked beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print
+  // view keeps the record panels' print form. Brand wall (W08, W14, W20, W25, W34): the return's own customer only.
+  const record = { type: 'ReturnAuthorisation', id: rma.id, companyId: rma.companyId, siteId: rma.siteId }
+  const party = rma.party ? { id: rma.party.id, name: rma.party.legalName } : null
+  const thread = can.threadsRead ? <OfficeRecordThread docked record={record} title={rma.party ? `${rma.number} · ${rma.party.legalName}` : rma.number} recordLabel={rma.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = can.threadsRead ? <RecordPanels record={record} title={rma.number} party={party ? { ...party, emails: [] } : null} /> : null
+  // ---- end B-TH-259
 
   const model: RmaModel = {
     prefix,
@@ -517,7 +521,7 @@ function Container({ returnId }: { returnId: string }) {
     close,
     newRepair,
     addLines,
-    dockOpen,
+    personId: session.user.id, // B-TH-259
     depth: depth.model,
     remakeLine: remake.lineOf, // B-W2b-368
   }
@@ -525,26 +529,13 @@ function Container({ returnId }: { returnId: string }) {
   return (
     <RmaRecordView
       model={model}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       returnLabels={<ReturnLabels returnId={rma.id} prefix={prefix} />}
       actions={{
         onReload: () => void load(),
         ...depth.actions,
         onDismissReceipt: () => setReceipt(null),
-        onDock: () =>
-          setDockOpen((open) => {
-            const next = !open
-            if (next && !window.matchMedia(WIDE).matches) {
-              router.push(returnHref(prefix, rma.id, '?tab=activity'))
-              return open
-            }
-            try {
-              window.localStorage.setItem(DOCK_KEY, next ? '1' : '0')
-            } catch {
-              // Not kept on this device; the dock still toggles.
-            }
-            return next
-          }),
         onQuantity: (lineId, value) => {
           const line = latest.current?.lines.find((entry) => entry.id === lineId)
           const quantity = Number(value.trim())

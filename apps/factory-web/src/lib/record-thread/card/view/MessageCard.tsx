@@ -1,15 +1,23 @@
 'use client'
 
-import { useId, useState, type ReactNode } from 'react'
-import { Globe, ImageIcon, Lock, Mail, MoreHorizontal, RotateCw, Tablet, Trash2 } from 'lucide-react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
+import { CornerDownRight, Globe, ImageIcon, Lock, Mail, MoreHorizontal, PencilLine, RotateCw, Tablet, Trash2, Undo2 } from 'lucide-react'
+// B-TH-255: the erased card and the files an e-mail did not keep.
+import { EyeOff, FileX } from 'lucide-react'
 import { Menu } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow } from '../../../i18n/ds-parts'
 import { INTL_LOCALE } from '../../../i18n/locales'
 import { useLocale, useT } from '../../../i18n/provider'
 import { Avatar } from '../../parts/Avatar'
-import { timeOf } from '../../parts/time'
+import { dayOf, shortDateOf, timeOf } from '../../parts/time'
 import {
+  // B-TH-236: the amount, the links to other messages, Undo.
+  amountWords,
+  excerptOf,
+  showsUndo,
+  undoLeft,
+  type CardLink,
   audienceKey,
   authorWords,
   cardActions,
@@ -24,6 +32,7 @@ import {
   type CardContext,
   type CardMessage,
 } from '../model'
+import { bodyKind, skippedLine } from '../model' // B-TH-255
 import '../card.css'
 
 export interface CardActions {
@@ -37,6 +46,12 @@ export interface CardActions {
   onMoreFiles?: (messageId: string) => void
   /** B-TH-231: "Use on another record…" with the message's files. */
   onUseOn?: (messageId: string) => void
+  // ---- B-TH-236 (B-TH-048, B-TH-050)
+  /** "Correct": the box takes a correction of this message, the way it went. */
+  onCorrect?: (messageId: string) => void
+  /** "Undo" in a mail's 10 seconds: take it back; its text comes back into the box. */
+  onUndo?: (messageId: string) => void
+  // ---- end B-TH-236
 }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
@@ -63,7 +78,10 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const side = sideKey(message.kind)
   const sideText = side === 'side.theirs' ? party : side ? t(side) : null
   const time = timeOf(message.at, locale)
-  const { text, quoted } = splitQuoted(message.body, message.kind)
+  // B-TH-255 (T3-F14): an erased message says why its words are gone; a message that only carries files draws no empty body.
+  const body = bodyKind(message)
+  const { text, quoted } = body === 'text' ? splitQuoted(message.body, message.kind) : { text: '', quoted: null }
+  const skipped = skippedLine(message.skipped)
   const fold = longFold(text)
   const folded = fold.folds && !allShown
   const files = cardFiles(message.files, context.canReadFiles, allFiles, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0 })
@@ -72,8 +90,12 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const sending = message.outbox?.state === 'sending'
   const names = message.mentions.map((name) => name ?? t('author.someone'))
 
+  // B-TH-236: a correction says so in its head ("Correction of 09:12"): the head keeps at most two marks, the rest goes to details.
+  const marks = cardMarks(message)
+  const headMarks = message.corrects ? marks.slice(0, 1) : marks
+  const movedMarks = message.corrects ? marks.slice(1) : []
   const label = t('label', { author, audience: t(audienceKey(message), { party }), time })
-  const cls = ['fw-rt-msg', `is-${message.kind}`, sending ? 'is-pending' : '', failed ? 'is-failed' : '', context.anchorId === message.id ? 'is-anchor' : ''].filter(Boolean).join(' ')
+  const cls = ['fw-rt-msg', `is-${message.kind}`, sending ? 'is-pending' : '', failed ? 'is-failed' : '', context.anchorId === message.id ? 'is-anchor' : '', body === 'erased' ? 'is-erased' : ''].filter(Boolean).join(' ')
 
   return (
     <article className={cls} id={`message-${message.id}`} data-message-id={message.id} data-feed-item={message.id} tabIndex={-1} aria-label={label}>
@@ -81,7 +103,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
         <Avatar name={message.kind === 'theirs' ? party : message.authorHidden ? null : message.author} kind={message.kind === 'theirs' ? 'organisation' : 'person'} />
         <span className="fw-rt-who">{author}</span>
         {sideText && <span className="fw-rt-side">{sideText}</span>}
-        {cardMarks(message).map((mark) => {
+        {headMarks.map((mark) => {
           const Icon = MARK_ICON[mark.icon]
           return (
             <span key={mark.key} className="fw-rt-mark">
@@ -90,6 +112,12 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
             </span>
           )
         })}
+        {message.corrects && (
+          <a className="fw-rt-mark fw-rt-mark-link" href={`#message-${message.corrects.id}`}>
+            <PencilLine size={13} aria-hidden />
+            {t('link.correction', { time: timeOf(message.corrects.at, locale) })}
+          </a>
+        )}
         {message.email && !message.outbox && (
           <Pill tone={DELIVERY_TONE[message.email.status]}>{t(`delivery.${message.email.status}`)}</Pill>
         )}
@@ -108,6 +136,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
                 description: t(`menu.${action}Hint`),
                 onSelect: () => {
                   if (action === 'reply') actions?.onReply?.(message.id)
+                  if (action === 'correct') actions?.onCorrect?.(message.id)
                   if (action === 'task') actions?.onTask?.(message.id)
                   if (action === 'link') actions?.onCopyLink?.(message.id)
                   if (action === 'useOn') actions?.onUseOn?.(message.id)
@@ -118,8 +147,17 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
         </span>
       </div>
 
-      <p className={`fw-rt-body${folded ? ' is-folded' : ''}`}>{text}</p>
-      {fold.folds && !allShown && (
+      {message.replyTo && <LinkLine kind="replyTo" link={message.replyTo} />}
+      {/* B-TH-255 (T3-F14): the privacy reason in words, never an empty grey card; a message of files only shows its files. */}
+      {body === 'erased' ? (
+        <p className="fw-rt-erased">
+          <EyeOff size={13} aria-hidden />
+          <span>{t('erased.line')}</span>
+        </p>
+      ) : body === 'text' ? (
+        <p className={`fw-rt-body${folded ? ' is-folded' : ''}`}>{text}</p>
+      ) : null}
+      {body === 'text' && fold.folds && !allShown && (
         <button type="button" className="fw-rt-showall" onClick={() => setAllShown(true)}>
           {t('body.showAll', { count: fold.lines })}
         </button>
@@ -134,6 +172,14 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
           </p>
         </>
       )}
+
+      {message.amount && (
+        <p className="fw-rt-amount">
+          <Lock size={12} aria-hidden />
+          <span>{t('amount.line', { amount: amountWords(message.amount, intl) })}</span>
+        </p>
+      )}
+      {movedMarks.length > 0 && <p className="fw-rt-details">{movedMarks.map((mark) => t(mark.key, { party })).join(' · ')}</p>}
 
       {message.kind === 'note' && names.length > 0 && (
         <p className="fw-rt-details">
@@ -199,9 +245,25 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
         </div>
       )}
 
+      {/* B-TH-255 (T3-F15): what an inbound mail brought that was not kept, by name and why (office only; never a signature logo). */}
+      {skipped && (
+        <p className="fw-rt-skipped" role="note">
+          <FileX size={13} aria-hidden />
+          <span>{t('skipped.line', { count: skipped.count, files: skipped.items.map((item) => t('skipped.item', { name: item.name, reason: t(item.reasonKey) })).join(', ') })}</span>
+        </p>
+      )}
+
       {message.email && message.kind === 'ours' && (
         <p className="fw-rt-details">{t('details.email', { to: message.email.to.join(', '), subject: message.email.subject })}</p>
       )}
+      {message.correctedBy && (
+        <p className="fw-rt-details">
+          <a className="fw-rt-link-to" href={`#message-${message.correctedBy.id}`}>
+            {t('link.correctedBelow', { time: timeOf(message.correctedBy.at, locale) })}
+          </a>
+        </p>
+      )}
+      {message.email && showsUndo(message, context.now ?? Date.now()) && <UndoLine until={message.email.undoUntil!} start={context.now} party={party} onUndo={actions?.onUndo ? () => actions.onUndo?.(message.id) : undefined} />}
 
       {message.email?.status === 'BOUNCED' && (
         <p className="fw-rt-bounce" role="note">
@@ -234,5 +296,48 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
         </p>
       )}
     </article>
+  )
+}
+
+// ── B-TH-236 ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** "In reply to Alma, 14 Nov: …" above the words, opening the message it answers (B-TH-050). */
+function LinkLine({ kind, link }: { kind: 'replyTo'; link: CardLink }) {
+  const t = useT('record-thread-card')
+  const locale = useLocale()
+  const who = link.author ?? t('author.floorPerson')
+  const when = shortDateOf(link.at, locale, dayOf(new Date().toISOString()))
+  return (
+    <a className="fw-rt-linkline" href={`#message-${link.id}`}>
+      <CornerDownRight size={13} aria-hidden />
+      <span>{t(`link.${kind}`, { who, when, excerpt: excerptOf(link.excerpt) })}</span>
+    </a>
+  )
+}
+
+/**
+ * "Sending to Brand Alpha… · Undo (7)" on our mail in its 10 seconds (B-TH-048, T7-F06), for the person who sent it: the seconds
+ * count down; Undo takes it back (its text comes back into the box). When the window passes the line goes and the delivery word stays.
+ */
+function UndoLine({ until, start, party, onUndo }: { until: string; start?: number | undefined; party: string; onUndo?: (() => void) | undefined }) {
+  const t = useT('record-thread-card')
+  // Counted from when the card first drew it (the clock, or a design case's fixed "now"), one second a tick.
+  const [now, setNow] = useState(() => start ?? Date.now())
+  const left = undoLeft(until, now)
+  useEffect(() => {
+    if (left <= 0) return
+    const id = setInterval(() => setNow((current) => current + 1000), 1000)
+    return () => clearInterval(id)
+  }, [left])
+  if (left <= 0) return null
+  return (
+    <p className="fw-rt-undo" role="status">
+      <span>{t('undo.sending', { party })}</span>
+      {onUndo && (
+        <Button size="sm" onClick={onUndo} aria-label={t('undo.label', { seconds: left })}>
+          <Undo2 size={13} aria-hidden /> {t('undo.button', { seconds: left })}
+        </Button>
+      )}
+    </p>
   )
 }

@@ -14,6 +14,10 @@ import { useOrderingWords } from '../neworder/words'
 import { fetchCatalogue, fetchStyle, type CatalogueRead, type StyleDetail } from './api'
 import { catalogueBandOf } from './band'
 import { catalogueHref, filtersOf, NO_FILTERS, NS, orderHeld, resultIds, viewOf, type CatalogueFilters, type CatalogueViewMode } from './model'
+// ---- B-TH-276: "Ask about this style" (New order with the style carried in) and "Ask us" (the account conversation's page).
+import { accountConversationHref } from '../../shell/record/model'
+import { askStyleHeld, askStyleHref } from './model'
+// ---- end B-TH-276
 import { CatalogueView } from './view/CatalogueView'
 import type { StyleDetailModel } from './view/StyleDetailDialog'
 
@@ -185,8 +189,13 @@ function CatalogueContainer() {
               ids,
               addHeld: held,
               sheetHref: `${frame.prefix}/catalogue/${encodeURIComponent(detail.id)}/sheet`,
+              // B-TH-276: "Ask about this style" — New order with the style carried in.
+              askHref: askStyleHref(frame.prefix, detail.id),
+              askHeld: askStyleHeld({ mayOrder, preview: frame.me.preview, offline }),
             }
           : null,
+        // B-TH-276: "Ask us" (nothing open yet) — the account conversation's page.
+        askHref: accountConversationHref(frame.prefix, frame.me.party.id),
       }}
       actions={{
         onSearch: (q) => go({ ...filters, q }),
@@ -202,7 +211,6 @@ function CatalogueContainer() {
           if (pending) setRead(pending)
           setPending(null)
         },
-        onAsk: () => frame.ask(null),
         detail: {
           onClose: () => go(filters, { style: null }),
           onGo: (id) => go(filters, { style: id }),

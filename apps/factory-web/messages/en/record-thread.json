@@ -13,7 +13,17 @@
     "openFailed": "The file could not be opened. Try again.",
     "partyUnread": "The customer’s contacts could not be read: type the address yourself.",
     "cannotOpen": "One file you cannot open: it is out of your reach (its record, or a measurement sheet without the right to open it).",
-    "copied": "Copied to {target}: the copy names where it came from."
+    "copied": "Copied to {target}: the copy names where it came from.",
+    "portalPosted": "Posted in the portal: the customer reads it there; their mail setting decides when they hear of it.",
+    "floorPrice": "Not added: “{found}” looks like a price, and the floor never sees money. Take it out, or write it as an office note’s amount. Your text is back in the box.",
+    "taskFromMessage": "Task made: it links back to this message.",
+    "portal": {
+      "NO_PARTY": "Not posted: this record has no customer yet (a prospect has no portal). Make the customer first; your text is back in the box.",
+      "NO_PORTAL": "Not posted: nobody of this customer reads this record in the portal now. Reply by e-mail instead; your text is back in the box.",
+      "CLOSED": "Not posted: this thread is closed. Reopen it to reply; your text is back in the box.",
+      "NOT_SHAREABLE": "Not posted: this record’s thread stays inside the factory and is never shared with a customer. Write an office note; your text is back in the box.",
+      "other": "Not posted in the portal: the factory refused it as it is. Your text is back in the box."
+    }
   },
   "pane": {
     "label": "Reading pane",

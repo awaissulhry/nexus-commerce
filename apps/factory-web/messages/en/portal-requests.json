@@ -57,5 +57,26 @@
     "retry": "Try again"
   },
   "offline": "No connection — showing what was loaded at {time}",
-  "loading": "Reading your request…"
+  "loading": "Reading your request…",
+  "files": {
+    "title": "Add files",
+    "offline": "You are offline: files go when you are back."
+  },
+  "withdraw": {
+    "action": "Withdraw this request",
+    "hint": "Possible until we decide on it.",
+    "title": "Withdraw your request {seq}?",
+    "titleNone": "Withdraw your request?",
+    "body": "We stop working on it. This cannot be undone: if you change your mind, write to us in the messages below.",
+    "keep": "Keep it",
+    "confirm": "Withdraw",
+    "busy": "Withdrawing…",
+    "problem": {
+      "changed": "This request changed meanwhile: it was read again. Look at it and try again if you still want to.",
+      "missing": "This request is not one of yours, or it no longer exists.",
+      "forbidden": "Your access does not let you withdraw requests. Your admin can change that.",
+      "network": "No connection: nothing changed. Try again in a moment.",
+      "failed": "It could not be withdrawn: nothing changed. Try again in a moment."
+    }
+  }
 }

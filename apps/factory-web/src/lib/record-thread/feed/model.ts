@@ -11,7 +11,10 @@ import { dayOf, THREAD_TIME_ZONE } from '../parts/time'
  * messages", the two just before the open ones are one line each. Record steps are one thin line; field changes group by person
  * and hour ("5 changes by Bea Esempio · Show"). Pure: the view draws these rows.
  *
- * Not drawn until the back end has it (design kit §5): the held-mail line (thread-G06, B-TH-079), the erased card (thread-G09).
+ * B-TH-255 (TH-6, on B-TH-079): two quiet lines at the end of the feed — the messages new to the reader that the Head's View hides
+ * ("1 new message hidden by this view · Show all": a view left on never hides news, T1-F05) and the mail for this conversation that
+ * waits for a person ("1 mail for this conversation waits in Mail to sort — sender not a contact · Review" for a reader with
+ * email.triage; "A reply waits for a colleague to check it" for everyone else, never the sender or why: T4-F10, W07 / W08 / W22).
  */
 
 /** The last messages that stay open (PR-08). */
@@ -216,4 +219,56 @@ export function arrivedAtEnd(before: readonly string[], after: readonly string[]
   const last = before[before.length - 1]
   const index = after.indexOf(last)
   return index === -1 ? 0 : after.length - 1 - index
+}
+
+// ── B-TH-255 (B-TH-079; T1-F05, T4-F10) ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Why a mail for this conversation waits for a person: HELD's reason (factory-domain email-in/rules HELD_REASONS) or TRIAGE (Mail to
+ * sort). Held together by the test (the domain's rules reach node:crypto: a browser module never imports them).
+ */
+export const HELD_REASON_CODES = ['DMARC_FAIL', 'SPAM', 'UNKNOWN_SENDER', 'THREAD_CLOSED', 'TRIAGE'] as const
+
+/** The office read's `waitingMail` (platform/threads contract), plus where Review opens (Home › Mail to sort) for this company. */
+export interface FeedWaitingMail {
+  readonly count: number
+  readonly reasons: readonly string[]
+  /** email.triage over the mail's company: "Review"; else "A reply waits for a colleague to check it". */
+  readonly mayReview: boolean
+  /** Home › Mail to sort of this company; null: no link (a design case, a host without the address). */
+  readonly reviewHref: string | null
+}
+
+/** The API counts at most this many waiting mails (WAITING_MAIL_MAX): the line says "50 or more" then. */
+export const WAITING_MAIL_MAX = 50
+
+/** A held reason's words: a key of record-thread-feed (`waiting.reason.UNKNOWN_SENDER`); an unknown code says "to be checked". */
+export const heldReasonKey = (reason: string): string => ((HELD_REASON_CODES as readonly string[]).includes(reason) ? `waiting.reason.${reason}` : 'waiting.reason.other')
+
+/**
+ * The held-mail line at the end of the feed (T4-F10), or null when nothing waits. A reader who may review it (email.triage) reads how
+ * many, why (each reason once, in words) and Review (Home › Mail to sort); anyone else reads only that a reply waits for a colleague —
+ * never the sender (the API never sends it) and never why (W07, W08, W22, W34).
+ */
+export function waitingMailLine(waiting: FeedWaitingMail | null | undefined): { readonly key: 'waiting.review' | 'waiting.reviewMany' | 'waiting.colleague' | 'waiting.colleagueMany'; readonly count: number; readonly reasons: readonly string[]; readonly href: string | null } | null {
+  if (!waiting || waiting.count <= 0) return null
+  const many = waiting.count >= WAITING_MAIL_MAX
+  if (!waiting.mayReview) return { key: many ? 'waiting.colleagueMany' : 'waiting.colleague', count: waiting.count, reasons: [], href: null }
+  const reasons = [...new Set(waiting.reasons.map(heldReasonKey))]
+  return { key: many ? 'waiting.reviewMany' : 'waiting.review', count: waiting.count, reasons, href: waiting.reviewHref }
+}
+
+/** "1 new message hidden by this view · Show all": the line's count, or null (All, or nothing new hidden). */
+export const hiddenNewLine = (hiddenNew: number | undefined): { readonly count: number } | null => (hiddenNew && hiddenNew > 0 ? { count: hiddenNew } : null)
+
+/**
+ * A folded message's one line (B-TH-255): its first words; an erased message says so ("Message removed (privacy request)"); a message
+ * of files only names how many ("2 files"), never an empty line that looks erased.
+ */
+export function foldedGist(message: Pick<CardMessage, 'body' | 'files' | 'erased'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets'>>): { readonly text: string } | { readonly key: string; readonly count?: number } {
+  if (message.erased) return { key: 'erased.short' }
+  const gist = gistOf(message.body)
+  if (gist.trim() !== '') return { text: gist }
+  const files = message.files.length + (message.hiddenFiles ?? 0) + (message.lockedSheets ?? 0)
+  return files > 0 ? { key: 'filesOnly.line', count: files } : { text: '' }
 }

@@ -60,7 +60,7 @@ const tabsOf = (words: ReturnWords, prefix: string, type: 'RETURN' | 'COMPLAINT'
   items: [
     { id: 'request', label: words.t('tabs.request'), href: caseHref(prefix, type, id, 'request'), ...(photos > 0 ? { count: photos } : {}) },
     { id: 'status', label: words.t('tabs.status'), href: caseHref(prefix, type, id, 'status') },
-    { id: 'messages', label: words.t('tabs.messages'), href: caseHref(prefix, type, id, 'messages') },
+    // B-TH-275: no Messages tab — the case's conversation docks beside both tabs.
   ],
 })
 

@@ -42,6 +42,10 @@ import { closedRefusal, failedKey, goesToOf, openItems, receiptOf, reorderText, 
 // B-TH-304
 import { catalogueDoorOf } from './request-model'
 import { RequestPageView, type RequestPageModel } from './view/RequestPageView'
+// B-TH-282: the customer's files go right after Send, onto the new request (B-TH-085).
+import { filesOutcome } from '../../../lib/request-compose/files'
+import { useRequestFiles } from '../requests/use-request-files'
+import { requestHref } from '../requests/model'
 import { useOrderingWords } from './words'
 
 /**
@@ -87,7 +91,11 @@ function ComposeContainer() {
   const keepKey = composeDraftKey(frame.me.user.id, frame.me.party.code)
   const sentKey = lastSentKey(frame.me.user.id, frame.me.party.code)
 
-  const [open, setOpen] = useState<{ state: 'loading' | 'error' | 'ready'; open: boolean; reason: string | null }>({ state: 'loading', open: true, reason: null })
+  const [open, setOpen] = useState<{ state: 'loading' | 'error' | 'ready'; open: boolean; reason: string | null; files: { open: boolean; words: string | null } }>({ state: 'loading', open: true, reason: null, files: { open: false, words: null } })
+  // ---- B-TH-282: the files held in the page until Send (a file cannot exist before its request).
+  const fileWords = useMemo(() => ({ network: tc('files.failed.network'), store: tc('files.failed.store'), refused: tc('files.failed.refused') }), [tc])
+  const files = useRequestFiles(api, fileWords)
+  // ---- end B-TH-282
   const [addresses, setAddresses] = useState<Async<ShipToChoice[]>>({ state: can('portal.addresses.view') ? 'loading' : 'none', value: [] })
   const [requests, setRequests] = useState<Async<RequestRow[]>>({ state: can('portal.salesOrders.view') ? 'loading' : 'none', value: [] })
   const [draft, setDraft] = useState<ComposeDraft>(EMPTY_COMPOSE)
@@ -111,7 +119,8 @@ function ComposeContainer() {
     if (!mayOrder) return
     try {
       const answer = await fetchRequestsOpen(api)
-      setOpen({ state: 'ready', open: answer.open, reason: answer.reason ? answer.reason[locale] : null })
+      // B-TH-282: the files' own gate (the scanner's sentence while uploads from outside are closed); unknown = closed.
+      setOpen({ state: 'ready', open: answer.open, reason: answer.reason ? answer.reason[locale] : null, files: answer.files ?? { open: false, words: null } })
     } catch {
       setOpen((current) => ({ ...current, state: 'error' }))
     }
@@ -260,6 +269,8 @@ function ComposeContainer() {
         if (keepTimer.current) clearTimeout(keepTimer.current)
         key.current = null
         setAnswer({ answer: result, draft })
+        // B-TH-282: the held files go now, onto the new request (sent, held for the virus scan, or Retry on the receipt).
+        if (files.held.some((file) => file.problem === null)) void files.send(result.request.id, 'request')
         setDraft(EMPTY_COMPOSE)
         setKept({ state: 'none' })
         setShown({})
@@ -291,11 +302,13 @@ function ComposeContainer() {
         setSending(false)
       }
     },
-    [held, draft, today, sentKey, api, keepKey, frame, readRequests, readOpen, t],
+    [held, draft, today, sentKey, api, keepKey, frame, readRequests, readOpen, t, files],
   )
 
   // Leaving loses nothing while the draft is kept here; without storage (a private window) it asks first.
-  usePortalUnsaved('portal:new-request', { dirty: !answer && typedIn(draft) && kept.state !== 'kept', what: t('request.unsaved'), save: () => send() })
+  // B-TH-282: files held in the page are not kept on this device: leaving with them asks first too.
+  const filesWaiting = !answer && files.held.some((file) => file.problem === null && file.state === 'held')
+  usePortalUnsaved('portal:new-request', { dirty: (!answer && typedIn(draft) && kept.state !== 'kept') || filesWaiting, what: t('request.unsaved'), save: () => send() })
 
   const discard = () => {
     if (keepTimer.current) clearTimeout(keepTimer.current)
@@ -309,6 +322,7 @@ function ComposeContainer() {
     setNotice(null)
     setDetailsOpen(false)
     setDiscardOpen(false)
+    files.clear() // B-TH-282
     key.current = null
   }
 
@@ -352,10 +366,16 @@ function ComposeContainer() {
                 sendHeld: held ? tc(held) : null,
                 failed,
                 same: same ? { at: formatTime(new Date(same.at).toISOString(), { locale, timeZone: DEFAULT_TIME_ZONE }), yours: same.yours ? same.yours[locale] : null } : null,
-                filesHeld: tc('files.closed'),
+                filesHeld: open.files.words ?? tc('files.closed'),
                 notice,
               }
             : null,
+        // B-TH-282: the files area — open, or the API's sentence while uploads from outside are closed.
+        files:
+          phase === 'compose'
+            ? { open: open.files.open, closedWords: open.files.words, held: files.held, leftOut: files.leftOut, when: 'hold', readOnly: preview, heldReason: preview ? tc('held.preview') : null }
+            : null,
+        receiptFiles: answer && files.held.length > 0 ? { held: files.held, openHref: requestHref(frame.prefix, answer.answer.request.id) } : null,
         aside: {
           open: { state: requests.state, items: openItems(requests.value, frame.prefix, locale, at) },
           allHref: pageBuilt('orders.list') ? `${frame.prefix}/orders?chip=REQUESTED` : null,
@@ -393,9 +413,20 @@ function ComposeContainer() {
         onNewOrder: () => {
           setAnswer(null)
           setDetailsOpen(false)
+          files.clear() // B-TH-282
         },
         onDiscardConfirm: discard,
         onDiscardCancel: () => setDiscardOpen(false),
+        // ---- B-TH-282
+        files: {
+          onDrop: files.add,
+          onSheet: files.sheet,
+          onRemove: files.remove,
+        },
+        onRetryFiles: () => {
+          if (answer && filesOutcome(files.held).failed > 0) void files.send(answer.answer.request.id, 'request')
+        },
+        // ---- end B-TH-282
       }}
     />
   )

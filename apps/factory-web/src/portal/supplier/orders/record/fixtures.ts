@@ -9,10 +9,12 @@ import { SupplierCase, type SupplierCaseBuilder } from '../view/SupplierCase'
 import type { OrderRecordViewModel } from '../view/OrderRecordView'
 
 /**
- * SCR-189 › one purchase order (design portal.supplier.orders rec "Purchase order"; B-W2b-179), MADE-UP data only: the five
- * tabs (Lines with "What changed in version 2", Confirm or propose with LineResponseList and "Answers so far", Ship notices,
- * Documents with the price-free copy, Messages), the pop-ups (Answer line 20 is the DS part's own sheet, Decline, What changed,
- * Confirm all as asked), every end and refusal, an office preview and a colleague who may not approve.
+ * SCR-189 › one purchase order (design portal.supplier.orders rec "Purchase order"; B-W2b-179; B-TH-277 tabs 5 → 3), MADE-UP data
+ * only: the three tabs (Lines with "What changed in version 2" and the order as sent, Confirm or propose with LineResponseList,
+ * what we ask for and "Answers so far", Ship notices with each DDT), the PO's conversation docked beside every tab at 1440 (the
+ * portal record frame; price talk lives there, C2) and on a phone behind "Messages (2 new)" or open full width, the pop-ups
+ * (Answer line 20 is the DS part's own sheet, Decline, What changed, Confirm all as asked), every end and refusal, an office
+ * preview and a colleague who may not approve. Never a customer's or a brand's name (WALL-G18).
  */
 
 const NO_ANSWERS: Record<string, LineDraft> = {}
@@ -42,14 +44,16 @@ function recordModel(page: OrderPage | null, over: Partial<OrderRecordViewModel>
   }
 }
 
-function recordCase(page: OrderPage, tab: RecordTab, over: (locale: Locale) => Partial<OrderRecordViewModel> = () => ({}), shell: { preview?: boolean } = {}): SupplierCaseBuilder {
+type Frame = { mode: 'docked' | 'stacked'; viewOpen?: boolean; newCount?: number }
+function recordCase(page: OrderPage, tab: RecordTab, over: (locale: Locale) => Partial<OrderRecordViewModel> = () => ({}), shell: { preview?: boolean; frame?: Frame } = {}): SupplierCaseBuilder {
   return (locale) => {
     const t = words(locale)
     const model = recordModel(page, { tab, ...over(locale) })
     const held = shell.preview ? t('held.preview') : page.answer.mayAnswer ? null : t('held.mayAnswer')
     return {
       shell: shellOf(locale, { path: `/orders/${page.order.id}`, preview: shell.preview ?? false, band: orderBandOf({ t, locale, page, tab, prefix: PREFIX, done: model.done !== null, confirmHeld: held, notices: model.notices.state === 'ready' ? model.notices.items.length : null }) }),
-      body: { kind: 'record', model, thread: tab === 'messages' ? threadOf(locale) : null },
+      // B-TH-277: the PO's conversation docks beside every tab (no Messages tab).
+      body: { kind: 'record', model, thread: threadOf(locale), ...(shell.frame ? { frame: shell.frame } : {}) },
     }
   }
 }
@@ -76,14 +80,16 @@ export const designScreen = defineDesignScreen<SupplierCaseBuilder>({
     { id: 'done-proposed', label: 'Sent to the buyer — the end', model: recordCase(proposedPage(), 'confirm', (locale) => ({ done: { outcome: 'PROPOSED', summary: locale === 'it' ? '1 riga come richiesto · 1 data più tardi · 1 sostituto' : '1 line as asked · 1 later date · 1 substitute', supplierRef: 'CP-OC-401' } })) },
     { id: 'proposed', label: 'Change proposed, waiting for the buyer', model: recordCase(proposedPage(), 'confirm'), note: 'What was proposed, read only; Answers so far.' },
     { id: 'proposed-refused', label: 'The buyer refused the changes', model: recordCase(proposedPage('REFUSED'), 'confirm') },
-    { id: 'confirmed', label: 'A confirmed order', model: recordCase(confirmedPage(), 'confirm'), note: 'The lines are locked: to ask for a change, write in Messages (the API takes no new proposal on a confirmed order: named in the notes).' },
+    { id: 'confirmed', label: 'A confirmed order', model: recordCase(confirmedPage(), 'confirm'), note: 'The lines are locked: to ask for a change, write in the docked conversation (the API takes no new proposal on a confirmed order: named in the notes).' },
     // B-W2b-186: "Announce delivery" opens the new ship notice from this order.
     { id: 'asn', label: 'Ship notices', model: recordCase(confirmedPage(), 'asn', () => ({ announce: { href: `${PREFIX}/deliveries/new?po=${confirmedPage().order.id}`, heldReason: null } })) },
     { id: 'asn-empty', label: 'No delivery announced yet', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'ready', items: [] }, announce: { href: `${PREFIX}/deliveries/new?po=${confirmedPage().order.id}`, heldReason: null } })) },
     { id: 'asn-no-access', label: 'Ship notices not part of the access', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'noAccess', items: [] } })) },
     { id: 'asn-error', label: 'Ship notices could not be read', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'error', items: [] } })) },
-    { id: 'documents', label: 'Documents', model: recordCase(confirmedPage(), 'documents', (locale) => ({ requests: [{ id: 's3', title: locale === 'it' ? 'Carica il rapporto Cr VI del bagno 2231' : 'Upload the Cr VI report of batch 2231', verb: locale === 'it' ? 'Carica' : 'Upload', href: `${PREFIX}/open/PurchaseOrder/x#task:s3` }] })), note: 'The order as sent, price-free (a new tab); your DDTs; what we ask for. The mailed PDF with prices is only in Messages (C2).' },
-    { id: 'messages', label: 'Messages', model: recordCase(OPEN, 'messages'), note: 'The PO’s shared thread (PartnerThread); price talk belongs here.' },
+    // B-TH-277: what the Documents tab held — what we ask for now on Confirm or propose; the order as sent on Lines and in ⋯.
+    { id: 'confirmed-asks', label: 'A confirmed order with what we ask for', model: recordCase(confirmedPage(), 'confirm', (locale) => ({ requests: [{ id: 's3', title: locale === 'it' ? 'Carica il rapporto Cr VI del bagno 2231' : 'Upload the Cr VI report of batch 2231', verb: locale === 'it' ? 'Carica' : 'Upload', href: `${PREFIX}/open/PurchaseOrder/x#task:s3` }] })), note: 'What the old Documents tab listed: our asks here; the order as sent (price-free PDF) under Lines’ facts and in ⋯; each DDT on its ship notice’s row. The mailed PDF with prices is only in the conversation (C2).' },
+    { id: 'phone', label: 'Phone: Confirm or propose, Messages (2 new)', model: recordCase(OPEN, 'confirm', () => ({}), { frame: { mode: 'stacked', newCount: 2 } }), note: 'Under 1280 px the body leads; “Messages (2 new)” opens the PO’s conversation full width (Back returns to the same tab and scroll).' },
+    { id: 'phone-messages', label: 'Phone: the conversation open', model: recordCase(OPEN, 'lines', () => ({}), { frame: { mode: 'stacked', viewOpen: true } }), note: 'The conversation full width with Back; the price-talk line above it.' },
     {
       id: 'confirm-all',
       label: 'Pop-up: Confirm all as asked',

@@ -267,5 +267,23 @@
     "REFUSED": "Rejected",
     "WITHDRAWN": "Withdrawn",
     "EXPIRED": "Expired"
+  },
+  "projects": {
+    "title": "Projects",
+    "hint": "The projects we added you to: one conversation about several styles, samples or orders.",
+    "status": {
+      "ACTIVE": "Active",
+      "ON_HOLD": "On hold",
+      "CLOSED": "Closed"
+    },
+    "target": "Target date {date}",
+    "open": "Open",
+    "openOf": "Open the project {name}"
+  },
+  "discuss": {
+    "col": "Messages",
+    "label": "Discuss",
+    "styleOf": "Discuss the style {code} with us",
+    "roundOf": "Discuss {round} with us"
   }
 }

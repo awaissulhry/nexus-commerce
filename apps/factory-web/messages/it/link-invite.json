@@ -49,6 +49,10 @@
     "title": "Il record",
     "empty": "Per ora non condividiamo altro su questo record."
   },
+  "side": {
+    "title": "Informazioni sull'invito",
+    "open": "Informazioni sull'invito"
+  },
   "field": {
     "code": "Codice",
     "name": "Nome",
@@ -134,7 +138,7 @@
     }
   },
   "files": {
-    "title": "File condivisi",
+    "title": "File",
     "empty": "Nessun file condiviso per ora.",
     "emptyBody": "Qui compaiono i file che condividiamo con te su questo record.",
     "open": "Apri",
@@ -155,7 +159,11 @@
       "empty": "Il file è vuoto.",
       "closed": "Per ora non si possono caricare file. Mandalo per e-mail al tuo contatto.",
       "open": "Non siamo riusciti ad aprire il file. Riprova."
-    }
+    },
+    "all_one": "Tutti i file ({count})",
+    "all_other": "Tutti i file ({count})",
+    "allMore": "+{more} altri · tutti i {count} file",
+    "viewTitle": "File di questo record"
   },
   "thread": {
     "title": "Messaggi",

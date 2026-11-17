@@ -1027,5 +1027,30 @@
       "notFound": "Questa email non c'è più.",
       "unavailable": "Il server della fabbrica non ha risposto. Controlla la connessione e riprova."
     }
+  },
+  "myProjects": {
+    "title": "I miei progetti",
+    "all": "Tutti i miei progetti",
+    "allCount": "Tutti i miei progetti ({count})",
+    "officeOnly": "Solo interno",
+    "youLead": "Ne sei responsabile",
+    "target": "Obiettivo {date}",
+    "stale": "Data obiettivo superata e nessun messaggio: chiudilo o aggiornalo",
+    "staleHint": "Ha superato la data obiettivo e non ha messaggi da 14 giorni. Aprilo per chiuderlo con il suo esito o per aggiornarlo.",
+    "muted": "Silenziato: le sue novità non ti arrivano (le menzioni sì)",
+    "new_one": "{count} nuovo",
+    "new_other": "{count} nuovi",
+    "newLabel_one": "{name}: {count} messaggio nuovo, aprilo",
+    "newLabel_other": "{name}: {count} messaggi nuovi, apri il primo",
+    "error": "Non è stato possibile leggere i tuoi progetti",
+    "retry": "Riprova",
+    "problem": {
+      "unavailable": "Il servizio non risponde ora. Riprova tra poco.",
+      "forbidden": "Il tuo ruolo non apre i progetti qui.",
+      "notFound": "Niente da mostrare.",
+      "signedOut": "La sessione è finita: accedi di nuovo.",
+      "contract": "La risposta non è quella attesa: ricarica la pagina.",
+      "rateLimited": "Troppe richieste in poco tempo: aspetta un momento."
+    }
   }
 }

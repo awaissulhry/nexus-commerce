@@ -41,6 +41,8 @@ export interface CatalogueViewModel {
   detail: StyleDetailModel | null
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
+  /** B-TH-276: "No styles are open to you yet. Ask us." — the account conversation's page (a real link, not a pop-up). */
+  askHref?: string | null
 }
 
 export interface CatalogueActions {
@@ -55,8 +57,6 @@ export interface CatalogueActions {
   onRetry?: () => void
   onShowUpdate?: () => void
   onHelp?: () => void
-  /** "No styles are open to you yet. Ask us." */
-  onAsk?: () => void
   detail?: StyleDetailActions
 }
 
@@ -181,9 +181,12 @@ export function CatalogueView({ model, actions }: { model: CatalogueViewModel; a
         title={t('catalogue.empty')}
         description={t('catalogue.emptyBody')}
         action={
-          <Button size="sm" onClick={() => actions?.onAsk?.()}>
-            {t('catalogue.ask')}
-          </Button>
+          // B-TH-276: the account conversation as a page (P-CUS-CAT: "Ask a question … as a page, not a modal").
+          model.askHref ? (
+            <Button size="sm" asChild>
+              <a href={model.askHref}>{t('catalogue.ask')}</a>
+            </Button>
+          ) : undefined
         }
       />
     )

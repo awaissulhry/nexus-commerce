@@ -36,6 +36,9 @@ import { EmployeesImport } from './import/EmployeesImport'
 import { useEmployeeDialogs } from './use-dialogs'
 import type { CellState, EmployeesListModel, Rows, TeamOnly } from './view-model'
 import { EmployeesView } from './view/EmployeesView'
+// ---- B-TH-271 (PL6): a team's window with the team's office notes docked ----
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
+import { readsTeamNotes, teamTitle, teamWindowHref, teamWindowOf } from './teams/model'
 
 /**
  * `/w/<company>/people/employees` (SCR-084): the address holds the list's state (`?tile=`, `?rows=`, `?q=`,
@@ -76,6 +79,7 @@ function EmployeesContainer() {
       const merged = { ...address, ...next }
       const keep = new URLSearchParams(params?.toString() ?? '')
       keep.delete('team')
+      if (merged.view !== 'teams') keep.delete('open') // B-TH-271: a team's window belongs to the Teams view
       const text = employeesAddressText(merged, keep)
       const team = merged.teamId ? `${text ? '&' : '?'}team=${encodeURIComponent(merged.teamId)}` : ''
       router.replace(`${pathname}${text}${team}`, { scroll: false })
@@ -343,6 +347,27 @@ function EmployeesContainer() {
     [rows.items, words, locale, today],
   )
 
+  // ---- B-TH-271 (PL6; O-PPL-TEAM.thread): the open team's window (`?view=teams&open=<team>`) and, with threads.read AND people.view
+  // (the API's gate on notes about people), the team's office notes docked in it — notes only (a team has no party), Activity's tools
+  // in its "⋯" (R-ACT); an empty thread folds to "Add a note" (the thread tells the window).
+  const openTeamId = teamWindowOf(params)
+  const openTeam = openTeamId ? ((teams.items ?? []).find((team) => team.id === openTeamId && team.status === 'ACTIVE') ?? null) : null
+  const [teamThreadEmpty, setTeamThreadEmpty] = useState(false)
+  const teamThread =
+    openTeam && readsTeamNotes(session.permissions) ? (
+      <OfficeRecordThread
+        key={openTeam.id}
+        docked
+        record={{ type: 'Team', id: openTeam.id, companyId: openTeam.companyId, siteId: openTeam.site.id }}
+        title={teamTitle(openTeam)}
+        recordLabel={`${openTeam.code} ${openTeam.name}`}
+        party={null}
+        onEmpty={setTeamThreadEmpty}
+      />
+    ) : null
+  const openTeamWindow = (teamId: string | null) => router.replace(teamWindowHref(pathname, params?.toString() ?? '', teamId), { scroll: false })
+  // ---- end B-TH-271
+
   const model: EmployeesListModel = {
     prefix,
     origin,
@@ -369,11 +394,14 @@ function EmployeesContainer() {
     notice,
     today,
     timeZone: TIME_ZONE,
+    openTeamId, // B-TH-271
   }
 
   return (
     <EmployeesView
         model={model}
+        teamThread={teamThread /* B-TH-271 */}
+        teamThreadEmpty={teamThreadEmpty}
         extra={<EmployeesImport open={address.isImport && can.view} companyId={session.company?.id ?? null} prefix={prefix} can={can} onClose={() => go({ isImport: false })} onApplied={reloadAll} />}
         actions={{
           onTile: (tile) => go({ tile, rows: 'ACTIVE' }),
@@ -405,6 +433,7 @@ function EmployeesContainer() {
           onAddTeam: () => dialogs.openAddTeam(siteId ?? (scope.sites.length === 1 ? scope.sites[0]!.id : null)),
           onSetLead: (team, employeeId) => void setLead(team, employeeId),
           onArchiveTeam: (team) => void archive(team),
+          onOpenTeam: openTeamWindow, // B-TH-271
           onStepDone: (leaver, step) => void dialogs.markStepDone(leaver, step),
           onStepSkip: dialogs.openSkip,
           onCancelLeaving: dialogs.openCancelLeaving,

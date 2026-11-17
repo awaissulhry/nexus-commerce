@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { blankInvite } from '../../../admin/users/partners/model'
-import { inShell, panels, RECORD_CAN, recordModel, SUPPLIERS } from '../../../parties/_shared/fixtures'
+import { inShell, partyThread, RECORD_CAN, recordModel, SUPPLIERS } from '../../../parties/_shared/fixtures'
 import { PartyRecordView } from '../../../parties/_shared/view/PartyRecordView'
 import { portalModel, READ_ONLY, rolesOf, SUPPLIER_PEOPLE, supplierAccess } from '../../../sales/customers/portal/demo'
 import type { PortalAccessModel } from '../../../sales/customers/portal/model'
@@ -18,7 +18,7 @@ const party = SUPPLIERS[0]!
 
 function SupplierPortalDesign({ model }: { model: PortalAccessModel }) {
   const record = recordModel('suppliers', party, { tab: 'portal', can: { ...RECORD_CAN, partners: true } })
-  return inShell(`/purchasing/suppliers/${party.id}`, createElement(PartyRecordView, { model: record, panels: panels(party), portal: createElement(PortalAccessView, { model }) }))
+  return inShell(`/purchasing/suppliers/${party.id}`, createElement(PartyRecordView, { model: record, thread: partyThread(party, 'suppliers') /* B-TH-260 */, portal: createElement(PortalAccessView, { model }) }))
 }
 
 const base = (over: Partial<PortalAccessModel> = {}) => portalModel('suppliers', over)

@@ -44,9 +44,26 @@ export function listQuery(chip: JobChip | null, q: string): string {
 }
 
 // ── the record ───────────────────────────────────────────────────────────────────────────────────────────────────────
-export const RECORD_TABS = ['kit', 'progress', 'sendback', 'documents', 'messages'] as const
+// ---- B-TH-277 (threads plan TH-6, P-SUB-JOB; tree: tabs 5 → 3, phone first): Kit received (with its documents: the job sheet, our
+// kit DDTs, your DDTs, your photos — the Documents tab merged into it) · Progress · Send back. The Messages tab went: the job's
+// conversation docks beside every tab (the portal record frame; on a phone behind "Messages (2 new)").
+export const RECORD_TABS = ['kit', 'progress', 'sendback'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export const isRecordTab = (value: unknown): value is RecordTab => typeof value === 'string' && (RECORD_TABS as readonly string[]).includes(value)
+/** Where an old tab's work went: Documents into Kit received; Messages has no tab (null: the job's next step, the frame shows it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab | null>> = { documents: 'kit', messages: null }
+/**
+ * The tab a job's address opens (B-TH-277): one of its tabs; an old `?tab=documents` → Kit received (its documents are there); an
+ * old `?tab=messages`, no tab or anything else → where the job's one next step is done (the frame shows the conversation for
+ * `messages`: R-8). `Object.hasOwn`-safe: a key of Object.prototype is never a tab.
+ */
+export function jobTabOf(asked: string | null | undefined, next: NextStep | null): RecordTab {
+  if (isRecordTab(asked)) return asked
+  const merged = asked && Object.prototype.hasOwnProperty.call(MERGED_TABS, asked) ? MERGED_TABS[asked] : null
+  if (merged) return merged
+  return next ? tabFor(next) : 'progress'
+}
+// ---- end B-TH-277
 
 /** The tab a job opens on: where its one next step is done. */
 export function tabFor(next: NextStep): RecordTab {

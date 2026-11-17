@@ -1,12 +1,14 @@
 'use client'
 
 import { useMemo, useRef, type ReactNode } from 'react'
-import { CircleCheck, Download, FileCode2, FileText, Lock } from 'lucide-react'
+import { CircleCheck, Download, FileCode2, FileText, Lock, MessageCircleQuestion } from 'lucide-react'
 import { EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { bulkDownloadHeld, dueWords, isLive, payHeld, sdiTone, type PayFacts, type PayRow } from '../model'
+// B-TH-276: "Ask about this invoice" opens the invoice's conversation page.
+import { payAskHref } from '../model'
 import { useDocumentWords } from '../words'
 
 /**
@@ -32,6 +34,8 @@ export interface ToPayModel {
   /** Why nothing may be opened now (a preview, offline), a key. */
   held: string | null
   keysOpen?: boolean
+  /** B-TH-276: the portal's address prefix (`/p/<party>`): an invoice row's "Ask about this invoice" link; absent: none drawn. */
+  prefix?: string
 }
 
 export interface ToPayActions {
@@ -52,14 +56,23 @@ export function ToPaySection({ model, actions }: { model: ToPayModel; actions?: 
     const NumberCell = ({ data }: ICellRendererParams<PayRow>) => {
       if (!data) return null
       const payment = data.payment
+      // B-TH-276 (P-CUS-DOCS [P10]): the invoice's conversation as its own page — a real link (⌘-click: a new tab), never a pop-up.
+      const ask = payAskHref(latest.current.model.prefix, data)
       return (
         <span className="fw-pdoc-two">
           <span className="fw-pdoc-title fw-pdoc-ellipsis" title={data.target.kind === 'invoice' ? data.number : t('pay.depositFor', { number: data.number })}>
             {data.target.kind === 'invoice' ? data.number : t('pay.depositFor', { number: data.number })}
           </span>
-          <span className="fw-pdoc-sub fw-pdoc-ellipsis">
-            {data.target.kind === 'invoice' ? t(`docType.${docTypeKey(data.docType)}`) : t('pay.deposit')}
-            {payment && isLive(payment.status) ? ` · ${t('pay.underWay')}` : payment?.status === 'FAILED' ? ` · ${t('pay.lastFailed')}` : ''}
+          <span className="fw-pdoc-subrow">
+            <span className="fw-pdoc-sub fw-pdoc-ellipsis">
+              {data.target.kind === 'invoice' ? t(`docType.${docTypeKey(data.docType)}`) : t('pay.deposit')}
+              {payment && isLive(payment.status) ? ` · ${t('pay.underWay')}` : payment?.status === 'FAILED' ? ` · ${t('pay.lastFailed')}` : ''}
+            </span>
+            {ask ? (
+              <a className="fw-pdoc-asklink" href={ask} aria-label={t('pay.askOf', { number: data.number })}>
+                <MessageCircleQuestion size={13} aria-hidden /> {t('pay.ask')}
+              </a>
+            ) : null}
           </span>
         </span>
       )

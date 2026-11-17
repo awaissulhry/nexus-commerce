@@ -10,6 +10,10 @@ import { companyPrefix } from '../../../lib/session/session'
 import { setThreadStatus } from '../../../record-panels/api'
 import { readThreadPage } from '../../_shared/record-thread/api'
 import { useLiveBus } from '../../../shell/live/use-live'
+// B-TH-252: "Start a project…" from the request.
+import { useStartProject } from './use-start-project'
+// B-TH-290: production's answer on the request.
+import { useProductionAnswer } from './use-production-answer'
 import {
   askInfo,
   assignInquiry,
@@ -506,6 +510,12 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     }
   }, [api, dialog, after, can, prefix, load])
 
+  // ---- B-TH-252: "Start a project…" (projects.manage; a prospect's request is held: match its customer first) ----
+  const starting = useStartProject(view, live === 'offline')
+
+  // ---- B-TH-290: production's answer (typed by planning or the production manager in Details; the request as answered comes back) ----
+  const production = useProductionAnswer(view, live === 'offline', (value, done) => after(value, done, false), () => void load(true))
+
   const model: InquiryRecordModel = {
     prefix,
     me,
@@ -523,6 +533,10 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     notice,
     dialog,
     pictures,
+    // B-TH-252
+    startProject: { held: starting.held, dialog: starting.model },
+    // B-TH-290
+    production: production.model,
   }
 
   const withDraft = (change: (now: RequestDraft) => RequestDraft) =>
@@ -561,6 +575,10 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
         .catch(() => undefined)
     },
     onDismissNotice: () => setNotice(null),
+    // B-TH-252
+    startProject: { ...starting.actions, onOpen: starting.open },
+    // B-TH-290
+    production: production.actions,
     dialog: {
       onAssign: (assigneeId) => void assign(assigneeId),
       onRetryPeople: () => viewRef.current && readPeople(viewRef.current),

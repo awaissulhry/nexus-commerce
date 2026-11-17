@@ -464,14 +464,16 @@ export function FloorMyWork() {
     if (step.kind === 'repairItem') return setStep({ kind: 'repair' })
     if (step.kind === 'repair') setRepairSaid(null)
     if (step.kind === 'inspection') return setStep({ kind: 'inspections' })
-    setStep(step.kind === 'message' ? { kind: 'messages' } : allowed ? { kind: 'list' } : { kind: 'noPermission' })
+    // B-TH-278: back from a message to the list it was opened from (one work order's notes, or all of this tablet's).
+    setStep(step.kind === 'message' ? { kind: 'messages', ...(step.workOrderId !== undefined ? { workOrderId: step.workOrderId } : {}) } : allowed ? { kind: 'list' } : { kind: 'noPermission' })
   }
 
-  const openMessage = (id: string) => {
+  /** B-TH-278: opening a note marks it on THIS tablet only (browser storage); nothing is sent: no "Seen", no name, no time (art. 4). */
+  const openMessage = (id: string, workOrderId: string | undefined) => {
     const next = withSeen(seen, id)
     setSeen(next)
     saveSeen(next)
-    setStep({ kind: 'message', id })
+    setStep({ kind: 'message', id, ...(workOrderId !== undefined ? { workOrderId } : {}) })
   }
 
   const onAction = (action: MyWorkAction) => {
@@ -502,13 +504,13 @@ export function FloorMyWork() {
         return void sendHelp()
       case 'messages':
         setPutLastDone(null)
-        return setStep({ kind: 'messages' })
+        return setStep({ kind: 'messages', ...(action.workOrderId !== undefined ? { workOrderId: action.workOrderId } : {}) }) // B-TH-278
       // B-W2b-232 (FI9:02): New instructions opens Spec & instructions on its list "New for you".
       case 'instructions':
         offerInstructions({ code: null, operationId: null, from: 'mywork' })
         return router.push(TASK_ROUTES.instructions)
       case 'message':
-        return openMessage(action.id)
+        return openMessage(action.id, action.workOrderId)
       case 'putLast':
         setCantFind(null)
         return void openReasons(action.slotId)

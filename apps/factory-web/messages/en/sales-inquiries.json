@@ -1166,5 +1166,120 @@
       "noDomain": "Set up the mail domain first",
       "setUp": "Admin › Connections"
     }
+  },
+  "project": {
+    "open": "Start a project…",
+    "openHint": "Development work for this customer (a collection, a style family, a programme): the request is linked to it",
+    "held": {
+      "read": "Needs the right to read conversations.",
+      "right": "Needs the right to keep projects.",
+      "prospect": "The request has no customer yet: match it to its customer first (a project’s outside company never changes afterwards).",
+      "offline": "You are offline: try again when the network is back."
+    },
+    "title": "Start a project from this request",
+    "rule": "A project is for work on several styles, samples or orders, or work with no record yet. About this one order? Answer the request instead.",
+    "customer": "Outside company",
+    "customerHint": "Only {customer} and our team will be in this project. This cannot be changed later.",
+    "name": "Name",
+    "nameHint": "The request’s subject unless you type another name.",
+    "target": "Target date",
+    "targetHint": "When it should be done; its lead is reminded when it is past this date and quiet.",
+    "goal": "Goal",
+    "goalHint": "One paragraph: what the project should reach.",
+    "files_one": "Carry {count} file to the project",
+    "files_other": "Carry {count} files to the project",
+    "noFiles": "The request has no files to carry.",
+    "after": "The request is linked to the project and stays as it is: answer it, quote it or decline it as before. You lead the project; add colleagues and {customer} people on its page.",
+    "go": "Start the project",
+    "problem": {
+      "name": "The name is one line of up to 200 characters.",
+      "target": "Pick the target date.",
+      "targetPast": "The target date is in the past: pick today or a later day.",
+      "goal": "The goal is up to 4000 characters.",
+      "invalid": "Check the fields: the project could not be made as typed.",
+      "forbidden": "Your role cannot start a project for this customer.",
+      "notFound": "The request is no longer there.",
+      "unavailable": "The service does not answer right now. Try again in a moment."
+    },
+    "refusal": {
+      "NO_PARTY_REQUEST": "The request has no customer yet: match it to its customer first (a project’s outside company never changes afterwards).",
+      "PARTY_BLOCKED": "This customer is blocked or archived: a new project cannot be shared with it.",
+      "SEASON": "This season is not a season of the request’s company.",
+      "LEAD": "A project is led by an active office person who may read it."
+    }
+  },
+  "production": {
+    "col": "Production",
+    "colHint": "Production's answer: can we make it, or not before which week",
+    "cell": {
+      "OK": "OK",
+      "notBefore": "Not before week {week}",
+      "notBeforeYear": "Not before week {week} of {year}"
+    },
+    "late_one": "{count} day after the wanted date",
+    "late_other": "{count} days after the wanted date",
+    "lateWeeks_one": "{count} week after the wanted date",
+    "lateWeeks_other": "{count} weeks after the wanted date",
+    "title": "Production",
+    "none": "Production has not answered yet.",
+    "whoTypes": "Planning or the production manager types it here; ask them in an office note.",
+    "by": "Answered by {name}, {when}",
+    "byNobody": "Answered {when}",
+    "officeOnly": "Office only: the customer never sees it.",
+    "answer": "Answer for production",
+    "change": "Change the answer",
+    "menu": "Production answer…",
+    "menuHint": "OK, or not before which week (planning offers one)",
+    "chipHint": "open it in Details",
+    "editor": "Production's answer",
+    "kind": {
+      "label": "Answer",
+      "OK": "OK, we can make it",
+      "NOT_BEFORE": "Not before a week"
+    },
+    "week": "Not before week",
+    "weekHint": "The earliest week it can be ready (this week or a later one).",
+    "weekPick": "Pick the week",
+    "weekOption": "Week {week} · {from} – {to}",
+    "weekOptionYear": "Week {week} of {year} · {from} – {to}",
+    "suggest": {
+      "title": "Planning's suggestion",
+      "asking": "Asking planning…",
+      "again": "Ask again",
+      "use": "Use this suggestion",
+      "used": "Suggestion in use",
+      "at": "At {plant}",
+      "line": "Line {seq}: ready on {date}",
+      "linePart": "Line {seq}: some sizes ready on {date}, not all",
+      "lineNone": "Line {seq}: no date planning can promise",
+      "leftOut": "Line {seq}: {why}",
+      "plant": "Plant",
+      "plantPick": "Pick the plant that makes it",
+      "several": "The company has several plants: pick the one that makes it.",
+      "noPlant": "The company has no active plant to make it: answer it yourself.",
+      "forbidden": "Your role does not read promise dates at this plant: answer it yourself.",
+      "failed": "Planning could not be asked just now: try again, or answer it yourself.",
+      "noRight": "Planning's suggestion needs the right to read promise dates: answer it yourself."
+    },
+    "save": "Save the answer",
+    "takeBack": "Take the answer back",
+    "cancel": "Cancel",
+    "problem": {
+      "pick": "Pick OK or a week.",
+      "week": "Pick the earliest week it can be ready.",
+      "past": "That week is over: pick this week or a later one.",
+      "invalid": "The answer was refused: pick the week again.",
+      "noAnswer": "Production had not answered this request: there is nothing to take back.",
+      "stale": "Someone changed the request meanwhile: it was read again. Check the answer and save again.",
+      "unavailable": "The answer could not be saved just now: try again."
+    },
+    "held": {
+      "notProduction": "Production's answer is typed by whoever records promise dates (planning or the production manager)."
+    },
+    "done": {
+      "savedOk": "Production's answer on {number}: OK.",
+      "savedWeek": "Production's answer on {number}: not before week {week}.",
+      "takenBack": "Production's answer on {number} taken back."
+    }
   }
 }

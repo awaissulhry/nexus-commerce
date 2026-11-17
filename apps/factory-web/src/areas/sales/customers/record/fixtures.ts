@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, panels, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
+import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
 import { failed, loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
 import type { Party } from '../../../parties/_shared/api'
 import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
@@ -42,7 +42,7 @@ interface DepthCase {
   privacy?: PrivacyModel
 }
 
-/** A case: the record, (B-W2a-49) the Commercial terms card of its Tax & terms tab, (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
+/** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase }
 
 function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDepth | undefined {
@@ -78,7 +78,8 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
     createElement(
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
-      createElement(CustomerRecordView, { model: record, panels: party ? panels(party) : null, documents: party ? panels(party, 'files') : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id) }),
+      // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id) }),
     ),
   )
 }
@@ -91,11 +92,11 @@ const glanceCase = (code: GlanceCode, glance: Read<Glance>, over: Partial<PartyR
 const holdModel = (over: Partial<HoldCardModel> = {}, can: DepthCan = ALL_CAN): HoldCardModel => ({ read: ready(HOLDS), can, status: 'ACTIVE', prefix: '/w/DEMO', dialog: null, companies: COMPANIES, ...over })
 const poModel = (over: Partial<PoNumberModel> = {}, can: DepthCan = ALL_CAN): PoNumberModel => ({ read: ready(COMPANY_TERMS), can, status: 'ACTIVE', draft: {}, saving: false, failed: null, ...over })
 const taxCase = (hold: Partial<HoldCardModel> = {}, po: Partial<PoNumberModel> = {}, can: DepthCan = ALL_CAN, over: Partial<PartyRecordModel> = {}): CustomerCase => ({
-  ...record('MARCHIO-ESEMPIO', { tab: 'tax', can: DEPTH_CAN, ...over }),
+  ...record('MARCHIO-ESEMPIO', { tab: 'terms', can: DEPTH_CAN, ...over }),
   depth: { hold: holdModel(hold, can), po: poModel(po, can) },
 })
 const reqModel = (over: Partial<RequirementsModel> = {}, can: DepthCan = ALL_CAN): RequirementsModel => ({ read: ready(REQUIREMENTS), can, status: 'ACTIVE', dialog: null, styles: ready(STYLES), files: ready(FILES), companies: COMPANIES, ...over })
-const reqCase = (over: Partial<RequirementsModel> = {}, can: DepthCan = ALL_CAN, record_: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record('MARCHIO-ESEMPIO', { tab: 'requirements', can: DEPTH_CAN, ...record_ }), depth: { requirements: reqModel(over, can) } })
+const reqCase = (over: Partial<RequirementsModel> = {}, can: DepthCan = ALL_CAN, record_: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record('MARCHIO-ESEMPIO', { tab: 'terms', can: DEPTH_CAN, ...record_ }), depth: { requirements: reqModel(over, can) } })
 const privacyModel = (over: Partial<PrivacyModel> = {}, can: DepthCan = ALL_CAN): PrivacyModel => ({ read: ready(PRIVACY), can, status: 'ACTIVE', today: TODAY, dialog: null, stepUp: STEP_UP_CLOSED, portalHref: `/w/DEMO/sales/customers/${by('MODA-DEMO').id}?tab=portal`, ...over })
 const privacyCase = (over: Partial<PrivacyModel> = {}, can: DepthCan = ALL_CAN): CustomerCase => ({ ...record('MODA-DEMO', { tab: 'addresses', can: DEPTH_CAN }), depth: { privacy: privacyModel(over, can) } })
 const dialogState = { busy: false, failed: null, tried: false } as const
@@ -103,7 +104,7 @@ const firstContact = PRIVACY.contacts[0]!
 const consentContact = PRIVACY.contacts[2]!
 const words = { words: '', portal: false, copy: null, kept: null } as const
 
-const termsCase = (code: string, terms: CommercialTermsModel, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'tax', ...over }), terms })
+const termsCase = (code: string, terms: CommercialTermsModel, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'terms', ...over }), terms })
 
 export const designScreen = defineDesignScreen<CustomerCase>({
   screen: 'SCR-033',
@@ -157,19 +158,19 @@ export const designScreen = defineDesignScreen<CustomerCase>({
       model: record('MODA-DEMO', { tab: 'addresses', dialog: { kind: 'address', addressId: by('MODA-DEMO').addresses[0]!.id }, dialogProblem: 'problem.invalid', refused: ['postalCode'] }),
     },
     { id: 'contact-new', label: 'Add a contact', model: record('MODA-DEMO', { tab: 'addresses', dialog: { kind: 'contact' } }) },
-    { id: 'tax', label: 'Tax & terms: an Italian identity', model: record('MODA-DEMO', { tab: 'tax' }) },
-    { id: 'tax-eu-valid', label: 'Tax & terms: VIES valid, with its proof', model: record('DE-BEISPIEL', { tab: 'tax' }) },
-    { id: 'tax-eu-invalid', label: 'Tax & terms: VIES answered not valid', model: record('FR-EXEMPLE', { tab: 'tax' }) },
-    { id: 'tax-eu-held', label: "Tax & terms: VIES didn't answer (held, not a refusal)", model: record('AT-MUSTER', { tab: 'tax' }) },
-    { id: 'tax-eu-unchecked', label: 'Tax & terms: never checked', model: record('ES-PRUEBA', { tab: 'tax', history: loaded([]) }) },
+    { id: 'tax', label: 'Terms & requirements: an Italian identity', model: record('MODA-DEMO', { tab: 'terms' }) },
+    { id: 'tax-eu-valid', label: 'Terms & requirements: VIES valid, with its proof', model: record('DE-BEISPIEL', { tab: 'terms' }) },
+    { id: 'tax-eu-invalid', label: 'Terms & requirements: VIES answered not valid', model: record('FR-EXEMPLE', { tab: 'terms' }) },
+    { id: 'tax-eu-held', label: "Terms & requirements: VIES didn't answer (held, not a refusal)", model: record('AT-MUSTER', { tab: 'terms' }) },
+    { id: 'tax-eu-unchecked', label: 'Terms & requirements: never checked', model: record('ES-PRUEBA', { tab: 'terms', history: loaded([]) }) },
     {
       id: 'tax-checking',
-      label: 'Tax & terms: a check running',
-      model: record('ES-PRUEBA', { tab: 'tax', viesRunning: true, notice: { key: 'vies.checkingOne', tone: 'info', params: { name: 'Prueba Motos S.L.' } } }),
+      label: 'Terms & requirements: a check running',
+      model: record('ES-PRUEBA', { tab: 'terms', viesRunning: true, notice: { key: 'vies.checkingOne', tone: 'info', params: { name: 'Prueba Motos S.L.' } } }),
     },
-    { id: 'identity-new', label: 'New tax identity from a date', model: record('MODA-DEMO', { tab: 'tax', dialog: { kind: 'identity', mode: 'new' } }) },
-    { id: 'identity-correct', label: 'Correct the identity in force (add the SDI code)', model: record('MARCHIO-ESEMPIO', { tab: 'tax', dialog: { kind: 'identity', mode: 'correct' } }) },
-    { id: 'identity-first', label: 'A first tax identity', model: record('NUOVO-PROVA', { tab: 'tax', dialog: { kind: 'identity', mode: 'new' } }) },
+    { id: 'identity-new', label: 'New tax identity from a date', model: record('MODA-DEMO', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
+    { id: 'identity-correct', label: 'Correct the identity in force (add the SDI code)', model: record('MARCHIO-ESEMPIO', { tab: 'terms', dialog: { kind: 'identity', mode: 'correct' } }) },
+    { id: 'identity-first', label: 'A first tax identity', model: record('NUOVO-PROVA', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
     { id: 'quotes-orders', label: 'Quotes & orders: open', model: record('MODA-DEMO', { tab: 'orders' }) },
     { id: 'quotes-orders-all', label: 'Quotes & orders: all', model: record('MODA-DEMO', { tab: 'orders', deals: 'all' }) },
     {
@@ -179,9 +180,12 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     },
     { id: 'quotes-orders-empty', label: 'Quotes & orders: none yet', model: record('NUOVO-PROVA', { tab: 'orders', quotes: loaded([]), orders: loaded([]) }) },
     { id: 'quotes-orders-error', label: "Quotes & orders: couldn't load", model: record('MODA-DEMO', { tab: 'orders', quotes: failed('problem.unavailable') }) },
-    { id: 'documents', label: 'Documents (files of the record)', model: record('MODA-DEMO', { tab: 'documents' }) },
-    { id: 'activity', label: 'Activity (thread, files, history)', model: record('MODA-DEMO', { tab: 'activity' }) },
-    { id: 'dock', label: 'Thread beside Overview (≥ 1280 px, ⌘J)', model: record('MODA-DEMO', { dockOpen: true }), note: 'Owner O1: wide screens only; narrower, the button opens Activity.' },
+    // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)
+    // and its Files view.
+    { id: 'thread-docked', label: 'TH-6 · The customer’s thread docked beside the Overview (40 %): Reply to this customer only', model: record('MODA-DEMO'), note: 'The band sits in the shell’s band row with ONE pill; "Projects (2)" opens this customer’s projects. The thread is docked at 40 %, sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me); its Files view the old Documents tab’s files. An old ?tab=activity or ?tab=documents opens the thread; ?tab=tax and ?tab=requirements land on Terms & requirements.' },
+    { id: 'thread-documents', label: 'TH-6 · An old ?tab=documents address: the Overview with the thread shown (its Files view holds the files)', model: record('MODA-DEMO', { threadOnArrival: true }) },
+    { id: 'thread-no-right', label: 'TH-6 · Without threads.read: no thread beside the tabs (no Thread button)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, threads: false } }) },
+    { id: 'projects-none', label: 'TH-6 · Without threads.read the band has no Projects (n); without projects.manage Start a project is held', model: record('MODA-DEMO', { can: { ...RECORD_CAN, projects: false, projectsManage: false } }) },
     { id: 'edit', label: 'Edit the identity (explicit save)', model: record('MODA-DEMO', { dialog: { kind: 'edit' } }) },
     { id: 'block', label: 'Block customer', model: record('MODA-DEMO', { dialog: { kind: 'block' } }) },
     { id: 'archive', label: 'Archive customer', model: record('NUOVO-PROVA', { dialog: { kind: 'archive' } }) },
@@ -192,7 +196,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'not-found', label: 'Not found', model: record('MODA-DEMO', { party: null, problem: 'problem.notFound' }) },
     { id: 'error', label: "The API didn't answer", model: record('MODA-DEMO', { party: null, problem: 'problem.unavailable' }) },
     { id: 'no-access', label: 'No permission', model: record('MODA-DEMO', { can: { ...RECORD_CAN, view: false } }) },
-    { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: record('MODA-DEMO', { dialog: { kind: 'shortcuts' }, asOf: NOW }) },
+    { id: 'notices', label: 'TH-6 · One notice: blocked shows, a refusal and the read-only notice wait behind "2 more notices"', model: record('BLOCCATO-DEMO', { can: { ...RECORD_CAN, manage: false }, notice: { key: 'problem.conflict', tone: 'warning' }, asOf: NOW }) },
     // B-W2a-49 (design customer.tax.terms, SAL-012): the customer's commercial terms below identity and VIES.
     { id: 'terms', label: 'W2a: Commercial terms — library terms, its price list and the list it falls back to', model: termsCase('MODA-DEMO', termsModel()), note: 'Payment terms in words (deposit 30 % at once); the price list links to its record; minimum order with the price grain.' },
     { id: 'terms-group', label: 'W2a: Commercial terms — a dealer in a discount group (read only: the group list gives it)', model: termsCase('MODA-DEMO', termsModel({ terms: GROUP_TERMS })) },
@@ -222,17 +226,17 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'w2b-324-overview-nothing', label: 'W2b Customer 360: nothing open, no limit, no rule', model: glanceCase('PILOTA-DEMO', ready(glanceOf('PILOTA-DEMO', { team: null, profiles: { count: 0, rows: [] } })), { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'w2b-324-overview-loading', label: 'W2b Customer 360 reading', model: glanceCase('MODA-DEMO', LOADING) },
     { id: 'w2b-324-overview-error', label: "W2b Customer 360 couldn't be read", model: glanceCase('MODA-DEMO', failedRead('problem.offline')) },
-    { id: 'w2b-324-tax', label: 'W2b Tax & terms: Hold (in force, history, an order waiting) and Customer PO number per company', model: taxCase() },
-    { id: 'w2b-324-tax-none', label: 'W2b Tax & terms: not on hold, no history', model: taxCase({ read: ready(NO_HOLDS) }) },
-    { id: 'w2b-324-tax-many', label: 'W2b Tax & terms: two holds in force (the toggle says to release each)', model: taxCase({ read: ready(TWO_HOLDS) }) },
+    { id: 'w2b-324-tax', label: 'W2b Terms & requirements: Hold (in force, history, an order waiting) and Customer PO number per company', model: taxCase() },
+    { id: 'w2b-324-tax-none', label: 'W2b Terms & requirements: not on hold, no history', model: taxCase({ read: ready(NO_HOLDS) }) },
+    { id: 'w2b-324-tax-many', label: 'W2b Terms & requirements: two holds in force (the toggle says to release each)', model: taxCase({ read: ready(TWO_HOLDS) }) },
     { id: 'w2b-324-tax-place', label: 'W2b Put on hold: company, reason, why', model: taxCase({ read: ready(NO_HOLDS), dialog: { kind: 'place', draft: { companyId: COMPANIES[0]!.id, reason: 'CREDIT', words: 'Two invoices overdue (made-up).' }, ...dialogState } }) },
     { id: 'w2b-324-tax-place-problem', label: 'W2b Put on hold: held until a reason is picked', model: taxCase({ read: ready(NO_HOLDS), dialog: { kind: 'place', draft: { companyId: null, reason: null, words: '' }, busy: false, failed: null, tried: true } }) },
     { id: 'w2b-324-tax-place-refused', label: 'W2b Put on hold refused: one for that reason is in force', model: taxCase({ dialog: { kind: 'place', draft: { companyId: null, reason: 'QUALITY_DISPUTE', words: 'Again (made-up).' }, busy: false, failed: 'hold.refused.same', tried: true } }) },
     { id: 'w2b-324-tax-release', label: 'W2b Release the hold, with why', model: taxCase({ dialog: { kind: 'release', hold: HOLDS.holds[0]!, draft: { holdId: HOLDS.holds[0]!.id, words: 'Answered and closed (made-up).' }, ...dialogState } }) },
     { id: 'w2b-324-tax-po-changed', label: 'W2b Customer PO number: one change waiting for Save (⌘S)', model: taxCase({}, { draft: { [COMPANIES[1]!.id]: true } }) },
-    { id: 'w2b-324-tax-read-only', label: 'W2b Tax & terms for a reader: Put on hold, Release and the switches held with why', model: taxCase({}, {}, READ_CAN, { can: { ...DEPTH_CAN, manage: false, block: false } }) },
-    { id: 'w2b-324-tax-loading', label: 'W2b Tax & terms: hold and PO number reading', model: taxCase({ read: LOADING }, { read: LOADING }) },
-    { id: 'w2b-324-tax-error', label: "W2b Tax & terms: hold and PO number couldn't be read", model: taxCase({ read: failedRead('problem.unavailable') }, { read: failedRead('problem.unavailable') }) },
+    { id: 'w2b-324-tax-read-only', label: 'W2b Terms & requirements for a reader: Put on hold, Release and the switches held with why', model: taxCase({}, {}, READ_CAN, { can: { ...DEPTH_CAN, manage: false, block: false } }) },
+    { id: 'w2b-324-tax-loading', label: 'W2b Terms & requirements: hold and PO number reading', model: taxCase({ read: LOADING }, { read: LOADING }) },
+    { id: 'w2b-324-tax-error', label: "W2b Terms & requirements: hold and PO number couldn't be read", model: taxCase({ read: failedRead('problem.unavailable') }, { read: failedRead('problem.unavailable') }) },
     { id: 'w2b-324-req', label: 'W2b Requirements: the rules in force with where they show, the ended ones', model: reqCase() },
     { id: 'w2b-324-req-empty', label: 'W2b Requirements: no special requirements', model: reqCase({ read: ready({ inForce: [], ended: [] }) }) },
     { id: 'w2b-324-req-add', label: 'W2b Add rule: company, kind, rule, shown on, applies to, attachment', model: reqCase({ dialog: { kind: 'add', target: null, draft: { ...blankRequirement(COMPANIES[0]!.id), words: 'Pallets no higher than 1.6 m (made-up).', appliesAt: ['SHIPMENT'], fileId: FILES[0]!.id }, ...dialogState } }) },

@@ -26,12 +26,38 @@ export const headSchema = z.object({
 export type ThreadHead = z.infer<typeof headSchema>
 // ---- end B-TH-229
 
-const page = z.object({ thread: threadSchema.nullable(), messages: z.array(messageSchema), nextCursor: z.string().nullable(), reading: readingSchema.nullable().optional(), head: headSchema.optional() })
+// ---- B-TH-255 (B-TH-079; T3-F14, T3-F15, T4-F10): the office read's depth — a message erased after a privacy request, an inbound mail's
+// files not kept (never a signature logo), and the mail for this conversation that waits for a person. Codes stay strings here (an
+// unknown one is said plainly, never a failed read): the card and the feed name each in words.
+const skippedSchema = z.object({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.string() })
+export const officeMessageSchema = messageSchema.extend({ erased: z.boolean().optional(), skippedAttachments: z.array(skippedSchema).optional() })
+export type OfficeMessage = z.infer<typeof officeMessageSchema>
+export const waitingMailSchema = z.object({ count: z.number().int(), reasons: z.array(z.string()), mayReview: z.boolean() })
+export type WaitingMail = z.infer<typeof waitingMailSchema>
+// ---- end B-TH-255
+
+const page = z.object({
+  thread: threadSchema.nullable(),
+  messages: z.array(officeMessageSchema /* B-TH-255 */),
+  nextCursor: z.string().nullable(),
+  reading: readingSchema.nullable().optional(),
+  head: headSchema.optional(),
+  waitingMail: waitingMailSchema.nullable().optional() /* B-TH-255 */,
+})
 export type ThreadPageAnswer = z.infer<typeof page>
 
 export function readThreadPage(api: ApiClient, record: RecordKey, cursor: string | null, signal?: AbortSignal): Promise<ThreadPageAnswer> {
   return api.get(threadPath(record), { query: { cursor: cursor ?? undefined, limit: THREAD_PAGE }, schema: page, signal })
 }
+
+// ---- B-TH-255 (B-TH-079, T1-F05): how many messages new to the reader the Head's View hides — the timeline read with the view's
+// audience and kinds (one entry is enough: only `hiddenNew` is used; the entries are the timeline's own page).
+const hiddenAnswer = z.object({ hiddenNew: z.number().int() })
+export async function readHiddenNew(api: ApiClient, record: RecordKey, query: { audience: 'ALL' | 'PARTNER' | 'OFFICE'; kinds: 'message' | 'change' }, signal?: AbortSignal): Promise<number> {
+  const answer = await api.get(`${threadPath(record)}/timeline`, { query: { audience: query.audience, kinds: query.kinds, limit: 1 }, schema: hiddenAnswer, signal })
+  return answer.hiddenNew
+}
+// ---- end B-TH-255
 
 // ---- B-TH-229 (B-TH-027 / B-TH-028): the person's own read mark; who answers the thread ---------------------------------------
 /** POST …/read: the person read the thread up to this message (the mark only moves forward); their reading after it. */
@@ -48,28 +74,93 @@ export async function setThreadOwner(api: ApiClient, record: RecordKey, ownerId:
 // ---- end B-TH-229
 
 const posted = z.object({ message: z.object({ id: z.string() }).passthrough() }).passthrough()
-const sent = z.object({ messageId: z.string() }).passthrough()
+// B-TH-236 (B-TH-048): the answer names the mail and until when its sender may take it back.
+const sent = z.object({ messageId: z.string(), email: z.object({ id: z.string(), undoUntil: z.string().nullable().optional() }).passthrough().optional() }).passthrough()
 
-/** POST …/notes with the caller's key: an Office note (never reaches a customer; a work order's may go to the floor). */
-export async function postNoteKeyed(api: ApiClient, record: RecordKey, input: { body: string; mentions: readonly string[]; attachments: readonly string[]; forFloor: boolean }, idempotencyKey: string): Promise<string> {
+/** B-TH-236 (B-TH-050): what a new message answers or corrects (one at most; a message of this conversation). */
+export interface MessageLinks {
+  replyToMessageId?: string
+  correctsMessageId?: string
+}
+
+/**
+ * POST …/notes with the caller's key: an Office note (never reaches a customer; a work order's may go to the floor). B-TH-236: the
+ * amount in its own field (price readers only, never with "For the floor") and the message it answers or corrects.
+ */
+export async function postNoteKeyed(
+  api: ApiClient,
+  record: RecordKey,
+  input: { body: string; mentions: readonly string[]; attachments: readonly string[]; forFloor: boolean; amount?: { value: number; currency: string } | null } & MessageLinks,
+  idempotencyKey: string,
+): Promise<string> {
   const answer = await api.post(`${threadPath(record)}/notes`, {
-    body: { body: input.body, mentions: [...input.mentions], attachments: [...input.attachments], ...(input.forFloor ? { forFloor: true } : {}) },
+    body: {
+      body: input.body,
+      mentions: [...input.mentions],
+      attachments: [...input.attachments],
+      ...(input.forFloor ? { forFloor: true } : {}),
+      ...(input.amount ? { amount: input.amount } : {}),
+      ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+      ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
+    },
     schema: posted,
     idempotencyKey,
   })
   return answer.message.id
 }
 
-/** POST …/emails with the caller's key: the reply to the record's customer, To and Cc apart, with the recorded tick when given. */
+/**
+ * POST …/emails with the caller's key: the reply to the record's customer, To and Cc apart, with the recorded tick when given.
+ * B-TH-236: the message it answers or corrects; the answer's mail and its Undo time (10 seconds after Send).
+ */
 export async function sendReplyKeyed(
   api: ApiClient,
   record: RecordKey,
-  body: { to: string[]; cc?: string[]; subject?: string; body: string; attachments: string[]; sendOutside?: true },
+  body: { to: string[]; cc?: string[]; subject?: string; body: string; attachments: string[]; sendOutside?: true } & MessageLinks,
   idempotencyKey: string,
-): Promise<string> {
+): Promise<{ messageId: string; email: { id: string; undoUntil: string | null } | null }> {
   const answer = await api.post(`${threadPath(record)}/emails`, { body, schema: sent, idempotencyKey })
-  return answer.messageId
+  return { messageId: answer.messageId, email: answer.email ? { id: answer.email.id, undoUntil: answer.email.undoUntil ?? null } : null }
 }
+
+// ---- B-TH-237 (B-TH-044): a reply the customer reads in its portal, no e-mail ----------------------------------------------------
+/** POST …/replies with the caller's key: OUTBOUND on the PORTAL channel; files already shared with the record's customer. */
+export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, input: { body: string; attachments: readonly string[] } & MessageLinks, idempotencyKey: string): Promise<string> {
+  const answer = await api.post(`${threadPath(record)}/replies`, {
+    body: {
+      body: input.body,
+      attachments: [...input.attachments],
+      ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+      ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
+    },
+    schema: posted,
+    idempotencyKey,
+  })
+  return answer.message.id
+}
+// ---- end B-TH-237
+
+// ---- B-TH-236 (B-TH-048): take a mail back in its 10 seconds; its text comes back for the box --------------------------------
+const takenBack = z.object({
+  email: z.object({ id: z.string(), status: z.string() }).passthrough(),
+  text: z.object({
+    to: z.array(z.string()),
+    cc: z.array(z.string()),
+    bcc: z.array(z.string()),
+    subject: z.string(),
+    body: z.string(),
+    attachments: z.array(z.string()),
+    replyToMessageId: z.string().nullable().optional(),
+    correctsMessageId: z.string().nullable().optional(),
+  }),
+})
+export type TakenBack = z.infer<typeof takenBack>
+
+/** POST …/emails/<emailId>/undo (its sender, in the window): WITHDRAWN; the text, recipients, files and links of the mail. */
+export function takeBackMail(api: ApiClient, record: RecordKey, emailId: string): Promise<TakenBack> {
+  return api.post(`${threadPath(record)}/emails/${enc(emailId)}/undo`, { body: {}, schema: takenBack, idempotencyKey: globalThis.crypto.randomUUID() })
+}
+// ---- end B-TH-236
 
 const organisation = z.object({ id: z.string(), name: z.string() })
 const checkSchema = z.object({

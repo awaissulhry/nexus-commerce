@@ -168,7 +168,8 @@
       "unavailable": "Nessuna connessione: il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
       "other": "Il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
       "more": "Non è stato possibile leggere i messaggi precedenti."
-    }
+    },
+    "erased": "Messaggio rimosso dopo una richiesta per la privacy"
   },
   "record": {
     "tabs": "Sezioni del documento",
@@ -190,7 +191,30 @@
       "Complaint": "Reclamo",
       "RepairOrder": "Riparazione",
       "Inquiry": "Richiesta",
+      "Project": "Progetto",
+      "Style": "Modello",
+      "SampleRound": "Giro campione",
       "other": "Documento"
+    },
+    "frame": {
+      "messages": "Messaggi",
+      "messagesNew_one": "Messaggi ({count} nuovo)",
+      "messagesNew_other": "Messaggi ({count} nuovi)",
+      "messagesMany": "Messaggi ({count}+ nuovi)",
+      "messagesNewLabel_one": "Messaggi, {count} nuovo",
+      "messagesNewLabel_other": "Messaggi, {count} nuovi",
+      "back": "Indietro"
+    },
+    "summary": {
+      "title": "Su questa pratica",
+      "details": "Dettagli della pratica",
+      "type": "Tipo",
+      "number": "Numero",
+      "theirRef": "Il vostro riferimento",
+      "state": "Stato",
+      "partOf": "Fa parte di",
+      "open": "Apri la pagina: {type}",
+      "failed": "Non è stato possibile leggere i dettagli di questa pratica."
     }
   },
   "terms": {
@@ -220,7 +244,8 @@
     "saving": "Salvataggio…",
     "failed": "Non è stato possibile leggere le impostazioni e-mail.",
     "refused": "Impossibile salvare: le e-mail su ordini, consegne e fatture arrivano sempre subito.",
-    "saveFailed": "Le impostazioni non sono state salvate. Riprova."
+    "saveFailed": "Le impostazioni non sono state salvate. Riprova.",
+    "defaultInstant": "Subito, di norma: un nostro messaggio spesso aspetta la vostra risposta."
   },
   "still": {
     "title": "Ci sei ancora?",
@@ -313,7 +338,8 @@
       "portal_approvals_view": "Vedere cosa ti chiediamo di approvare",
       "portal_samples_view": "Vedere i tuoi campioni, i tuoi modelli in sviluppo e le loro schede tecniche",
       "portal_production_view": "Vedere i tuoi ordini in produzione: fase, data prevista, stato e a chi tocca",
-      "portal_production_urgency": "Segnare urgenti o normali i tuoi ordini in produzione, entro le urgenze concesse"
+      "portal_production_urgency": "Segnare urgenti o normali i tuoi ordini in produzione, entro le urgenze concesse",
+      "portal_projects_view": "Vedere i progetti della tua organizzazione a cui ti abbiamo aggiunto, con i tuoi record collegati e i messaggi condivisi con te"
     }
   },
   "display": {

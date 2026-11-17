@@ -348,6 +348,7 @@ function pageOf(locale: Locale, input: CaseInput): DocumentsViewModel {
           selected: [],
           busy: null,
           held,
+          prefix: PREFIX, // B-TH-276: an invoice row's "Ask about this invoice" (its conversation page)
         }
       : null,
     library: { state: 'ready', rows: matching, total: input.q ? matching.length : read.count, group, q: input.q ?? '', by, versions: input.versions ?? 'current', selected: [], busy: null, held, updates: 0, more: false, loadingMore: false, prefix: PREFIX, ...input.library },
@@ -382,7 +383,7 @@ export const designScreen = defineDesignScreen<DocumentsCaseBuilder>({
       id: 'finance',
       label: 'Finance: to pay and every document',
       model: docCase(),
-      note: 'Which documents (the groups Finance sees, with counts); To pay oldest due first (overdue in words, the SDI state, the PDF and the XML in new tabs, Pay); All documents with their fixed version and fingerprint, NEW, Preview, Download (logged), ⋯ each file in a new tab; Download statement in the band (a new tab).',
+      note: 'Which documents (the groups Finance sees, with counts); To pay oldest due first (overdue in words, the SDI state, the PDF and the XML in new tabs, Pay); All documents with their fixed version and fingerprint, NEW, Preview, Download (logged), ⋯ each file in a new tab; Download statement in the band (a new tab). B-TH-276: each invoice row says "Ask a question" — a real link to the invoice’s conversation page (`/open/Invoice/<id>?view=conversation`: its summary and its thread, no pop-up); an invoice’s or a credit note’s ⋯ in All documents has "Ask about this invoice" too.',
     },
     { id: 'quality', label: 'Quality: conformity per style', model: docCase({ can: QUALITY, person: 'quality', prices: false }), note: 'No prices: one line says so; no invoices or quotes. Conformity per style received: per shipment the declaration, the user information, the certificate valid on the shipping date and the reports; a missing document says "ask us".' },
     { id: 'buyer', label: 'A buyer (delivery papers and conformity)', model: docCase({ can: BUYER, person: 'buyer', prices: false }) },
@@ -452,7 +453,7 @@ export const designScreen = defineDesignScreen<DocumentsCaseBuilder>({
       id: 'invoice-paid',
       label: 'An invoice that is paid already',
       model: docCase({ page: { notice: { key: 'invoice.nothingOpen', tone: 'info' } } }),
-      note: 'Opened from a request or a notification (`?invoice=`): nothing left to pay, said once.',
+      note: 'Opened from a request or a notification (`?invoice=`): nothing left to pay, said once. An old `?invoice=<id>&tab=messages` never opens here: the invoice’s conversation page replaces it (B-TH-276).',
     },
     {
       id: 'preview-office',

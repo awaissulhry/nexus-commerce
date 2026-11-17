@@ -6,11 +6,17 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
+// ---- B-TH-277 (P-SUP-DEL.thread; tree: "the PO's thread docked beside the notice form instead of the Ask modal"): the conversation
+// of the order the delivery is for docks beside the notice and its steps (the portal record frame); no order yet, no dock.
+import { PortalRecordFrame } from '../../shell/record/PortalRecordFrame'
+import { PortalThread } from '../../shell/thread/PortalThread'
+// ---- end B-TH-277
 import { NotInAccessHere, useOffline } from '../orders/parts'
 import { cancelNotice, createNotice, fetchNotice, fetchShippable, fileContent, readSheet, sendNotice, setPackingList, updateNotice, type NoticePage, type ShippableRead } from './api'
 import { newBandOf, noticeBandOf } from './band'
 import {
   cancelHeld,
+  dockedOrderOf, // B-TH-277
   hasLeather,
   issueKeysOf,
   linesBody,
@@ -46,7 +52,10 @@ import { useDeliveryWords } from './words'
  * one of our confirmed orders, a draft on its four steps, a SENT notice as it stands or being changed, the cancel. Each step
  * writes what it holds at its version with ONE Idempotency-Key per body (step 1 creates the draft, step 2 reads the sheet
  * first and keeps it on the second call, step 3 the terms, step 4 sends); a refusal is said in the page's words; the live
- * channel re-reads the notice (typed work is never overwritten: "it changed, read it again").
+ * channel re-reads the notice (typed work is never overwritten: "it changed, read it again"). B-TH-277: the conversation of the
+ * order the delivery is for (PortalThread type PurchaseOrder — the notice's own ShipNotice thread is not where the supplier talks
+ * to us about a delivery: price, dates and documents are the PO's talk, C2) docks beside the notice and its steps; the band's
+ * "Ask a question" names that same order and focuses the docked box. A new notice before its order is chosen has no dock.
  */
 export function SupplierNoticePage({ id }: { id: string | null }) {
   return (
@@ -372,8 +381,17 @@ function NoticeContainer({ id }: { id: string | null }) {
     onClose: () => setDialog((current) => (current?.busy ? current : null)),
   }
 
+  // B-TH-277: the order's conversation, docked once the order is known (a notice read, or the new notice's order chosen and offered).
+  const dockOrder = dockedOrderOf({ page, order, missing: load === 'missing' })
+  const thread = dockOrder ? <PortalThread type="PurchaseOrder" id={dockOrder.id} showRecord={false} /> : null
+  const threadLabel = t('thread.label', { number: dockOrder?.number ?? '' })
+
   if (!stepping && page) {
-    return <NoticeView model={{ state: load === 'ready' ? 'ready' : load === 'missing' ? 'missing' : load === 'error' ? 'error' : 'loading', page, prefix: frame.prefix, dialog: cancelModel, problem: problem?.problem ?? null }} actions={{ onRetry: () => void read(), dialog: dialogActions }} />
+    return (
+      <PortalRecordFrame thread={thread} threadLabel={threadLabel}>
+        <NoticeView model={{ state: load === 'ready' ? 'ready' : load === 'missing' ? 'missing' : load === 'error' ? 'error' : 'loading', page, prefix: frame.prefix, dialog: cancelModel, problem: problem?.problem ?? null }} actions={{ onRetry: () => void read(), dialog: dialogActions }} />
+      </PortalRecordFrame>
+    )
   }
 
   const model: AnnounceViewModel = {
@@ -395,7 +413,7 @@ function NoticeContainer({ id }: { id: string | null }) {
     stale,
   }
   return (
-    <>
+    <PortalRecordFrame thread={thread} threadLabel={threadLabel}>
       <AnnounceView
         model={model}
         actions={{
@@ -420,6 +438,6 @@ function NoticeContainer({ id }: { id: string | null }) {
         }}
       />
       {cancelModel ? <CancelDialog model={cancelModel} actions={dialogActions} /> : null}
-    </>
+    </PortalRecordFrame>
   )
 }

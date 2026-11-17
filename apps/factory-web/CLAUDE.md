@@ -101,11 +101,19 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   or the 12 hours → `ended=revoked`); a chosen sign-out sends none. A cut ticket's number (`CT…-YYYY-N`) is read before the carton rule
   (`floor/scan/scan-model.ts isCutTicketNumber`: a free code with `cutTicket`): Home opens Fabric cutting with it at a cutting table.
   `nav/portal-nav.ts` is THE merge point of every portal page: an area/page sets its `built`, a record page its line in
-  `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the frame's record page with its Messages). Pages read
+  `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the generic page, B-TH-274). Pages read
   `usePortalFrame()` (session, prefix, `api` that moves the idle clock, `access`, `ask`), fill the band with `usePortalBand`,
   guard typed work with `usePortalUnsaved`, listen with `usePortalLive`, and draw a record's conversation with
   `thread/PortalThread`. Home (`p/[party]/page.tsx`, a merge point of the Home steps) is the frame's task list for now.
   Catalogue `portal` (every partner permission, role, task kind, search group and record type has words: a test).
+- B-TH-273 / B-TH-274 (threads TH-6, PL3, PL5): `src/portal/shell/record/` — `PortalRecordFrame` docks a record's ONE conversation
+  (PortalThread) on every portal record page: ~40 % (3 : 2) from 1280 px, sticky; below, "Messages (2 new)" opens it full width
+  (`?thread=open`, Back). No Messages tab, no Ask modal: the dock is `#messages`, the frame's ⋯ "Ask a question" sends it
+  `PORTAL_ASK_EVENT` (focus; narrower opens the view first), a page with no docked conversation opens the conversation as a page
+  (`model.ts conversationHref` = `/open/<type>/<id>?view=conversation`, the account `/open/Party/<own id>`). Old `?tab=messages`
+  / `?thread=new` / `#messages` show the conversation on arrival (`portalArrivalOf`; `tabOrFirst` maps a removed tab). The
+  generic page (`RecordPage.tsx`, `view/RecordView.tsx`) = the summary (GET /records/:type/:id/summary, partner view) beside the
+  conversation. `usePortalRecordFrame()`: PortalThread reports its new count and marks read only while on screen.
 - `src/areas/sales/customers/portal/` — Portal access in the office (B-W2b-180; SCR-033-portal, SCR-057-portal): ONE tab both party
   records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered
   and the production-progress switch (C1, customers), What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
@@ -138,7 +146,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/portal/customer/returns/` — the customer's Returns & claims (B-W2b-197 on B-W2b-192's API, SCR-187; catalogue
   `portal-returns`, CSS prefix `fw-pret-`): `/p/<party>/returns?chip=&q=&start=RETURN|COMPLAINT&order=<id>` (the cases in
   the list frame with Export N, the Quality role's complaints, "Start a return or claim": what you need, details, check and
-  send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status|messages` (`CasePage.tsx`: Add photos, Cancel
+  send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status` (B-TH-275: the conversation docked, PL3; `CasePage.tsx`: Add photos, Cancel
   this request?, the return label and credit note PDFs in a new tab, the case's thread). `RECORD_PAGES.ReturnAuthorisation`
   and `.Complaint` open them; their partner views are in factory-api `platform/search/partner/views/`.
 - `src/portal/customer/returns/repair/` and `src/links/claim/types/repair/` — repairs and alterations from outside (B-W2b-342 on its
@@ -168,7 +176,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `u`). Profile: company, addresses and contacts typed on the page and sent together for our check (EditModeBar, ⌘S; Withdraw),
   then the shared account cards. Both read again on their `live.events`.
 - `src/portal/customer/orders/` — the customer's Orders & tracking (B-W2b-191, SCR-184, `/p/<party>/orders?chip=&q=&print=1`,
-  `/orders/<id>?tab=status|lines|shipments|documents|messages&line=`; catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
+  `/orders/<id>?tab=status|lines|shipments|documents&line=` (B-TH-275: the conversation docked); catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
   (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
   re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
   record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
@@ -190,6 +198,17 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   true states, the question with Answer, PortalThread type Inquiry; `RECORD_PAGES.Inquiry`; catalogue `portal-requests`). Orders &
   tracking became Orders & requests (requests first, "Closed requests" chip, Kind/Subject columns, Next shipment from 1600 px); Home's
   Start card (New order / Ask a question / the draft). Portal pages show the customer's own numbers only, never INQ-/SO-/QT-/RQ-.
+  B-TH-282 (TH-7): customers' files — `lib/request-compose/files.ts` (pure: kinds, refusals, the measurement tick on a PDF or photo,
+  design files download-only, states sent / held for the virus scan / failed) + `view/ComposeFiles.tsx`; `requests/use-request-files.ts`
+  uploads (announce → PUT → complete → ONE message carries them): New order holds them and sends them right after Send onto the new
+  request (the receipt says how they went, Retry); the request page's "Add files" beside the thread uses the request's door while
+  undecided, its thread's after (the DS PartnerThread has no upload slot: B-TH-305 waits for the Owner). Closed uploads say the API's
+  sentence (GET /portal/inquiries/open `files`). B-TH-291: "Withdraw this request" while undecided (`version`, one key per question).
+- B-TH-236 / B-TH-237 / B-TH-283 (the office thread): Undo for 10 s on the sender's mail (`email.undoUntil`, POST …/emails/:id/undo,
+  the text back in the box), the amount field on an office note for `money.price` (`lib/record-thread/helpers/amount.ts`), the floor's
+  price check, Reply / Correct links (`DraftLink`; Correct on one's own message the way it went), "In the portal only" (POST …/replies;
+  NO_PORTAL removes the choice), and measurement sheets (the paper clip's "Measurement sheet…", the box's measurement side, the Files
+  view's tick; a sheet the reader opens is marked "each opening is recorded").
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -216,6 +235,19 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `products-changes`, CSS prefix `fw-chg-`): `view/DecideDialog.tsx` + `use-decide.ts` are THE "Approve change" (A / R, J / K),
   `view/Redline.tsx` the redline (B-W2b-220's compare, one VersionCompare per part), `view/Impact.tsx` the work in progress and the
   drift. `RECORD_PAGES.ChangeRequest` / `.ChangeOrder` open the records.
+- `src/areas/products/projects/` — Products › Development › Projects (threads plan TH-5, B-TH-248 … B-TH-253 on the API's
+  modules/product/projects, B-TH-066 … B-TH-072): `api.ts` (every office call, zod written here: the contract lives in the API),
+  `model.ts` + `parts.tsx` (shared: rights, addresses, status and target words, refusals from `refusal/<CODE>`), the list
+  `/products/projects?view=&party=|office=1&lead=&season=&target=&q=&new=1&link=<Type>:<id>` (SCR-700, `ProjectsPage.tsx`,
+  `list-model.ts`; every cell a door; never Close in bulk), the project page `/products/projects/<id>` (SCR-701, `record/`: its own
+  `ProjectFrame` — the thread ~2/3 left, the side column right, `?details=open` below 1280 px; `/records/Project/<id>` redirects
+  there), `record/people/` (SCR-701-people), `record/linked/` (SCR-701-linked; `use-in-project.ts` = the thread head's "In
+  project" chip, read by DockedOfficeThread), `record/news/` (linked news, asked only: `kinds=linked`), `add-to/` (bulk "Add to
+  project" on Styles and Samples, SCR-701-addto). One catalogue per part: `products-projects` (shared + list),
+  `products-projects-record`, `-people`, `-linked`. Today's My projects is `areas/home/today/projects/` (SCR-029-projects),
+  "Start a project…" the request pane's ⋯ (`areas/sales/inquiries/start-project.ts`, `use-start-project.ts`), the portal's side
+  `src/portal/customer/projects/` (`/p/<party>/projects/<id>`, SCR-702; never the office's PRJ number). Members-only office
+  projects and templates (B-TH-292) come later.
 - `src/areas/products/styles/versions/` + `styles/release/` + `src/areas/production/work-orders/spec/` — B-W2b-245 (SCR-348, SCR-349;
   catalogue `products-versions`, CSS prefix `fw-ver-`): the style's Versions & changes tab (`?tab=versions`: revisions, Compare
   revisions — also a pop-up from the band ⋯ —, the style's change requests and orders, orders on older revisions), THE Release

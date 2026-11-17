@@ -92,7 +92,8 @@ describe('who may do what: permissions and grains', () => {
     const sales = abilitiesOf(['product.styles.view', 'costing.view', 'threads.read'])
     expect(tabsFor(OWNER)).toEqual([...STYLE_TABS])
     expect(tabsFor(sales).filter((tab) => ['bom', 'routing', 'compliance'].includes(tab))).toEqual([])
-    expect(tabsFor(abilitiesOf(['product.styles.view']))).not.toContain('activity')
+    // B-TH-261: Activity is gone for everyone (the thread docks beside every tab).
+    expect(tabsFor(OWNER)).not.toContain('activity' as never)
   })
 })
 
@@ -141,7 +142,8 @@ describe('the revision in view', () => {
     expect(issueWords(bom.issues[0]!, bom, null)).toEqual({ key: 'issue.SIZE_QUANTITY_MISSING', params: { line: '10 · PEL-BOV-12', size: '58', colourway: '—', step: '—' } })
     expect(issueWords(bom.issues[1]!, bom, null).params?.colourway).toBe('ANTR')
     expect(issueTab({ code: 'NO_STEPS' })).toBe('routing')
-    expect(issueTab({ code: 'NO_ACTIVE_COLOURWAY' })).toBe('variants')
+    // B-TH-261: Colourways & sizes is part of Overview & variants; the Fix scrolls to the range and colourways.
+    expect(issueTab({ code: 'NO_ACTIVE_COLOURWAY' })).toBe('overview')
     expect(issueTab({ code: 'COLOUR_MISSING' })).toBe('bom')
     const routing = demoRouting()
     expect(issueWords({ code: 'MINUTES_NOT_POSITIVE', lineId: null, size: null, colourwayId: null, stepId: routing.steps[3]!.id, message: 'x' }, bom, routing).params?.step).toBe('40 · CUC-MAN')
