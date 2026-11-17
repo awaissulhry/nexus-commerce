@@ -8,7 +8,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
 - `@nexus/factory-db`: `openFactoryDatabase({ connectionString })` → `withScope(scope, client => …)`. One audited pg
   pool for the runtime login `factory_app` (db-kit's `AuditedPool`; the first connection is audited at open, so an
   unsafe login stops the boot), and one Prisma client per scope behind db-kit's `TenantPg`, kept in a cache
-  (`clientCapacity`, default 16, least recently used idle one closed). Scopes: `office` (tenantId, actorId), `floor`
+  (`clientCapacity`, default 15, least recently used idle one closed). Scopes: `office` (tenantId, actorId), `floor`
   (+ siteId), `partner` (+ partyId), `platform` (none). Ids are UUIDs; a missing value throws before any query. Use a
   client only inside its callback. Also the model types and enums. Never the PrismaClient class.
 - The client cache and memory (B-W2b-F9): a Prisma 7.10 client takes about 86 MB of heap and 95 ms the moment it is
@@ -18,7 +18,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
   and partner scope but is not a database setting, and every actor of a tenant, site or party shares one client.
   `client.vitest.test.ts` fails when a migration reads a setting no scope sets (a guard on `factory.actor_id` would
   put the actor back into `SCOPE_DEFINITIONS` and the cache back to one client per person) and when one more client
-  costs more than 130 MB of heap.
+  costs more than 138 MB of heap (11-17: 131.45 MB measured; capacity 16 → 15 to keep the same total).
 - `@nexus/factory-db/testing`: `migratedDatabase(label)`, a throwaway database copied from `factory_tpl_<hash of the migrations>` (B-W2b-F27, `src/testing/template.ts`: built once per migration set under the lock, then `CREATE DATABASE … TEMPLATE` without it); `FACTORY_PG_TEST_TEMPLATE=off` migrates each one from zero instead.
 - The test migration lock (B-W2b-F11, `src/testing/migration-lock.ts`): builds of test databases on one server take
   turns under `MIGRATION_LOCK`, now a transaction-level advisory lock on a connection of its own that is closed when the
