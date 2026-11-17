@@ -1,4 +1,5 @@
 import type { ActionDue } from '@nexus/ui/patterns/ActionList/index'
+import { DEFAULT_FREQUENCY, defaultFrequencyOf, isTopic } from '@nexus/factory-domain/portal/notifications/topics'
 import { formatDate, formatDateTime, formatTime } from '../../lib/i18n/format'
 import type { Locale } from '../../lib/i18n/locales'
 import type { EmailFrequency, EmailSettings, PortalBadge, PortalMe, PortalTask } from './api'
@@ -213,12 +214,10 @@ export function emailChanges(settings: EmailSettings, draft: EmailDraft): { topi
 export const allNonEssentialOff = (settings: EmailSettings, draft: EmailDraft): boolean => settings.topics.filter((topic) => !topic.locked).every((topic) => (draft[topic.topic] ?? topic.frequency) === 'OFF')
 
 // ---- B-TH-221 follow-up (B-TH-045, Owner decision 5): back on, a topic gets the API's own default for a person with no
-// setting — messages AS IT HAPPENS (a message from us waits for its answer: a daily summary would delay it by a day), every
-// other topic the daily summary. The same table as factory-domain's notification topics (DEFAULT_FREQUENCIES).
-const BACK_ON: Readonly<Record<string, EmailFrequency>> = Object.freeze({ MESSAGES: 'INSTANT' })
-
+// setting (factory-domain defaultFrequencyOf) — messages AS IT HAPPENS (a message from us waits for its answer: a daily
+// summary would delay it by a day), every other topic the daily summary.
 /** A non-essential topic's frequency when the one switch turns mail back on: the default a new person has. */
-export const backOnFrequency = (topic: string): EmailFrequency => BACK_ON[topic] ?? 'DAILY'
+export const backOnFrequency = (topic: string): EmailFrequency => (isTopic(topic) ? defaultFrequencyOf(topic) : DEFAULT_FREQUENCY)
 // ---- end B-TH-221 follow-up
 
 /** The one switch: every non-essential topic off, or back to its default (messages as it happens, the rest daily). */
