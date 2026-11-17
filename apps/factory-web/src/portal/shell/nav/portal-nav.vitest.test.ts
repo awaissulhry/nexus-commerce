@@ -257,7 +257,8 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
 
   it('every built area, page and record page has its route in the portal (app/(portal)/p/[party])', () => {
     const route = (href: string) => {
-      const path = href.split(/[?#]/)[0]!.replace(/\/$/, '')
+      // B-TH-253: a page may encode its id (Project does), so `[id]` arrives as %5Bid%5D: the route's folder is the decoded path.
+      const path = decodeURIComponent(href.split(/[?#]/)[0]!).replace(/\/$/, '')
       return existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]', path, 'page.tsx'))
     }
     const hrefs = PORTAL_AREAS.flatMap((area) => [...(area.pages ?? []).filter((page) => page.built).map((page) => page.href), ...(area.built ? [area.href] : [])])

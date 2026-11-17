@@ -544,10 +544,11 @@ describe('th-backend-g step 2: the decline’s message starts from the mail temp
 
   it('the decline words name the five languages and the blank, in Italian and English', () => {
     for (const locale of ['en', 'it'] as const) {
-      const words = messagesFor(locale, ['sales-inquiries'])['sales-inquiries'] as Record<string, any>
-      expect(Object.keys(words.decline.language).sort()).toEqual(['de', 'en', 'es', 'fr', 'it'])
-      expect(words.decline.held.blank).toContain('…')
-      expect(words.decline.blankHint).toContain('…')
+      // The catalogue is flat keys ("decline.language.de").
+      const words = messagesFor(locale, ['sales-inquiries'])['sales-inquiries'] ?? {}
+      expect(Object.keys(words).filter((key) => key.startsWith('decline.language.')).map((key) => key.slice('decline.language.'.length)).sort()).toEqual(['de', 'en', 'es', 'fr', 'it'])
+      expect(words['decline.held.blank']).toContain('…')
+      expect(words['decline.blankHint']).toContain('…')
     }
   })
 })

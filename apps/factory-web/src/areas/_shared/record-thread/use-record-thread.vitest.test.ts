@@ -184,7 +184,7 @@ describe('the container’s calls', () => {
     expect(await postNoteKeyed(note.api, { type: 'Inquiry', id: 'i 1' }, { body: 'x', mentions: [], attachments: [], forFloor: false }, 'key-1')).toBe('m9')
     expect(note.calls).toEqual([{ method: 'POST', path: '/threads/Inquiry/i%201/notes', body: { body: 'x', mentions: [], attachments: [] }, idempotencyKey: 'key-1', query: undefined }])
     const reply = recording({ messageId: 'm10' })
-    expect(await sendReplyKeyed(reply.api, { type: 'Inquiry', id: 'i1' }, { to: ['a@x.example'], cc: ['b@x.example'], body: 'Hi', attachments: [], sendOutside: true }, 'key-2')).toBe('m10')
+    expect(await sendReplyKeyed(reply.api, { type: 'Inquiry', id: 'i1' }, { to: ['a@x.example'], cc: ['b@x.example'], body: 'Hi', attachments: [], sendOutside: true }, 'key-2')).toEqual({ messageId: 'm10', email: null }) // B-TH-236: the mail's id and its undo window come back
     expect(reply.calls[0]).toMatchObject({ path: '/threads/Inquiry/i1/emails', body: { to: ['a@x.example'], cc: ['b@x.example'], sendOutside: true }, idempotencyKey: 'key-2' })
   })
 
@@ -285,7 +285,9 @@ describe('B-TH-255 — the View asks the API what it hides; the office read keep
     expect(page.messages.find((item) => item.id === 'm1')?.erased).toBe(true)
     expect(page.messages.find((item) => item.id === 'm2')?.skippedAttachments).toEqual([{ name: 'logo.ai', contentType: 'application/postscript', sizeBytes: 10, reason: 'type_not_allowed' }])
     expect(page.waitingMail).toEqual({ count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: false })
-    expect(JSON.stringify(page.waitingMail)).not.toMatch(/@|from|sender/i)
+    // Never a sender: no address and no from / sender field (UNKNOWN_SENDER is the reason's code, not a sender).
+    expect(Object.keys(page.waitingMail ?? {}).sort()).toEqual(['count', 'mayReview', 'reasons'])
+    expect(JSON.stringify(page.waitingMail)).not.toMatch(/@|"from|"sender/i)
   })
 
   it('a live re-read keeps the waiting mail when the page says nothing of it; null when it says none', () => {
@@ -422,7 +424,8 @@ describe('TH-9 — pins, the draft on the server, Done, search, the follow-up', 
     // Discard is the person's word: the server's draft goes too; an emptied box discards it.
     expect(container).toMatch(/discardRef\.current = \(\) => \{[\s\S]*?discardServerDraft\(api, key\)/)
     // Leaving with the draft on the server asks nothing (only files still going up are not kept).
-    expect(container).toContain("useLeaveGuard(keptOnServer ? { text: '', files: notKept } : { text: work.draft.body, files: unsentFiles })")
+    // B-TH-280: a read-only thread (the print view) keeps no draft and asks nothing.
+    expect(container).toContain("useLeaveGuard(host.readOnly ? { text: '', files: 0 } : keptOnServer ? { text: '', files: notKept } : { text: work.draft.body, files: unsentFiles })")
   })
 
   it('B-TH-288: Done on its own address (the customer can still write); search asks the server for this record’s messages only', async () => {

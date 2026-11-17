@@ -58,6 +58,9 @@ const LEGAL = {
 const ALL = (permission: string) => permission.startsWith('portal.') || permission === 'files.read' || permission === 'threads.read'
 
 export function shellOf(locale: Locale, band: PortalBand, over: Partial<PortalShellViewModel> = {}): PortalShellViewModel {
+  // B-TH-275 (wall W02): the footer's terms link follows the reader's own prefix, as the real shell's does (PortalShell:
+  // `${prefix}/terms` from the signed-in person's party) — Brand Beta's page never links Brand Alpha's address.
+  const prefix = over.prefix ?? PREFIX
   return {
     brand: { name: 'Pelletteria Esempio', logoUrl: null, logoDarkUrl: null, accent: '#7a1f3d' },
     companyName: 'Pelletteria Esempio',
@@ -73,7 +76,7 @@ export function shellOf(locale: Locale, band: PortalBand, over: Partial<PortalSh
     live: 'live',
     legal: LEGAL[locale],
     privacyHref: '/privacy/00000000-0000-7000-8000-000000000001',
-    termsHref: `${PREFIX}/terms`,
+    termsHref: `${prefix}/terms`,
     freeForSuppliers: false,
     preview: false,
     canSearch: true,
