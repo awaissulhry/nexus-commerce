@@ -50,7 +50,7 @@ export default defineStage({
       const sample = Number(/sample (\d+)/.exec(await aql.innerText())?.[1])
       expect(sample, 'the plan’s sample size').toBeGreaterThan(0)
       for (let piece = 0; piece < sample; piece++) await record(() => press(aql.getByRole('button', { name: '+ one piece', exact: true })))
-      await expect(aql.getByText(`${sample} of ${sample} inspected`)).toBeVisible()
+      await expect(aql.getByText(`${sample} of ${sample} inspected`).first()).toBeVisible()
       // The plan's checks: every group passes.
       await section('Checks').click()
       const checks = page.getByRole('region', { name: "The plan's checks" })
@@ -71,8 +71,10 @@ export default defineStage({
         const pad = page.getByRole('group', { name: 'Measured' })
         for (const key of nominal!.replace(',', '.')) await pad.getByRole('button', { name: key, exact: true }).click()
         await record(() => press(page.getByRole('button', { name: /^Save · within/ })))
-        await expect(page.getByText(new RegExp(`^Garment 1 · size \\d+: ${nominal!.replace('.', '\\.')} \\S+, within`)).first()).toBeVisible()
-        await section('Measurements').click()
+        await expect(page.getByRole('list', { name: 'Values measured' }).getByText(new RegExp(`^Garment 1 · size \\d+: ${nominal!.replace('.', '\\.')} \\S+, within`))).toBeVisible()
+        // Back from the point (its next garment waits) to the list of points.
+        await press(page.getByRole('button', { name: 'Back', exact: true }))
+        await expect(section('Measurements')).toBeVisible()
       }
       // The batch label, once for the lot: its number is the work order's batch.
       await section('Serial or batch').click()
