@@ -4,7 +4,7 @@ import { templateOf } from '../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../events/catalogue'
 import { searchAnswer, searchQuery } from './contracts'
 import { hasExactHit, matchedParts } from './highlight'
-import { foldSearchText, looksLikeNumber, queryWords, SEARCH_LIMITS, searchTextOf, SearchTextError } from './text'
+import { foldSearchText, holdsAmount, looksLikeNumber, queryWords, SEARCH_LIMITS, searchTextOf, SearchTextError, withoutAmounts } from './text'
 
 describe('search text (B-W2a-32)', () => {
   it('folds case, accents and punctuation; keeps the joiners inside numbers and codes', () => {
@@ -81,5 +81,19 @@ describe('the search catalogue entries', () => {
     expect(searchQuery.parse({ q: 'pista' })).toEqual({ q: 'pista', limit: SEARCH_LIMITS.page, offset: 0 })
     expect(searchQuery.safeParse({ q: 'x', limit: '500' }).success).toBe(false)
     expect(searchAnswer.safeParse({ query: '', words: [], tooShort: true, results: [], counts: [], total: 0, nextOffset: null, asOf: null }).success).toBe(true)
+  })
+})
+
+describe('B-TH-097: a message in the index holds no amount', () => {
+  it('cuts every amount with its currency out of the words, either way round, and never trips the guard', () => {
+    expect(withoutAmounts('The black jacket at € 45,00 each, 30 pieces.')).toBe('The black jacket at each, 30 pieces.')
+    expect(withoutAmounts('Price 1.200,50 EUR or 1200 usd, shipping 12€ and CHF 9')).toBe('Price or , shipping and')
+    expect(withoutAmounts('45eur per piece')).toBe('per piece')
+    expect(withoutAmounts('Size 52, colour black, 3 pieces')).toBe('Size 52, colour black, 3 pieces')
+    for (const text of ['€45', 'eur 45', '45 EUR', 'gbp12.5', 'a 7chf b']) {
+      const cut = withoutAmounts(text)
+      expect(holdsAmount(cut), text).toBe(false)
+      expect(() => searchTextOf({ title: 'SO-1', words: [cut] }), text).not.toThrow()
+    }
   })
 })

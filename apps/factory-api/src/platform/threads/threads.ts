@@ -350,6 +350,10 @@ export interface MessageInput {
   readonly emailMessageId?: string | null
   /** When it entered the thread. Default: the command's time. */
   readonly at?: Date
+  // ---- B-TH-045 (production lane T6): the batch of one action that writes on several records (a note to N records, the answer to
+  // N orders of one customer): its events carry it, and each reader's notifications of the batch fold into one bell item.
+  readonly batchId?: string
+  // ---- end B-TH-045
 }
 
 /**
@@ -400,7 +404,8 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
     siteId: thread.siteId,
     after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: input.direction, audience, channel: input.channel, attachments, mentions, forFloor },
   })
-  const about = { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId }
+  // B-TH-045: the batch rides on both events (absent for a message of its own).
+  const about = { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId, ...(input.batchId ? { batchId: input.batchId } : {}) }
   const where = { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }
   tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience } }))
   // B-W2a-20 (COL-006, COL-011): each person the note mentions (not its author) gets a mention row with the note (where

@@ -22,7 +22,8 @@ const notification = output({
   link: z.string(),
   read: z.boolean(),
   createdAt: instant(),
-  group: output({ key: z.string(), count: z.number().int(), ids: z.array(id()) }),
+  /** B-TH-045: `records` = how many different records the person's group holds (a batch of ours: "on 3 orders"; else 1). */
+  group: output({ key: z.string(), count: z.number().int(), ids: z.array(id()), records: z.number().int() }),
 })
 
 export const portalNotificationsContract = defineContract({

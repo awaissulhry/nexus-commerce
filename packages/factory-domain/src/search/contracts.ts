@@ -26,6 +26,10 @@ export const searchQuery = input({
   limit: z.coerce.number().int().min(1).max(SEARCH_LIMITS.maxPage).default(SEARCH_LIMITS.page),
   /** Results to skip (the results page's next page); at most 1000. */
   offset: z.coerce.number().int().min(0).max(1000).default(0),
+  // ---- B-TH-097 (threads plan TH-9, G11): with type=Message, only the messages of one record's thread ("Search in the thread").
+  recordType: z.string().regex(RECORD_TYPE).max(60).optional(),
+  recordId: id().optional(),
+  // ---- end B-TH-097
 })
 export type SearchQueryInput = z.input<typeof searchQuery>
 
@@ -43,6 +47,8 @@ export const searchResult = output({
   siteId: id().nullable(),
   match: z.enum(SEARCH_MATCHES),
   indexedAt: instant(),
+  /** B-TH-097: a message's result names the record whose thread holds it (the result opens that record at the message). */
+  record: output({ type: z.string(), id: id() }).optional(),
 })
 export type SearchResult = z.infer<typeof searchResult>
 
