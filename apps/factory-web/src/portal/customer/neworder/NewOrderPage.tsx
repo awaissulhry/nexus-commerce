@@ -94,7 +94,6 @@ type Load = 'loading' | 'error' | 'missing' | 'ready'
 type Async<T> = { state: 'loading' | 'error' | 'ready'; value: T }
 type Typed = Record<string, Record<string, number>>
 interface SentInfo {
-  number: string
   customerRef: string | null
   lines: number
   pieces: number
@@ -638,7 +637,6 @@ function NewOrderContainer() {
       })
       apply(answer)
       setSent({
-        number: answer.sent.number,
         customerRef: answer.request.customerRef,
         lines: answer.request.summary.lines,
         pieces: answer.request.summary.pieces,
@@ -727,7 +725,6 @@ function NewOrderContainer() {
           prefix: frame.prefix,
           template: templateHref(locale),
           customerRef: sent?.customerRef ?? record?.request.customerRef ?? null,
-          number: sent?.number ?? null,
           sendHeld: sendWords,
           discardHeld: heldWords,
           onSend: () => void send(),
@@ -767,7 +764,7 @@ function NewOrderContainer() {
         sendHeld: sendWords,
         showProblems,
         sent,
-        closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, number: record.request.number, salesOrder: record.request.salesOrder } : null,
+        closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, salesOrder: record.request.salesOrder ? { id: record.request.salesOrder.id } : null } : null, // B-TH-304: no office number
         offlineSince,
         dialogs: {
           picker: picker ? { ...picker, onDraft, prefix: frame.prefix, writeHeld: heldWords } : null,

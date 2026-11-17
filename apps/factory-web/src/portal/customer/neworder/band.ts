@@ -17,7 +17,6 @@ export function newOrderBandOf(input: {
   prefix: string
   template: string
   customerRef?: string | null
-  number?: string | null
   /** Send's held reason in words (null: it may go). */
   sendHeld?: string | null
   /** Discard's held reason in words (null: it may go). */
@@ -31,7 +30,8 @@ export function newOrderBandOf(input: {
   if (input.phase === 'sent') {
     return {
       title: t('band.sentTitle'),
-      refs: { theirs: input.customerRef ?? null, ours: input.number ?? null },
+      // B-TH-304 (pick A): their PO only — the office's request number would tell how much the others order.
+      refs: input.customerRef ? { theirs: input.customerRef, ours: null } : null,
       status: { label: t('band.pillSent'), tone: 'info' },
       actions: [],
       more: [],

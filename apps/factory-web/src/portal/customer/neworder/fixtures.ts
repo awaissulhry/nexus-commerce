@@ -15,6 +15,9 @@ import { BRAND_BETA } from '../../../lib/testing/two-brands'
 import { at as requestAt, betaShellOf, PREFIX as BETA, REQUESTS, requestView } from '../requests/design-data'
 import { requestBandOf } from './band'
 import { goesToOf, openItems } from './request-model'
+// B-TH-304: the catalogue door, open again, read by Brand Beta (the customer's own order numbers, never the office's series).
+import { catalogueDoorOf } from './request-model'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import type { RequestPageModel } from './view/RequestPageView'
 
 /**
@@ -68,23 +71,23 @@ function held(locale: Locale, view: NewOrderViewModel): string | null {
   return reason ? t(reason.key, reason.count !== undefined ? { count: reason.count } : undefined) : null
 }
 
-function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase = 'draft'): OrderingCaseBuilder {
+function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase = 'draft', beta = false): OrderingCaseBuilder {
   return (locale) => {
     const words = orderingWords(locale)
     const over = build(locale)
-    const base = model({ phase, ...over })
+    // B-TH-304: `beta` — the catalogue door read by Brand Beta (brand B), the made-up reader of every wall scan.
+    const base = model({ phase, ...(beta ? { prefix: BETA } : {}), ...over })
     const view = { ...base, sendHeld: over.sendHeld !== undefined ? over.sendHeld : held(locale, base) }
     const band = newOrderBandOf({
       words,
       phase: view.phase,
-      prefix: PREFIX,
+      prefix: beta ? BETA : PREFIX,
       template: templateHref(locale),
       customerRef: view.sent?.customerRef ?? view.record?.request.customerRef ?? null,
-      number: view.sent?.number ?? null,
       sendHeld: view.sendHeld,
       discardHeld: view.writeHeld,
     })
-    return { shell: shellOf(locale, band, '/orders/new'), body: { kind: 'neworder', model: view } }
+    return { shell: beta ? betaShellOf(locale, band, '/orders/new') : shellOf(locale, band, '/orders/new'), body: { kind: 'neworder', model: view } }
   }
 }
 
@@ -107,6 +110,13 @@ const problems = () => {
   })
   const trousers = LINE_TROUSERS()
   return draftRecord({ lines: [jacket, { ...trousers, colourway: { id: '0194f0e2-1940-7000-8000-000000000104', code: 'BRN', name: 'Marrone Esempio' }, problems: [{ code: 'COLOUR_DISCONTINUED', lineId: trousers.id, size: null }] }], request: { requestedDate: null } })
+}
+
+// ---- B-TH-304: Brand Beta's catalogue door (its PO, its own order numbers; the office's SO-… is in the data, never drawn) ----
+const BETA_PAST = PAST_ORDERS.map((row, index) => ({ ...row, customerRef: index === 0 ? BRAND_BETA.customerRef : row.customerRef && `BETA-PO-${4410 - index}` }))
+function betaDraft(request: Partial<NonNullable<NewOrderViewModel['record']>['request']> = {}) {
+  const source = { orderLineId: '0194f0e2-1940-7000-8000-000000000601', orderId: PAST_ORDERS[0]!.id, orderNumber: PAST_ORDERS[0]!.number, yourNumber: customerNumberOf('ORDER', 12), customerRef: BRAND_BETA.customerRef, orderDate: PAST_ORDERS[0]!.orderDate! }
+  return draftRecord({ lines: [lineOf(1, { source }), LINE_TROUSERS()], request: { customerRef: BRAND_BETA.customerRef, ...request } })
 }
 
 const reorderModel = (over: Partial<NonNullable<NewOrderViewModel['reorder']>> = {}): NonNullable<NewOrderViewModel['reorder']> => ({
@@ -188,7 +198,7 @@ function requestPage(phase: RequestPageModel['phase'], build: (locale: Locale) =
       admins: [BRAND_BETA.portalPerson.name],
       openCheckFailed: false,
       compose: phase === 'compose' ? composeOf(locale, compose) : null,
-      aside: { open: { state: 'ready', items: openItems(REQUESTS, BETA, locale, (iso) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }).format(new Date(iso))) }, allHref: `${BETA}/orders?chip=REQUESTED`, returnsHref: `${BETA}/returns` },
+      aside: { open: { state: 'ready', items: openItems(REQUESTS, BETA, locale, (iso) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }).format(new Date(iso))) }, allHref: `${BETA}/orders?chip=REQUESTED`, returnsHref: `${BETA}/returns`, catalogue: catalogueDoorOf(BETA) /* B-TH-304 */ },
       receipt: null,
       discardOpen: false,
       ...over,
@@ -259,6 +269,17 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       model: page(() => ({ way: 'reorder', reorder: reorderModel({ order: { id: PAST_ORDERS[0]!.id, state: 'ready', read: pastOrder() }, selected: ['0194f0e2-1940-7000-8000-000000000601'] }) })),
       note: '“Price now … (was …)”, sizes left out, a discontinued colour to replace (the row is selectable once chosen), a style no longer sold (not selectable, with the reason). Bulk action: Add N lines to the draft.',
     },
+    // ---- B-TH-304: the catalogue door again, read by Brand Beta: its own order numbers, its PO, never an office number ----
+    { id: 'th-304-draft', label: 'The catalogue door (Brand Beta): a draft with a line from a past order', model: page(() => ({ record: betaDraft() }), 'draft', true), note: 'The line says “from your order 12 (your PO …)”: the customer’s own number, never SO-….' },
+    { id: 'th-304-reorder', label: 'The catalogue door (Brand Beta): reorder — past orders by their own number', model: page(() => ({ record: betaDraft(), way: 'reorder', reorder: reorderModel({ orders: { state: 'ready', rows: BETA_PAST } }) }), 'draft', true), note: 'Their PO first, then “Your order 12” (RefPair); an order with no number of its own shows its PO and date only.' },
+    {
+      id: 'th-304-reorder-order',
+      label: 'The catalogue door (Brand Beta): one past order’s lines',
+      model: page(() => ({ record: betaDraft(), way: 'reorder', reorder: reorderModel({ orders: { state: 'ready', rows: BETA_PAST }, order: { id: BETA_PAST[0]!.id, state: 'ready', read: { ...pastOrder(), order: { ...pastOrder().order, customerRef: BRAND_BETA.customerRef } } } }) }), 'draft', true),
+      note: '“Lines of your order 12”.',
+    },
+    { id: 'th-304-sent', label: 'The catalogue door (Brand Beta): sent', model: page(() => ({ record: betaDraft(), sent: { customerRef: BRAND_BETA.customerRef, lines: 2, pieces: 26, net: '9500.00', currency: 'EUR', seesPrices: true } }), 'sent', true), note: 'Their PO; “you find it under Orders & requests as a catalogue order”; no request number of ours; no answer-time promise.' },
+    { id: 'th-304-accepted', label: 'The catalogue door (Brand Beta): confirmed as an order', model: page(() => ({ record: betaDraft({ status: 'ACCEPTED' }), closed: { status: 'ACCEPTED', salesOrder: { id: '0194f0e2-1940-7000-8000-000000000777' } } }), 'closed', true), note: 'Open the order: its own page names “Your order 13”.' },
     { id: 'reorder-empty', label: 'Reorder: no past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel({ orders: { state: 'ready', rows: [] } }) })) },
     { id: 'reorder-error', label: 'Reorder: the past orders could not be read', model: page(() => ({ way: 'reorder', reorder: reorderModel({ orders: { state: 'error', rows: [] } }) })) },
     { id: 'upload', label: 'Upload a sheet: the template and the file', model: page(() => ({ way: 'upload', upload: { sheet: { state: 'idle' }, templateHref: templateHref('it'), writeHeld: null } })), note: 'tab:template: the XLSX opens in a new tab (the browser saves it).' },
@@ -286,10 +307,10 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     {
       id: 'sent',
       label: 'sec:sent — Request sent',
-      model: page(() => ({ sent: { number: 'RQ-2026-0087', customerRef: 'BA-PO-4521', lines: 2, pieces: 26, net: '9500.00', currency: 'EUR', seesPrices: true } }), 'sent'),
-      note: '“Order request sent — your PO …, our request RQ-…” (no answer-time promise, B-TH-041) · Open the order (status Requested) · New order.',
+      model: page(() => ({ sent: { customerRef: 'BA-PO-4521', lines: 2, pieces: 26, net: '9500.00', currency: 'EUR', seesPrices: true } }), 'sent'),
+      note: '“Order request sent — your PO …: you find it under Orders & requests as a catalogue order” (B-TH-304: never the office’s request number; no answer-time promise, B-TH-041) · Open the order (status Requested) · New order.',
     },
-    { id: 'closed', label: 'A request no longer a draft', model: page(() => ({ record: draftRecord({ request: { status: 'SENT', number: 'RQ-2026-0081' } }), closed: { status: 'SENT', number: 'RQ-2026-0081', salesOrder: null } }), 'closed') },
+    { id: 'closed', label: 'A request no longer a draft', model: page(() => ({ record: draftRecord({ request: { status: 'SENT', number: 'RQ-2026-0081' } }), closed: { status: 'SENT', salesOrder: null } }), 'closed') },
     { id: 'missing', label: 'A draft that no longer exists', model: page(() => ({ state: 'missing', record: null })) },
     { id: 'loading', label: 'Loading the draft', model: page(() => ({ state: 'loading', record: null })) },
     { id: 'error', label: 'The draft could not be read', model: page(() => ({ state: 'error', record: null })) },

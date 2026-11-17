@@ -11,6 +11,8 @@ import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
 import { addLinesInCommand, ownRequest, pricesFor, requestView, type NewLine } from './requests'
 import { dayText, readRequest } from './store'
+// B-TH-304: the customer's own order numbers in the catalogue door (pick A).
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 
 /**
  * Reorder a past order (B-W2b-190, SAL-072; design portal.customer.neworder "Reorder a past order": "Past orders (your
@@ -40,7 +42,7 @@ export async function pastOrders(app: FastifyInstance, request: FastifyRequest, 
         status: { not: 'CANCELLED' },
         ...(q ? { OR: [{ number: { contains: q, mode: 'insensitive' } }, { customerRef: { contains: q, mode: 'insensitive' } }] } : {}),
       },
-      select: { id: true, number: true, customerRef: true, orderDate: true, status: true, lines: { select: { kind: true, quantity: true } } },
+      select: { id: true, number: true, customerRef: true, orderDate: true, status: true, customerSeq: true /* B-TH-304 */, lines: { select: { kind: true, quantity: true } } },
       orderBy: [{ orderDate: 'desc' }, { id: 'asc' }],
       take: LIST_MAX,
     }),
@@ -49,6 +51,8 @@ export async function pastOrders(app: FastifyInstance, request: FastifyRequest, 
     orders: rows.map((row) => ({
       id: row.id,
       number: row.number,
+      // B-TH-304 (pick A, plan §0.5): the customer's own number ("Your order 12"): the portal draws it, never the office's series.
+      yourNumber: customerNumberOf('ORDER', row.customerSeq),
       customerRef: row.customerRef,
       orderDate: dayText(row.orderDate),
       lines: row.lines.length,
@@ -69,6 +73,7 @@ async function orderLinesOf(request: FastifyRequest, reader: PortalReader, order
         customerRef: true,
         orderDate: true,
         status: true,
+        customerSeq: true, // B-TH-304
         lines: { select: { id: true, seq: true, kind: true, styleId: true, colourwayId: true, styleRevisionId: true, unitPrice: true, description: true, sizes: { select: { size: true, quantity: true } } }, orderBy: { seq: 'asc' } },
       },
     }),
@@ -97,7 +102,7 @@ export async function pastOrder(app: FastifyInstance, request: FastifyRequest, o
   const { order, revisions } = await orderLinesOf(request, reader, orderId)
   const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: order.companyId, partyId: reader.session.partyId, day: businessDate(appClock(app).now()), styleIds: order.lines.map((line) => line.styleId) }))
   return {
-    order: { id: order.id, number: order.number, customerRef: order.customerRef, orderDate: dayText(order.orderDate) },
+    order: { id: order.id, number: order.number, yourNumber: customerNumberOf('ORDER', order.customerSeq) /* B-TH-304 */, customerRef: order.customerRef, orderDate: dayText(order.orderDate) },
     lines: order.lines.map((line) => {
       const plan = planOf(line, revisions, catalogue, reader.seesPrices)
       const facts = factsOf(catalogue, line.styleId, line.colourwayId)

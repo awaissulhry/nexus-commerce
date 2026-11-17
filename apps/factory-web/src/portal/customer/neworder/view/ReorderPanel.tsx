@@ -9,7 +9,7 @@ import { Button, Input, Select } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { PastLine, PastOrder, PastOrderRow } from '../api'
-import { droppedOf, noticeTone, noticeWords, reorderLineHeld } from '../model'
+import { droppedOf, noticeTone, noticeWords, orderLinesLabel, ownOrderRef, reorderLineHeld } from '../model'
 import { useOrderingWords } from '../words'
 import { Loading, ReadFailed } from './parts'
 
@@ -75,11 +75,12 @@ function PastOrders({ model, actions }: { model: ReorderModel; actions?: Reorder
     const OrderCell = ({ data }: ICellRendererParams<PastOrderRow>) =>
       data ? (
         <button type="button" className="fw-pcat-name" onClick={() => latest.current?.onOpenOrder?.(data.id)}>
-          <RefPair theirs={data.customerRef} ours={data.number} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} />
+          {/* B-TH-304: the customer's own number ("Your order 12"), never the office's series. */}
+          <RefPair theirs={data.customerRef} ours={ownOrderRef(data.yourNumber, words.locale)?.value ?? null} theirsLabel={t('ref.yours')} oursLabel={ownOrderRef(data.yourNumber, words.locale)?.label ?? ''} size="sm" copy={false} labels={ds.refPair} />
         </button>
       ) : null
     return [
-      { colId: 'order', headerName: t('reorder.col.order'), cellRenderer: OrderCell, flex: 1.6, minWidth: 220, sortable: false, valueGetter: ({ data }) => (data ? `${data.customerRef ?? ''} ${data.number}` : '') },
+      { colId: 'order', headerName: t('reorder.col.order'), cellRenderer: OrderCell, flex: 1.6, minWidth: 220, sortable: false, valueGetter: ({ data }) => (data ? `${data.customerRef ?? ''} ${data.yourNumber ? data.yourNumber.words[words.locale] : ''}`.trim() : '') },
       { colId: 'date', headerName: t('reorder.col.date'), flex: 0.8, minWidth: 120, sortable: false, valueGetter: ({ data }) => (data?.orderDate ? words.day(data.orderDate) : '—') },
       { colId: 'lines', headerName: t('reorder.col.lines'), flex: 0.5, minWidth: 90, sortable: false, valueGetter: ({ data }) => (data ? String(data.lines) : '') },
       { colId: 'pieces', headerName: t('reorder.col.pieces'), flex: 0.5, minWidth: 90, sortable: false, valueGetter: ({ data }) => (data ? words.pieces(data.pieces) : '') },
@@ -195,7 +196,7 @@ function OrderLines({ model, actions }: { model: ReorderModel; actions?: Reorder
         </Button>
         {read ? (
           <span className="fw-pno-quiet">
-            <RefPair theirs={read.order.customerRef} ours={read.order.number} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} />
+            <RefPair theirs={read.order.customerRef} ours={ownOrderRef(read.order.yourNumber, words.locale)?.value ?? null} theirsLabel={t('ref.yours')} oursLabel={ownOrderRef(read.order.yourNumber, words.locale)?.label ?? ''} size="sm" copy={false} labels={ds.refPair} />
             {read.order.orderDate ? ` · ${words.day(read.order.orderDate)}` : ''}
           </span>
         ) : null}
@@ -208,7 +209,7 @@ function OrderLines({ model, actions }: { model: ReorderModel; actions?: Reorder
         <>
           <p className="fw-pno-quiet">{t('reorder.todayPrices')}</p>
           <ListFrame<PastLine>
-            label={t('reorder.linesLabel', { order: read.order.number })}
+            label={orderLinesLabel(read.order, t, words.day)}
             listKey={null}
             rows={read.lines}
             rowId={(row) => row.orderLineId}
