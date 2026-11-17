@@ -3,15 +3,15 @@ import { permissionCheck } from '../../../../lib/session/session'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
-import type { CutLog, TicketPrinters, WorkOrder, WorkOrderBundles } from '../../_shared/api'
+import type { CutLog } from '../../_shared/api'
 import type { Availability } from '../../work-orders/daily/api'
-import type { Allocation, CutRow, CutTiles, Replacement, WorkOrderYield, YieldFigures } from '../api'
+import type { CutRow, CutTiles, Replacement, WorkOrderYield, YieldFigures } from '../api'
 import { cuttingCanOf, type CuttingCan } from '../model'
 
 /**
- * Made-up data for the design cases of SCR-238 (Cutting, New cut order, Allocate hides) and SCR-238-record (a cut and
- * its tabs): an invented site ("Stabilimento Demo Nord"), styles ("DEMO-JKT-01"), leathers ("DEMO-LEA-100 · NER"),
- * lots, hides, tables and people; the figures worked out by hand (the sums are in the comments). Nothing here is a real
+ * Made-up data for the design cases of SCR-238 (Cutting, New cut order, Allocate hides) and the tests of a work order's cut
+ * (pieces per part, recuts, the yield per lot; F-PR-06 merged the Cut record into the work order's Cutting & bundles tab): an
+ * invented site ("Stabilimento Demo Nord"), styles ("DEMO-JKT-01"), leathers ("DEMO-LEA-100 · NER"), lots, hides, tables and people; the figures worked out by hand (the sums are in the comments). Nothing here is a real
  * company, person or number. Design-only (only fixtures and tests import it); it exports no `designScreen`.
  */
 
@@ -153,52 +153,11 @@ export const AVAILABILITY: Availability = {
   ],
 }
 
-// ---- the record of WO-26-0031 ----------------------------------------------------------------------------------------------------
+// ---- WO-26-0031's cut log, yield and recuts (the rules' tests: pieces per part, a recut's entries, the yield per lot) ----------
 
 const cell = (n: number, size: string) => ({ id: uid('9191', n), colourwayCode: 'NER', size })
 const CELLS = [cell(1, '48'), cell(2, '50'), cell(3, '52')]
-
-export const WORK_ORDER = {
-  id: CUTTING.workOrder.id,
-  number: CUTTING.workOrder.number,
-  batchNumber: null,
-  kind: 'SIZE_GRID',
-  status: 'IN_PROGRESS',
-  version: 4,
-  companyId: COMPANY,
-  siteId: SITE.id,
-  site: SITE,
-  style: { ...JKT, ppeCategory: 'II', sizes: ['48', '50', '52'] },
-  revision: { id: uid('7171', 1), revision: 2, status: 'RELEASED' },
-  labelTemplate: null,
-  dueDate: '2026-11-13',
-  daysLate: null,
-  priority: 1,
-  note: null,
-  release: { at: at(26, 9), byId: null, materialOverride: null },
-  startedAt: at(27, 7),
-  completedAt: null,
-  closedAt: null,
-  cancelledAt: null,
-  cancelReason: null,
-  createdAt: at(25, 10),
-  updatedAt: at(30, 8, 12),
-  nextActions: ['COMPLETED'],
-  orders: [],
-  cells: CELLS.map((entry, index) => ({ ...entry, version: 1, colourwayId: uid('9292', 1), colourwayName: 'Nero', quantity: [8, 10, 6][index]!, salesOrderLineId: uid('9393', 1), salesOrderId: uid('9494', 1), lineSeq: 10, progress: null })),
-  pieces: 24,
-  progress: { counted: true },
-  hold: null,
-  spec: {
-    frozen: true,
-    frozenAt: at(26, 9),
-    operations: [],
-    materials: [{ itemId: LEA_NER.itemId, itemCode: LEA_NER.code, itemName: LEA_NER.name, itemColourId: LEA_NER.itemColourId, colourCode: 'NER', baseUom: 'FT2', planned: '1155.8400', issued: '220.4000', balance: '935.4400' }],
-    standardMinutes: { perGarment: '95.0', allPieces: '2280.0' },
-  },
-} as unknown as WorkOrder
-
-export const HELD_WORK_ORDER = { ...WORK_ORDER, id: HELD.workOrder.id, number: HELD.workOrder.number, status: 'ON_HOLD', hold: { reason: 'Shade differs from the approved sample', at: at(29, 16), fromStatus: 'IN_PROGRESS', recordType: 'QualityHold', recordId: uid('1212', 1) } } as unknown as WorkOrder
+const WORK_ORDER = { id: CUTTING.workOrder.id, number: CUTTING.workOrder.number }
 
 const entry = (n: number, hideN: number, minute: number, pieces: Array<[number, string, number]>, area: string, extra: Partial<CutLog['entries'][number]> = {}): CutLog['entries'][number] => ({
   id: uid('2323', n),
@@ -275,7 +234,6 @@ export const WORK_ORDER_YIELD: WorkOrderYield = {
     yieldHide(4, 'B', 'NER-3', 'PARTLY_CUT', '55.1000', '5.2000', '0.0000', '0.0000', '0.0000'),
   ],
 }
-export const EMPTY_YIELD: WorkOrderYield = { ...WORK_ORDER_YIELD, overall: { used: '0.0000', unmatched: '0.0000', pattern: '0.0000', remnant: '0.0000', waste: '0.0000', wastePct: null, yieldPct: null, plannedPct: '75.00', variancePct: null }, hides: [] }
 export const EMPTY_LOG: CutLog = { ...CUT_LOG, entries: [], hides: [], cells: CUT_LOG.cells.map((entry) => ({ ...entry, cut: 0, toCut: entry.quantity, parts: entry.parts.map((part) => ({ ...part, pieces: 0 })) })) }
 
 const replacement = (n: number, over: Partial<Replacement>): Replacement => ({
@@ -304,41 +262,3 @@ export const RECUTS: Replacement[] = [
   replacement(1, {}),
   replacement(2, { cell: { id: uid('9191', 1), colourwayCode: 'NER', size: '48', quantity: 8 }, part: 'front', status: 'DONE', cutLogId: uid('2323', 1), doneAt: at(28, 9), reason: 'Cut against the grain' }),
 ]
-
-export const ALLOCATED: Allocation[] = [
-  { id: uid('1717', 1), status: 'ACTIVE', hide: { id: uid('4444', 14), code: 'DEMO-HD-0014' }, lot: { id: LOT_A.id, code: LOT_A.code, qualityStatus: 'RELEASED' }, item: { id: LEA_NER.itemId, code: LEA_NER.code, baseUom: 'FT2' }, quantity: '53.0000', createdAt: at(29, 9) },
-  { id: uid('1717', 2), status: 'ACTIVE', hide: { id: uid('4444', 17), code: 'DEMO-HD-0017' }, lot: { id: LOT_A.id, code: LOT_A.code, qualityStatus: 'RELEASED' }, item: { id: LEA_NER.itemId, code: LEA_NER.code, baseUom: 'FT2' }, quantity: '50.6000', createdAt: at(29, 9) },
-]
-
-const bundle = (n: number, size: string, quantity: number, over: Partial<WorkOrderBundles['bundles'][number]> = {}): WorkOrderBundles['bundles'][number] => ({
-  id: uid('1818', n),
-  code: `DEMO-BN-${String(n).padStart(4, '0')}`,
-  replacedCodes: [],
-  workOrderSizeId: uid('9191', size === '48' ? 1 : 2),
-  colourwayCode: 'NER',
-  size,
-  part: null,
-  quantity,
-  status: 'ACTIVE',
-  voidedAt: null,
-  cutLogIds: [uid('2323', 1)],
-  createdAt: at(30, 7, 50),
-  scans: 0,
-  doneAt: [],
-  lastScan: null,
-  hides: [{ hideId: uid('4444', 1), code: 'DEMO-HD-0001', lotId: LOT_A.id, lotCode: LOT_A.code }],
-  tickets: [{ jobId: uid('1919', n), printerId: uid('2020', 1), status: 'PRINTED', createdAt: at(30, 7, 51) }],
-  reprints: [],
-  ...over,
-})
-export const BUNDLES: WorkOrderBundles = {
-  workOrder: { id: WORK_ORDER.id, number: WORK_ORDER.number, status: 'IN_PROGRESS', siteId: SITE.id },
-  cells: [],
-  bundles: [
-    bundle(1, '48', 3, { scans: 2, lastScan: { at: at(30, 9), operation: { seq: 20, code: 'CUC' }, station: null } }),
-    bundle(2, '50', 5, { replacedCodes: ['DEMO-BN-0002A'], reprints: [{ code: 'DEMO-BN-0002', replacedCode: 'DEMO-BN-0002A', reason: 'Ticket torn at the bench', printerId: uid('2020', 1), postedBy: 'OFFICE', at: at(30, 8) }] }),
-    bundle(3, '50', 2, { tickets: [{ jobId: uid('1919', 3), printerId: uid('2020', 1), status: 'FAILED', createdAt: at(30, 7, 52) }] }),
-    bundle(4, '50', 1, { status: 'VOID', voidedAt: at(30, 8, 5) }),
-  ],
-}
-export const PRINTERS: TicketPrinters = { printers: [{ id: uid('2020', 1), code: 'LBL-01', name: 'Stampante etichette taglio' }], defaultPrinterId: uid('2020', 1) }

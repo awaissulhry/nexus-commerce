@@ -9,6 +9,7 @@ import type { RoundView } from '../../api'
 import { approvalHeld, isOpen, listHref, recordHref, RECORD_TABS, refusalPhrase, roundPhrase } from '../../model'
 import { DecisionTag, isPageKey, KindTag, NoticeLine, SamplesMessages, StagePill, useWords } from '../../parts'
 import { DecideDialog } from '../../view/DecideDialog'
+import { SwatchDialog } from '../../view/SwatchDialog' // F-PR-19
 import type { SampleRecordActions, SampleRecordModel } from '../view-model'
 import { ApprovalTab } from './ApprovalTab'
 import { FitTab } from './FitTab'
@@ -223,6 +224,7 @@ function Body({ model, actions, thread, printThread }: { model: SampleRecordMode
       </RecordFrame>
       <RecordDialogs model={model} round={r} actions={actions} />
       {model.decide && <DecideDialog model={model.decide} actions={actions?.decide} />}
+      {model.swatch && <SwatchDialog model={model.swatch} actions={actions?.swatch} /> /* F-PR-19 */}
     </>
   )
 }

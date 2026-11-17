@@ -9,6 +9,8 @@ import type { ReadinessRow } from './daily/api'
 import type { ReleasePreviewRow } from './every-shift/api'
 // F-PR-03: the list by risk (made-up customers, orders, POs, risks and waits).
 import type { CustomerFilterState } from '../_shared/customer/model'
+// F-PR-21
+import { targetsOfRows, type AssignSupervisorModel } from '../../_shared/production-supervisor/model'
 
 /**
  * SCR-069 — Work orders (design production.workorders) with made-up data only: every state of the list (loading, error,
@@ -78,6 +80,20 @@ const base = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => 
 
 /** F-PR-03: a case of the list by risk (rows with their risk, the customer filter, the tiles with At risk and Waiting on customer). */
 const risky = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => base(role, { sort: 'risk', rows: { items: RISK_OPEN, more: false, problem: null }, counts: RISK_COUNTS, customers: CUSTOMERS, now: NOW, ...over })
+
+// ---- F-PR-21: the production supervisor on Work orders (made-up): the column says Me / Someone else / Not set (never a name), the
+// Mine tile (`?supervisor=me`), "Assign supervisor…" on a selection of two customers' work orders, THE assign dialog's states.
+const MARKS = ['ME', 'SOMEONE_ELSE', 'NOT_SET'] as const
+const SUPERVISED_ROWS: WorkOrderRow[] = RISK_OPEN.map((row, index) => ({ ...row, supervisor: row.customer ? MARKS[index % MARKS.length]! : null }))
+const SUPERVISED_COUNTS = { ...RISK_COUNTS, mine: SUPERVISED_ROWS.filter((row) => row.supervisor === 'ME').length }
+const PICKED = [SUPERVISED_ROWS.find((row) => row.customer?.id === ALPHA.id)!, SUPERVISED_ROWS.find((row) => row.customer?.id === BETA.id)!]
+const PICKED_TARGETS = targetsOfRows(PICKED, true).targets
+const ME = { id: '0190f0e2-7777-7000-8000-000000000001', name: 'Alex Demo', me: true }
+const BEA = { id: '0190f0e2-7777-7000-8000-000000000002', name: 'Bea Esempio', me: false }
+const assignOf = (over: Partial<AssignSupervisorModel> = {}): AssignSupervisorModel => ({ targets: PICKED_TARGETS, leftOut: 0, current: null, people: { status: 'ready', people: [ME, BEA], complete: true }, busy: false, problem: null, result: null, ...over })
+const supervised = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => risky(role, { rows: { items: SUPERVISED_ROWS, more: false, problem: null }, counts: SUPERVISED_COUNTS, supervisorCan: { manage: role === 'manager' || role === 'owner' }, ...over })
+// ---- end F-PR-21
+
 
 const WORDS: ReadinessRow['word'][] = ['NOT_BOOKED', 'EXPECTED', 'NOT_ENOUGH', 'RECEIVED', 'REQUESTED', 'DELAYED', 'NOT_PLANNED']
 const READINESS_ROWS: Record<string, ReadinessRow> = Object.fromEntries(
@@ -210,5 +226,31 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'risk-limited', label: 'F-PR-03 · An office person limited to one customer: All my customers, its code (no parties.view), nothing of the other', model: risky('sales', { customers: { options: [BETA], party: null, everyCustomer: false, names: false }, counts: GROUP_COUNTS[BETA.id], rows: { items: RISK_OPEN.filter((row) => row.customer?.id === BETA.id), more: false, problem: null } }) },
     { id: 'risk-board', label: 'F-PR-03 · Board by state: each card the customer code, its health and who it waits on', model: risky('manager', { mode: 'board', view: 'all', rows: { items: RISK_ROWS, more: false, problem: null }, today: '2026-10-29' }) },
     { id: 'risk-no-match', label: 'F-PR-03 · Blocked by Hold matches nothing: Clear filters (the sort and the grouping stay)', model: risky('manager', { blockedBy: 'HOLD', rows: { items: [], more: false, problem: null } }) },
+    // ---- F-PR-21 ----
+    { id: 'supervisor-column', label: 'F-PR-21 · The Supervisor column: Me / Someone else / Not set (names only inside one record); the Mine tile', model: supervised('manager') },
+    { id: 'supervisor-mine', label: 'F-PR-21 · Mine pressed (`?supervisor=me`): the work orders I supervise; the export and a saved view follow it', model: supervised('manager', { supervisor: 'me', rows: { items: SUPERVISED_ROWS.filter((row) => row.supervisor === 'ME'), more: false, problem: null } }) },
+    { id: 'supervisor-selected', label: 'F-PR-21 · Two customers\u2019 work orders selected: Assign supervisor… in the bar', model: supervised('manager', { selected: PICKED.map((row) => row.id) }) },
+    { id: 'supervisor-held', label: 'F-PR-21 · Without production.brand.manage: Assign supervisor… held in words', model: supervised('sales', { selected: PICKED.map((row) => row.id) }) },
+    { id: 'supervisor-assign', label: 'F-PR-21 · THE assign dialog: the orders named, 2 customers, only people allowed on both, Customer default', model: supervised('manager', { selected: PICKED.map((row) => row.id), assign: assignOf() }) },
+    { id: 'supervisor-assign-loading', label: 'F-PR-21 · The assign dialog while it reads who may supervise', model: supervised('manager', { assign: assignOf({ people: { status: 'loading' } }) }) },
+    { id: 'supervisor-assign-failed', label: 'F-PR-21 · The assign dialog: who may supervise could not be read (Try again)', model: supervised('manager', { assign: assignOf({ people: { status: 'error', problem: 'problem.people' } }) }) },
+    { id: 'supervisor-assign-nobody', label: 'F-PR-21 · Nobody may take both customers: what a supervisor needs, in words; Customer default still offered', model: supervised('manager', { assign: assignOf({ people: { status: 'ready', people: [], complete: true } }) }) },
+    {
+      id: 'supervisor-assign-result',
+      label: 'F-PR-21 · After Send: one result per order (Done, Already so, Not done: why), one more counted, never named',
+      model: supervised('manager', {
+        assign: assignOf({
+          result: {
+            supervisor: { name: BEA.name, active: true },
+            lines: [
+              { orderId: PICKED_TARGETS[0]!.orderId, number: PICKED_TARGETS[0]!.number, state: 'changed' },
+              { orderId: PICKED_TARGETS[1]!.orderId, number: PICKED_TARGETS[1]!.number, state: 'skipped', key: 'skip.NO_MEASUREMENTS' },
+            ],
+            unknown: 1,
+          },
+        }),
+      }),
+    },
+    // ---- end F-PR-21
   ],
 })

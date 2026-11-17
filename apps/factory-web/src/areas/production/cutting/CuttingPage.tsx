@@ -9,7 +9,7 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
 import { getAvailability, reserveHides } from '../work-orders/daily/api'
 import { listCuts, roomYield, type CutRow, type CutTiles, type CutView, type YieldFigures } from './api'
-import { addressOf, addressText, CUTTING_NAMESPACE, cuttingCanOf, phrase, readProblem, romeDayStart, usedText, writeProblem, type CutAddress } from './model'
+import { addressOf, addressText, cutHref, CUTTING_NAMESPACE, cuttingCanOf, phrase, readProblem, romeDayStart, usedText, writeProblem, type CutAddress } from './model'
 import { createCutOrder, listCutOrders, siteStations, waitingGroups, type CutOrderSummary, type CutOrderTiles, type Station, type WaitingGroup } from './orders/api'
 import { groupKeyOf, listCsv, listRows, NO_DRAFT, newOrderBody, newOrderHeld, orderHref, orderProblem, ORDERS_NAMESPACE, ordersCanOf, orderViewOf, sheetHref, type ListRow, type NewOrderDraft } from './orders/model'
 import type { NewOrderModel } from './orders/view/NewCutOrderDialog'
@@ -274,7 +274,7 @@ function Container() {
 
   const openRow = (row: ListRow) => {
     if (row.order) router.push(orderHref(prefix, row.order.id))
-    else if (can.workOrders) router.push(`${prefix}/production/cutting/${row.cut.workOrder.id}`)
+    else if (can.workOrders) router.push(cutHref(prefix, row.cut.workOrder.id))
   }
 
   const model: CuttingModel = {
@@ -325,7 +325,7 @@ function Container() {
         onExport: exportRows,
         onTickets: (row) => {
           if (row.order) window.open(sheetHref(prefix, row.order.id), '_blank', 'noopener')
-          else router.push(`${prefix}/production/cutting/${row.cut.workOrder.id}?tab=tickets`)
+          else router.push(cutHref(prefix, row.cut.workOrder.id))
         },
         onDismissNotice: () => setNotice(null),
       }}

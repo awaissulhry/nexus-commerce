@@ -126,7 +126,7 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
           items={[
             { id: 'open', label: t('list.open'), href: href(data) },
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
-            ...(model.can.workOrders ? [{ id: 'order', label: t('list.openWorkOrder'), href: `${model.prefix}/production/work-orders/${data.workOrder.id}?tab=bundles` }] : []),
+            ...(model.can.workOrders ? [{ id: 'order', label: t('list.openWorkOrder'), href: `${model.prefix}/production/work-orders/${data.workOrder.id}?tab=cutting` }] : []),
             { id: 'ticket', label: t('ticket.pdf'), ...(model.can.printLabels ? { href: `${href(data)}/ticket`, target: '_blank' as const } : { disabled: true, description: t('held.noPrint', { right: rightRef('print.labels') }) }) },
           ]}
         />

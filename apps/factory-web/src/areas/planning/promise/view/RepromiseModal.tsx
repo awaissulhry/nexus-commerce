@@ -1,12 +1,16 @@
 'use client'
 
-import { Check, Send, Undo2, X } from 'lucide-react'
+import { Check, Copy, Send, Undo2, X } from 'lucide-react'
 import { Banner, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, Skeleton, Spinner, Toggle } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import type { Proposal, RepromiseDraft } from '../api'
 import { certificateWords, dayWords, decisionHolds, formHeld, formProblems, movedSizes, previewStale, sizeKey, sizeName, type RepromiseForm, type Words } from '../model'
+// ---- F-PR-20: "Ask the customer" on the accept, and the customer's answer on the proposal
+import type { CustomerAnswerRead } from '../api'
+import { acceptLabelKey, CUSTOMER_ANSWER_TONE } from '../model'
+// ---- end F-PR-20
 import type { PromiseActions, PromiseModel, RepromiseDialog } from '../view-model'
 import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
@@ -17,7 +21,9 @@ import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS par
  * accepts; the customer sees it in the portal and gets the message" → Send to sales for acceptance. A line whose re-promise
  * already waits shows it instead, with sales' word: Accept (tell the customer now, by e-mail on the order's thread), Decline
  * (with the reason the planner reads), and the planner's Withdraw. Nobody decides their own proposal — the Owner included:
- * the button is held and says why.
+ * the button is held and says why. F-PR-20: sales may also "Ask the customer to accept the new date" (B-PR-28: the date stands
+ * either way; a refusal puts a follow-up task on the order for us); after it, the customer's link is shown once (for a customer
+ * who answers without the portal) and the proposal shows the customer's answer — also when its task opens a decided proposal.
  */
 export function RepromiseModal({ model, actions, words }: { model: PromiseModel; actions?: PromiseActions; words: Words }) {
   const { t } = words
@@ -50,7 +56,7 @@ export function RepromiseModal({ model, actions, words }: { model: PromiseModel;
       />
     )
   } else if (dialog.done && draft) {
-    body = <DoneView dialog={dialog} draft={draft} words={words} />
+    body = <DoneView dialog={dialog} draft={draft} actions={actions} words={words} />
     footer = (
       <Button variant="primary" onClick={close}>
         {t('common.close')}
@@ -63,6 +69,15 @@ export function RepromiseModal({ model, actions, words }: { model: PromiseModel;
   } else if (draft && dialog.form) {
     body = <ProposeView model={model} dialog={dialog} draft={draft} form={dialog.form} actions={actions} words={words} />
     footer = <ProposeFooter model={model} dialog={dialog} draft={draft} form={dialog.form} actions={actions} words={words} />
+  }
+  // F-PR-20: the proposal its task opened, decided since: its word and the customer's answer, above the line's dialog.
+  if (dialog.opened && !dialog.done && draft) {
+    body = (
+      <div className="fw-pdt-dialog">
+        <OpenedProposal proposal={dialog.opened} words={words} />
+        {body}
+      </div>
+    )
   }
 
   return (
@@ -248,6 +263,12 @@ function DecisionView({ model, dialog, draft, proposal, actions, words }: { mode
           <span>{t('decide.tell')}</span>
           {holds.tell && holds.accept === null ? <span className="fw-pdt-hint">— {t(holds.tell)}</span> : null}
         </label>
+        {/* F-PR-20: ask the customer to accept the new date (off by default; the date stands either way). */}
+        <label className="fw-pdt-toggle">
+          <Toggle checked={!!dialog.askBrand && !holds.accept} onChange={(next) => actions?.onAskBrand?.(next)} disabled={holds.accept !== null} aria-label={t('decide.askBrand')} />
+          <span>{t('decide.askBrand')}</span>
+        </label>
+        <p className="fw-pdt-hint">{t('decide.askBrandHint')}</p>
       </section>
       {dialog.declining && (
         <Field label={t('decide.declineReason')} hint={t('decide.declineHint')} required>
@@ -287,7 +308,7 @@ function DecisionFooter({ model, dialog, proposal, actions, words }: { model: Pr
         <X size={14} aria-hidden /> {t('decide.declineOpen')}
       </Button>
       <Button variant="primary" heldReason={holds.accept ? t(holds.accept) : busy} onClick={() => actions?.onAccept?.()}>
-        {dialog.busy === 'accept' ? <Spinner size={12} /> : <Check size={14} aria-hidden />} {dialog.tell && !holds.tell ? t('decide.acceptTell') : t('decide.accept')}
+        {dialog.busy === 'accept' ? <Spinner size={12} /> : <Check size={14} aria-hidden />} {t(acceptLabelKey(dialog.tell && !holds.tell, !!dialog.askBrand && !holds.accept)) /* F-PR-20 */}
       </Button>
     </>
   )
@@ -295,7 +316,7 @@ function DecisionFooter({ model, dialog, proposal, actions, words }: { model: Pr
 
 // ---- what happened ---------------------------------------------------------------------------------------------------------
 
-function DoneView({ dialog, draft, words }: { dialog: RepromiseDialog; draft: RepromiseDraft; words: Words }) {
+function DoneView({ dialog, draft, actions, words }: { dialog: RepromiseDialog; draft: RepromiseDraft; actions?: PromiseActions; words: Words }) {
   const { t, locale } = words
   const done = dialog.done!
   const mtm = draft.line.kind === 'MADE_TO_MEASURE'
@@ -308,15 +329,70 @@ function DoneView({ dialog, draft, words }: { dialog: RepromiseDialog; draft: Re
         : done.kind === 'declined'
           ? t('done.declinedBody')
           : t('done.withdrawnBody')
+  // F-PR-20: asked the customer — its link once (a customer without the portal answers by it), then its answer on the proposal.
+  const asked = done.kind === 'accepted' ? (done.answer?.brandAsk ?? null) : null
+  const link = asked?.url ?? null
+  const answer = done.proposal.customerAnswer ?? null
   return (
     <div className="fw-pdt-dialog">
       <Banner tone="success" title={t(`done.${done.kind}`)}>
         {sizes}
       </Banner>
       <p className="fw-pdt-text">{body}</p>
+      {asked ? <p className="fw-pdt-text">{t('done.asked')}</p> : null}
+      {link ? (
+        <Banner
+          tone="info"
+          title={t('link.title')}
+          action={
+            <Button size="sm" onClick={() => actions?.onCopyLink?.(link)}>
+              <Copy size={14} aria-hidden /> {t('link.copy')}
+            </Button>
+          }
+        >
+          <span className="fw-pdt-url">{link}</span>
+          <span className="fw-pdt-hint">{t('link.once')}</span>
+        </Banner>
+      ) : null}
+      {answer ? <CustomerAnswerPart answer={answer} words={words} /> : null}
     </div>
   )
 }
+
+// ---- F-PR-20: the customer's answer on a proposal ------------------------------------------------------------------------------
+
+/** The customer's answer to the new date: its state, when, its own words, the name it signed with, the follow-up task (ours). */
+function CustomerAnswerPart({ answer, words }: { answer: CustomerAnswerRead; words: Words }) {
+  const { t, locale } = words
+  return (
+    <section className="fw-pdt-dialog-part" aria-label={t('answer.title')}>
+      <h3 className="fw-pdt-h3">{t('answer.title')}</h3>
+      <span className="fw-pdt-cell-inline">
+        <Pill tone={CUSTOMER_ANSWER_TONE[answer.state]}>{t(`answer.state.${answer.state}`)}</Pill>
+        {answer.at ? <span className="fw-pdt-hint">{t('answer.at', { time: formatDateTime(answer.at, { locale }) })}</span> : null}
+      </span>
+      {answer.answer ? <p className="fw-pdt-text">{t('answer.words', { words: answer.answer })}</p> : null}
+      {answer.typedName ? <p className="fw-pdt-hint">{t('answer.signed', { name: answer.typedName })}</p> : null}
+      {answer.followUp ? <p className="fw-pdt-hint">{t(`answer.followUp.${answer.followUp.status}`)}</p> : null}
+    </section>
+  )
+}
+
+/** The proposal its task opened, decided since: its state and who decided when, then the customer's answer when asked. */
+function OpenedProposal({ proposal, words }: { proposal: Proposal; words: Words }) {
+  const { t, locale } = words
+  const decision = proposal.decision
+  const answer = proposal.customerAnswer ?? null
+  return (
+    <>
+      <Banner tone="info" title={t('opened.title', { order: proposal.order.number, line: proposal.line.seq, state: t(`proposal.${proposal.state}`) })}>
+        {decision ? (decision.by ? t('opened.decided', { time: formatDateTime(decision.at, { locale }), name: decision.by.name }) : t('opened.decidedNoName', { time: formatDateTime(decision.at, { locale }) })) : null}
+      </Banner>
+      {answer ? <CustomerAnswerPart answer={answer} words={words} /> : <p className="fw-pdt-hint">{t('opened.notAsked')}</p>}
+    </>
+  )
+}
+// ---- end F-PR-20
 
 function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
