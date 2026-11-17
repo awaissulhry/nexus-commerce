@@ -15,6 +15,8 @@ import { ORDERS_VIEW } from '../sales/orders/permissions'
 // B-W2b-385 (NT1:04): a return that arrived after its deadline is seen on the return (sales.returns.view).
 import { SALES_RETURNS_VIEW } from '../sales/returns/permissions'
 import { APPROVALS_VIEW } from '../approvals/permissions'
+// B-TH-012: a company's request numbering is seen under numbering (numbering.view: the admin reads the series).
+import { NUMBERING_VIEW } from '../numbering/permissions'
 // B-W2b-409: a missing proof of exit is seen on its shipment (shipping.view).
 import { SHIPPING_VIEW } from '../shipping/permissions'
 import type { TimerKind } from '../timers/rules'
@@ -58,7 +60,9 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // B-W2b-409 (LOG-089): EXIT_PROOF_MISSING, an export whose proof of exit is still missing after its declaration's days.
 // B-W2b-416 (FIN-050): MARGIN_BELOW_FLOOR, an order whose margin (estimated now, or final) is below its margin floor.
 // B-W2b-GB02 (G146, B-W2b-392's gap): STAMP_DUTY_DUE, a stamp duty quarter not paid N days before its F24 due day.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR', 'STAMP_DUTY_DUE'] as const
+// B-TH-012 (threads plan L2-G03): REQUEST_NUMBERING_MISSING, a company that receives requests (a customer portal on, or
+// inquiry addresses in force) with no active INQUIRY series: a request would wait silently.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR', 'STAMP_DUTY_DUE', 'REQUEST_NUMBERING_MISSING'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -351,6 +355,21 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     recheck: [{ event: 'stamp_duty_quarter.changed', key: 'quarterId' }],
   }),
   // ---- end B-W2b-GB02
+  // ---- B-TH-012: no request waits silently
+  REQUEST_NUMBERING_MISSING: spec({
+    kind: 'REQUEST_NUMBERING_MISSING',
+    trigger: 'CONDITION',
+    // One alert per company that receives requests (a customer's portal is on, or inquiry addresses are in force) and has no
+    // ACTIVE INQUIRY series: the portal's New order is held and a mail to an inquiry address waits in Mail to sort. It clears
+    // once a series is active. The facts say which doors are open, never a customer.
+    recordType: 'Company',
+    view: NUMBERING_VIEW,
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Requests have no numbering', it: 'Le richieste non hanno numerazione' }, threshold: {}, severity: 'CRITICAL', cooldownMinutes: 1440, recipientRole: 'admin' },
+    label: { en: 'Companies whose requests have no numbering', it: 'Aziende le cui richieste non hanno numerazione' },
+    recheck: [],
+  }),
+  // ---- end B-TH-012
 })
 
 /** The kinds of a trigger. */

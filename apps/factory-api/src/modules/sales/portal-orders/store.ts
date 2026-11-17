@@ -33,6 +33,8 @@ export const ORDER_SELECT = {
   partyId: true,
   number: true,
   customerRef: true,
+  // B-TH-105: the customer's own running number ("Your order 12").
+  customerSeq: true,
   status: true,
   orderDate: true,
   currency: true,

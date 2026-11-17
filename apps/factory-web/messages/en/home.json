@@ -603,6 +603,7 @@
       "alerts.MARGIN_BELOW_FLOOR.QUOTED": "The margin of order {label} is below its margin floor: its quote was approved below it.",
       "alerts.STAMP_DUTY_DUE": "The stamp duty of {label} is due by {dueOn} ({days} days left): pay it by F24 (tax code {f24Code}) and record the payment.",
       "alerts.STAMP_DUTY_DUE.LATE": "The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment.",
+      "alerts.REQUEST_NUMBERING_MISSING": "{label} receives requests but has no active request numbering (INQUIRY): New order in the portal is held and mail to its inquiry addresses waits. Set up the series under numbering.",
       "INQUIRY_WAITING.ASSIGNED": "Inquiry {number} from {from} has waited more than a working day for your answer.",
       "INQUIRY_WAITING.NEW": "Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.",
       "INQUIRY_WAITING.blocks": "The customer waits for an answer.",

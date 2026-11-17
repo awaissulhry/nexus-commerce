@@ -270,7 +270,18 @@ export interface PartnerPostInput {
 }
 
 /** POST /portal/threads/<type>/<id>/messages: the person's post into the record's thread (COL-060). */
-export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef, input: PartnerPostInput, idempotencyKey?: string) {
+// ---- B-TH-010: the customer's request words as the first message of the request's thread --------------------------------
+/**
+ * How a post is allowed: a portal person who may comment (portal.comment, the default), or — B-TH-010 — the person who just
+ * sent the request from the portal (modules/sales/portal-requests: portal.orderRequests.manage, checked by its route): their
+ * own words become the request's first message, the same INBOUND PORTAL post by their name.
+ */
+export interface PartnerPostOptions {
+  readonly firstOfRequest?: boolean
+}
+// ---- end B-TH-010
+
+export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef, input: PartnerPostInput, idempotencyKey?: string, options: PartnerPostOptions = {}) {
   const caller = partnerCallerOf(request)
   const draft = { bodyText: cleanBody(input.body), attachments: uniqueIds(input.attachments) }
   const problems = postProblems(draft)
@@ -279,7 +290,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   const opened = await request.withClient(async (client) => {
     const { scope } = await openRecord(client, caller, ref)
     if (caller.session.preview) throw new ForbiddenError(partnerThreadWords('PREVIEW', caller.session.person.locale, caller.session.company.name))
-    if (!can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
+    if (!options.firstOfRequest && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
   })
   let thread = opened
