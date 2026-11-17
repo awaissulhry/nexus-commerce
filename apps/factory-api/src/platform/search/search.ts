@@ -1,3 +1,5 @@
+import type { FactoryClient } from '@nexus/factory-db'
+import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import type { Actor, Grant } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { SearchAnswer, SearchMatch } from '@nexus/factory-domain/search/contracts'
@@ -5,6 +7,9 @@ import { queryWords, SEARCH_LIMITS, type SearchQuery } from '@nexus/factory-doma
 import type { CommandCaller } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
+// B-TH-097: each message hit is read again against its thread (the record type's gate, the thread's scope now).
+import { mayOnThread } from '../threads/records'
+import { scopeOfThread } from '../threads/threads'
 
 /**
  * GET /search (B-W2a-32; PLT-153; design shell.search: the palette's Exact number and Records groups, the All results
@@ -23,7 +28,8 @@ import { ApiError } from '../../core/errors'
  *     words sit (a record's own number and name come first in its text), the screen's company (and tenant-wide records)
  *     before other companies', the newest entry first;
  *   - `counts` per record type (the type filter aside) for the results page's chips; `asOf` = the tenant index's newest
- *     write. Results hold no money (entries have none).
+ *     write. Results hold no money (entries have none);
+ *   - B-TH-097: messages only when asked (type=Message, optionally of one record's thread), each read again against its thread.
  * The query runs as one raw statement of the reader's office scope (row-level security holds the tenant), values bound.
  */
 
@@ -116,7 +122,31 @@ export interface SearchParams {
   readonly type?: string | undefined
   readonly limit: number
   readonly offset: number
+  /** B-TH-097: with type=Message, the messages of this record's thread only. */
+  readonly recordType?: string | undefined
+  readonly recordId?: string | undefined
 }
+
+// ---- B-TH-097 (threads plan TH-9, G11: search inside messages, office only) -----------------------------------------------------
+/**
+ * Messages are found only when asked (type=Message: the results page's Messages chip, "Search in the thread" with its record):
+ * never among the records of the palette or of every type. Their entries are seen as the thread is read (threads.read over the
+ * thread's company, site and party; a gated record type's notes are never indexed: indexers/message.ts); each hit is then read
+ * again here, against its thread as it is NOW (its gate and scope: a thread that took its customer since is that customer's), and
+ * named with the record it opens. A hit that fails is left out, unannounced.
+ */
+export const MESSAGE_TYPE = 'Message'
+
+async function messageRecords(client: FactoryClient, actor: Actor, ids: readonly string[]): Promise<Map<string, { type: string; id: string }>> {
+  const seen = new Map<string, { type: string; id: string }>()
+  if (ids.length === 0) return seen
+  const rows = await client.message.findMany({ where: { id: { in: [...ids] } }, select: { id: true, thread: { select: { recordType: true, recordId: true, companyId: true, siteId: true, partyId: true } } } })
+  for (const row of rows) {
+    if (mayOnThread(actor, THREADS_READ, row.thread.recordType, scopeOfThread(row.thread))) seen.set(row.id, { type: row.thread.recordType, id: row.thread.recordId })
+  }
+  return seen
+}
+// ---- end B-TH-097
 
 const matchOf = (row: Pick<Row, 'exact' | 'inside'>): SearchMatch => (row.exact ? 'number' : row.inside ? 'words' : 'similar')
 
@@ -132,7 +162,13 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
     const visible = visibleSql(actorOf(context), values)
     if (!visible) return { ...empty, asOf }
     const sql = matchSql(query, values)
-    const where = `${visible} AND ${sql.match}`
+    // B-TH-097: messages only when asked (and then, with a record, that record's thread alone).
+    const asked = params.type === MESSAGE_TYPE
+    const thread =
+      asked && params.recordType && params.recordId
+        ? ` AND EXISTS (SELECT 1 FROM "Message" m JOIN "Thread" t ON t."tenantId" = m."tenantId" AND t.id = m."threadId" WHERE m.id = e."recordId" AND t."recordType" = ${values.add(params.recordType)} AND t."recordId" = ${values.add(params.recordId)}::uuid)`
+        : ''
+    const where = `${visible} AND ${sql.match}${asked ? thread : ` AND e."recordType" <> '${MESSAGE_TYPE}'`}`
     const countValues = values.list.length
     const typed = params.type ? ` AND e."recordType" = ${values.add(params.type)}` : ''
     // B-W2b-36: with no company chosen this term is left out (a bare `true DESC` is a constant ORDER BY: PostgreSQL refuses it).
@@ -154,11 +190,14 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
       ...values.list.slice(0, countValues),
     )
     const total = rows[0]?.total ?? (params.offset > 0 ? (params.type ? (counts.find((entry) => entry.recordType === params.type)?.count ?? 0) : counts.reduce((sum, entry) => sum + entry.count, 0)) : 0)
+    // B-TH-097: each message hit read again against its thread now, with the record it opens.
+    const records = await messageRecords(client, actorOf(context), rows.filter((row) => row.recordType === MESSAGE_TYPE).map((row) => row.recordId))
+    const shown = rows.filter((row) => row.recordType !== MESSAGE_TYPE || records.has(row.recordId))
     return {
       query: query.text,
       words: [...query.words],
       tooShort: false,
-      results: rows.map((row) => ({
+      results: shown.map((row) => ({
         recordType: row.recordType,
         recordId: row.recordId,
         number: row.number,
@@ -170,6 +209,7 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
         siteId: row.siteId,
         match: matchOf(row),
         indexedAt: toUtcIso(new Date(row.indexedAt)),
+        ...(records.has(row.recordId) ? { record: records.get(row.recordId)! } : {}),
       })),
       counts,
       total,

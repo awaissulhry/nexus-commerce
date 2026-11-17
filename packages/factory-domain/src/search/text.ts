@@ -50,6 +50,21 @@ export function foldSearchText(text: string): string {
 /** An amount with its currency (`€ 1.200,00`, `1200.50 EUR`): never search text. */
 const MONEY_WORD = /(^|\s)(€|eur|usd|gbp|chf)\s?\d|\d\s?(€|eur|usd|gbp|chf)(\s|$)/i
 
+// ---- B-TH-097 (threads plan TH-9, G11: search inside messages): a message is free words, and people type prices in them. Its
+// entry holds its words WITHOUT the amounts (an amount with its currency, either way round, is cut out), and a part that would
+// still read as one is left out whole: searchTextOf's guard never stops the index on a message.
+const AMOUNTS = /(€|eur|usd|gbp|chf)\s?\d[\d.,']*|\d[\d.,']*\s?(€|eur|usd|gbp|chf)/gi
+
+/** Whether a text holds an amount with its currency (searchTextOf refuses such a part). */
+export const holdsAmount = (text: string): boolean => MONEY_WORD.test(text)
+
+/** The text without its amounts (`the jacket at € 45,00 each` → `the jacket at each`); empty when an amount would still show. */
+export function withoutAmounts(text: string): string {
+  const cut = text.replace(AMOUNTS, ' ').replace(/\s+/g, ' ').trim()
+  return holdsAmount(cut) ? '' : cut
+}
+// ---- end B-TH-097
+
 export class SearchTextError extends Error {
   override name = 'SearchTextError'
 }

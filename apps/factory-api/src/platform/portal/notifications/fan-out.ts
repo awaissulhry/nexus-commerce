@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
-import { GROUP_WINDOW_MS, groupKeyFor } from '@nexus/factory-domain/notifications/rules'
+import { batchGroupKey, GROUP_WINDOW_MS, groupKeyFor } from '@nexus/factory-domain/notifications/rules'
 import { portalRecordUrl } from '@nexus/factory-domain/portal/home/links'
 import { PARTNER_MESSAGE_TEMPLATES, partnerSentence, topicOfNotice } from '@nexus/factory-domain/portal/notifications/messages'
 import { frequencyOf, type PartnerEmailFrequency, type PartnerEmailTopic } from '@nexus/factory-domain/portal/notifications/topics'
@@ -27,7 +27,8 @@ import { preferencesOf } from './settings'
  * The readers are the party's people who could use the portal now (../tasks/people.ts partyReaders: portal ON, active, before
  * their end of access, roles reaching the record's company); each draft keeps those its rule says the record is for. A row
  * names the person's party (the database checks it), the record, the message key and params (never an amount, never an office
- * person), and joins its group (same person, record and category within 15 minutes). One `partner_notification.created` per
+ * person), and joins its group (same person, record and category within 15 minutes; B-TH-045: same person, batch and category
+ * when the draft names a batch). One `partner_notification.created` per
  * party tells its sessions to read their bell again.
  *
  * After the command: every row whose topic the person gets AS IT HAPPENS (a transactional topic always) is mailed at once,
@@ -87,7 +88,8 @@ export async function partnerFanOut(caller: CommandCaller, event: Pick<EventEnve
           for (const reader of await partyReaders(tx, tenantId, draft.partyId, draft.companyId, now)) {
             if (!draft.forReader(reader) || made.some((row) => row.userId === reader.personId)) continue
             const id = newId()
-            const previous = await latestOfGroup(tx, reader.personId, draft.record.type, draft.record.id, template.category, new Date(now.getTime() - GROUP_WINDOW_MS))
+            // B-TH-045: a batch of ours (one answer to several records) is one group per person and kind; else the record's group.
+            const groupKey = draft.batchId ? batchGroupKey(draft.batchId, template.category) : groupKeyFor(await latestOfGroup(tx, reader.personId, draft.record.type, draft.record.id, template.category, new Date(now.getTime() - GROUP_WINDOW_MS)), id, now)
             const inserted = await tx.notification.createMany({
               data: [
                 {
@@ -105,7 +107,7 @@ export async function partnerFanOut(caller: CommandCaller, event: Pick<EventEnve
                   messageKey: draft.messageKey,
                   params: draft.params as Prisma.InputJsonValue,
                   actorId: null,
-                  groupKey: groupKeyFor(previous, id, now),
+                  groupKey,
                   createdAt: now,
                   updatedAt: now,
                 },

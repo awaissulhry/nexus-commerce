@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import PostalMime from 'postal-mime'
-import { addressesOf, cleanMessageId, cleanName, cleanSubject, MAX_KEPT_ATTACHMENTS, messageIdsOf, type SkipReason } from '@nexus/factory-domain/email-in/rules'
+import { addressesOf, cleanMessageId, cleanName, cleanSubject, inlinePictureName, keepsInlinePart, MAX_KEPT_ATTACHMENTS, messageIdsOf, type SkipReason } from '@nexus/factory-domain/email-in/rules'
 import { cleanInboundText, sanitiseMailHtml, textOfHtml } from '@nexus/factory-domain/email-in/sanitise'
 import { cleanFileName, KIND_RULES, normaliseContentType } from '../files/rules'
 import { mailboxesOf } from './notification'
@@ -9,8 +9,9 @@ import { mailboxesOf } from './notification'
  * Reading a raw mail (plan A1 §3.7 "Content"; COL-025, COL-026), in the worker, outside any transaction: postal-mime
  * parses the RFC 5322 bytes (MIME parts, encodings, RFC 2047 words); the HTML is sanitised and the text kept
  * (factory-domain email-in/sanitise); the headers the sorting needs are cleaned; each attachment is either kept (an
- * ATTACHMENT file may hold its type and size: platform/files rules) or listed as skipped with why. Nothing here touches
- * the database or the network.
+ * ATTACHMENT file may hold its type and size: platform/files rules) or listed as skipped with why — B-TH-088: a picture
+ * pasted in the mail is kept like one, unless it is small or repeated (a signature logo). Nothing here touches the database
+ * or the network.
  */
 
 /** An attachment to keep: its bytes go to the file store. */
@@ -63,19 +64,26 @@ export async function parseRawMail(raw: Buffer): Promise<ParsedMail> {
   const html = sanitiseMailHtml(email.html)
   const text = cleanInboundText(email.text && email.text.trim() !== '' ? email.text : textOfHtml(email.html))
   let kept = 0
+  const bodies = email.attachments.map((attachment) => bytesOf(attachment.content))
+  const hashes = bodies.map((body) => createHash('sha256').update(body).digest('hex'))
+  // B-TH-088: how often each picture is in the mail (a signature logo comes back in every quoted reply).
+  const copies = new Map<string, number>()
+  for (const hash of hashes) copies.set(hash, (copies.get(hash) ?? 0) + 1)
   const parts = email.attachments.map((attachment, index) => {
-    const body = bytesOf(attachment.content)
+    const body = bodies[index]!
     const contentType = sniffedType(normaliseContentType(attachment.mimeType ?? ''), body)
-    const name = cleanFileName(attachment.filename ?? '') ?? `attachment-${index + 1}`
+    const inline = attachment.related === true
+    const name = cleanFileName(attachment.filename ?? '') ?? (inline ? inlinePictureName(contentType, index + 1) : `attachment-${index + 1}`)
     const skipped = (reason: SkipReason) => ({ kept: false as const, part: { name, contentType, sizeBytes: body.length, reason } })
-    // A part of the HTML (multipart/related: a logo, a signature picture) is not an attachment of the record.
-    if (attachment.related === true) return skipped('inline')
+    // A part of the HTML (multipart/related) is kept only as a pasted picture (B-TH-088): a small or repeated one is a signature's
+    // logo or icon, never a file of the record.
+    if (inline && !keepsInlinePart({ contentType, sizeBytes: body.length, copies: copies.get(hashes[index]!) ?? 1 })) return skipped('inline')
     if (body.length === 0) return skipped('empty')
     if (!ATTACHMENT.contentTypes.includes(contentType)) return skipped('type_not_allowed')
     if (body.length > ATTACHMENT.maxBytes) return skipped('too_large')
     if (kept >= MAX_KEPT_ATTACHMENTS) return skipped('too_many')
     kept += 1
-    return { kept: true as const, part: { name, contentType, body, sha256: createHash('sha256').update(body).digest('hex') } }
+    return { kept: true as const, part: { name, contentType, body, sha256: hashes[index]! } }
   })
   return {
     from: { address: addressesOf([from?.address])[0] ?? null, name: cleanName(from?.name) },

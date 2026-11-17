@@ -18,12 +18,17 @@ const P2 = '00000000-0000-7000-8000-0000000000d2'
 const KEY = Buffer.alloc(32, 7)
 
 describe('partner e-mail settings (B-W2b-167, COL-063)', () => {
-  it('locks order, delivery and invoice mail on as it happens; everything else is a daily summary until changed', () => {
+  it('locks order, delivery and invoice mail on as it happens; messages as it happens and everything else a daily summary until changed', () => {
     const stored = new Map<PartnerEmailTopic, PartnerEmailFrequency>([['ORDERS', 'OFF'], ['DATES', 'WEEKLY']])
     expect(TRANSACTIONAL_TOPICS).toEqual(['ORDERS', 'SHIPPED', 'INVOICES'])
     expect(frequencyOf('ORDERS', stored)).toBe('INSTANT')
     expect(frequencyOf('DATES', stored)).toBe('WEEKLY')
-    expect(frequencyOf('MESSAGES', stored)).toBe('DAILY')
+    // B-TH-045 (Owner decision 5): messages as it happens until the person changes it; the other non-essential topics daily.
+    expect(frequencyOf('MESSAGES', stored)).toBe('INSTANT')
+    expect(frequencyOf('DOCUMENTS', stored)).toBe('DAILY')
+    expect(frequencyOf('MESSAGES', new Map([['MESSAGES', 'DAILY']]))).toBe('DAILY')
+    expect(frequencyOf('MESSAGES', rowsOfChange({ nonEssential: 'OFF' }))).toBe('OFF')
+    expect(settingsOf(stored).find((entry) => entry.topic === 'MESSAGES')).toEqual({ topic: 'MESSAGES', frequency: 'INSTANT', locked: false, stored: false })
     expect(settingsOf(stored).find((entry) => entry.topic === 'SHIPPED')).toEqual({ topic: 'SHIPPED', frequency: 'INSTANT', locked: true, stored: false })
   })
 

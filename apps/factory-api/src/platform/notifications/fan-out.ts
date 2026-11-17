@@ -6,7 +6,7 @@ import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time
 import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { events as notificationEvents } from '@nexus/factory-domain/notifications/events'
-import { GROUP_WINDOW_MS, groupKeyFor, type MessageKey, type NotificationCategory } from '@nexus/factory-domain/notifications/rules'
+import { batchGroupKey, GROUP_WINDOW_MS, groupKeyFor, type MessageKey, type NotificationCategory } from '@nexus/factory-domain/notifications/rules'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { defineHandler, type EventHandler } from '../outbox/dispatch'
 import { heldRoles } from '../auth/roles/access'
@@ -28,7 +28,8 @@ import { matrixOf } from './preferences/store'
  * the rows insert with skipDuplicates on (person, event type, event id): a replayed event makes no second notification.
  * A rule builds each reader's params FOR them from their live roles (an amount only with its grain, marked with it) and
  * re-checks that they still may see the record. A new notification joins the group of the same person, record and
- * category when one came within 15 minutes (PLT-142 grouping). One `notification.created` per fan-out tells the screens
+ * category when one came within 15 minutes (PLT-142 grouping) — or, B-TH-045, of the same person, batch and category when its
+ * event names a batch (one action on several records). One `notification.created` per fan-out tells the screens
  * to read their own bell again (it names nobody).
  */
 
@@ -46,6 +47,8 @@ export interface Draft {
   readonly params: Record<string, Prisma.InputJsonValue | null>
   /** Who caused it (never told about it themselves); null: the system. */
   readonly actorId: string | null
+  /** B-TH-045: the batch of the action that caused it (its event's `batchId`): the reader's rows of one batch are one group. */
+  readonly batchId?: string | null
 }
 
 /** A person as the rules see them: ACTIVE, with their live office roles (two-factor taken as proved). Null: not active. */
@@ -138,7 +141,8 @@ export async function fanOut(caller: CommandCaller, event: Pick<EventEnvelope, '
         const choice = await choiceOf(draft)
         if (!choice.made) continue
         const id = newId()
-        const previous = await latestOfGroup(tx, draft.userId, draft.record.type, draft.record.id, draft.category, new Date(now.getTime() - GROUP_WINDOW_MS))
+        // B-TH-045: a batch's rows are one group per reader and kind (whatever their records); else the record's group.
+        const groupKey = draft.batchId ? batchGroupKey(draft.batchId, draft.category) : groupKeyFor(await latestOfGroup(tx, draft.userId, draft.record.type, draft.record.id, draft.category, new Date(now.getTime() - GROUP_WINDOW_MS)), id, now)
         rows.push({
           id,
           userId: draft.userId,
@@ -153,7 +157,7 @@ export async function fanOut(caller: CommandCaller, event: Pick<EventEnvelope, '
           messageKey: draft.messageKey,
           params: draft.params as Prisma.InputJsonValue,
           actorId: draft.actorId,
-          groupKey: groupKeyFor(previous, id, now),
+          groupKey,
           createdAt: now,
           ...(choice.inApp ? {} : { readAt: now, doneAt: now }),
         })
