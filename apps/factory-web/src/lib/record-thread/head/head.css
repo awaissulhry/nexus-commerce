@@ -13,6 +13,12 @@
 .fw-rth-counts { display: inline-flex; align-items: center; gap: var(--nds-space-4); flex: none; }
 .fw-rth-count { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-variant-numeric: tabular-nums; }
 .fw-rth-menu { flex: none; }
+/* B-TH-229 (T1-F03): the owner's tile — a 24 px round button (the name in its tooltip and accessible name). */
+.fw-rth-owner { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; padding: 0; border: 0; border-radius: var(--nds-radius-pill); background: transparent; color: var(--nds-text-2); cursor: pointer; }
+span.fw-rth-owner { cursor: default; }
+.fw-rth-owner:hover { background: var(--nds-surface-hover); }
+.fw-rth-owner:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rth-owner-none { font-size: var(--nds-font-size-sm); }
 .fw-rth.is-compact { padding-left: var(--nds-space-12); }
 /* The count chips fold into the "⋯" on a narrow dock from the first paint (the view's measure then adds their counts to the doors). */
 @container fw-rth (max-width: 559px) { .fw-rth-counts { display: none; } }
@@ -29,3 +35,6 @@
 .fw-rth-frame-label { margin: 0 0 var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
 .fw-rth-feed { height: 96px; background: var(--nds-surface-sunken); }
 .fw-rth-open { padding: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
+/* B-TH-229: "Change owner…" */
+.fw-rth-ownerdialog { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-rth-ownerhint { margin: 0; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }

@@ -68,6 +68,8 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
   view: CustomerCase,
   cases: [
     { id: 'th-223-list', label: 'Orders & requests: the open ones (requests first)', model: betaCase(), note: 'One list: Number (their PO, then the customer’s own number: “Your request 7”, “Your order 11” — never INQ-, SO-, RQ-), Kind, Subject, Date, State (true states), Wanted or promised, Pieces, Value (price roles), Next shipment. The request that needs them on top. New order is the band’s primary.' },
+    // B-TH-230 (TH-2): New messages — the person's own, on their own requests and orders only; a door to the conversation.
+    { id: 'th-230-new-messages', label: 'New messages: "● 2 new" on a request and an order of this customer', model: betaCase(() => ({ unread: { [REQUESTS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[0]!.id]: { newCount: 1, lastAt: '2026-11-16T15:10:00.000Z' } } })), note: 'One read for the rows shown: the count holds only messages shared with this customer (never an office note) and only its own requests and orders. The cell opens the request’s page or the order’s Messages.' },
     { id: 'th-223-all', label: 'Everything', model: betaChip('ALL'), note: 'Every request and every order, closed ones too.' },
     { id: 'th-223-requested', label: 'Requested: the requests and the catalogue order still waiting for us', model: betaChip('REQUESTED') },
     { id: 'th-223-closed', label: 'Closed requests: never vanished', model: betaChip(CLOSED_REQUESTS), note: 'Declined, closed and made-into-an-order requests stay findable under their own choice.' },

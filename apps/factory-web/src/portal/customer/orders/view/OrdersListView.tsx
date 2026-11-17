@@ -13,6 +13,12 @@ import type { ListKey } from '../../../../list-frame/model'
 import type { RequestRow } from '../../requests/api'
 import type { InTransitRead, InTransitRow, OrderRow, OrdersRead } from '../api'
 import { kindKey, listChips, listRows, ownRef, recordHref, rowHref, rowState, shipmentTone, transitSteps, yoursOf, type ListChip, type ListRow } from '../model'
+// B-TH-230: the New messages column (LastMessageCell): the person's own new messages, their party's threads only.
+import { threadHref } from '../model'
+import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
+import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/model'
+import { useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
 import { useOrderWords } from '../words'
 import { Loading, PricesNote, ReadFailed } from './parts'
 import '../orders.css'
@@ -50,6 +56,8 @@ export interface OrdersListViewModel {
   newOrderHref?: string | null
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
+  /** B-TH-230: the person's own new messages per row (one read of the rows shown); null/absent: no column. */
+  unread?: UnreadMap | null
 }
 
 export interface OrdersListActions {
@@ -79,6 +87,15 @@ const subscribeWide = (onChange: () => void) => {
 const useWide = (): boolean => useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => false)
 
 export function OrdersListView({ model, actions }: { model: OrdersListViewModel; actions?: OrdersListActions }) {
+  return (
+    <WithMessages namespaces={[LAST_MESSAGE_NS]}>
+      <List model={model} actions={actions} />
+    </WithMessages>
+  )
+}
+
+function List({ model, actions }: { model: OrdersListViewModel; actions?: OrdersListActions }) {
+  const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const wide = useWide()
   const words = useOrderWords()
   const { t, locale, day, time } = words
@@ -224,13 +241,17 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
       { ...column('subject', t('col.subject'), SubjectCell, { flex: 1.2, minWidth: 124 }), valueGetter: ({ data }) => subjectOf(data) },
       { ...column('date', t('col.date'), DateCell, { flex: 0.6, minWidth: 104 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? day(data.request.receivedAt.slice(0, 10)) : data.order.orderedOn ? day(data.order.orderedOn) : '') : '') },
       { ...column('status', t('col.status'), StatusCell, { flex: 0.9, minWidth: 136 }), valueGetter: ({ data }) => (data ? rowState(data, locale).words : '') },
+      // B-TH-230: New messages — the person's own; the cell is a door to the record's conversation.
+      ...(latest.current.model.unread
+        ? [{ ...column('newMessages', l('column'), ({ data }: ICellRendererParams<ListRow>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={threadHref(latest.current.model.prefix, data)} record={yoursOf(data, locale) ?? t(kindKey(data))} /> : null), { flex: 0.6, minWidth: 112 }), headerTooltip: l('columnHint'), valueGetter: ({ data }: { data?: ListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined) } as ColDef<ListRow>]
+        : []),
       { ...column('promise', t('col.wanted'), PromiseCell, { flex: 0.7, minWidth: 124 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? (data.request.wantedDate ? day(data.request.wantedDate) : '') : data.order.promiseDate ? day(data.order.promiseDate) : '') : '') },
       { ...column('pieces', t('col.pieces'), PiecesCell, { flex: 0.8, minWidth: 104 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? (data.request.pieces > 0 ? t('list.piecesAsked', { count: data.request.pieces }) : '') : [t('list.piecesShipped', { shipped: data.order.pieces.shipped, ordered: data.order.pieces.ordered }), data.order.pieces.open > 0 ? t('list.piecesOpen', { count: data.order.pieces.open }) : null].filter(Boolean).join(' · ')) : '') },
       ...(seesPrices ? [{ ...column('value', t('col.value'), ValueCell, { flex: 0.7, minWidth: 104 }), valueGetter: ({ data }: { data?: ListRow }) => (data?.kind === 'order' ? words.money(data.order.netAmount, data.order.currency) : '') }] : []),
       ...(wide ? [{ ...column('next', t('col.nextShipment'), NextCell, { flex: 1, minWidth: 140 }), valueGetter: ({ data }) => (data?.kind === 'order' && data.order.nextShipment ? [data.order.nextShipment.date ? day(data.order.nextShipment.date) : null, data.order.nextShipment.carrierName].filter(Boolean).join(' · ') : '') } as ColDef<ListRow>] : []),
       { ...column('actions', t('col.actions'), MoreCell, { width: 72, minWidth: 72, maxWidth: 72 }), pinned: 'right', suppressHeaderMenuButton: true },
     ]
-  }, [t, locale, day, words, ds.refPair, seesPrices, wide])
+  }, [t, locale, day, words, ds.refPair, seesPrices, wide, l, model.unread /* B-TH-230 */])
 
   const count = model.selected.length
   const bulk = (

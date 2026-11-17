@@ -22,6 +22,10 @@ import { NAMESPACE as DEPTH } from '../depth/model'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import { brandName, NAMESPACE as SHEET } from './sheet/model'
 import type { PictureLoader } from './sheet/parts'
+// B-TH-230: the New messages column — one read of the page's rows, again on a live message.
+import { useLiveBus } from '../../../../shell/live/use-live'
+import { readUnreadWith } from '../../../../lib/last-message-cell/api'
+import { useUnread } from '../../../../lib/last-message-cell/use-unread'
 
 /**
  * `/w/<company>/sales/orders` (SCR-038): reads the orders of the saved rows view and the search from the address (the
@@ -272,8 +276,17 @@ function OrdersContainer() {
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
 
+  // ---- B-TH-230: the reader's own new messages per order on the page (threads.read; one POST /threads/unread of ≤ 200 rows) ----
+  const readsThreads = session.permissions.includes('threads.read')
+  const [unreadTick, setUnreadTick] = useState(0)
+  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads && layout === 'list')
+  const unreadRows = useMemo(() => (layout === 'list' ? (list.items ?? []).map((row) => ({ recordType: 'SalesOrder', id: row.id })) : []), [layout, list.items])
+  const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  // ---- end B-TH-230
+
   const model: OrdersListModel = {
     prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins,
+    unread: readsThreads ? unread : null, // B-TH-230
     customer, // B-TH-201
     // ---- B-TH-225 / B-TH-226 ----
     brand: brandNamed,

@@ -3,6 +3,8 @@ import { newInviteDraft } from '../../../record-panels/share/model'
 import type { RecordShares } from '../../../record-panels/share/api'
 import { BRAND_ALPHA } from '../../testing/two-brands'
 import { doorHolds, viewsOffered, whoAnswers, type HeadAbilities, type HeadModel } from './model'
+// B-TH-229: the API's waiting (B-TH-028) and owner.
+import { answersOf, type HeadOwner } from './model'
 import { HeadCase, type HeadCaseModel } from './view/HeadCase'
 
 /**
@@ -95,6 +97,12 @@ const DIALOGS: HeadCaseModel['dialogs'] = {
   },
 }
 
+// ---- B-TH-229: the API's head (B-TH-028) — the one waiting rule in working time, the owner, "2 new"
+const BEA: HeadOwner = { id: id(12), name: 'Bea Esempio', active: true, source: 'ASSIGNEE' }
+const api = (over: Partial<HeadModel> = {}, can: HeadAbilities = ALL): HeadModel =>
+  head({ answers: answersOf({ on: 'US', since: '2026-11-17T06:40:00.000Z', workingMinutes: 242, calendar: true, amber: false, thresholdDays: 3 }), owner: BEA, ownerHeld: null, newCount: 2, ...over }, can)
+// ---- end B-TH-229
+
 const both = [438, 718] as const
 const all = [438, 718, 375] as const
 const c = (headModel: HeadModel, frames: HeadCaseModel['frames'] = all, open: HeadCaseModel['open'] = null): HeadCaseModel => ({ head: headModel, frames, dialogs: DIALOGS, open })
@@ -106,6 +114,15 @@ export const designScreen = defineDesignScreen<HeadCaseModel>({
   cases: [
     { id: 'waiting-on-us', label: 'Waiting on us · 4 h, at 438, 718 and 375 px', model: c(head()), note: 'The last shared message came from Brand Alpha (an office note never flips it). Hover or focus the pill: since when, in clock hours. At 438 px the count chips fold into the "⋯" (their counts on the doors’ lines); the phone head shows the record and the pill.' },
     { id: 'waiting-on-customer', label: 'Waiting on customer · 2 d', model: c(head({ answers: { on: 'party', since: '2026-11-15T09:00:00.000Z' }, counts: {} }), both), note: 'A person of ours wrote last; no count chip (all zero). The "⋯" still holds the five tools (R-ACT).' },
+    // ---- B-TH-229
+    { id: 'th-229-waiting', label: 'Waiting on us · 4 h (working hours), the owner, 2 new', model: c(api()), note: 'The API’s ONE rule (B-TH-028): 4 working hours on the company calendar since the customer’s message, not amber yet (3 working days for an order). “2 new” are your own new messages; the band’s Thread button says the same. The owner’s tile: the name on hover; a click (or “⋯ › Change owner…”) picks who answers.' },
+    { id: 'th-229-amber', label: 'Amber: a request waiting on us over 1 working day', model: c(api({ record: 'INQ-2026-0041', answers: answersOf({ on: 'US', since: '2026-11-13T08:10:00.000Z', workingMinutes: 1460, calendar: true, amber: true, thresholdDays: 1 }), newCount: 0 })), note: 'A request goes by its state: New / In progress waits on us, amber after 1 working day — the same rule as Incoming’s tile and Today. No new message: no chip.' },
+    { id: 'th-229-customer', label: 'Waiting on the customer · never amber', model: c(api({ answers: answersOf({ on: 'CUSTOMER', since: '2026-11-11T09:00:00.000Z', workingMinutes: 2380, calendar: true, amber: false, thresholdDays: 3 }), newCount: 0, owner: { ...BEA, source: 'SET' } }), both), note: 'It waits on the customer: the time only, never amber (it is not ours to answer).' },
+    { id: 'th-229-clock', label: 'No company calendar: clock hours, said', model: c(api({ answers: answersOf({ on: 'US', since: '2026-11-17T06:40:00.000Z', workingMinutes: 242, calendar: false, amber: false, thresholdDays: 3 }) }), both), note: 'Without a calendar the minutes are clock minutes; the tooltip says so.' },
+    { id: 'th-229-owner-inactive', label: 'Owner who left; nobody', model: c(api({ owner: { ...BEA, active: false, source: 'MAKER' }, newCount: 120 }), both), note: 'An owner no longer active is named “(inactive)”; 120 new → “99+ new”.' },
+    { id: 'th-229-owner-held', label: 'Change owner held (no right to write)', model: c(api({ owner: null, ownerHeld: { key: 'held.noRight', params: { right: RIGHTS.follow } } }), both), note: 'Nobody owns it yet: “—”. Without threads.post the tile does not open and “⋯ › Change owner…” is held with the right it needs.' },
+    { id: 'th-229-change-owner', label: 'Change owner…', model: c(api(), both, 'owner'), note: 'The office people who read this thread, me first; the current owner greyed out; ↑ ↓ and Enter choose. “The record’s own owner” appears once someone was chosen.' },
+    // ---- end B-TH-229
     { id: 'view-notes', label: 'View: Office notes (the chip)', model: c(head({ view: 'notes' }), both), note: 'A chip names the view when it is not All; its × shows everything again.' },
     { id: 'menu-held', label: 'A door held with its reason', model: c(head({}, { ...ALL, approve: false, share: false })), note: 'Open "⋯": Ask a partner to approve and Share with a partner are there, held with the right they need — never hidden.' },
     { id: 'no-party', label: 'A record without a customer', model: c(head({ answers: null }, ALL, false), both), note: 'No pill (nobody to wait on); Ask and Share held "This record has no customer or supplier".' },

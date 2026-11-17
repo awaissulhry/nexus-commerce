@@ -46,6 +46,17 @@ describe('true states only', () => {
     expect(stateLinks(ordered, '/p/X', 'it', t('it')).order).toEqual({ href: '/p/X/orders/o-1', label: 'Il vostro ordine 12' })
   })
 
+  // ---- B-TH-228 (on B-TH-025): a request made straight into an order (no quote) reads the ORDER's own state on its page (W37)
+  it('a request made straight into an order reads the order\'s own state: waiting for approval is never "confirmed"', () => {
+    expect(requestStateOf({ status: 'ORDERED', quoteStatus: null, orderStatus: 'PENDING_APPROVAL' })).toBe('ORDER_WAITING')
+    expect(requestStateOf({ status: 'ORDERED', quoteStatus: null, orderStatus: 'CONFIRMED' })).toBe('ORDER_CONFIRMED')
+    expect(requestStateOf({ status: 'ORDERED', quoteStatus: null, orderStatus: 'CANCELLED' })).toBe('CLOSED')
+    const straight = requestView('ORDER_CONFIRMED', { made: { quote: null, order: { id: 'o-2', number: '#12', yourNumber: customerNumberOf('ORDER', 12) } } })
+    // The link names the customer's own order number, never the office's SO- series.
+    expect(stateLinks(straight, '/p/X', 'en', t('en'))).toEqual({ order: { href: '/p/X/orders/o-2', label: 'Your order 12' }, quote: null })
+  })
+  // ---- end B-TH-228
+
   it('quotes our question of a request that waits for the customer; the answer ends it', () => {
     const line = (id: string, side: 'company' | 'partner', body: string): ThreadLine => ({ id, side, body, at: '2026-11-17T09:00:00Z' })
     const thread = [line('1', 'partner', 'Forty jackets'), line('2', 'company', 'Which sizes?')]

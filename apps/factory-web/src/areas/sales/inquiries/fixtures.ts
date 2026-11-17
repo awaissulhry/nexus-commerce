@@ -148,6 +148,8 @@ function ListDesign({ model }: { model: DesignModel }) {
 }
 
 const OPEN_ROWS = ROWS.filter((one) => ['NEW', 'ASSIGNED', 'NEED_INFO'].includes(one.status))
+// B-TH-230: the reader's own new messages on two requests (made-up times).
+const UNREAD = { [ROWS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[2]!.id]: { newCount: 120, lastAt: '2026-11-16T15:10:00.000Z' } }
 const CHANGED = { ...requestDraftOf(VIEW), wantedDate: '2027-01-27', targetPrice: '142', lines: [...requestDraftOf(VIEW).lines, { ...emptyLine('demo-3'), description: 'Kidney belt in black', quantity: '20' }] }
 
 export const designScreen = defineDesignScreen<DesignModel>({
@@ -166,6 +168,9 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'th-216-companies', label: 'TH-1b · Two companies: the Company column (a funnel) and its chip', model: page({ companies: DEMO_COMPANIES.map((entry) => ({ id: entry.id, name: entry.name })), address: at({ company: DEMO_COMPANIES[0].id }) }) },
     { id: 'th-216-production', label: 'TH-1b · The production manager: reads every request, no target price, every sales action held "Needs the sales permission"', model: page({ selected: [ROWS[0]!.id] }, 'production') },
     // ── end B-TH-216 ──
+    // ── B-TH-230 (TH-2): New messages (the reader's own) and the Waiting column amber by the one rule ──
+    { id: 'th-230-new-messages', label: 'TH-2 · New messages: "● 2 new · 10:42" on the requests the customer answered; the Waiting column amber past 1 working day', model: page({ unread: UNREAD }), note: 'One read for the page (POST /threads/unread, ≤ 200 rows); a count only on rows you may open; the cell opens the request beside the list with its thread at the first new message. Waiting on us past 1 working day is amber (the one rule: the thread head and Today say the same); waiting on the customer is never amber.' },
+    // ── end B-TH-230 ──
     { id: 'inbox', label: 'The queue: open inquiries, the oldest waiting first; tiles, waiting in working time, "You" / "A colleague"', model: page(), note: 'Enter opens the inquiry in its DetailModal; x / Space select; ⋯ and right-click the verbs. Keys only in the footer icon.' },
     { id: 'tile-new', label: 'Tile: New (its chip in the filter row)', model: page(tile('NEW', OPEN_ROWS.filter((one) => one.status === 'NEW'))) },
     { id: 'tile-waiting-us', label: 'Tile: Waiting for us over 1 working day', model: page(tile('WAITING_US', OPEN_ROWS.filter((one) => one.waiting.overdue))) },

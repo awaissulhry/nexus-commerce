@@ -30,9 +30,9 @@
     "quote": "Open the quote {number}"
   },
   "held": {
-    "invoices": "Needs the invoices right (invoices.view)",
-    "shipping": "Needs the shipping right (shipping.view)",
-    "quotes": "Needs the quotes right (quotes.view)"
+    "invoices": "Needs the invoices right",
+    "shipping": "Needs the shipping right",
+    "quotes": "Needs the quotes right"
   },
   "invoiced": {
     "NONE": "None",

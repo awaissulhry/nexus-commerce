@@ -7,6 +7,8 @@ import { isApiError } from '../../../lib/api/errors'
 import { formatDateTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { fetchThread, postMessage, type PartnerMessageRead, type PartnerRecord, type PartnerThreadRead } from '../api'
+// B-TH-229: reading marks the conversation read for this portal person.
+import { markThreadRead } from '../api'
 import { usePortalFrame, usePortalLive, usePortalUnsaved } from '../frame'
 import { THREAD_BODY_LIMIT, threadHeldKey } from '../thread-model'
 import { ThreadView } from '../view/ThreadView'
@@ -77,6 +79,28 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
 
   // A new message on this record (ours by mail or in the app, a colleague's in the portal): read the newest page again.
   usePortalLive({ onChange: (change) => (change.type.startsWith('thread.') || change.type === 'partner_notification.created' ? void load() : undefined), onReconnect: () => void load() })
+
+  // B-TH-229 (B-TH-027, T1-F04, PL3-F08): reading marks the conversation read for this person — after the messages were on screen a
+  // second while the page is in view, up to the newest one read; once per read (a re-read after it has nothing new). Only the
+  // person's own mark: the DS PartnerThread draws no new mark and nobody sees who read what.
+  useEffect(() => {
+    const newest = read?.messages[0]?.id
+    if (state !== 'ready' || !newest || (read?.reading?.newCount ?? 0) <= 0) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const later = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (document.visibilityState === 'visible') void markThreadRead(frame.api, type, id, newest).catch(() => undefined)
+      }, 1_000)
+    }
+    if (document.visibilityState === 'visible') later()
+    const onVisible = () => document.visibilityState === 'visible' && later()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [state, read, frame.api, type, id])
 
   // "Ask a question" opens the box with the focus in it.
   useEffect(() => {

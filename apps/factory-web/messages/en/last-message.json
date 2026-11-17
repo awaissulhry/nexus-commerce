@@ -1,0 +1,12 @@
+{
+  "column": "New messages",
+  "columnHint": "Your own new messages on the record since you last read its thread. A click opens the thread at the first new one.",
+  "cell": {
+    "count_one": "{count} new",
+    "count_other": "{count} new",
+    "many": "99+ new",
+    "none": "No new messages",
+    "label_one": "{count} new message on {record}: open the thread at the first new one",
+    "label_other": "{count} new messages on {record}: open the thread at the first new one"
+  }
+}

@@ -1,0 +1,41 @@
+/* B-TH-230 — the New messages cell: the link colour (a door), a dot in the info tone, the count, when the newest came. */
+.fw-lmc {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+  white-space: nowrap;
+}
+.fw-lmc.is-door {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+.fw-lmc.is-door:hover .fw-lmc-count {
+  text-decoration: underline;
+}
+.fw-lmc.is-door:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+  border-radius: var(--nds-radius-xs);
+}
+.fw-lmc-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-info);
+}
+.fw-lmc-when {
+  font-weight: 400;
+  color: var(--nds-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fw-lmc-empty {
+  display: inline-block;
+  min-width: 1px;
+}
