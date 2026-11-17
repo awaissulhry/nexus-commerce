@@ -1,0 +1,212 @@
+/*
+ * B-TH-213 — RecordFrame (PL1, PL4; design kit §2): the record band in the shell's band row, the body and the docked thread in a
+ * 3 : 2 grid (gap 16) from 1280 px, sticky under the band with its own scroll; one column below, the thread a full-width view behind
+ * the band's button. No page max-width (no dead space at 1920). Design-system tokens only.
+ */
+
+/* The record band in the shell's band row (the slot) or, without one, at the top of the page. */
+.fw-band-slot {
+  min-width: 0;
+}
+
+.fw-band-slot > .nds-detailhdr {
+  border-bottom: 0;
+}
+
+.fw-rcf-band {
+  margin: calc(-1 * var(--nds-space-24)) calc(-1 * var(--nds-space-30)) var(--nds-space-16);
+}
+
+.fw-rcf-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.fw-rcf-meta-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-rcf-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.fw-rcf-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex: none;
+}
+
+.fw-rcf-primary {
+  display: inline-flex;
+}
+
+.fw-rcf-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-rcf-keylist {
+  margin: 0;
+  display: grid;
+  gap: var(--nds-space-8);
+}
+
+.fw-rcf-keyrow {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-rcf-keyrow dt {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.fw-rcf-keyrow dd {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-rcf-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* ── the frame ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-rcf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+  align-items: start;
+}
+
+.fw-rcf-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-rcf-dock {
+  display: none;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  height: var(--fw-rcf-h, calc(100dvh - 180px));
+}
+
+.fw-rcf-back {
+  flex: none;
+}
+
+/* The thread column fills the dock (its feed scrolls, the box sits at its foot). */
+.fw-rcf-dock > .fw-rt-column {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+@media (min-width: 1280px) {
+  .fw-rcf.has-thread:not(.is-hidden) {
+    grid-template-columns: var(--fw-rcf-cols, minmax(0, 3fr) minmax(0, 2fr));
+  }
+
+  .fw-rcf.has-thread:not(.is-hidden) > .fw-rcf-dock {
+    display: flex;
+    position: sticky;
+    top: var(--fw-rcf-top, 64px);
+  }
+
+  .fw-rcf.has-thread:not(.is-hidden)[data-width='full'] > .fw-rcf-body {
+    display: none;
+  }
+}
+
+@media (max-width: 1279px) {
+  .fw-rcf.has-thread[data-view='thread'] > .fw-rcf-body {
+    display: none;
+  }
+
+  .fw-rcf.has-thread[data-view='thread'] > .fw-rcf-dock {
+    display: flex;
+  }
+}
+
+@media (max-width: 719px) {
+  .fw-rcf-keys,
+  .fw-rcf-meta-more,
+  .fw-rcf-live {
+    display: none;
+  }
+
+  /* The band's tools wrap under the title instead of running off the left edge. */
+  .fw-rcf-actions {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  /* PL4: with the thread open full screen the band keeps the title, the pill, the Thread button and ⋯; the step waits. */
+  .fw-rcf-hdr.is-thread .fw-rcf-primary {
+    display: none;
+  }
+
+  .fw-rcf-band {
+    margin: calc(-1 * var(--nds-space-12)) calc(-1 * var(--nds-space-16)) var(--nds-space-12);
+  }
+
+  /* PL4: the thread full screen, edge to edge inside the page's gutters. */
+  .fw-rcf.has-thread[data-view='thread'] > .fw-rcf-dock {
+    margin-inline: calc(-1 * var(--nds-space-16));
+  }
+}
+
+/* ── the one notice (B-TH-214: at most one banner in the body column, the rest behind "N more notices") ─────────── */
+.fw-rcf-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* No notice to say: no box (and no gap in the body column) from the first paint. */
+.fw-rcf-notices:not(:has(> .fw-rcf-notices-list > *)) {
+  display: none;
+}
+
+.fw-rcf-notices-list {
+  display: contents;
+}
+
+.fw-rcf-notices:not(.is-open) .fw-rcf-notices-list > :not(:first-child) {
+  display: none;
+}
+
+.fw-rcf-notices-more {
+  align-self: flex-start;
+}
+
+/* The print view (`?print=1`): the band, the body and the thread's print form, one after the other. */
+.fw-rcf-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}

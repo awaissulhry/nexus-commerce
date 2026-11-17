@@ -265,7 +265,7 @@ export function RecordChain({ order, model }: { order: Order; model: OrderRecord
       href: order.chain.quote && model.can.viewQuotes ? `${model.prefix}/sales/quotes/${order.chain.quote.id}` : null,
     },
     { key: 'order', label: t('chain.order'), value: t(`status.${order.status}`), href: null },
-    { key: 'deposit', label: t('chain.deposit'), value: t(`gate.state.${deposit.state}`), href: `${record}?tab=money` },
+    { key: 'deposit', label: t('chain.deposit'), value: t(`gate.state.${deposit.state}`), href: `${record}?tab=shipments` /* B-TH-214 */ },
     {
       key: 'workOrders',
       label: t('chain.workOrders'),
@@ -282,7 +282,7 @@ export function RecordChain({ order, model }: { order: Order; model: OrderRecord
       key: 'invoices',
       label: t('chain.invoices'),
       value: order.chain.invoices.length === 0 ? '—' : t('chain.count', { count: order.chain.invoices.length }),
-      href: order.chain.invoices.length === 0 ? null : `${record}?tab=money`,
+      href: order.chain.invoices.length === 0 ? null : `${record}?tab=shipments` /* B-TH-214 */,
     },
   ]
   return (

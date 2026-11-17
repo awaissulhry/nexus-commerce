@@ -170,18 +170,19 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   const [freeze, againFreeze] = usePart(on('lines', 'changes'), (signal) => getFreeze(api, id!, signal))
   const [changes, againChanges] = usePart(on('changes'), (signal) => getChanges(api, id!, signal))
   const [materials, againMaterials, putMaterials] = usePart(on('lines'), (signal) => getMaterials(api, id!, signal))
-  const [confirmation, againConfirmation, putConfirmation] = usePart(at && tab === 'documents' ? at : null, (signal) => getConfirmation(api, id!, signal))
-  const [techPack, againTechPack] = usePart(can.inquiries && at && tab === 'documents' ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
-  const [milestones, againMilestones] = usePart(can.planning && at && tab === 'dates' ? at : null, (signal) => getMilestones(api, id!, signal))
+  // ---- B-TH-214 (tabs 9 → 5): the confirmation is on Confirmation & changes; the tech pack and the dates on Production & dates ----
+  const [confirmation, againConfirmation, putConfirmation] = usePart(at && tab === 'changes' ? at : null, (signal) => getConfirmation(api, id!, signal))
+  const [techPack, againTechPack] = usePart(can.inquiries && at && tab === 'production' ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
+  const [milestones, againMilestones] = usePart(can.planning && at && tab === 'production' ? at : null, (signal) => getMilestones(api, id!, signal))
   const sites = useMemo(() => (order ? forecastSites(order, session.sites) : []), [order, session.sites])
-  const [forecasts, againForecasts] = usePart<ReadonlyMap<string, Forecast>>(can.promise && at && tab === 'dates' && sites.length > 0 ? `${at}:${sites.join(',')}` : null, async (signal) => {
+  const [forecasts, againForecasts] = usePart<ReadonlyMap<string, Forecast>>(can.promise && at && tab === 'production' && sites.length > 0 /* B-TH-214 */ ? `${at}:${sites.join(',')}` : null, async (signal) => {
     const lines = await Promise.all(sites.map((site) => listPromiseLines(api, site, { q: order!.number, limit: 300 }, signal).then((answer) => answer.lines).catch(() => [])))
     return forecastsOf(lines.flat(), id!)
   })
 
-  // The newest confirmation's PDF (Documents tab): a presigned address the browser reads (60 s).
+  // The newest confirmation's PDF (Confirmation & changes, B-TH-214): a presigned address the browser reads (60 s).
   const newestFile = confirmation?.value?.versions[0]?.fileId ?? null
-  const [confirmationPdf, againPdf] = usePart(tab === 'documents' && newestFile && can.files ? newestFile : null, async () => storeUrl((await downloadLink(api, newestFile!)).download.url))
+  const [confirmationPdf, againPdf] = usePart(tab === 'changes' && newestFile && can.files ? newestFile : null, async () => storeUrl((await downloadLink(api, newestFile!)).download.url))
 
   const [dialog, setDialog] = useState<DepthDialog | null>(null)
   const [busy, setBusy] = useState(false)
