@@ -190,6 +190,9 @@
       "Complaint": "Reclamo",
       "RepairOrder": "Riparazione",
       "Inquiry": "Richiesta",
+      "Project": "Progetto",
+      "Style": "Modello",
+      "SampleRound": "Giro campione",
       "other": "Documento"
     }
   },
@@ -313,7 +316,8 @@
       "portal_approvals_view": "Vedere cosa ti chiediamo di approvare",
       "portal_samples_view": "Vedere i tuoi campioni, i tuoi modelli in sviluppo e le loro schede tecniche",
       "portal_production_view": "Vedere i tuoi ordini in produzione: fase, data prevista, stato e a chi tocca",
-      "portal_production_urgency": "Segnare urgenti o normali i tuoi ordini in produzione, entro le urgenze concesse"
+      "portal_production_urgency": "Segnare urgenti o normali i tuoi ordini in produzione, entro le urgenze concesse",
+      "portal_projects_view": "Vedere i progetti della tua organizzazione a cui ti abbiamo aggiunto, con i tuoi record collegati e i messaggi condivisi con te"
     }
   },
   "display": {

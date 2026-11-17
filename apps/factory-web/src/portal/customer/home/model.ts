@@ -4,6 +4,9 @@ import type { MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import type { Locale } from '../../../lib/i18n/locales'
 import { isPreviewable, mainFileOf } from '../documents/preview/model'
 import type { ApprovalRead, Conversation, CustomerDocument, DocumentsRead, HomeRead, OpenItemsRead, OrderRow, OrdersRead } from './api'
+// B-TH-253: the projects the person was added to join the Messages card (PROJ.portal-F01).
+import type { ProjectStatus } from '@nexus/factory-domain/projects/rules'
+import type { PortalProject } from '../projects/api'
 // B-TH-238: the Messages card reads the customer's requests (its own numbers and true states, never an office series).
 import type { RequestRow } from '../requests/api'
 import { requestHref, requestOrder, yourNumberText } from '../requests/model'
@@ -195,7 +198,8 @@ export function replyHref(prefix: string, conversation: Pick<Conversation, 'reco
 /** One row of the Messages card, as the view draws it (words resolved by the view from `kind` and the facts). */
 export interface MessageRow {
   readonly key: string
-  readonly kind: 'needsYou' | 'conversation' | 'account'
+  // B-TH-253: 'project' — a project the person was added to (even before a first message), named by its name.
+  readonly kind: 'needsYou' | 'conversation' | 'account' | 'project'
   /** Where it opens: the request's page, the record's page with its thread in view, the account's conversation. */
   readonly href: string
   /** Their reference and the customer's own one (never an office series: the API's partner views say "#7"). */
@@ -210,6 +214,8 @@ export interface MessageRow {
   readonly last: { readonly from: 'you' | 'us'; readonly at: string; readonly excerpt: string | null } | null
   /** The messages new to this person (its own read marks; the party's shared messages only). */
   readonly newCount: number
+  /** B-TH-253 (project rows): its status in one word and its target date; null where only its conversation was read. */
+  readonly project?: { readonly status: ProjectStatus | null; readonly targetDate: string | null }
 }
 
 export interface MessagesCard {
@@ -223,10 +229,20 @@ export interface MessagesCard {
   readonly account: MessageRow
   /** More conversations than the card shows. */
   readonly more: number
+  /**
+   * B-TH-253 (PROJ.portal-F01): the projects the person was added to — the open ones even before a first message, a closed one
+   * while its conversation is among the recent ones —, new messages first, then the API's order (target date). Named by their
+   * name, never the office's project number. A project's conversation is not repeated among the conversations.
+   */
+  readonly projects: readonly MessageRow[]
+  /** More projects than the card shows. */
+  readonly projectsMore: number
 }
 
 export const MESSAGES_NEEDS_YOU = 3
 export const MESSAGES_CONVERSATIONS = 5
+/** B-TH-253: the most project rows the card shows. */
+export const MESSAGES_PROJECTS = 3
 
 /**
  * The Messages card from the session's OWN reads only (GET /portal/inquiries?state=OPEN for what needs the customer, GET
@@ -245,6 +261,8 @@ export function messagesCardOf(input: {
   /** New messages per waiting request id (POST /threads/unread). */
   readonly unread: Readonly<Record<string, number>>
   readonly recordPage: (type: string, id: string) => string | null
+  /** B-TH-253: GET /portal/projects (the projects the person was added to); absent or empty without portal.projects.view. */
+  readonly projects?: readonly PortalProject[]
 }): MessagesCard {
   const asked = requestOrder(input.waiting).filter((row) => row.state.needsYou)
   const shownAsked = asked.slice(0, MESSAGES_NEEDS_YOU)
@@ -267,7 +285,8 @@ export function messagesCardOf(input: {
     }
   })
   const others = input.conversations
-    .filter((conversation) => conversation.record.type !== 'Party' && !(conversation.record.type === 'Inquiry' && askedIds.has(conversation.record.id)))
+    // B-TH-253: a project's conversation is its project row (named by its name), never a conversation row with the office's number.
+    .filter((conversation) => conversation.record.type !== 'Party' && conversation.record.type !== 'Project' && !(conversation.record.type === 'Inquiry' && askedIds.has(conversation.record.id)))
     // New messages first (the order of the API — the newest message first — kept inside each part).
     .map((conversation, index) => ({ conversation, index }))
     .sort((a, b) => Number(b.conversation.newCount > 0) - Number(a.conversation.newCount > 0) || a.index - b.index)
@@ -299,17 +318,45 @@ export function messagesCardOf(input: {
     last: lastOf(accountConversation),
     newCount: accountConversation?.newCount ?? 0,
   }
-  return { needsYou, needsYouCount: input.needsYouCount ?? asked.length, conversations, account, more: Math.max(0, others.length - conversations.length) }
+  // ---- B-TH-253: the project rows
+  const listed = input.projects ?? []
+  const listedIds = new Set(listed.map((project) => project.id))
+  const projectEntries = [
+    ...listed.filter((project) => project.status !== 'CLOSED' || conversationOf.has(`Project:${project.id}`)).map((project) => ({ id: project.id, project, conversation: conversationOf.get(`Project:${project.id}`) })),
+    ...input.conversations.filter((conversation) => conversation.record.type === 'Project' && !listedIds.has(conversation.record.id)).map((conversation) => ({ id: conversation.record.id, project: null, conversation })),
+  ]
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => Number((b.entry.conversation?.newCount ?? 0) > 0) - Number((a.entry.conversation?.newCount ?? 0) > 0) || a.index - b.index)
+    .map(({ entry }) => entry)
+  const projects = projectEntries.slice(0, MESSAGES_PROJECTS).map(({ id, project, conversation }): MessageRow => {
+    const own = input.recordPage('Project', id)
+    return {
+      key: `Project:${id}`,
+      kind: 'project',
+      href: own ? `${input.prefix}${own}#messages` : `${input.prefix}/open/Project/${encodeURIComponent(id)}#messages`,
+      // Never the office's project number (an office series counts every customer's projects): the name names it.
+      theirs: null,
+      ours: null,
+      yours: null,
+      subject: project?.name ?? conversation?.record.subtitle ?? null,
+      state: null,
+      last: lastOf(conversation),
+      newCount: conversation?.newCount ?? 0,
+      project: { status: project?.status ?? null, targetDate: project?.targetDate ?? null },
+    }
+  })
+  // ---- end B-TH-253
+  return { needsYou, needsYouCount: input.needsYouCount ?? asked.length, conversations, account, more: Math.max(0, others.length - conversations.length), projects, projectsMore: Math.max(0, projectEntries.length - projects.length) }
 }
 
 /** The card's numbers (what needs the customer, its new messages): what a test holds still while another customer moves. */
 export function messagesCountsOf(card: MessagesCard): { readonly needsYou: number; readonly newMessages: number; readonly conversations: number } {
-  const rows = [...card.needsYou, ...card.conversations, card.account]
+  const rows = [...card.needsYou, ...card.projects, ...card.conversations, card.account]
   return { needsYou: card.needsYouCount, newMessages: rows.reduce((sum, row) => sum + row.newCount, 0), conversations: card.conversations.length + card.more }
 }
 
 /** Nothing to show but the account's offer (the card says "No messages yet" above it). */
-export const messagesEmpty = (card: MessagesCard): boolean => card.needsYou.length === 0 && card.conversations.length === 0 && card.account.last === null
+export const messagesEmpty = (card: MessagesCard): boolean => card.needsYou.length === 0 && card.projects.length === 0 && card.conversations.length === 0 && card.account.last === null
 // ── end B-TH-238
 
 // ── What waits for you: the rows the Approve pop-up answers ────────────────────────────────────────────────────────────

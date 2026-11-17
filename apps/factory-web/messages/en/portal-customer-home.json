@@ -126,7 +126,19 @@
     "account": "Your conversation with {company}",
     "accountLabel": "Your conversation with {company}",
     "accountEmpty": "Ask us anything here: we answer in the portal.",
-    "write": "Write to us"
+    "write": "Write to us",
+    "projects": "Projects",
+    "projectsLabel": "Projects we added you to",
+    "projectTag": "Project",
+    "projectStatus": {
+      "ON_HOLD": "On hold",
+      "CLOSED": "Closed"
+    },
+    "projectTarget": "Target date {date}",
+    "projectNone": "No messages yet",
+    "openProject": "Open the project {name}",
+    "projectsMore_one": "And {count} more project we added you to.",
+    "projectsMore_other": "And {count} more projects we added you to."
   },
   "welcome": {
     "title": "Welcome, {name}.",

@@ -16,6 +16,9 @@ import { fetchRequests } from '../requests/api'
 import { REQUESTS as BETA_REQUESTS } from '../requests/design-data'
 import { fetchRecentMessages } from './api'
 import { betaMessagesOf } from './fixtures'
+// B-TH-253: the projects in the Messages card.
+import { betaProjectConversation } from './fixtures'
+import { BETA_PROJECTS } from '../projects/design-data'
 import { messagesCardOf, messagesCountsOf, messagesEmpty } from './model'
 import {
   answerProblem,
@@ -428,3 +431,52 @@ describe('B-TH-238 — Home’s Messages: what needs the customer first, then ne
   })
 })
 // ---- end B-TH-238
+
+// ---- B-TH-253 (PROJ.portal-F01; walls W06, W38): the projects the person was added to, in Home's Messages card
+describe('B-TH-253 — the projects in Home’s Messages card', () => {
+  const renderCase = (id: string, locale: 'it' | 'en' = 'en') => {
+    const entry = designScreen.cases.find((item) => item.id === id)!
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+  }
+
+  it('open projects even before a first message, new messages first; a closed one only with a recent conversation; not repeated', () => {
+    const card = betaMessagesOf('en', { projects: BETA_PROJECTS, conversations: [betaProjectConversation('en')] }).card!
+    expect(card.projects.map((row) => [row.subject, row.newCount, row.project?.status])).toEqual([
+      ['Winter touring line', 1, 'ACTIVE'],
+      ['Club vests with embroidered names', 0, 'ON_HOLD'],
+    ])
+    expect(card.projects[0]).toMatchObject({ kind: 'project', href: `/p/${BRAND_BETA.code}/projects/${BETA_PROJECTS[0]!.id}#messages`, last: { from: 'us' }, ours: null, theirs: null })
+    expect(card.projects[1]).toMatchObject({ last: null, project: { targetDate: BETA_PROJECTS[1]!.targetDate } })
+    // The project's conversation is its project row, never a conversation row.
+    expect(card.conversations.some((row) => row.key.startsWith('Project:'))).toBe(false)
+    expect(card.projectsMore).toBe(0)
+    expect(messagesCountsOf(card).newMessages).toBe(1)
+    expect(messagesEmpty(card)).toBe(false)
+    // A closed project with a recent conversation stays (its messages are there to read).
+    const closedTalk = { ...betaProjectConversation('en'), record: { ...betaProjectConversation('en').record, id: BETA_PROJECTS[2]!.id } }
+    expect(betaMessagesOf('en', { projects: BETA_PROJECTS, conversations: [closedTalk] }).card!.projects.map((row) => row.project?.status)).toEqual(['CLOSED', 'ACTIVE', 'ON_HOLD'])
+  })
+
+  it('without the right (no list) no project row is made up; a project conversation still never shows the office’s number', () => {
+    const none = betaMessagesOf('en', { waiting: [], conversations: [] }).card!
+    expect(none.projects).toEqual([])
+    const talkOnly = betaMessagesOf('en', { waiting: [], conversations: [betaProjectConversation('en')] }).card!
+    expect(talkOnly.projects).toHaveLength(1)
+    expect(talkOnly.projects[0]).toMatchObject({ subject: 'Winter touring line', ours: null, project: { status: null, targetDate: null } })
+    expect(talkOnly.conversations).toEqual([])
+  })
+
+  it('on screen: each project by its name with its status and target date, never PRJ-…, nothing of Brand Alpha — it and en', () => {
+    const en = renderCase('th-253-projects')
+    expect(en).toContain('Projects')
+    expect(en).toContain('Winter touring line')
+    expect(en).toContain('On hold')
+    expect(en).toContain('Target date')
+    expect(en).not.toContain('Rain jackets, spring range')
+    expect(en).not.toMatch(/PRJ-\d{2}-\d{3}/)
+    expect(en.indexOf('We need something from you')).toBeLessThan(en.indexOf('Winter touring line'))
+    expect(en.indexOf('Winter touring line')).toBeLessThan(en.indexOf('#12'))
+    for (const locale of ['it', 'en'] as const) expect(scanText(renderCase('th-253-projects', locale), BRAND_ALPHA)).toEqual([])
+    expect(renderCase('th-253-projects', 'it')).toContain('Progetti')
+  })
+})

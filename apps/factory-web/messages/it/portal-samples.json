@@ -261,5 +261,23 @@
     "REFUSED": "Rifiutato",
     "WITHDRAWN": "Ritirata",
     "EXPIRED": "Scaduta"
+  },
+  "projects": {
+    "title": "Progetti",
+    "hint": "I progetti a cui ti abbiamo aggiunto: una conversazione su più modelli, campioni o ordini.",
+    "status": {
+      "ACTIVE": "Attivo",
+      "ON_HOLD": "In pausa",
+      "CLOSED": "Chiuso"
+    },
+    "target": "Data obiettivo {date}",
+    "open": "Apri",
+    "openOf": "Apri il progetto {name}"
+  },
+  "discuss": {
+    "col": "Messaggi",
+    "label": "Scrivici",
+    "styleOf": "Scrivici del modello {code}",
+    "roundOf": "Scrivici di {round}"
   }
 }
