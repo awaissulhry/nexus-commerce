@@ -9,6 +9,13 @@ import { ALWAYS_RULES, holdersOf } from '../model' // B-TH-232
 import type { RoleTemplate } from '../new-role/api'
 import { copyName, createProblem, newRoleErrors, offeredTemplates, slugOf, templateHeld } from '../new-role/model'
 import { bodyOf, draftDiff, draftOf, editHeld, grainToggled, refusalWords, reviewRows, saveProblem, toggled, type RoleReview } from './model'
+// ---- B-TH-269: the role on RecordFrame (tabs 4 → 3, the docked thread) ----
+import { readFileSync } from 'node:fs'
+import type { ComponentType } from 'react'
+import type { DesignScreen } from '../../../../lib/design/design-screen'
+import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
+import { designScreen as rolesScreen } from '../fixtures'
+import { ROLE_MERGED_TABS, ROLE_TABS, ROLE_THREAD_RIGHTS, roleTabOf, roleThreadMounted } from '../model'
 
 /** B-W2b-413: New role and Change role, pure (PLT-031). */
 
@@ -117,3 +124,80 @@ describe('B-TH-232 the role screen says plainly what a customer limit covers', (
   })
 })
 // ── end B-TH-232 ──
+
+// ── B-TH-269 (threads plan TH-6; 08-tabs O-ADM-ROLE; the rule of picture 38): the role on RecordFrame ──
+describe('B-TH-269 the role on RecordFrame — Permissions · Scope rules · Users, the thread docked (notes only, roles.view)', () => {
+  const screen = rolesScreen as unknown as DesignScreen<unknown>
+  const draw = (id: string, locale: 'it' | 'en' = 'en') => {
+    const found = screen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return renderView(screen.view as ComponentType<{ model: unknown }>, found.model, locale)
+  }
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+
+  it('three tabs; every old ?tab= keeps working (R-8): Activity → Permissions with the thread opened', () => {
+    expect(ROLE_TABS).toEqual(['permissions', 'rules', 'users'])
+    expect(ROLE_MERGED_TABS).toEqual({ activity: 'permissions' })
+    for (const tab of ROLE_TABS) expect(roleTabOf(tab)).toBe(tab)
+    expect(roleTabOf('activity')).toBe('permissions')
+    expect(roleTabOf('constructor')).toBe('permissions')
+    expect(roleTabOf(null)).toBe('permissions')
+    const html = draw('role-thread')
+    for (const tab of ROLE_TABS) expect(html).toContain(`?tab=${tab}`)
+    expect(html).not.toContain('?tab=activity')
+    for (const word of ['Permissions', 'Scope rules', 'Users']) expect(textOf(html)).toContain(word)
+    for (const word of ['Permessi', 'Regole di ambito', 'Utenti']) expect(textOf(draw('role-thread', 'it'))).toContain(word)
+  })
+
+  it('the thread is mounted only with threads.read AND roles.view (B-TH-005: the API gates Role threads by roles.view)', () => {
+    expect(ROLE_THREAD_RIGHTS).toEqual(['threads.read', 'roles.view'])
+    expect(roleThreadMounted(new Set(['threads.read', 'roles.view']))).toBe(true)
+    expect(roleThreadMounted(new Set(['threads.read']))).toBe(false)
+    expect(roleThreadMounted(new Set(['roles.view']))).toBe(false)
+    const container = readFileSync(new URL('../RoleRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('roleThreadMounted(held)')
+  })
+
+  it('ONE thread docked open beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock hook', () => {
+    for (const id of ['role-thread', 'role-rules', 'role-users', 'w2b-413-role-edit']) {
+      const html = draw(id)
+      expect(html.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(html, id).toContain('aria-label="Thread tools"')
+      expect(html, id).not.toContain('fw-rp-tabs')
+      expect(html, id).not.toContain('fw-adm-record-dock')
+      expect(html, id).not.toMatch(/class="fw-rcf has-thread is-hidden"/)
+    }
+    const container = readFileSync(new URL('../RoleRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread docked record=\{record\}[^>]*party=\{null\}/)
+    expect(container).not.toContain('useThreadDock')
+    expect(container).not.toContain('useRecordTab')
+    const view = readFileSync(new URL('../view/RoleRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../_shared/record-frame/RecordFrame'")
+    expect(view).not.toContain("from '../../shared/view/RecordFrame'")
+    expect(view).not.toContain("tab === 'activity'")
+  })
+
+  it('without roles.view: no thread, no Thread button', () => {
+    const html = draw('role-no-thread')
+    expect(html).not.toContain('class="fw-rcf-dock"')
+    expect(html).not.toContain('aria-label="Thread tools"')
+  })
+
+  it('W03: an admin thread has no outside party — notes only, no "Reply to", no e-mail', () => {
+    const dock = textOf(dockOf(draw('role-thread')))
+    expect(dock).not.toMatch(/Reply to (?!the customer)/)
+    expect(dock).not.toMatch(/@[a-z0-9-]+\.example/)
+  })
+
+  it('ONE pill in the band; every banner in the one notice of the body column, never above the thread', () => {
+    const html = draw('role-custom')
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    expect(html.indexOf('class="fw-rcf-notices')).toBeGreaterThan(-1)
+    expect(html.indexOf('class="fw-rcf-notices')).toBeLessThan(dockAt)
+    expect(dockOf(html)).not.toContain('fw-rcf-notices')
+    // An archived copy's one step is Restore (the band's primary); Archive lives in the band's ⋯.
+    expect(textOf(draw('w2b-413-role-archived'))).toContain('Restore')
+    expect(readFileSync(new URL('../view/RoleRecordView.tsx', import.meta.url), 'utf8')).toMatch(/id: 'archive'/)
+  })
+})
+// ── end B-TH-269 ──

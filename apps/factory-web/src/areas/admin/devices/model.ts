@@ -285,8 +285,26 @@ export function printerBody(draft: PrinterDraft): { name: string; relayTarget: s
 
 // ---- a device record ----
 
-export const DEVICE_TABS = ['binding', 'status', 'activity'] as const
+// ---- B-TH-269 (threads plan TH-6; 08-tabs O-ADM-DEV; the rule of picture 38): tabs 3 → 2. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"); Station & mode and Status stay.
+export const DEVICE_TABS = ['binding', 'status'] as const
 export type DeviceTab = (typeof DEVICE_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Station & mode with the thread opened (RecordFrame reads the address). */
+export const DEVICE_MERGED_TABS: Readonly<Record<string, DeviceTab>> = Object.freeze({ activity: 'binding' })
+export function deviceTabOf(value: string | null | undefined): DeviceTab {
+  const asked = value ?? ''
+  if ((DEVICE_TABS as readonly string[]).includes(asked)) return asked as DeviceTab
+  return Object.hasOwn(DEVICE_MERGED_TABS, asked) ? DEVICE_MERGED_TABS[asked]! : 'binding'
+}
+/**
+ * B-TH-005 (thread-G02, GDPR art. 4 inside the office): a device's thread speaks of who uses it, so the API asks devices.view beside
+ * threads.read (THREAD_GATES); the page mounts the thread only when the person holds both.
+ */
+export const mayReadDeviceThread = (permissions: Iterable<string>): boolean => {
+  const held = new Set(permissions)
+  return held.has('threads.read') && held.has('devices.view')
+}
+// ---- end B-TH-269
 
 export interface DeviceRecordModel {
   prefix: string
@@ -304,7 +322,8 @@ export interface DeviceRecordModel {
   now: string
   /** The floor app version the server serves now (B-W2a-42). */
   currentVersion?: string | null
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   /** A binding draft (fixture). */
   draft?: BindingDraft | null
   /** The site's workers for a personal phone (null: not read, or no `workers.view`). */

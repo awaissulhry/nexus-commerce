@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { at, COMPANIES, inShell, NOW, panels, PREFIX } from '../shared/fixtures'
+import { at, COMPANIES, inShell, NOW, PREFIX } from '../shared/fixtures'
+// ---- B-TH-269: the connection's docked thread in the design cases (notes only: an admin record has no party, W03) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { InboundDelivery, IntegrationAccount, IntegrationCall, SendingIdentity } from './api'
 import type { MailDomainModel } from './mail/model'
@@ -248,7 +250,8 @@ export const deliveryModel = (over: Partial<DeliveryModel> = {}): DeliveryModel 
 
 // ---- SCR-087 ----
 
-type Case = { page: 'list'; model: ConnectionsViewModel } | { page: 'record'; model: ConnectionRecordModel; dock?: boolean }
+// B-TH-269: `noThread` — a person without threads.read or integrations.view (B-TH-005): no dock, no Thread button.
+type Case = { page: 'list'; model: ConnectionsViewModel } | { page: 'record'; model: ConnectionRecordModel; noThread?: boolean }
 
 /** Two running services, a paused one and a "Not connected" row (the second company has no SDI). */
 const PICKED = [ACCOUNTS[0]!.id, ACCOUNTS[3]!.id, ACCOUNTS[4]!.id, `missing-SDI-${CHOICES[1]!.id}`]
@@ -260,9 +263,9 @@ const list = (over: Partial<ConnectionsViewModel> = {}): Case => ({
 })
 const withDelivery = (over: Partial<DeliveryModel>, page: Partial<ConnectionsViewModel> = {}): Case => list({ ...page, delivery: deliveryModel(over) })
 const ledger = <T,>(items: readonly T[] | null, more: string | null = null, problem: string | null = null): Ledger<T> => ({ items, problem, more })
-const record = (index: number, over: Partial<ConnectionRecordModel> = {}, dock = false): Case => ({
+const record = (index: number, over: Partial<ConnectionRecordModel> = {}, noThread = false): Case => ({
   page: 'record',
-  dock,
+  noThread,
   model: {
     prefix: PREFIX,
     tab: 'overview',
@@ -281,8 +284,9 @@ const record = (index: number, over: Partial<ConnectionRecordModel> = {}, dock =
 function ConnectionsDesign({ model }: { model: Case }) {
   if (model.page === 'list') return inShell('/admin/connections', createElement(ConnectionsView, { model: model.model }))
   const account = model.model.account
-  const panel = account ? panels({ type: 'IntegrationAccount', id: account.id, companyId: account.companyId }, account.label, 'history') : null
-  return inShell(`/admin/connections/${account?.id ?? 'x'}`, createElement(ConnectionRecordView, { model: { ...model.model, dockOpen: model.dock }, panels: panel }))
+  // B-TH-269: the account's thread docked beside every tab (notes only), with threads.read and integrations.view; none without them.
+  const thread = account && !model.noThread ? designDockedThread({ recordType: 'IntegrationAccount', record: account.label, party: null }) : null
+  return inShell(`/admin/connections/${account?.id ?? 'x'}`, createElement(ConnectionRecordView, { model: model.model, thread }))
 }
 
 export const designScreen = defineDesignScreen<Case>({
@@ -383,8 +387,14 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'record-inbound', label: 'Connection: received messages', model: record(3, { tab: 'inbound' }), note: 'Never a message body.' },
     { id: 'record-inbound-empty', label: 'Connection: nothing received', model: record(2, { tab: 'inbound', inbound: ledger([]) }) },
     { id: 'record-inbound-none', label: 'Connection: a service that sends nothing', model: record(1, { tab: 'inbound', inbound: ledger([]) }) },
-    { id: 'record-activity', label: 'Connection: activity', model: record(3, { tab: 'activity' }) },
-    { id: 'record-dock', label: 'Connection: history beside the overview (≥ 1280 px)', model: record(3, {}, true) },
+    // ---- B-TH-269: Activity went (its tools are in the thread's "⋯"); the thread docks beside every tab.
+    {
+      id: 'record-dock',
+      label: 'Connection: the thread docked beside the overview',
+      model: record(3),
+      note: 'B-TH-269: notes only (an admin record has no party), read only with integrations.view beside threads.read (B-TH-005). The old ?tab=activity address lands here with the thread open.',
+    },
+    { id: 'record-no-thread', label: 'Connection: without integrations.view or threads.read (no thread)', model: record(3, {}, true), note: 'No dock and no Thread button.' },
     { id: 'record-pause', label: 'Connection: pause, confirm', model: record(3, { confirm: { accountId: ACCOUNTS[3]!.id, pause: true } }) },
     { id: 'record-viewer', label: 'Connection: someone who only reads', model: record(3, { can: { manage: false } }) },
     { id: 'record-not-found', label: 'Connection: not found', model: { page: 'record', model: { prefix: PREFIX, tab: 'overview', account: null, problem: 'problem.notFound', companyName: null, can: { manage: true }, calls: ledger(null), failedOnly: false, inbound: ledger(null), inboundStatus: null, now: NOW } } },

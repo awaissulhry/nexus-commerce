@@ -118,8 +118,6 @@
   "record": {
     "backTo": "Torna a {name}",
     "dangerZone": "Zona pericolosa",
-    "dock": "Conversazione",
-    "dockHint": "Mostra la conversazione accanto a questa scheda (schermi larghi); su schermi stretti apre Attività.",
     "dockLabel": "Conversazione e cronologia di questo record",
     "tabsLabel": "Sezioni di questo record",
     "notFoundTitle": "Non trovato",
@@ -455,8 +453,7 @@
     "tab": {
       "legal": "Dati legali e fiscali",
       "sites": "Stabilimenti",
-      "defaults": "Valori predefiniti",
-      "activity": "Attività"
+      "defaults": "Valori predefiniti"
     },
     "held": {
       "archived": "Questa società è archiviata."
@@ -549,8 +546,7 @@
       "structure": "Struttura",
       "centres": "Centri di lavoro",
       "calendars": "Calendari",
-      "devices": "Dispositivi",
-      "activity": "Attività"
+      "devices": "Dispositivi"
     },
     "addLine": "Aggiungi linea",
     "addStation": "Aggiungi postazione",
@@ -898,8 +894,7 @@
       "profile": "Profilo",
       "roles": "Ruoli e ambito",
       "partner": "Organizzazione partner",
-      "sessions": "Sessioni e accessi",
-      "activity": "Attività"
+      "sessions": "Sessioni e accessi"
     },
     "giveRole": "Dai un ruolo",
     "mfaOn": "Doppio fattore attivo",
@@ -1004,8 +999,7 @@
   "worker": {
     "tab": {
       "profile": "Profilo",
-      "badge": "Badge e PIN",
-      "activity": "Attività"
+      "badge": "Badge e PIN"
     },
     "held": {
       "own": "Nessuno gestisce il proprio badge, PIN o ruoli.",
@@ -1222,8 +1216,7 @@
     "tab": {
       "permissions": "Permessi",
       "rules": "Regole di ambito",
-      "users": "Utenti",
-      "activity": "Attività"
+      "users": "Utenti"
     },
     "copyOf": "Copia personalizzata di {key}",
     "readOnlySystem": "Ruolo pronto: sola lettura. Resta uguale al suo modello.",
@@ -1511,8 +1504,7 @@
   "device": {
     "tab": {
       "binding": "Postazione e modalità",
-      "status": "Stato",
-      "activity": "Attività"
+      "status": "Stato"
     },
     "held": {
       "revoked": "Questo dispositivo è revocato: registrane uno nuovo."

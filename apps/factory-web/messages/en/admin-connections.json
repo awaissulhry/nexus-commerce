@@ -109,8 +109,7 @@
       "overview": "Overview",
       "settings": "Settings & secrets",
       "calls": "Calls",
-      "inbound": "Received",
-      "activity": "Activity"
+      "inbound": "Received"
     },
     "pause": {
       "action": "Pause",

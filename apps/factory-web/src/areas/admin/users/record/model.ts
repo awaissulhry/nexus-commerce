@@ -5,17 +5,40 @@ import type { RevealModel } from '../../shared/view/OneTimeReveal'
 
 /**
  * SCR-011 a person's record (design 02 admin.users "Record: User"; PLT-019, PLT-032, PLT-070): an office person —
- * Profile, Roles & scope (role × where × when; what they can do in plain words with their money sight), Activity — and
- * a floor worker — Profile, Badge & PIN (badges, the PIN's state and reset, floor roles), Activity. B-W2b-180 adds the
- * partner organisation, B-W2b-413 Sessions & sign-ins (where they are signed in now). Pure: the last-administrator rule, the give-role summary, the worker's form.
+ * Profile, Roles & scope (role × where × when; what they can do in plain words with their money sight) — and
+ * a floor worker — Profile, Badge & PIN (badges, the PIN's state and reset, floor roles), each with its thread docked CLOSED beside
+ * the tabs (B-TH-269, R-10). B-W2b-180 adds the partner organisation, B-W2b-413 Sessions & sign-ins (where they are signed in now).
+ * Pure: the last-administrator rule, the give-role summary, the worker's form.
  */
 
 // B-W2b-180: 'partner' = Partner organisation (a person of a partner organisation: areas/admin/users/partners/organisation).
 // B-W2b-413: 'sessions' = Sessions & sign-ins (users.sessions.manage: record/sessions).
-export const USER_TABS = ['profile', 'roles', 'partner', 'sessions', 'activity'] as const
+// ---- B-TH-269 (threads plan TH-6; 08-tabs O-ADM-USER, O-ADM-WRK; the rule of picture 38): user 5 → 4, worker 3 → 2. Activity goes
+// (R-ACT: its tools are in the docked thread's "⋯"; its history in the thread's View › Changes).
+export const USER_TABS = ['profile', 'roles', 'partner', 'sessions'] as const
 export type UserTab = (typeof USER_TABS)[number]
-export const WORKER_TABS = ['profile', 'badge', 'activity'] as const
+export const WORKER_TABS = ['profile', 'badge'] as const
 export type WorkerTab = (typeof WORKER_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Profile with the thread shown (RecordFrame reads the address). */
+export const USER_MERGED_TABS: Readonly<Record<string, UserTab>> = Object.freeze({ activity: 'profile' })
+export const WORKER_MERGED_TABS: Readonly<Record<string, WorkerTab>> = Object.freeze({ activity: 'profile' })
+function tabFrom<T extends string>(tabs: readonly T[], merged: Readonly<Record<string, T>>, value: string | null | undefined): T {
+  const asked = value ?? ''
+  if ((tabs as readonly string[]).includes(asked)) return asked as T
+  return Object.hasOwn(merged, asked) ? merged[asked]! : tabs[0]!
+}
+export const userTabOf = (value: string | null | undefined): UserTab => tabFrom(USER_TABS, USER_MERGED_TABS, value)
+export const workerTabOf = (value: string | null | undefined): WorkerTab => tabFrom(WORKER_TABS, WORKER_MERGED_TABS, value)
+
+/**
+ * R-10 and B-TH-005 (on the API: THREAD_GATES User → users.view, Worker → workers.view; GDPR art. 4 inside the office): notes about a
+ * PERSON are read only by whoever may view that person's record, beside threads.read — the page mounts no thread otherwise (a role
+ * that reads threads, the sales office or the warehouse, never sees what HR or the administrator wrote). The thread docks CLOSED:
+ * the band's Thread button or ⌘J shows it. Notes only (W03: no outside party on an admin thread).
+ */
+export const PERSON_THREAD_GATE = Object.freeze({ User: 'users.view', Worker: 'workers.view' } as const)
+export const personThreadMounted = (type: keyof typeof PERSON_THREAD_GATE, held: ReadonlySet<string>): boolean => held.has('threads.read') && held.has(PERSON_THREAD_GATE[type])
+// ---- end B-TH-269
 
 export type UserDialog = 'give-role' | 'end-roles' | 'suspend' | 'reactivate' | 'deactivate' | 'password'
 
@@ -48,7 +71,8 @@ export interface UserRecordModel {
   dialogProblem?: string | null
   notice?: Notice | null
   stepUp?: StepUpModel
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
 }
 
 /** The active people who give roles over every company (the tenant must keep one: users/status.ts, roles). */
@@ -147,7 +171,8 @@ export interface WorkerRecordModel {
   reveal?: RevealModel | null
   stepUp?: StepUpModel
   draft?: WorkerProfileDraft | null
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
 }
 
 export const workerDraft = (worker: Worker): WorkerProfileDraft => ({ displayName: worker.displayName, locale: worker.locale, employeeCode: worker.employeeCode ?? '' })

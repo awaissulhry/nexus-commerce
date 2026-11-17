@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
@@ -25,23 +25,28 @@ import {
   type SiteStructure,
 } from '../shared/api'
 import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
-import { useRecordTab, useThreadDock } from '../shared/record-hooks'
-import { floorBody, SITE_TABS, type FloorDraft, type PartDraft, type SiteDialog } from './model'
+import { floorBody, siteTabOf, type FloorDraft, type PartDraft, type SiteDialog } from './model'
 import { SiteRecordView } from './view/SiteRecordView'
+// ---- B-TH-269: the docked thread on the site (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../shell/print/print-model'
 
 /**
  * `/w/<company>/admin/companies/<company id>/sites/<id>` (SCR-009): reads the site's structure (`GET /org/sites/:id`),
  * its floor times (`GET /auth/floor/sites/:id/settings`, devices.view), its devices and printers; adds and changes
- * lines, work centres and stations (each with the version read), saves the floor times, archives what nothing uses.
+ * lines, work centres and stations (each with the version read), saves the floor times, archives what nothing uses. B-TH-269: the
+ * site's thread docks beside every tab (notes only — an admin record has no party, W03; with threads.read); `?tab=structure|centres|
+ * calendars|devices`, the old `activity` lands on Structure with the thread opened.
  */
 export function SiteRecord({ siteId }: { siteId: string }) {
   const api = useOfficeApi()
   const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
   const session = useOfficeSession()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(SITE_TABS)
-  const { dockOpen, toggleDock } = useThreadDock('Site')
+  const tab = siteTabOf(params?.get('tab'))
   const [structure, setStructure] = useState<SiteStructure | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [floor, setFloor] = useState<{ settings: FloorSettings | null; problem?: string | null }>({ settings: null })
@@ -110,10 +115,19 @@ export function SiteRecord({ siteId }: { siteId: string }) {
     return rows.find((row) => row.id === id)?.version ?? 1
   }
 
+  // B-TH-269: the site's thread docked beside every tab (notes only: no party on an admin record, W03), with threads.read (the API asks
+  // nothing more of a Site thread); Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  const site = structure?.site ?? null
+  const record = site ? { type: 'Site', id: site.id, companyId: site.companyId, siteId: site.id } : null
+  const mayThread = held.has('threads.read')
+  const thread = site && record && mayThread ? <OfficeRecordThread docked record={record} title={`${site.code} · ${site.name}`} recordLabel={site.code} party={null} printHref={printHref(pathname ?? '', params?.toString() ?? '')} /> : null
+  const printThread = site && record && mayThread ? <RecordPanels record={record} title={site.name} /> : null
+
   return (
     <SiteRecordView
-      model={{ prefix, tab, structure, problem, can, floor, devices, printers, showArchived, dialog, busy, dialogProblem, notice, dockOpen }}
-      panels={structure ? <RecordPanels record={{ type: 'Site', id: structure.site.id, companyId: structure.site.companyId, siteId: structure.site.id }} title={structure.site.name} /> : null}
+      model={{ prefix, tab, structure, problem, can, floor, devices, printers, showArchived, dialog, busy, dialogProblem, notice, personId: session.user.id /* B-TH-269 */ }}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onDialog: (next) => {
           setDialog(next)
@@ -170,7 +184,6 @@ export function SiteRecord({ siteId }: { siteId: string }) {
             setBusy(false)
           }
         },
-        onDock: toggleDock,
         onRetry: () => {
           setProblem(null)
           setStructure(null)

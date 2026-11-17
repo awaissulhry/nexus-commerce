@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -11,10 +12,12 @@ import { changeUser, endAssignment, giveRole, listAssignments, listCompanies, li
 import { runBulk } from '../../shared/bulk'
 import { bulkNotice } from '../../shared/reach'
 import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice, type ScopeOption } from '../../shared/model'
-import { useRecordTab, useThreadDock } from '../../shared/record-hooks'
 import { isStepUpCancelled, useStepUp } from '../../shared/step-up'
-import { dayEnd, dayStart, isLastAdmin, USER_TABS, type GiveRoleDraft, type UserDialog } from './model'
+import { dayEnd, dayStart, isLastAdmin, personThreadMounted, userTabOf, type GiveRoleDraft, type UserDialog } from './model'
 import { UserRecordView } from './view/UserRecordView'
+// ---- B-TH-269: the docked thread on the person (RecordFrame, docked CLOSED — R-10; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const ACTION_PATH = { suspend: 'suspend', reactivate: 'reactivate', deactivate: 'deactivate', password: 'require-password-reset' } as const
 
@@ -23,15 +26,18 @@ const ACTION_PATH = { suspend: 'suspend', reactivate: 'reactivate', deactivate: 
  * person; the list also says whether they are the last administrator), their roles from `GET /auth/users/:id/roles`.
  * "End N" ends each ticked role with its own `POST /auth/role-assignments/:id/end` (no bulk route). Giving or ending a
  * role and each lifecycle change go through the step-up dialog when the API asks for a fresh code (A1 §3.10), with the
- * version read; a 409 reads the record again.
+ * version read; a 409 reads the record again. B-TH-269 (`?tab=profile|roles|partner|sessions`, the old activity lands on Profile
+ * with the thread shown): the person's thread docked CLOSED beside every tab (R-10), notes only, mounted with threads.read AND
+ * users.view (B-TH-005: notes about a person are HR's and the administrator's, never every thread reader's).
  */
 export function UserRecord({ userId }: { userId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(USER_TABS)
-  const { dockOpen, toggleDock } = useThreadDock('User')
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const tab = userTabOf(params?.get('tab')) // B-TH-269
   const [users, setUsers] = useState<User[] | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [assignments, setAssignments] = useState<Loaded<Assignment>>(loading())
@@ -90,6 +96,12 @@ export function UserRecord({ userId }: { userId: string }) {
     }
   }
 
+  // B-TH-269: the person's thread (notes only, docked closed by the view) with threads.read and users.view; the print view keeps the
+  // panels' print form.
+  const record = user && personThreadMounted('User', held) ? { type: 'User', id: user.id, companyId: null } : null
+  const thread = user && record ? <OfficeRecordThread docked record={record} title={user.displayName} recordLabel={user.displayName} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = user && record ? <RecordPanels record={record} title={user.displayName} /> : null
+
   return (
     <UserRecordView
       model={{
@@ -108,9 +120,10 @@ export function UserRecord({ userId }: { userId: string }) {
         dialogProblem,
         notice,
         stepUp,
-        dockOpen,
+        personId: session.user.id, // B-TH-269
       }}
-      panels={user ? <RecordPanels record={{ type: 'User', id: user.id, companyId: null }} title={user.displayName} /> : null}
+      thread={thread}
+      printThread={printThread}
       // B-W2b-180: a partner's organisation (partners.view), read and changed through the partner routes.
       // (an element mounts only when its tab draws it).
       partner={user?.audience === 'PARTNER' && user.partyId && held.has('partners.view') ? <PartnerOrganisation userId={user.id} partyId={user.partyId} onChanged={() => void load()} /> : null}
@@ -157,7 +170,6 @@ export function UserRecord({ userId }: { userId: string }) {
           user ? change(`stepUp.sentence.${action}`, () => changeUser(api, user.id, ACTION_PATH[action], { version: user.version, ...(reason ? { reason } : {}) }), `user.done.${action}`) : Promise.resolve(false),
         onStepUp: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,
-        onDock: toggleDock,
         onRetry: () => {
           setProblem(null)
           setUsers(null)

@@ -1,8 +1,5 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
-import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
@@ -281,23 +278,3 @@ export const WORKERS: Worker[] = [
   worker(5, 'Ennio Bozza', { pinMustChange: true }),
   worker(6, 'Flavia Modello', { status: 'INACTIVE', badge: null }),
 ]
-
-// ---- the record panels on an Admin record ----
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-const historyCase = panelsScreen.cases.find((item) => item.id === 'history-changes')!.model as RecordPanelsViewModel
-
-/** The record panels as an Admin record mounts them (internal notes only: an Admin record has no party). */
-export function panels(record: { type: string; id: string; companyId: string | null; siteId?: string | null }, title: string, tab: 'thread' | 'history' = 'thread'): ReactNode {
-  const base = tab === 'history' ? historyCase : conversation
-  const model: RecordPanelsViewModel = {
-    ...base,
-    record,
-    title,
-    party: null,
-    can: { ...base.can, email: false },
-    messages: { ...base.messages, items: (base.messages.items ?? []).filter((message) => message.direction === 'INTERNAL_NOTE').slice(0, 3) },
-    tab,
-  }
-  return createElement(RecordPanelsView, { model })
-}
