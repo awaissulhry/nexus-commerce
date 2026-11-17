@@ -84,6 +84,14 @@ async function withLines(inquiryId: string, lines: Json[]): Promise<Json> {
   return (await ok(P.sales, 'PATCH', `/sales/inquiries/${inquiryId}`, { version: record.version, lines })).inquiry
 }
 
+/** The harness clock back to now, or just after the newest role assignment when that is later (a role must have started). */
+async function settleClock(): Promise<void> {
+  const [latest] = await admin<{ at: Date | null }>(w, 'SELECT max("validFrom") AS at FROM "RoleAssignment" WHERE "tenantId" = $1', [w.tenant.id])
+  const target = Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000)
+  console.info(`settleClock: harness ran ${Math.round((w.h.clock.now().getTime() - Date.now()) / 1000)} s ahead; now ${Math.round((target - Date.now()) / 1000)} s`)
+  w.h.clock.set(new Date(target))
+}
+
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
   w = await startWorld()
@@ -123,9 +131,9 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
     await stepped(w, P.owner)
     await ok(P.owner, 'PUT', `/sales/credit/limits/${P3()}/${companyA()}`, { amount: 100, currency: 'EUR', reason: 'Made-up: a new customer starts small.' })
     await settle()
-    // Each two-factor step moved the harness clock 30 s on; a request is closed "not in the future" of the database's clock: the
-    // clock goes back to now before the first request (no step-up follows).
-    w.h.clock.set(new Date())
+    // Each two-factor step moved the harness clock 30 s on, while a request is closed "not in the future" of the database's clock
+    // (5 minutes of difference allowed): the clock goes back as far as every role given so far still holds (no step-up follows).
+    await settleClock()
   })
 
   it('G3 customer A’s portal request gets its lines and a shared file; Make order: ONE order of A, CONFIRMED, the file carried', async () => {

@@ -62,6 +62,14 @@ const B = (method: 'GET' | 'POST', url: string, body?: unknown, status: number |
 const officeNumber = async (inquiryId: string) => (await admin<{ number: string }>(w, 'SELECT number FROM "Inquiry" WHERE id = $1', [inquiryId]))[0]!.number
 const ownRequests = async (partyId: string) => (await admin<{ n: number }>(w, 'SELECT count(*)::int AS n FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2', [w.tenant.id, partyId]))[0]!.n
 
+/** The harness clock back to now, or just after the newest role assignment when that is later (a role must have started). */
+async function settleClock(): Promise<void> {
+  const [latest] = await admin<{ at: Date | null }>(w, 'SELECT max("validFrom") AS at FROM "RoleAssignment" WHERE "tenantId" = $1', [w.tenant.id])
+  const target = Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000)
+  console.info(`settleClock: harness ran ${Math.round((w.h.clock.now().getTime() - Date.now()) / 1000)} s ahead; now ${Math.round((target - Date.now()) / 1000)} s`)
+  w.h.clock.set(new Date(target))
+}
+
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
   w = await startWorld()
@@ -92,9 +100,9 @@ describe('B-TH-021 golden flow TH-1b: a request like an e-mail, from the portal 
     alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA(), BUYER)
     beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA(), BUYER)
     await settle()
-    // Each two-factor step moved the harness clock 30 s on; the requests' times are checked against the database's clock (a
-    // request is closed "not in the future"): the clock goes back to now before the first request (no step-up follows).
-    w.h.clock.set(new Date())
+    // Each two-factor step moved the harness clock 30 s on, while a request is closed "not in the future" of the database's clock
+    // (5 minutes of difference allowed): the clock goes back as far as every role given so far still holds (no step-up follows).
+    await settleClock()
   })
 
   it('T37 customer A sends a request from its portal, text only: the receipt says “Your request N” (its own count), never the office series', async () => {
