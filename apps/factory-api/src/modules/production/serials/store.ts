@@ -25,6 +25,8 @@ export const LABEL_HEADER = {
   styleRevisionId: true,
   labelTemplateId: true,
   releasedAt: true,
+  // B-PR-05: its one customer, for the brand wall (facts.ts mayLabel).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type LabelHeader = Prisma.WorkOrderGetPayload<{ select: typeof LABEL_HEADER }>
 

@@ -20,7 +20,7 @@ import {
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import type { OfficeContext } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
-import { invalid, may, notFound, officeOf, refuse } from './access'
+import { invalid, may, notFound, officeOf, partiesOf, refuse } from './access'
 import { recordOf } from './read'
 import { garmentsElsewhere, lockCells, readCells, readCutOrder, readLays, readLines, readTickets, type CutOrderRow } from './store'
 import { emitOrder, emitTicket } from './emit'
@@ -94,7 +94,7 @@ async function checkedLines(tx: CommandTx, context: OfficeContext, material: Mat
   const problems: Issue[] = []
   const rows = body.lines.map((line, index) => {
     const cell = cells.get(line.workOrderSizeId)
-    if (!cell || !may(context, PRODUCTION_CUTTING_VIEW, cell.workOrder)) {
+    if (!cell || !may(context, PRODUCTION_CUTTING_VIEW, cell.workOrder, [cell.workOrder.partyId])) {
       problems.push({ path: `lines/${index}/workOrderSizeId`, message: 'The work order cell is not found.' })
       return null
     }
@@ -143,8 +143,8 @@ export async function createCutOrder(caller: CommandCaller, body: CreateBody, id
     const colour = body.itemColourId && isUuid(body.itemColourId) ? await db.itemColour.findUnique({ where: { id: body.itemColourId }, select: { id: true, itemId: true } }) : null
     return { site, item, colour }
   })
-  if (!facts.site || !may(context, PRODUCTION_CUTTING_VIEW, { companyId: facts.site.companyId, siteId: facts.site.id })) return notFound('Site')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, { companyId: facts.site!.companyId, siteId: facts.site!.id })) throw new ForbiddenError('Planning cut orders needs the right to plan them at the site.')
+  if (!facts.site || !may(context, PRODUCTION_CUTTING_VIEW, { companyId: facts.site.companyId, siteId: facts.site.id }, [])) return notFound('Site')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, { companyId: facts.site!.companyId, siteId: facts.site!.id }, [])) throw new ForbiddenError('Planning cut orders needs the right to plan them at the site.')
   if (!facts.item) invalid([{ path: 'itemId', message: 'The material is not found.' }], 'The material is not found.')
   if (body.itemColourId && (!facts.colour || facts.colour.itemId !== body.itemId)) invalid([{ path: 'itemColourId', message: "Not a colour of the material." }], "Not a colour of the material.")
   const item = facts.item!
@@ -207,8 +207,8 @@ export async function createCutOrder(caller: CommandCaller, body: CreateBody, id
 async function managedOrder(caller: CommandCaller, cutOrderId: string): Promise<{ context: OfficeContext; order: CutOrderRow }> {
   const context = officeOf(caller)
   const order = await caller.withClient((db) => readCutOrder(db, cutOrderId))
-  if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order)) return notFound('Cut order')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order!)) throw new ForbiddenError('Planning cut orders needs the right to plan them at the site.')
+  if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order, partiesOf(order))) return notFound('Cut order')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order!, partiesOf(order!))) throw new ForbiddenError('Planning cut orders needs the right to plan them at the site.')
   return { context, order: order! }
 }
 

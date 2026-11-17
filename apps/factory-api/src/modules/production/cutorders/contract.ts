@@ -185,6 +185,8 @@ export const listCutOrdersContract = defineContract({
     view: z.enum(CUT_ORDER_VIEWS).optional(),
     kind: z.enum(CUT_ORDER_KINDS).optional(),
     q: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-04b: the cut orders with a cell of this customer (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     cursor: id().optional(),
   }),
@@ -199,7 +201,8 @@ export const listCutOrdersContract = defineContract({
 })
 
 export const waitingCellsContract = defineContract({
-  querystring: input({ siteId: id().optional(), itemId: id().optional(), itemColourId: id().optional() }),
+  // B-PR-04b: partyId = one customer's cells (inside the caller's reach).
+  querystring: input({ siteId: id().optional(), itemId: id().optional(), itemColourId: id().optional(), partyId: id().optional() }),
   response: {
     200: output({
       groups: z.array(
@@ -313,7 +316,8 @@ export const removeLayRollContract = defineContract({
 const material = output({ item: output({ code: z.string(), name: z.string() }), colour: output({ code: z.string(), name: z.string() }).nullable() })
 
 export const waitingTicketsContract = defineContract({
-  querystring: input({ siteId: id().optional() }),
+  // B-PR-04b: partyId = the tickets of cut orders with a cell of this customer (inside the caller's reach).
+  querystring: input({ siteId: id().optional(), partyId: id().optional() }),
   response: {
     200: output({
       tickets: z.array(

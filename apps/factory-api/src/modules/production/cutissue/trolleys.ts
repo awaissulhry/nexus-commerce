@@ -28,7 +28,7 @@ import {
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { assertFloorReady } from '../bundles/bundles'
-import { may, officeOf, refuse, seen, workerOf } from './access'
+import { issueParties, issueWall, may, officeOf, ofWorkOrder, refuse, seen, workerOf } from './access'
 import { emitIssue } from './emit'
 import { deviceStation, findBundle, readBundles, readCells, readLines, readOrder, readOrders, readProcesses, trolleyOfBundles, type Reader } from './store'
 
@@ -157,6 +157,8 @@ export interface TrolleyListQuery {
   readonly siteId?: string | undefined
   readonly lineId?: string | undefined
   readonly q?: string | undefined
+  /** B-PR-04b: the trolleys carrying a bundle of this customer (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit?: number | undefined
 }
@@ -164,7 +166,14 @@ export interface TrolleyListQuery {
 /** GET /production/trolleys: the office's list, newest first, with a tile per status. */
 export async function listTrolleys(caller: CommandCaller, query: TrolleyListQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutIssueWhereInput
+  // B-PR-04b (the brand wall): a trolley shows only when every bundle's work order is reached (the tiles count the same).
+  const scope: Prisma.CutIssueWhereInput = {
+    AND: [
+      scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutIssueWhereInput,
+      issueWall(context, PRODUCTION_CUTTING_VIEW),
+      query.partyId ? { lines: { some: { bundle: { is: { workOrder: { is: { partyId: query.partyId } } } } } } } : {},
+    ],
+  }
   const limit = Math.min(query.limit ?? 50, TROLLEY_LIMITS.rows)
   const q = query.q?.trim().toUpperCase()
   const base: Prisma.CutIssueWhereInput[] = [
@@ -186,13 +195,18 @@ export async function listTrolleys(caller: CommandCaller, query: TrolleyListQuer
 /** GET /production/trolleys/:issueId: one trolley with its bundles (office). */
 export async function trolleyRecord(caller: CommandCaller, issueId: string) {
   const context = officeOf(caller)
-  return caller.withClient(async (db) => ({ trolley: await viewOf(db, seen(context, PRODUCTION_CUTTING_VIEW, await readIssue(db, issueId), 'Trolley')) }))
+  return caller.withClient(async (db) => {
+    const issue = await readIssue(db, issueId)
+    const parties = issue ? await issueParties(db, issue.id) : [] // B-PR-04b
+    return { trolley: await viewOf(db, seen(context, PRODUCTION_CUTTING_VIEW, issue, 'Trolley', () => parties)) }
+  })
 }
 
 /** GET /production/trolleys/open: the site's trolleys loading or on their way; a tablet on a line sees those coming to it first. */
 export async function openTrolleys(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly lineId?: string | undefined }) {
   const context = workerOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_TROLLEYS, { company: 'companyId', site: 'siteId' }) as Prisma.CutIssueWhereInput
+  // B-PR-04b (the brand wall): the trolleys whose every bundle's work order is reached.
+  const scope: Prisma.CutIssueWhereInput = { AND: [scopeWhere(actorOf(context), PRODUCTION_TROLLEYS, { company: 'companyId', site: 'siteId' }) as Prisma.CutIssueWhereInput, issueWall(context, PRODUCTION_TROLLEYS)] }
   const siteId = context.audience === 'floor' ? context.siteId : query.siteId
   return caller.withClient(async (db) => {
     const station = context.audience === 'floor' ? await deviceStation(db, context.deviceId) : null
@@ -212,7 +226,7 @@ export async function scanTrolley(caller: CommandCaller, query: { readonly code:
   if (!siteId) throw new ValidationError('Name the site of the trolley.', [{ path: 'querystring/siteId', message: 'The office names the site.' }])
   return caller.withClient(async (db) => {
     const issue = await openIssueOf(db, siteId, code)
-    if (issue && !may(context, PRODUCTION_TROLLEYS, issue)) throw new NotFoundError('Trolley not found.')
+    if (issue && !may(context, PRODUCTION_TROLLEYS, issue, await issueParties(db, issue.id))) throw new NotFoundError('Trolley not found.')
     const view = issue ? await viewOf(db, issue) : null
     return { code, trolley: view, next: nextTrolleyStep(issue ? { status: issue.status as CutIssueStatus } : null) }
   })
@@ -261,9 +275,12 @@ export async function loadTrolley(caller: CommandCaller, body: LoadBody, idempot
   const known = await caller.withClient(async (db) => {
     const bundle = await findBundle(db, { code: body.bundle })
     const order = bundle ? await readOrder(db, bundle.workOrderId) : null
-    return { bundle, order: seen(context, PRODUCTION_TROLLEYS, order, 'Bundle') }
+    return { bundle, order: seen(context, PRODUCTION_TROLLEYS, order, 'Bundle', ofWorkOrder) }
   })
   const siteId = siteOf(context, known.order.siteId)
+  // B-PR-04b (the brand wall): a trolley open with a bundle of a customer the caller does not reach is not found (its answer would
+  // show those bundles), as for unload, send and receive.
+  await knownOpen(caller, context, code, siteId)
   if (context.audience === 'floor') await assertFloorReady(caller, context, siteId)
   const { result, replayed } = await command(caller, { name: 'production.loadTrolley', idempotencyKey, input: { ...body, trolley: code } }, async (tools) => loadInCommand(tools, context, siteId, code, known.bundle!.id, body.lineId))
   return { ...result, replayed }
@@ -319,8 +336,11 @@ async function loadInCommand(tools: CommandTools, context: OfficeContext | Floor
 async function knownOpen(caller: CommandCaller, context: OfficeContext | FloorContext, code: string, siteId: string | undefined): Promise<{ issue: IssueRow | null; siteId: string }> {
   const site = context.audience === 'floor' ? context.siteId : siteId
   if (!site) throw new ValidationError('Name the site of the trolley.', [{ path: 'body/siteId', message: 'The office names the site.' }])
-  const issue = await caller.withClient((db) => openIssueOf(db, site, code))
-  if (issue && !may(context, PRODUCTION_TROLLEYS, issue)) throw new NotFoundError('Trolley not found.')
+  const { issue, parties } = await caller.withClient(async (db) => {
+    const open = await openIssueOf(db, site, code)
+    return { issue: open, parties: open ? await issueParties(db, open.id) : [] } // B-PR-04b
+  })
+  if (issue && !may(context, PRODUCTION_TROLLEYS, issue, parties)) throw new NotFoundError('Trolley not found.')
   return { issue, siteId: site }
 }
 
@@ -434,7 +454,11 @@ export async function receiveTrolley(caller: CommandCaller, body: { readonly tro
 /** POST /production/trolleys/:issueId/cancel: a trolley loaded by mistake (LOADING only), with the reason; its bundles are free. */
 export async function cancelTrolley(caller: CommandCaller, issueId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const context = workerOf(caller)
-  const known = seen(context, PRODUCTION_TROLLEYS, await caller.withClient((db) => readIssue(db, issueId)), 'Trolley')
+  const found = await caller.withClient(async (db) => {
+    const issue = await readIssue(db, issueId)
+    return { issue, parties: issue ? await issueParties(db, issue.id) : [] } // B-PR-04b
+  })
+  const known = seen(context, PRODUCTION_TROLLEYS, found.issue, 'Trolley', () => found.parties)
   if (known.status !== 'LOADING') refuse({ code: 'TROLLEY_NOT_LOADING', message: `Trolley ${known.trolleyCode} is ${known.status.toLowerCase()}: only a trolley still loading is cancelled.` })
   const { result } = await command(caller, { name: 'production.cancelTrolley', idempotencyKey, input: { issueId, ...body }, record: { type: 'CutIssue', id: issueId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools

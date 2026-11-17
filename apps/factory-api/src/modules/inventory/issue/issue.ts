@@ -549,7 +549,10 @@ async function pickedMove(caller: CommandCaller, moveId: string, permission: typ
   const context = stockContextOf(caller)
   const move = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: LEDGER_SELECT })) : null
   if (!move || !move.workOrderId || !PICKED_REASONS.includes(move.reason) || !mayAt(context, permission, move)) throw new NotFoundError('Issue not found.')
-  await pickingWorkOrder(caller, move.workOrderId, permission)
+  // B-PR-05 (the brand wall): a move of a work order the caller does not reach answers as an unknown issue.
+  await pickingWorkOrder(caller, move.workOrderId, permission).catch((error: unknown) => {
+    throw error instanceof NotFoundError ? new NotFoundError('Issue not found.') : error
+  })
   return { context, move }
 }
 

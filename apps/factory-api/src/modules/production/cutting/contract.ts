@@ -115,6 +115,8 @@ export const cuttingWorkOrdersContract = defineContract({
   querystring: input({
     /** A scanned or typed work order number (exact). */
     number: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-04b: one customer's (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(50).default(30),
   }),
   response: {
@@ -428,6 +430,8 @@ export const cutsListContract = defineContract({
     view: z.enum(CUT_VIEWS).default('open'),
     /** Part of the work order's number, its batch number, or the style's code or name (any case). */
     q: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-04b: one customer's (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {

@@ -1,7 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { ReworkStatus } from '@nexus/factory-domain/production/rework/rules'
@@ -12,6 +11,7 @@ import { serverClock } from '../../../core/time'
 import { readCellLabels, scrapFactsOf, scrapMaterials, type Reader, type ScrapFacts, type ScrapMaterial } from './store'
 // B-W2b-53 (MES-128): each scan's scrap approval, the waiting filter and tile.
 import { approvalsOf, officeWaiting, type ApprovalView } from './over-limit'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-05
 
 /**
  * Scrap & rework, the office's read (B-W2a-13; MES-129, MES-130, MES-126; design production.scrap "Scrap tiles" and the
@@ -28,7 +28,6 @@ function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeContext 
   return context
 }
 
-const SCOPE = { company: 'companyId', site: 'siteId' } as const
 const unique = (values: readonly (string | null | undefined)[]) => [...new Set(values.filter((value): value is string => typeof value === 'string'))]
 
 export interface ScrapQuery {
@@ -40,6 +39,8 @@ export interface ScrapQuery {
   readonly kind?: 'SCRAP' | 'REWORK' | undefined
   /** B-W2b-53: only the scans whose scrap waits for the team leader's approval. */
   readonly approval?: 'WAITING' | undefined
+  /** B-PR-05: one customer's rows (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
@@ -67,19 +68,20 @@ export async function scrapList(caller: CommandCaller, query: ScrapQuery) {
   const context = officeOf(caller)
   const actor = actorOf(context)
   const withCost = heldGrains(actor).has('cost')
-  const scope = scopeWhere(actor, PRODUCTION_SCRAP_VIEW, SCOPE)
+  // B-PR-05 (the brand wall): every row through its work order (company, site and customer), of one customer when asked.
+  const scope: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actor, PRODUCTION_SCRAP_VIEW), query.partyId ? { partyId: query.partyId } : {}] }
   const filters = [query.siteId ? { siteId: query.siteId } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}]
   return caller.withClient(async (db) => {
     const rows: Row[] = []
     // B-W2b-53: the waiting filter narrows the scans to those whose scrap waits (no rework row waits for an approval).
-    const waitingIds = query.approval === 'WAITING' ? (await officeWaiting(db, scope as Prisma.WorkOrderWhereInput, filters)).map((entry) => entry.scan.id) : null
+    const waitingIds = query.approval === 'WAITING' ? (await officeWaiting(db, scope, filters)).map((entry) => entry.scan.id) : null
     if (query.kind !== 'REWORK') {
       // The scans that scrapped, standing (no later row voids them), with their scrap lines.
       const scans = await db.operationScan.findMany({
         where: {
           AND: [
             // A scan has no company column: its work order's scope.
-            { workOrder: { is: scope as Prisma.WorkOrderWhereInput } },
+            { workOrder: { is: scope } },
             ...filters,
             { kind: { in: ['REPORT', 'CORRECTION'] }, scrapQuantity: { gt: 0 } },
             query.from ? { serverTime: { gte: query.from } } : {},
@@ -105,7 +107,7 @@ export async function scrapList(caller: CommandCaller, query: ScrapQuery) {
     }
     // Rework orders (kind REWORK), and the scrap of finished ones (kind SCRAP); none waits for an approval (B-W2b-53).
     const reworks = waitingIds ? [] : await db.reworkOrder.findMany({
-      where: { AND: [scope as Prisma.ReworkOrderWhereInput, ...filters, query.from ? { createdAt: { gte: query.from } } : {}, query.to ? { createdAt: { lt: query.to } } : {}] },
+      where: { AND: [{ workOrder: { is: scope } }, ...filters, query.from ? { createdAt: { gte: query.from } } : {}, query.to ? { createdAt: { lt: query.to } } : {}] },
       select: { id: true, companyId: true, siteId: true, workOrderId: true, workOrderSizeId: true, bundleId: true, foundAtOperationId: true, reworkAtOperationId: true, quantity: true, scrapQuantity: true, reasonCode: true, status: true, doneAt: true, createdAt: true },
       orderBy: { id: 'desc' },
       take: query.limit,
@@ -174,18 +176,22 @@ async function rowViews(db: Reader, rows: readonly Row[], withCost: boolean) {
   })
 }
 
-/** The tiles: scrap today (pieces, Europe/Rome day), rework open, recuts to cut, reductions to approve. */
-async function tilesOf(db: Reader, scope: object, filters: readonly object[]) {
+/**
+ * The tiles: scrap today (pieces, Europe/Rome day), rework open, recuts to cut, reductions to approve. B-PR-05 (the brand wall):
+ * `scope` = the work orders reached; every count goes through its row's work order (no total that mixes customers).
+ */
+async function tilesOf(db: Reader, scope: Prisma.WorkOrderWhereInput, filters: readonly object[]) {
   const since = businessDayStart(businessDate(serverClock.now()))
-  const scans = await db.operationScan.findMany({ where: { AND: [{ workOrder: { is: scope as Prisma.WorkOrderWhereInput } }, ...filters, { kind: { in: ['REPORT', 'CORRECTION'] }, scrapQuantity: { gt: 0 }, serverTime: { gte: since } }] }, select: { id: true, scrapQuantity: true } })
+  const ofWorkOrder = { workOrder: { is: scope } }
+  const scans = await db.operationScan.findMany({ where: { AND: [ofWorkOrder, ...filters, { kind: { in: ['REPORT', 'CORRECTION'] }, scrapQuantity: { gt: 0 }, serverTime: { gte: since } }] }, select: { id: true, scrapQuantity: true } })
   const voided = new Set((await db.operationScan.findMany({ where: { correctsId: { in: scans.map((scan) => scan.id) } }, select: { correctsId: true } })).map((row) => row.correctsId!))
-  const reworkScrap = await db.reworkOrder.aggregate({ where: { AND: [scope as Prisma.ReworkOrderWhereInput, ...filters, { status: 'DONE', doneAt: { gte: since } }] }, _sum: { scrapQuantity: true } })
+  const reworkScrap = await db.reworkOrder.aggregate({ where: { AND: [ofWorkOrder, ...filters, { status: 'DONE', doneAt: { gte: since } }] }, _sum: { scrapQuantity: true } })
   return {
     scrapToday: scans.filter((scan) => !voided.has(scan.id)).reduce((sum, scan) => sum + scan.scrapQuantity, 0) + (reworkScrap._sum.scrapQuantity ?? 0),
-    reworkOpen: await db.reworkOrder.count({ where: { AND: [scope as Prisma.ReworkOrderWhereInput, ...filters, { status: { in: ['OPEN', 'IN_PROGRESS'] } }] } }),
-    recutsToCut: await db.replacementRequest.count({ where: { AND: [scope as Prisma.ReplacementRequestWhereInput, ...filters, { kind: 'RECUT', status: 'OPEN' }] } }),
-    reductionsToApprove: await db.replacementRequest.count({ where: { AND: [scope as Prisma.ReplacementRequestWhereInput, ...filters, { kind: 'REDUCE', status: 'OPEN' }] } }),
+    reworkOpen: await db.reworkOrder.count({ where: { AND: [ofWorkOrder, ...filters, { status: { in: ['OPEN', 'IN_PROGRESS'] } }] } }),
+    recutsToCut: await db.replacementRequest.count({ where: { AND: [ofWorkOrder, ...filters, { kind: 'RECUT', status: 'OPEN' }] } }),
+    reductionsToApprove: await db.replacementRequest.count({ where: { AND: [ofWorkOrder, ...filters, { kind: 'REDUCE', status: 'OPEN' }] } }),
     // B-W2b-53 (MES-128): the scans whose scrap waits for the team leader's approval.
-    waitingApproval: (await officeWaiting(db, scope as Prisma.WorkOrderWhereInput, filters as Prisma.OperationScanWhereInput[])).length,
+    waitingApproval: (await officeWaiting(db, scope, filters as Prisma.OperationScanWhereInput[])).length,
   }
 }

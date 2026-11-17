@@ -1,7 +1,6 @@
 import type { Uom } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
 import { quantityText } from '@nexus/factory-domain/inventory/ledger/moves'
 import { availabilityOf } from '@nexus/factory-domain/inventory/reservations/rules'
 import { asMoney } from '@nexus/factory-domain/money/marked'
@@ -16,6 +15,7 @@ import { ReservationRefusedError } from '../../inventory/reservations/reserve'
 import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf, type ReserveKey } from '../../inventory/reservations/store'
 // B-W2b-53 (MES-128): held scrap posts no stock.
 import { OverLimitRefusedError, scrapPostingHeld } from './over-limit'
+import { reachesWorkOrder } from '../work-orders/scope' // B-PR-05
 
 /**
  * Scrap posts stock by lot (B-W2a-13; MES-129; design production.scrap "lot and area leaving stock", Movements "SCRAP
@@ -70,8 +70,9 @@ function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeContext 
 /** POST /production/scrap/stock. */
 export async function scrapStock(caller: CommandCaller, body: ScrapStockInput, idempotencyKey?: string) {
   const context = officeOf(caller)
-  const order = await caller.withClient((client) => client.workOrder.findUnique({ where: { id: body.workOrderId }, select: { id: true, companyId: true, siteId: true } }))
-  if (!order || !can(actorOf(context), PRODUCTION_SCRAP, order)) throw new NotFoundError('Work order not found.')
+  // B-PR-05 (the brand wall): with the work order's one customer (another customer's is not found).
+  const order = await caller.withClient((client) => client.workOrder.findUnique({ where: { id: body.workOrderId }, select: { id: true, companyId: true, siteId: true, partyId: true } }))
+  if (!order || !reachesWorkOrder(actorOf(context), PRODUCTION_SCRAP, order)) throw new NotFoundError('Work order not found.')
   const shape = body.lines.flatMap((line, index) => {
     if (line.hideId) return line.itemId || line.lotId ? [{ path: path(index), message: 'A hide names its own lot and material: send the hide alone.' }] : []
     if (!line.itemId && !line.lotId) return [{ path: path(index, 'itemId'), message: 'Name the material, its lot, or a hide.' }]
