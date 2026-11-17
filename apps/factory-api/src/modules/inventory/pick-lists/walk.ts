@@ -10,8 +10,9 @@ import { NOT_COUNTED_WORDS, usabilityOf } from '@nexus/factory-domain/planning/u
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
+import { stockContextOf, type StockContext } from '../ledger/access'
 import { sheetOf } from '../issue/kits'
+import { mayPick } from '../issue/picking' // B-PR-10
 import { readLots, readPickHeader, readSiteStock, type LotRow, type PickHeader, type Reader } from '../issue/store'
 import { readKits } from '../kits/store'
 import { heldByQualityHolds } from '../../quality/holds/stock'
@@ -239,7 +240,8 @@ export async function pickWalk(caller: CommandCaller, workOrderIds: readonly str
     const headers: PickHeader[] = []
     for (const id of ids) {
       const header = await readPickHeader(db, id)
-      if (!header || !mayAt(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.')
+      // B-PR-10: another customer's work order is not found (its site AND its customer), as an unknown one.
+      if (!header || !mayPick(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.')
       headers.push(header)
     }
     const bins = await binsOf(db, unique(headers.map((header) => header.siteId)))

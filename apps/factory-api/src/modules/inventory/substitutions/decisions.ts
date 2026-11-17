@@ -4,8 +4,9 @@ import { INVENTORY_ISSUE } from '@nexus/factory-domain/inventory/permissions'
 import { SUBSTITUTION_LIMITS, withdrawRefusal, type SubstitutionStatus } from '@nexus/factory-domain/inventory/substitutions/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { withdrawPending } from '../../../platform/approvals/engine'
-import { mayAt, officeContextOf } from '../ledger/access'
+import { officeContextOf } from '../ledger/access'
 import { changed, lockSubstitution, readSubstitution, refuse, substitutionViews, SUBSTITUTION_COLUMNS, type SubstitutionRow } from './store'
+import { mayPick } from '../issue/picking' // B-PR-10
 
 /**
  * A substitute's yes, no and withdrawal (B-W2b-298; MES-139). The yes and the no come from the approval engine (the kind file
@@ -78,8 +79,8 @@ export interface WithdrawInput {
 export async function withdrawSubstitute(caller: CommandCaller, substitutionId: string, body: WithdrawInput, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const found = await caller.withClient((db) => readSubstitution(db, substitutionId))
-  const header = found ? await caller.withClient((db) => db.workOrder.findUnique({ where: { id: found.workOrderId }, select: { companyId: true, siteId: true } })) : null
-  if (!found || !header || !mayAt(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Substitute not found.')
+  const header = found ? await caller.withClient((db) => db.workOrder.findUnique({ where: { id: found.workOrderId }, select: { companyId: true, siteId: true, partyId: true } })) : null
+  if (!found || !header || !mayPick(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Substitute not found.') // B-PR-10: and its customer
   const { result } = await command(caller, { name: 'inventory.substitute', idempotencyKey, input: { substitutionId, ...body } }, async (tools) => {
     const row = await lockSubstitution(tools.tx, substitutionId)
     if (!row) throw new NotFoundError('Substitute not found.')

@@ -12,7 +12,7 @@ import { actorOf } from '../../../core/context'
 import { placeOfScan, type PlaceRef } from '../bin-moves/hand'
 import { siteLocations, subtreeOf } from '../counts/ledger-at'
 import { LINE_COLUMNS, updateLine, type LineRow } from '../counts/store'
-import { stockContextOf, type StockContext } from '../ledger/access'
+import { stockContextOf, type StockContext, assertWholeWarehouse } from '../ledger/access'
 import type { Reader } from '../issue/store'
 import { leftInBase, lengthUom } from '../rolls/facts'
 import { asSystem, scansOf, separationFor, tenantOf, type ScanRow } from './store'
@@ -119,6 +119,7 @@ async function binLineViews(db: Reader, lines: readonly LineRow[], scans: readon
 /** GET /inventory/stock-counts/to-count */
 export async function toCount(caller: CommandCaller, query: { readonly siteId?: string | undefined }, now: Date = new Date()) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const siteId = context.audience === 'floor' ? context.siteId : query.siteId
   if (!siteId) throw new ValidationError('Name the site.', [{ path: 'siteId', message: 'Name the site.' }])
   return caller.withClient(async (db) => {
@@ -171,6 +172,7 @@ const siteOfCaller = (context: StockContext): string | null => (context.audience
 /** GET /inventory/stock-counts/bin */
 export async function binOf(caller: CommandCaller, query: { readonly placeCode: string; readonly countId?: string | undefined }) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   return caller.withClient(async (db) => {
     const named = query.countId ? await countFor(db, context, query.countId) : null
     const siteId = named?.siteId ?? siteOfCaller(context)
@@ -240,6 +242,7 @@ const scanLock = (tx: CommandTx, tenantId: string, countId: string, code: string
 /** POST /inventory/stock-counts/:countId/scans */
 export async function scanUnit(caller: CommandCaller, countId: string, body: ScanBody, idempotencyKey?: string) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   if (context.audience !== 'office' && context.audience !== 'floor') throw new ForbiddenError()
   if (!body.code && !body.lineId) throw new ValidationError('Scan a unit, or name the line its pieces are typed for.', [{ path: 'body/code', message: 'Scan a label, or send lineId with the quantity.' }])
   const scannedAt = body.scannedAt ? parseInstant(body.scannedAt) : null
@@ -384,6 +387,7 @@ const MOVED_WORDS = (moves: number) => ({
 /** GET /inventory/stock-counts/:countId/bins/:locationId ("Bin done") */
 export async function binDone(caller: CommandCaller, countId: string, locationId: string) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   return caller.withClient(async (db) => {
     const { count, place, lines, scans } = await binFacts(db, context, countId, locationId)
     const differences = await differenceViews(db, lines, scans)
@@ -395,6 +399,7 @@ export async function binDone(caller: CommandCaller, countId: string, locationId
 /** POST …/bins/:locationId/finish ("Finish bin") */
 export async function finishBin(caller: CommandCaller, countId: string, locationId: string, body: { readonly occurredAt?: string | undefined }, idempotencyKey?: string) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   if (context.audience !== 'office' && context.audience !== 'floor') throw new ForbiddenError()
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt) : null
   const deviceTime = context.audience === 'floor' && occurredAt ? { deviceTime: occurredAt } : {}
