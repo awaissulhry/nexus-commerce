@@ -18,7 +18,7 @@ export async function galleryLooks(request: FastifyRequest, styleIds: readonly s
   const actor = actorOf(contextOf(request))
   const asked = [...new Set(styleIds)]
   const read = await request.withClient(async (client) => {
-    const styles = (await client.style.findMany({ where: { id: { in: asked } }, select: { id: true, companyId: true } })).filter((style) => can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId }))
+    const styles = (await client.style.findMany({ where: { id: { in: asked } }, select: { id: true, companyId: true, brandPartyId: true } })).filter((style) => can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId, partyId: style.brandPartyId })) // B-PR-10: its brand too
     const ids = styles.map((style) => style.id)
     const mains = await mainPictures(client, ids)
     const counts = ids.length === 0 ? [] : await client.styleImage.groupBy({ by: ['styleId'], where: { styleId: { in: ids } }, _count: { _all: true } })

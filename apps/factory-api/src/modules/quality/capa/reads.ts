@@ -12,7 +12,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { officePeople } from '../complaints/list'
 import { officeOf, refuse } from './access'
-import { asDay, byCapa, CAPA_COLUMNS, capaSummary, customersOf, namesOf, readActions, readSources, remindable, sourceFactsOf, sourceLabels, teamOf } from './store'
+import { asDay, byCapa, CAPA_COLUMNS, capaSummary, capasOfHiddenSources, customersOf, namesOf, readActions, readSources, remindable, sourceFactsOf, sourceLabels, teamOf } from './store'
 
 /**
  * The CAPA list, its tiles and its people (B-W2b-108; design quality.capa capa-metrics, capa-grid, the board by stage and
@@ -68,6 +68,11 @@ function viewWhere(view: CapaView, me: string, today: string): Prisma.CapaWhereI
 }
 
 const scopeOfCaller = (caller: CommandCaller) => scopeWhere(actorOf(officeOf(caller)), QUALITY_CAPA_VIEW, SCOPE) as Prisma.CapaWhereInput
+/** B-PR-10: the caller's CAPAs less those answering a record of a customer it does not reach (store.ts capasOfHiddenSources). */
+const wallOfCaller = async (caller: CommandCaller, db: Parameters<typeof capasOfHiddenSources>[0]): Promise<Prisma.CapaWhereInput> => {
+  const hidden = await capasOfHiddenSources(db, actorOf(officeOf(caller)))
+  return hidden.length > 0 ? { id: { notIn: hidden } } : {}
+}
 
 /** GET /quality/capa */
 export async function listCapas(caller: CommandCaller, query: ListQuery) {
@@ -103,7 +108,7 @@ export async function listCapas(caller: CommandCaller, query: ListQuery) {
     filters.push({ OR: [{ createdAt: { lt: when! } }, { createdAt: when!, id: { lt: id } }] })
   }
   return caller.withClient(async (client) => {
-    const rows = await client.capa.findMany({ where: { AND: filters }, select: CAPA_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1 })
+    const rows = await client.capa.findMany({ where: { AND: [...filters, await wallOfCaller(caller, client)] }, select: CAPA_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1 })
     const shown = rows.slice(0, limit)
     const ids = shown.map((row) => row.id)
     const sources = await readSources(client, ids)
@@ -129,7 +134,7 @@ export async function capaCounts(caller: CommandCaller) {
   const now = serverClock.now()
   const today = businessDate(now)
   return caller.withClient(async (client) => {
-    const scope = scopeOfCaller(caller)
+    const scope: Prisma.CapaWhereInput = { AND: [scopeOfCaller(caller), await wallOfCaller(caller, client)] } // B-PR-10
     return {
       tiles: {
         open: await client.capa.count({ where: { AND: [scope, OPEN] } }),

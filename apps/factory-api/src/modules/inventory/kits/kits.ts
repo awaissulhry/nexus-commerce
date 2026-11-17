@@ -3,9 +3,10 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { INVENTORY_ISSUE, INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { kitActions, kitHeldWords, stagingProblem, type KitAction, type KitChange } from '@nexus/factory-domain/inventory/kits/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import { mayAt, officeContextOf, stockContextOf } from '../ledger/access'
+import { officeContextOf, stockContextOf } from '../ledger/access'
 import { lockWorkOrderIssues, type Reader } from '../issue/store'
 import { picksOf, readKits } from './store'
+import { mayPick } from '../issue/picking' // B-PR-10
 
 /**
  * Kit staging (B-W2b-15; SCM-213; follow-up Z2:04 of B-W2a-58; design warehouse.picking pk-grid "kit location", pop:pk-list
@@ -35,10 +36,12 @@ interface Header {
   readonly status: string
   readonly companyId: string
   readonly siteId: string
+  /** B-PR-10: its one customer (the brand wall: another customer's kit is not found). */
+  readonly partyId: string | null
 }
 
 async function headerOf(db: Reader, workOrderId: string): Promise<Header | null> {
-  return isUuid(workOrderId) ? db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true } }) : null
+  return isUuid(workOrderId) ? db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true, partyId: true } }) : null
 }
 
 /** The kit record view: the picks' state, its place and check, and what may be done now. */
@@ -66,7 +69,7 @@ export async function getKit(caller: CommandCaller, workOrderId: string) {
   const context = officeContextOf(caller)
   return caller.withClient(async (db) => {
     const header = await headerOf(db, workOrderId)
-    if (!header || !mayAt(context, INVENTORY_STOCK_VIEW, header)) throw new NotFoundError('Work order not found.')
+    if (!header || !mayPick(context, INVENTORY_STOCK_VIEW, header)) throw new NotFoundError('Work order not found.') // B-PR-10
     return { kit: await kitRecordOf(db, header) }
   })
 }
@@ -95,8 +98,9 @@ async function writeKit(caller: CommandCaller, workOrderId: string, name: `inven
   if (context.audience === 'system') throw new NotFoundError('Work order not found.')
   const floor = context.audience === 'floor'
   const seen = await caller.withClient((db) => headerOf(db, workOrderId))
-  if (!seen || !mayAt(context, floor ? INVENTORY_ISSUE : INVENTORY_STOCK_VIEW, seen)) throw new NotFoundError('Work order not found.')
-  if (!mayAt(context, INVENTORY_ISSUE, seen)) throw new NotFoundError('Work order not found.')
+  // B-PR-10: another customer's work order is not found (its site AND its customer), for the read and the write.
+  if (!seen || !mayPick(context, floor ? INVENTORY_ISSUE : INVENTORY_STOCK_VIEW, seen)) throw new NotFoundError('Work order not found.')
+  if (!mayPick(context, INVENTORY_ISSUE, seen)) throw new NotFoundError('Work order not found.')
   const { result } = await command(caller, { name, idempotencyKey, input }, async (tools) => {
     const { tx } = tools
     // The work order's row, locked: its state cannot move under the kit's check. B-W2b-310: a floor session may not lock the

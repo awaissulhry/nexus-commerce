@@ -47,6 +47,7 @@ import {
   type ItemRow,
   type StyleRow,
 } from './store'
+import { reachesBrand } from '../wall' // B-PR-10
 
 /**
  * Technical files (B-W2b-251; PRD-296, QHS-110; design compliance.techfiles › grid, tiles and the record's Annex III checklist;
@@ -372,7 +373,7 @@ export async function createFile(caller: CommandCaller, body: CreateBody, key: s
   const context = officeOf(caller)
   const actor = actorOf(context)
   const style = await caller.withClient((db) => readStyle(db, body.styleId).catch(() => null))
-  if (!style || !can(actor, TECHFILES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+  if (!style || !can(actor, TECHFILES_VIEW, { companyId: style.companyId }) || !reachesBrand(actor, TECHFILES_VIEW, style.brandPartyId)) throw new NotFoundError('Style not found.') // B-PR-10
   // One live file per style: said first, before anything else is asked of the person.
   const live = await caller.withClient((db) => db.technicalFile.findFirst({ where: { styleId: style.id, status: { not: 'ARCHIVED' } }, select: { number: true, status: true } }))
   if (live) throw new ConflictError(`Style ${style.code} has technical file ${live.number} (${live.status}): one live file per style. Open that one.`)

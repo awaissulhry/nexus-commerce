@@ -2,7 +2,7 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
 import { ConflictError, ForbiddenError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { OrderRow, RequestRow } from '@nexus/factory-domain/product/changes/contracts'
 import { PRODUCT_CHANGES_VIEW } from '@nexus/factory-domain/product/changes/permissions'
@@ -10,6 +10,8 @@ import { approvalCount, type ChangeDecision, type ChangeRefusal } from '@nexus/f
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { heldRoles } from '../../../platform/auth/roles/access'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-10
+import { styleBrandWhere } from '../styles/store' // B-PR-10
 
 /**
  * Change requests and change orders' rows (B-W2b-226; factory-db changes.prisma, B-W2b-212): who may see which, the columns
@@ -154,8 +156,8 @@ export async function requestRowsOf(db: Reader, rows: readonly RequestData[]): P
 /** The request the caller may see with the permission (else 404 / 403). */
 export async function readRequestFor(caller: CommandCaller, changeRequestId: string, permission: Permission = PRODUCT_CHANGES_VIEW): Promise<{ context: OfficeContext; row: RequestData }> {
   const context = officeOf(caller)
-  const row = isUuid(changeRequestId) ? await caller.withClient((client) => client.changeRequest.findUnique({ where: { id: changeRequestId }, select: REQUEST_COLUMNS })) : null
-  if (!row || !may(context, PRODUCT_CHANGES_VIEW, row.companyId)) throw new NotFoundError('Change request not found.')
+  const row = isUuid(changeRequestId) ? await caller.withClient((client) => client.changeRequest.findUnique({ where: { id: changeRequestId, ...requestWall(actorOf(context), PRODUCT_CHANGES_VIEW) }, select: REQUEST_COLUMNS })) : null
+  if (!row || !may(context, PRODUCT_CHANGES_VIEW, row.companyId)) throw new NotFoundError('Change request not found.') // B-PR-10: and the wall
   assertMay(context, permission, row.companyId)
   return { context, row }
 }
@@ -234,8 +236,8 @@ export async function orderRowsOf(db: Reader, rows: readonly OrderData[]): Promi
 /** The change order the caller may see with the permission (else 404 / 403). */
 export async function readOrderFor(caller: CommandCaller, changeOrderId: string, permission: Permission = PRODUCT_CHANGES_VIEW): Promise<{ context: OfficeContext; row: OrderData }> {
   const context = officeOf(caller)
-  const row = isUuid(changeOrderId) ? await caller.withClient((client) => client.changeOrder.findUnique({ where: { id: changeOrderId }, select: ORDER_COLUMNS })) : null
-  if (!row || !may(context, PRODUCT_CHANGES_VIEW, row.companyId)) throw new NotFoundError('Change order not found.')
+  const row = isUuid(changeOrderId) ? await caller.withClient((client) => client.changeOrder.findUnique({ where: { id: changeOrderId, ...orderWall(actorOf(context), PRODUCT_CHANGES_VIEW) }, select: ORDER_COLUMNS })) : null
+  if (!row || !may(context, PRODUCT_CHANGES_VIEW, row.companyId)) throw new NotFoundError('Change order not found.') // B-PR-10: and the wall
   assertMay(context, permission, row.companyId)
   return { context, row }
 }
@@ -275,3 +277,31 @@ export async function madeOf(db: Reader, workOrderIds: readonly string[]): Promi
 }
 
 export const NOTHING_MADE: Made = Object.freeze({ cut: { bundles: 0, pieces: 0 }, worked: { bundles: 0, pieces: 0 } })
+
+// ── B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/*
+ * The brand wall of change requests and change orders (production plan §2; Owner rule 2026-11-16: "One brand must not be
+ * able to see anything related to any other brand"). A person limited to some customers reaches a request only when it
+ * reaches its style's brand (a private-label style is its customer's; our own collection names none), the work order it is
+ * raised on (B-PR-03's wall: a work order of no customer needs every customer) and the party that asked (another customer or
+ * a supplier outside the person's list is not found); an order only when it reaches its style's brand and EVERY work order
+ * its items name. The production unit (every customer) is not filtered: `{}`.
+ */
+export function requestWall(actor: Actor, permission: Permission): Prisma.ChangeRequestWhereInput {
+  const parts = [
+    { style: { is: styleBrandWhere(actor, permission) } },
+    { OR: [{ workOrderId: null }, { workOrder: { is: workOrderWhere(actor, permission) } }] },
+    scopeWhere(actor, permission, { party: { field: 'partyId', nullable: true } }) as Prisma.ChangeRequestWhereInput,
+  ]
+  return everyCustomer(actor, permission) ? {} : { AND: parts }
+}
+
+export function orderWall(actor: Actor, permission: Permission): Prisma.ChangeOrderWhereInput {
+  const parts = [{ style: { is: styleBrandWhere(actor, permission) } }, { items: { every: { OR: [{ workOrderId: null }, { workOrder: { is: workOrderWhere(actor, permission) } }] } } }]
+  return everyCustomer(actor, permission) ? {} : { AND: parts }
+}
+
+/** Every grant of the permission reaches every customer: nothing to wall. */
+const everyCustomer = (actor: Actor, permission: Permission): boolean => Object.keys(workOrderWhere(actor, permission)).length === 0
+// ── end B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+

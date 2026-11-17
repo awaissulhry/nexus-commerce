@@ -19,6 +19,8 @@ import { logChanges, type LoggedPlace } from '../schedule-depth/log'
 import { pinnedRefusal } from '../schedule-depth/pins'
 import type { UndoBody } from './contract'
 import { byWords, CHANGE_COLUMNS, entriesOf, factsOf, laterWords, latestOfSlots, operationsOf, slotsNowOf, whatOf, type ChangeRow } from './feed'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * Undo one change of the board's log (B-W2b-329; PLN-149; design planning.board "Undo one move", "⌘Z … undo while the bar
@@ -58,6 +60,8 @@ const reasonOf = (value: string | null | undefined): string | null => (value ===
 
 async function changeTarget(caller: CommandCaller, changeId: string): Promise<{ id: string; kind: string; site: SiteRow }> {
   const context = officeContextOf(caller)
+  // B-PR-10 (a named leftover): undoing a change moves work on lanes every customer shares (as B-PR-07's slot writes).
+  assertEveryParty(actorOf(context), PLANNING_VIEW)
   const row = await caller.withClient((db) => (isUuid(changeId) ? db.scheduleChange.findUnique({ where: { id: changeId }, select: { id: true, kind: true, plan: { select: { site: { select: SITE_COLUMNS } } } } }) : Promise.resolve(null)))
   const site = row?.plan.site ?? null
   assertMayAt(context, PLANNING_VIEW, site ? { companyId: site.companyId, siteId: site.id } : null, 'Change')

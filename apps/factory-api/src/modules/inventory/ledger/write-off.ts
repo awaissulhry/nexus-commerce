@@ -26,7 +26,7 @@ import { holdOnWriteOff } from '../../quality/holds/checks'
 import { readHides, readItems, readLots, readSiteStock } from '../issue/store'
 import { ReservationRefusedError } from '../reservations/reserve'
 import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf, type ReserveKey } from '../reservations/store'
-import { mayAt, officeContextOf, seesCost, siteFor } from './access'
+import { mayAt, officeContextOf, seesCost, siteFor, assertWholeWarehouse } from './access'
 import { completeKeys, LEDGER_SELECT, postMoves, type MoveDraft } from './post-moves'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { remnantsOnScrap } from '../remnants/lifecycle'
@@ -85,6 +85,7 @@ async function reasonOf(tools: CommandTools, code: string, note: string | null |
 
 export async function writeOff(caller: CommandCaller, body: WriteOffInput, idempotencyKey?: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, body.siteId, INVENTORY_SCRAP, 'body/siteId')
   const shape = writeOffLineProblems(body.lines)
   if (shape.length > 0) throw new ValidationError(shape[0]!.message, shape.map((issue) => ({ path: prefixed(issue.path), message: issue.message })))

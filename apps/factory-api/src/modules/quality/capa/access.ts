@@ -4,7 +4,7 @@ import { QUALITY_CAPA_VIEW } from '@nexus/factory-domain/quality/capa/permission
 import { isFinal, STATUS_WORDS, typeWords, type CapaStatus, type CapaType } from '@nexus/factory-domain/quality/capa/rules'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { readCapa, scopeOf, type CapaRow } from './store'
+import { capasOfHiddenSources, readCapa, scopeOf, type CapaRow } from './store'
 
 /**
  * Who works on CAPAs (plan A1 §2.2, §3.11): the office over the companies AND customers its grants reach (an 8D written
@@ -46,7 +46,9 @@ export const mayOn = (context: OfficeContext, permission: Permission, row: Pick<
 export async function officeCapa(caller: CommandCaller, capaId: string, permission: Permission = QUALITY_CAPA_VIEW): Promise<{ context: OfficeContext; capa: CapaRow }> {
   const context = officeOf(caller)
   const capa = await caller.withClient((client) => readCapa(client, capaId))
-  if (!capa || !mayOn(context, QUALITY_CAPA_VIEW, capa)) throw new NotFoundError('CAPA not found.')
+  // B-PR-10: and every record it answers (another customer's NCR or complaint): as an unknown CAPA.
+  const hidden = capa ? await caller.withClient((client) => capasOfHiddenSources(client, actorOf(context))) : []
+  if (!capa || !mayOn(context, QUALITY_CAPA_VIEW, capa) || hidden.includes(capa.id)) throw new NotFoundError('CAPA not found.')
   if (!mayOn(context, permission, capa)) throw new ForbiddenError(`This needs a right your role does not hold over the CAPA's company${capa.customerId ? ' and customer' : ''}.`)
   return { context, capa }
 }

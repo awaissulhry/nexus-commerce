@@ -5,7 +5,7 @@ import { INVENTORY_ISSUE } from '@nexus/factory-domain/inventory/permissions'
 import { backfillRefusal } from '@nexus/factory-domain/inventory/remnants/rules'
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller } from '../../../core/command'
-import { mayAt, officeContextOf } from '../ledger/access'
+import { mayAt, officeContextOf, assertWholeWarehouse } from '../ledger/access'
 import { lockHideCuts, readItems, readSiteStock } from '../issue/store'
 import { RemnantRefusedError, tagRemnantInCommand, REMNANT_SELECT } from './lifecycle'
 
@@ -25,6 +25,7 @@ export interface BackfillInput {
 
 export async function tagW1Remnant(caller: CommandCaller, body: BackfillInput, idempotencyKey?: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const hide = isUuid(body.hideId) ? await caller.withClient((client) => client.hide.findUnique({ where: { id: body.hideId }, select: { id: true, code: true, siteId: true, lotId: true, itemId: true, state: true, lot: { select: { companyId: true } } } })) : null
   if (!hide || !mayAt(context, INVENTORY_ISSUE, { companyId: hide.lot.companyId, siteId: hide.siteId })) throw new NotFoundError('Hide not found.')
   const { result } = await command(caller, { name: 'inventory.tagRemnant', idempotencyKey, input: body }, async (tools) => {

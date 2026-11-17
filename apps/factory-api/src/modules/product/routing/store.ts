@@ -17,6 +17,7 @@ import { bumpRevision, findRevision, lockStyleRow, revisionViewOf, STYLE_COLUMNS
 import { contextOf, mayWrite } from '../materials/store'
 import { readOperations, readSteps, readSubcontracts, readWorkshops, type OperationFacts, type StepRecord } from './read'
 import { requireEditRule } from '../lifecycle/edit-rule'
+import { styleScope } from '../styles/store' // B-PR-10
 
 /**
  * The routing's rows (factory-db `RoutingOperation`) and what they name (`Style`, `StyleRevision`, `Operation`): the
@@ -46,7 +47,7 @@ export async function readStyleFor(caller: CommandCaller, styleId: string): Prom
   const context = contextOf(caller)
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
   const row = await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: STYLE_COLUMNS }))
-  if (!row || !can(actorOf(context), PRODUCT_ROUTING_VIEW, { companyId: row.companyId })) throw new NotFoundError('Style not found.')
+  if (!row || !can(actorOf(context), PRODUCT_ROUTING_VIEW, styleScope(row))) throw new NotFoundError('Style not found.') // B-PR-10: its brand too
   return row
 }
 

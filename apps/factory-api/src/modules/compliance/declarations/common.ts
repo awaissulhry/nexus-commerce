@@ -10,6 +10,7 @@ import { serverClock, type Clock } from '../../../core/time'
 import { mayWrite } from '../../product/materials/store'
 import { officeOf as labelsOfficeOf } from '../labels/store'
 import { assertMayKeep, namesFor } from '../register-of-rules/common'
+import { reachesBrand } from '../wall' // B-PR-10
 
 /**
  * What the DoC generator's parts share (B-W2b-257; modules/compliance/declarations): the office context, the module clock,
@@ -126,7 +127,8 @@ export type StyleRow = Prisma.StyleGetPayload<{ select: typeof STYLE_SELECT }>
 /** The style as the caller may see it (compliance.certificates.view over its company), or not found. */
 export async function readVisibleStyle(db: Reader, context: OfficeContext, styleId: string): Promise<StyleRow> {
   const style = isUuid(styleId) ? await db.style.findUnique({ where: { id: styleId }, select: STYLE_SELECT }) : null
-  if (!style || !mayRead(context, style.companyId)) throw new NotFoundError('There is no such style.')
+  // B-PR-10: another customer's private-label style is not found (as an unknown id).
+  if (!style || !mayRead(context, style.companyId) || !reachesBrand(actorOf(context), DECLARATIONS_VIEW, style.brandPartyId)) throw new NotFoundError('There is no such style.')
   return style
 }
 
@@ -134,8 +136,9 @@ export async function readVisibleStyle(db: Reader, context: OfficeContext, style
 export async function readVisibleDocument(db: Reader, context: OfficeContext, documentId: string): Promise<DocumentRow> {
   const row = isUuid(documentId) ? await db.complianceDocument.findUnique({ where: { id: documentId }, select: DOCUMENT_SELECT }) : null
   if (!row || !mayRead(context, row.companyId)) throw new NotFoundError('There is no such declaration.')
-  const style = await db.style.findUnique({ where: { id: row.styleId }, select: { companyId: true } })
-  if (!style || !mayRead(context, style.companyId)) throw new NotFoundError('There is no such declaration.')
+  const style = await db.style.findUnique({ where: { id: row.styleId }, select: { companyId: true, brandPartyId: true } })
+  // B-PR-10: a declaration of another customer's private-label style is not found.
+  if (!style || !mayRead(context, style.companyId) || !reachesBrand(actorOf(context), DECLARATIONS_VIEW, style.brandPartyId)) throw new NotFoundError('There is no such declaration.')
   return row
 }
 

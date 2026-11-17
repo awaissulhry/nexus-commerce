@@ -13,6 +13,7 @@ import { certificateCovering } from '../../quality/lab/store'
 import { mayAt, officeContextOf, postedBy, stockContextOf, type StockContext } from '../ledger/access'
 import { fixed } from '../stock/read-kit'
 import { ProtectorRefusedError } from './facts'
+import { mayPick } from '../issue/picking' // B-PR-10
 
 /**
  * Protector lots per batch or garment (B-W2b-107; SCM-261; EN 1621-1, -2; Reg. (EU) 2016/425; design floor.operation "Trace
@@ -45,7 +46,7 @@ import { ProtectorRefusedError } from './facts'
 const today = (): BusinessDate => businessDate(serverClock.now())
 const dayOf = (value: Date | null): BusinessDate | null => (value === null ? null : value.toISOString().slice(0, 10))
 
-const WORK_ORDER_SELECT = { id: true, companyId: true, siteId: true, number: true, batchNumber: true, status: true, style: { select: { code: true, name: true } } } as const satisfies Prisma.WorkOrderSelect
+const WORK_ORDER_SELECT = { id: true, companyId: true, siteId: true, partyId: true, number: true, batchNumber: true, status: true, style: { select: { code: true, name: true } } } as const satisfies Prisma.WorkOrderSelect
 type WorkOrderRow = Prisma.WorkOrderGetPayload<{ select: typeof WORK_ORDER_SELECT }>
 
 const ROW_SELECT = {
@@ -117,7 +118,8 @@ function rowView(row: ProtectorRow, certificates: ReadonlyMap<string, { validTo:
 async function workOrderFor(caller: CommandCaller, workOrderId: string, permission: Parameters<typeof mayAt>[1]): Promise<{ workOrder: WorkOrderRow; context: StockContext }> {
   const context = stockContextOf(caller)
   const workOrder = isUuid(workOrderId) ? await caller.withClient((client) => client.workOrder.findUnique({ where: { id: workOrderId }, select: WORK_ORDER_SELECT })) : null
-  if (!workOrder || !mayAt(context, permission, workOrder)) throw new NotFoundError('Work order not found.')
+  // B-PR-10: another customer's work order is not found (its site AND its customer), for the read and the record write.
+  if (!workOrder || !mayPick(context, permission, workOrder)) throw new NotFoundError('Work order not found.')
   return { workOrder, context }
 }
 
@@ -250,9 +252,10 @@ export async function withdrawProtector(caller: CommandCaller, rowId: string, bo
   const context = officeContextOf(caller)
   const problems = withdrawProblems(body)
   if (problems.length > 0) invalid(problems, 'Say why.')
-  const row = isUuid(rowId) ? await caller.withClient((client) => client.garmentProtectorLot.findUnique({ where: { id: rowId }, select: { ...ROW_SELECT, workOrder: { select: { companyId: true } } } })) : null
-  const scope = row ? { companyId: row.workOrder.companyId, siteId: row.siteId } : null
-  if (!row || !scope || !(mayAt(context, WORKORDERS_VIEW, scope) || mayAt(context, INVENTORY_PROTECTORS_RECORD, scope))) throw new NotFoundError('Protector record not found.')
+  const row = isUuid(rowId) ? await caller.withClient((client) => client.garmentProtectorLot.findUnique({ where: { id: rowId }, select: { ...ROW_SELECT, workOrder: { select: { companyId: true, partyId: true } } } })) : null
+  // B-PR-10: the record's work order's customer too: another customer's protector record is not found.
+  const scope = row ? { companyId: row.workOrder.companyId, siteId: row.siteId, partyId: row.workOrder.partyId } : null
+  if (!row || !scope || !(mayPick(context, WORKORDERS_VIEW, scope) || mayPick(context, INVENTORY_PROTECTORS_RECORD, scope))) throw new NotFoundError('Protector record not found.')
   if (!mayAt(context, INVENTORY_PROTECTORS_RECORD, scope)) throw new ForbiddenError("This needs the right to record protectors at the work order's site.")
   const reason = body.reason.trim()
   const { result } = await command(caller, { name: 'inventory.withdrawProtectorLot', idempotencyKey, input: { rowId, ...body }, record: { type: 'GarmentProtectorLot', id: row.id, expectedVersion: body.version } }, async (tools) => {
