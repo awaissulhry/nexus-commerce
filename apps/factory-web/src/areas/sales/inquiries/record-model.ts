@@ -1,6 +1,9 @@
 import type { LiveState } from '../../../shell/live/use-live'
-import type { Assignees, ContactOption, InquiryView, PartyOption, ScaleOption, StyleOption } from './api'
+import type { Assignees, ContactOption, InquiryView, ScaleOption, StyleOption } from './api'
 import type { DeclineDraft, InquiriesCan, LineDraft, Loaded, Notice, OrderDraft, RecordTab, RequestDraft, StyleDraftDraft } from './model'
+// B-TH-234: make or match the customer, hand the customer a task.
+import type { CustomerCheck } from './api'
+import type { CustomerChoice, TaskDraft } from './model'
 import type { StyleRead } from './view/LinesEditor'
 
 /**
@@ -18,8 +21,11 @@ export type RecordDialog =
   // ---- B-TH-228: Make order, Make style draft
   | { readonly kind: 'order'; readonly draft: OrderDraft; readonly busy: boolean; readonly notice: Notice | null }
   | { readonly kind: 'styleDraft'; readonly draft: StyleDraftDraft; readonly scales: Loaded<readonly ScaleOption[]>; readonly busy: boolean; readonly notice: Notice | null }
+  // ---- B-TH-234: make or match the customer from the prospect (the check first), "Ask <customer> for…" a task in its portal
+  | { readonly kind: 'customer'; readonly check: Loaded<CustomerCheck>; readonly choice: CustomerChoice | null; readonly confirmed: boolean; readonly busy: boolean; readonly notice: Notice | null }
+  | { readonly kind: 'task'; readonly draft: TaskDraft; readonly busy: boolean; readonly notice: Notice | null }
 
-export type RecordVerb = 'quote' | 'assign' | 'decline' | 'lost' | 'askInfo' | 'resume' | 'unassign' | 'order' | 'styleDraft'
+export type RecordVerb = 'quote' | 'assign' | 'decline' | 'lost' | 'askInfo' | 'resume' | 'unassign' | 'order' | 'styleDraft' | /* B-TH-234 */ 'customer' | 'task' | 'notAnOrder'
 
 export interface InquiryRecordModel {
   readonly prefix: string
@@ -33,8 +39,6 @@ export interface InquiryRecordModel {
   readonly saving: boolean
   /** A verb without a dialog running (ask for more information, resume, take off). */
   readonly busy: boolean
-  /** The customers a prospect may be matched to (parties.view); null without the right. */
-  readonly customers: { readonly items: readonly PartyOption[] | null; readonly problem: string | null } | null
   /** The contacts of the inquiry's customer (or the one being matched). */
   readonly contacts: { readonly items: readonly ContactOption[] | null; readonly problem: string | null } | null
   readonly styles: { readonly items: readonly StyleOption[] | null; readonly problem: string | null } | null
@@ -52,8 +56,6 @@ export interface InquiryRecordActions {
   onDraft?: (patch: Partial<RequestDraft>) => void
   onLines?: (lines: LineDraft[]) => void
   onStyle?: (styleId: string) => void
-  /** A prospect matched to a customer (its contacts are read), or the match undone. */
-  onMatch?: (partyId: string | null) => void
   onTechPack?: (fileId: string, on: boolean) => void
   onSave?: () => void
   onDiscard?: () => void
@@ -75,5 +77,9 @@ export interface InquiryRecordActions {
     // B-TH-228
     onOrderDraft?: (patch: Partial<OrderDraft>) => void
     onStyleDraft?: (patch: Partial<StyleDraftDraft>) => void
+    // B-TH-234
+    onCustomer?: (patch: { choice?: CustomerChoice | null; confirmed?: boolean }) => void
+    onTask?: (patch: Partial<TaskDraft>) => void
+    onRetryCheck?: () => void
   }
 }

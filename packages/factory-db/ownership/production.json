@@ -136,6 +136,15 @@
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
       }
     },
+    "WorkOrderHold": {
+      "about": "B-PR-15 (production plan, schema wave 3/5; B-PR-21 places and lifts them): a plain production or customer hold on a work order (quality holds stay holds.json's). The office places a hold (ACTIVE) and lifts it (LIFTED, with when, by whom and why) and reads every hold of the tenant (the API scopes it by company, site and customer: partyId, the work order's own). The floor reads its own site's holds (a held work order's tablet says why), never the office's note. The customer reads none of it here: the API shows it 'On hold' and the words meant for it. Never deleted; a work order leaves ON_HOLD only when no ACTIVE hold names it (the …_brand_production_guards triggers).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["note"] }
+      }
+    },
     "FloorScanRefusal": {
       "about": "The scans a site's floor devices sent from their offline queue that the server refused (B-W1-42; SCR-023 data), with the reason and the one fix. The floor keeps its own (insert), discards them and marks them resolved when the same client scan id is accepted (update); the office reads them and discards them too. Their content never changes; nobody deletes one.",
       "kind": "tenant",

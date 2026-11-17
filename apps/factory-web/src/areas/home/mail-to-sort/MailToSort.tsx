@@ -9,7 +9,8 @@ import { storeUrl } from '../../../record-panels/store'
 import { answerProblem, assignMail, findRecords, getMail, listMail, readProblem, rejectMail, releaseMail } from './api'
 // B-TH-224: whether the open mail became a request ("Open in Incoming").
 import { requestMadeOf } from '../mail/create-inquiry/api'
-import { isMailChange, type MailDetail, type MailFilter, type MailSummary, type MailToSortViewModel, type RecordCandidate } from './model'
+// B-TH-239: toSortCountOf — the "Mail to sort" tile's own count (one rule with Incoming's notice).
+import { isMailChange, toSortCountOf, type MailDetail, type MailFilter, type MailSummary, type MailToSortViewModel, type RecordCandidate, type ToSortCount } from './model'
 import { MailToSortView } from './view/MailToSortView'
 // B-W2b-397: the team inboxes, the capture address and Create an inquiry.
 import { companyPrefix } from '../../../lib/session/session'
@@ -48,18 +49,29 @@ export function MailToSort() {
   const openRef = useRef(open)
   openRef.current = open
 
+  // B-TH-239: the tile counts the first page of what waits — read with the list when it shows all, else on its own (one more read).
+  const [toSort, setToSort] = useState<ToSortCount>({ count: null, more: false })
+  const loadToSort = useCallback(async () => {
+    try {
+      setToSort(toSortCountOf(await listMail(api, 'all', null)))
+    } catch {
+      // A failed count keeps the last one known ("—" before any): the list itself says what failed.
+    }
+  }, [api])
   const loadList = useCallback(
     async (more = false, cursor: string | null = null) => {
       const wanted = filterRef.current
+      if (!more && wanted !== 'all') void loadToSort()
       try {
         const page = await listMail(api, wanted, more ? cursor : null)
+        if (!more && wanted === 'all') setToSort(toSortCountOf(page))
         if (wanted !== filterRef.current) return
         setMails((current) => ({ items: more && current.items ? [...current.items, ...page.mails] : page.mails, cursor: page.nextCursor, problem: null }))
       } catch (error) {
         setMails((current) => ({ ...current, problem: readProblem(error) }))
       }
     },
-    [api],
+    [api, loadToSort],
   )
   // B-TH-224: the request each opened mail became (null: none; absent: not read), for "Open in Incoming".
   const [made, setMade] = useState<Readonly<Record<string, { id: string; number: string } | null>>>({})
@@ -156,6 +168,7 @@ export function MailToSort() {
     capture,
     prefix,
     canInquiry,
+    toSort, // B-TH-239
   }
 
   return (

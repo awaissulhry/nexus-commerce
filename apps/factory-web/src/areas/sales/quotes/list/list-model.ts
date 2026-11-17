@@ -9,6 +9,8 @@ import type { NewFromActions } from '../new-from/view/NewFrom'
 import type { QuotesPageLinksModel } from '../new-from/view/PageLinks'
 // B-TH-257: the New messages column.
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'
+// TH-6 part B: the Picture column's loader (Incoming's cached small-preview read).
+import type { PictureLoader } from '../../inquiries/view/cells'
 
 /** The quotes list's view model (SCR-034; design sales.quotes): the container (QuotesPage.tsx) fills it. */
 
@@ -80,6 +82,8 @@ export interface QuotesListViewModel {
   /** orders.view: an accepted row's "SO-…" opens its order. */
   readsOrders?: boolean
   // ---- end B-TH-257
+  // ---- TH-6 part B (B-TH-257 follow-up; grid-F01): design cases give each row's small preview here (no request is made).
+  demoPictures?: Readonly<Record<string, string>>
 }
 
 export interface QuotesListActions extends DuplicateActions, NewFromActions {
@@ -110,4 +114,6 @@ export interface QuotesListActions extends DuplicateActions, NewFromActions {
   onExport?: (ids: readonly string[]) => void
   /** Cancel the selected quotes, one by one with each one's version; resolves true when all were cancelled. */
   onCancelMany?: (ids: readonly string[], reason: string) => Promise<boolean>
+  /** TH-6 part B (grid-F01): a row's small preview (GET /sales/quotes/:id/picture), or null for the placeholder. */
+  loadPicture?: PictureLoader
 }

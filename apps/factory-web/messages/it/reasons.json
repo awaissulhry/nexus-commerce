@@ -21,6 +21,7 @@
     "APPROVAL_REJECT": "Rifiuti di approvazione",
     "PRICE_ADJUSTMENT": "Rettifiche di prezzo",
     "SUPPLIER_DOCUMENT_TYPE": "Tipi di documento fornitore",
+    "PRODUCTION_HOLD": "Blocchi di produzione",
     "SCRAP": "Scarti",
     "REWORK": "Rilavorazioni"
   },
@@ -39,6 +40,7 @@
     "APPROVAL_REJECT": "Perché chi approva ha detto no a una richiesta: ogni rifiuto ne indica uno, con le parole.",
     "PRICE_ADJUSTMENT": "Perché il prezzo di una riga è stato cambiato a mano: ogni modifica manuale su una riga di offerta o ordine ne indica una.",
     "SUPPLIER_DOCUMENT_TYPE": "Che cos'è un documento di un fornitore (un DURC, un audit LWG, un certificato ISO 9001): ogni documento dell'archivio di un fornitore può indicarne uno.",
+    "PRODUCTION_HOLD": "Perché un ordine di lavoro è stato bloccato in produzione senza un blocco qualità (materiale mancante, una domanda tecnica aperta, la capacità): ogni blocco di questo tipo ne indica uno.",
     "SCRAP": "Perché un capo va perso a un'operazione: i riquadri di scarto della schermata operazione.",
     "REWORK": "Perché un capo torna indietro per essere rifatto: i riquadri di rilavorazione della schermata operazione."
   },

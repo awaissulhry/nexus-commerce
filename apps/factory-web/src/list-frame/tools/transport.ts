@@ -174,7 +174,52 @@ export interface ListToolsTransport {
   bulkApply(ask: BulkApplyAsk, idempotencyKey: string): Promise<readonly BulkResult[]>
   /** B-W2b-388: Pin to Today (absent: the menu has no such item). */
   readonly pins?: ListPins
+  /** B-TH-241: the custom fields a list frame draws as columns (absent: no custom columns). */
+  readonly fields?: ListFieldsTransport
 }
+
+// ── B-TH-241 (threads plan TH-4, SHEET-G04; features SHEET.brand-fields-F02, -F05): custom columns in the list frame ──
+/**
+ * A custom field as a list frame draws it (apps/factory-api platform/fields `fieldView`: `GET /fields`). Its column id is the
+ * API's (`cf:<code>`, a money field `cf:<grain>:<code>`), so the export engine writes it and leaves a money one out for a person
+ * without its grain. `partyId` (B-TH-056): a field for one customer only (null: every customer).
+ */
+export interface ListField {
+  readonly code: string
+  readonly columnId: string
+  readonly type: string
+  readonly labelIt: string
+  readonly labelEn: string
+  readonly unit: string | null
+  readonly companyId: string | null
+  readonly partyId: string | null
+  /** A select's values (code → label), deactivated ones too (a record may hold one). */
+  readonly options: ReadonlyArray<{ readonly code: string; readonly labelIt: string; readonly labelEn: string; readonly active: boolean }>
+}
+
+/** One record's value of one field (`POST /fields/rows/:recordType`): the stored value and its words (a select's label, a name). */
+export interface ListFieldValue {
+  readonly value: unknown
+  readonly wordsIt: string | null
+  readonly wordsEn: string | null
+}
+
+/** Whose fields a list reads: a company's (and every company's), and one customer's (and every customer's). */
+export interface ListFieldScope {
+  readonly companyId?: string | null
+  readonly partyId?: string | null
+}
+
+export interface ListFieldsTransport {
+  /** The fields this person sees of a record type, in the scope (`GET /fields?recordType=&companyId=&partyId=`). */
+  read(recordType: string, scope: ListFieldScope): Promise<readonly ListField[]>
+  /**
+   * The values of these records (at most 200 ids), by record id then field code; a record the person may not see is left out
+   * (`POST /fields/rows/:recordType`). A field for one customer has values only on that customer's records (the API's rule).
+   */
+  rows(recordType: string, ids: readonly string[]): Promise<ReadonlyMap<string, Readonly<Record<string, ListFieldValue>>>>
+}
+// ── end B-TH-241 ──
 
 /** B-W2b-388 (PLT-163, design home.today `my-views` "Pin a view from any list with Columns ▾ › Pin to Today"): a view pinned to
  * Today is followed (PLT-151): My saved views shows its count, and a change tells me. */

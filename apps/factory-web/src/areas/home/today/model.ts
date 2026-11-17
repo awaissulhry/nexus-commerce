@@ -1,4 +1,5 @@
 import type { KeyNumbersState } from './numbers/model'
+import type { IncomingState } from './incoming/model' // B-TH-239
 import { z } from 'zod'
 
 /**
@@ -327,6 +328,9 @@ export interface TodayViewModel {
   readonly comingUp?: Loaded<ComingUpView> | null
   /** B-W2a-79 My numbers (GET /home/numbers; numbers/): absent or null, the section is not drawn. */
   readonly numbers?: KeyNumbersState | null
+  // ── B-TH-239: Incoming's counts (incoming/, one read with Sales › Incoming); absent or null: not a reader of requests (no section). ──
+  readonly incoming?: IncomingState
+  // ── end B-TH-239 ──
   /** The read's clock (AsOf renders the same on the server and the client). */
   readonly now: number
   readonly live: LiveState

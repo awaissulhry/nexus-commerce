@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { listInquiries } from '../api'
+import { listIncoming } from '../api' // B-TH-233: Incoming's one read
 import { backAddressOf, backHref, fullPageHref, inquiriesCan, queryOf, recordTabOf, type RecordTab } from '../model'
 import { useInquiry } from '../use-inquiry'
 import { InquiryPageView } from '../view/InquiryPageView'
@@ -34,7 +34,8 @@ export function InquiryRecord({ inquiryId }: { inquiryId: string }) {
   useEffect(() => {
     if (!back || !canView) return setIds(null)
     const controller = new AbortController()
-    listInquiries(api, JSON.parse(queryKey) as ReturnType<typeof queryOf>, controller.signal)
+    // B-TH-233: the full page walks the list's requests (a catalogue order and a change request have no full page of a request).
+    listIncoming(api, { ...(JSON.parse(queryKey) as ReturnType<typeof queryOf>), kind: 'REQUEST' }, { signal: controller.signal })
       .then((answer) => setIds(answer.rows.map((row) => row.id)))
       .catch(() => setIds(null))
     return () => controller.abort()

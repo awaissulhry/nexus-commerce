@@ -2,7 +2,9 @@ import { createElement, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { DEMO_USER } from '../../../../../shell/design-data'
 import { ALL_RIGHTS, customerAccess, DEMO_NOW, DEMO_TODAY, READ_ONLY } from '../../../../sales/customers/portal/demo'
-import { COMPANIES, inShell, panels, PREFIX, ROLES } from '../../../shared/fixtures'
+import { COMPANIES, inShell, PREFIX, ROLES } from '../../../shared/fixtures'
+// B-TH-269: the user record on RecordFrame — its thread docked (closed: R-10), notes only.
+import { designDockedThread } from '../../../../_shared/record-frame/fixtures'
 import { loaded, STEP_UP_CLOSED } from '../../../shared/model'
 import type { UserRecordModel } from '../../record/model'
 import { UserRecordView } from '../../record/view/UserRecordView'
@@ -12,7 +14,7 @@ import { PartnerOrganisationView, type PartnerOrganisationModel } from './view/P
 /**
  * SCR-011-partner — User › Partner organisation › Organisation (B-W2b-180; design admin.users rec:User/partner/org): a
  * person of a partner organisation in their user record — Profile, Partner organisation (in place of Roles & scope),
- * Activity. Made-up people of a made-up customer.
+ * Sessions & sign-ins, the notes docked closed beside them (B-TH-269). Made-up people of a made-up customer.
  */
 
 interface Case {
@@ -35,7 +37,7 @@ function PartnerDesign({ model }: { model: Case }): ReactNode {
   const person = model.record.user!
   return inShell(
     `/admin/users/${person.id}`,
-    createElement(UserRecordView, { model: model.record, panels: panels({ type: 'User', id: person.id, companyId: null }, person.displayName), partner: createElement(PartnerOrganisationView, { model: model.org }) }),
+    createElement(UserRecordView, { model: model.record, thread: designDockedThread({ recordType: 'User', record: person.displayName, party: null }), partner: createElement(PartnerOrganisationView, { model: model.org }) }),
   )
 }
 

@@ -45,10 +45,12 @@ const storageOf = (): Storage | null => {
  * record type, so the next record of the same type opens the same; ⌘J (Ctrl J) shows or hides the thread; "Reset width"
  * goes back to 40 %. The dock (B-TH-214) reads `width` and `hidden`; the Head's width menu calls `choose`.
  */
-export function useThreadWidth(recordType: string, personId: string | null, options: { readonly keys?: boolean } = {}) {
+export function useThreadWidth(recordType: string, personId: string | null, options: { readonly keys?: boolean; /* B-TH-269 */ readonly startHidden?: boolean } = {}) {
   // Server and first client render: the default; the remembered one after mounting (no mismatch).
   const [width, setWidth] = useState<DockWidth>(DEFAULT_DOCK_WIDTH)
-  const [hidden, setHidden] = useState(false)
+  // ---- B-TH-269 (R-10): a person's record (a colleague, a worker) docks its thread CLOSED; the Thread button or ⌘J shows it.
+  const [hidden, setHidden] = useState(options.startHidden ?? false)
+  // ---- end B-TH-269
   // B-TH-213: RecordFrame reads whether a width was chosen (a wide grid tab gives one third otherwise) and owns ⌘J itself.
   const [remembered, setRemembered] = useState(false)
   const keys = options.keys ?? true

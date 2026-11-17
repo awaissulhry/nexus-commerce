@@ -250,8 +250,7 @@
     "ddtWhat": "The transport document of shipment {shipment}, cited by the invoice",
     "download": "Download",
     "draft": {
-      "body": "They are made at issue: the legal XML and the courtesy PDF.",
-      "title": "No documents yet"
+      "body": "They are made at issue: the legal XML and the courtesy PDF."
     },
     "filesPending": "The invoice is issued; its XML and PDF are still being made.",
     "mail": {
@@ -750,14 +749,11 @@
     "back": "Invoices",
     "backToList": "Back to the invoices",
     "changed": "Someone changed this invoice at {time}.",
-    "dock": "Thread",
-    "dockHint": "The invoice’s thread beside the tab (⌘J)",
     "dockLabel": "Thread, files and history",
     "draftTitle": "Draft · {type}",
     "issuedOn": "Issued {date}",
     "loading": "Loading the invoice…",
     "more": "More actions",
-    "noPanels": "The thread is not available here.",
     "order": "Order {number}",
     "readOnly": "You can read this invoice; finance issues invoices and records payments.",
     "reload": "Reload",
@@ -765,6 +761,7 @@
     "resendBy_other": "Send again by {date} ({count} working days left)",
     "resendOverdue": "The time to send it again ended on {date}",
     "sendCopyHint": "Write to the customer from the thread and attach the courtesy PDF",
+    "sendCopyNotice": "SDI could not deliver this invoice: send the customer a copy with the courtesy PDF.",
     "state": {
       "error": {
         "body": "Try again in a moment.",
@@ -1213,13 +1210,12 @@
     "title": "Confirm it’s you"
   },
   "tab": {
-    "activity": "Activity",
     "checksFail": "Checks to fix",
-    "documents": "Documents",
     "lines": "Lines & VAT",
     "money": "Deposits & payments",
     "rejected": "Rejected by SDI",
-    "sdi": "SDI status"
+    "sdi": "SDI status",
+    "sdiDocuments": "SDI & documents"
   },
   "tile": {
     "atSdi": "Waiting at SDI",

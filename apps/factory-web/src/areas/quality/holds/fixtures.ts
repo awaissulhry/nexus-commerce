@@ -1,8 +1,7 @@
 import { createElement, Fragment, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
-import { designScreen as panelsScreen } from '../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
+// B-TH-270 (PL6): the hold's thread docked in its review window (office notes only), as the page mounts OfficeRecordThread.
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { STEP_UP_CLOSED, type StepUpState } from '../_shared/hooks'
 import { failedRead, qualityCan, ready, reading } from '../_shared/model'
 import { canFor, inShell, ME, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../_shared/fixtures'
@@ -128,10 +127,8 @@ const list = (over: Partial<HoldsListModel> = {}, role: RoleCase = 'owner'): Des
 
 const openOn = (detail: HoldDetail, tab: RecordTab = 'hold') => ({ open: { id: detail.hold.id, detail: ready(detail), tab } })
 
-const panelsPreview = (hold: Hold): RecordPanelsViewModel => {
-  const base = panelsScreen.cases.find((entry) => entry.id === 'conversation')?.model ?? panelsScreen.cases[0]!.model
-  return { ...base, record: { type: 'QualityHold', id: hold.id, companyId: hold.companyId, siteId: hold.siteId }, title: `${hold.subjects[0]?.label ?? ''}`, party: null }
-}
+/** B-TH-270: the hold's made-up thread — its number (an older hold: what it holds), office notes only (a hold is never shared). */
+const holdThread = (hold: Hold) => designDockedThread({ recordType: 'QualityHold', record: hold.number ?? `${hold.subjects[0]?.label ?? ''}`, party: null })
 
 const placeModel = (draft: PlaceDraft, over: Partial<PlaceModel> = {}): PlaceModel => ({
   open: true,
@@ -216,7 +213,7 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
       createElement(HoldsView, {
         model,
         stepUp: design.stepUp ?? STEP_UP_CLOSED,
-        panels: hold && design.model.can.threadsRead ? createElement(RecordPanelsView, { model: panelsPreview(hold) }) : null,
+        thread: hold && design.model.can.threadsRead ? holdThread(hold) : null,
         actions: {
           onView: (next: View) => {
             setView(next)
@@ -287,7 +284,15 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'check-maker', label: 'Decision: you made some of the garments; no re-inspection yet', model: list(openOn(DETAIL_MAKER, 'decision')) },
     { id: 'check-statement', label: 'Decision: the floor names stations only — the statement is signed in the release', model: list(openOn(DETAIL_STATEMENT, 'decision')) },
     { id: 'check-cr-vi', label: 'Decision: waiting for a Cr VI PASS', model: list(openOn(DETAIL_CR_VI, 'decision')) },
-    { id: 'detail-activity', label: 'Activity: the thread, files and history of the hold', model: list(openOn(DETAIL_READY, 'activity')) },
+    // ---- B-TH-270 (PL6, picture 40): the window's tabs 4 → 3, the hold's thread docked in its right column.
+    {
+      id: 'detail-thread',
+      label: 'B-TH-270 · The hold’s thread docked in the window (PL6): office notes only, Activity’s tools in its ⋯',
+      model: list(openOn(DETAIL_READY, 'decision')),
+      note: 'Hold · Affected · Decision; the thread sits in the window’s right column (~40 % of the 1160 px window) beside every tab, sticky while the tab scrolls. A hold is never shared: office notes only, no "Reply to". Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me). An old ?tab=activity opens Hold with the thread beside it; J / K and R stay the window’s keys outside the thread.',
+    },
+    { id: 'detail-no-thread', label: 'B-TH-270 · Without threads.read: the window is the tabs alone (no thread column)', model: list({ ...openOn(DETAIL_READY), can: { ...canFor('owner'), threadsRead: false } }) },
+    // ---- end B-TH-270
     { id: 'detail-released', label: 'A released hold: read only', model: list({ view: 'released', rows: ready(RELEASED), ...openOn(DETAIL_RELEASED) }) },
     { id: 'detail-loading', label: 'A hold still reading', model: list({ open: { id: HOLDS[0]!.id, detail: reading(), tab: 'hold' } }) },
     { id: 'detail-error', label: 'A hold that could not be read', model: list({ open: { id: HOLDS[0]!.id, detail: failedRead('problem.unavailable'), tab: 'hold' } }) },

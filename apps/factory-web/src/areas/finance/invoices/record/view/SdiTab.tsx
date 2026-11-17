@@ -25,9 +25,10 @@ export function SdiTab({ invoice, model, actions }: { invoice: Invoice; model: I
   const t = useT('finance')
   const locale = useLocale()
   if (invoice.status === 'DRAFT') {
+    // B-TH-268 (SDI & documents): one card for a draft — not at SDI yet, and its files are made at issue.
     return (
       <Card padded>
-        <EmptyState title={t('sdi.draft.title')} description={t('sdi.draft.body')} />
+        <EmptyState title={t('sdi.draft.title')} description={`${t('sdi.draft.body')} ${t('docs.draft.body')}`} />
       </Card>
     )
   }

@@ -23,9 +23,13 @@ import { ConfirmedLateSection, confirmedLateTile, OrderBlocksCell } from '../../
 import '../../depth/depth.css'
 import { DocumentNumberLine } from '../../../../admin/documents/override/view/DocumentNumberLine'
 import '../../../../_shared/buying/buying.css'
+// B-TH-240: Supplier replies (the saved view, its tile, the Supplier wrote and Waiting cells) and the New messages column.
+import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
+import { unreadValue } from '../../../../../lib/last-message-cell/model'
+import { newMessagesHref, REPLIES_VIEW, replyCell, repliesEmpty, repliesLine, repliesValue, tilesFor, viewsFor } from '../supplier-replies'
 
-/** B-W2a-69's tiles and views: their words are in this step's catalogue (`purchasing-orders`). */
-const DAILY_IDS: ReadonlySet<string> = new Set(['dueThisWeek', 'deliveryLate', 'pastConfirmBy'])
+/** B-W2a-69's tiles and views: their words are in this step's catalogue (`purchasing-orders`); B-TH-240's Supplier replies too. */
+const DAILY_IDS: ReadonlySet<string> = new Set(['dueThisWeek', 'deliveryLate', 'pastConfirmBy', REPLIES_VIEW])
 const DELIVERY_TONE = { LATE: 'danger', THIS_WEEK: 'warning', LATER: 'neutral' } as const
 
 export type { OrdersListActions, OrdersListModel } from '../../model'
@@ -40,7 +44,7 @@ export type { OrdersListActions, OrdersListModel } from '../../model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'lists']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'lists', LAST_MESSAGE_NS /* B-TH-240 */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -55,6 +59,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const worklist = model.worklist ?? null
   const blocks = useMemo(() => (worklist?.status === 'ready' ? blocksByOrder(worklist.rows) : null), [worklist])
   const lists = useT('lists')
+  const lm = useT(LAST_MESSAGE_NS) // B-TH-240
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const now = useMemo(() => (model.now ? new Date(model.now) : new Date()), [model.now])
@@ -161,6 +166,45 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     // B-W2b-333: the customer and work orders the order's late or unconfirmed lines put at risk (the worklist's, one read).
     // A draft, a closed or cancelled order blocks nothing on the worklist (it lists sent orders' open lines only).
     const BlocksCell = ({ data }: ICellRendererParams<OrderRow>) => (data && CHASE_STATUSES.has(data.status) ? <OrderBlocksCell blocks={blocks?.get(data.id)} known={worklist?.status === 'ready' && (worklist.complete || !!blocks?.has(data.id))} prefix={model.prefix} /> : null)
+    // ---- B-TH-240: Supplier wrote (who, the first words, when — a door to the order's thread at that message) and Waiting (the one
+    // rule's working time; amber past 3 working days). Built from the conversation alone: never a customer or brand of the order.
+    const replyOf = (row: OrderRow) => (model.replies?.status === 'ready' ? (model.replies.byOrder[row.id] ?? null) : null)
+    const ReplyCell = ({ data }: ICellRendererParams<OrderRow>) => {
+      if (!data) return null
+      const reply = replyOf(data)
+      if (!reply) return <span className="fw-by-cell-sub">{model.replies?.status === 'loading' ? td('replies.reading') : '—'}</span>
+      const cell = replyCell(reply, model.prefix, now.getTime())
+      return (
+        <span className="fw-by-cell">
+          <Link className="fw-by-link fw-by-ellipsis" href={cell.href} title={td('replies.door', { number: data.number })}>
+            {cell.excerpt || td('replies.noWords')}
+          </Link>
+          <span className="fw-by-cell-sub">{td('replies.by', { who: cell.who, time: formatTime(cell.at, place) })}</span>
+        </span>
+      )
+    }
+    const WaitCell = ({ data }: ICellRendererParams<OrderRow>) => {
+      if (!data) return null
+      const reply = replyOf(data)
+      if (!reply) return <span className="fw-by-cell-sub">—</span>
+      const cell = replyCell(reply, model.prefix, now.getTime())
+      return (
+        <span title={td(cell.tip.key, cell.tip.params)}>
+          <Pill tone={cell.amber ? 'warning' : 'neutral'}>{td(cell.wait.key, cell.wait.params)}</Pill>
+        </span>
+      )
+    }
+    const replyColumns: ColDef<OrderRow>[] = model.replies
+      ? [
+          { colId: 'reply', headerName: td('replies.col'), minWidth: 220, flex: 1.8, sortable: false, valueGetter: (params) => (params.data ? (replyOf(params.data)?.lastMessage.excerpt ?? '') : ''), cellRenderer: ReplyCell },
+          { colId: 'replyWaiting', headerName: td('replies.colWaiting'), headerTooltip: td('replies.colWaitingHint'), minWidth: 120, flex: 0.7, valueGetter: (params) => (params.data ? (replyOf(params.data)?.waiting.workingMinutes ?? null) : null), cellRenderer: WaitCell },
+        ]
+      : []
+    // The reader's own new messages (only for a reader of conversations): a door to the order's thread at the first new one.
+    const newColumns: ColDef<OrderRow>[] = model.unread
+      ? [{ colId: 'newMessages', headerName: lm('column'), headerTooltip: lm('columnHint'), minWidth: 116, flex: 0.6, valueGetter: (params) => unreadValue(params.data ? model.unread?.[params.data.id] : undefined), cellRenderer: ({ data }: ICellRendererParams<OrderRow>) => (data ? <LastMessageCell unread={model.unread?.[data.id]} href={newMessagesHref(model.prefix, data.id)} record={data.number} /> : null) }]
+      : []
+    // ---- end B-TH-240
     const MoreCell = ({ data }: ICellRendererParams<OrderRow>) =>
       data ? (
         <Menu
@@ -185,7 +229,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     return [
       { colId: 'number', headerName: t('po.col.number'), field: 'number', minWidth: 140, flex: 1, cellRenderer: NumberCell },
       { colId: 'supplier', headerName: t('po.col.supplier'), field: 'supplierName', minWidth: 170, flex: 1.5, tooltipField: 'supplierName' },
+      ...replyColumns, // B-TH-240
       { colId: 'status', headerName: t('po.col.status'), field: 'status', minWidth: 160, flex: 0.9, cellRenderer: StatusCell },
+      ...newColumns, // B-TH-240
       { colId: 'confirmation', headerName: t('po.col.confirmation'), minWidth: 200, flex: 1.6, cellRenderer: ConfirmationCell },
       { colId: 'dates', headerName: t('po.col.need'), minWidth: 150, flex: 1.1, cellRenderer: DatesCell },
       { colId: 'expected', headerName: td('list.colExpected'), minWidth: 130, flex: 0.9, cellRenderer: ExpectedCell },
@@ -195,7 +241,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       { colId: 'site', headerName: t('po.col.site'), minWidth: 80, flex: 0.5, valueGetter: (params) => (params.data ? siteName(params.data.siteId) : '') },
       { colId: 'more', headerName: t('po.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, td, tw, locale, model.prefix, model.can.cost, model.can.poSend, model.can.poManage, model.sites, model.depthCan, model.worklist, blocks, worklist, now])
+  }, [t, td, tw, locale, model.prefix, model.can.cost, model.can.poSend, model.can.poManage, model.sites, model.depthCan, model.worklist, blocks, worklist, now, lm, model.replies, model.unread /* B-TH-240 */])
 
   if (!model.can.poView) {
     return (
@@ -210,7 +256,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const tileView = ORDER_TILES.find((tile) => tile.view === model.view)?.view ?? null
   const rowsMenu = (
     <Select size="sm" aria-label={t('po.list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as OrderView)}>
-      {ORDER_VIEWS.map((view) => (
+      {viewsFor(ORDER_VIEWS, model.can).map((view) => (
         <option key={view} value={view}>
           {viewWords(view)}
         </option>
@@ -219,6 +265,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   )
   const state = model.rows.problem ? (
     <EmptyState title={t('po.list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
+  ) : items && items.length === 0 && model.view === REPLIES_VIEW && repliesEmpty(model.can, model.q.trim() !== '') ? (
+    // B-TH-240: nothing waits on us — not an error, and not "no match": the view's own words (or why a reader cannot have it).
+    <EmptyState title={td(repliesEmpty(model.can, false)!.title.key)} description={td(repliesEmpty(model.can, false)!.body.key)} action={<Button size="sm" onClick={() => actions?.onView?.('all')}>{td('replies.empty.all')}</Button>} />
   ) : items && items.length === 0 ? (
     model.q.trim() !== '' || model.view !== 'all' ? (
       <EmptyState
@@ -294,10 +343,11 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       )}
 
       <MetricStrip
-        metrics={ORDER_TILES.flatMap((tile) => [
+        metrics={tilesFor(ORDER_TILES, model.can).flatMap((tile) => [
           {
             label: tileWords(tile.id),
-            value: model.summary ? (tile.count(model.summary) === null ? '—' : String(tile.count(model.summary))) : '—',
+            // B-TH-240: Supplier replies says "—" until known (never 0 for a reader the API cannot count for).
+            value: tile.view === REPLIES_VIEW ? repliesValue(model.summary, model.can) : model.summary ? (tile.count(model.summary) === null ? '—' : String(tile.count(model.summary))) : '—',
             onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
             active: tileView === tile.view,
           },
@@ -308,6 +358,15 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         ])}
       />
       {model.worklist?.status === 'error' && <p className="fw-by-hint fw-by-warning">{tw('list.worklistFailed', { problem: t(model.worklist.problem) })}</p>}
+      {/* B-TH-240: the Supplier replies view says how many wait on us, or that its cells are partial or could not be read. */}
+      {model.view === REPLIES_VIEW && !model.rows.problem && (
+        <p className={model.replies?.status === 'error' ? 'fw-by-hint fw-by-warning' : 'fw-by-hint'} role="status">
+          {(() => {
+            const line = repliesLine(model.summary, model.replies, model.can)
+            return td(line.key, line.params)
+          })()}
+        </p>
+      )}
 
       {model.view === 'confirmedLate' && model.confirmedLate ? (
         <ConfirmedLateSection

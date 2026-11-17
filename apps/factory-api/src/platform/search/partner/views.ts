@@ -14,6 +14,13 @@ import returnAuthorisation from './views/return-authorisation'
 import salesOrder from './views/sales-order'
 import shipment from './views/shipment'
 import subcontractOrder from './views/subcontract-order'
+// ---- B-TH-073: a brand's own private-label styles and its sample rounds (their thread, the Samples group of the portal search).
+import sampleRound from './views/sample-round'
+import style from './views/style'
+// ---- end B-TH-073
+// ---- B-TH-069: a project of the organisation, to its members only (its thread, the Projects group of the portal search).
+import project from './views/project'
+// ---- end B-TH-069
 
 /**
  * The partner views (./view.ts) of the records a partner may open: the portal's search finds them, the portal's record
@@ -36,6 +43,13 @@ export const PARTNER_VIEWS: readonly PartnerView[] = Object.freeze([
   inquiry,
   // B-TH-040
   portalOrderRequest,
+  // ---- B-TH-073
+  style,
+  sampleRound,
+  // ---- end B-TH-073
+  // ---- B-TH-069
+  project,
+  // ---- end B-TH-069
 ])
 
 const byType = new Map<string, PartnerView>()

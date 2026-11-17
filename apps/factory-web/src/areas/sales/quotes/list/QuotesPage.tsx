@@ -5,6 +5,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLiveChanges } from '../../../../record-panels/live'
 import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../api'
+// TH-6 part B (B-TH-257 follow-up; grid-F01): the Picture cell's small preview.
+import { readQuotePicture } from '../api'
+import type { PictureLoader } from '../../inquiries/view/cells'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { abilitiesOf, filtersOfTile, grainsOf, quotesCsv, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -296,6 +299,15 @@ function QuotesContainer() {
     return failed === 0
   }
 
+  // TH-6 part B (grid-F01): a row's small preview (never the original); none yet or out of reach: the placeholder.
+  const loadPicture = useCallback<PictureLoader>(
+    async (quoteId) => {
+      const picture = await readQuotePicture(api, quoteId)
+      return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null
+    },
+    [api],
+  )
+
   const exportCsv = (ids: readonly string[]) => {
     const chosen = (rows.items ?? []).filter((row) => ids.includes(row.id))
     const csv = quotesCsv(chosen, grains, { header: (key) => t(key), status: (status) => t(`status.${status}`) }, locale)
@@ -342,6 +354,7 @@ function QuotesContainer() {
         onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`),
         onExport: exportCsv,
         onCancelMany: cancelMany,
+        loadPicture, // TH-6 part B
         ...duplicate.actions,
         onDuplicateStart: (row) => duplicate.open({ id: row.id, number: row.number, partyId: row.partyId, partyName: row.partyName, revision: row.revision, versions: [] }),
         ...newFrom.actions,

@@ -35,6 +35,14 @@ import { CustomerSwitcher, DoorCell, FunnelButton, PeekCard, PeekLink, PictureTh
 // B-TH-230: the New messages column (LastMessageCell).
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue } from '../../../../../lib/last-message-cell/model'
+// ---- B-TH-244 (TH-4: the overall view grouped by customer, the later columns, Invoice shipped goods for N) ----
+import { Receipt } from 'lucide-react'
+import { SelectionLabel } from '@nexus/ui/grid'
+import type { ListGroups } from '../../../../../list-frame/groups/model'
+import { figureDoors, groupHref, invoiceShippedHeld, timingKey, totalNameKey } from '../sheet/overall'
+import { FiguresLine, InvoiceDraftsDialog } from '../sheet/overall-parts'
+import type { ExtraTerms } from '../../model'
+import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -174,7 +182,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     [t, s, d, l, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */],
   )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf // B-TH-201, B-TH-225, B-TH-057
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 // B-TH-201, B-TH-225, B-TH-057, B-TH-244
   const clearFilters = () => {
     setQuery('')
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -188,9 +196,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
     // B-TH-057 (SHEET-G05): a custom field filter of the address is a chip too (the list, its counts and its file apply it).
     ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
+    // B-TH-244: the terms a total's door added (never a hidden filter).
+    ...extraChips(model.extra ?? null, t, s).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key) })),
   ]
   const unavailable = model.customer?.name === null
-  const count = viewCount(model.board, model.rows)
+  // B-TH-244: the honest count — the server's figure for the whole view when it was read (a door's view, the grouped view).
+  const count = model.summary?.value ? model.summary.value.all.orders.count : viewCount(model.board, model.rows)
   const customerName = model.customer?.name ?? null
   const title = customerName ? s('titleOf', { name: customerName }) : s('title')
   const switcher = model.switcher ? (
@@ -210,9 +221,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const about = exportAbout(s, { customer: customerName, view: t(`rows.${model.rows}`), count, price: model.can.price, formats: ['XLSX', 'CSV'], margin: !!model.margins && wide })
   const viewerRow = viewer ? (items ?? []).find((row) => row.id === viewer) ?? null : null
   // ── end B-TH-225 / B-TH-226 ──
+  // B-TH-244: the grouped view draws its customers' headers even before their rows are read; with no group: the empty states.
+  const groupsShown = !!model.group && (model.summary?.value?.groups?.length ?? 0) > 0
   const state = model.list.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.list.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
-  ) : items && items.length === 0 ? (
+  ) : items && items.length === 0 && model.rows === 'uninvoiced' && !groupsShown ? (
+    // B-TH-244 (SHEET.overall-F06): nothing shipped waits to be invoiced.
+    <EmptyState title={s('uninvoiced.none')} description={s('uninvoiced.noneBody')} />
+  ) : items && items.length === 0 && !groupsShown ? (
     narrowed ? (
       <EmptyState title={t('list.noMatch.title')} description={t('list.noMatch.body')} action={<Button size="sm" onClick={clearFilters}>{t('list.clearFilters')}</Button>} />
     ) : (
@@ -240,6 +256,11 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   ) : undefined
 
   const pressed = TILES.find((tile) => tile.rows === model.rows)?.key ?? null
+  // ── B-TH-245 (threads plan TH-4, SHEET-G09; SHEET.brand-fields-F03, -F08): the sheet's cells that edit ──
+  const cellHeld = (row: OrderRow): string | null => heldCell(row, t, s)
+  const orderEdit = orderEditOf(model, s, cellHeld, (id, after, version) => actions?.onCellSaved?.(id, after, version))
+  // ── end B-TH-245 ──
+  const groups = useOverallGroups(model, actions, t, s, locale) // B-TH-244
 
   return (
     <div className="fw-so">
@@ -349,10 +370,23 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           tools={
             <>
               {switcher /* B-TH-226 */}
-              {rowsSelect}
+              {/* B-TH-243 (ORD-G10): the rows views are the built-in views on top of Views ▾ — no second Rows ▾ beside it. */}
               {sortSelect /* B-TH-057 */}
+              {/* B-TH-244 (SHEET.overall-F02): Group by customer — on All customers only (a customer's sheet is one group). */}
+              {!model.customer && (
+                <Select size="sm" aria-label={s('group.label')} value={model.group ?? ''} onChange={(event) => actions?.onGroup?.(event.target.value === 'party' ? 'party' : null)}>
+                  <option value="">{s('group.none')}</option>
+                  <option value="party">{s('group.party')}</option>
+                </Select>
+              )}
             </>
           }
+          groups={groups /* B-TH-244 */}
+          custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
+          edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
+          onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
+          builtInViews={{ items: builtInViewsOf(model, t, s), active: model.rows, onPick: (id) => actions?.onRows?.(id as RowView) }}
+          viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
           title={customerName ? s('export.title', { customer: customerName }) : undefined /* B-TH-225: the export job names the customer */}
@@ -368,11 +402,17 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
               <>
                 {/* B-W2b-323: Set priority for N (one command over the selection). */}
                 {model.depth && <SetPriorityButton count={picked.length} model={model.depth} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
+                {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
+                {model.can.manageInvoices && (
+                  <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
+                    <Receipt size={13} aria-hidden /> <SelectionLabel>{s('invoiceShipped.action', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                )}
               </>
             ),
           }}
           updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-          more={model.list.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
+          more={!model.group && model.list.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
           keys={ownKeys}
           onHelp={() => setHelp(true)}
           onOpen={(row) => actions?.onOpen?.(row.id)}
@@ -384,6 +424,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} t={s} onClose={() => setViewer(null)} /> /* B-TH-225 */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
+      {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
       {/* B-W2b-323: Set priority, Import orders. */}
       {model.depth && <SetPriorityDialog model={model.depth} actions={actions?.depth} />}
       {model.importer && <OrdersImportView model={model.importer} actions={actions?.importActions} />}
@@ -402,6 +443,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     </div>
   )
 }
+
+// ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
+/** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
+export function builtInViewsOf(model: Pick<OrdersListModel, 'customer'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
+  const name = model.customer?.name ?? null
+  return ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...(name ? { hint: s('views.ofCustomer', { customer: name }) } : {}) }))
+}
+// ── end B-TH-243 ──
 
 // ── B-TH-225 (threads plan TH-1a, picture 23; Owner rule 2026-11-16 "every cell is a door"; features grid-F01…F30) ──────────
 
@@ -431,7 +480,7 @@ const CARD_FIELDS = Object.freeze({
   brand: { role: 'field' as const },
   status: { role: 'field' as const },
   promised: { role: 'field' as const },
-  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company'].map((id) => [id, { role: 'hidden' as const }])),
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency'].map((id) => [id, { role: 'hidden' as const }])),
 })
 
 interface ColumnsInput {
@@ -668,6 +717,37 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
       />
     ) : null
   const also = (key: string, label: string) => ({ exportWith: [{ key, label }] })
+  // ── B-TH-244 (N23, ORD-G08): the later columns — opt-in (hidden until Customise or a view shows them), each the export's own key ──
+  const later = (column: ColDef<OrderRow>): ColDef<OrderRow> => ({ ...column, hide: true, sortable: false, context: { ...((column.context as object | undefined) ?? {}), optIn: true } })
+  const ProgressCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span className="fw-sheet-progress">{progressWords(data, s)}</span> : null)
+  const MoneyOf = (key: 'paid' | 'balance') => ({ data }: ICellRendererParams<OrderRow>) => (data && typeof data[key] === 'number' ? <span>{money(data[key] as number, data.currency, locale)}</span> : null)
+  const AtRiskCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data?.atRisk ? (
+      <FunnelButton tip={s('atRisk.filter')} onClick={() => act()?.onExtra?.({ atRisk: true })}>
+        <Tag tone="warning">{s('atRisk.days', { count: data.atRisk.daysLeft })}</Tag>
+      </FunnelButton>
+    ) : null
+  const UrgencyCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data?.customerUrgency ? (
+      <FunnelButton tip={s('urgency.filter', { urgency: s(`urgency.${data.customerUrgency}`) })} onClick={() => act()?.onExtra?.({ customerUrgency: data.customerUrgency })}>
+        {s(`urgency.${data.customerUrgency}`)}
+      </FunnelButton>
+    ) : null
+  const laterColumns: ColDef<OrderRow>[] = [
+    later({ colId: 'openUnits', headerName: s('col.openUnits'), headerTooltip: s('col.openUnitsHint'), minWidth: 88, flex: 0.5, type: 'rightAligned', valueGetter: ({ data }: { data?: OrderRow }) => data?.openUnits ?? null }),
+    later({ colId: 'progress', headerName: s('col.progress'), headerTooltip: s('col.progressHint'), minWidth: 150, flex: 1, cellRenderer: ProgressCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? progressWords(data, s) : '') }),
+    ...(can.price
+      ? [
+          later({ colId: 'paid', headerName: s('col.paid'), minWidth: 104, flex: 0.7, type: 'rightAligned', cellRenderer: MoneyOf('paid') }),
+          later({ colId: 'balance', headerName: s('col.balance'), headerTooltip: s('col.balanceHint'), minWidth: 104, flex: 0.7, type: 'rightAligned', cellRenderer: MoneyOf('balance') }),
+        ]
+      : []),
+    later({ colId: 'site', headerName: s('col.site'), minWidth: 110, flex: 0.8, valueGetter: ({ data }: { data?: OrderRow }) => (data ? (data.sites ?? []).map((site) => site.name).join(', ') : '') }),
+    later({ colId: 'note', headerName: s('col.note'), headerTooltip: s('col.noteHint'), minWidth: 160, flex: 1.2, valueGetter: ({ data }: { data?: OrderRow }) => data?.internalNote ?? '' }),
+    later({ colId: 'atRisk', headerName: s('col.atRisk'), headerTooltip: s('col.atRiskHint'), minWidth: 120, flex: 0.8, cellRenderer: AtRiskCell }),
+    later({ colId: 'customerUrgency', headerName: s('col.customerUrgency'), headerTooltip: s('col.customerUrgencyHint'), minWidth: 120, flex: 0.8, cellRenderer: UrgencyCell }),
+  ]
+  // ── end B-TH-244 ──
   return serverSorted(model.sort ?? null, [
     { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn },
     { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 128, flex: 1, cellRenderer: NumberCell, context: also('customerRef', s('col.customerRef')) },
@@ -694,6 +774,7 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
     ...(model.depth ? depthColumns(model.depth, latest.current.actions?.depth, d).map((column) => ({ ...column, minWidth: column.colId === 'season' ? 76 : 108, hide: !wide })) : []),
     { colId: 'quote', headerName: t('col.quote'), minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: QuoteCell },
     ...(companies.length > 1 ? [{ colId: 'company', headerName: s('col.company'), minWidth: 88, flex: 0.8, sortable: false, cellRenderer: CompanyCell }] : []),
+    ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
   ] as ColDef<OrderRow>[])
 }
@@ -713,3 +794,101 @@ function serverSorted(sort: OrderSort | null, columns: ColDef<OrderRow>[]): ColD
   })
 }
 // ── end B-TH-057 ──
+
+// ── B-TH-244 (threads plan TH-4, picture 26; features SHEET.overall-F02 … F11) ──────────────────────────────────────────────────
+/** The door terms as chips (each with ✕): what a total's door added beside the rows view. */
+export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate): Array<{ key: keyof ExtraTerms; label: string }> {
+  if (!extra) return []
+  const out: Array<{ key: keyof ExtraTerms; label: string }> = []
+  if (extra.status) out.push({ key: 'status', label: s('chips.status', { status: t(`status.${extra.status}`) }) })
+  if (extra.late) out.push({ key: 'late', label: s('chips.late') })
+  if (extra.deposit) out.push({ key: 'deposit', label: s('chips.deposit') })
+  if (extra.reaccept) out.push({ key: 'reaccept', label: s('chips.reaccept') })
+  if (extra.shippedNotInvoiced) out.push({ key: 'shippedNotInvoiced', label: s('chips.uninvoiced') })
+  if (extra.invoiced) out.push({ key: 'invoiced', label: s('chips.invoiced', { state: s(`invoiced.${extra.invoiced}`) }) })
+  if (extra.atRisk) out.push({ key: 'atRisk', label: s('chips.atRisk') })
+  if (extra.currency) out.push({ key: 'currency', label: s('chips.currency', { currency: extra.currency }) })
+  if (extra.customerUrgency) out.push({ key: 'customerUrgency', label: s('chips.urgency', { urgency: s(`urgency.${extra.customerUrgency}`) }) })
+  return out
+}
+
+/**
+ * The grouped view's groups for the list frame: one header per customer of the view (the server's figures for ALL its orders, each a
+ * door; its name opens that customer's sheet), its rows as its own reads bring them ("Show more of …"), and the grand total pinned
+ * under the grid ("All customers", or "All my customers" for a person limited to some). Null: not grouped, or the figures not read yet.
+ */
+function useOverallGroups(model: OrdersListModel, actions: OrdersListActions | undefined, t: Translate, s: Translate, locale: Locale): ListGroups<OrderRow> | null {
+  const value = model.summary?.value ?? null
+  const path = `${model.prefix}/sales/orders`
+  const latest = useRef(actions)
+  latest.current = actions
+  return useMemo(() => {
+    if (model.group !== 'party' || !value?.groups) return null
+    const rowsOf = model.groupRows ?? {}
+    return {
+      keyOf: (row: OrderRow) => row.partyId,
+      groups: value.groups.map((group) => {
+        const own = rowsOf[group.partyId]
+        return {
+          key: group.partyId,
+          name: group.name,
+          label: (
+            <Link href={groupHref(path, group)} className="fw-sheet-door strong" data-door="" title={s('totals.openSheet', { name: group.name })}>
+              {group.name}
+            </Link>
+          ),
+          summary: (
+            <>
+              <FiguresLine doors={figureDoors(group.figures, { path, t: s, locale })} label={s('totals.of', { name: group.name })} />
+              <span className="fw-sheet-sub">{s(timingKey(group))}</span>
+            </>
+          ),
+          state: own?.loading && !own.items ? { kind: 'reading' as const } : own?.problem ? { kind: 'failed' as const, words: t(own.problem), onRetry: () => latest.current?.onGroupRetry?.(group.partyId) } : null,
+          more: own?.more && !own.loading ? { label: s('groups.more', { name: group.name }), onMore: () => latest.current?.onGroupMore?.(group.partyId) } : null,
+        }
+      }),
+      collapsed: model.collapsed ?? [],
+      onToggle: (key: string) => latest.current?.onToggleGroup?.(key),
+      total: (
+        <>
+          <span className="fw-sheet-total-name">{s(totalNameKey(value))}</span>
+          <FiguresLine doors={figureDoors(value.all, { path, t: s, locale })} label={s(totalNameKey(value))} />
+        </>
+      ),
+    }
+  }, [model.group, value, model.groupRows, model.collapsed, path, t, s, locale])
+}
+
+/** The Progress cell: cut, sewn and finished of the pieces in work orders ("—" for a step nothing counts); none yet: words. */
+export function progressWords(row: Pick<OrderRow, 'progress'>, s: Translate): string {
+  const progress = row.progress
+  if (progress === undefined) return '—'
+  if (progress === null) return s('progress.none')
+  const figure = (value: number | null) => (value === null ? '—' : String(value))
+  return s('progress.text', { cut: figure(progress.cut), sewn: figure(progress.sewn), finished: figure(progress.finished), inWork: progress.inWork })
+}
+// ── end B-TH-244 ──
+
+// ── B-TH-245 (threads plan TH-4, SHEET-G09; features SHEET.brand-fields-F03 edit in a cell, -F08 Edit N; O-SAL-ORD-LIST.grid-F26) ──
+/** Why an order keeps its cells: a closed or cancelled order never changes (the database freezes it), in words; else null. */
+export function heldCell(row: Pick<OrderRow, 'status'>, t: Translate, s: Translate): string | null {
+  return row.status === 'CLOSED' || row.status === 'CANCELLED' ? s('cells.final', { status: t(`status.${row.status}`) }) : null
+}
+
+/**
+ * The sheet's own edit fields: the order note (the office's; the customer never sees it). The custom values join them in the list
+ * frame (`custom.edit`); the order's lines never edit here (an amendment changes them). A person without orders.manage reads every
+ * cell (held, in words); Edit N reviews old → new before it saves; a row changed by someone else meanwhile is refused as "changed
+ * since", never overwritten.
+ */
+export function orderEditOf(model: Pick<OrdersListModel, 'can'>, s: Translate, held: (row: OrderRow) => string | null, onSaved: (id: string, after: Readonly<Record<string, string | number | null>>, version: number) => void): ListEdit<OrderRow> {
+  return {
+    fields: { note: { kind: 'text', nullable: true, maxLength: 2000, label: s('col.note'), valueOf: (row) => row.internalNote ?? null, held } },
+    versionOf: (row) => row.version,
+    labelOf: (row) => row.number,
+    onSaved,
+    bulk: { noun: { one: s('cells.nounOne'), other: s('cells.nounOther') } },
+    held: model.can.manage ? null : s('cells.noManage'),
+  }
+}
+// ── end B-TH-245 ──

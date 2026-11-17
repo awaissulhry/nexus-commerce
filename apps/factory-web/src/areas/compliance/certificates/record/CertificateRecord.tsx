@@ -1,12 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hooks'
+import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { failedRead, problemKey, reading, ready, type Notice, type Read } from '../../../quality/_shared/model'
 import {
   addCoverage,
@@ -39,7 +39,8 @@ import {
   inputOf,
   lapseCells,
   lapseSummary,
-  RECORD_TABS,
+  tabOf,
+  threadPartyOf,
   todayInRome,
   type CertificateDraft,
   type CheckModel,
@@ -59,9 +60,10 @@ import { CertificateRecordView } from './view/CertificateRecordView'
 import { useDepth } from '../depth/use-depth'
 import { useBodies } from '../bodies/use-bodies'
 import { bodiesCsv } from '../depth/model'
+// ---- B-TH-267: the docked thread on the certificate (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.ce.dock'
 const ACTS = ['check', 'register', 'coverage', 'suspend', 'withdraw', 'reinstate'] as const
 
 /** The API's sentences of a refusal (data, English) for the lines under our words. */
@@ -85,9 +87,11 @@ function writeProblem(error: unknown): string {
 }
 
 /**
- * The certificate record container (`/w/<company>/compliance/certificates/<id>?tab=coverage|body|files|activity`,
- * SCR-051): reads the certificate (its coverage, whether its PDF is on file), each covered style's colourways and sizes
- * (product.styles.view), the same notified body's other certificates (the Notified body tab) and the files (files.read);
+ * The certificate record container (`/w/<company>/compliance/certificates/<id>?tab=coverage|renewals|body`, SCR-051; the old
+ * `files` lands on Notified body & PDF and `activity` on Coverage with the thread open — B-TH-267 —; the thread docked beside every
+ * tab, the holding brand its only party): reads the certificate (its coverage, whether its PDF is on file), each covered style's
+ * colourways and sizes (product.styles.view), the same notified body's other certificates and the files (files.read) for the
+ * Notified body & PDF tab;
  * edits a draft (PATCH with the version), registers it, suspends, withdraws or reinstates it, adds and ends coverage,
  * sends the PDF (announce → store → confirm), asks the gate for a garment or for every garment it covers on a later day
  * (the lapse check), and re-reads on the certificate's live events. `?act=check|register|…` opens that dialog once.
@@ -103,12 +107,13 @@ export function CertificateRecord({ certificateId }: { certificateId: string }) 
 function CertificateRecordContainer({ certificateId }: { certificateId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
-  const router = useRouter()
+  const pathname = usePathname()
   const params = useSearchParams()
   const can = useMemo(() => certCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
-  const tab = useRecordTab(RECORD_TABS)
+  // B-TH-267: every old ?tab= lands on its merged tab (files → body, activity → coverage with the thread open).
+  const tab = tabOf(params?.get('tab'))
   const today = useMemo(() => todayInRome(), [])
   const locale = useLocale()
   const t = useT('certificates')
@@ -129,7 +134,6 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [dialogLines, setDialogLines] = useState<readonly string[]>([])
-  const [dockOpen, setDockOpen] = useState(false)
   const acted = useRef(false)
   const lapseDated = useRef(false)
   const search = useRef<AbortController | null>(null)
@@ -191,17 +195,10 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
       .then((list) => setFiles(ready(list)))
       .catch((error) => setFiles(failedRead(problemKey(error))))
   }, [api, can.filesRead, certificateId])
+  // B-TH-267: the PDF and files are part of Notified body & PDF (read with the certificate's PDF state, as before).
   useEffect(() => {
-    if (tab === 'files' || value?.hasPdf !== undefined) loadFiles()
+    if (tab === 'body' || value?.hasPdf !== undefined) loadFiles()
   }, [loadFiles, tab, value?.hasPdf])
-
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
 
   // A failed PDF upload right after Add certificate comes back here with `?pdf=failed`.
   useEffect(() => {
@@ -504,7 +501,16 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
     }
   }
 
-  const panels = value && can.threads ? <RecordPanels record={{ type: 'Certificate', id: value.id, companyId: value.companyId, siteId: null }} title={value.number} /> : null
+  // B-TH-267: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — mounted only with threads.read; its only
+  // party is the brand that holds the certificate (none: office notes only); the print view keeps the panels' print form.
+  const record = value ? { type: 'Certificate', id: value.id, companyId: value.companyId, siteId: null } : null
+  const party = value ? threadPartyOf(value, brands) : null
+  const title = value ? (party ? `${value.number} · ${party.name}` : value.number) : ''
+  const thread =
+    value && record && can.threads ? (
+      <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
+    ) : null
+  const printThread = value && record && can.threads ? <RecordPanels record={record} title={value.number} party={party ? { ...party, emails: [] } : null} /> : null
 
   return (
     <CertificateRecordView
@@ -532,29 +538,16 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
         busy,
         dialogProblem,
         dialogLines,
-        dockOpen,
+        personId: session.user.id,
         renewals: renewals.model,
         depth: depth.model,
         bodies: bodies.model,
       }}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onDialog: openDialog,
         onRetry: () => void load(),
-        onDock: () => {
-          if (typeof window !== 'undefined' && !window.matchMedia(WIDE).matches) {
-            router.push(`${prefix}/compliance/certificates/${encodeURIComponent(certificateId)}?tab=activity`)
-            return
-          }
-          setDockOpen((open) => {
-            try {
-              window.localStorage.setItem(DOCK_KEY, open ? '0' : '1')
-            } catch {
-              // Not kept on this device; the dock still toggles.
-            }
-            return !open
-          })
-        },
         onCopy: (text) => void copy(text),
         onDismissNotice: () => setNotice(null),
         onEdit: (open) => setEdit(open && value ? { draft: draftOf(value), touched: [], busy: false, problem: null, lines: [] } : null),

@@ -183,17 +183,23 @@
     "more": "More for this lot",
     "tab": {
       "results": "Results & limits",
-      "documents": "Documents",
-      "release": "Release",
-      "activity": "Activity"
+      "release": "Documents & release"
     },
-    "noPanels": "The thread, files and history need permission to read threads.",
     "youReceived": "You received this lot: you may record its results and documents, and another quality person releases it.",
     "facts": {
       "status": "Lot status",
       "crVi": "Chromium VI",
       "receipt": "Receipt"
-    }
+    },
+    "name": "Lot",
+    "loading": "Reading the lot…",
+    "notFound": "Lot not found",
+    "notFoundBody": "It is not there any more, or it belongs to another company.",
+    "forbidden": "Not for your role",
+    "failed": "The lot could not be read",
+    "dockLabel": "The lot’s thread",
+    "tabsLabel": "Parts of the lot",
+    "sameThread": "Same conversation as Warehouse › Lots & traceability"
   },
   "results": {
     "title": "Chromium VI results",
@@ -474,8 +480,6 @@
   "keys": {
     "title": "Keyboard shortcuts",
     "record": "Record a test result",
-    "release": "Release the lot (or release it again)",
-    "submit": "Save the open dialog",
-    "all": "All shortcuts"
+    "release": "Release the lot (or release it again)"
   }
 }

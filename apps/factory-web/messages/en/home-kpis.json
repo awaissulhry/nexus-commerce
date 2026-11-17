@@ -336,7 +336,8 @@
       "EXIT_PROOF_MISSING": "Exports without proof of exit",
       "MARGIN_BELOW_FLOOR": "Orders below their margin floor",
       "STAMP_DUTY_DUE": "Stamp duty due soon",
-      "REQUEST_NUMBERING_MISSING": "Requests have no numbering"
+      "REQUEST_NUMBERING_MISSING": "Requests have no numbering",
+      "PROJECT_STALE": "Project past its target date and quiet"
     }
   },
   "history": {

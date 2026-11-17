@@ -556,7 +556,7 @@
       "noLanguage": "Nessuna lingua in archivio",
       "wanted": "l'ordine chiede {language}",
       "fallbackTag": "Altra lingua",
-      "open": "Scarica {document}",
+      "view": "Apri {document} nel visualizzatore",
       "packingList": "Packing list (solo nei colli)",
       "whenShipped": "Quando la merce parte, i documenti si allegano e il link si invia da soli.",
       "allAttached": "Tutto ciò che è in archivio è allegato per il cliente"
@@ -1004,7 +1004,7 @@
     "contents_other": "{count} capi, colli: {parcels}",
     "current": "Attuale",
     "older": "Precedente",
-    "download": "Scarica la packing list {number}",
+    "view": "Apri la packing list {number} nel visualizzatore",
     "none": "Ancora nessuna packing list: creala dai colli (Righe e colli).",
     "noneCancelled": "Nessuna packing list.",
     "note": "Una packing list si rifà quando i colli cambiano; ogni versione tiene il suo numero. Stampa tutto apre i documenti per l'autista in una nuova scheda."

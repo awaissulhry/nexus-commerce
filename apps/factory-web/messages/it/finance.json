@@ -250,8 +250,7 @@
     "ddtWhat": "Il documento di trasporto della spedizione {shipment}, citato in fattura",
     "download": "Scarica",
     "draft": {
-      "body": "Si creano all’emissione: l’XML legale e il PDF di cortesia.",
-      "title": "Ancora nessun documento"
+      "body": "Si creano all’emissione: l’XML legale e il PDF di cortesia."
     },
     "filesPending": "La fattura è emessa; l’XML e il PDF sono ancora in preparazione.",
     "mail": {
@@ -750,14 +749,11 @@
     "back": "Fatture",
     "backToList": "Torna alle fatture",
     "changed": "Qualcuno ha modificato questa fattura alle {time}.",
-    "dock": "Conversazione",
-    "dockHint": "La conversazione della fattura accanto alla scheda (⌘J)",
     "dockLabel": "Conversazione, file e storico",
     "draftTitle": "Bozza · {type}",
     "issuedOn": "Emessa il {date}",
     "loading": "Caricamento della fattura…",
     "more": "Altre azioni",
-    "noPanels": "La conversazione non è disponibile qui.",
     "order": "Ordine {number}",
     "readOnly": "Puoi leggere questa fattura; l’amministrazione emette le fatture e registra gli incassi.",
     "reload": "Ricarica",
@@ -765,6 +761,7 @@
     "resendBy_other": "Reinviare entro il {date} (mancano {count} giorni lavorativi)",
     "resendOverdue": "Il tempo per reinviarla è scaduto il {date}",
     "sendCopyHint": "Scrivi al cliente dalla conversazione e allega il PDF di cortesia",
+    "sendCopyNotice": "Lo SDI non ha potuto recapitare questa fattura: inviate al cliente una copia con il PDF di cortesia.",
     "state": {
       "error": {
         "body": "Riprova tra poco.",
@@ -1213,13 +1210,12 @@
     "title": "Conferma che sei tu"
   },
   "tab": {
-    "activity": "Attività",
     "checksFail": "Controlli da sistemare",
-    "documents": "Documenti",
     "lines": "Righe e IVA",
     "money": "Acconti e incassi",
     "rejected": "Scartata dallo SDI",
-    "sdi": "Stato SDI"
+    "sdi": "Stato SDI",
+    "sdiDocuments": "SDI e documenti"
   },
   "tile": {
     "atSdi": "In attesa presso lo SDI",

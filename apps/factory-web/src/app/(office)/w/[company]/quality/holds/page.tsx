@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Holds · Nexus Factory' }
  * draws the Office shell; the page is the client container. `?view=` names the list (`open` default, `mine`, `overdue`,
  * `system`, `quarantine`, `released`, `closed`, `all`; the API's own `?status=`, `?overdue=true`, `?system=true`,
  * `?quarantine=ASKED`, `?ownerId=me` are read too), `?subjectType=` / `?subjectId=` narrow it to a kind or one record's
- * holds, `?open=<id>&tab=hold|decision|activity` opens a hold in its DetailModal, `?new=1` opens Place hold
+ * holds, `?open=<id>&tab=hold|affected|decision` (the old `activity`: Hold, the thread docked in the window — B-TH-270) opens a hold in its DetailModal, `?new=1` opens Place hold
  * (`&kind=WorkOrder&ids=<id,…>&source=Inspection:<id>` prefilled).
  */
 export default function HoldsRoute() {

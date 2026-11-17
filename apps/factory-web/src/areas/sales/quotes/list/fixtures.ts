@@ -6,6 +6,8 @@ import { CAN, GRAINS, PARTY, PEOPLE, PREFIX } from '../record/fixtures'
 import { duplicateOf } from '../duplicate/model'
 import type { NewQuoteModel, QuotesListViewModel } from './list-model'
 import { QuotesListView } from './view/QuotesListView'
+// TH-6 part B (B-TH-257 follow-up): the Picture column's made-up small previews (Incoming's demo garments).
+import { DEMO_PICTURES } from '../../inquiries/demo/fixtures'
 
 /**
  * SCR-034 Quotes — made-up data only (PLAN §3.1): invented customers and numbers. Each case is one state the Owner
@@ -67,6 +69,21 @@ const SOURCED: QuoteListRow[] = ROWS.map((entry): QuoteListRow =>
 )
 const UNREAD = { [id(42)]: { newCount: 2, lastAt: '2026-10-29T09:42:00.000Z' }, [id(40)]: { newCount: 140, lastAt: '2026-10-27T16:05:00.000Z' } }
 // ---- end B-TH-257
+
+// ---- TH-6 part B (B-TH-257 follow-up; grid-F01): each row's first style and its picture — a small preview (42), "+2" with the
+// style's placeholder for a reader without its file (38), no line yet (35); the rest name a style without a main picture.
+const style = (n: number, code: string, name: string) => ({ styleId: `0190f0e2-5900-7000-8000-0000000000${String(n).padStart(2, '0')}`, styleCode: code, styleName: name })
+const PICTURED: QuoteListRow[] = SOURCED.map((entry): QuoteListRow =>
+  entry.id === id(42)
+    ? { ...entry, picture: { ...style(1, 'DEMO-JKT-01', 'Giacca moto Demo'), fileId: '0190f0e2-5361-7000-8000-000000000042', contentType: 'image/jpeg', small: true }, styleCount: 1 }
+    : entry.id === id(38)
+      ? { ...entry, picture: { ...style(2, 'DEMO-PNT-02', 'Pantaloni Demo'), fileId: null, contentType: null, small: false }, styleCount: 3 }
+      : entry.id === id(35)
+        ? { ...entry, picture: null, styleCount: 0 }
+        : { ...entry, picture: { ...style(3, 'DEMO-GLV-03', 'Guanti Demo'), fileId: null, contentType: null, small: false }, styleCount: 1 },
+)
+const QUOTE_PICTURES: Readonly<Record<string, string>> = { [id(42)]: Object.values(DEMO_PICTURES)[0] ?? '' }
+// ---- end TH-6 part B
 
 const priceOnly = (rows: QuoteListRow[]) => rows.map(({ marginPct: _m, marginFloorBreached: _b, ...rest }) => rest as QuoteListRow)
 
@@ -158,7 +175,7 @@ export const designScreen = defineDesignScreen<QuotesListViewModel>({
       model: model({ grains: GRAINS.sales, can: CAN.sales, duplicate: { ...duplicateOf({ id: ROWS[0]!.id, number: ROWS[0]!.number, partyId: ROWS[0]!.partyId, partyName: ROWS[0]!.partyName, revision: 1, versions: [] }), done: { quoteId: id(61), number: 'Q-2026-0161', lines: 2, dropped: [], warnings: ['The source was priced without VAT; this customer buys with VAT included: check the prices kept as typed.'] } } }),
     },
     // B-TH-257: New messages (threads.read), "from INQ-…" and an accepted row's order.
-    { id: 'th-257-sources', label: 'TH-6 · Sales · New messages, "from INQ-…", an accepted row’s order or "Order waits"', model: model({ grains: GRAINS.sales, can: CAN.sales, rows: { items: SOURCED, more: false, problem: null }, unread: UNREAD, readsRequests: true, readsOrders: true }), note: 'New messages counts only messages you have not read on that quote (99+ above 99); the cell opens the quote with the thread at the first new one. "from INQ-…" opens the request; an accepted quote names its order, or says the order waits. Picture waits for its API (no picture on a quote row yet).' },
+    { id: 'th-257-sources', label: 'TH-6 · Sales · Picture, New messages, "from INQ-…", an accepted row’s order or "Order waits"', model: model({ grains: GRAINS.sales, can: CAN.sales, rows: { items: PICTURED, more: false, problem: null }, unread: UNREAD, readsRequests: true, readsOrders: true, demoPictures: QUOTE_PICTURES }), note: 'Picture: the first style’s small preview (never the original; "+2" for more styles; the placeholder without a file or files.read) opens it large. New messages counts only messages you have not read on that quote (99+ above 99); the cell opens the quote with the thread at the first new one. "from INQ-…" opens the request; an accepted quote names its order, or says the order waits.' },
     { id: 'th-257-no-threads', label: 'TH-6 · A role without threads.read: no New messages column', model: model({ grains: GRAINS.sales, can: CAN.sales, rows: { items: SOURCED, more: false, problem: null }, unread: null, readsRequests: false, readsOrders: false }) },
     { id: 'loading', label: 'Loading', model: model({ rows: { items: null, more: false, problem: null }, tiles: UNKNOWN, asOf: null }), note: 'Unknown counts show "—", never 0.' },
     { id: 'error', label: 'Error', model: model({ rows: { items: null, more: false, problem: 'problem.read.unavailable' }, tiles: UNKNOWN }) },

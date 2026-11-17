@@ -604,6 +604,7 @@
       "alerts.STAMP_DUTY_DUE": "The stamp duty of {label} is due by {dueOn} ({days} days left): pay it by F24 (tax code {f24Code}) and record the payment.",
       "alerts.STAMP_DUTY_DUE.LATE": "The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment.",
       "alerts.REQUEST_NUMBERING_MISSING": "{label} receives requests but has no active request numbering (INQUIRY): New order in the portal is held and mail to its inquiry addresses waits. Set up the series under numbering.",
+      "alerts.PROJECT_STALE": "{label} is past its target date ({targetDate}) and has had no message for {days} days: close it or update it.",
       "INQUIRY_WAITING.ASSIGNED": "Inquiry {number} from {from} has waited more than a working day for your answer.",
       "INQUIRY_WAITING.NEW": "Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.",
       "INQUIRY_WAITING.blocks": "The customer waits for an answer.",
@@ -780,6 +781,21 @@
       "noRecord": "This item has no record to remind you of.",
       "already": "Reminder set.",
       "passed": "The day before has passed already."
+    },
+    "incoming": {
+      "title": "Incoming",
+      "sameAsIncoming": "The same numbers as Sales › Incoming",
+      "offline": "Offline: the last numbers read",
+      "loading": "Counting the incoming requests…",
+      "error": "Couldn't count the incoming requests.",
+      "new": "New incoming requests",
+      "newHint": "Requests, catalogue orders and change requests nobody has started yet: Incoming's New tile",
+      "catalogue": "Catalogue orders to decide",
+      "catalogueHint": "Orders customers sent from their portal catalogue, waiting for Accept or Refuse",
+      "waiting": "Waiting on us over a working day",
+      "waitingHint": "Everyone's, as Incoming's tile counts them (Needs me now lists only yours or nobody's)",
+      "open": "Open",
+      "lineLabel": "{what}: {count}. Open in Incoming"
     }
   },
   "mailToSort": {

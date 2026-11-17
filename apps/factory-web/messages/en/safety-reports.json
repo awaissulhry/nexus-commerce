@@ -504,13 +504,16 @@
     "style": "Style",
     "tab": {
       "accident": "Accident log",
-      "photos": "Photos",
-      "report": "Report"
+      "report": "Report & photos"
     },
     "told": "The authority was told…",
     "what": "What happened",
     "whatHint": "In the reporter's words.",
-    "where": "Where it went"
+    "where": "Where it went",
+    "name": "Product-safety report",
+    "dockLabel": "Thread of the product-safety report",
+    "tabsLabel": "Sections of the report",
+    "photos": "Photos"
   },
   "refused": {
     "check": "The quick device check did not pass. Try again in a moment.",

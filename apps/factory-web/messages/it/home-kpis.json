@@ -336,7 +336,8 @@
       "EXIT_PROOF_MISSING": "Esportazioni senza prova dell'uscita",
       "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo",
       "STAMP_DUTY_DUE": "Imposta di bollo in scadenza",
-      "REQUEST_NUMBERING_MISSING": "Le richieste non hanno numerazione"
+      "REQUEST_NUMBERING_MISSING": "Le richieste non hanno numerazione",
+      "PROJECT_STALE": "Progetto oltre la data obiettivo e fermo"
     }
   },
   "history": {

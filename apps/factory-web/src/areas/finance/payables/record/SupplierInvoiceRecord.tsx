@@ -9,7 +9,7 @@ import { downloadLink } from '../../../../record-panels/api'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { storeUrl } from '../../../../record-panels/store'
 import { romeToday } from '../../costing/model'
-import { useCoalesced, useLive, useThreadDock } from '../../_shared/hooks'
+import { useCoalesced, useLive } from '../../_shared/hooks'
 // B-W2b-425: the leather area check, dual approval and the payment batch.
 import { AreaCheck } from '../area-check/AreaCheck'
 import { DualApproval } from '../dual-approval/DualApproval'
@@ -37,6 +37,9 @@ import {
 import { amountOf, decimalOf, mappingInputOf, payablesCanOf, readProblem, recordTouched, tabOf, writeProblem } from '../model'
 import type { LineDraft, Loaded, RecordDialog, SupplierInvoiceModel } from './record-model'
 import { SupplierInvoiceView } from './view/SupplierInvoiceView'
+// ---- B-TH-268: the docked thread on the supplier invoice (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * `/w/<company>/finance/payables/<id>` (SCR-153 record): reads the invoice (payables.view over its company AND supplier;
@@ -68,7 +71,6 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<SupplierInvoiceModel['notice']>(null)
   const [changed, setChanged] = useState<{ at: string } | null>(null)
-  const { dockOpen, toggleDock } = useThreadDock('SupplierInvoice')
   const key = useRef(newIdempotencyKey())
 
   const readCandidates = useCallback(
@@ -209,8 +211,13 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
     }
   }
 
-  const model: SupplierInvoiceModel = { prefix, can, today: romeToday(), tab, invoice, candidates, savingLine, lineProblem, live, dockOpen, changed, notice, busy, dialog, dialogProblem }
+  const model: SupplierInvoiceModel = { prefix, can, today: romeToday(), tab, invoice, candidates, savingLine, lineProblem, live, personId: session.user.id /* B-TH-268 */, changed, notice, busy, dialog, dialogProblem }
   const value = invoice.status === 'ready' ? invoice.value : null
+  // B-TH-268: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — "Reply to" reaches this invoice's own
+  // supplier only (the API's thread party), its files are this invoice's; only with threads.read. The print view keeps the panels'
+  // print form.
+  const record = value && session.permissions.includes('threads.read') ? { type: 'SupplierInvoice', id: value.id, companyId: value.company.id, siteId: null } : null
+  const title = value ? `${value.number} · ${value.supplier.name}` : ''
 
   return (
     <SupplierInvoiceView
@@ -220,24 +227,17 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
           ? {
               area: tab === 'match' ? <AreaCheck invoiceId={value.id} prefix={prefix} version={value.version} /> : null,
               dual: tab === 'approval' ? <DualApproval invoiceId={value.id} version={value.version} /> : null,
-              payment: tab === 'payment' ? <PaymentBatch invoiceId={value.id} companyId={value.company.id} prefix={prefix} version={value.version} /> : null,
+              // B-TH-268: the payment batch lives in Approval & payment.
+              payment: tab === 'approval' ? <PaymentBatch invoiceId={value.id} companyId={value.company.id} prefix={prefix} version={value.version} /> : null,
             }
           : undefined
       }
-      panels={
-        value && (tab === 'activity' || dockOpen) ? (
-          <RecordPanels
-            record={{ type: 'SupplierInvoice', id: value.id, companyId: value.company.id, siteId: null }}
-            title={`${value.number} · ${value.supplier.name}`}
-            party={{ id: value.supplier.id, name: value.supplier.name, emails: [] }}
-          />
-        ) : null
-      }
+      thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
+      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.supplier.id, name: value.supplier.name, emails: [] }} /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryCandidates: () => value && readCandidates(value),
         onReload: () => void load(),
-        onDock: toggleDock,
         onDismissNotice: () => setNotice(null),
         onDialog: (next) => {
           setDialog(next)

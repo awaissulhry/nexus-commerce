@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { canFor, CONTACTS, CUSTOMERS, DECLINED_VIEW, demoThreadElement, inShell, JACKET_DETAIL, ME, NOW, PANTS_DETAIL, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, ROWS, STYLE_OPTIONS, VIEW, type RoleCase } from '../demo/fixtures'
+import { canFor, CONTACTS, DECLINED_VIEW, demoThreadElement, inShell, JACKET_DETAIL, ME, NOW, PANTS_DETAIL, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, ROWS, STYLE_OPTIONS, VIEW, type RoleCase } from '../demo/fixtures'
 import type { InquiryView } from '../api'
 import type { RecordTab } from '../model'
 import type { InquiryRecordModel } from '../record-model'
@@ -33,7 +33,6 @@ function recordCase(view: InquiryView | null, tab: RecordTab = 'request', over: 
       draft: null,
       saving: false,
       busy: false,
-      customers: view?.prospect ? { items: CUSTOMERS, problem: null } : null,
       contacts: view?.party ? { items: CONTACTS, problem: null } : null,
       styles: { items: STYLE_OPTIONS, problem: null },
       details: { [JACKET_DETAIL.id]: { status: 'ready', value: JACKET_DETAIL }, [PANTS_DETAIL.id]: { status: 'ready', value: PANTS_DETAIL } },

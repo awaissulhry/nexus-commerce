@@ -131,6 +131,8 @@ const RECORD_WORDS: Readonly<Record<string, { readonly it: string; readonly en: 
   Complaint: { it: 'Reclamo', en: 'Complaint' },
   ReturnAuthorisation: { it: 'Reso', en: 'Return' },
   SupplierClaim: { it: 'Contestazione', en: 'Supplier claim' },
+  // B-TH-069
+  Project: { it: 'Progetto', en: 'Project' },
 })
 
 export function recordLabelOf(recordType: string, reference: string, locale: ShareLocale): string {

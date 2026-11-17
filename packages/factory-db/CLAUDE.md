@@ -554,7 +554,22 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `ErasureRecord_composer_drafts` (a User's erasure, but KEPT, removes that person's drafts) and
    `Inquiry_production_answer_check` (production's answer all or none, NOT_BEFORE exactly with a Monday, an active office
    person); it redefines the wave 3/9 `factory_inquiry_guard` word for word but for the lines marked B-TH-090 (WITHDRAWN a
-   fifth final state, from an open one, only for a customer's request, closed by a portal person of that customer)):
+   fifth final state, from an open one, only for a customer's request, closed by a portal person of that customer)),
+   `…_brand_production_guards` (production plan schema wave 3/5, B-PR-15, a customer's production state, its issues and the
+   plain production hold: its own triggers `BrandOrderProduction_guard` (order, customer, key `brand-production:<salesOrderId>`
+   and creation fixed; urgentRank set exactly while URGENT and 1 or more, no unique on it; who set the urgency and when both or
+   neither, an Urgent mark always with them, a BRAND setter a portal person of the order's customer, a FACTORY one an office
+   person; a locked row REGULAR, its reason (one line, ≤ 500), when and by whom exactly while locked; supervisor and since when
+   both or neither, an active office person when named or changed; a health raise only to AT_RISK with reason, when, by whom,
+   until, all or none, the office note only beside it; never deleted), `ProductionIssue_guard` (a SalesOrder or WorkOrder of
+   ONE customer, of the issue's company, site and customer; its task a Task of the tenant, its message one of its record's
+   own thread; born OPEN, OPEN → ANSWERED | CANCELLED, an OFFICE issue ANSWERED → OPEN; answeredAt exactly when ANSWERED;
+   escalation step 0-2 with escalatedAt from step 1; due day not before the raise's Rome day; never deleted),
+   `WorkOrderHold_guard` (the work order's company and customer; BRAND only on a customer's work order, its ask a HOLD
+   request of that customer, PRODUCTION names none; placed ACTIVE on an open work order, read FOR SHARE, by an office person,
+   or written whole as LIFTED history; ACTIVE → LIFTED once with when, by whom, why; while ACTIVE only the note and the
+   customer's words change; never deleted) and `WorkOrder_production_holds` (a work order leaves ON_HOLD only when no ACTIVE
+   WorkOrderHold names it); no earlier function redefined):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

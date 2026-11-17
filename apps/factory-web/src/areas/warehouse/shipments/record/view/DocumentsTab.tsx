@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Download, FileCheck2, FileStack, FileText, Link2, Lock, Paperclip, Printer, Send } from 'lucide-react'
+import { Download, Eye, FileCheck2, FileStack, FileText, Link2, Lock, Paperclip, Printer, Send } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
@@ -13,6 +13,30 @@ import type { Ddt, DdtDraft, Shipment, TravelDocument } from '../../api'
 import { DOCUMENT_STATE_TONE, ddtProblemGroups, kilos, languageName, LINK_STATE_TONE } from '../../model'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 import { PartState } from './ShipmentRecordView'
+// ---- B-TH-264 follow-up (TH-6 part B): the Documents' files open in the docked thread's ONE file viewer (the frame's door).
+import { contentTypeOf } from '../../../../../lib/record-thread/attachments/model'
+import { useRecordFrame, type FrameFile } from '../../../../_shared/record-frame/RecordFrame'
+
+/**
+ * A file of this tab opens in the thread's viewer over the files of its card (← / → walk them, the viewer's Download saves one);
+ * where the page has no thread (no threads.read) the file opens as before (its download).
+ */
+export function useOpenInViewer(actions?: ShipmentRecordActions): (files: readonly FrameFile[], fileId: string, opener?: HTMLElement | null) => void {
+  const frame = useRecordFrame()
+  return (files, fileId, opener) => {
+    if (frame?.openFiles) frame.openFiles({ files, fileId, returnTo: opener ?? null })
+    else actions?.onOpenFile?.(fileId)
+  }
+}
+
+/** The travelling documents a card lists, as the viewer names them (their type from the name: a PDF draws, a photo shows). */
+export function travelFiles(entries: readonly TravelDocument[], label: (entry: TravelDocument) => string): FrameFile[] {
+  return entries.flatMap((entry) => {
+    const file = entry.copy ?? entry.source
+    return file ? [{ id: file.id, name: file.originalName || label(entry), contentType: contentTypeOf({ name: file.originalName }), sizeBytes: file.sizeBytes }] : []
+  })
+}
+// ---- end B-TH-264 follow-up
 
 /**
  * Documents (design sh-ddt, sh-doc-conf): the DDT (DPR 472/1996) — while none is live, the draft the server would issue
@@ -225,12 +249,14 @@ function DdtFacts({ printed, number }: { printed: DdtDraft | Ddt; number: string
 function TravelCard({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
   const t = useT('shipments')
   const locale = useLocale()
+  const openInViewer = useOpenInViewer(actions) // B-TH-264 follow-up
   if (!model.documents.value) return <PartState problem={model.documents.problem} onRetry={() => actions?.onRetryPart?.('documents')} label={t('docs.travel.title')} />
   const documents = model.documents.value
   const travelling = documents.documents.filter((entry) => entry.kind === 'DECLARATION_OF_CONFORMITY' || entry.kind === 'USER_INFORMATION')
   const packingList = documents.documents.find((entry) => entry.kind === 'PACKING_LIST') ?? null
   const attachHeld = !model.can.manage ? t('held.noManage') : documents.counts.toAttach === 0 ? t('held.nothingToAttach') : null
   const docLabel = (entry: TravelDocument) => `${t(`docKind.${entry.kind}`)}${entry.style ? ` · ${entry.style.code}${entry.style.revision !== null ? ` rev. ${entry.style.revision}` : ''}` : ''}`
+  const files = travelFiles(travelling, docLabel) // B-TH-264 follow-up
   return (
     <Card padded>
       <div className="fw-sh-card-head">
@@ -280,8 +306,8 @@ function TravelCard({ shipment, model, actions }: { shipment: Shipment; model: S
                 {entry.fallback && <Tag tone="warning">{t('docs.travel.fallbackTag')}</Tag>}
                 <Pill tone={DOCUMENT_STATE_TONE[entry.state] ?? 'neutral'}>{t(`docState.${entry.state}`)}</Pill>
                 {model.can.readFiles && (entry.copy ?? entry.source) && (
-                  <Button size="sm" variant="quiet" onClick={() => actions?.onOpenFile?.((entry.copy ?? entry.source)!.id)} aria-label={t('docs.travel.open', { document: docLabel(entry) })}>
-                    <Download size={14} aria-hidden />
+                  <Button size="sm" variant="quiet" onClick={(event) => openInViewer(files, (entry.copy ?? entry.source)!.id, event.currentTarget)} aria-label={t('docs.travel.view', { document: docLabel(entry) })}>
+                    <Eye size={14} aria-hidden />
                   </Button>
                 )}
               </span>
@@ -354,6 +380,9 @@ function OtherDocumentsCard({ shipment, model, actions }: { shipment: Shipment; 
   const t = useT('shipments')
   const locale = useLocale()
   const versions = model.packingLists.value
+  // B-TH-264 follow-up: the packing lists (PDFs the server made) in the thread's viewer, newest first as listed.
+  const openInViewer = useOpenInViewer(actions)
+  const files: FrameFile[] = (versions ?? []).map((entry) => ({ id: entry.fileId, name: `${t('other.name', { number: entry.number })} · ${t('other.version', { version: entry.version })}.pdf`, contentType: 'application/pdf' }))
   const packHref = `${model.prefix}/warehouse/shipments/${shipment.id}/pack`
   return (
     <Card padded>
@@ -384,8 +413,8 @@ function OtherDocumentsCard({ shipment, model, actions }: { shipment: Shipment; 
               <span className="fw-sh-inline">
                 {entry.current ? <Tag tone="success">{t('other.current')}</Tag> : <Tag tone="neutral">{t('other.older')}</Tag>}
                 {model.can.readFiles && (
-                  <Button size="sm" variant="quiet" onClick={() => actions?.onOpenFile?.(entry.fileId)} aria-label={t('other.download', { number: entry.number })}>
-                    <Download size={14} aria-hidden />
+                  <Button size="sm" variant="quiet" onClick={(event) => openInViewer(files, entry.fileId, event.currentTarget)} aria-label={t('other.view', { number: entry.number })}>
+                    <Eye size={14} aria-hidden />
                   </Button>
                 )}
               </span>

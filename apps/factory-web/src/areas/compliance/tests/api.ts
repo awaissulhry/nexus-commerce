@@ -70,7 +70,15 @@ export type LotDocument = z.infer<typeof documentSchema>
 export const ruleSchema = z.object({ crViEvidenceRule: z.enum(EVIDENCE_RULES), source: z.enum(SETTING_SOURCES), words: z.string() })
 export type LotRule = z.infer<typeof ruleSchema>
 
-export const lotDetailSchema = z.object({ lot: lotSchema, rule: ruleSchema, results: z.array(resultSchema), documents: z.array(documentSchema), checklist: checklistSchema })
+export const lotDetailSchema = z.object({
+  lot: lotSchema,
+  rule: ruleSchema,
+  results: z.array(resultSchema),
+  documents: z.array(documentSchema),
+  checklist: checklistSchema,
+  // TH-6 part B (B-TH-267): the lot's supplier by name — its Lot thread's party. Optional: an older API answer has none (notes only).
+  supplier: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+})
 export type LotDetail = z.infer<typeof lotDetailSchema>
 
 export const workOrderUseSchema = z.object({

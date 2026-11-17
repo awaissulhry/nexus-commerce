@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { WorkOrderStatus } from '../../_shared/api'
-import { bundlesOf, canOf, cutLogOf, FINAL, inShell, panels, panelsModel, PICK, PREFIX, PRINTERS, releaseCheck, wipOf, workOrder, type Role } from '../../_shared/fixtures'
+import { bundlesOf, canOf, cutLogOf, FINAL, inShell, PICK, PREFIX, PRINTERS, releaseCheck, wipOf, workOrder, type Role } from '../../_shared/fixtures'
 import { PART_LOADING, type WorkOrderRecordModel } from './record-model'
 import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, releaseCheckW2a } from '../daily/demo/fixtures'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
@@ -11,12 +11,19 @@ import { LABOUR, labourAs, NO_OFF_STANDARD } from '../labour/fixtures'
 import type { SplitModel } from '../every-shift/use-split'
 // B-W2b-130: Materials › Leather (the one shade lot rule), made-up.
 import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_OF_SHADE } from './leather/fixtures'
+// ---- B-TH-265: the work order on RecordFrame — its docked thread (its own notes, or an order's picked beside it), "Order files (n)" ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
+import { filesReady, leftOut, orderFilesOf, orderGroup } from './order-files/fixtures'
+import { threadChoices, type ThreadPick } from './order-files/model'
+import { WorkOrderThreads } from './view/WorkOrderThreads'
+// ---- end B-TH-265
 
 /**
  * SCR-070 — the work order studio (design production.workorders "Record: Work order") with made-up data only: a draft
  * with its release check (blocked in words, only material short, ready), the release dialog (with the planner's reason),
  * a released, in-progress, completed, closed and cancelled one, the facts and the sizes in edit, Materials, Quality,
- * Activity and the thread beside a tab, a change while editing, and the states (loading, error, not found, no
+ * the docked thread beside every tab (B-TH-265: the work order's own notes, or an order's thread picked beside it; Activity went,
+ * its tools in the thread's "⋯"), Order files (agreement T9), a change while editing, and the states (loading, error, not found, no
  * permission). Roles: Owner, Production manager, Team leader (floor supervisor in the Office), Sales (read-only).
  * Cutting is SCR-071, Bundles and Operations SCR-072. B-W2b-130: Materials › Leather — each leather's shade lots with the hides
  * held, reserved and cut, and the one shade lot rule in words (one lot, none yet, mixed against the rule, mixed where the rule is
@@ -26,6 +33,10 @@ import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_
 export interface RecordCase {
   role: Role
   record: WorkOrderRecordModel
+  /** B-TH-265: the thread the dock shows (default: the work order's own notes). */
+  pick?: ThreadPick
+  /** B-TH-265: no thread here (without threads.read): no dock, no Thread button. */
+  noThread?: boolean
 }
 
 const ready = <T,>(value: T) => ({ value, problem: null })
@@ -48,7 +59,6 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       quality: can.quality ? (released ? ready(FINAL) : PART_LOADING) : null,
       printers: can.bundles ? ready(PRINTERS) : null,
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -59,7 +69,10 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       waitingAt: null,
       bundleOpen: null,
       cutOpen: null,
-      panelsPreview: panelsModel(),
+      // B-TH-265: the order files of the work order's order (made-up) and the order whose thread may be read.
+      personId: null,
+      orderFiles: filesReady(orderFilesOf(workOrder(status))),
+      threadChoices: threadChoices(workOrder(status).orders, { state: 'ready', read: orderFilesOf(workOrder(status)) }),
       // B-W2a-46: the W2a parts (holds, finished to stock, yield, scrap and rework, readiness) as the role reads them.
       daily: dailyFor(DAILY_ROLE_OF[role], status),
       // B-W2b-130.
@@ -71,7 +84,19 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
 
 export function RecordDesign({ model }: { model: RecordCase }) {
   const wo = model.record.workOrder.status === 'ready' ? model.record.workOrder.value : null
-  return inShell(`/production/work-orders/${wo?.id ?? 'x'}`, createElement(WorkOrderRecordView, { model: model.record, panels: model.record.tab === 'activity' || model.record.dockOpen ? panels() : null }), model.role)
+  // B-TH-265: the docked thread beside every tab — the work order's own notes (no party: Office notes only, the 'For the floor' tick),
+  // or the order's thread picked beside it (its customer's thread); none without threads.read.
+  const choices = model.record.threadChoices ?? []
+  const picked = choices.find((choice) => choice.orderId === model.pick) ?? null
+  const thread =
+    wo && !model.noThread
+      ? createElement(WorkOrderThreads, {
+          choices,
+          pick: picked ? picked.orderId : 'workOrder',
+          children: picked ? designDockedThread({ recordType: 'SalesOrder', record: picked.number, party: { name: picked.party.name, role: 'customer' } }) : designDockedThread({ recordType: 'WorkOrder', record: wo.number, party: null }),
+        })
+      : null
+  return inShell(`/production/work-orders/${wo?.id ?? 'x'}`, createElement(WorkOrderRecordView, { model: model.record, thread }), model.role)
 }
 
 const draft = (role: Role, kind: 'blocked' | 'material' | 'ready' | 'noRevision', over: Partial<WorkOrderRecordModel> = {}) => recordCase(role, 'DRAFT', { check: ready(releaseCheck(kind)), ...over })
@@ -94,7 +119,7 @@ const SPLIT: SplitModel = {
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-070',
-  title: 'Work order studio (Overview & release, Materials, Quality, Activity)',
+  title: 'Work order studio (Overview & release, Materials, Quality, the docked thread, Order files)',
   view: RecordDesign,
   cases: [
     { id: 'draft-blocked', label: 'A draft: the release check holds it — each check in words, what holds it under it', model: draft('manager', 'blocked'), note: 'Release is held: "Release · 3 checks open". The dot on Overview says checks are open.' },
@@ -124,8 +149,27 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'materials', label: 'Materials: planned, issued and still to issue; the pick list with held stock in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials' }) },
     { id: 'materials-draft', label: 'Materials of a draft: what the release would freeze', model: draft('manager', 'blocked', { tab: 'materials' }) },
     { id: 'quality', label: 'Quality (read-only): inspections and released per size', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality' }) },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: recordCase('manager', 'IN_PROGRESS', { tab: 'activity' }) },
-    { id: 'dock', label: 'The thread beside a tab (⌘J, 1280 px and wider)', model: recordCase('manager', 'IN_PROGRESS', { dockOpen: true }) },
+    // ---- B-TH-265: the docked thread (the rule of picture 38) and the order files (agreement T9) ----
+    {
+      id: 'thread-docked',
+      label: 'B-TH-265 · The work order’s notes docked beside Overview (40 %; one third on Cutting and Bundles under 1600 px)',
+      model: recordCase('manager', 'IN_PROGRESS'),
+      note: 'The band sits in the shell’s band row with ONE status pill; the thread is docked, sticky, ⌘J hides it. The work order’s own thread has no party: Office notes only (never shared with a customer), a note may go to the tablets with its “For the floor” tick. Its “⋯” holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). An old ?tab=activity opens Overview with the thread; ?tab=documents opens Overview (the traveller and the style revision are in the band’s ⋯).',
+    },
+    { id: 'thread-cutting', label: 'B-TH-265 · The thread beside Cutting (a wide grid: one third under 1600 px)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'cutting' }) },
+    {
+      id: 'thread-order',
+      label: 'B-TH-265 · The order’s thread picked beside the work order’s notes (shared with its customer)',
+      model: { ...recordCase('manager', 'IN_PROGRESS'), pick: workOrder('IN_PROGRESS').orders[0]!.id },
+      note: 'One thread at a time: the pick at the dock’s top says whose the order’s thread is, so nobody writes to the customer thinking it stays in the office.',
+    },
+    { id: 'thread-no-order-thread', label: 'B-TH-265 · The order’s thread not readable for this person: no pick, the work order’s notes only', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [orderGroup(workOrder('IN_PROGRESS'), { thread: null })])), threadChoices: [] }) },
+    { id: 'thread-no-right', label: 'B-TH-265 · Without threads.read: no thread beside the tabs (no Thread button)', model: { ...recordCase('teamLeader', 'IN_PROGRESS'), noThread: true } },
+    { id: 'order-files', label: 'B-TH-265 · Order files (4): the order’s confirmation, the lines’ artwork, the worksheet — each opened through the work order’s own route', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true }) }) },
+    { id: 'order-files-left-out', label: 'B-TH-265 · Order files: what is left out said as counts, never named', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(leftOut(workOrder('IN_PROGRESS')), { open: true }) }) },
+    { id: 'order-files-refused', label: 'B-TH-265 · Order files: a file that could not be opened, in words', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, problem: 'orderFiles.gone' }) }) },
+    { id: 'order-files-failed', label: 'B-TH-265 · Order files could not be read: Try again', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: { files: { state: 'error', problem: 'error.offline' }, open: true, opening: null, problem: null } }) },
+    { id: 'order-files-none', label: 'B-TH-265 · A work order of no order (stock): no Order files in the band', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [])), threadChoices: [] }) },
     { id: 'changed', label: 'Someone changed it while the page holds an edit: Reload', model: recordCase('manager', 'IN_PROGRESS', { changed: { at: '2026-10-29T09:42:00.000Z' }, draft: { editing: true } }) },
     { id: 'notice', label: 'After a write: a notice', model: recordCase('manager', 'RELEASED', { notice: { tone: 'success', words: { key: 'notice.released', params: { batch: 'BA-00049' } } } }) },
     { id: 'owner', label: 'Owner: everything', model: recordCase('owner', 'IN_PROGRESS') },
@@ -177,8 +221,9 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2b-split-over', label: 'W2b · Split work order: a size moves more than it has', model: draft('manager', 'ready', { split: { ...SPLIT, draft: { ...SPLIT.draft, moves: { [DRAFT_CELL.id]: DRAFT_CELL.quantity + 1 } }, preview: null } }) },
     { id: 'w2b-split-refused', label: 'W2b · Split work order refused (changed meanwhile): said inside the dialog', model: draft('manager', 'ready', { split: { ...SPLIT, problem: { key: 'production-every-shift:split.changed' } } }) },
     { id: 'w2b-split-held', label: 'W2b · In progress: Split held in ⋯ with the reason (the release froze the sizes)', model: recordCase('manager', 'IN_PROGRESS') },
-    { id: 'w2b-documents', label: 'W2b · Documents: the traveller, the tickets, the style revision', model: recordCase('manager', 'IN_PROGRESS', { tab: 'documents' }) },
-    { id: 'w2b-documents-draft', label: 'W2b · Documents of a draft: the traveller says the sizes are not frozen', model: draft('manager', 'ready', { tab: 'documents' }) },
+    // B-TH-265: the Documents tab went (R-7) — Print traveller and the style revision are lines of the band's ⋯ (open it on the case).
+    { id: 'w2b-traveller', label: 'W2b · The band’s ⋯: Print traveller (made on request, stored nowhere) and the style revision', model: recordCase('manager', 'IN_PROGRESS') },
+    { id: 'w2b-traveller-draft', label: 'W2b · A draft’s ⋯: its traveller says the sizes are not frozen', model: draft('manager', 'ready') },
     { id: 'w2b-minutes', label: 'W2b · Labour & cost › Minutes: planned and earned per operation, work order totals only; the cost below for those who may', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR) }) },
     { id: 'w2b-offstandard-none', label: 'W2b · Off-standard minutes: nothing names this work order yet', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: NO_OFF_STANDARD, problem: null }) }) },
     { id: 'w2b-offstandard-loading', label: 'W2b · Off-standard minutes: being read', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: null }) }) },

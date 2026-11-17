@@ -28,7 +28,7 @@ import {
   type Related,
   type Sdi,
 } from '../../_shared/api'
-import { isStepUpCancelled, useCoalesced, useLive, useStepUp, useThreadDock } from '../../_shared/hooks'
+import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../../_shared/hooks'
 import { abilitiesOf, lineInputsOf, readProblem, recordTouched, romeToday, writeProblem } from '../../_shared/model'
 import { releaseOverpayment } from '../daily/api'
 import { withCharge, withoutLine } from '../daily/model'
@@ -47,6 +47,9 @@ import { TestModeBanner } from '../test-mode/TestModeBanner'
 import { DepthWord } from '../test-mode/view/DepthWord'
 // B-W2b-GB02 (G152): the declaration of intent a draft rests on.
 import { DeclarationPick } from '../intent/DeclarationPick'
+// ---- B-TH-268: the docked thread on the invoice (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * `/w/<company>/finance/invoices/<id>` (SCR-081): loads the invoice (invoices.view; the API checks its company and
@@ -93,7 +96,6 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
   const [dialogProblem, setDialogProblem] = useState<InvoiceRecordModel['dialogProblem']>(null)
   const [resendProblems, setResendProblems] = useState<InvoiceRecordModel['resendProblems']>(null)
   const [changed, setChanged] = useState<{ at: string } | null>(null)
-  const { dockOpen, toggleDock } = useThreadDock('Invoice')
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
   const w = useT(DEPTH)
   const [debitOpen, setDebitOpen] = useState(false)
@@ -207,7 +209,7 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
     return answer
   }
 
-  const model: InvoiceRecordModel = { prefix, can, today: romeToday(), tab, invoice, checks, related, sdi, pdf, live, dockOpen, changed, notice, busy, dialog, dialogProblem, resendProblems, stepUp }
+  const model: InvoiceRecordModel = { prefix, can, today: romeToday(), tab, invoice, checks, related, sdi, pdf, live, personId: session.user.id /* B-TH-268 */, changed, notice, busy, dialog, dialogProblem, resendProblems, stepUp }
   const value = invoice.status === 'ready' ? invoice.value : null
   // B-W2b-417: the in-depth parts, each its own container.
   const debitWait = !can.manageInvoices ? w('held.noManage') : value?.status === 'REJECTED' ? w('debit.refusal.REJECTED') : null
@@ -242,16 +244,23 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
       }
     : undefined
 
+  // B-TH-268: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — "Reply to" reaches this invoice's own
+  // customer only (the API's thread party is its buyer), its files are this invoice's; only with threads.read. The print view keeps the
+  // panels' print form.
+  const readsThreads = session.permissions.includes('threads.read')
+  const record = value && readsThreads ? { type: 'Invoice', id: value.id, companyId: value.companyId, siteId: null } : null
+  const title = value ? `${value.number ?? value.docType} · ${value.party.legalName}` : ''
+
   return (
     <InvoiceRecordView
       model={model}
       depth={depth}
-      panels={value ? <RecordPanels record={{ type: 'Invoice', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number ?? value.docType} · ${value.party.legalName}`} party={{ id: value.buyerPartyId, name: value.party.legalName, emails: [] }} /> : null}
+      thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number ?? value.docType} party={{ id: value.buyerPartyId, name: value.party.legalName }} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
+      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.buyerPartyId, name: value.party.legalName, emails: [] }} /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryPart: () => value && loadParts(value),
         onReload: () => void load(),
-        onDock: toggleDock,
         onDismissNotice: () => setNotice(null),
         onDialog: (next) => {
           setDialog(next)

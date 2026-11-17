@@ -63,10 +63,19 @@ export const fieldSchema = z.object({
   picklist: z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string(), values: z.array(optionSchema) }).nullable(),
   linkTo: z.string().nullable(),
   linkRecordType: recordKey.nullable(),
+  /** B-TH-056 / B-TH-242: the one customer the field is for (null: every customer); it never changes. */
+  partyId: z.string().nullable().default(null),
 })
 export type Field = z.infer<typeof fieldSchema>
 
-export const editorFieldSchema = fieldSchema.extend({ valueCount: z.number(), createdAt: z.string(), updatedAt: z.string() })
+export const editorFieldSchema = fieldSchema.extend({
+  valueCount: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  // B-TH-242: the customer's name on the field's line; EVERY_CUSTOMER: shown in every customer's portal (its name reaches them all).
+  partyName: z.string().nullable().default(null),
+  portalNotice: z.enum(['EVERY_CUSTOMER']).nullable().default(null),
+})
 export type EditorField = z.infer<typeof editorFieldSchema>
 
 export const recordTypeSchema = z.object({
@@ -112,6 +121,8 @@ export interface NewFieldBody {
   shownInPortal: boolean
   picklistId: string | null
   linkTo: RecordKey | null
+  /** B-TH-242: "For: one customer" — the customer (customers, quotes and orders only); null: every customer. Never changes. */
+  partyId: string | null
 }
 
 /** fields.manage: a field added to a record type ("Add field to …"), at the end of its section. */

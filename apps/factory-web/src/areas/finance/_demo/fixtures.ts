@@ -1,7 +1,5 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
@@ -494,11 +492,3 @@ export const SETTINGS_MISSING: FinanceSettings = {
 }
 
 export const BANK = { companyId: COMPANY, bank: { accountHolder: DEMO_COMPANIES[0].name, iban: 'IT60X0542811101000000123456', bic: 'BPMOIT22XXX', bankName: 'Banca Esempio' }, version: 3, updatedAt: at(20, 9) }
-
-// ---- record panels --------------------------------------------------------------------------------------------------------------
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-export function panelsModel(title = 'FT-2026-00031 · Moto Demo S.r.l.'): RecordPanelsViewModel {
-  return { ...conversation, record: { type: 'Invoice', id: TD01_ID, companyId: COMPANY, siteId: null }, title, party: null }
-}

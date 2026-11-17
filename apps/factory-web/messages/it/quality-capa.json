@@ -185,7 +185,6 @@
     "title": "Scorciatoie da tastiera",
     "new": "Nuova CAPA",
     "addAction": "Aggiungi un'azione (scheda Azioni)",
-    "save": "Salva il modulo Problema",
     "previousAction": "Azione precedente (pannello)",
     "nextAction": "Azione successiva (pannello)"
   },
@@ -403,13 +402,15 @@
     "internal": "Interna",
     "owner": "Responsabile: {name}",
     "due": "Scade il {date}",
-    "more": "Altro per questa CAPA"
+    "more": "Altro per questa CAPA",
+    "title": "Azione correttiva",
+    "dockLabel": "La discussione della CAPA",
+    "tabsLabel": "Sezioni della CAPA"
   },
   "tab": {
     "problem": "Problema",
     "actions": "Azioni",
-    "report": "Report",
-    "activity": "Attività"
+    "report": "Report"
   },
   "record": {
     "offline": "Offline: vedi l'ultima copia; le modifiche aspettano che torni la connessione.",
@@ -418,9 +419,6 @@
     "closedBanner": "Chiusa il {date} da {name}",
     "cancelledBanner": "Annullata: {reason}",
     "moved": "Spostata a {stage}"
-  },
-  "activity": {
-    "none": "L'attività si apre con la scheda."
   },
   "actions": {
     "intro": "Azioni correttive e preventive (D5–D7). Il responsabile riceve un promemoria 3 giorni prima e il giorno della scadenza; un'azione in ritardo viene segnalata a chi indicato, altrimenti secondo la regola qualità dell'azienda.",

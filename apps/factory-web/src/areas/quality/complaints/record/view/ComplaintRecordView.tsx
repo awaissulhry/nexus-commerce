@@ -2,43 +2,82 @@
 
 import { useId, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Link2, MoreHorizontal, Pencil, ScanLine, ShieldAlert, Unlink } from 'lucide-react'
-import { Banner, Card, Field, KeyValue, Menu, RecordLayout, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { ExternalLink, Link2, Pencil, ScanLine, ShieldAlert, Unlink } from 'lucide-react'
+import { Banner, Card, Field, KeyValue, RecordLayout, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Checkbox, Input, RadioCard, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { Combobox, EditModeBar, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime, formatNumber } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
-import { Freshness, RecordFrame, Section } from '../../../_shared/parts'
+import { Freshness, RecordProblem, RecordSkeleton, Section } from '../../../_shared/parts'
 import { COMPLAINT_SEVERITIES, OFFICE_CHANNELS, type Complaint, type ComplaintAction, type ComplaintLinkType, type OfficeChannel } from '../../api'
 import { capaWords, dayAt, evidenceHref, garmentWords, LINK_TYPES, linkSaveHeld, linksHeld, linkTypeHeld, linkTypeKey, personName, primaryAction, recordHref, stepOf, unlinkHeld } from '../../model'
 import { AcknowledgeDialog, CategoryTag, ComplaintsMessages, DueText, InstantText, say, SeverityTag, StatusPill, useWords } from '../../view/parts'
 import { TriageModal } from '../../view/TriageModal'
 import type { ComplaintRecordActions, ComplaintRecordModel, FactsDraft, RecordDialog, RecordTab } from '../view-model'
 import { AnswerTab, InvestigationTab, SendBody, sendReviewHeld } from './AnswerTabs'
+// ---- B-TH-266: the complaint on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 /**
- * A complaint's record (SCR-113; design quality.complaints › Complaint, `?tab=complaint|investigation|answer|linked|activity`): the
- * band (‹ Complaints, "CMP-… <summary>", the customer, the category, the status; the primary step by status — Triage,
- * Start investigation, Mark answered, Close — then Create NCR, and ⋯ Add to PPE register, Make a repair, the garment's
- * evidence trail in a new tab, Copy link), the safety alert until the owner acknowledges it, then the tabs: Complaint
- * (the customer's words and photos, what it is about, the triage and the safety state beside them; the facts edited with
- * the EditModeBar), B-W2b-113's Investigation and Answer (./AnswerTabs: findings and root cause; the letter from a
- * template, its preview and the send review), Linked records (NCRs, CAPA, the return, the PPE register entry, shipment,
- * order, the garment and its repairs) and Activity (the record's thread and history). A closed complaint never changes.
- * Fetches nothing.
+ * A complaint's record (SCR-113; design quality.complaints › Complaint, `?tab=complaint|investigation|answer|linked`), on RecordFrame
+ * (B-TH-266; threads plan O-QA-CMP, the rule of picture 38, the tabs of picture 39): the band in the shell's band row (‹ Complaints,
+ * "CMP-… <summary>", ONE pill — its status —, the customer, the category, their reference, the freshness; the primary step by status
+ * — Triage, Start investigation, Mark answered, Close — then Create NCR; ⋯ Add to PPE register, Make a repair, the garment's evidence
+ * trail in a new tab, Copy link, then the frame's Keyboard line), the Thread button (⌘J) and the complaint's ONE thread docked beside
+ * every tab — the same conversation as the customer's portal complaint page, its customer the only party —, Activity's tools in its
+ * "⋯" (R-ACT). The ONE notice of the body column: the safety alert until the owner acknowledges it, the rest behind "N more". Tabs
+ * 5 → 4: Complaint (the customer's words and photos, what it is about, the triage and the safety state beside them; the facts edited
+ * with the EditModeBar), B-W2b-113's Investigation and Answer (./AnswerTabs: findings and root cause; the letter from a template, its
+ * preview and the send review), Linked records (NCRs, CAPA, the return, the PPE register entry, shipment, order, the garment and its
+ * repairs). A closed complaint never changes. Fetches nothing.
  */
-export function ComplaintRecordView({ model, actions, panels }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; panels?: ReactNode }) {
+// B-TH-266: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function ComplaintRecordView({ model, actions, thread, printThread }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <ComplaintsMessages>
-      <ComplaintRecord model={model} actions={actions} panels={panels} />
+      <ComplaintRecord model={model} actions={actions} thread={thread} printThread={printThread} />
     </ComplaintsMessages>
   )
 }
 
-function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; panels?: ReactNode }) {
+/** B-TH-266: a complaint while it is read, missing, refused or not for this role — inside the frame (the band stays), no thread. */
+export function ComplaintRecordState({ prefix, state, personId, onRetry }: { prefix: string; state: 'loading' | 'notFound' | 'forbidden' | { readonly problem: string }; personId?: string | null; onRetry?: () => void }) {
+  return (
+    <ComplaintsMessages>
+      <RecordState prefix={prefix} state={state} personId={personId} onRetry={onRetry} />
+    </ComplaintsMessages>
+  )
+}
+
+function RecordState({ prefix, state, personId, onRetry }: { prefix: string; state: 'loading' | 'notFound' | 'forbidden' | { readonly problem: string }; personId?: string | null; onRetry?: () => void }) {
+  const t = useWords()
+  const back = (
+    <Link className="fw-q-link" href={`${prefix}/quality/complaints`}>
+      {t('record.back')}
+    </Link>
+  )
+  return (
+    <RecordFrame
+      recordType="Complaint"
+      personId={personId ?? null}
+      band={{ back, title: state === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title'), moreLabel: t('record.more') }}
+      thread={null}
+      threadLabel={t('record.dockLabel')}
+    >
+      {state === 'loading' ? (
+        <RecordSkeleton />
+      ) : (
+        <RecordProblem problem={state === 'notFound' ? 'problem.notFound' : state === 'forbidden' ? 'problem.forbidden' : state.problem} back={back} onRetry={state === 'notFound' || state === 'forbidden' ? undefined : onRetry} />
+      )}
+    </RecordFrame>
+  )
+}
+
+function ComplaintRecord({ model, actions, thread, printThread }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useWords()
   const { complaint, prefix } = model
-  const tab: RecordTab = model.tab === 'activity' && !panels ? 'complaint' : model.tab
+  const tab: RecordTab = model.tab
   const base = recordHref(prefix, complaint.id)
   const step = (action: ComplaintAction) => stepOf(complaint, action, model.offline)
   const held = (action: ComplaintAction) => {
@@ -78,64 +117,66 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
     { id: 'number', label: t('row.copy'), onSelect: () => actions?.onCopy?.(complaint.number) },
   ]
 
-  const tabs = [
-    { id: 'complaint', label: t('tab.complaint') },
-    { id: 'investigation', label: t('tab.investigation') },
-    { id: 'answer', label: t('tab.answer'), count: complaint.answer.sent ? null : complaint.answer.text ? 1 : null },
-    { id: 'linked', label: t('tab.linked'), count: linkedCount(complaint) },
-    ...(panels ? [{ id: 'activity', label: t('tab.activity') }] : []),
+  const tabs: TabItem[] = [
+    { id: 'complaint', href: base, label: t('tab.complaint') },
+    { id: 'investigation', href: `${base}?tab=investigation`, label: t('tab.investigation') },
+    { id: 'answer', href: `${base}?tab=answer`, label: t('tab.answer'), count: complaint.answer.sent ? null : complaint.answer.text ? 1 : null },
+    { id: 'linked', href: `${base}?tab=linked`, label: t('tab.linked'), count: linkedCount(complaint) },
   ]
 
   return (
     <>
       <RecordFrame
-        back={{ href: `${prefix}/quality/complaints`, label: t('record.back') }}
-        title={
-          <>
-            <span className="fw-q-code">{complaint.number}</span> · {complaint.summary}
-          </>
-        }
-        meta={
-          <span className="fw-q-cell-row">
-            <span>{complaint.party.legalName}</span>
-            {complaint.customerRef && <span className="fw-q-hint">{t('row.theirRef', { ref: complaint.customerRef })}</span>}
-            <Freshness asOf={model.asOf} live={model.live} />
-          </span>
-        }
-        status={
-          <span className="fw-q-cell-row">
-            <CategoryTag category={complaint.category} />
-            <StatusPill status={complaint.status} />
-          </span>
-        }
-        actions={
-          <>
-            {primary && (
-              <Button size="sm" variant="primary" heldReason={held(primary)} onClick={() => run(primary)}>
-                {t(`action.${primary}`)}
-              </Button>
-            )}
-            {complaint.status !== 'CLOSED' && (
-              <Button size="sm" heldReason={held('createNcr')} onClick={() => run('createNcr')}>
-                {t('action.createNcr')}
-              </Button>
-            )}
-            <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={moreItems} />
-          </>
-        }
-        tabs={tabs}
-        active={tab}
-        tabHref={(id) => `${base}?tab=${id}`}
-        dock={tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        recordType="Complaint"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={`${prefix}/quality/complaints`}>{t('record.back')}</Link>,
+          title: (
+            <>
+              <span className="fw-q-code">{complaint.number}</span> · {complaint.summary}
+            </>
+          ),
+          // B-TH-266: ONE pill in the band — the status; the category, the customer and the freshness travel with the identity.
+          status: <StatusPill status={complaint.status} />,
+          meta: (
+            <span className="fw-q-cell-row">
+              <CategoryTag category={complaint.category} />
+              <span>{complaint.party.legalName}</span>
+              {complaint.customerRef && <span className="fw-q-hint">{t('row.theirRef', { ref: complaint.customerRef })}</span>}
+              <Freshness asOf={model.asOf} live={model.live} />
+            </span>
+          ),
+          primary:
+            primary || complaint.status !== 'CLOSED' ? (
+              <>
+                {complaint.status !== 'CLOSED' && (
+                  <Button size="sm" heldReason={held('createNcr')} onClick={() => run('createNcr')}>
+                    {t('action.createNcr')}
+                  </Button>
+                )}
+                {primary && (
+                  <Button size="sm" variant="primary" heldReason={held(primary)} onClick={() => run(primary)}>
+                    {t(`action.${primary}`)}
+                  </Button>
+                )}
+              </>
+            ) : undefined,
+          more: moreItems,
+          moreLabel: t('record.more'),
+        }}
       >
-        <RecordNotices model={model} actions={actions} held={held} run={run} />
+        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+        {/* B-TH-266: the ONE notice of the body column — most serious first, the rest behind "N more". */}
+        <RecordNotices>
+          <ComplaintNotices model={model} actions={actions} held={held} run={run} />
+        </RecordNotices>
         {tab === 'complaint' && <ComplaintTab model={model} actions={actions} held={held} run={run} />}
         {tab === 'investigation' && <InvestigationTab model={model} actions={actions} held={held} />}
         {tab === 'answer' && <AnswerTab model={model} actions={actions} held={held} />}
         {tab === 'linked' && <LinkedTab model={model} actions={actions} />}
-        {tab === 'activity' && panels}
       </RecordFrame>
       <RecordDialogs model={model} actions={actions} />
       {model.triage && <TriageModal model={model.triage} prefix={prefix} actions={actions} />}
@@ -146,37 +187,13 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
 const linkedCount = (complaint: Complaint): number =>
   complaint.ncrs.length + complaint.repairs.length + (complaint.register ? 1 : 0) + (complaint.return ? 1 : 0) + (complaint.shipment ? 1 : 0) + (complaint.order ? 1 : 0) + (complaint.capaRecord ? 1 : 0)
 
-function RecordNotices({ model, actions, held, run }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; held: (action: ComplaintAction) => string | null; run: (action: ComplaintAction) => void }) {
+/** The complaint's banners, most serious first (B-TH-266: inside the frame's ONE notice, each a child it counts). */
+function ComplaintNotices({ model, actions, held, run }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; held: (action: ComplaintAction) => string | null; run: (action: ComplaintAction) => void }) {
   const t = useWords()
   const locale = useLocale()
   const complaint = model.complaint
   return (
     <>
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={say(t, model.notice.words)}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-              {t('common.dismiss')}
-            </Button>
-          }
-        >
-          {model.notice.detail ? say(t, model.notice.detail) : null}
-        </Banner>
-      )}
-      {model.offline && <Banner tone="warning" title={t('offline.title')}>{t('offline.body')}</Banner>}
-      {model.changedAt && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatDateTime(model.changedAt, { locale }) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
       {complaint.safety.state === 'RAISED' && (
         <Banner
           tone="danger"
@@ -191,6 +208,31 @@ function RecordNotices({ model, actions, held, run }: { model: ComplaintRecordMo
           {t('record.safetyRaisedBody')}
         </Banner>
       )}
+      {model.notice && (
+        <Banner
+          tone={model.notice.tone}
+          title={say(t, model.notice.words)}
+          action={
+            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+              {t('common.dismiss')}
+            </Button>
+          }
+        >
+          {model.notice.detail ? say(t, model.notice.detail) : null}
+        </Banner>
+      )}
+      {model.changedAt && (
+        <Banner
+          tone="info"
+          title={t('record.changed', { time: formatDateTime(model.changedAt, { locale }) })}
+          action={
+            <Button size="sm" onClick={() => actions?.onReload?.()}>
+              {t('record.reload')}
+            </Button>
+          }
+        />
+      )}
+      {model.offline && <Banner tone="warning" title={t('offline.title')}>{t('offline.body')}</Banner>}
       {complaint.status === 'CLOSED' && (
         <Banner tone="info" title={t('record.closed', { day: complaint.closedAt ? formatDate(complaint.closedAt, { locale }) : '—' })}>
           {complaint.closeReason}
@@ -245,7 +287,7 @@ function ComplaintTab({ model, actions, held, run }: { model: ComplaintRecordMod
                 )}
               </div>
             )}
-            <p className="fw-q-hint">{t('photos.addInActivity')}</p>
+            <p className="fw-q-hint">{t('photos.addInThread')}</p>
             <p className="fw-q-hint">{t('mail.intoThread', { number: complaint.number })}</p>
           </Section>
           {!edit && (

@@ -2,16 +2,14 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, MessageSquare, MoreHorizontal, PauseCircle, ShieldOff, Unlock, Zap } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, Tabs, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { FileX, PauseCircle, ShieldOff, Unlock, Zap } from 'lucide-react'
+import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { WorkOrder } from '../../../_shared/api'
-import { mayCancel, nextStep, openChecks, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../../_shared/model'
+import { isWideTab, mayCancel, nextStep, openChecks, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../../_shared/model'
 import { BundlesTab } from '../../bundles/view/BundlesTab'
 import { CuttingTab } from '../../cutting/view/CuttingTab'
 import { OperationsTab } from '../../progress/view/OperationsTab'
@@ -24,8 +22,7 @@ import { MaterialsTab } from './MaterialsTab'
 import { OverviewTab } from './OverviewTab'
 import { QualityTab } from './QualityTab'
 import { LabourTab } from '../../labour/view/LabourTab'
-import { minutesOf, SHIFT_NAMESPACE, splitHeld, travellersHref } from '../../every-shift/model'
-import { DocumentsTab } from '../../every-shift/view/DocumentsTab'
+import { documentDoors, minutesOf, SHIFT_NAMESPACE, splitHeld } from '../../every-shift/model'
 import { SplitDialog } from '../../every-shift/view/SplitDialog'
 import '../../../_shared/production.css'
 // B-W2b-245: Spec differences and Change request (design pop:wo-diff, pop:wo-change).
@@ -35,74 +32,92 @@ import { requestHeld, SPEC_NS } from '../../spec/model'
 import { CLOSE_NS } from '../../close/model'
 import { CloseBanners, CloseParts } from '../../close/view/CloseParts'
 import { VarianceAtClose } from '../../labour/variance/view/VarianceAtClose'
+// ---- B-TH-265: the work order on RecordFrame (the band in the shell's row, the docked thread, one notice) and "Order files (n)" ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { hasOrderFiles } from '../order-files/model'
+import { OrderFilesButton, OrderFilesDialog } from '../order-files/view/OrderFiles'
+// ---- end B-TH-265
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
 /**
- * SCR-070 — the work order studio (design production.workorders "Record: Work order"; 00 §2.2; Owner L1: the tabs always
- * in view). The band: ‹ Work orders, "<number> · <style>", the state, batch number, revision and due date, the next step
- * as the primary (Release → Start → Complete → Close, held with its reason), the thread (⌘J), ⋯ Cancel. The tabs:
- * Overview (release check or frozen spec, facts, the size run with cut / bundled / sewn / finished per cell), Materials
- * (planned and issued, the pick list), Cutting (SCR-071), Bundles and Operations (SCR-072), Quality (read-only), Activity
- * (the record panels; beside any tab on a wide screen with ⌘J). Totals per work order, operation or line only; no money.
+ * SCR-070 — the work order studio (design production.workorders "Record: Work order"; 00 §2.2; Owner L1: the tabs always in view), on
+ * RecordFrame (B-TH-265; the rule of picture 38): the band in the shell's band row (‹ Work orders, "<number> · <style>", ONE status
+ * pill, rush, split from, batch number, revision and due date, the site and customers, "Order files (n)"; the next step as the primary
+ * — Release → Start → Complete → Close, held with its reason — beside Put on hold / Release the hold; the thread (⌘J); ⋯ Split, Print
+ * traveller, the style revision, Change request, Cancel, Copy number and the Keyboard line), the work order's thread docked beside
+ * every tab (its own notes, never shareable with a customer, a note may go to the floor; one of its orders' threads picked beside it;
+ * Activity's tools in the thread's "⋯", R-ACT), ONE notice in the body column, and the tabs 9 → 7: Overview (release check or frozen
+ * spec, facts, the size run with cut / bundled / sewn / finished per cell), Materials (planned and issued, the pick list), Cutting
+ * (SCR-071), Bundles and Operations (SCR-072), Quality (read-only), Labour & cost. Documents went into the band's ⋯ (R-7), Activity
+ * into the docked thread; every old ?tab= keeps working (R-8). Totals per work order, operation or line only; no money.
  */
-export function WorkOrderRecordView({ model, actions, panels }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
+// B-TH-265: `thread` is the docked thread (the container's WorkOrderThreads with the office's OfficeRecordThread, or a design case's);
+// `printThread` what the print view shows of it.
+export function WorkOrderRecordView({ model, actions, thread, printThread }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS]}>
-      <WorkOrderRecord model={model} actions={actions} panels={panels} />
+      <WorkOrderRecord model={model} actions={actions} thread={thread} printThread={printThread} />
     </WithMessages>
   )
 }
 
-function WorkOrderRecord({ model, actions, panels }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
+function WorkOrderRecord({ model, actions, thread, printThread }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('production')
   const listHref = `${model.prefix}/production/work-orders`
   const loaded = model.workOrder
 
   if (loaded.status !== 'ready') {
+    // Loading, not found, no right, a failed read: the band and its state inside the frame, no thread yet.
     return (
-      <div className="fw-pr">
-        <div className="fw-pr-band">
-          <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('record.back')}</Link>} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title')} />
+      <RecordFrame
+        recordType="WorkOrder"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabel')}
+        thread={null}
+        band={{ back: <Link href={listHref}>{t('record.back')}</Link>, title: loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title'), moreLabel: t('record.more') }}
+      >
+        <div className="fw-pr-main">
+          {loaded.status === 'loading' ? (
+            <Card padded aria-busy="true">
+              <p className="fw-pr-hint" role="status">
+                <Spinner size={14} /> {t('record.loading')}
+              </p>
+              <div className="fw-pr-stack">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <Skeleton key={index} height={22} />
+                ))}
+              </div>
+            </Card>
+          ) : (
+            <Card padded>
+              <EmptyState
+                icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+                title={t(`record.state.${loaded.status}.title`)}
+                description={loaded.status === 'error' ? t(loaded.problem) : t(`record.state.${loaded.status}.body`)}
+                action={
+                  loaded.status === 'error' ? (
+                    <Button size="sm" onClick={() => actions?.onRetry?.()}>
+                      {t('common.retry')}
+                    </Button>
+                  ) : (
+                    <Button size="sm" asChild>
+                      <Link href={listHref}>{t('record.backToList')}</Link>
+                    </Button>
+                  )
+                }
+              />
+            </Card>
+          )}
         </div>
-        {loaded.status === 'loading' ? (
-          <Card padded aria-busy="true">
-            <p className="fw-pr-hint" role="status">
-              <Spinner size={14} /> {t('record.loading')}
-            </p>
-            <div className="fw-pr-stack">
-              {Array.from({ length: 6 }, (_, index) => (
-                <Skeleton key={index} height={22} />
-              ))}
-            </div>
-          </Card>
-        ) : (
-          <Card padded>
-            <EmptyState
-              icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
-              title={t(`record.state.${loaded.status}.title`)}
-              description={loaded.status === 'error' ? t(loaded.problem) : t(`record.state.${loaded.status}.body`)}
-              action={
-                loaded.status === 'error' ? (
-                  <Button size="sm" onClick={() => actions?.onRetry?.()}>
-                    {t('common.retry')}
-                  </Button>
-                ) : (
-                  <Button size="sm" asChild>
-                    <Link href={listHref}>{t('record.backToList')}</Link>
-                  </Button>
-                )
-              }
-            />
-          </Card>
-        )}
-      </div>
+      </RecordFrame>
     )
   }
-  return <ReadyRecord workOrder={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyRecord workOrder={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} />
 }
 
-function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
+function ReadyRecord({ workOrder, model, actions, thread, printThread }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('production')
   const locale = useLocale()
   const recordHref = `${model.prefix}/production/work-orders/${workOrder.id}`
@@ -115,17 +130,12 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
     else if (step.kind) actions?.onDialog?.({ kind: 'move', move: step.kind })
   }
 
-  // Keys: ⌘J the thread; ⌘↵ the next step's dialog (never while typing or inside a dialog).
+  // Keys: ⌘↵ the next step's dialog (never while typing or inside a dialog). B-TH-265: ⌘J is the record frame's (the thread).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        actions?.onDock?.()
-        return
-      }
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open) return
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !stepHeld) {
         event.preventDefault()
         openStep()
@@ -161,7 +171,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
     count: tabCount(tab),
   }))
 
-  const primary = step.kind ? (
+  const stepButton = step.kind ? (
     <Button
       size="sm"
       variant="primary"
@@ -173,18 +183,17 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
     </Button>
   ) : null
 
-  // B-W2b-59: Split work order (⋯, held with its reason) and the traveller's new tab.
+  // B-W2b-59: Split work order (⋯, held with its reason). B-TH-265: Documents' doors (the traveller, the style revision) in the ⋯ (R-7).
   const ts = useT(SHIFT_NAMESPACE)
   // B-W2b-245: the ⋯ "Change request…".
   const tspec = useT(SPEC_NS)
   const heldWords = useScopedT('production')
   const splitWait = splitHeld(workOrder, model.can)
-  const more = [
+  const more: MenuItemDef[] = [
     { id: 'split', label: ts('split.open'), disabled: splitWait !== null, ...(splitWait ? { description: heldWords(splitWait.key, splitWait.params) } : {}), onSelect: () => actions?.onOpenSplit?.() },
-    { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [workOrder.id]), target: '_blank' as const },
+    ...documentDoors(workOrder, model.prefix).map((door) => ({ id: door.id, label: ts(door.label.key, door.label.params), description: ts(door.description.key), href: door.href, target: '_blank' as const })),
     // B-W2b-245 (design pop:wo-change "⋯"): a change to this work order's spec is a change request.
     ...(model.spec ? [{ id: 'changeRequest', label: tspec('wo.changeOpen'), disabled: requestHeld(model.spec.can) !== null, ...(requestHeld(model.spec.can) ? { description: tspec(requestHeld(model.spec.can)!) } : {}), onSelect: () => actions?.spec?.onOpen?.({ kind: 'change' }) }] : []),
-    ...(mayCancel(workOrder, model.can) ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
     {
       id: 'copy',
       label: t('action.copyNumber'),
@@ -192,6 +201,8 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
         void navigator.clipboard?.writeText(workOrder.number).catch(() => undefined)
       },
     },
+    // Danger last, never beside the primary.
+    ...(mayCancel(workOrder, model.can) ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
   ]
 
   // B-W2a-46 (wo-hold "band second action"): Put on hold, or Release the hold while it is held.
@@ -213,46 +224,39 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
   ) : null
   const holdWords = workOrder.hold ? (activeHolds[0] ? holdReasonWords(activeHolds[0].reasonCode, daily?.reasons ?? null, locale) : (workOrder.hold.reason ?? '—')) : null
 
-  const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
-  const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
   const customers = [...new Set(workOrder.orders.map((order) => order.partyName))]
   const colourways = [...new Set(workOrder.cells.map((cell) => cell.colourwayCode))]
+  // The band's primary: the step, and the hold beside it (at most two actions; the rest in the ⋯).
+  const primary =
+    stepButton || holdButton ? (
+      <span className="fw-pr-actions">
+        {stepButton}
+        {holdButton}
+      </span>
+    ) : undefined
 
   return (
-    <div className="fw-pr">
-      <div className="fw-pr-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={`${model.prefix}/production/work-orders`}>{t('record.back')}</Link>}
-          title={
-            <span className="fw-pr-title">
-              {workOrder.number}{' '}
-              <span className="fw-pr-title-sub">
-                · {workOrder.style.code} {workOrder.style.name}
-                {colourways.length > 0 ? ` · ${colourways.join(', ')}` : ''}
-              </span>
+    <RecordFrame
+      recordType="WorkOrder"
+      personId={model.personId ?? null}
+      threadLabel={t('record.dockLabel')}
+      thread={thread ?? null}
+      printThread={printThread}
+      wide={isWideTab(model.tab)}
+      band={{
+        back: <Link href={`${model.prefix}/production/work-orders`}>{t('record.back')}</Link>,
+        title: (
+          <span className="fw-pr-title">
+            {workOrder.number}{' '}
+            <span className="fw-pr-title-sub">
+              · {workOrder.style.code} {workOrder.style.name}
+              {colourways.length > 0 ? ` · ${colourways.join(', ')}` : ''}
             </span>
-          }
-          actions={
-            <span className="fw-pr-actions">
-              {primary}
-              {holdButton}
-              {activity && (
-                <Button size="sm" variant={model.dockOpen ? 'tonal' : 'secondary'} active={model.dockOpen} aria-pressed={model.dockOpen} onClick={() => actions?.onDock?.()} title={t('record.dockHint')}>
-                  <MessageSquare size={14} aria-hidden /> <span>{t('record.dock')}</span>
-                  <span className="fw-pr-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
-              )}
-              <Menu label={<MoreHorizontal size={16} aria-label={t('record.more')} />} items={more} align="right" triggerProps={{ 'aria-label': t('record.more') }} />
-            </span>
-          }
-        />
-        <div className="fw-pr-meta-row">
-          <span className="fw-pr-meta">
-            <Pill tone={STATUS_TONE[workOrder.status]}>{t(`status.${workOrder.status}`)}</Pill>
+          </span>
+        ),
+        status: <Pill tone={STATUS_TONE[workOrder.status]}>{t(`status.${workOrder.status}`)}</Pill>,
+        meta: (
+          <>
             {workOrder.rush && (
               <Tag tone="danger">
                 <Zap size={11} aria-hidden /> {ts('rush.word')}
@@ -271,75 +275,74 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
               </Tag>
             )}
             <span className="fw-pr-hint">{[workOrder.site.code, ...customers].join(' · ')}</span>
-          </span>
-          <span className="fw-pr-status" role="status">
-            {t(`live.${model.live}`)}
-          </span>
-        </div>
+            {/* B-TH-265 (agreement T9): the orders' own files, read through the work order's own route. */}
+            {model.orderFiles && hasOrderFiles(model.orderFiles.files) && <OrderFilesButton model={model.orderFiles} actions={actions?.orderFiles} />}
+          </>
+        ),
+        primary,
+        more,
+        moreLabel: t('record.more'),
+      }}
+    >
+      <div className="fw-pr-main">
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
-      </div>
 
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={notices(model.notice.words.key, model.notice.words.params)}
-          action={
-            actions?.onDismissNotice ? (
-              <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                {t('common.dismiss')}
-              </Button>
-            ) : undefined
-          }
-        />
-      )}
-      {workOrder.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: workOrder.cancelReason ?? '—' })} />}
-      {workOrder.status === 'ON_HOLD' && workOrder.hold && (
-        <Banner tone="danger" title={tw('holds.banner', { reason: holdWords ?? '—', back: tw(`status.${workOrder.hold.fromStatus ?? 'DRAFT'}`) })}>
-          {tw('holds.floorRefuses')}
-        </Banner>
-      )}
-      {/* B-W2b-424: the Undo after a close; a closed work order's close (who, when, why) with Reopen…. */}
-      {model.close ? <CloseBanners workOrder={workOrder} model={model.close} actions={actions?.close} /> : workOrder.status === 'CLOSED' && <Banner tone="info" title={t('record.closed')} />}
-      {!model.can.manage && !model.can.release && <Banner tone="info" title={t('record.readOnly')} />}
-
-      <div className={showDock ? 'fw-pr-body has-dock' : 'fw-pr-body'}>
-        <div className="fw-pr-main">
-          {model.tab === 'overview' && <OverviewTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'materials' && <MaterialsTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'cutting' && <CuttingTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'labour' && (
-            <LabourTab
-              labour={model.labour}
-              prefix={model.prefix}
-              workOrderId={workOrder.id}
-              draft={workOrder.status === 'DRAFT'}
-              onRetry={actions?.onRetryLabour}
-              minutes={minutesOf(workOrder, model.wip.value)}
-              labourHref={model.can.labour ? `${model.prefix}/production/labour` : null}
-              variance={model.variance ? <VarianceAtClose model={model.variance} onRetry={actions?.onRetryVariance} /> : null}
+        {/* B-TH-265: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
+          {model.notice && (
+            <Banner
+              tone={model.notice.tone}
+              title={notices(model.notice.words.key, model.notice.words.params)}
+              action={
+                actions?.onDismissNotice ? (
+                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                    {t('common.dismiss')}
+                  </Button>
+                ) : undefined
+              }
             />
           )}
-          {model.tab === 'documents' && <DocumentsTab workOrder={workOrder} prefix={model.prefix} bundles={activeBundles} />}
-          {model.tab === 'activity' && (activity ?? <p className="fw-pr-hint">{t('record.noPanels')}</p>)}
-        </div>
-        {showDock && (
-          <aside className="fw-pr-dock" aria-label={t('record.dockLabel')}>
-            {activity}
-          </aside>
+          {workOrder.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: workOrder.cancelReason ?? '—' })} />}
+          {workOrder.status === 'ON_HOLD' && workOrder.hold && (
+            <Banner tone="danger" title={tw('holds.banner', { reason: holdWords ?? '—', back: tw(`status.${workOrder.hold.fromStatus ?? 'DRAFT'}`) })}>
+              {tw('holds.floorRefuses')}
+            </Banner>
+          )}
+          {model.changed && (
+            <Banner
+              tone="info"
+              title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
+              action={
+                <Button size="sm" onClick={() => actions?.onReload?.()}>
+                  {t('record.reload')}
+                </Button>
+              }
+            />
+          )}
+          {/* The shell's band says the tab's live state; offline, the page says its figures may be old. */}
+          {model.live === 'offline' && <Banner tone="warning" title={t('live.offline')} />}
+          {/* B-W2b-424: the Undo after a close; a closed work order's close (who, when, why) with Reopen…. */}
+          {model.close ? <CloseBanners workOrder={workOrder} model={model.close} actions={actions?.close} /> : workOrder.status === 'CLOSED' && <Banner tone="info" title={t('record.closed')} />}
+          {!model.can.manage && !model.can.release && <Banner tone="info" title={t('record.readOnly')} />}
+        </RecordNotices>
+
+        {model.tab === 'overview' && <OverviewTab workOrder={workOrder} model={model} actions={actions} />}
+        {model.tab === 'materials' && <MaterialsTab workOrder={workOrder} model={model} actions={actions} />}
+        {model.tab === 'cutting' && <CuttingTab workOrder={workOrder} model={model} actions={actions} />}
+        {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
+        {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
+        {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
+        {model.tab === 'labour' && (
+          <LabourTab
+            labour={model.labour}
+            prefix={model.prefix}
+            workOrderId={workOrder.id}
+            draft={workOrder.status === 'DRAFT'}
+            onRetry={actions?.onRetryLabour}
+            minutes={minutesOf(workOrder, model.wip.value)}
+            labourHref={model.can.labour ? `${model.prefix}/production/labour` : null}
+            variance={model.variance ? <VarianceAtClose model={model.variance} onRetry={actions?.onRetryVariance} /> : null}
+          />
         )}
       </div>
 
@@ -350,7 +353,9 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       {model.spec && <SpecDialogs workOrder={workOrder} model={model.spec} prefix={model.prefix} actions={actions?.spec} />}
       {/* B-W2b-424 */}
       {model.close && <CloseParts workOrder={workOrder} model={model.close} actions={actions?.close} />}
-    </div>
+      {/* B-TH-265 */}
+      {model.orderFiles && <OrderFilesDialog number={workOrder.number} model={model.orderFiles} choices={model.threadChoices ?? []} actions={actions?.orderFiles} />}
+    </RecordFrame>
   )
 }
 

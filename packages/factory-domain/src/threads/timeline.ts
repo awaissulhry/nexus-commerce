@@ -10,7 +10,12 @@ import { isMarkedJson, looksLikeMoney } from '../money/marked'
  */
 
 export const TIMELINE_KINDS = ['message', 'change', 'file'] as const
-export type TimelineKind = (typeof TIMELINE_KINDS)[number]
+// ---- B-TH-072 (threads plan TH-5, PROJ-G17, PROJ.linked-F08): `linked` — a project's linked records' state moves and decisions,
+// merged when read (never copied) — only when asked ("View ▾ Linked news"): never in the default feed.
+export const ASKED_ONLY_TIMELINE_KINDS = ['linked'] as const
+export const TIMELINE_ASKABLE_KINDS = [...TIMELINE_KINDS, ...ASKED_ONLY_TIMELINE_KINDS] as const
+export type TimelineKind = (typeof TIMELINE_ASKABLE_KINDS)[number]
+// ---- end B-TH-072
 
 export interface Positioned {
   readonly at: Date

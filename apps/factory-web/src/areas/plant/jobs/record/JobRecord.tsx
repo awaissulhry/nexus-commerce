@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
@@ -14,11 +14,16 @@ import { assigneeFields, assigneeValue, instantOf, localOf, plantCan, readProble
 import { PlantMessages, useWords, type Loaded, type Notice } from '../../_shared/parts'
 import { confirmJobWorks, getDeepJob, handBackJob, uploadMedia, type DeepJobRecord, type MediaCategory } from '../../requests/depth/api'
 import { audioRefusal, closeBody, closeDraftOf, depthProblemOf, mediaName, mediaViews, type CloseDraft } from '../../requests/depth/model'
-import { JOB_TABS, type Capture, type JobEditDraft, type JobRecordDialog, type JobRecordModel, type JobTab } from '../view-model'
+import { jobTabOf, type Capture, type JobEditDraft, type JobRecordDialog, type JobRecordModel, type JobTab } from '../view-model'
 import { JobRecordView } from './view/JobRecordView'
+// ---- B-TH-265: the docked thread on the job (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
+// ---- end B-TH-265
 
 /**
- * `/w/<company>/plant/jobs/<id>` (SCR-149 record; `?tab=problem|photos|handback|activity`): the job read once and again
+ * `/w/<company>/plant/jobs/<id>` (SCR-149 record; `?tab=problem|handback`, B-TH-265: an old `photos` or `activity` opens Problem &
+ * photos, `activity` with the thread): the job read once and again
  * on its live changes (the job, its machine, its requests); the moves (plan, start, wait, reopen, close, cancel with its
  * reason), each one command with the version read; the side panel's explicit edit. B-W2b-140: the one-screen close
  * (the tab and the Hand back dialog), Sign safe from the Unsafe lock panel (a fresh code), the line lead's confirmation,
@@ -37,10 +42,10 @@ function JobRecordContainer({ jobId }: { jobId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const params = useSearchParams()
+  const pathname = usePathname()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => plantCan(session.permissions), [session.permissions])
-  const asked = params?.get('tab') ?? ''
-  const tab: JobTab = (JOB_TABS as readonly string[]).includes(asked) ? (asked as JobTab) : 'problem'
+  const tab: JobTab = jobTabOf(params?.get('tab'))
 
   const [loaded, setLoaded] = useState<Loaded<DeepJobRecord>>({ status: 'loading' })
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -285,14 +290,22 @@ function JobRecordContainer({ jobId }: { jobId: string }) {
     lightbox,
     capture,
     stepUp,
+    personId: session.user.id, // B-TH-265
   }
 
-  const panels = value && tab === 'activity' ? <RecordPanels record={{ type: 'MaintenanceJob', id: value.job.id, companyId: value.job.companyId, siteId: value.job.siteId }} title={`${value.job.number} · ${value.job.machine.assetNumber}`} /> : null
+  // B-TH-265: the job's thread docked beside both tabs (notes only: a maintenance job has no party; its company and site), with
+  // threads.read; Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  const record = value ? { type: 'MaintenanceJob', id: value.job.id, companyId: value.job.companyId, siteId: value.job.siteId } : null
+  const title = value ? `${value.job.number} · ${value.job.machine.assetNumber}` : ''
+  const readsThreads = session.permissions.includes('threads.read')
+  const thread = value && record && readsThreads ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.job.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = value && record && readsThreads ? <RecordPanels record={record} title={title} /> : null
 
   return (
     <JobRecordView
       model={model}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onMove: (kind) => void move(kind),

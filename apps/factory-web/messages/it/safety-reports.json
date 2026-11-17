@@ -504,13 +504,16 @@
     "style": "Modello",
     "tab": {
       "accident": "Registro degli incidenti",
-      "photos": "Foto",
-      "report": "Segnalazione"
+      "report": "Segnalazione e foto"
     },
     "told": "L'autorità è stata informata…",
     "what": "Cosa è successo",
     "whatHint": "Con le parole di chi ha segnalato.",
-    "where": "Dove è andata"
+    "where": "Dove è andata",
+    "name": "Segnalazione di sicurezza prodotto",
+    "dockLabel": "Conversazione della segnalazione",
+    "tabsLabel": "Sezioni della segnalazione",
+    "photos": "Foto"
   },
   "refused": {
     "check": "Il breve controllo del dispositivo non è riuscito. Riprova tra poco.",

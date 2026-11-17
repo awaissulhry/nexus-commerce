@@ -7,6 +7,7 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { getSdi, invoiceFromDdts, invoiceFromShipment, listInvoices, shippedNotInvoiced, type InvoiceRow } from '../../_shared/api' // B-W2b-GB02 (G148): + invoiceFromShipment
+import { fromDdtsOfAddress } from './list-model' // B-TH-244
 import { downloadText, useCoalesced, useLive } from '../../_shared/hooks'
 import { abilitiesOf, invoicesAddress, invoicesCsv, invoicesTouched, queryFromAddress, readProblem, romeToday, writeProblem, type RowView } from '../../_shared/model'
 import { createDeferred, deferredDue, draftReturnCredit, returnCredit as readReturnCredit, type Deferred } from '../daily/api'
@@ -66,7 +67,8 @@ function InvoicesContainer() {
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<InvoicesListModel['notice']>(null)
   const returnId = params?.get('return') ?? null
-  const [dialog, setDialog] = useState<InvoicesListModel['dialog']>(params?.get('new') === '1' ? { kind: 'fromDdts', ddtIds: [], partyId: null } : returnId ? { kind: 'returnCredit', returnId } : null)
+  // B-TH-244: `?new=1&ddts=…&party=…` (Sales › Orders' "Invoice shipped goods for N") opens the dialog with those DDTs chosen.
+  const [dialog, setDialog] = useState<InvoicesListModel['dialog']>(fromDdtsOfAddress(params) ?? (returnId ? { kind: 'returnCredit', returnId } : null))
   // B-W2a-80: the deferred invoices due (tile + saved filter), a return's credit notes (`?return=<id>`).
   const shippedView = shippedViewOf(params)
   const [deferred, setDeferred] = useState<Deferred | null>(null)

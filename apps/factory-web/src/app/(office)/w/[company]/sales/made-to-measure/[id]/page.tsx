@@ -4,7 +4,7 @@ import { ProfileRecord } from '../../../../../../../areas/sales/mtm/record/Profi
 
 export const metadata: Metadata = { title: 'Rider profile · Nexus Factory' }
 
-/** Sales › Made-to-measure › a rider profile (SCR-036-record; `?tab=measurements|photos|fittings|proofs|orders|activity`, `&do=` a row verb's dialog). */
+/** Sales › Made-to-measure › a rider profile (SCR-036-record; `?tab=measurements|photos|fittings|proofs|orders` — the old `activity` opens Measurements with the thread, B-TH-258 —, `&do=` a row verb's dialog). */
 export default async function RiderProfileRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

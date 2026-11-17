@@ -142,6 +142,8 @@ export interface MailToSortViewModel {
   prefix?: string
   /** B-W2b-397: "Create an inquiry" from a mail is offered; false: held (no sales.inquiries.manage); absent: not drawn. */
   canInquiry?: boolean
+  /** B-TH-239: the "Mail to sort" tile's own count (toSortCountOf), whatever the list's filter and "Show more"; absent: the design index. */
+  toSort?: ToSortCount
 }
 
 export interface MailAction {
@@ -269,3 +271,34 @@ export function matchCandidates(candidates: readonly RecordCandidate[], query: s
 export function isMailChange(change: { type: string }): boolean {
   return change.type === 'email.inbound_sorted'
 }
+
+// ---- B-TH-239 (threads plan TH-3; O-HOME-MAIL.tiles-F01, picture 17): the "Mail to sort" tile counts what waits, one rule --------
+
+/** The page the tile counts on: the API's first page of the default list (the same read as Incoming's "mails wait" notice). */
+export const TO_SORT_PAGE = 50
+
+export interface ToSortCount {
+  /** Mail that waits (TRIAGE, HELD, FAILED) on the first page; null: not read yet ("—", never 0). */
+  readonly count: number | null
+  /** More wait than one page ("50+"). */
+  readonly more: boolean
+}
+
+/**
+ * The "Mail to sort" tile: what waits on the first page of the default list (TO_SORT) — the same number Sales › Incoming's notice
+ * says ("12 mails wait in Mail to sort"), whatever filter the list below shows (Held, Not read …) and however many pages "Show more"
+ * loaded. Before, the tile counted the rows loaded under the current filter, so it said "3" on the Held filter and grew with every
+ * page. Null page: not read yet.
+ */
+export function toSortCountOf(page: { readonly mails: readonly Pick<MailSummary, 'status'>[]; readonly nextCursor: string | null } | null): ToSortCount {
+  if (!page) return { count: null, more: false }
+  return { count: page.mails.filter((mail) => TO_SORT.includes(mail.status)).length, more: page.nextCursor !== null }
+}
+
+/** The tile's count when the page has no count of its own (the design index): the loaded rows only while they ARE the first page of all. */
+export function toSortTile(model: Pick<MailToSortViewModel, 'toSort' | 'filter' | 'mails'>): ToSortCount {
+  if (model.toSort) return model.toSort
+  if (model.filter !== 'all' || !model.mails.items) return { count: null, more: false }
+  return { count: Math.min(model.mails.items.length, TO_SORT_PAGE), more: model.mails.more || model.mails.items.length > TO_SORT_PAGE }
+}
+// ---- end B-TH-239

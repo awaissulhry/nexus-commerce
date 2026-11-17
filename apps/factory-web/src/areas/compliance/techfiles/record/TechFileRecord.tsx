@@ -9,7 +9,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { isStepUpCancelled, liveMatches, useLive, useRecordTab, useStepUp } from '../../../quality/_shared/hooks'
+import { isStepUpCancelled, liveMatches, useLive, useStepUp } from '../../../quality/_shared/hooks'
 import {
   addItem,
   addRiskRow,
@@ -60,12 +60,11 @@ import {
   packWindowAddress,
   problemOf,
   ready,
-  RECORD_TABS,
-  recordAddress,
   refusalDetail,
   riskCellProblem,
   romeToday,
   shownAssessment,
+  tabOf,
   techfilesCan,
   unreviewState,
   valueOf,
@@ -77,9 +76,10 @@ import { usePackDialog } from '../use-pack-dialog'
 import type { Notice } from '../view/parts'
 import { IDLE, optionKey, UPLOAD_CHOICE, type EvidenceDialog, type FileDialog, type Mark, type RiskUi, type ShareState, type TestDialog, type WithdrawState } from './view-model'
 import { RecordLoadingView, RecordProblemView, TechFileRecordView } from './view/TechFileRecordView'
+// ---- B-TH-267: the technical file on RecordFrame (its thread docked beside every tab; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.techfiles.dock'
 const NO_RISK_UI: RiskUi = { shown: null, zone: null, marks: {}, selected: [], reasoning: null, reasoningMark: null, sign: null, writing: IDLE }
 
 /** A refusal in our words with the API's sentences under it (a 409 in words: the open points, "kept until …"). */
@@ -89,8 +89,8 @@ const refused = (error: unknown, key?: string): Notice => ({ tone: 'danger', key
 const typeOf = (name: string): string => (/\.pdf$/i.test(name) ? 'application/pdf' : /\.png$/i.test(name) ? 'image/png' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : /\.webp$/i.test(name) ? 'image/webp' : 'application/octet-stream')
 
 /**
- * A technical file's container (`/w/<company>/compliance/techfiles/<id>?tab=annex|risk|tests|production|pack|activity`,
- * SCR-120-file): reads the file (its Annex III points), and each tab's part once it is opened (risk, test reports, production
+ * A technical file's container (`/w/<company>/compliance/techfiles/<id>?tab=annex|risk|tests|production|pack`, SCR-120-file;
+ * B-TH-267: an old `?tab=activity` lands on the Annex III checklist with the docked thread opened): reads the file (its Annex III points), and each tab's part once it is opened (risk, test reports, production
  * control, packs), each failing on its own; runs ONE write at a time per pop-up with the version read and an Idempotency-Key; a
  * 409 is said in our words with the API's sentences under it (the record read again). Signing and sending by link ask for a
  * fresh code (step-up) only when pressed. Live technical_file.* events read the part again — or, while a pop-up is open, say it
@@ -105,7 +105,7 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
   const params = useSearchParams()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => techfilesCan(session.permissions), [session.permissions])
-  const tab = useRecordTab(RECORD_TABS)
+  const tab = tabOf(params?.get('tab')) // B-TH-267: every old ?tab= lands (MERGED_TABS)
   const online = useOnline()
   const today = romeToday()
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
@@ -114,7 +114,6 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(params?.get('created') === '1' ? { tone: 'success', key: 'done.created' } : null)
   const [changedAt, setChangedAt] = useState<string | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   const [fileDialog, setFileDialog] = useState<{ dialog: FileDialog; writing: typeof IDLE } | null>(null)
   const [keepers, setKeepers] = useState<Read<Awaited<ReturnType<typeof readKeepers>>> | null>(null)
   const [certificates, setCertificates] = useState<Read<Awaited<ReturnType<typeof evidenceOptions>>['options']> | null>(null)
@@ -178,14 +177,6 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
       void loadPacks()
     }
   }, [tab, risk, reports, production, packs, loadRisk, loadReports, loadProduction, loadPacks])
-
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
 
   // The one-off `?created=1` leaves the address once the notice shows.
   useEffect(() => {
@@ -539,14 +530,23 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
     )
   }
 
+  // B-TH-267: loading, not found, not for the role or a failed read: inside the frame (the band stays), no thread.
   if (record.status !== 'ready') {
     if (record.status === 'error') return <RecordProblemView problem={record.problem} prefix={prefix} onRetry={() => void load()} />
-    return <RecordLoadingView />
+    return <RecordLoadingView prefix={prefix} />
   }
 
   const current = record.value
+  // ---- B-TH-267 (N14, B-TH-075): the technical file's ONE thread, docked beside every tab, for a reader of threads. Its party is the
+  // style's brand (the record read names it: "Reply to <brand>"); our own collection's file has none — the office's notes only. The
+  // print view keeps the record panels' print form.
   const threads = session.permissions.includes('threads.read')
-  const panels = threads ? <RecordPanels record={{ type: 'TechnicalFile', id: current.file.id, companyId: current.file.companyId, siteId: null }} title={`${current.file.number} · ${current.file.style.code}`} party={null} /> : undefined
+  const fileRef = { type: 'TechnicalFile', id: current.file.id, companyId: current.file.companyId, siteId: null }
+  const threadTitle = `${current.file.number} · ${current.file.style.code}`
+  const brand = current.file.brand ?? null
+  const thread = threads ? <OfficeRecordThread docked record={fileRef} title={threadTitle} recordLabel={current.file.number} party={brand ? { id: brand.id, name: brand.name } : null} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = threads ? <RecordPanels record={fileRef} title={threadTitle} party={brand ? { id: brand.id, name: brand.name, emails: [] } : null} /> : null
+  // ---- end B-TH-267
 
   return (
     <TechFileRecordView
@@ -561,7 +561,7 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
         today,
         notice,
         changedAt,
-        dockOpen,
+        personId: session.user.id /* B-TH-267 */,
         fileDialog,
         keepers,
         certificates,
@@ -578,27 +578,11 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
         pack: pack.model,
         stepUp,
       }}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onDismissNotice: () => setNotice(null),
         onReload: () => void load(),
-        onDock: () => {
-          let wide = false
-          try {
-            wide = window.matchMedia(WIDE).matches
-          } catch {
-            wide = false
-          }
-          if (!wide) return router.push(recordAddress(prefix, fileId, 'activity'))
-          setDockOpen((now) => {
-            try {
-              window.localStorage.setItem(DOCK_KEY, now ? '0' : '1')
-            } catch {
-              // Not kept on this device; the dock still toggles.
-            }
-            return !now
-          })
-        },
         onRetry: (part) => {
           if (part === 'risk') {
             setRisk(LOADING)

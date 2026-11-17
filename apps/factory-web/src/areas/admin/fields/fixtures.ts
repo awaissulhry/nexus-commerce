@@ -1,5 +1,6 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { DEMO_BOX, DEMO_COMPANIES, DEMO_CUSTOMER_FIELDS, DEMO_GRADES, DEMO_NOW, DEMO_ORDER_FIELDS, DEMO_READ_AT, demoEditor } from './demo'
+import { DEMO_ALPHA_FIELD, DEMO_FIELD_CUSTOMERS, DEMO_ORDER_FIELDS_WITH_CUSTOMER } from './demo' // B-TH-242
 import { draftOfField, newDraft, newListDraft, newValueDraft, withDraft } from './model'
 import { FieldsView, type FieldsViewModel } from './view/FieldsView'
 
@@ -78,6 +79,33 @@ export const designScreen = defineDesignScreen<FieldsViewModel>({
       model: model({ marks: { [`${DEMO_ORDER_FIELDS[1]!.id}:labelEn`]: { state: 'saving' }, [`${DEMO_ORDER_FIELDS[2]!.id}:shownInPortal`]: { state: 'saving' }, [`${DEMO_ORDER_FIELDS[3]!.id}:labelIt`]: { state: 'refused', fault: 'fault.stale' } } }),
     },
     { id: 'done', label: 'A field added', model: model({ notice: { key: 'done.added', tone: 'success', params: { field: 'Gift note' } } }) },
+    // ── B-TH-242 (threads plan TH-4, picture 27: a column for one customer) ──
+    {
+      id: 'th4-for-customer',
+      label: 'Orders with a field for one customer: its line names the customer',
+      model: model({ editor: demoEditor({ fields: DEMO_ORDER_FIELDS_WITH_CUSTOMER }) }),
+      note: 'The For column: "Brand Alpha S.r.l. only" — the field shows on that customer\'s orders, sheet and portal alone.',
+    },
+    {
+      id: 'th4-add-one-customer',
+      label: 'Add field: For one customer — the picker',
+      model: model({ dialog: { kind: 'field', mode: 'new', fieldId: null, draft: typed({ type: 'TEXT', labelIt: 'Cartellino', labelEn: 'Hang tag', forCustomer: 'one' }), fault: null }, customers: { query: 'brand', results: DEMO_FIELD_CUSTOMERS.map((row) => ({ ...row })), problem: null } }),
+      note: 'Add field waits for the customer and says so; the active customers of the field\'s company.',
+    },
+    {
+      id: 'th4-add-one-customer-picked',
+      label: 'Add field: For one customer, picked, shown in its portal (no warning line)',
+      model: model({ dialog: { kind: 'field', mode: 'new', fieldId: null, draft: typed({ type: 'TEXT', labelIt: 'Cartellino', labelEn: 'Hang tag', forCustomer: 'one', partyId: DEMO_FIELD_CUSTOMERS[0].id, partyName: DEMO_FIELD_CUSTOMERS[0].legalName, shownInPortal: true }), fault: null } }),
+    },
+    {
+      id: 'th4-add-every-portal',
+      label: 'Add field: For every customer and shown in the portal — the line "Every customer will see this column name"',
+      model: model({ dialog: { kind: 'field', mode: 'new', fieldId: null, draft: typed({ type: 'TEXT', labelIt: 'Stagione', labelEn: 'Season', shownInPortal: true }), fault: null } }),
+      note: 'A label of every customer\'s portal must name no customer: the line says so before Add field.',
+    },
+    { id: 'th4-edit-one-customer', label: 'A field for one customer: its own dialog (the customer is fixed)', model: model({ editor: demoEditor({ fields: DEMO_ORDER_FIELDS_WITH_CUSTOMER }), dialog: { kind: 'field', mode: 'edit', fieldId: DEMO_ALPHA_FIELD.id, draft: draftOfField(DEMO_ALPHA_FIELD), fault: null } }) },
+    { id: 'th4-customers-refused', label: 'Add field: For one customer, the customers may not be read', model: model({ dialog: { kind: 'field', mode: 'new', fieldId: null, draft: typed({ type: 'TEXT', labelIt: 'Cartellino', labelEn: 'Hang tag', forCustomer: 'one' }), fault: null }, customers: { query: '', results: [], problem: 'customer.cannotSearch' } }) },
+    // ── end B-TH-242 ──
     { id: 'customer', label: 'Customers: fields shared with suppliers', model: model({ recordType: 'CUSTOMER', editor: demoEditor({ recordType: 'CUSTOMER', fields: DEMO_CUSTOMER_FIELDS }) }), note: 'A customer and a supplier are one party: the banner says so.' },
     { id: 'empty', label: 'Quotes: no custom field yet', model: model({ recordType: 'QUOTE', editor: demoEditor({ recordType: 'QUOTE', fields: [] }) }), note: 'Add field is the first useful action.' },
     { id: 'read-only', label: 'A reader (fields.view, no fields.manage)', model: reader(), note: 'Everything reads; Add field says why it waits; no selection, no switches.' },

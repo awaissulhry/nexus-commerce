@@ -7,6 +7,9 @@ import { ApprovalsView } from './view/ApprovalsView'
 // B-W2b-307: the inbox in depth (every request in one inbox).
 import { DEPTH_CASES } from './depth/fixtures'
 import { InboxView } from './view/InboxView'
+// B-TH-270 (PL6): the request's thread docked in the review window, in the design cases (notes only: an approval has no party).
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
+import { requestName } from './words/request-words'
 
 /**
  * SCR-030 Approvals — made-up data only (PLAN §3.1). Each case is one state the Owner reviews, per role: Finance
@@ -25,7 +28,14 @@ const own = approvalRow({ id: '0190f0e2-9999-7000-8000-200000000004', quoteId: '
 type DesignModel = ApprovalsViewModel | { readonly depth: InboxViewModel }
 const isDepth = (value: DesignModel): value is { readonly depth: InboxViewModel } => 'depth' in value
 function DesignView({ model }: { model: DesignModel }) {
-  return isDepth(model) ? createElement(InboxView, { model: model.depth }) : createElement(ApprovalsView, { model })
+  return isDepth(model) ? createElement(InboxView, { model: model.depth, thread: requestThread(model.depth) }) : createElement(ApprovalsView, { model })
+}
+
+/** B-TH-270: the open request's made-up thread (its record's number; office notes only), as the page mounts RequestThread. */
+function requestThread(depth: InboxViewModel) {
+  const review = depth.taskReview
+  const task = review?.detail.status === 'ready' ? review.detail.value : null
+  return task ? designDockedThread({ recordType: 'ApprovalTask', record: requestName(task, 'en'), party: null }) : undefined
 }
 
 function model(overrides: Partial<ApprovalsViewModel> = {}): ApprovalsViewModel {

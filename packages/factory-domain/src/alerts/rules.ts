@@ -328,6 +328,9 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     // B-TH-012
     case 'REQUEST_NUMBERING_MISSING':
       return it ? 'Quando un\'azienda riceve richieste (portale o indirizzi delle richieste) senza una numerazione delle richieste attiva' : 'When a company receives requests (a portal or inquiry addresses) without an active request numbering'
+    // B-TH-071
+    case 'PROJECT_STALE':
+      return it ? 'Quando un progetto aperto ha superato la data obiettivo e non ha messaggi da 14 giorni (lo si dice al responsabile)' : 'When an open project is past its target date and has had no message for 14 days (its lead is told)'
   }
 }
 
@@ -405,6 +408,8 @@ export const ALERT_TEMPLATES = {
   'alerts.STAMP_DUTY_DUE.LATE': { en: 'The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment.', it: "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento." },
   // B-TH-012: {label} the company; the portal's New order is held and a mail to an inquiry address waits until a series is active.
   'alerts.REQUEST_NUMBERING_MISSING': { en: '{label} receives requests but has no active request numbering (INQUIRY): New order in the portal is held and mail to its inquiry addresses waits. Set up the series under numbering.', it: '{label} riceve richieste ma non ha una numerazione delle richieste attiva (INQUIRY): il Nuovo ordine del portale è sospeso e la posta agli indirizzi delle richieste resta in attesa. Impostate la serie nella numerazione.' },
+  // B-TH-071: {label} the project; {targetDate} its target date; {days} days without a message.
+  'alerts.PROJECT_STALE': { en: '{label} is past its target date ({targetDate}) and has had no message for {days} days: close it or update it.', it: '{label} ha superato la data obiettivo ({targetDate}) e non ha messaggi da {days} giorni: chiudilo o aggiornalo.' },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
 
@@ -471,6 +476,9 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
     // B-TH-012
     case 'REQUEST_NUMBERING_MISSING':
       return { key: 'alerts.REQUEST_NUMBERING_MISSING', params: { label } }
+    // B-TH-071
+    case 'PROJECT_STALE':
+      return { key: 'alerts.PROJECT_STALE', params: { label, targetDate: text('targetDate'), days: num('quietDays') } }
     case 'WORKING_TIME_LIMIT':
       // B-W2b-GF2: WEEKLY_REST and NIGHT_AVERAGE have their own words too.
       return { key: (['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE', 'WEEKLY_REST', 'NIGHT_AVERAGE'] as const).includes(text('limit') as 'DAILY_REST') ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }

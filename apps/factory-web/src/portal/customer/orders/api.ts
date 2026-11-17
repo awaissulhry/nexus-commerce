@@ -32,6 +32,25 @@ export type OrderYourNumber = z.infer<typeof yourNumber>
 /** A price: absent for a reader without the price grain. */
 const price = z.number().nullable().optional()
 
+// ── B-TH-246 (threads plan TH-4, SHEET-G10; Owner decision 13; wall W10, W17, W39): the customer's own sheet ──
+/** A column the office ticked for the portal: every customer's portal fields and this customer's own (never another's). */
+export const portalColumnSchema = z.object({
+  columnId: z.string(),
+  code: z.string(),
+  type: z.string(),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  unit: z.string().nullable(),
+  grain: z.string().nullable(),
+  /** A list's values the rows use (null: not a list field). */
+  options: z.array(z.object({ code: z.string(), labelIt: z.string(), labelEn: z.string() })).nullable(),
+})
+export type PortalColumn = z.infer<typeof portalColumnSchema>
+/** One cell: the value as stored (money marked with its grain) and its words when the API says them. */
+export const portalCellSchema = z.object({ value: z.unknown(), wordsIt: z.string().nullable(), wordsEn: z.string().nullable() })
+export type PortalCell = z.infer<typeof portalCellSchema>
+// ── end B-TH-246 ──
+
 // ── the list ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const orderRowSchema = z.object({
   /** ORDER, or REQUEST: a portal order request sent and not decided yet. */
@@ -56,6 +75,8 @@ export const orderRowSchema = z.object({
     .object({ id: z.string(), number: z.string(), status: z.enum(CUSTOMER_SHIPMENT_STATUSES), words, date: z.string().nullable(), carrierName: z.string().nullable(), expectedDeliveryAt: z.string().nullable().optional() })
     .nullable(),
   progressPercent: z.number().nullable(),
+  /** B-TH-246: the row's cells of the portal columns, by column id (the sheet's read only). */
+  values: z.record(z.string(), portalCellSchema).optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -68,6 +89,8 @@ export const ordersSchema = z.object({
   count: z.number(),
   items: z.array(orderRowSchema),
   live,
+  /** B-TH-246: the portal columns (the sheet's read only; the list's plain read has none). */
+  columns: z.array(portalColumnSchema).optional(),
 })
 export type OrdersRead = z.infer<typeof ordersSchema>
 
@@ -80,6 +103,47 @@ export const fetchOrders = (api: ApiClient, query: { chip?: OrderChip | null; q?
     schema: ordersSchema,
     signal,
   })
+
+// ── B-TH-246: the customer's own sheet (GET /portal/sales-orders/sheet: the list's rows with the portal columns) ──
+export const fetchSheet = (api: ApiClient, query: { chip?: OrderChip | null; q?: string | null; offset?: number; limit?: number }, signal?: AbortSignal): Promise<OrdersRead> =>
+  api.get('/portal/sales-orders/sheet', {
+    query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined, limit: query.limit ?? PAGE_SIZE, offset: query.offset ?? 0 },
+    schema: ordersSchema,
+    signal,
+  })
+
+/**
+ * "Download all (Excel)": the server writes the file in the customer's own scope (its rows and its columns only; never the office's
+ * export job, Owner decision 13) — the view's chip and search, every row.
+ */
+export async function downloadSheet(api: ApiClient, query: { chip: OrderChip | null; q: string | null; format: 'XLSX' | 'CSV'; locale: 'it' | 'en' }): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
+  let disposition: string | null = null
+  let contentType = query.format === 'XLSX' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8'
+  const bytes = await api.bytes('/portal/sales-orders/sheet/download', {
+    query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined, format: query.format, locale: query.locale },
+    onHeaders: (headers) => {
+      disposition = headers.get('content-disposition')
+      contentType = headers.get('content-type') ?? contentType
+    },
+  })
+  return { bytes, fileName: fileNameOf(disposition), contentType }
+}
+
+/** The file name a Content-Disposition names (RFC 6266: `filename*=UTF-8''…` first, else `filename="…"`), or null. */
+export function fileNameOf(disposition: string | null): string | null {
+  if (!disposition) return null
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  if (star) {
+    try {
+      return decodeURIComponent(star[1]!.trim())
+    } catch {
+      return null
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)
+  return plain ? plain[1]!.trim() : null
+}
+// ── end B-TH-246 ──
 
 const trackingEvent = z.object({ at: z.string(), status: z.string(), words, description: z.string().nullable(), location: z.string().nullable(), parcelSeq: z.number().nullable() })
 export type TrackingEvent = z.infer<typeof trackingEvent>

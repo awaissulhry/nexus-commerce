@@ -1,35 +1,40 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { listCompanies, listRoles, listUsers, roleCatalogue, type PermissionCatalogue, type Role, type User } from '../shared/api'
 import { failed, loaded, loading, problemKey, type Loaded, type ScopeOption } from '../shared/model'
-import { useRecordTab, useThreadDock } from '../shared/record-hooks'
 import { isStepUpCancelled, useStepUp } from '../shared/step-up'
 import { changeTwoFactor, previewTwoFactor, twoFactorRoles, type TwoFactorRole } from '../security/api'
 import { LOADING, NO_DIALOG, type Dialog, type Read } from '../security/model'
 import { AdminMessages, StepUp } from '../shared/view/parts'
-import { ROLE_TABS } from './model'
+import { roleTabOf, roleThreadMounted } from './model'
 import { editHeld } from './save-role/model'
 import { useSaveRole } from './save-role/use-save-role'
 import { RoleRecordView } from './view/RoleRecordView'
+// ---- B-TH-269: the docked thread on the role (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../shell/print/print-model'
 
 /**
- * `/w/<company>/admin/roles/<id>` (SCR-012 Role record): the role from `GET /auth/roles` (no read of one role exists),
+ * `/w/<company>/admin/roles/<id>` (SCR-012 Role record; `?tab=permissions|rules|users`, the old activity lands on Permissions with
+ * the thread open — B-TH-269): the role from `GET /auth/roles` (no read of one role exists),
  * the catalogue for its permissions in words, and its holders from `GET /auth/users` (users.view; without it the Users
- * tab says so). B-W2b-413: Change role, Archive and Restore (save-role/use-save-role.ts).
+ * tab says so). B-W2b-413: Change role, Archive and Restore (save-role/use-save-role.ts). B-TH-269: the role's thread docked beside
+ * every tab, notes only (W03: no outside party on an admin thread), mounted with threads.read AND roles.view (B-TH-005).
  */
 export function RoleRecord({ roleId }: { roleId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(ROLE_TABS)
-  const { dockOpen, toggleDock } = useThreadDock('Role')
+  const tab = roleTabOf(params?.get('tab')) // B-TH-269
   const [role, setRole] = useState<Role | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [catalogue, setCatalogue] = useState<PermissionCatalogue | null>(null)
@@ -99,6 +104,10 @@ export function RoleRecord({ roleId }: { roleId: string }) {
   const editHeldReason = role && !role.system ? editHeld(role, { manage: held.has('roles.manage'), heldByMe }) : null
   const editable = !!role && !!catalogue && !role.system && editHeldReason === null && role.audience === 'office'
   const archiveHeld = !held.has('roles.manage') ? 'saveRole.held.right' : heldByMe ? 'saveRole.held.mine' : null
+  // B-TH-269: the role's thread (notes only) with threads.read and roles.view; the print view keeps the panels' print form.
+  const record = role && roleThreadMounted(held) ? { type: 'Role', id: role.id, companyId: null } : null
+  const thread = role && record ? <OfficeRecordThread docked record={record} title={role.name} recordLabel={role.name} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = role && record ? <RecordPanels record={record} title={role.name} /> : null
 
   return (
     <>
@@ -111,7 +120,7 @@ export function RoleRecord({ roleId }: { roleId: string }) {
         catalogue,
         holders,
         companies,
-        dockOpen,
+        personId: session.user.id, // B-TH-269
         twoFactor: { role: twoFactor, canChange, dialog },
         editor: editable && changing.draft ? { role: role!, catalogue: catalogue!, draft: changing.draft, review: changing.review } : null,
         editHeld: editHeldReason,
@@ -119,10 +128,10 @@ export function RoleRecord({ roleId }: { roleId: string }) {
         notice: changing.notice,
         freshCode: changing.stepUp,
       }}
-      panels={role ? <RecordPanels record={{ type: 'Role', id: role.id, companyId: null }} title={role.name} /> : null}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onOpen: (path) => router.push(path),
-        onDock: toggleDock,
         onRetry: () => {
           setProblem(null)
           void load()

@@ -437,6 +437,102 @@
         "noRight": "Non puoi scrivere nel thread di questa scheda.",
         "gone": "Questo modello non c'è più."
       }
+    },
+    "replies": {
+      "intro": "Messaggi che si scrivono sempre uguali — un avviso di ritardo, una domanda su una richiesta, un certificato inviato — per lingua e tipo di documento. Sceglierne uno in un messaggio lo compila con i dati del documento; la persona lo legge, lo modifica e lo invia.",
+      "label": "Risposte salvate",
+      "count_one": "1 risposta salvata · {shared} condivise con l'ufficio",
+      "count_other": "{count} risposte salvate · {shared} condivise con l'ufficio",
+      "search": "Cerca nome o testo",
+      "new": "Nuova risposta salvata",
+      "edit": "Modifica",
+      "part": {
+        "label": "Quali e-mail",
+        "templates": "E-mail che invia Nexus",
+        "replies": "Risposte salvate"
+      },
+      "col": {
+        "name": "Risposta salvata",
+        "record": "Per",
+        "words": "Testo"
+      },
+      "whose": {
+        "shared": "Condivisa con l'ufficio",
+        "own": "Tua"
+      },
+      "record": {
+        "SalesOrder": "Un ordine",
+        "Quote": "Un preventivo",
+        "PurchaseOrder": "Un ordine d'acquisto",
+        "ServiceCase": "Una pratica di assistenza",
+        "Shipment": "Una spedizione",
+        "Party": "Un cliente o fornitore",
+        "Inquiry": "Una richiesta (Vendite › In arrivo)",
+        "ANY": "Qualsiasi documento"
+      },
+      "filter": {
+        "language": "Lingua",
+        "anyLanguage": "Italiano e inglese",
+        "record": "Per",
+        "anyRecord": "Ogni tipo di documento"
+      },
+      "held": {
+        "noRight": "Per tenere risposte salvate serve il diritto di inviare e-mail.",
+        "sharedNoRight": "Una risposta condivisa la modifica solo chi tiene le risposte condivise.",
+        "notYours": "La risposta personale di un'altra persona: la modifica solo lei.",
+        "share": "Per condividere con l'ufficio serve il diritto di tenere le risposte condivise.",
+        "noneYours": "Nessuna delle risposte selezionate è tua da eliminare."
+      },
+      "empty": {
+        "title": "Ancora nessuna risposta salvata",
+        "body": "Scrivi una volta i messaggi che invii spesso: poi compilano un messaggio con un clic, in italiano o in inglese."
+      },
+      "delete_one": "Elimina 1",
+      "delete_other": "Elimina {count}",
+      "deleteTitle_one": "Eliminare 1 risposta salvata?",
+      "deleteTitle_other": "Eliminare {count} risposte salvate?",
+      "deleteKept": "I messaggi già inviati con esse restano come sono stati inviati.",
+      "deleteLeft_one": "1 risposta selezionata non è tua da eliminare: resta.",
+      "deleteLeft_other": "{count} risposte selezionate non sono tue da eliminare: restano.",
+      "deleteSharedAck": "Ho capito che anche l'ufficio perde quelle condivise",
+      "languages": "Le risposte salvate si scrivono in italiano o in inglese. A un contatto che legge un'altra lingua viene proposta quella inglese.",
+      "sendsNothing": "Una risposta salvata non invia nulla da sola: compila soltanto il messaggio che una persona poi legge, modifica e invia.",
+      "newTitle": "Nuova risposta salvata",
+      "editTitle": "Risposta salvata: {name}",
+      "cancel": "Annulla",
+      "save": "Salva",
+      "field": {
+        "name": "Nome",
+        "nameHint": "Come la si trova nel riquadro del messaggio, es. \"Ritardo di qualche giorno\".",
+        "language": "Lingua",
+        "languageHint": "Italiano o inglese: il riquadro del messaggio la propone in quella lingua.",
+        "record": "Per",
+        "recordHint": "Il tipo di documento su cui viene proposta, e quindi quali dati può compilare.",
+        "shared": "Condividi con l'ufficio",
+        "sharedHint": "Chiunque scriva e-mail per questa azienda può sceglierla; la modifica solo chi tiene le risposte condivise.",
+        "isShared": "Condivisa con l'ufficio.",
+        "isOwn": "Solo tua: nessun altro la vede.",
+        "body": "Testo",
+        "bodyHint": "I segnaposto si compilano con i dati del documento quando la risposta viene scelta; un dato che il documento non ha resta vuoto."
+      },
+      "preview": {
+        "label": "Anteprima su un documento di esempio",
+        "title": "Anteprima",
+        "hint": "Un documento di esempio compila i segnaposto. Non viene inviato nulla.",
+        "empty": "Scrivi il testo per vederlo compilato."
+      },
+      "problem": {
+        "name": "Una riga da 1 a {limit} caratteri.",
+        "body": "Scrivi il testo della risposta."
+      },
+      "done": {
+        "created": "Risposta salvata \"{name}\" salvata.",
+        "changed": "Risposta salvata \"{name}\" modificata.",
+        "deleted_one": "1 risposta salvata eliminata.",
+        "deleted_other": "{count} risposte salvate eliminate.",
+        "deleteFailed": "Nessuna risposta salvata eliminata ({refused} rifiutate): rileggile e riprova.",
+        "deletePartial": "{count} eliminate, {refused} rifiutate: rileggile e riprova."
+      }
     }
   }
 }

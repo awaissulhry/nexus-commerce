@@ -283,15 +283,16 @@
     "reloadFailed": "The entry could not be read again: it shows its last copy. Try again in a moment.",
     "closed": "Closed on {date}",
     "closedBody": "A closed entry never changes: a correction is a note in its thread.",
-    "addNote": "Add a note",
     "sourceRelease": "Release {label}, taken back",
-    "sourceLot": "A lab result of the material lot (Cr VI)"
+    "sourceLot": "A lab result of the material lot (Cr VI)",
+    "name": "PPE register entry",
+    "dockLabel": "Thread of the register entry",
+    "tabsLabel": "Sections of the register entry"
   },
   "tab": {
     "event": "Event",
     "affected": "Affected units",
-    "actions": "Actions",
-    "activity": "Activity"
+    "actions": "Actions"
   },
   "action": {
     "edit": "Edit the event",

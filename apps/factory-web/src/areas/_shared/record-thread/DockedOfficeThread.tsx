@@ -52,6 +52,7 @@ import { FollowersControl } from '../../../record-panels/view/FollowersControl'
 import { TaskNewDialog } from '../../../record-panels/view/TaskNewDialog'
 import { fillReply, listReplies } from '../document-send/template/api'
 import { useRecordFrame } from '../record-frame/RecordFrame'
+import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
 import { officeOnly, removeFile, shareWithParty } from './api'
 // B-TH-231: carry a file to another record (same customer or none); a refused file read in words.
 import { readUseOnTargets, useFileOn } from './api'
@@ -239,6 +240,17 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   useEffect(() => {
     if (current) void fetchLinks(current)
   }, [current, fetchLinks])
+  // ---- B-TH-264 follow-up (TH-6 part B): a body part's files (the shipment's Documents) open in this ONE viewer, over the files it lists.
+  const filesAsk = frame?.filesAsk ?? null
+  const clearFilesAsk = frame?.clearFiles
+  useEffect(() => {
+    if (!filesAsk) return
+    const { files, index } = askedFiles(filesAsk, threadFiles, key)
+    clearFilesAsk?.()
+    if (files.length === 0) return
+    setViewer({ files, index, returnTo: filesAsk.returnTo ?? (document.activeElement as HTMLElement | null) })
+  }, [filesAsk, clearFilesAsk, threadFiles, key])
+  // ---- end B-TH-264 follow-up
   const fw = useT(FILES_NS)
   const viewerFiles: ViewerFile[] = viewer ? viewer.files.map((file) => toViewerFile(file, links[file.id] ?? { src: null, downloadHref: null }, fw('locked.sheet'))) : []
 

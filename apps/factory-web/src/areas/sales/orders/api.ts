@@ -13,6 +13,10 @@ import type { PickBody } from '../quotes/record/configurator/api'
  * titles) are never drawn: the screens say their own words from the codes.
  */
 
+// B-TH-244: the customer's own mark on an order (apps/factory-api modules/sales/orders/customer-urgency).
+export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
+export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
+
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
 export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
@@ -120,6 +124,23 @@ export const orderRowSchema = z.object({
     })
     .default({ quote: null, depositInvoice: null, deliveryNotes: null, invoices: null }),
   // ── end B-TH-225 ──
+  // ── B-TH-244 (threads plan TH-4; N23, ORD-G08; the API's B-TH-059): the later columns (each absent from an older answer) ──
+  /** Pieces it still owes (0 once shipped, closed or cancelled). */
+  openUnits: z.number().optional(),
+  /** Only when asked (`progress=true`): cut, sewn and finished of the pieces in work orders; null: none past draft yet. */
+  progress: z.object({ inWork: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), finished: z.number().nullable() }).nullable().optional(),
+  /** Received and still to pay (price grain: absent without it). */
+  paid: z.number().optional(),
+  balance: z.number().optional(),
+  /** The sites that make it. */
+  sites: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).optional(),
+  /** The office's own note (the customer never sees it). */
+  internalNote: z.string().nullable().optional(),
+  /** The ORDER_LATE_RISK rule calls it at risk: days left and the rule's threshold; null: not at risk. */
+  atRisk: z.object({ daysLeft: z.number(), daysBeforePromise: z.number() }).nullable().optional(),
+  /** The customer's own mark (read-only); null: none known. */
+  customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable().optional(),
+  // ── end B-TH-244 ──
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -143,6 +164,16 @@ export interface OrderQuery {
   // custom field filter (`cf`), both terms of the page's address, so a saved view and the file keep them ──
   sort?: OrderSort | null
   cf?: string | null
+  // ── B-TH-244 (TH-4: every total of the overall view opens exactly its rows): the door terms, the built-in view, progress ──
+  invoiced?: InvoicedState | null
+  atRisk?: boolean
+  currency?: string | null
+  customerUrgency?: CustomerUrgency | null
+  /** The built-in view "Shipped, not invoiced". */
+  shippedNotInvoiced?: boolean
+  /** Count each row's production progress (only while the Progress column is shown: it reads the floor's records). */
+  progress?: boolean
+  // ── end B-TH-244 ──
   q?: string
   cursor?: string | null
   limit?: number
@@ -167,6 +198,8 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       companyId: query.companyId ?? undefined, // B-TH-225
       sort: query.sort ?? undefined, // B-TH-057
       cf: query.cf?.trim() || undefined, // B-TH-057
+      ...doorQueryOf(query), // B-TH-244
+      progress: query.progress ? 'true' : undefined, // B-TH-244
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -185,13 +218,97 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } = {}): Promise<OrderBoard> {
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced'> /* B-TH-244 */ = {}): Promise<OrderBoard> {
   return api.get('/sales/orders/board', {
-    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */ },
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */ },
     schema: boardSchema,
     signal,
   })
 }
+
+// ── B-TH-244 (threads plan TH-4, SHEET-G08; features SHEET.overall-F02, -F03, -F08, -F11): the overall view's honest totals ──
+/** The door terms of a query, as the API names them (an absent one never reaches it). */
+function doorQueryOf(query: Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced'>): Record<string, string | undefined> {
+  return {
+    invoiced: query.invoiced ?? undefined,
+    atRisk: query.atRisk ? 'true' : undefined,
+    currency: query.currency ?? undefined,
+    customerUrgency: query.customerUrgency ?? undefined,
+    shippedNotInvoiced: query.shippedNotInvoiced ? 'true' : undefined,
+  }
+}
+
+/** A number that opens its rows: the list's terms (the API's names) that read exactly what it counts; null: it counts nothing. */
+const doorSchema = z.object({ count: z.number(), filter: z.record(z.string(), z.string()).nullable() })
+export type SummaryDoor = z.infer<typeof doorSchema>
+const figuresSchema = z.object({
+  orders: doorSchema,
+  pieces: z.object({ ordered: doorSchema, shipped: doorSchema, open: doorSchema }),
+  late: doorSchema,
+  atRisk: doorSchema,
+  invoiced: z.object({ NONE: doorSchema, PART: doorSchema, ALL: doorSchema }),
+  /** Per currency, never summed across (price grain: absent without it). */
+  net: z.array(z.object({ currency: z.string(), amount: z.number(), filter: z.record(z.string(), z.string()).nullable() })).optional(),
+})
+export type SummaryFigures = z.infer<typeof figuresSchema>
+const summarySchema = z.object({
+  all: figuresSchema,
+  groups: z.array(z.object({ partyId: z.string(), code: z.string(), name: z.string(), invoiceTiming: z.enum(['PER_SHIPMENT', 'MONTHLY']), figures: figuresSchema })).nullable(),
+  limited: z.boolean(),
+  asOf: instant,
+})
+export type OrderSummary = z.infer<typeof summarySchema>
+export type SummaryGroup = NonNullable<OrderSummary['groups']>[number]
+
+/** GET /sales/orders/summary: the view's figures for every order its terms keep (never the loaded rows), per customer with group. */
+export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party' | null, signal?: AbortSignal): Promise<OrderSummary> {
+  return api.get('/sales/orders/summary', {
+    query: {
+      status: query.status ?? undefined,
+      open: query.open ? 'true' : undefined,
+      late: query.late ? 'true' : undefined,
+      deposit: query.deposit ?? undefined,
+      reaccept: query.reaccept ? 'true' : undefined,
+      partyId: query.partyId ?? undefined,
+      brand: query.brand ?? undefined,
+      companyId: query.companyId ?? undefined,
+      cf: query.cf?.trim() || undefined,
+      ...doorQueryOf(query),
+      q: query.q?.trim() || undefined,
+      group: group ?? undefined,
+    },
+    schema: summarySchema,
+    signal,
+  })
+}
+
+/** Finance's From-DDTs dialog for chosen orders: one draft per customer and company (and month and currency), and what waits. */
+const candidatesSchema = z.object({
+  asOf: z.string(),
+  drafts: z.array(
+    z.object({
+      partyId: z.string(),
+      companyId: z.string(),
+      code: z.string(),
+      legalName: z.string(),
+      month: z.string(),
+      currency: z.string(),
+      orders: z.array(z.object({ id: z.string(), number: z.string() })),
+      ddts: z.array(z.object({ ddtId: z.string(), number: z.string() })),
+      garments: z.string(),
+      valueAmount: z.number().optional(),
+      body: z.object({ ddtIds: z.array(z.string()) }),
+    }),
+  ),
+  held: z.array(z.object({ orderId: z.string(), number: z.string(), reason: z.string() })),
+})
+export type InvoiceCandidates = z.infer<typeof candidatesSchema>
+
+/** GET /invoicing/from-ddts/candidates?orderIds= (finance only): nothing is made here. */
+export function fromDdtsCandidates(api: ApiClient, orderIds: readonly string[], signal?: AbortSignal): Promise<InvoiceCandidates> {
+  return api.get('/invoicing/from-ddts/candidates', { query: { orderIds: orderIds.join(',') }, schema: candidatesSchema, signal })
+}
+// ── end B-TH-244 ──
 
 // ── B-TH-226 (TH-1a, picture 24): the Customer switcher's customers (GET /sales/orders/customers, B-TH-019) ──
 export const orderCustomerSchema = z.object({ id: z.string(), code: z.string(), name: z.string(), archived: z.boolean(), orders: z.number(), open: z.number(), late: z.number(), lastOrderDate: z.string().nullable() })

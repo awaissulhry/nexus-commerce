@@ -108,15 +108,16 @@ const NOBODY = '__nobody__'
  * the keys in the footer icon. A hold opens in its DetailModal (`?open=`, J / K). Fetches nothing: HoldsPage.tsx reads
  * and writes; the place dialog is the page's container; Decide in NCR opens B-W2a-68's New NCR.
  */
-export function HoldsView({ model, actions, stepUp, panels }: { model: HoldsListModel; actions?: HoldsListActions; stepUp?: StepUpState; panels?: ReactNode }) {
+// B-TH-270 (PL6): `thread` the open hold's thread docked in its review window (the page's OfficeRecordThread, or a design case's).
+export function HoldsView({ model, actions, stepUp, thread }: { model: HoldsListModel; actions?: HoldsListActions; stepUp?: StepUpState; thread?: ReactNode }) {
   return (
     <HoldsMessages>
-      <Holds model={model} actions={actions} stepUp={stepUp} panels={panels} />
+      <Holds model={model} actions={actions} stepUp={stepUp} thread={thread} />
     </HoldsMessages>
   )
 }
 
-function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; actions?: HoldsListActions; stepUp?: StepUpState; panels?: ReactNode }) {
+function Holds({ model, actions, stepUp, thread }: { model: HoldsListModel; actions?: HoldsListActions; stepUp?: StepUpState; thread?: ReactNode }) {
   const t = useT('holds')
   const q = useT('quality')
   const lists = useT('lists')
@@ -589,7 +590,7 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
           detail={openHold.detail}
           tab={openHold.tab}
           model={model}
-          panels={panels}
+          thread={thread}
           nav={ids.includes(openHold.id) ? ids : null}
           actions={actions}
         />

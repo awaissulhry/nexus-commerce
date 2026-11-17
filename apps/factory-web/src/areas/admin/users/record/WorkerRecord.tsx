@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
@@ -9,23 +10,28 @@ import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { editWorker, issueBadge, listCompanies, listRoles, listWorkers, resetPin, revokeBadge, setWorkerRoles, setWorkerStatus, type Role, type Worker } from '../../shared/api'
 import { problemKey, problemNotice, type Notice } from '../../shared/model'
 import type { RevealModel } from '../../shared/view/OneTimeReveal'
-import { useRecordTab, useThreadDock } from '../../shared/record-hooks'
 import { isStepUpCancelled, useStepUp } from '../../shared/step-up'
-import { WORKER_TABS, type WorkerDialog, type WorkerProfileDraft } from './model'
+import { personThreadMounted, workerTabOf, type WorkerDialog, type WorkerProfileDraft } from './model'
 import { WorkerRecordView } from './view/WorkerRecordView'
+// ---- B-TH-269: the docked thread on the worker (RecordFrame, docked CLOSED — R-10, GDPR art. 4; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * `/w/<company>/admin/users/floor/<id>` (SCR-011 floor): the worker comes from `GET /auth/floor/workers` (no read of one
  * worker exists), the floor roles from `GET /auth/roles`. A badge and a PIN reset take an Idempotency-Key and a fresh
- * code; their secret is shown once (a repeat answers null: ask again). A role change too asks for a fresh code.
+ * code; their secret is shown once (a repeat answers null: ask again). A role change too asks for a fresh code. B-TH-269
+ * (`?tab=profile|badge`, the old activity lands on Profile with the thread shown): the worker's thread docked CLOSED beside both tabs
+ * (R-10), notes only, mounted with threads.read AND workers.view (B-TH-005; art. 4: notes about a worker never reach every thread reader).
  */
 export function WorkerRecord({ workerId }: { workerId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(WORKER_TABS)
-  const { dockOpen, toggleDock } = useThreadDock('Worker')
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const tab = workerTabOf(params?.get('tab')) // B-TH-269
   const [worker, setWorker] = useState<Worker | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [siteName, setSiteName] = useState<string | null>(null)
@@ -80,6 +86,12 @@ export function WorkerRecord({ workerId }: { workerId: string }) {
     }
   }
 
+  // B-TH-269: the worker's thread (notes only, docked closed by the view) with threads.read and workers.view; the print view keeps the
+  // panels' print form.
+  const record = worker && personThreadMounted('Worker', held) ? { type: 'Worker', id: worker.id, companyId, siteId: worker.siteId } : null
+  const thread = worker && record ? <OfficeRecordThread docked record={record} title={worker.displayName} recordLabel={worker.displayName} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = worker && record ? <RecordPanels record={record} title={worker.displayName} /> : null
+
   return (
     <WorkerRecordView
       model={{
@@ -97,9 +109,10 @@ export function WorkerRecord({ workerId }: { workerId: string }) {
         notice,
         reveal,
         stepUp,
-        dockOpen,
+        personId: session.user.id, // B-TH-269
       }}
-      panels={worker ? <RecordPanels record={{ type: 'Worker', id: worker.id, companyId, siteId: worker.siteId }} title={worker.displayName} /> : null}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onDialog: (next) => {
           setDialog(next)
@@ -144,7 +157,6 @@ export function WorkerRecord({ workerId }: { workerId: string }) {
         },
         onStepUp: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,
-        onDock: toggleDock,
         onRetry: () => {
           setProblem(null)
           setWorker(null)

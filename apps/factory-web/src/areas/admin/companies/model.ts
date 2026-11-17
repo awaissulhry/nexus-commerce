@@ -4,7 +4,7 @@ import { matches, type Loaded, type Notice } from '../shared/model'
 
 /**
  * SCR-008 Companies & sites (design 02 admin.org): ONE page — a tree of the legal companies and their sites, with what
- * each is missing — and the Company record (Legal & tax · Sites · Defaults · Calendars · Activity). Pure: the rows of the tree, the
+ * each is missing — and the Company record (Legal & tax · Sites · Defaults · Calendars, the thread docked beside them — B-TH-269). Pure: the rows of the tree, the
  * readiness banner, the code a new company gets, the form checks and the Company record's form drafts.
  */
 
@@ -163,9 +163,19 @@ export function addressLine(address: Address | null): string | null {
 
 // ---- the Company record ----------------------------------------------------------------------------------------------
 
-// B-W2a-59: Calendars (Working days and holidays), between Defaults and Activity as the design orders them; shown with calendars.view.
-export const COMPANY_TABS = ['legal', 'sites', 'defaults', 'calendars', 'activity'] as const
+// B-W2a-59: Calendars (Working days and holidays), after Defaults as the design orders them; shown with calendars.view.
+// ---- B-TH-269 (threads plan TH-6; 08-tabs O-ADM-CO; the rule of picture 38): tabs 5 → 4. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"); Legal & tax, Sites, Defaults and Calendars stay.
+export const COMPANY_TABS = ['legal', 'sites', 'defaults', 'calendars'] as const
 export type CompanyTab = (typeof COMPANY_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Legal & tax with the thread opened (RecordFrame reads the address). */
+export const COMPANY_MERGED_TABS: Readonly<Record<string, CompanyTab>> = Object.freeze({ activity: 'legal' })
+export function companyTabOf(value: string | null | undefined): CompanyTab {
+  const asked = value ?? ''
+  if ((COMPANY_TABS as readonly string[]).includes(asked)) return asked as CompanyTab
+  return Object.hasOwn(COMPANY_MERGED_TABS, asked) ? COMPANY_MERGED_TABS[asked]! : 'legal'
+}
+// ---- end B-TH-269
 export const REGIMES = ['RF01', 'RF02', 'RF04', 'RF05', 'RF06', 'RF07', 'RF08', 'RF09', 'RF10', 'RF11', 'RF12', 'RF13', 'RF14', 'RF15', 'RF16', 'RF17', 'RF18', 'RF19'] as const
 export const TIME_ZONES = ['Europe/Rome', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid', 'Europe/Bucharest', 'Europe/Tirane', 'Africa/Tunis'] as const
 
@@ -302,5 +312,6 @@ export interface CompanyRecordModel {
   fieldProblems?: Partial<Record<keyof CompanyDraft, string>>
   /** The archive confirm is open. */
   archiving?: boolean
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
 }

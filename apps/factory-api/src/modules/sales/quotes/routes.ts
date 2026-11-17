@@ -50,6 +50,9 @@ import { inlineDisposition, previewQuotePdf } from './preview'
 // B-W2b-358 (MM1:01, SAL-276): a quote's made-to-measure units.
 import { mtmLineContract, mtmLineEditContract, outOfChartContract, quoteUnitsContract } from '../mtm/contract'
 import { addMadeToMeasureLine, editMadeToMeasureLine, outOfChart, quoteUnits } from './mtm-line'
+// TH-6 part B (B-TH-257 follow-up): the quote list's Picture cell's small preview.
+import { quotePictureContract } from './contract'
+import { quotePicture } from './row-picture'
 
 /**
  * Quotes, part 1 (B-W1-21): the list and the record, a new quote, its header and terms, its size-grid lines (each costed
@@ -66,6 +69,7 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
   app.get('/sales/quotes', { schema: listQuotesContract }, async (request) => listQuotes(request, request.query))
 
   app.get('/sales/quotes/:quoteId', { schema: getQuoteContract }, async (request) => getQuote(request, request.params.quoteId))
+  app.get('/sales/quotes/:quoteId/picture', { schema: quotePictureContract }, async (request) => quotePicture(request, request.params.quoteId)) // TH-6 part B
 
   app.post('/sales/quotes', { schema: createQuoteContract }, async (request, reply) => reply.code(201).send(await createQuote(request, request.body, idempotencyKeyFrom(request))))
 

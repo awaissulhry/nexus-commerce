@@ -129,3 +129,54 @@ p.fw-apv-hint[role='status'] {
 .fw-apv-sub.is-danger {
   color: var(--nds-danger-text, var(--nds-danger));
 }
+
+/*
+ * B-TH-270 (threads plan PL6, picture 40): the review window's tab content and the request's thread docked in its right column —
+ * ~40 % of the 1160 px window (a 3 : 2 grid, gap 16: ~458 px), sticky while the content scrolls, the feed scrolling inside it and the
+ * box at its foot. Under 800 px of screen (the window then fills it; a phone's full-screen sheet) the thread follows the content.
+ */
+.fw-apv-window {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-apv-window-body {
+  min-width: 0;
+}
+
+.fw-apv-window-thread {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: min(640px, calc(100dvh - 240px));
+  min-height: 360px;
+}
+
+.fw-apv-window-thread > .fw-rt-column {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.fw-apv-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+@media (max-width: 799px) {
+  .fw-apv-window {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-apv-window-thread {
+    position: static;
+    height: min(560px, 80dvh);
+  }
+}
