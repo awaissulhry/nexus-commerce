@@ -36,10 +36,10 @@ export function ScrapValueLine({ model, qualityHref, onRetry }: { model: ScrapRe
             </>
           ) : value.state === 'none' ? (
             <span className="fw-fco-muted">{t('scrapValue.none')}</span>
-          ) : value.state === 'unknown' ? (
-            <span className="fw-fco-muted">{t('scrapValue.unknown')}</span>
-          ) : (
+          ) : value.state === 'amount' ? (
             <span>{moneyText(value.amount, value.currency, locale)}</span>
+          ) : (
+            <span className="fw-fco-muted">{t('scrapValue.unknown')}</span>
           )}
         </span>
         <Link className="fw-fco-link" href={qualityHref}>
