@@ -114,7 +114,7 @@
   },
   "list": {
     "tableLabel": "Sales orders",
-    "search": "Search number or customer PO",
+    "search": "Search number, PO, customer, style or brand",
     "rowsLabel": "Rows",
     "layoutLabel": "Show orders as",
     "keyView": "List or board",

@@ -150,6 +150,14 @@ export interface ListFrameProps<T> {
    */
   onRowClick?: (row: T, event: MouseEvent) => void
   // ── end B-TH-225 ──
+  // ── B-TH-057 (threads plan TH-4: Sales › Orders sorts on the server), opt-in ──
+  /**
+   * A person clicked a column's header sort: the column and the way round it asks (null: the grid's third click, no sort). The
+   * page reads the rows again in that order (its columns set `sort` from the address and a comparator that keeps the rows as
+   * read, so the grid shows the arrow and never reorders the loaded rows itself). Absent: the grid sorts the loaded rows, as before.
+   */
+  onSortChanged?: (colId: string | null, direction: 'asc' | 'desc' | null) => void
+  // ── end B-TH-057 ──
 }
 
 /** Today in the site's zone (YYYY-MM-DD). */
@@ -183,7 +191,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -324,6 +332,15 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
     if (!event.data || !click || !rowClickRef.current) return
     if (target?.closest('a, button, input, select, textarea, label, [role="button"], [role="checkbox"], .ag-selection-checkbox, [contenteditable="true"]')) return
     rowClickRef.current(event.data, click)
+  }, [])
+
+  // B-TH-057: a person's header click (never the page's own `sort` from the address) reaches the page.
+  const sortRef = useRef(onSortChanged)
+  sortRef.current = onSortChanged
+  const onGridSortChanged = useCallback((event: { source?: string; api: GridApi<T> }) => {
+    if (!sortRef.current || event.source !== 'uiColumnSorted') return
+    const sorted = event.api.getColumnState().find((column) => column.sort === 'asc' || column.sort === 'desc')
+    sortRef.current(sorted?.colId ?? null, (sorted?.sort as 'asc' | 'desc' | undefined) ?? null)
   }, [])
 
   // The long grid asks for its next page when the last rows come into view (once per page: `loading` holds it).
@@ -502,6 +519,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           onSelectionChanged={onSelectionChanged}
           onCellKeyDown={onCellKeyDown}
           {...(onRowClick ? { onRowClicked } : {}) /* B-TH-225 */}
+          {...(onSortChanged ? { onSortChanged: onGridSortChanged } : {}) /* B-TH-057 */}
           suppressCellFocus={false}
           {...(inline.active ? { readOnlyEdit: true, onCellEditRequest: inline.onCellEditRequest, cellSelection: true } : {})}
         />

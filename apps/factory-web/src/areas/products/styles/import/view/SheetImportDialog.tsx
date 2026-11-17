@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { ImportWizard, ImportWizardInline, type WizardActions } from '../../../../admin/import/view/ImportWizard'
 import type { SheetImport } from '../sheet-import'
@@ -12,11 +13,12 @@ import '../../../../admin/import/import.css'
  * D14 ImportFlow) on one importer. `inline` draws it in place (the design cases and the tests: a dialog opens only in a
  * browser). It fetches nothing.
  */
-export function SheetImportDialog({ model, actions, inline }: { model: SheetImport; actions?: WizardActions; inline?: boolean }) {
+// B-TH-293: `memory` — one line above the check's columns (Import orders: a customer's remembered columns).
+export function SheetImportDialog({ model, actions, inline, memory }: { model: SheetImport; actions?: WizardActions; inline?: boolean; memory?: ReactNode }) {
   const Wizard = inline ? ImportWizardInline : ImportWizard
   return (
     <WithMessages namespaces={['admin-import', 'admin']}>
-      <Wizard model={model.wizard} importers={model.importers} companies={model.companies} can={model.rights} actions={actions} />
+      <Wizard model={model.wizard} importers={model.importers} companies={model.companies} can={model.rights} actions={actions} memory={memory} />
     </WithMessages>
   )
 }

@@ -10,6 +10,7 @@ import { failedRead, problemKey, qualityCan, ready, reading, type Read } from '.
 import { fileAddress, getReports, keepReport, previewReport, shareReport, type Reports } from '../depth/api'
 import { depthCan } from '../depth/model'
 import { InspectionReportView, type ReportModel } from './view/InspectionReportView'
+import { certificateRefusal, keepCertificate, shareCertificate } from './certificate' // B-TH-232
 
 // B-TH-032: SHARED_PRODUCTION — a work order of several customers' garments: its report goes to none of them as is.
 const SHARE_REFUSALS = ['NOT_ON_SHIPMENT', 'NO_VERSION', 'NO_SUCH_VERSION', 'NO_SHIPMENT', 'SHARED_PRODUCTION'] as const
@@ -54,13 +55,17 @@ export function InspectionReport() {
   const [share, setShare] = useState<ReportModel['share']>({ shipmentId: null, version: null, send: false, busy: false, problem: null, lines: [], done: null })
   const keepKey = useRef<string | null>(null)
   const shareKey = useRef<string | null>(null)
+  // B-TH-232: the shipment's certificate of conformity (keep, then share), offered on a work order of several customers.
+  const [certificate, setCertificate] = useState<NonNullable<ReportModel['certificate']>>({ may: depth.docsMake && depth.docsShare, busy: false, problem: null, lines: [], done: null })
+  const certificateKeys = useRef<{ keep: string | null; share: string | null }>({ keep: null, share: null })
 
   const loadReports = useCallback(async () => {
     if (!can.inspectionsView) return null
     try {
       const answer = await getReports(api, inspectionId)
       setReports(ready(answer))
-      setShare((current) => ({ ...current, shipmentId: current.shipmentId ?? answer.shipments.find((entry) => entry.shareable)?.id ?? null }))
+      // B-TH-232: no shipment can take the report as is, but one of a work order of several customers can take its certificate.
+      setShare((current) => ({ ...current, shipmentId: current.shipmentId ?? answer.shipments.find((entry) => entry.shareable)?.id ?? answer.shipments.find((entry) => entry.held === 'SHARED_PRODUCTION')?.id ?? null }))
       return answer
     } catch (error) {
       setReports(failedRead(problemKey(error)))
@@ -124,9 +129,32 @@ export function InspectionReport() {
     }
   }, [api, depth.shippingManage, inspectionId, loadReports, reports.value, share.send, share.shipmentId, share.version])
 
+  // ── B-TH-232 ──
+  const shareCertificateOf = useCallback(
+    async (shipmentId: string) => {
+      const shipment = reports.value?.shipments.find((entry) => entry.id === shipmentId)
+      setCertificate((current) => ({ ...current, busy: true, problem: null, lines: [], done: null }))
+      certificateKeys.current.keep ??= newIdempotencyKey()
+      try {
+        const keptOne = await keepCertificate(api, shipmentId, language, certificateKeys.current.keep)
+        certificateKeys.current.keep = null
+        certificateKeys.current.share ??= newIdempotencyKey()
+        const answer = await shareCertificate(api, shipmentId, { version: keptOne.certificate.version }, certificateKeys.current.share)
+        certificateKeys.current.share = null
+        setCertificate((current) => ({ ...current, busy: false, done: { shipment: answer.shared.shipmentNumber || shipment?.number || '', version: answer.shared.version } }))
+      } catch (error) {
+        if (!isApiError(error) || error.kind !== 'conflict') certificateKeys.current = { keep: null, share: null }
+        const refusal = certificateRefusal(error)
+        setCertificate((current) => ({ ...current, busy: false, problem: refusal.key, lines: refusal.lines }))
+      }
+    },
+    [api, language, reports.value],
+  )
+  // ── end B-TH-232 ──
+
   return (
     <InspectionReportView
-      model={{ allowed: can.inspectionsView, language, reports, pdf, pdfProblem, keeping, kept, keepProblem, canSend: depth.shippingManage, shareFirst, share }}
+      model={{ allowed: can.inspectionsView, language, reports, pdf, pdfProblem, keeping, kept, keepProblem, canSend: depth.shippingManage, shareFirst, share, certificate: { ...certificate, may: depth.docsMake && depth.docsShare } /* B-TH-232 */ }}
       actions={{
         onLanguage: (next) => router.replace(`${pathname}?id=${encodeURIComponent(inspectionId)}&language=${next}${shareFirst ? '&share=1' : ''}`, { scroll: false }),
         onKeep: () => void keep(),
@@ -144,8 +172,10 @@ export function InspectionReport() {
         onShareDraft: (draft) => {
           shareKey.current = null
           setShare((current) => ({ ...current, ...draft, problem: null, lines: [], done: null }))
+          if (draft.shipmentId !== undefined) setCertificate((current) => ({ ...current, problem: null, lines: [], done: null })) // B-TH-232
         },
         onShare: () => void doShare(),
+        onShareCertificate: (shipmentId) => void shareCertificateOf(shipmentId), // B-TH-232
       }}
     />
   )

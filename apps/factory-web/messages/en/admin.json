@@ -176,7 +176,9 @@
     "some": "These companies",
     "someHint": "Only the companies (and sites) ticked below.",
     "sitesOf": "Sites of {company}",
-    "sitesHint": "None ticked: every site of this company."
+    "sitesHint": "None ticked: every site of this company.",
+    "customers_one": "{count} customer only",
+    "customers_other": "{count} customers only"
   },
   "reveal": {
     "print": "Print",
@@ -1264,6 +1266,10 @@
       "stepUp": {
         "title": "Raising rights asks for a fresh code",
         "why": "People, roles, badges, PINs and bank details: a code from the authenticator app."
+      },
+      "customerLimit": {
+        "title": "A customer limit covers customer records",
+        "why": "A role given for some customers shows only their customers, requests, quotes, orders, shipments, invoices, returns, complaints and samples. Styles, materials, work orders and production boards are not limited by customer: give such a person only the roles they need."
       }
     },
     "mfa": {

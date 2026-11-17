@@ -114,7 +114,7 @@
   },
   "list": {
     "tableLabel": "Ordini di vendita",
-    "search": "Cerca numero o ordine del cliente",
+    "search": "Cerca numero, ordine del cliente, cliente, modello o marchio",
     "rowsLabel": "Righe",
     "layoutLabel": "Mostra gli ordini come",
     "keyView": "Elenco o bacheca",

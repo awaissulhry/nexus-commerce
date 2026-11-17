@@ -106,7 +106,9 @@ export const capaRecordView = output({
       note: z.string().nullable(),
       createdAt: instant(),
       createdById: id().nullable(),
-      record: output({ number: z.string(), title: z.string().nullable(), state: z.string(), severity: z.string().nullable(), category: z.string().nullable(), siteId: id().nullable(), namesThisCapa: z.boolean() }).nullable(),
+      // B-TH-232: `shareHeld` — a complaint the 8D may not be shared on (OTHER_CUSTOMER: written for another customer;
+      // OTHER_CUSTOMERS_COMPLAINTS: it also answers another customer's complaint); null: it may (or not a complaint).
+      record: output({ number: z.string(), title: z.string().nullable(), state: z.string(), severity: z.string().nullable(), category: z.string().nullable(), siteId: id().nullable(), namesThisCapa: z.boolean(), shareHeld: z.enum(['OTHER_CUSTOMER', 'OTHER_CUSTOMERS_COMPLAINTS']).nullable() }).nullable(),
     }),
   ),
   /** D3, live from the NCRs the reader sees: their containment actions and holds still active. */

@@ -302,7 +302,9 @@ export type ReportVersion = z.infer<typeof versionSchema>
 export const reportsSchema = z.object({
   inspection: z.object({ id: z.string(), number: z.string(), status: z.string(), workOrderId: z.string(), signed: z.boolean() }),
   versions: z.array(versionSchema),
-  shipments: z.array(z.object({ id: z.string(), number: z.string(), status: z.string(), customer: z.string().nullable(), shareable: z.boolean() })),
+  // B-TH-232: `held` — STATE (not packed, or cancelled), SHARED_PRODUCTION (the work order also makes garments for another customer:
+  // the shipment's own certificate of conformity goes instead); null: it can take the report.
+  shipments: z.array(z.object({ id: z.string(), number: z.string(), status: z.string(), customer: z.string().nullable(), shareable: z.boolean(), held: z.enum(['STATE', 'SHARED_PRODUCTION']).nullable().optional() })),
   shares: z.array(z.object({ shipmentId: z.string(), shipmentNumber: z.string().nullable(), fileId: z.string(), version: z.number(), live: z.boolean(), sharedAt: z.string() })),
   ready: z.object({ ok: z.boolean() }),
   may: z.object({ make: z.boolean(), share: z.boolean() }),

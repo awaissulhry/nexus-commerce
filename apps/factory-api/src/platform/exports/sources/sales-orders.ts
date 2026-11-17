@@ -10,6 +10,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../../../modules/sales/orders/access'
 import { listOrders, type ListFilters, type ListQuery } from '../../../modules/sales/orders/orders'
+import { isOrderSort } from '../../../modules/sales/orders/sort' // B-TH-057
 import { ordersDepth } from '../../../modules/sales/orders-depth/depth' // B-TH-018
 import { defineExportSource } from '../source'
 
@@ -32,6 +33,10 @@ import { defineExportSource } from '../source'
  * as it narrows the screen (malformed: refused). Priority, season and the company's name are read per page beside the list
  * (the list's own W2b read, GET /sales/orders/depth's ordersDepth; one query of the companies). The Margin % column stays out
  * of the file: its read (costing/margins) computes every order in scope, not a page.
+ *
+ * B-TH-057 (SHEET-G05, SHEET-G15, ORD-G07; threads plan TH-4): the file keeps the screen's order and rows — `?sort=` (customer,
+ * brand, promise, daysLate, ordered; `-` the other way round) and `?cf=` (the custom field filter) are the list's own terms,
+ * read by listOrders as the screen reads them (a sort it does not know is refused), and `?q=` searches what the screen searches.
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
@@ -116,13 +121,23 @@ const NAMES: Readonly<Record<ExportLocale, { orders: string; rows: (count: numbe
 }
 // ── end B-TH-008 ──
 
+// ── B-TH-057 (SHEET-G05, SHEET-G15: screen = file) ──
+/** The address's server sort and custom field filter, as the list reads them; a sort the list does not know is refused. */
+function orderTerms(address: URLSearchParams): Pick<ListQuery, 'sort' | 'cf'> {
+  const sort = address.get('sort')?.trim() || undefined
+  if (sort !== undefined && !isOrderSort(sort)) throw new ValidationError('Not a sort of the orders: the file would not follow the screen.', [{ path: 'query/sort', message: 'customer, brand, promise, daysLate or ordered (- in front: the other way round).' }])
+  const cf = address.get('cf')?.trim() || undefined
+  return { ...(sort ? { sort } : {}), ...(cf ? { cf } : {}) }
+}
+// ── end B-TH-057 ──
+
 export const salesOrders = defineExportSource<Query, Row>({
   listKey: 'sales.orders',
   permission: ORDERS_VIEW,
   query(address) {
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
-    const kept = narrowing(address) // B-TH-008
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer

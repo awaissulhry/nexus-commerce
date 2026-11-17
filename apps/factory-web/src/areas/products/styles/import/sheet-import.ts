@@ -79,13 +79,15 @@ function startProblem(error: unknown): string {
   return problemKey(error)
 }
 
-export function useSheetImport(api: ApiClient, options: SheetImportOptions): { model: SheetImport | null; open: () => void; actions: WizardActions } {
+export function useSheetImport(api: ApiClient, options: SheetImportOptions): { model: SheetImport | null; open: () => void; actions: WizardActions; checkAgainWith: (mapping: Readonly<Record<string, string | null>>) => void } {
   const { importerKey, companyId, rights, locale, onApplied } = options
   // B-W2b-323: no "every company" choice for an importer whose rows always belong to one company (sales orders).
   const companies = options.everyCompany === null ? [...options.companies] : [{ id: EVERY_COMPANY, name: options.everyCompany }, ...options.companies]
   const [wizard, setWizard] = useState<WizardModel | null>(null)
   const [importers, setImporters] = useState<Importer[]>([standInImporter(importerKey)])
   const file = useRef<File | null>(null)
+  // B-TH-293: the sheet of the job on screen, kept so it can be checked again with other columns (nothing else reads it).
+  const sent = useRef<File | null>(null)
   const applied = useRef(false)
   const latest = useRef(wizard)
   latest.current = wizard
@@ -134,6 +136,7 @@ export function useSheetImport(api: ApiClient, options: SheetImportOptions): { m
     onClose: () => {
       setWizard(null)
       file.current = null
+      sent.current = null // B-TH-293
       if (applied.current) onApplied?.()
       applied.current = false
     },
@@ -149,6 +152,7 @@ export function useSheetImport(api: ApiClient, options: SheetImportOptions): { m
       patch({ busy: true, problem: null })
       uploadSheet(api, { importerKey, companyId: draft.companyId === EVERY_COMPANY ? null : draft.companyId || null, numberFormat: draft.numberFormat, sheetName: draft.sheetName.trim() || null }, file.current)
         .then((job) => {
+          sent.current = file.current // B-TH-293
           file.current = null
           setWizard({ ...emptyWizard(draft, job) })
         })
@@ -181,5 +185,23 @@ export function useSheetImport(api: ApiClient, options: SheetImportOptions): { m
     },
   }
 
-  return { model: wizard ? { wizard, importers, rights, companies } : null, open, actions }
+  // ── B-TH-293: check the same sheet again with other columns (a customer's remembered ones): a new dry run with the mapping;
+  // the job it replaces, still only planned, is cancelled (nothing was written by it). ──
+  const checkAgainWith = (mapping: Readonly<Record<string, string | null>>) => {
+    const current = latest.current
+    const picked = sent.current
+    if (!current?.job || !picked) return
+    const before = current.job
+    const draft = current.draft
+    patch({ busy: true, problem: null })
+    uploadSheet(api, { importerKey, companyId: draft.companyId === EVERY_COMPANY ? null : draft.companyId || null, numberFormat: draft.numberFormat, sheetName: draft.sheetName.trim() || null, mapping }, picked)
+      .then(async (job) => {
+        if (before.status === 'PLANNED') await cancelImport(api, before.id, { version: before.version }).catch(() => undefined)
+        setWizard({ ...emptyWizard(draft, job) })
+      })
+      .catch((error: unknown) => patch({ busy: false, problem: startProblem(error) }))
+  }
+  // ── end B-TH-293 ──
+
+  return { model: wizard ? { wizard, importers, rights, companies } : null, open, actions, checkAgainWith }
 }
