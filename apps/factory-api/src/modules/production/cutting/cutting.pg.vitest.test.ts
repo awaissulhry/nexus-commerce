@@ -385,6 +385,7 @@ describe('a cut (MES-056, SCM-194): the scan issues the hide and logs the set in
     expect(logged!.payload).toEqual({
       workOrderId: WO.main.id,
       number: WO.main.number,
+      partyId: A.brand, // B-PR-09: its work order's one customer
       cutLogId: answer.cut.id,
       hideId: hides.H01!.id,
       lotId: lots.BLK!.id,

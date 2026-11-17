@@ -338,7 +338,7 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     const audit = await admin(`SELECT action, after FROM "AuditLog" WHERE "recordId" = $1`, [workOrder.id])
     expect(audit).toEqual([expect.objectContaining({ action: 'workorders.create', after: expect.objectContaining({ number: 'WO-00001', status: 'DRAFT', styleRevisionId: A.revision }) })])
     const [event] = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'workorder.created' AND subject = $1`, [workOrder.id])
-    expect(event!.payload).toEqual({ workOrderId: workOrder.id, number: 'WO-00001', siteId: A.siteA1, styleId: A.style, salesOrderIds: [order.orderId], cells: 2, pieces: 5 })
+    expect(event!.payload).toEqual({ workOrderId: workOrder.id, number: 'WO-00001', partyId: A.brand /* B-PR-09 */, siteId: A.siteA1, styleId: A.style, salesOrderIds: [order.orderId], cells: 2, pieces: 5 })
     expect((await ok('viewer', 'GET', '/production/work-orders?late=true')).workOrders).toEqual([])
     // The seed's SEED-WO-0001 is in progress after its first cut.
     expect((await ok('viewer', 'GET', `/production/work-orders?status=IN_PROGRESS&styleId=${A.style}&siteId=${A.siteA1}`)).workOrders.map((row: Json) => row.number)).toEqual(['SEED-WO-0001'])
