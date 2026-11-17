@@ -26,6 +26,19 @@ const size = () => z.string().trim().min(1).max(10)
 const issue = output({ path: z.string(), message: z.string() })
 const workOrderParams = input({ workOrderId: id() })
 
+// ── B-PR-03 (production plan, the brand wall) ──
+/**
+ * A work order's one customer (B-PR-01): its id, and its code and name as the office names it; null for a sample of a round
+ * for no customer, or with `mixedCustomers` for one made before the one-customer rule with cells of several customers ("Mixed
+ * brands (made before the rule)": only people who reach every customer see one).
+ */
+const customerFacts = {
+  partyId: id().nullable(),
+  customer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  mixedCustomers: z.boolean(),
+}
+// ── end B-PR-03 ──
+
 const operation = output({
   id: id().nullable(),
   seq: z.number().int(),
@@ -99,6 +112,8 @@ export const workOrderSchema = output({
   repairOrder: output({ id: id(), number: z.string(), stage: z.string() }).nullable(),
   /** B-W2b-246 (MES-018): a SAMPLE work order's sample round; null for any other kind. */
   sampleRound: output({ id: id(), number: z.string(), kind: z.string(), roundNo: z.number().int(), stage: z.string() }).nullable(),
+  /** B-PR-03: its one customer. */
+  ...customerFacts,
   orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), partyId: id(), partyName: z.string(), depositRequired: z.boolean() })),
   cells: z.array(
     output({
@@ -149,6 +164,8 @@ export const listContract = defineContract({
     due: z.enum(RELATIVE_DAYS).optional(),
     /** B-W2b-51 (MES-009): rush work orders only (`true`), or none of them (`false`); the quick filter's flag. */
     rush: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** B-PR-03: one customer's work orders (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -170,7 +187,9 @@ export const listContract = defineContract({
           styleName: z.string(),
           revision: z.number().int().nullable(),
           colourways: z.array(z.string()),
-          orders: z.array(output({ id: id(), number: z.string(), partyName: z.string() })),
+          /** B-PR-03: its one customer, and the customer PO (`customerRef`) of each of its orders. */
+          ...customerFacts,
+          orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), partyName: z.string() })),
           cells: z.number().int(),
           pieces: z.number().int(),
           /**
@@ -194,7 +213,8 @@ export const listContract = defineContract({
 })
 
 export const countsContract = defineContract({
-  querystring: input({ siteId: id().optional() }),
+  // B-PR-03: one customer's counts, as the list's filter.
+  querystring: input({ siteId: id().optional(), partyId: id().optional() }),
   response: {
     200: output({
       /** Work orders the caller may see per state; `open` = draft + released + in progress; `late` = open past the due date. */

@@ -424,7 +424,8 @@ export const workOrderWipContract = defineContract({
 })
 
 export const siteWipContract = defineContract({
-  querystring: input({ siteId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(100) }),
+  // B-PR-03: one customer's work orders (inside the caller's reach).
+  querystring: input({ siteId: id().optional(), partyId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(100) }),
   response: {
     200: output({
       workOrders: z.array(

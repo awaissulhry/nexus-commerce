@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
 import { seed as seedProduction, type ProductionSeed } from '../seed/production'
 import { seed as seedSamples, type SamplesSeed } from '../seed/samples'
+import { seed as seedTwoBrands } from '../seed/two-brands' // B-PR-39
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { readMigrations } from './policies'
 import { RUNTIME_LOGIN } from './roles'
@@ -252,3 +253,42 @@ describe('one customer per work order (B-PR-01, PW-00 at the database)', () => {
     await expect(update(office(), 'WorkOrder', released, `"partyId" = $2::uuid`, B)).rejects.toThrow(/never change/)
   })
 })
+
+// ── B-PR-39 (production plan slice 1): the brand wall walk's seed — PW-00 mirrored in the seed ────────────────────────────────
+describe('the brand wall walk seed (B-PR-39)', () => {
+  it('a second customer with work orders of its own in production, an office person limited to it, its portal people; twice changes nothing', async () => {
+    const made = await seedTwoBrands({ db: factory, namespace: NS })
+    const second = made.second.partyId
+    expect(second).not.toBe(A)
+    const orders = await admin(
+      `SELECT w.number, w.status::text AS status, w."partyId"::text AS party, array_agg(DISTINCT c."partyId"::text) AS cells, sum(c.quantity)::int AS pieces
+         FROM "WorkOrder" w JOIN "WorkOrderSize" c ON c."workOrderId" = w.id WHERE w.id = ANY($1::uuid[]) GROUP BY w.id ORDER BY w.number`,
+      [[made.workOrderIds.inProduction, made.workOrderIds.draft]],
+    )
+    expect(orders).toEqual([
+      { number: 'SEED-WO-B001', status: 'IN_PROGRESS', party: second, cells: [second], pieces: 5 },
+      { number: 'SEED-WO-B002', status: 'DRAFT', party: second, cells: [second], pieces: 1 },
+    ])
+    // Its style is its own label; its line is on the threads' order of the second brand.
+    expect((await admin(`SELECT "brandPartyId"::text AS brand FROM "Style" WHERE id = $1`, [made.styleId]))[0]).toEqual({ brand: second })
+    expect((await admin(`SELECT "orderId"::text AS "order", "partyId"::text AS party FROM "SalesOrderLine" WHERE id = $1`, [made.salesOrderLineId]))[0]).toEqual({ order: made.second.salesOrderId, party: second })
+    const people = await admin(
+      `SELECT u.id::text AS id, u.audience::text AS audience, u."partyId"::text AS party, r.key, a."partyIds"::text[] AS "partyIds"
+         FROM "User" u JOIN "RoleAssignment" a ON a."userId" = u.id AND a."endedAt" IS NULL JOIN "Role" r ON r.id = a."roleId" WHERE u.id = ANY($1::uuid[]) ORDER BY r.key`,
+      [[made.officeUserId, made.portalUserIds.buyer, made.portalUserIds.viewer, made.portalUserIds.designer]],
+    )
+    expect(people).toEqual([
+      { id: made.portalUserIds.buyer, audience: 'PARTNER', party: second, key: 'customer-buyer', partyIds: [second] },
+      { id: made.portalUserIds.designer, audience: 'PARTNER', party: second, key: 'customer-designer', partyIds: [second] },
+      { id: made.portalUserIds.viewer, audience: 'PARTNER', party: second, key: 'customer-viewer', partyIds: [second] },
+      { id: made.officeUserId, audience: 'OFFICE', party: null, key: 'production_manager', partyIds: [second] },
+    ])
+    expect((await admin(`SELECT "portalOn", "allowedRoleKeys" FROM "PortalSettings" WHERE "partyId" = $1`, [second]))[0]).toEqual({ portalOn: false, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer'] })
+    // Idempotent: a second run adds nothing.
+    const count = async () => (await admin(`SELECT (SELECT count(*) FROM "WorkOrder") + (SELECT count(*) FROM "WorkOrderSize") + (SELECT count(*) FROM "User") + (SELECT count(*) FROM "RoleAssignment") + (SELECT count(*) FROM "SalesOrderLine") AS n`))[0]!.n
+    const before = await count()
+    await seedTwoBrands({ db: factory, namespace: NS })
+    expect(await count()).toBe(before)
+  })
+})
+// ── end B-PR-39 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────

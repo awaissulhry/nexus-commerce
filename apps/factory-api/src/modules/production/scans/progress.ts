@@ -1,5 +1,4 @@
-import type { Prisma } from '@nexus/factory-db'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-03
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { daysLate } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -113,14 +112,15 @@ export async function workOrderWip(caller: CommandCaller, workOrderId: string) {
 /**
  * Every open work order of the caller's sites with its operations' WIP (SCR-073 "Floor now"; no cells, no person, no
  * station): what it is (style, site, due date and days late, pieces and finished garments) and, per operation, the pieces
- * arrived, waiting, good, scrap and rework, its bundles, and the good per line (F2: output per line only).
+ * arrived, waiting, good, scrap and rework, its bundles, and the good per line (F2: output per line only). B-PR-03: only
+ * the work orders of the customers the caller reaches (the brand wall), or one customer's when asked.
  */
-export async function siteWip(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly limit: number }) {
+export async function siteWip(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined; readonly limit: number }) {
   const context = officeOf(caller)
   const today = businessDate(serverClock.now())
   return caller.withClient(async (db) => {
     const workOrders = await db.workOrder.findMany({
-      where: { AND: [scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, { status: { in: [...OPEN] } }, query.siteId ? { siteId: query.siteId } : {}] },
+      where: { AND: [workOrderWhere(actorOf(context), WORKORDERS_VIEW), { status: { in: [...OPEN] } }, query.siteId ? { siteId: query.siteId } : {}, query.partyId ? { partyId: query.partyId } : {}] },
       select: { ...SCAN_HEADER, dueDate: true, priority: true, site: { select: { code: true } }, style: { select: { code: true, name: true } }, sizes: { select: { quantity: true } } },
       orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
       take: query.limit,

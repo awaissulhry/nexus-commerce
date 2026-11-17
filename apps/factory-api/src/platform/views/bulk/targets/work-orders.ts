@@ -1,6 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -9,6 +8,7 @@ import type { BulkRefusal } from '@nexus/factory-domain/views/bulk/rules'
 import { actorOf } from '../../../../core/context'
 import { mayOn, officeContextOf } from '../../../../modules/production/work-orders/access'
 import { dayOrNull } from '../../../../modules/production/work-orders/store'
+import { workOrderWhere } from '../../../../modules/production/work-orders/scope' // B-PR-03
 import { updateWorkOrder } from '../../../../modules/production/work-orders/work-orders'
 import { defineBulkTarget } from '../target'
 
@@ -22,7 +22,8 @@ import { defineBulkTarget } from '../target'
  * (workorder.priority_changed tells the floor's lists when the priority or the rush flag changes).
  */
 
-const SELECT = { id: true, number: true, status: true, version: true, companyId: true, siteId: true, dueDate: true, priority: true, rush: true } as const satisfies Prisma.WorkOrderSelect
+// B-PR-03 (the brand wall): with its customer, so the row check reaches it by customer too.
+const SELECT = { id: true, number: true, status: true, version: true, companyId: true, siteId: true, partyId: true, dueDate: true, priority: true, rush: true } as const satisfies Prisma.WorkOrderSelect
 
 interface Row {
   readonly id: string
@@ -31,6 +32,8 @@ interface Row {
   readonly version: number
   readonly companyId: string
   readonly siteId: string
+  /** B-PR-03: its one customer (null: a sample of no customer, or mixed customers made before the rule). */
+  readonly partyId: string | null
   readonly dueDate: BusinessDate | null
   readonly priority: number
   readonly rush: boolean
@@ -53,7 +56,8 @@ export const workOrders = defineBulkTarget<Row>({
     const wanted = ids.filter(isUuid)
     if (wanted.length === 0) return []
     const rows = await caller.withClient((client) =>
-      client.workOrder.findMany({ where: { AND: [scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, { id: { in: wanted } }] }, select: SELECT }),
+      // B-PR-03: the work orders of the customers the caller reaches (another customer's is not found).
+      client.workOrder.findMany({ where: { AND: [workOrderWhere(actorOf(context), WORKORDERS_VIEW), { id: { in: wanted } }] }, select: SELECT }),
     )
     return rows.map((row) => ({ ...row, dueDate: dayOrNull(row.dueDate) }))
   },
@@ -74,6 +78,6 @@ export const workOrders = defineBulkTarget<Row>({
       },
       idempotencyKey,
     )
-    return { id: workOrder.id, number: workOrder.number, status: workOrder.status, version: workOrder.version, companyId: workOrder.companyId, siteId: workOrder.siteId, dueDate: workOrder.dueDate, priority: workOrder.priority, rush: workOrder.rush }
+    return { id: workOrder.id, number: workOrder.number, status: workOrder.status, version: workOrder.version, companyId: workOrder.companyId, siteId: workOrder.siteId, partyId: workOrder.partyId, dueDate: workOrder.dueDate, priority: workOrder.priority, rush: workOrder.rush }
   },
 })
