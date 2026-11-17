@@ -1176,7 +1176,7 @@
       "notLive_other": "Mail door not open yet · {count} addresses wait",
       "notLiveBody": "Mail to the inquiry addresses becomes a request once mail is received live (the mail provider’s receiving, a go-live step). Until then requests come by portal, phone and Mail to sort.",
       "noDomain": "Set up the mail domain first",
-      "setUp": "Admin › Connections"
+      "setUp": "Admin › Connections & API"
     }
   },
   "project": {

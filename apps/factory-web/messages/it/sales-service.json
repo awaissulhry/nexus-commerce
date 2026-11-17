@@ -292,7 +292,7 @@
     "noDeliveries": "Nessuna a questo cliente",
     "notOurs": "{label} non è un nostro capo o lotto.",
     "none": "Nessun capo indicato: scrivi matricola o lotto nel modulo.",
-    "photos": "Foto: pubblicale nella conversazione del caso (Attività)."
+    "photos": "Foto: pubblicale nella conversazione del caso accanto alla pagina."
   },
   "form": {
     "title": "Caso",
