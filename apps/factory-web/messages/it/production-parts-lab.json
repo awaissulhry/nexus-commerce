@@ -1,0 +1,61 @@
+{
+  "title": "Parti di produzione condivise",
+  "subtitleOffice": "Come le legge l'ufficio: ogni cliente che può vedere. Dati inventati.",
+  "subtitleCustomer": "Come le legge un cliente nel suo portale. Dati inventati.",
+  "section": {
+    "stages": "Barra delle fasi",
+    "waiting": "Tocca a",
+    "health": "Stato",
+    "pieces": "Pezzi per fase e taglia",
+    "requests": "Scheda richiesta",
+    "holds": "Avviso di sospensione",
+    "fresh": "Riga di aggiornamento",
+    "progress": "Una barra mostra il numero che dicono le sue parole"
+  },
+  "example": {
+    "unknown": "Fase non nota",
+    "loading": "Caricamento",
+    "problem": "Impossibile caricare",
+    "full": "Forma completa: date, la data franco fabbrica e come è cambiata",
+    "blocked": "Bloccato",
+    "rows": "Forma a riga per una cella di elenco o una scheda sul telefono",
+    "mostSerious": "Due sospensioni: la più grave, l'altra contata",
+    "pause": "Una pausa chiesta dal cliente",
+    "production": "Una sospensione di produzione"
+  },
+  "note": {
+    "waitingOffice": "Ambra: la nostra attesa dopo 1 giorno lavorativo per una richiesta, 3 per il resto; quella del cliente dopo la sua scadenza.",
+    "waitingCustomer": "Un cliente legge solo “Tocca a voi” o “Tocca a noi”: chiunque altro aspettiamo resta tra noi.",
+    "healthOffice": "Premi uno stato: le date e la nota di una persona segnata Solo ufficio.",
+    "healthCustomer": "Lo stato e il motivo scelto dalla lista; mai la nota dell'ufficio.",
+    "requestsCaller": "Caricamento ed errori di lettura spettano alla scheda che elenca le richieste (le Richieste dell'ordine).",
+    "noHold": "Nessuna sospensione: nessun avviso.",
+    "progress": "Prima: la barra mostrava i capi finiti accanto alle parole della fase più avanti (0 % accanto a “Cuciti 80 di 100”)."
+  },
+  "action": {
+    "answer": "Rispondi in Approvazioni",
+    "withdraw": "Ritira",
+    "counter": "Accetta la controproposta",
+    "release": "Togli la sospensione"
+  },
+  "data": {
+    "colourway": "JK-210 Rider · {colour}",
+    "black": "Nero",
+    "red": "Rosso",
+    "cell": "Riga 10 · {colour} · {size}",
+    "changeNote": "Più M, meno XL per l'uscita di primavera.",
+    "frozen": "Taglie fissate al taglio, 08/11/2026",
+    "counter": "Possiamo anticipare al 21/11 se la pelle rossa arriva lunedì.",
+    "cancelNote": "La riga 20 non serve più.",
+    "refused": "La riga 20 è già tagliata e cucita.",
+    "qualityReason": "Qualità: differenza di tono sui pannelli rossi",
+    "productionReason": "Linea spostata su un ordine urgente",
+    "blockedOffice": "Tocca al cliente: campione di preproduzione",
+    "blockedCustomer": "Tocca a voi: campione di preproduzione",
+    "material": "Materiale mancante",
+    "onUs": "Tocca a noi",
+    "ppSample": "Campione di preproduzione",
+    "sizeSet": "Serie taglie",
+    "healthNote": "Prova di laboratorio da ripetere; recuperiamo sabato."
+  }
+}

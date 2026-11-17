@@ -1,0 +1,92 @@
+/* The production parts lab (/design/production-parts, F-PR-01): cards that fill the main area (no page max-width), two
+   columns from 1440, one on a phone. Semantic tokens only. */
+.fw-ppl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-width: 0;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+/* Wrapping cards: small ones share a row and grow to fill it (no empty column at 1920), wide ones take the row. */
+.fw-ppl-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-24);
+  min-width: 0;
+}
+.fw-ppl-card {
+  flex: 1 1 460px;
+  min-width: 0;
+}
+.fw-ppl-span {
+  flex-basis: 100%;
+}
+.fw-ppl-part {
+  min-width: 0;
+}
+.fw-ppl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-ppl-example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-ppl-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-ppl-note {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-ppl-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-ppl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-10);
+  min-width: 0;
+}
+.fw-ppl-column {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.fw-ppl-requests {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+.fw-ppl-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-ppl-progress-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+.fw-ppl-progress-row > .fw-ppl-note {
+  grid-column: 2;
+}

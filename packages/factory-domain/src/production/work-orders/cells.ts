@@ -3,10 +3,11 @@ import type { Issue } from '../../core/errors'
 /**
  * A work order's cells from sales order lines (B-W1-38; features MES-001, MES-002; plan A1 §2.4 E), pure. A work order
  * makes ONE style at ONE site of the order's company, as a size grid: each cell is the pieces of one colourway in one
- * size, from one sales order line of that style (lines of several orders of the company may share a work order). A
- * cell takes at most what is still open on its line for that size: the size's ordered pieces less those already on
- * other work orders that are not CANCELLED (a cancelled work order gives its pieces back). One cell per colourway and
- * size (the table's unique key). Cells change only while the work order is a DRAFT (the …_production_guards trigger).
+ * size, from one sales order line of that style (lines of several orders of the company may share a work order, all of
+ * ONE customer: B-PR-02). A cell takes at most what is still open on its line for that size: the size's ordered pieces
+ * less those already on other work orders that are not CANCELLED (a cancelled work order gives its pieces back). One
+ * cell per colourway and size (the table's unique key). Cells change only while the work order is a DRAFT (the
+ * …_production_guards trigger).
  *
  * Made-to-measure units (MES-003; B-W2b-368, XF1:01): a unit's order line reads as one piece of its base size (the API's
  * readOrderLines), so these rules make its one cell, once; the API makes it on its own MADE_TO_MEASURE work order with the
@@ -54,7 +55,33 @@ export interface CellTarget {
   readonly styleSizes: readonly string[]
   /** The revision chosen for the work order (null: none yet). */
   readonly styleRevisionId: string | null
+  /**
+   * B-PR-02: the work order's customer (WorkOrder.partyId; a new work order's is its first line's): a line of another
+   * customer is refused. null: a work order of no single customer (one that mixes customers, made before the rule, or a
+   * sample of no customer), which takes no order line. Left out: not checked (the API passes it from B-PR-03 on).
+   */
+  readonly partyId?: string | null
 }
+
+// ── B-PR-02 (production plan: one customer per work order) ────────────────────────────────────────────────────────────
+type Words = { readonly en: string; readonly it: string }
+
+/**
+ * A work order makes the lines of ONE customer (the database's …_production_brand_wall_guards refuse a cell of another),
+ * so a brand's figures are always its own and an office person limited to some customers never meets another's work
+ * order. The refusal names no customer: not the work order's, not the line's.
+ */
+export const ONE_CUSTOMER_WORDS: Words = Object.freeze({
+  en: 'These order lines are of two customers: one customer per work order.',
+  it: "Queste righe d'ordine sono di due clienti: un solo cliente per ordine di produzione.",
+})
+
+/** A work order of no single customer takes no order line (the guards refuse its new or changed cells). */
+export const NO_CUSTOMER_WORDS: Words = Object.freeze({
+  en: 'This work order is of no single customer, so it takes no order line: make a new work order for these lines.',
+  it: "Questo ordine di produzione non è di un solo cliente, quindi non accetta righe d'ordine: crea un nuovo ordine di produzione per queste righe.",
+})
+// ── end B-PR-02 ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** One cell asked for: a line's size and its pieces (0 removes the cell). */
 export interface CellRequest {
@@ -97,6 +124,9 @@ export function lineProblems(line: OrderLineFacts, target: CellTarget, path: str
   if (line.styleRevisionId !== null && target.styleRevisionId !== null && line.styleRevisionId !== target.styleRevisionId) {
     problems.push({ path, message: `${label} is ordered to another revision of the style than the work order's.` })
   }
+  // B-PR-02: one customer per work order, in words that name neither customer.
+  if (target.partyId === null) problems.push({ path, message: NO_CUSTOMER_WORDS.en })
+  else if (target.partyId !== undefined && line.partyId !== target.partyId) problems.push({ path, message: ONE_CUSTOMER_WORDS.en })
   return problems
 }
 

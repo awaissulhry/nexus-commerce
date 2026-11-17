@@ -20,6 +20,8 @@ import type { WorkOrderKind, WorkOrderStatus } from './machine'
  *             yet (the planner allocates it). Its materials are planned from its cells like any draft's, and the parent's
  *             drafted materials go (the release plans them again from the cells it keeps). Stock reserved for the parent,
  *             its kit and its operations on the planning board stay with the parent.
+ *   customer  the parent's (B-PR-02, splitParty below): a work order is of one customer; a draft that mixes customers (made
+ *             before the rule) gives its cells away one customer at a time.
  */
 
 /** The statuses a work order is split in. */
@@ -113,3 +115,32 @@ export function splitPlan(cells: readonly SplitCell[], asked: readonly SplitAsk[
   const total = cells.reduce((sum, cell) => sum + cell.quantity, 0)
   return { keep, remove, move, moved, kept: total - moved }
 }
+
+// ── B-PR-02 (production plan: one customer per work order) ────────────────────────────────────────────────────────────
+/** A cell's customer as the split reads it (WorkOrderSize.partyId: its order line's customer). */
+export interface SplitPartyCell {
+  readonly id: string
+  readonly partyId: string | null
+}
+
+/** Cells of several customers asked to move together, in words that name none of them. */
+export const ONE_CUSTOMER_SPLIT_WORDS: Readonly<{ en: string; it: string }> = Object.freeze({
+  en: "These sizes are of more than one customer: move one customer's sizes at a time (one customer per work order).",
+  it: 'Queste taglie sono di più clienti: sposta le taglie di un cliente alla volta (un solo cliente per ordine di produzione).',
+})
+
+/**
+ * The customer of the new work order (its WorkOrder.partyId, set when it is made): a split keeps its parent's. A draft that
+ * mixes customers (made before the rule: it names none) gives its cells away ONE customer at a time, and the new work
+ * order is that customer's: the database's guard lets cells LEAVE such a draft into single-customer children, never join
+ * it. Cells of another customer than the parent's, or of several when the parent names none, move nowhere (problems at
+ * `path`). An ask of an unknown cell is splitProblems' to name; it decides nothing here.
+ */
+export function splitParty(parent: { readonly partyId: string | null }, cells: readonly SplitPartyCell[], asked: readonly SplitAsk[], path = 'body/cells'): { readonly partyId: string | null; readonly problems: Issue[] } {
+  const partyOf = new Map(cells.map((cell) => [cell.id, cell.partyId]))
+  const moving = new Set(asked.filter((ask) => partyOf.has(ask.cellId)).map((ask) => partyOf.get(ask.cellId)!))
+  if (parent.partyId !== null) moving.add(parent.partyId)
+  if (moving.size > 1) return { partyId: null, problems: [{ path, message: ONE_CUSTOMER_SPLIT_WORDS.en }] }
+  return { partyId: parent.partyId ?? [...moving][0] ?? null, problems: [] }
+}
+// ── end B-PR-02 ───────────────────────────────────────────────────────────────────────────────────────────────────────
