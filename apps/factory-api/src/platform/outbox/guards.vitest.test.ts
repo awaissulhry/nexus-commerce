@@ -131,15 +131,18 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // portal path; a person removed with thread.followers_changed; linked, unlinked; an invitation ended at close): 948 → 957,
     // 1499 → 1510.
     // ---- END CHECK (fix wave 3c, counted by the guard on each main commit): the TH-5 count missed two literal emits merged
-    // before it — B-PR-41 + B-PR-14 (#1567: one) and B-TH-049…054 (#1570: one) — so the guard counted 956 and 1511 on TH-5's tree
+    // before it — B-PR-41 + B-PR-14 (#1572: one) and B-TH-049…054 (#1573: one) — so the guard counted 956 and 1511 on TH-5's tree
     // (a8e20d4036), 957 and 1512 with the planted event and emit. Since then:
     // B-PR-16: ten events (brand_production.stage_reached, .health_changed, .urgency_changed, .hold_changed, .supervisor_changed;
     // work_order_hold.placed, .lifted; production_issue.raised, .answered, .escalated) and no literal emit: 956 → 966.
-    // B-PR-21: no event and four literal emits (a production hold placed and lifted: workorder.status_changed ×2 on each path): 1511 → 1515.
+    // B-PR-21: no event and four literal emits (a production hold placed and lifted: work_order_hold.placed and .lifted, each with its
+    // workorder.status_changed): 1511 → 1515.
     // B-PR-24: four events (approval_request.decided_for_party, .reversed; order_change_request.countered, .counter_answered) and
     // no literal emit: 966 → 970.
-    // The guard counts 970 and 1515 on main 55396473f5; with the planted event and emit: 971, 1516.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(971 declared event version\(s\), 1516 literal emit/) })
+    // B-PR-25 + B-PR-28 (#1610): no event and two literal emits (a new promise date asked of the customer: approval_request.asked;
+    // the open ask about an older date of that line: approval_request.withdrawn): 1515 → 1517.
+    // The guard counts 970 and 1517 on main c6e6ed7858; with the planted event and emit: 971, 1518.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(971 declared event version\(s\), 1518 literal emit/) })
     // ---- end END CHECK
   })
 
