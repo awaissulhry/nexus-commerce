@@ -232,6 +232,19 @@ export interface WorkerDraft {
   roleIds: string[]
 }
 
+// ── W1-BGF (the W1 browser stages' repair): what the admin typed survives the site list arriving ──
+/** A new worker's empty form: the first site, Italian on the tablet. */
+export function blankWorkerDraft(sites: readonly { id: string }[]): WorkerDraft {
+  return { displayName: '', locale: 'it', employeeCode: '', siteId: sites[0]?.id ?? '', roleIds: [] }
+}
+
+/** The site list arrived (or changed) while the form is open: it fills an empty site, never what was typed or picked. */
+export function workerDraftWithSites(draft: WorkerDraft, sites: readonly { id: string }[]): WorkerDraft {
+  if (draft.siteId && sites.some((site) => site.id === draft.siteId)) return draft
+  return { ...draft, siteId: sites[0]?.id ?? '' }
+}
+// ── end W1-BGF ──
+
 export function workerProblems(draft: WorkerDraft): Record<string, string> {
   const out: Record<string, string> = {}
   if (draft.displayName.trim() === '') out.displayName = 'form.required'
