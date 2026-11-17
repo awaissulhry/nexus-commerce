@@ -362,7 +362,8 @@ describe('search and export', () => {
     const words = (code: string) => exportSource.words!.en[code] ?? code
     expect(exportSource.columns.from!.value(row, words)).toBe('Moto Club Fiera')
     expect(exportSource.columns.status!.value(row, words)).toBe('In progress')
-    expect(exportSource.columns.assignedTo!.value(row, words)).toBe('A colleague')
+    // B-TH-016 (Owner decision 4): the assignee by name, not "A colleague".
+    expect(exportSource.columns.assignedTo!.value(row, words)).toBe('Made-up carla')
     expect(exportSource.columns.targetPrice!.grain).toBe('price')
   })
 })

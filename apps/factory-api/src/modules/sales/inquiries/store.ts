@@ -89,6 +89,9 @@ export const INQUIRY_COLUMNS = {
   prospectErasedAt: true,
   request: true,
   wantedDate: true,
+  // B-TH-009 (L2-G01): the customer's PO and the delivery address it asked.
+  customerRef: true,
+  shipToAddressId: true,
   targetUnitPrice: true,
   currency: true,
   techPackFileIds: true,
@@ -108,7 +111,7 @@ export const INQUIRY_COLUMNS = {
 } as const satisfies Prisma.InquirySelect
 export type InquiryData = Prisma.InquiryGetPayload<{ select: typeof INQUIRY_COLUMNS }>
 
-export const LINE_COLUMNS = { id: true, inquiryId: true, seq: true, styleId: true, colourwayId: true, colourText: true, description: true, sizes: true, quantity: true, note: true } as const satisfies Prisma.InquiryLineSelect
+export const LINE_COLUMNS = { id: true, inquiryId: true, seq: true, styleId: true, colourwayId: true, colourText: true, description: true, sizes: true, quantity: true, note: true, /* B-TH-009 (L2-G08) */ unitPriceShown: true } as const satisfies Prisma.InquiryLineSelect
 export type LineData = Prisma.InquiryLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
 export async function readInquiryRow(db: Reader, inquiryId: string): Promise<InquiryData | null> {

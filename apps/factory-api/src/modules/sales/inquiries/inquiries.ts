@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
 import { DomainError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { can, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import type { AssignBody, BulkAssignBody, BulkDeclineBody, CreateInquiryBody, DeclineBody, InquiryListQuery, LineBody, LoseBody, ProspectBody, UpdateInquiryBody, VersionBody } from '@nexus/factory-domain/sales/inquiries/contracts'
@@ -110,6 +110,9 @@ export async function viewInCommand(tools: CommandTools, inquiryId: string) {
 
 function baseWhere(context: OfficeContext, query: InquiryListQuery): Prisma.InquiryWhereInput {
   const q = query.q?.trim()
+  // B-TH-016 (PR-30): a prospect's e-mail is searched only for a reader who keeps inquiries (a reader who only reads them never
+  // finds a request by an address it is not shown).
+  const keeps = holds(actorOf(context), SALES_INQUIRIES_MANAGE)
   return {
     AND: [
       scopeWhere(actorOf(context), SALES_INQUIRIES_VIEW, { company: 'companyId', party: { field: 'partyId', nullable: true } }) as Prisma.InquiryWhereInput,
@@ -126,7 +129,7 @@ function baseWhere(context: OfficeContext, query: InquiryListQuery): Prisma.Inqu
               { number: { contains: q, mode: 'insensitive' } },
               { request: { contains: q, mode: 'insensitive' } },
               { prospectCompany: { contains: q, mode: 'insensitive' } },
-              { prospectEmail: { contains: q.toLowerCase() } },
+              ...(keeps ? [{ prospectEmail: { contains: q.toLowerCase() } }] : []),
               { party: { code: { contains: q, mode: 'insensitive' } } },
               { party: { legalName: { contains: q, mode: 'insensitive' } } },
               { party: { tradeName: { contains: q, mode: 'insensitive' } } },
@@ -244,19 +247,28 @@ async function assertContact(db: Reader, partyId: string, contactId: string, pat
   if (!contact || contact.partyId !== partyId || contact.status !== 'ACTIVE' || contact.erasedAt !== null) badBody(path, 'Not an active contact of this customer.')
 }
 
-/** The lines as asked, checked: each line's own rules, then its style (of the company or tenant-wide, not archived) and colourway (of that style). */
-export async function checkedLines(db: Reader, companyId: string, lines: readonly LineBody[], path = 'body/lines'): Promise<LineBody[]> {
+/**
+ * The lines as asked, checked: each line's own rules, then its style (of the company or tenant-wide, not archived) and colourway
+ * (of that style). B-TH-009 (PR-05): a private-label style only for its own customer, or a rider of its team (the quote rule
+ * PRIVATE_LABEL, said to the office in words; the database's …_sales_intake_portal_th_guards hold it too); a prospect's
+ * inquiry names none.
+ */
+export async function checkedLines(db: Reader, companyId: string, lines: readonly LineBody[], path = 'body/lines', partyId: string | null = null): Promise<LineBody[]> {
   assertNoProblems(lines.flatMap((line, index) => lineProblems(line, `${path}/${index}`)), 'These lines cannot be the inquiry.')
   const styleIds = [...new Set(lines.flatMap((line) => (line.styleId ? [line.styleId] : [])))]
-  const styles = styleIds.length === 0 ? [] : await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, companyId: true, status: true } })
+  const styles = styleIds.length === 0 ? [] : await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, companyId: true, status: true, brandPartyId: true } })
   const colourwayIds = [...new Set(lines.flatMap((line) => (line.colourwayId ? [line.colourwayId] : [])))]
   const colourways = colourwayIds.length === 0 ? [] : await db.colourway.findMany({ where: { id: { in: colourwayIds } }, select: { id: true, styleId: true } })
+  const branded = styles.some((style) => style.brandPartyId !== null && style.brandPartyId !== partyId)
+  const team = branded && partyId ? ((await db.party.findUnique({ where: { id: partyId }, select: { teamPartyId: true } }))?.teamPartyId ?? null) : null
   const problems: Issue[] = []
   for (const [index, line] of lines.entries()) {
     if (!line.styleId) continue
     const style = styles.find((row) => row.id === line.styleId)
     if (!style || (style.companyId !== null && style.companyId !== companyId)) problems.push({ path: `${path}/${index}/styleId`, message: 'Not a style of this company.' })
     else if (style.status === 'ARCHIVED') problems.push({ path: `${path}/${index}/styleId`, message: `${style.code} is archived.` })
+    else if (style.brandPartyId !== null && style.brandPartyId !== partyId && (team === null || team !== style.brandPartyId))
+      problems.push({ path: `${path}/${index}/styleId`, message: partyId ? `${style.code} is another customer's private-label style: only its own customer asks for it.` : `${style.code} is a customer's private-label style: match the inquiry to that customer first, or ask in words.` })
     if (line.colourwayId && colourways.find((row) => row.id === line.colourwayId)?.styleId !== line.styleId) problems.push({ path: `${path}/${index}/colourwayId`, message: 'Not a colourway of this style.' })
   }
   assertNoProblems(problems, 'These lines cannot be the inquiry.')
@@ -333,6 +345,14 @@ export interface NewInquiry {
   readonly note: string | null
   readonly lines: readonly LineBody[]
   readonly assigneeId: string | null
+  /** B-TH-010 (L2-G01): the customer's own reference and the delivery address it asked (one of its SHIP_TO addresses). */
+  readonly customerRef?: string | null
+  readonly shipToAddressId?: string | null
+  /**
+   * B-TH-010: sent by the customer from the portal (the command runs in the office scope as the portal person): nobody of the
+   * office typed it (no creator, no creator follower); the audit row's actor is the person.
+   */
+  readonly fromPortal?: boolean
 }
 
 /** The checks of a new inquiry that read the database (who asks, the lines, the assignee). */
@@ -343,7 +363,7 @@ export async function checkNew(caller: CommandCaller, context: OfficeContext, ma
     if (!(await db.company.findUnique({ where: { id: made.companyId }, select: { id: true } }))) badBody('companyId', 'No such company.')
     if (made.partyId) await assertCustomer(db, context, made.partyId, made.companyId)
     if (made.partyId && made.contactId) await assertContact(db, made.partyId, made.contactId)
-    await checkedLines(db, made.companyId, made.lines)
+    await checkedLines(db, made.companyId, made.lines, 'body/lines', made.partyId)
     if (made.assigneeId && !(await mayKeep(db, context.tenantId, made.assigneeId, { companyId: made.companyId, partyId: made.partyId }, serverClock.now()))) badBody('assigneeId', ASSIGNEE_REFUSED)
   })
   if (!may(context, SALES_INQUIRIES_MANAGE, { companyId: made.companyId, partyId: made.partyId })) throw new ForbiddenError('Your role does not keep inquiries for this company or customer.')
@@ -354,7 +374,7 @@ export async function insertInquiry(tools: CommandTools, made: NewInquiry, id: s
   const { tx, now } = tools
   const { formatted: number } = await allocateNumber(tools, { companyId: made.companyId, kind: 'INQUIRY' }, { type: 'Inquiry', id })
   const company = made.currency ? null : await tx.company.findUniqueOrThrow({ where: { id: made.companyId }, select: { currency: true } })
-  const createdById = authorOf(tools)
+  const createdById = made.fromPortal ? null : authorOf(tools)
   const status: InquiryStatus = made.assigneeId ? 'ASSIGNED' : 'NEW'
   const data = {
     id,
@@ -368,6 +388,8 @@ export async function insertInquiry(tools: CommandTools, made: NewInquiry, id: s
     ...prospectColumns(made.prospect),
     request: made.request,
     wantedDate: made.wantedDate ? asDay(made.wantedDate) : null,
+    customerRef: made.customerRef ?? null,
+    shipToAddressId: made.shipToAddressId ?? null,
     targetUnitPrice: made.targetUnitPrice,
     currency: made.currency ?? company!.currency,
     techPackFileIds: [...made.techPackFileIds],
@@ -383,7 +405,7 @@ export async function insertInquiry(tools: CommandTools, made: NewInquiry, id: s
   await tx.inquiry.create({ data, select: { id: true } })
   await writeLines(tools, id, made.lines, false)
   tools.audit({
-    action: made.source === 'MAIL' ? 'sales.inquiries.fromMail' : 'sales.inquiries.create',
+    action: made.fromPortal ? 'sales.inquiries.fromPortal' : made.source === 'MAIL' ? 'sales.inquiries.fromMail' : 'sales.inquiries.create',
     recordType: 'Inquiry',
     recordId: id,
     companyId: made.companyId,
@@ -473,7 +495,7 @@ export async function updateInquiry(caller: CommandCaller, inquiryId: string, bo
   await caller.withClient(async (db) => {
     if (changes.partyId !== undefined && changes.partyId !== seen.partyId) await assertCustomer(db, context, changes.partyId, seen.companyId)
     if (contactId && partyId && (changes.contactId !== undefined || changes.partyId !== undefined)) await assertContact(db, partyId, contactId)
-    if (changes.lines) await checkedLines(db, seen.companyId, changes.lines)
+    if (changes.lines) await checkedLines(db, seen.companyId, changes.lines, 'body/lines', partyId)
     if (changes.techPackFileIds) await assertTechPack(db, changes.techPackFileIds, seen.id, seen.sourceEmailId)
   })
   const matched = changes.partyId !== undefined && seen.partyId === null

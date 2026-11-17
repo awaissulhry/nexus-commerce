@@ -33,8 +33,14 @@ export const SALES_INQUIRIES_PERMISSIONS: readonly Permission[] = Object.freeze(
 
 /**
  * Who holds them (auth/roles/templates; the owner from every(), read-only through the registry): sales takes the requests that
- * arrive every day by mail and phone and answers them with a quote.
+ * arrive every day by mail and phone and answers them with a quote. B-TH-014 (Owner ask P7, threads plan): the production
+ * manager READS Incoming (what is asked, by when, the files) to see what comes to the floor; the template has no price grain,
+ * so the target price and a line's price shown stay hidden, and the prospect's e-mail and phone are read only with
+ * sales.inquiries.manage (B-TH-016, GDPR minimisation). Making the quote, asking for info and declining stay held with the
+ * reason (refusal READ_ONLY).
  */
 export const SALES_INQUIRIES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   sales: [SALES_INQUIRIES_VIEW, SALES_INQUIRIES_MANAGE],
+  // B-TH-014
+  production_manager: [SALES_INQUIRIES_VIEW],
 })

@@ -7,8 +7,8 @@ import { DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQ
  * Inquiries' contracts (B-W2b-295): what apps/factory-api's modules/sales/inquiries accepts and answers. A refusal is a 409 whose
  * issue is `refusal/<CODE>` (INQUIRY_REFUSALS) with the words. The money fields are the target unit price (a decimal string,
  * net) and the quote's value (minor units), both money.price: the value only with the price grain; a target price sent without
- * it is refused. People as user ids in a row (`mine` says whether it is the reader); by name inside the one record; nobody is
- * counted. The prospect's personal data (name, e-mail, phone) only inside the record and as the list's "From".
+ * it is refused. People as user ids in a row (`mine` says whether it is the reader) and, B-TH-016 (Owner decision 4), the
+ * assignee by name; by name inside the one record; nobody is counted. The prospect's personal data (name, e-mail, phone) only inside the record and as the list's "From".
  */
 
 const version = () => z.number().int().min(1)
@@ -220,6 +220,8 @@ export const inquiryRow = output({
   waiting,
   /** An office user id; `mine`: the reader. */
   assigneeId: id().nullable(),
+  /** B-TH-016 (Owner decision 4): who keeps it, by name. Always sent; optional only until the Incoming list reads it (TH-1b web). */
+  assignee: output({ id: id(), name: z.string() }).nullable().optional(),
   mine: z.boolean(),
   quote: numbered.nullable(),
   declineReason: z.enum(DECLINE_REASONS).nullable(),
@@ -264,6 +266,9 @@ const lineView = output({
   sizes: z.record(z.string(), z.number().int()),
   quantity: z.number().int().nullable(),
   note: z.string().nullable(),
+  /** B-TH-009 (L2-G08): the net unit price the customer was shown when it asked (price grain; null: none shown). The API always
+   *  sends it; optional only until the Incoming screens read it (TH-1b web), so their typed demo data stays as it is. */
+  unitPriceShown: money.price(z.string().nullable()).optional(),
 })
 
 const mailView = output({
@@ -281,6 +286,10 @@ const mailView = output({
 /** The inquiry (its DetailModal and full page: Request, Files & specs, Quote, Activity). */
 export const inquiryView = inquiryRow.extend({
   request: z.string(),
+  /** B-TH-009 (L2-G01): the customer's own reference (its PO), carried to the quote. Always sent; optional as unitPriceShown. */
+  customerRef: z.string().nullable().optional(),
+  /** B-TH-009 (L2-G01): where the customer wants the goods (one of its addresses; `waiting`: added in the portal, not yet checked). */
+  shipTo: output({ id: id(), name: z.string().nullable(), line1: z.string(), postalCode: z.string(), city: z.string(), country: z.string(), waiting: z.boolean() }).nullable().optional(),
   note: z.string().nullable(),
   closeNote: z.string().nullable(),
   contact: output({ id: id(), name: z.string(), email: z.string().nullable() }).nullable(),
