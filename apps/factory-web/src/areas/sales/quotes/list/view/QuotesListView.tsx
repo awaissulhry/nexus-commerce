@@ -23,6 +23,8 @@ import { QuotesPageLinks } from '../../new-from/view/PageLinks'
 // ---- B-TH-257: the New messages column (B-TH-230's LastMessageCell) ----
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue } from '../../../../../lib/last-message-cell/model'
+// ---- TH-6 part B (B-TH-257 follow-up; grid-F01): the Picture column, as the Orders sheet's ----
+import { QuotePictureCell, QuotePictureViewer } from './QuotePicture'
 
 export type { QuotesListViewModel, QuotesListActions } from '../list-model'
 
@@ -58,6 +60,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   }, [query])
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const [dialog, setDialog] = useState<'cancel' | 'help' | null>(null)
+  const [viewer, setViewer] = useState<string | null>(null) // TH-6 part B: the row whose picture is open large
   // A new read (filters, Show updates) starts with nothing selected; the design cases set their own.
   const rowsKey = model.rows.items?.map((row) => row.id).join(',') ?? ''
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
@@ -90,6 +93,9 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const live = useRef({ actions, manage: model.can.manage })
   live.current = { actions, manage: model.can.manage }
   const columns = useMemo<ColDef<QuoteListRow>[]>(() => {
+    // TH-6 part B (grid-F01): the first style's small preview ("+2"), opening the picture large; the placeholder without a file.
+    const PictureCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
+      data ? <QuotePictureCell row={data} load={latest.current.actions?.loadPicture} demo={latest.current.model.demoPictures?.[data.id]} t={t} onOpen={() => setViewer(data.id)} /> : null
     const NumberCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
         <span className="fw-ql-cell">
@@ -177,6 +183,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         />
       ) : null
     return [
+      { colId: 'picture', headerName: t('list.col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell }, // TH-6 part B
       { colId: 'number', headerName: t('list.col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell },
       { colId: 'customer', headerName: t('list.col.customer'), field: 'partyName', minWidth: 180, flex: 2, cellRenderer: CustomerCell },
       { colId: 'status', headerName: t('list.col.status'), field: 'status', minWidth: 190, flex: 1, cellRenderer: StatusCell },
@@ -358,6 +365,11 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
 
       {model.newQuote && <NewQuoteDialog model={model.newQuote} actions={actions} />}
       {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}
+      {/* TH-6 part B (grid-F01): the picture large of the row whose Picture was opened (Esc closes it). */}
+      {(() => {
+        const row = viewer ? (shown ?? []).find((item) => item.id === viewer) : undefined
+        return row ? <QuotePictureViewer row={row} load={actions?.loadPicture} demo={model.demoPictures?.[row.id]} prefix={model.prefix} quoteHref={recordHref(row)} t={t} onClose={() => setViewer(null)} /> : null
+      })()}
       {dialog === 'cancel' && <CancelManyDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
       {dialog === 'help' && (
         <Modal open onClose={() => setDialog(null)} title={t('list.keysTitle')} size="sm">

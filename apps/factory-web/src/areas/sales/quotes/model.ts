@@ -201,7 +201,7 @@ export const MERGED_TABS: Readonly<Record<string, QuoteTab>> = { documents: 'app
 /** The tab an address asks for: one of the five, an old one's new home, else Lines. */
 export function tabOf(asked: string | null | undefined): QuoteTab {
   const value = asked ?? ''
-  return (QUOTE_TABS as readonly string[]).includes(value) ? (value as QuoteTab) : (MERGED_TABS[value] ?? 'lines')
+  return (QUOTE_TABS as readonly string[]).includes(value) ? (value as QuoteTab) : (Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'lines') // TH-6 part B: never a name of Object's own (?tab=constructor)
 }
 
 /** A tab whose body is a wide grid (the colour × size grids of Lines): the docked thread takes one third under 1600 px (PL1, R-18). */
@@ -214,7 +214,17 @@ export const isWideTab = (tab: QuoteTab): boolean => tab === 'lines'
  */
 export function customerSeesOf(quote: Pick<QuoteDetail, 'status' | 'madeFrom' | 'order'>): PortalRequestState | null {
   if (!quote.madeFrom) return null
-  return requestStateOf({ status: 'QUOTED', quoteStatus: quote.status, orderStatus: quote.order?.state === 'MADE' ? quote.order.status : null })
+  // TH-6 part B (B-TH-257 follow-up): the request's own state (an older API answer has none: QUOTED, as it was) — a request the
+  // customer withdrew reads as the portal reads it, never "Quote being prepared".
+  return requestStateOf({ status: quote.madeFrom.status ?? 'QUOTED', quoteStatus: quote.status, orderStatus: quote.order?.state === 'MADE' ? quote.order.status : null, declineReason: quote.madeFrom.declineReason ?? null })
+}
+
+/**
+ * TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN): the office sees the real reason behind the customer's word — the customer
+ * withdrew the request (and when, when the API says so). Null for every other state (the customer's word says it all).
+ */
+export function requestWithdrawnOf(quote: Pick<QuoteDetail, 'madeFrom'>): { readonly at: string | null } | null {
+  return quote.madeFrom?.status === 'WITHDRAWN' ? { at: quote.madeFrom.closedAt ?? null } : null
 }
 
 /** The customer's own words of that state, in the reader's language (the same words the portal shows). */

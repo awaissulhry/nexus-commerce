@@ -18,6 +18,8 @@ import {
 } from '@nexus/factory-domain/sales/quotes/quotes'
 // B-W2b-165 (SAL-199): the proofs on the accept link.
 import { linkProofView, shownProofsField } from '../quote-proofs/contract'
+// TH-6 part B: the request's own state on "Made from".
+import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
 
 /**
  * The quotes routes' contracts (B-W1-21; A2 SCR-030 "Quotes", SCR-034 "Quote record", SCR-035 the line and the approval
@@ -176,7 +178,9 @@ const issueView = output({
 // ---- B-TH-078 (threads plan TH-6, ORD-G03): the request a quote was made from, and the order made from it or why it waits.
 export const QUOTE_ORDER_WAITS = ['NO_SALES_ORDER_SERIES', 'ACCOUNT_ON_HOLD', 'PO_NUMBER_REQUIRED', 'NOT_MADE'] as const
 /** "Made from INQ-…": the request whose quote this is (null: made by hand). */
-export const madeFromView = output({ inquiryId: id(), number: z.string() }).nullable()
+// TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN, #1564): the request's own state, so "Customer sees" reads it as the portal
+// does (a request the customer withdrew is no longer "Quote being prepared"), and when it ended (WITHDRAWN: by the customer).
+export const madeFromView = output({ inquiryId: id(), number: z.string(), status: z.enum(INQUIRY_STATUSES), declineReason: z.string().nullable(), closedAt: instant().nullable() }).nullable()
 /** An ACCEPTED quote's order (its status: CANCELLED says so), or WAITS with why in words; null while it is not accepted. */
 export const quoteOrderView = output({
   state: z.enum(['MADE', 'WAITS']),
@@ -272,6 +276,12 @@ export const listQuotesContract = defineContract({
           // B-TH-078: the sub-line "from INQ-…" and an accepted row's order ("SO-…", or "Order waits").
           madeFrom: madeFromView,
           order: quoteOrderView,
+          // ---- TH-6 part B (B-TH-257 follow-up; O-SAL-QUO-LIST.grid-F01, as the Orders sheet's B-TH-017): the current version's first
+          // line's style and its main picture — the file only with files.read (null: the placeholder); `small`: its ~320 px preview
+          // exists (GET /sales/quotes/:quoteId/picture serves it; the list never loads the original). `styleCount`: "+2".
+          picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
+          styleCount: z.number().int(),
+          // ---- end TH-6 part B
         }),
       ),
       nextCursor: id().nullable(),
@@ -280,6 +290,23 @@ export const listQuotesContract = defineContract({
 })
 
 export const getQuoteContract = defineContract({ params: quoteParams, response: { 200: one } })
+
+// ---- TH-6 part B (B-TH-257 follow-up): the quote list's Picture cell's small preview (as GET /sales/orders/:orderId/picture).
+export const quotePictureContract = defineContract({
+  params: quoteParams,
+  response: {
+    200: output({
+      picture: output({
+        fileId: id(),
+        styleId: id(),
+        contentType: z.string(),
+        /** A presigned GET of the ~320 px preview (60 seconds); null until it exists (the cell's placeholder). */
+        small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
+      }),
+    }),
+  },
+})
+// ---- end TH-6 part B
 
 const headerFields = {
   contactId: id().nullish(),

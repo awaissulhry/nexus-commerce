@@ -485,6 +485,13 @@ export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
     // B-TH-257 (B-TH-078's API): where the quote came from and where it went.
     { id: 'th-257-made-from', label: 'TH-6 · Sales · Made from a request: "Made from INQ-2026-0042 — Open", "Customer sees: Quote being prepared"', model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote({ madeFrom: MADE_FROM, order: null }))) }), note: 'The customer reads the request’s state in the portal’s own words, from the quote’s state: a draft is "Quote being prepared", never "Quote sent".' },
     { id: 'th-257-customer-sees-sent', label: 'TH-6 · Sent from a request: "Customer sees: Quote sent (see your e-mail)"', model: model({ quote: ready(quote({ status: 'SENT', current: { status: 'SENT' }, madeFrom: MADE_FROM, order: null })), versions: { items: [SENT_VERSION], people: {}, problem: null } }) },
+    // TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN): the customer withdrew the request after its quote was made.
+    {
+      id: 'th-6b-request-withdrawn',
+      label: 'TH-6 · The customer withdrew the request: "Customer sees: Closed" and, for the office, why',
+      model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote({ madeFrom: { ...MADE_FROM, status: 'WITHDRAWN', declineReason: null, closedAt: '2026-10-28T10:15:00.000Z' }, order: null }))) }),
+      note: 'The customer’s word comes from the request’s own state (Closed, as the portal says it); the office also reads the real reason: the customer withdrew the request, and when.',
+    },
     { id: 'th-257-no-request-right', label: 'TH-6 · Made from a request, read by someone without the requests right: the number, no link', model: model({ readsRequests: false, quote: ready(quote({ madeFrom: MADE_FROM, order: null })) }) },
     { id: 'th-257-order', label: 'TH-6 · Accepted: "Order SO-2026-0088 — Open" on the band', model: model(SENDING({ quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, madeFrom: MADE_FROM, order: ORDER_MADE })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })) },
     { id: 'th-257-order-waits', label: 'TH-6 · Accepted, no order yet: "Order waits" + Make the order now', model: model(SENDING({ quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, order: orderWaits('NOT_MADE') })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })), note: 'The customer accepted, the order is not made: the notice says so and Make the order now makes it from the accepted revision (orders.manage).' },
