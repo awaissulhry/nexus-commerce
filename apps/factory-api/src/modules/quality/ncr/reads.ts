@@ -13,6 +13,8 @@ import { may, officeOf, recordOf, visibleNcr } from './ncr'
 import { containmentHoursOf } from './settings'
 import { prefillFrom } from './sources'
 import { factsOf, NCR_COLUMNS, ncrSummary, summaryFactsOf, type NcrRow, type Reader } from './store'
+// B-PR-06 (the brand wall): an NCR names the customers of what it is about.
+import { customersOf, ncrListWhere, NO_CUSTOMER, reachesCustomers } from '../wall'
 
 /**
  * The NCRs' reads (B-W2a-47; design quality.ncr ncr-metrics, ncr-grid, ncr-board, the NCR record, ncr-new's prefill).
@@ -49,6 +51,8 @@ export interface ListQuery {
   readonly lotId?: string | undefined
   readonly supplierId?: string | undefined
   readonly q?: string | undefined
+  /** B-PR-06: the customer filter (the NCRs about that customer's work). */
+  readonly partyId?: string | undefined
 }
 
 function stagesOf(query: ListQuery): NcrStage[] | null {
@@ -108,9 +112,10 @@ const ORDER: Prisma.NonconformanceOrderByWithRelationInput[] = [{ createdAt: 'de
 
 export async function listNcrs(caller: CommandCaller, query: ListQuery) {
   const now = serverClock.now()
-  const where = whereOf(caller, query, now)
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
+    // B-PR-06: less the NCRs about a customer the caller does not reach (several customers: every customer only).
+    const where = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, whereOf(caller, query, now), query.partyId)
     let rows = await client.nonconformance.findMany({ where, select: NCR_COLUMNS, orderBy: ORDER, take: query.waiting ? 1000 : NCR_LIMITS.list + 1 })
     if (query.waiting) {
       const waiting = await waitingIds(client, rows)
@@ -126,8 +131,11 @@ export async function ncrCounts(caller: CommandCaller, query: { readonly siteId?
   const context = officeOf(caller)
   const now = serverClock.now()
   const monthStart = businessDayStart(`${businessDate(now).slice(0, 7)}-01`)
-  const base = (extra: ListQuery) => whereOf(caller, { ...(query.siteId ? { siteId: query.siteId } : {}), ...extra }, now)
+  const plain = (extra: ListQuery) => whereOf(caller, { ...(query.siteId ? { siteId: query.siteId } : {}), ...extra }, now)
   return caller.withClient(async (client) => {
+    // B-PR-06: every tile counts only the NCRs the caller reaches (the wall once over every stage, then each tile).
+    const walled = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, plain({ open: false }))
+    const base = (extra: ListQuery) => ({ AND: [walled, plain(extra)] })
     const deciding = await client.nonconformance.findMany({ where: base({ waiting: true }), select: { id: true, quantityAffected: true }, take: 5000 })
     return {
       counts: {
@@ -149,7 +157,8 @@ export async function ncrBoard(caller: CommandCaller, query: Omit<ListQuery, 'st
   return caller.withClient(async (client) => {
     const lanes = []
     for (const stage of BOARD_LANES) {
-      const where: Prisma.NonconformanceWhereInput = { AND: [whereOf(caller, { ...query, stage }, now), stage === 'CLOSED' ? { closedAt: { gte: closedSince } } : {}] }
+      // B-PR-06: each lane less the NCRs about a customer the caller does not reach.
+      const where: Prisma.NonconformanceWhereInput = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, { AND: [whereOf(caller, { ...query, stage }, now), stage === 'CLOSED' ? { closedAt: { gte: closedSince } } : {}] } as Prisma.NonconformanceWhereInput, query.partyId)
       let rows = await client.nonconformance.findMany({ where, select: NCR_COLUMNS, orderBy: stage === 'CLOSED' ? [{ closedAt: 'desc' }, { id: 'desc' }] : ORDER, take: query.waiting ? 1000 : NCR_LIMITS.list + 1 })
       if (query.waiting) {
         const waiting = await waitingIds(client, rows)
@@ -180,10 +189,18 @@ export async function ncrPrefill(caller: CommandCaller, query: { readonly record
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
     const prefill = await prefillFrom(client, query.recordType, query.recordId, { defectIds: query.defectIds })
-    if (!prefill) throw new NotFoundError(`${query.recordType.replace(/([a-z])([A-Z])/g, '$1 $2')} not found.`)
+    // B-PR-06 (the brand wall): a record of another customer's work is as an unknown one.
+    const customers = (await customersOf(client, [{ type: query.recordType, id: query.recordId }])).get(`${query.recordType}:${query.recordId}`) ?? NO_CUSTOMER
+    if (!prefill || !reachesCustomers(actorOf(context), QUALITY_NCR_RAISE, prefill, customers)) throw new NotFoundError(`${query.recordType.replace(/([a-z])([A-Z])/g, '$1 $2')} not found.`)
     if (prefill.siteId && prefill.companyId && !may(context, QUALITY_NCR_RAISE, { companyId: prefill.companyId, siteId: prefill.siteId })) throw new ForbiddenError('You raise NCRs only at the sites your role reaches.')
     const files = await client.storedFile.findMany({ where: { recordType: query.recordType, recordId: query.recordId, status: 'AVAILABLE' }, select: { id: true, kind: true, originalName: true }, orderBy: { createdAt: 'asc' }, take: 20 })
-    const existing = await client.nonconformance.findMany({ where: { AND: [scopeWhere(actorOf(context), QUALITY_NCR_VIEW, SCOPE) as Prisma.NonconformanceWhereInput, recordWhere(query.recordType, query.recordId)] }, select: { id: true, number: true, stage: true }, orderBy: ORDER, take: 20 })
+    const existing = await client.nonconformance.findMany({
+      // B-PR-06: only the record's NCRs the caller reaches.
+      where: await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, { AND: [scopeWhere(actorOf(context), QUALITY_NCR_VIEW, SCOPE) as Prisma.NonconformanceWhereInput, recordWhere(query.recordType, query.recordId)] } as Prisma.NonconformanceWhereInput),
+      select: { id: true, number: true, stage: true },
+      orderBy: ORDER,
+      take: 20,
+    })
     return {
       prefill: {
         ...prefill,
