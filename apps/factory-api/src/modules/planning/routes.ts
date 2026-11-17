@@ -289,7 +289,11 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.post('/planning/promises/order-lines/:orderLineId/re-promise', { schema: proposeContract }, async (request) => proposeRepromise(request, request.params.orderLineId, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/promises/re-promises', { schema: listRepromisesContract }, async (request) => listRepromises(request, request.query))
   app.get('/planning/promises/re-promises/:proposalId', { schema: getRepromiseContract }, async (request) => getRepromise(request, request.params.proposalId))
-  app.post('/planning/promises/re-promises/:proposalId/accept', { schema: acceptContract }, async (request) => acceptRepromise(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  // B-PR-28: with `askBrand`, the customer's question's APPROVAL link is built by the office sign-in (none configured: no link).
+  app.post('/planning/promises/re-promises/:proposalId/accept', { schema: acceptContract }, async (request) => {
+    const auth = request.server.officeAuth
+    return acceptRepromise(request, request.params.proposalId, request.body, idempotencyKeyFrom(request), auth ? { link: (path, token) => auth.link(path, token) } : undefined)
+  })
   app.post('/planning/promises/re-promises/:proposalId/decline', { schema: declineContract }, async (request) => declineRepromise(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/promises/re-promises/:proposalId/withdraw', { schema: withdrawContract }, async (request) => withdrawRepromise(request, request.params.proposalId, idempotencyKeyFrom(request)))
   app.get('/planning/backlog', { schema: readBacklogContract }, async (request) => readBacklog(request, request.query))
