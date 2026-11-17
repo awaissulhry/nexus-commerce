@@ -372,6 +372,8 @@ model Company {
   supplierItems        SupplierItem[]
   // W2b portal-supply.prisma (wave 22/22): its supplier questionnaire versions.
   supplierQuestionnaires SupplierQuestionnaire[]
+  // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): its projects.
+  projects             Project[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

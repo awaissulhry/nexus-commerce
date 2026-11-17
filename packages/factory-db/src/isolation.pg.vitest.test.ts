@@ -70,6 +70,7 @@ import { seed as seedPrivacy } from '../seed/privacy'
 import { seed as seedPrivacyOps } from '../seed/privacy-ops'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
+import { seed as seedProjects } from '../seed/projects' // B-TH-065
 import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
 import { seed as seedReturns } from '../seed/returns'
@@ -523,6 +524,12 @@ beforeAll(async () => {
   // Quality at plant A1), daily and hourly facts (the first a company's orders in): the plain ones a copy may repeat.
   await seedInsightsDepth({ db: factory, namespace: 'iso-a' })
   await seedInsightsDepth({ db: factory, namespace: 'iso-b' })
+  // ---- B-TH-065 (threads schema wave 8/9): projects (an ACTIVE one of P1's with its style link and people, the first rows a
+  // copy may repeat; an office-only one on hold; a CLOSED one of P1's) and P1's portal buyer as a member (the partner rows of
+  // RecordFollower).
+  await seedProjects({ db: factory, namespace: 'iso-a' })
+  await seedProjects({ db: factory, namespace: 'iso-b' })
+  // ---- end B-TH-065
   // ---- B-TH-001: a second brand in tenant A (WALL-G17): its thread, messages, order, file and notification, so "rows of
   // another party" exist inside the same tenant too and every generated partner case is proven against them by data.
   second = await seedSecondBrand({ db: factory, namespace: 'iso-a' })
@@ -919,6 +926,8 @@ it('covers every classified table and every runtime role', () => {
     'ProductTypeProfile',
     'ProductionControlTest',
     'ProductionSettings',
+    'Project',
+    'ProjectLink',
     'PromiseRecord',
     'ProtectedView',
     'ProtectorPlacement',

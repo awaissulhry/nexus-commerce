@@ -446,6 +446,9 @@ model Season {
   /// @not-money the relation to its cost sheets
   costSheets    CostSheet[]
   sizeWeights   SizeWeight[]
+  // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects for the season (the reference holds the
+  // company and the code).
+  projects      Project[]
 
   @@unique([tenantId, companyId, code])
   // The target of the references from quote versions (tenant, id) and sales orders (tenant, company, id: the order's own

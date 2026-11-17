@@ -421,7 +421,8 @@
       "CREATOR": "made it",
       "ASSIGNEE": "was given something on it",
       "MENTIONED": "was mentioned on it",
-      "CHOSE": "chose to follow"
+      "CHOSE": "chose to follow",
+      "ADDED": "was added"
     },
     "addedBy": "added by {name}",
     "since": "since {date}",

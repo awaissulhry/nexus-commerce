@@ -132,13 +132,22 @@ enum NotificationDeliveryOutcome {
 }
 
 /// Who follows a record, and why. Unfollowing removes the row; muting keeps it, so the person is not added again.
+/// TH-5 (threads plan, schema wave 8/9, B-TH-065; PROJ-G04, PROJ-G06): a project's people are its followers: office people
+/// (added by hand with reason ADDED) and, on a project shared with an outside company, that company's portal people, added
+/// one by one by the office (reason ADDED; the row names their party).
 model RecordFollower {
   id          String       @id @db.Uuid
   tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   recordType  String
   recordId    String       @db.Uuid
-  /// The office user who follows it.
+  /// The person who follows it: an office user; TH-5 (B-TH-065): or a portal user who is a member of a project of their
+  /// own party.
   userId      String       @db.Uuid
+  /// TH-5 (schema wave 8/9, B-TH-065; PROJ-G06): a portal person's party, set exactly when the person is a portal user (and
+  /// then theirs), as Notification.partyId: only on a Project whose outside company it is, added by the office (reason
+  /// ADDED). The partner policy's key: a portal session reads its own party's members of its own projects, never the office's
+  /// followers (no party) nor who in the office added them. Null for an office person. Never changes.
+  partyId     String?      @db.Uuid
   /// Why they first followed it. Never changes.
   reason      FollowReason
   /// Muted (M): no news of the record reaches them; a mention of them still does.
@@ -153,6 +162,8 @@ model RecordFollower {
   @@unique([tenantId, recordType, recordId, userId])
   // What a person follows.
   @@index([tenantId, userId])
+  // TH-5 (B-TH-065): a party's members (the partner policy reads by it).
+  @@index([tenantId, partyId])
 }
 
 enum FollowReason {
@@ -164,6 +175,9 @@ enum FollowReason {
   MENTIONED
   /// Chose to follow it.
   CHOSE
+  /// TH-5 (threads plan, schema wave 8/9, B-TH-065; PROJ-G04): was added by a colleague ("added by Marco"), who is named in
+  /// createdById; the only reason of a portal person's row (only the office adds people of the outside company).
+  ADDED
 }
 
 /// One @mention of an office user in an internal note: the note's own thread, record, author and time, and one of the

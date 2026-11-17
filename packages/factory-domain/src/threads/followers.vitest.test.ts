@@ -7,7 +7,7 @@ describe('followers of a record (B-W2a-20: COL-011)', () => {
     expect(autoFollows(null)).toBe(true)
     expect(autoFollows({ muted: true })).toBe(false)
     expect(autoFollows({ muted: false })).toBe(false)
-    expect(FOLLOW_REASONS).toEqual(['CREATOR', 'ASSIGNEE', 'MENTIONED', 'CHOSE'])
+    expect(FOLLOW_REASONS).toEqual(['CREATOR', 'ASSIGNEE', 'MENTIONED', 'CHOSE', 'ADDED'])
   })
 
   it('my own follow: add, remove (unfollow), mute, unmute, or nothing', () => {

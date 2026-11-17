@@ -153,6 +153,8 @@ model User {
   supervisedPortalSettings PortalSettings[] @relation("PortalSettingsSupervisor")
   backupPortalSettings     PortalSettings[] @relation("PortalSettingsBackup")
   approverPortalSettings   PortalSettings[] @relation("PortalSettingsApprover")
+  // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects they lead (an office person).
+  ledProjects              Project[]        @relation("ProjectLead")
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.
