@@ -23,13 +23,15 @@ export default defineIndexer({
       where: idWhere(filter),
       orderBy: { id: 'asc' },
       take,
-      select: { id: true, companyId: true, siteId: true, number: true, status: true, workOrder: { select: { number: true, batchNumber: true, style: { select: { code: true, name: true } } } } },
+      select: { id: true, companyId: true, siteId: true, number: true, status: true, workOrder: { select: { number: true, batchNumber: true, style: { select: { code: true, name: true, brandPartyId: true } } } } },
     })
     return rows.map((row) => ({
       recordId: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      partyId: null,
+      // B-TH-030 (WALL-G12): an inspection of a private-label style's work order is its brand's (read through the style,
+      // never through the work order's own entry, which the production lane owns).
+      partyId: row.workOrder.style.brandPartyId,
       number: row.number,
       title: row.workOrder.style.name,
       subtitle: row.workOrder.number,
