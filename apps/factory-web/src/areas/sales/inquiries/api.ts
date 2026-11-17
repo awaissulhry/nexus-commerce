@@ -7,6 +7,9 @@ import {
   inquiryView,
   mailDraftView,
   quoteAnswer,
+  // B-TH-228: Make order, Make style draft.
+  orderAnswer,
+  styleDraftAnswer,
   type CreateInquiryBody,
   type FromMailBody,
   type UpdateInquiryBody,
@@ -33,6 +36,9 @@ export type InquiryView = z.infer<typeof inquiryView>
 export type InquiryLine = InquiryView['lines'][number]
 export type InquiryFile = InquiryView['files'][number]
 export type QuoteAnswer = z.infer<typeof quoteAnswer>
+// B-TH-228
+export type OrderAnswer = z.infer<typeof orderAnswer>
+export type StyleDraftAnswer = z.infer<typeof styleDraftAnswer>
 export type BulkAnswer = z.infer<typeof bulkAnswer>
 export type MailDraft = z.infer<typeof mailDraftView>
 export type Assignee = z.infer<typeof assigneesView>['people'][number]
@@ -119,6 +125,27 @@ export function loseInquiry(api: ApiClient, inquiryId: string, body: { version: 
 export function quoteInquiry(api: ApiClient, inquiryId: string, body: { version: number; customerRef?: string }, idempotencyKey?: string): Promise<QuoteAnswer> {
   return api.post(`${one(inquiryId)}/quote`, { body, schema: quoteAnswer, ...key(idempotencyKey) })
 }
+
+// ---- B-TH-228: Make order (B-TH-025) and Make style draft (B-TH-026) ---------------------------------------------------------
+
+/** POST …/order: the order made from the request (CONFIRMED, or PENDING_APPROVAL and why), the request ORDERED, the files carried. */
+export function orderInquiry(api: ApiClient, inquiryId: string, body: { version: number; lines?: Array<{ seq: number; unitPrice: string }>; promiseDate?: string | null; customerRef?: string; carryFiles: boolean }, idempotencyKey?: string): Promise<OrderAnswer> {
+  return api.post(`${one(inquiryId)}/order`, { body, schema: orderAnswer, ...key(idempotencyKey) })
+}
+
+/** POST …/style-draft: a DRAFT style for the request's own customer's label (never another brand), named on the request. */
+export function styleDraftInquiry(api: ApiClient, inquiryId: string, body: { version: number; code: string; name?: string; productType: string; sizeScaleId?: string; season?: string; fileIds: string[] }, idempotencyKey?: string): Promise<StyleDraftAnswer> {
+  return api.post(`${one(inquiryId)}/style-draft`, { body, schema: styleDraftAnswer, ...key(idempotencyKey) })
+}
+
+const scalePage = z.object({ scales: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() }).passthrough()) })
+export type ScaleOption = { id: string; code: string; name: string }
+
+/** The active size scales of the request's company (the style draft's range; optional: the product type may give one). */
+export function listScales(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<ScaleOption[]> {
+  return api.get('/product/size-scales', { query: { status: 'ACTIVE', limit: 200, companyId }, schema: scalePage, signal }).then((answer) => answer.scales.map((scale) => ({ id: scale.id, code: scale.code, name: scale.name })))
+}
+// ---- end B-TH-228
 
 // ---- a selection: all or none -------------------------------------------------------------------------------------------------
 

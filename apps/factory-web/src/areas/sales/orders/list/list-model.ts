@@ -32,6 +32,9 @@ export interface NewOrderDialogModel {
   /** B-TH-221: the one pointer — a written request goes to Incoming's New request (null: the person makes no request). */
   incomingHref?: string | null
 }
+// B-TH-230
+import type { UnreadMap } from '../../../../lib/last-message-cell/model'
+
 export interface OrdersListModel {
   /** `/w/<company>`. */
   prefix: string
@@ -56,6 +59,8 @@ export interface OrdersListModel {
   newOrder?: NewOrderDialogModel | null
   /** B-W2a-72: each order's margin % as estimated now (undefined: still reading; null: not known); null: the column is not drawn. */
   margins?: ReadonlyMap<string, string | null> | null
+  /** B-TH-230: the reader's own new messages per order (one read per page); null/absent: no threads.read, the column is not drawn. */
+  unread?: UnreadMap | null
   // ---- B-W2b-323 (orders in depth on screen) ----
   /** The Priority and Season columns, the inline priority, Set priority on a selection; null/absent: not drawn. */
   depth?: ListDepthModel | null

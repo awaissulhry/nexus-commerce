@@ -15,6 +15,8 @@ import { RemindMeDialog } from '../../../../shell/panels/remind-me/view/RemindMe
 import { CloseThreadConfirm } from '../../popups/view/Confirms'
 import type { DockWidth, HeadDoor, HeadModel, ThreadView } from '../model'
 import { PortalHeadLine, type PortalHeadModel } from './PortalHeadLine'
+// B-TH-229: "Change owner…"
+import { OwnerDialog } from './OwnerDialog'
 import { HEAD_NS, RecordThreadHead } from './RecordThreadHead'
 
 /**
@@ -36,8 +38,8 @@ export interface HeadCaseModel {
     readonly followers: PanelFollowers
     readonly now: number
   }
-  /** A door open at once (the case shows that dialog). */
-  readonly open?: HeadDoor | 'close' | null
+  /** A door open at once (the case shows that dialog); B-TH-229: 'owner' — Change owner…. */
+  readonly open?: HeadDoor | 'close' | 'owner' | null
   /** The portal's plain line instead of the office Head. */
   readonly portal?: PortalHeadModel
 }
@@ -52,7 +54,7 @@ export function HeadCase({ model }: { model: HeadCaseModel }) {
 
 function Case({ model }: { model: HeadCaseModel }) {
   const t = useT(HEAD_NS)
-  const [open, setOpen] = useState<HeadDoor | 'close' | null>(model.open ?? null)
+  const [open, setOpen] = useState<HeadDoor | 'close' | 'owner' | null>(model.open ?? null)
   const [view, setView] = useState<ThreadView>(model.head.view)
   const [width, setWidth] = useState<DockWidth | null>(model.head.width)
   const [follow, setFollow] = useState(model.head.follow)
@@ -67,6 +69,7 @@ function Case({ model }: { model: HeadCaseModel }) {
     onView: setView,
     onWidth: (choice: DockWidth | 'hide' | 'reset') => setWidth(choice === 'hide' ? width : choice === 'reset' ? 'forty' : choice),
     onCloseThread: () => setOpen('close'),
+    onOwner: () => setOpen('owner'),
   }
   const { dialogs } = model
   return (
@@ -90,6 +93,13 @@ function Case({ model }: { model: HeadCaseModel }) {
       {open === 'approve' && <AskDialog model={dialogs.approvals} actions={{ onAsk: (next) => !next && close(), onSend: close }} />}
       {open === 'share' && <InviteDialog model={dialogs.shares} actions={{ onInvite: (next) => !next && close(), onSend: close }} />}
       {open === 'remind' && <RemindMeDialog what={head.record} now={dialogs.now} onSet={() => Promise.resolve(true)} onClose={close} />}
+      {open === 'owner' && (
+        <OwnerDialog
+          model={{ record: head.record, owner: head.owner ?? null, people: dialogs.people.status === 'ready' ? dialogs.people.data.map((person) => ({ id: person.id, name: person.name })) : [], meId: dialogs.people.status === 'ready' ? (dialogs.people.data.find((person) => person.me)?.id ?? '') : '', busy: false, problem: null }}
+          onPick={close}
+          onClose={close}
+        />
+      )}
       {open === 'close' && <CloseThreadConfirm record={head.record} party={head.party?.name ?? null} onClose={close} onCancel={close} />}
     </div>
   )

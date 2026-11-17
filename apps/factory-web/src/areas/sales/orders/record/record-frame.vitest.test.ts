@@ -77,4 +77,18 @@ describe('the order on RecordFrame', () => {
     expect(documents).not.toContain('?tab=activity')
     expect(documents).not.toContain('TechPackCard')
   })
+
+  // ---- B-TH-228: an order made straight from a request names it (office only), never "Typed by the office" before it knows
+  it('B-TH-228: "Made from INQ-… — Open" on the band and the request in the chain; nothing while the source is read', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('th-228-made-from', locale)
+      expect(html).toContain('/sales/incoming/0190f0e2-5151-7000-8000-000000000041')
+      expect(textOf(html)).toContain(locale === 'en' ? 'Made from INQ-2026-0041 — Open' : 'Creato da INQ-2026-0041 — Apri')
+      expect(textOf(html)).toContain(locale === 'en' ? 'Made from request INQ-2026-0041 (no quote)' : 'Creato dalla richiesta INQ-2026-0041 (senza preventivo)')
+      expect(textOf(html)).not.toContain(locale === 'en' ? 'Typed by the office' : "Inserito dall'ufficio")
+    }
+    const reading = textOf(draw('th-228-made-from-reading'))
+    expect(reading).not.toContain('Typed by the office')
+    expect(reading).not.toContain('Made from INQ')
+  })
 })

@@ -304,7 +304,7 @@
   },
   "inquiry": {
     "held": {
-      "noRight": "Serve il permesso di rispondere alle richieste (sales.inquiries.manage)",
+      "noRight": "Serve il permesso di rispondere alle richieste",
       "made": "Da questa mail è già stata creata una richiesta: aprila in In arrivo",
       "failed": "Questa mail non si è potuta leggere",
       "notWaiting": "Solo una mail in attesa qui o in una conversazione"

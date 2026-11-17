@@ -461,6 +461,20 @@ export function rowHref(prefix: string, row: ListRow): string | null {
   return opens(row.order) ? recordHref(prefix, row.order.id) : null
 }
 
+// ---- B-TH-230: the New messages column — what each row's thread is, and its door ------------------------------------------------
+/** The record whose thread a row is (a request; an order with its own page), or null: a catalogue request has no thread page yet. */
+export function threadOf(row: ListRow): { readonly recordType: 'Inquiry' | 'SalesOrder'; readonly id: string } | null {
+  if (row.kind === 'request') return { recordType: 'Inquiry', id: row.request.id }
+  return opens(row.order) ? { recordType: 'SalesOrder', id: row.order.id } : null
+}
+
+/** The door of a row's New messages cell: the record's page with its conversation (a request's page holds it; an order's Messages tab). */
+export function threadHref(prefix: string, row: ListRow): string | null {
+  if (row.kind === 'request') return requestHref(prefix, row.request.id)
+  return opens(row.order) ? recordHref(prefix, row.order.id, 'messages') : null
+}
+// ---- end B-TH-230
+
 /** The row's state and its tone (true states only: the API's words). */
 export function rowState(row: ListRow, locale: Locale): { words: string; tone: Tone } {
   if (row.kind === 'request') return { words: row.request.state.words[locale], tone: requestStateTone(row.request.state.code) }

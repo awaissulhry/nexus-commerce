@@ -90,12 +90,17 @@ describe('the address: the API’s own filters, the inquiry open in its DetailMo
 })
 
 describe('the queue', () => {
-  it('waiting is said in working time; over a working day for us is the danger tone', () => {
+  it('waiting is said in working time; over a working day for us is amber by the one rule (B-TH-230), the customer never', () => {
     expect(workingTime(45)).toEqual({ key: 'time.minutes', params: { n: 45 } })
     expect(workingTime(135)).toEqual({ key: 'time.hours', params: { n: 2 } })
     expect(workingTime(620)).toEqual({ key: 'time.daysHours', params: { d: 1, h: 2 } })
-    expect(waitingOf(ROWS[0]!)?.tone).toBe('danger')
+    expect(waitingOf(ROWS[0]!)?.tone).toBe('warning')
+    expect(waitingOf(ROWS[0]!)?.phrase.key).toBe('waiting.usOverdue')
     expect(waitingOf(ROWS[2]!)?.phrase.key).toBe('waiting.customer')
+    expect(waitingOf(ROWS[2]!)?.tone).toBe('neutral')
+    // The rule's edge: exactly one working day (480 working minutes) is not past it; one minute more is.
+    expect(waitingOf({ waiting: { for: 'US', workingMinutes: 480, overdue: false } })?.tone).toBe('neutral')
+    expect(waitingOf({ waiting: { for: 'US', workingMinutes: 481, overdue: true } })?.tone).toBe('warning')
     expect(waitingOf(ROWS[4]!)).toBeNull()
   })
 

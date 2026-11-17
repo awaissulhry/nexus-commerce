@@ -304,7 +304,7 @@
   },
   "inquiry": {
     "held": {
-      "noRight": "Needs the right to answer requests (sales.inquiries.manage)",
+      "noRight": "Needs the right to answer requests",
       "made": "A request was made of this mail already: open it in Incoming",
       "failed": "This mail could not be read",
       "notWaiting": "Only a mail waiting here or in a thread"

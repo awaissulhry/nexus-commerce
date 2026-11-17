@@ -5,12 +5,13 @@ import { dayOf, THREAD_TIME_ZONE } from '../parts/time'
  * B-TH-204 — the record thread's feed (threads plan T4; picture 1, approved 2026-11-17): the order and rhythm of a record's
  * messages in the office. It reads like e-mail: oldest at the top, newest at the bottom, the box under it, and opens at the
  * newest message (or the one a link names). Day lines in the company's time zone. Older messages fold BY AGE (PR-08: all but
- * the last 3) until per-person reads arrive (B-TH-229 then folds read messages): the oldest run is one line "12 earlier
+ * the last 3) until per-person reads arrive; B-TH-229 (the person's own read mark, B-TH-027) then folds READ messages: what is new
+ * to the reader stays open with the one read message just before it (what the new ones answer), and the line "New since your last
+ * visit" sits above the first new message; with nothing new it folds by age as before. The oldest run is one line "12 earlier
  * messages", the two just before the open ones are one line each. Record steps are one thin line; field changes group by person
  * and hour ("5 changes by Bea Esempio · Show"). Pure: the view draws these rows.
  *
- * Not drawn until the back end has it (design kit §5): the unread line and count (G10, B-TH-027), the held-mail line
- * (thread-G06, B-TH-079), the erased card (thread-G09).
+ * Not drawn until the back end has it (design kit §5): the held-mail line (thread-G06, B-TH-079), the erased card (thread-G09).
  */
 
 /** The last messages that stay open (PR-08). */
@@ -77,6 +78,8 @@ export function whoWords(event: Pick<FeedEvent, 'who' | 'whoHidden' | 'actorAudi
 
 export type FeedRow =
   | { kind: 'day'; key: string; day: string }
+  // B-TH-229: "New since your last visit" above the first message new to the reader (T4-F04); `count` the reader's new messages.
+  | { kind: 'new'; key: string; count: number }
   | { kind: 'fold'; key: string; count: number; from: string; to: string }
   | { kind: 'folded'; key: string; message: CardMessage }
   | { kind: 'message'; key: string; message: CardMessage }
@@ -93,14 +96,27 @@ export interface FeedRowsInput {
   /** "12 earlier messages" was opened: its messages show one line each. */
   runOpen?: boolean
   timeZone?: string
+  // ---- B-TH-229: the reader's own reading as it was on arrival (the thread's `reading`, B-TH-027)
+  /** The first message new to the reader: the line sits above it and the read ones before it fold; null / absent: nothing new. */
+  firstNewId?: string | null
+  /** How many are new to the reader (the line's and the Head's number); 0 / absent: nothing new. */
+  newCount?: number
+  // ---- end B-TH-229
 }
 
 const byTime = <T extends { at: string; id: string }>(a: T, b: T) => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1)
 
-/** The messages that fold (all but the last 3, the opened ones and the anchor): their ids, oldest first. */
-export function foldedIds(messages: readonly CardMessage[], openIds: readonly string[] = [], anchorId: string | null = null): string[] {
+/**
+ * The messages that fold, oldest first: all but the last 3 (by age) — or, B-TH-229, when something is new to the reader, the READ
+ * ones before the first new message except the one just before it (what the new ones answer). Never the opened ones, the anchor or
+ * a message on its way. A first new message older than the page read: every message of the page is new, none folds.
+ */
+export function foldedIds(messages: readonly CardMessage[], openIds: readonly string[] = [], anchorId: string | null = null, firstNewId: string | null = null, newCount = 0): string[] {
   const sorted = [...messages].sort(byTime)
-  const open = new Set([...sorted.slice(-OPEN_LAST).map((message) => message.id), ...openIds, ...(anchorId ? [anchorId] : [])])
+  const newAt = firstNewId ? sorted.findIndex((message) => message.id === firstNewId) : -1
+  const unreadOutside = firstNewId !== null && newAt === -1 && newCount > 0
+  const openFrom = unreadOutside ? 0 : newAt !== -1 ? Math.max(0, newAt - 1) : Math.max(0, sorted.length - OPEN_LAST)
+  const open = new Set([...sorted.slice(openFrom).map((message) => message.id), ...openIds, ...(anchorId ? [anchorId] : [])])
   // A message on its way or not sent never folds: its writer is looking at it.
   return sorted.filter((message) => !open.has(message.id) && !message.outbox).map((message) => message.id)
 }
@@ -108,7 +124,9 @@ export function foldedIds(messages: readonly CardMessage[], openIds: readonly st
 /** The rows of the feed, oldest first. */
 export function feedRows(input: FeedRowsInput): FeedRow[] {
   const timeZone = input.timeZone ?? THREAD_TIME_ZONE
-  const folded = foldedIds(input.messages, input.openIds, input.anchorId ?? null)
+  const firstNewId = input.firstNewId ?? null
+  const newCount = input.newCount ?? 0
+  const folded = foldedIds(input.messages, input.openIds, input.anchorId ?? null, firstNewId, newCount)
   const foldedSet = new Set(folded)
   const sorted = [...input.messages].sort(byTime)
   let run = !input.runOpen && folded.length - FOLDED_ROWS >= 2 ? folded.slice(0, folded.length - FOLDED_ROWS) : []
@@ -134,6 +152,7 @@ export function feedRows(input: FeedRowsInput): FeedRow[] {
     lastDay = day
   }
   let foldShown = false
+  let newShown = false
   for (const item of items) {
     if (item.message) {
       const message = item.message
@@ -146,6 +165,11 @@ export function feedRows(input: FeedRowsInput): FeedRow[] {
         continue
       }
       dayLine(message.at)
+      // B-TH-229: the line above the first new message (or above the page's first message when the first new one is older).
+      if (newCount > 0 && !newShown && (message.id === firstNewId || (firstNewId !== null && !sorted.some((one) => one.id === firstNewId)))) {
+        rows.push({ kind: 'new', key: 'new', count: newCount })
+        newShown = true
+      }
       rows.push(foldedSet.has(message.id) ? { kind: 'folded', key: `folded:${message.id}`, message } : { kind: 'message', key: `message:${message.id}`, message })
       continue
     }
