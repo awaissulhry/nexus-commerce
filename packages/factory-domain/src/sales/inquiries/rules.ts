@@ -40,6 +40,18 @@ export const isOpen = (status: InquiryStatus): boolean => (OPEN_STATUSES as read
 export const DECLINE_REASONS = ['CAPACITY', 'LEAD_TIME', 'NOT_OUR_PRODUCT', 'PRICE', 'OTHER', 'NOT_AN_ORDER'] as const
 export type DeclineReason = (typeof DECLINE_REASONS)[number]
 
+// ---- B-TH-235 (threads plan X-SAL-REPORTS.drill; Owner rule "every total opens its rows") ----------------------------------
+/**
+ * What a request became, as Sales › Reports' request figure counts it (factory-domain insights/sales-reports requestFiguresOf):
+ * ORDERED — an order was made straight from it (ORDERED) or from its quote (an order of one of the quote's versions, not
+ * cancelled, that the reader may see); DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an
+ * order. The figure's other parts are the list's own tiles (ALL, OPEN, QUOTED, LOST). Sales › Incoming lists exactly the rows a
+ * figure counts with `?outcome=` (and `?from=&to=` for the period).
+ */
+export const REQUEST_OUTCOMES = ['ORDERED', 'DECLINED', 'NOT_AN_ORDER'] as const
+export type RequestOutcome = (typeof REQUEST_OUTCOMES)[number]
+// ---- end B-TH-235
+
 /** GDPR art. 6(1): a contact's and a prospect's lawful basis. A request for a quote is CONTRACT (steps at the person's request). */
 export const LAWFUL_BASES = ['CONTRACT', 'CONSENT', 'LEGITIMATE_INTEREST', 'LEGAL_DUTY'] as const
 export type LawfulBasis = (typeof LAWFUL_BASES)[number]

@@ -118,7 +118,16 @@
     "clearAll": "Togli tutti",
     "status": "Stato: {status}",
     "company": "Azienda: {name}",
-    "companyUnknown": "Azienda: una azienda"
+    "companyUnknown": "Azienda: una azienda",
+    "received": "Arrivate: {from} – {to}",
+    "receivedOn": "Arrivate: {day}",
+    "receivedFrom": "Arrivate dal {from}",
+    "receivedTo": "Arrivate fino al {to}",
+    "outcome": {
+      "ORDERED": "Diventate: un ordine (subito o dal preventivo)",
+      "DECLINED": "Diventate: rifiutate (non “Non è un ordine”)",
+      "NOT_AN_ORDER": "Diventate: non è un ordine"
+    }
   },
   "notice": {
     "label": "Avvisi",

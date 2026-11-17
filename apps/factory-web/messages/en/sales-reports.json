@@ -31,7 +31,8 @@
     "csv": {
       "intake": "Export order intake (CSV)",
       "backlog": "Export the backlog (CSV)",
-      "returns": "Export the return lines (CSV)"
+      "returns": "Export the return lines (CSV)",
+      "requests": "Export requests received, quoted and ordered (CSV)"
     },
     "csvHeld": "Wait until the panel has been read.",
     "dashboard": "Save as dashboard (Home)",
@@ -383,5 +384,50 @@
     "loading": "Reading…",
     "retry": "Try again",
     "incomplete": "More quotes than one report reads: the first 5,000 are counted."
+  },
+  "requests": {
+    "title": "Requests received, quoted and ordered",
+    "hint": "The requests that came in from {from} to {to}, by any door, and what each became so far. Every number opens those requests in Sales › Incoming.",
+    "failed": "The request figure could not be read.",
+    "outside": "Requests are not in your role",
+    "outsideBody": "This figure counts the requests in Sales › Incoming: it needs the right to see them.",
+    "empty": "No request came in this period",
+    "emptyHint": "A request by e-mail, in the portal, by phone or at a fair is counted here on the day it came.",
+    "figure": {
+      "received": "Received",
+      "quoted": "Quoted",
+      "ordered": "Ordered",
+      "declined": "Declined",
+      "lost": "Lost",
+      "notAnOrder": "Not an order",
+      "open": "Still open"
+    },
+    "figureHint": {
+      "received": "Came in this period",
+      "quoted": "A quote was made",
+      "ordered": "An order was made",
+      "declined": "Declined by us",
+      "lost": "The customer went elsewhere",
+      "notAnOrder": "Counted apart: not in the rates",
+      "open": "Waiting on us or on the customer"
+    },
+    "hintRate": "{pct} of the requests",
+    "hintOrdered": "{pct} of the requests · straight or from the quote",
+    "open": "{figure}: {count} ({where}) — open these requests in Sales › Incoming",
+    "thePeriod": "the whole period",
+    "by": {
+      "week": "Requests by week",
+      "month": "Requests by month"
+    },
+    "byCustomer": "Requests by customer",
+    "prospects": "Prospects (not customers yet)",
+    "col": {
+      "week": "Week",
+      "month": "Month",
+      "customer": "Customer",
+      "quotedPct": "Quote rate",
+      "orderedPct": "Order rate"
+    },
+    "definition": "Ordered counts an order made straight from the request or from its quote (an order you may see that is not cancelled); a request quoted and then ordered is in both. “Not an order” (a question, a mail that asks nothing) is counted apart and left out of the rates."
   }
 }

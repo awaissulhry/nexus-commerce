@@ -238,3 +238,76 @@ describe('B-TH-052 the request-to-order figure (GET /sales/reports/requests)', (
     expect((await call('sales', '/sales/reports/requests?split=customer')).statusCode).toBe(400)
   })
 })
+
+// ---- B-TH-235 (web: Sales › Reports' request figure, every figure a door to Sales › Incoming; Owner rule "every total opens its
+// rows"): each figure's door — the list's tile, `outcome` (what a request became), the company and the days — lists exactly the
+// requests the figure counts, on the list the page reads today (GET /sales/inquiries) and on Incoming's one read (GET
+// /sales/incoming, the export's), for every customer group, the prospects and a week; a limited reader's doors stay inside A.
+// The doors are the web's (apps/factory-web areas/sales/reports/model.ts requestsDoor): change both together.
+const DOORS: Record<string, { tile: string; outcome?: string }> = {
+  received: { tile: 'ALL' },
+  open: { tile: 'OPEN' },
+  quoted: { tile: 'QUOTED' },
+  ordered: { tile: 'ALL', outcome: 'ORDERED' },
+  declined: { tile: 'ALL', outcome: 'DECLINED' },
+  lost: { tile: 'LOST' },
+  notAnOrder: { tile: 'ALL', outcome: 'NOT_AN_ORDER' },
+}
+const doorQuery = (figure: string, scope: { from: string; to: string; partyId?: string | null; prospect?: boolean }) => {
+  const door = DOORS[figure]!
+  // The company the figure counts (the screen's): the list reaches every company of the person's grant.
+  const terms = new URLSearchParams({ tile: door.tile, companyId: COMPANY_B, receivedFrom: scope.from, receivedTo: scope.to })
+  if (door.outcome) terms.set('outcome', door.outcome)
+  if (scope.prospect) terms.set('prospect', 'true')
+  else if (scope.partyId) terms.set('partyId', scope.partyId)
+  return terms.toString()
+}
+async function doorCount(who: string, figure: string, scope: Parameters<typeof doorQuery>[1]): Promise<{ inquiries: number; incoming: number }> {
+  const query = doorQuery(figure, scope)
+  const inquiries = await ok(who, `/sales/inquiries?${query}`)
+  // Incoming's one read lists every kind: the door names requests (the figure counts requests only).
+  const incoming = await ok(who, `/sales/incoming?${query}&kind=REQUEST`)
+  return { inquiries: inquiries.counts[DOORS[figure]!.tile], incoming: incoming.counts[DOORS[figure]!.tile] }
+}
+
+describe('B-TH-235 every figure of the request figure opens exactly its rows in Sales › Incoming', () => {
+  it('the period, each customer, the prospects and one week: the door lists as many requests as the figure says (both reads)', async () => {
+    const answer = await ok('sales', '/sales/reports/requests')
+    const period = { from: answer.from as string, to: answer.to as string }
+    for (const figure of Object.keys(DOORS)) {
+      expect(await doorCount('sales', figure, period), `all ${figure}`).toEqual({ inquiries: answer.all[figure], incoming: answer.all[figure] })
+      for (const row of answer.groups as Json[]) {
+        const scope = { ...period, partyId: row.partyId as string | null, prospect: row.key === 'prospects' }
+        expect(await doorCount('sales', figure, scope), `${row.key} ${figure}`).toEqual({ inquiries: row.figures[figure], incoming: row.figures[figure] })
+      }
+    }
+    const week = (answer.buckets as Json[]).find((bucket) => bucket.figures.received > 0 && bucket.figures.ordered > 0)!
+    for (const figure of Object.keys(DOORS)) expect(await doorCount('sales', figure, { from: week.from, to: week.to }), `${week.key} ${figure}`).toEqual({ inquiries: week.figures[figure], incoming: week.figures[figure] })
+  })
+
+  it('an order made from a quote counts as ordered only for a reader who may see orders — the door says the same', async () => {
+    const answer = await ok('noOrders', '/sales/reports/requests')
+    const period = { from: answer.from as string, to: answer.to as string }
+    expect(answer.all.ordered).toBe(1)
+    expect((await ok('noOrders', `/sales/inquiries?${doorQuery('ordered', period)}`)).counts.ALL).toBe(1)
+  })
+
+  it('T30: a person limited to customer A opens A’s rows only; the door names no row of customer B', async () => {
+    const answer = await ok('limitedA', '/sales/reports/requests')
+    const period = { from: answer.from as string, to: answer.to as string }
+    for (const figure of Object.keys(DOORS)) expect(await doorCount('limitedA', figure, period), figure).toEqual({ inquiries: answer.all[figure], incoming: answer.all[figure] })
+    const listed = await ok('limitedA', `/sales/inquiries?${doorQuery('received', period)}`)
+    expect(listed.rows.map((row: Json) => row.party?.id ?? null).filter((party: string | null) => party === B.id)).toEqual([])
+    expect(JSON.stringify(listed)).not.toContain(B.code)
+  })
+
+  it('the doors refuse a word that is not a request outcome (400), and the export reads the same address terms', async () => {
+    expect((await call('sales', '/sales/inquiries?outcome=SHIPPED')).statusCode).toBe(400)
+    expect((await call('sales', '/sales/incoming?outcome=QUOTED')).statusCode).toBe(400)
+    const { inquiries } = await import('../../sales/inquiries/export-source')
+    const query = inquiries.query(new URLSearchParams('tile=ALL&from=2026-11-09&to=2026-11-15&outcome=ORDERED&party=' + A.id))
+    expect(query).toMatchObject({ tile: 'ALL', receivedFrom: '2026-11-09', receivedTo: '2026-11-15', outcome: 'ORDERED', partyId: A.id })
+    expect(inquiries.query(new URLSearchParams('from=11/2026&outcome=SHIPPED'))).not.toHaveProperty('outcome')
+  })
+})
+// ---- end B-TH-235

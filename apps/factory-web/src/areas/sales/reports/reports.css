@@ -242,3 +242,21 @@
   overflow-x: auto;
   min-width: 0;
 }
+
+/* B-TH-235: the intake panel's request figure (requests received, quoted, ordered): its own block under the intake, a hairline
+   above it; every number a link into Sales › Incoming (.fw-slr-cell-link). Tokens only. */
+.fw-slr-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-slr-subhead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}

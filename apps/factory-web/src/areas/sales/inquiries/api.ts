@@ -14,7 +14,7 @@ import {
   type FromMailBody,
   type UpdateInquiryBody,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
-import type { DeclineReason, InquirySource, InquiryStatus, InquiryTile } from '@nexus/factory-domain/sales/inquiries/rules'
+import type { DeclineReason, InquirySource, InquiryStatus, InquiryTile, RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, downloadLink, requestUpload } from '../../../record-panels/api'
 import { contentTypeOf, uploadProblem, type FileKind } from '../../../record-panels/model'
@@ -64,6 +64,10 @@ export interface InquiryQuery {
   partyId?: string | null
   prospect?: boolean
   q?: string
+  // B-TH-235: the days the requests came and what each became (Sales › Reports' request figure).
+  receivedFrom?: string | null
+  receivedTo?: string | null
+  outcome?: RequestOutcome | null
 }
 
 export function listInquiries(api: ApiClient, query: InquiryQuery, signal?: AbortSignal): Promise<InquiryList> {
@@ -76,6 +80,10 @@ export function listInquiries(api: ApiClient, query: InquiryQuery, signal?: Abor
       partyId: query.prospect ? undefined : (query.partyId ?? undefined),
       prospect: query.prospect ? 'true' : undefined,
       q: query.q?.trim() || undefined,
+      // B-TH-235
+      receivedFrom: query.receivedFrom ?? undefined,
+      receivedTo: query.receivedTo ?? undefined,
+      outcome: query.outcome ?? undefined,
       limit: LIST_LIMIT,
     },
     schema: inquiryList,
