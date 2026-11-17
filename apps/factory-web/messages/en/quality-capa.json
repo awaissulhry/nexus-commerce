@@ -185,7 +185,6 @@
     "title": "Keyboard shortcuts",
     "new": "New CAPA",
     "addAction": "Add an action (Actions tab)",
-    "save": "Save the Problem form",
     "previousAction": "Previous action (drawer)",
     "nextAction": "Next action (drawer)"
   },
@@ -403,13 +402,15 @@
     "internal": "Internal",
     "owner": "Owner: {name}",
     "due": "Due {date}",
-    "more": "More for this CAPA"
+    "more": "More for this CAPA",
+    "title": "Corrective action",
+    "dockLabel": "The CAPA’s thread",
+    "tabsLabel": "Sections of the CAPA"
   },
   "tab": {
     "problem": "Problem",
     "actions": "Actions",
-    "report": "Report",
-    "activity": "Activity"
+    "report": "Report"
   },
   "record": {
     "offline": "Offline: you see the last copy; changes wait until the connection is back.",
@@ -418,9 +419,6 @@
     "closedBanner": "Closed on {date} by {name}",
     "cancelledBanner": "Cancelled: {reason}",
     "moved": "Moved to {stage}"
-  },
-  "activity": {
-    "none": "The activity opens with the record."
   },
   "actions": {
     "intro": "Corrective and preventive actions (D5–D7). The owner is reminded 3 days before and on the due day; an overdue action escalates to its path, else by the company's quality rule.",

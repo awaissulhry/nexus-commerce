@@ -1,19 +1,19 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { ApiFile } from '../../../../record-panels/api'
-import { RecordProblem, RecordSkeleton } from '../../_shared/parts'
 import type { AnswerCheck, Complaint } from '../api'
 import { canFor, complaintOf, forRole, inShell, ME, NOW, PREFIX, QUALITY, ROWS, SAFETY_ID, STYLES, TODAY, withLetter, type RoleCase } from '../demo/fixtures'
 import { answerDraftOf, investigationDraftOf, sendDraftOf, templateWords, withTemplate, type InvestigationDraft } from '../model'
-import { ComplaintsMessages, useWords } from '../view/parts'
 import { triageModel } from '../fixtures'
 import { IDLE_ANSWER, type AnswerModel, type ComplaintRecordModel, type FactsDraft, type RecordDialog, type RecordTab } from './view-model'
-import { ComplaintRecordView } from './view/ComplaintRecordView'
+import { ComplaintRecordState, ComplaintRecordView } from './view/ComplaintRecordView'
+// B-TH-266: the complaint's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
- * Design cases of a complaint's record (SCR-113, the W2a part: Complaint · Linked records · Activity; the band's steps
- * held with their reasons; the dialogs). Made-up data only (../demo.ts). The Activity tab mounts the record panels in the
- * running app; here it shows a stand-in sentence.
+ * Design cases of a complaint's record (SCR-113, the W2a part: Complaint · Investigation · Answer · Linked records; the band's
+ * steps held with their reasons; the dialogs). Made-up data only (../demo.ts). B-TH-266: on RecordFrame — the band in the
+ * shell's row, the complaint's ONE thread docked beside every tab (its customer the only party), Activity's tools in its "⋯".
  */
 
 interface DesignModel {
@@ -56,7 +56,6 @@ function recordModel(complaint: Complaint, role: RoleCase, over: Partial<Complai
     dialogProblem: null,
     sites: [{ id: '0190f0e2-2222-7000-8000-000000000001', companyId: complaint.companyId, code: 'DEMO-A1', name: 'Demo plant' }],
     triage: null,
-    dockOpen: false,
     hrefs: {},
     ...over,
   }
@@ -73,34 +72,18 @@ const facts = (complaint: Complaint): FactsDraft => ({
   internalNote: '',
 })
 
-/** The record panels' place (they read the API in the running app). */
-function PanelsStandIn() {
-  const t = useWords()
-  return createElement('p', { className: 'fw-q-hint' }, t('photos.addInActivity'))
-}
-
-/** ‹ Complaints, in the page's language. */
-function Back() {
-  const t = useWords()
-  return createElement('a', { className: 'fw-q-link', href: `${PREFIX}/quality/complaints` }, t('record.back'))
-}
-
 function RecordDesign({ model }: { model: DesignModel }) {
   const [record, setRecord] = useState(model.record)
   useEffect(() => setRecord(model.record), [model.record])
-  if (record === 'loading' || record === 'notFound' || record === 'forbidden') {
-    const body =
-      record === 'loading'
-        ? createElement(RecordSkeleton)
-        : createElement(RecordProblem, { problem: record === 'notFound' ? 'problem.notFound' : 'problem.forbidden', back: createElement(Back) })
-    return inShell('/quality/complaints', createElement(ComplaintsMessages, null, body), model.role)
-  }
-  const panels = createElement(PanelsStandIn)
+  // B-TH-266: read, missing or refused — inside the frame, no thread.
+  if (record === 'loading' || record === 'notFound' || record === 'forbidden') return inShell('/quality/complaints', createElement(ComplaintRecordState, { prefix: PREFIX, state: record }), model.role)
+  // The complaint's ONE thread docked beside every tab — its customer the only party; a role without threads.read has no thread.
+  const thread = record.can.threadsRead ? designDockedThread({ recordType: 'Complaint', record: record.complaint.number, party: { name: record.complaint.party.legalName, role: 'customer' } }) : null
   return inShell(
     '/quality/complaints',
     createElement(ComplaintRecordView, {
       model: record,
-      panels,
+      thread,
       actions: {
         onDialog: (dialog: RecordDialog | null) => setRecord((current) => (typeof current === 'string' ? current : { ...current, dialog })),
         onEdit: (on: boolean) => setRecord((current) => (typeof current === 'string' ? current : { ...current, edit: on ? { draft: facts(current.complaint), busy: false, problem: null } : null })),
@@ -305,7 +288,7 @@ const W2B_CASES = [
 
 export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-113-complaint',
-  title: 'Complaint (record, investigation, answer, linked records, activity)',
+  title: 'Complaint (record, investigation, answer, linked records; the thread docked)',
   view: RecordDesign,
   cases: [
     { id: 'new', label: 'New: Triage first (the owner)', model: { role: 'owner', record: recordModel(complaintOf(NEW), 'owner') } },
@@ -326,7 +309,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
       model: { role: 'owner', record: recordModel(ACKNOWLEDGED, 'owner') },
     },
     { id: 'linked', label: 'Linked records: NCR, register entry, shipment, order, garment', model: { role: 'owner', record: recordModel(ACKNOWLEDGED, 'owner', tab('linked')) } },
-    { id: 'activity', label: 'Activity: the record panels', model: { role: 'owner', record: recordModel(ACKNOWLEDGED, 'owner', tab('activity')) } },
+    { id: 'thread-docked', label: 'B-TH-266: the complaint\'s thread docked beside Complaint — the customer\'s own conversation (the portal\'s), Activity\'s tools in its "⋯"', model: { role: 'owner', record: recordModel(ACKNOWLEDGED, 'owner') } },
     { id: 'investigating', label: 'Investigating: Mark answered; answer overdue', model: { role: 'owner', record: recordModel(complaintOf(INVESTIGATING), 'owner') } },
     { id: 'answered', label: 'Answered: Close; back to investigating under ⋯', model: { role: 'owner', record: recordModel(complaintOf(ANSWERED), 'owner') } },
     { id: 'closed', label: 'Closed: read-only, every step held', model: { role: 'owner', record: recordModel(complaintOf(CLOSED), 'owner') } },

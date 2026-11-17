@@ -39,6 +39,8 @@ import { designScreen as recordScreen } from './record/fixtures'
 import { ShipmentRecordView } from './record/view/ShipmentRecordView'
 // B-TH-264: the shipment on RecordFrame.
 import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
+// B-TH-264 follow-up: the Documents' files in the thread's viewer.
+import { travelFiles } from './record/view/DocumentsTab'
 
 const WAREHOUSE = abilitiesOf(['shipping.view', 'shipping.manage', 'shipping.pack', 'shipping.ddt.issue', 'shipping.ddt.cancel', 'shipping.labels.buy', 'print.labels', 'files.read', 'shipping.settings.view'])
 const VIEWER = abilitiesOf(['shipping.view'])
@@ -285,3 +287,39 @@ describe('B-TH-264 — the shipment on RecordFrame: tabs 7 → 5, the docked thr
     expect(hooks).not.toContain('?tab=activity')
   })
 })
+
+// ---- B-TH-264 follow-up (TH-6 part B): the Documents' files open in the docked thread's ONE file viewer ---------------------------
+describe('B-TH-264 follow-up — the Documents’ files open in the thread’s file viewer (the frame’s door), not a new tab', () => {
+  it('the travelling documents a card lists, as the viewer names them: the copy for the customer, else the file on record', () => {
+    const label = (entry: { kind: string }) => entry.kind
+    const attached = documents('attached').documents.filter((entry) => entry.kind === 'DECLARATION_OF_CONFORMITY' || entry.kind === 'USER_INFORMATION')
+    expect(travelFiles(attached, label)).toEqual([
+      expect.objectContaining({ name: 'declaration_of_conformity-copy.pdf', contentType: 'application/pdf', sizeBytes: 182_400 }),
+      expect.objectContaining({ name: 'user_information-copy.pdf', contentType: 'application/pdf' }),
+    ])
+    const onFile = documents('onFile').documents.filter((entry) => entry.kind === 'DECLARATION_OF_CONFORMITY')
+    expect(travelFiles(onFile, label)).toEqual([expect.objectContaining({ name: 'declaration_of_conformity.pdf' })])
+    // Nothing on file: nothing to open.
+    expect(travelFiles(documents('missing').documents, label)).toEqual([])
+  })
+
+  it('the DoC, the user information and the packing lists open through the frame’s door (the page’s own download only without a thread)', () => {
+    const source = readFileSync(new URL('./record/view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(/if \(frame\?\.openFiles\) frame\.openFiles\(\{ files, fileId, returnTo: opener \?\? null \}\)\s*else actions\?\.onOpenFile\?\.\(fileId\)/)
+    expect(source).toContain("openInViewer(files, (entry.copy ?? entry.source)!.id, event.currentTarget)")
+    expect(source).toContain('openInViewer(files, entry.fileId, event.currentTarget)')
+    expect(source).not.toContain('onClick={() => actions?.onOpenFile?.(')
+  })
+
+  it('their buttons say they open the viewer, in both languages', () => {
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].shipments ?? {}
+      expect(words['docs.travel.view'], locale).toBeTruthy()
+      expect(words['other.view'], locale).toBeTruthy()
+      expect(words['docs.travel.open'], locale).toBeUndefined()
+      expect(words['other.download'], locale).toBeUndefined()
+    }
+    expect(textOf(renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === 'docs-fallback')!.model, 'en'))).toContain('Declaration of Conformity')
+  })
+})
+// ---- end B-TH-264 follow-up

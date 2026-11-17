@@ -166,13 +166,6 @@ export const LIST_KEYS = (t: Translate): ListKey[] => [
   { keys: ['Esc'], does: t('keys.close') },
 ]
 
-/** The record's keys. */
-export const RECORD_KEYS = (t: Translate): ListKey[] => [
-  { keys: ['p'], does: t('keys.pack') },
-  { keys: ['⌘', 'J'], does: t('keys.dock') },
-  { keys: ['Esc'], does: t('keys.close') },
-]
-
 /** `?` and the footer's "All shortcuts": every key of the page. */
 export function KeysModal({ keys, onClose }: { keys: readonly ListKey[]; onClose: () => void }) {
   const t = useWords()

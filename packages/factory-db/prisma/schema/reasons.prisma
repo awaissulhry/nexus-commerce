@@ -74,4 +74,7 @@ enum ReasonList {
   /// W2b-6 (schema wave 45/57, B-W2b-363; SCM-020, B-W2b-315): what a supplier's document is (StoredFile.documentTypeCode):
   /// DURC, LWG_AUDIT, ISO_9001, REACH_DECLARATION …
   SUPPLIER_DOCUMENT_TYPE
+  /// B-PR-15 (production plan, schema wave 3/5; B-PR-21): why a work order was put on a plain production hold
+  /// (WorkOrderHold.reasonCode of kind PRODUCTION); quality holds keep HOLD.
+  PRODUCTION_HOLD
 }

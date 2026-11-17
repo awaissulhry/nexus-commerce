@@ -193,7 +193,8 @@
     "title": "Scorciatoie da tastiera",
     "search": "Cerca",
     "open": "Apri la fattura",
-    "select": "Seleziona la fattura evidenziata"
+    "select": "Seleziona la fattura evidenziata",
+    "approve": "Approva questa fattura (bloccato se l'hai registrata tu)"
   },
   "foreign": {
     "title": "Aggiungi fattura estera",
@@ -246,8 +247,6 @@
     "loading": "Lettura della fattura…",
     "tabsLabel": "Le schede della fattura",
     "asReceived": "Come ricevuta",
-    "dock": "Discussione",
-    "dockHint": "La discussione della fattura accanto alle schede (⌘J)",
     "dockLabel": "La discussione della fattura",
     "more": "Altre azioni",
     "void": "Annulla fattura",
@@ -258,7 +257,6 @@
     "changed": "Modificata da un'altra persona alle {time}.",
     "reload": "Rileggi",
     "readOnly": "Sola lettura: il tuo ruolo vede la fattura e non cambia nulla.",
-    "noPanels": "La discussione qui non è disponibile.",
     "state": {
       "not_found": {
         "title": "Fattura fornitore non trovata",
@@ -276,9 +274,7 @@
   "tab": {
     "lines": "Righe",
     "match": "Abbinamento",
-    "approval": "Approvazione",
-    "payment": "Pagamento",
-    "activity": "Attività",
+    "approvalPayment": "Approvazione e pagamento",
     "differences": "Differenze da verificare",
     "ready": "Pronta per l'approvazione"
   },

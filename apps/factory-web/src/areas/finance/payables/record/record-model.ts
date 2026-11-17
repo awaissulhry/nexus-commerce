@@ -1,4 +1,3 @@
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { Candidates, SupplierInvoice } from '../api'
 import type { PayablesCan, Phrase, RecordTab } from '../model'
 
@@ -43,22 +42,20 @@ export interface SupplierInvoiceModel {
   readonly savingLine: string | null
   readonly lineProblem: { readonly lineId: string; readonly phrases: readonly Phrase[] } | null
   readonly live: LiveState
-  readonly dockOpen: boolean
+  /** B-TH-268: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
   /** Changed by someone else while a dialog with typed words was open. */
   readonly changed: { readonly at: string } | null
   readonly notice: { readonly tone: 'success' | 'danger' | 'info' | 'warning'; readonly phrases: readonly Phrase[] } | null
   readonly busy: boolean
   readonly dialog: RecordDialog | null
   readonly dialogProblem: readonly Phrase[] | null
-  /** Design cases: the panels as data (the page mounts the live RecordPanels instead). */
-  readonly panelsPreview?: RecordPanelsViewModel
 }
 
 export interface SupplierInvoiceActions {
   onRetry?: () => void
   onRetryCandidates?: () => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   /** The Combobox picked a mapping for a line (saved at once). */

@@ -22,6 +22,8 @@ import { termsForParty } from '../terms/terms'
 import { depositOf, quoteDefaultsOf, termsNameIn } from '@nexus/factory-domain/sales/terms/terms'
 import { assertMay, day, dayValue, decimal, grainsOf, officeContextOf, officeQuote, quotePartyOf, readCurrentVersion, readQuote, type QuoteParty, type QuoteRow, type VersionRow } from './store'
 import { forCaller, quoteDetail, quoteSourcesOf, type QuoteDetail } from './views'
+// TH-6 part B (B-TH-257 follow-up): each row's picture (files.read only), as the Orders sheet's.
+import { quoteRowExtras } from './row-picture'
 import { withCompanyTerms } from '../../parties/company-terms/in-force'
 
 /**
@@ -409,6 +411,8 @@ export async function listQuotes(caller: CommandCaller, query: ListQuotesQuery) 
     const parties = new Map((await client.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.partyId))] } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]))
     // B-TH-078: each row's request and order (or why its order waits).
     const sources = await quoteSourcesOf(client, page)
+    // TH-6 part B: each row's first style and its picture (the file only with files.read).
+    const extras = await quoteRowExtras(client, actorOf(context), new Map(versions.map((version) => [version.quoteId, version.id])))
     return {
       quotes: page.map((row) => {
         const version = versionOf.get(row.id)
@@ -439,6 +443,9 @@ export async function listQuotes(caller: CommandCaller, query: ListQuotesQuery) 
           // B-TH-078
           madeFrom: sources.get(row.id)?.madeFrom ?? null,
           order: sources.get(row.id)?.order ?? null,
+          // TH-6 part B
+          picture: extras.get(row.id)?.picture ?? null,
+          styleCount: extras.get(row.id)?.styleCount ?? 0,
         }
       }),
       nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,

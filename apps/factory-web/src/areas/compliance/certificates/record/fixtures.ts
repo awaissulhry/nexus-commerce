@@ -1,17 +1,16 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import { RecordPanelsView } from '../../../../record-panels/view/RecordPanelsView'
 import { at, COMPANY_ID, inShell, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../../../quality/_shared/fixtures'
 import { failedRead, reading, ready } from '../../../quality/_shared/model'
 import type { CertificateDetail, CertificateFile } from '../api'
 import { BRANDS, byNumber, CERTIFICATES, COMPANIES, COVERAGE_0001, coveredBy, demoCoverage, demoDetail, JACKET, PROTECTOR, refusedFor, STYLE_FACTS, STYLE_OPTIONS, TODAY, TROUSERS } from '../fixtures'
-import { blankCheck, blankCoverage, certCan, defaultLapseDate, draftOf, lapseSummary, type CertificateRecordModel, type LapseAnswer, type LapseModel, type RecordTab } from '../model'
+import { blankCheck, blankCoverage, certCan, defaultLapseDate, draftOf, lapseSummary, threadPartyOf, type CertificateRecordModel, type LapseAnswer, type LapseModel, type RecordTab } from '../model'
 import { EXPIRED_RENEWAL, renewalsModel, RENEWAL_STATES, REVIEWS, TOURING_RENEWAL, URBAN_RENEWAL, URBAN_RENEWED } from '../renewals/fixtures'
 import { CertificateRecordView } from './view/CertificateRecordView'
 import { DEPTH_GARMENT, DEPTH_GARMENT_TYPED, DEPTH_GLOVE, DEPTH_GLOVE_DRAFT, DEPTH_OWN, DEPTH_OWN_NO_BASE, DEPTH_OWN_SUSPENDED, DEPTH_PROTECTOR, DEPTH_STATES, depthModel, GLOVE_DRAFT } from '../depth/demo/fixtures'
 import { BODY_0000, BODY_9990, bodiesModel, SUPPLIERS } from '../depth/bodies-demo/fixtures'
+// B-TH-267: the certificate's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-051 — the certificate record, made-up data only (the CERT-DEMO-… register of SCR-050; "Demo Test Lab" 0000). Each
@@ -19,28 +18,24 @@ import { BODY_0000, BODY_9990, bodiesModel, SUPPLIERS } from '../depth/bodies-de
  * covers and the lapse check that shows what the gate refuses the day after its last valid day; a draft not ready and
  * one ready to register with the confirm; editing a draft's details with the five-year rule; suspended, withdrawn and
  * expired certificates; the status dialogs; Add coverage for a style and for a part; End coverage; Check a garment; the
- * Notified body, Files and Activity tabs; the thread beside a tab; loading, failed, not found; the role cases.
+ * Notified body & PDF tab (B-TH-267: the body, then the PDF on its own route); the thread docked beside every tab (RecordFrame,
+ * Activity's tools in the thread's "⋯"; the holding brand its only party, our own company's certificate notes only); loading,
+ * failed, not found; the role cases.
  */
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-function panelsFor(certificate: CertificateDetail): ReactNode {
-  const model: RecordPanelsViewModel = { ...conversation, record: { type: 'Certificate', id: certificate.id, companyId: certificate.companyId, siteId: null }, title: certificate.number, party: null }
-  return createElement(RecordPanelsView, { model })
-}
 
 interface RecordCase {
   readonly model: CertificateRecordModel
   readonly role: RoleCase
-  readonly panels: boolean
+  /** B-TH-267: whether the case draws the docked thread (a person with threads.read on a certificate that is read). */
+  readonly thread: boolean
 }
 
 const idleLapse = (validTo: string): LapseModel => ({ date: defaultLapseDate(validTo), state: 'idle', done: 0, total: 0, capped: false, summary: null })
 
-function recordCase(detail: CertificateDetail | null, over: Partial<CertificateRecordModel> = {}, role: RoleCase = 'owner', panels = true): RecordCase {
+function recordCase(detail: CertificateDetail | null, over: Partial<CertificateRecordModel> = {}, role: RoleCase = 'owner', thread = true): RecordCase {
   return {
     role,
-    panels,
+    thread,
     model: {
       prefix: PREFIX,
       tab: 'coverage' as RecordTab,
@@ -65,7 +60,7 @@ function recordCase(detail: CertificateDetail | null, over: Partial<CertificateR
       busy: false,
       dialogProblem: null,
       dialogLines: [],
-      dockOpen: false,
+      personId: null,
       renewals: null,
       ...over,
     },
@@ -74,7 +69,10 @@ function recordCase(detail: CertificateDetail | null, over: Partial<CertificateR
 
 function RecordDesign({ model }: { model: RecordCase }) {
   const detail = model.model.detail.value
-  const page = createElement(CertificateRecordView, { model: model.model, panels: model.panels && detail && model.model.can.threads ? panelsFor(detail) : undefined })
+  // B-TH-267: the ONE thread docked beside every tab — the holding brand its only party (our own company's certificate: notes only).
+  const party = detail ? threadPartyOf(detail, model.model.brands) : null
+  const thread = model.thread && detail && model.model.can.threads ? designDockedThread({ recordType: 'Certificate', record: detail.number, party: party ? { name: party.name, role: 'customer' } : null }) : null
+  const page = createElement(CertificateRecordView, { model: model.model, thread })
   return inShell('/compliance/certificates', page, model.role)
 }
 
@@ -186,17 +184,17 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'end-coverage', label: 'End coverage (archived with the reason)', model: recordCase(valid, { dialog: { kind: 'endCoverage', coverageId: COVERAGE_0001[1]!.id }, endReason: 'Trousers moved to CERT-DEMO-0008.' }) },
     { id: 'check', label: 'Check a garment from the certificate', model: recordCase(valid, { dialog: { kind: 'check' }, check: { ...blankCheck(TODAY), style: ready(JACKET), colourwayId: JACKET.colourways[0]!.id, size: '52', result: coveredBy(valid, JACKET, JACKET.colourways[0]!.id, '52') } }) },
     { id: 'body', label: 'Notified body: other certificates from 0000', model: recordCase(valid, { tab: 'body', sameBody }) },
-    { id: 'files', label: 'Files: the PDF, kept 10 years after its last day', model: recordCase(valid, { tab: 'files', files: ready(FILES) }) },
-    { id: 'files-empty', label: 'Files: a draft without its PDF', model: recordCase(draftNotReady, { tab: 'files', files: ready([]) }) },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: recordCase(valid, { tab: 'activity' }) },
-    { id: 'dock', label: 'The thread beside the coverage (wide screens, ⌘J)', model: recordCase(valid, { dockOpen: true }) },
+    // B-TH-267: Files merged into Notified body & PDF (the PDF keeps its own route); Activity went (its tools in the thread's "⋯").
+    { id: 'body-pdf', label: 'Notified body & PDF: the body, then the PDF kept 10 years after its last day', model: recordCase(valid, { tab: 'body', sameBody, files: ready(FILES) }) },
+    { id: 'body-pdf-empty', label: 'Notified body & PDF: a draft without its PDF', model: recordCase(draftNotReady, { tab: 'body', sameBody: ready([]), files: ready([]) }) },
+    { id: 'thread-docked', label: 'The thread docked beside the coverage: our own certificate, office notes only', model: recordCase(valid) },
+    { id: 'thread-brand', label: 'The thread of a brand-held certificate: Reply to the brand only', model: recordCase(own, { tab: 'coverage' }), note: 'The brand that holds the certificate is the thread’s only party (the API’s rule).' },
     { id: 'product', label: 'Product developer (production manager): every write held', model: recordCase(draftReady, {}, 'production', false), note: 'Reads everything; Register, Edit, Add coverage and the moves say why they are held.' },
     { id: 'quality', label: 'Quality (inspector): registers and keeps coverage', model: recordCase(draftReady, {}, 'inspector') },
     { id: 'no-permission', label: 'Sales: not for this role', model: recordCase(valid, {}, 'sales', false) },
     { id: 'loading', label: 'Loading', model: recordCase(null, { asOf: null, live: 'connecting' }, 'owner', false) },
     { id: 'error', label: "The API didn't answer", model: recordCase(null, { detail: failedRead('problem.unavailable') }, 'owner', false) },
     { id: 'not-found', label: 'Not found (another company’s certificate)', model: recordCase(null, { detail: failedRead('problem.notFound') }, 'owner', false) },
-    { id: 'shortcuts', label: 'The keys (?)', model: recordCase(valid, { dialog: { kind: 'shortcuts' } }) },
     { id: 'w2a-renewals', label: 'W2a Renewals: the alerts fired, the renewal under way', model: renewalsTab(urban), note: 'The five-year bar with the window and the 180 / 90 / 30-day marks; each alert in words (whom it told, when); the task’s steps; the application recorded after the window; Link the new certificate is the next step. Below: the changes to the approved type (one waiting, one told, one approved).' },
     { id: 'w2a-renewals-before', label: 'W2a Renewals: years left, the window opens in 2028', model: renewalsTab(valid, { renewals: ready(TOURING_RENEWAL), reviews: ready([]) }), note: 'Start renewal is the next step; the alert timers are set once the dates come near; no changes since issue.' },
     { id: 'w2a-start', label: 'W2a Start renewal: the task as it will be made', model: renewalsTab(valid, { renewals: ready(TOURING_RENEWAL), dialog: { kind: 'start' } }), note: 'For me, a colleague or nobody yet; the steps in Italian or English; nothing is sent to the notified body.' },

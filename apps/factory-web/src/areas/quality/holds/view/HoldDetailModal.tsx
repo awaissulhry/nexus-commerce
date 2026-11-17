@@ -68,13 +68,15 @@ export function checkLines(detail: Pick<HoldDetail, 'release' | 'hold'>, t: (key
 
 /**
  * A hold (design quality.holds "Hold" record, §2.3: holds are reviewed in sequence, so a DetailModal at
- * `/quality/holds?open=<id>&tab=hold|decision|activity`): Hold — why, on what, by whom, until when, the quarantine move,
+ * `/quality/holds?open=<id>&tab=hold|affected|decision`): Hold — why, on what, by whom, until when, the quarantine move,
  * the work orders it holds; owner, expected release and note saved as they change. Decision — what must be true to
  * release it (the GateExplainer: each check in our words with the API's sentence under it), the four-eyes and maker
- * lines, Release… (held with the first open check) and Decide in NCR for reject, rework or scrap. Activity — the hold's
- * thread, files and history (the record panels). B-W2b-114: Affected — what the hold touches (the trace of its records
- * forward, counts by state, its hold by genealogy, Extend hold); the quarantine move asked or confirmed from the Hold tab.
- * J / K walk the list; r opens the release.
+ * lines, Release… (held with the first open check) and Decide in NCR for reject, rework or scrap. B-W2b-114: Affected —
+ * what the hold touches (the trace of its records forward, counts by state, its hold by genealogy, Extend hold); the
+ * quarantine move asked or confirmed from the Hold tab. B-TH-270 (PL6, picture 40): the tabs 4 → 3 — Activity went; the
+ * hold's thread is docked in the window's right column (~40 % of the 1160 px window) beside every tab, office notes only
+ * (a hold is never shared), Activity's tools in its "⋯" (R-ACT); under 800 px of screen it follows the tab's content.
+ * J / K walk the list; r opens the release — never while the focus is in the thread (its own keys).
  */
 export function HoldDetailModal({
   open,
@@ -82,7 +84,7 @@ export function HoldDetailModal({
   detail,
   tab,
   model,
-  panels,
+  thread,
   nav,
   actions,
 }: {
@@ -91,7 +93,8 @@ export function HoldDetailModal({
   detail: Read<HoldDetail>
   tab: RecordTab
   model: HoldsListModel
-  panels?: ReactNode
+  /** B-TH-270 (PL6): the hold's thread docked in the window (the page's OfficeRecordThread, or a design case's); none without threads.read. */
+  thread?: ReactNode
   nav: readonly string[] | null
   actions?: HoldsListActions
 }) {
@@ -115,6 +118,8 @@ export function HoldDetailModal({
       if (!now.open || event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="listbox"]') || target.isContentEditable)) return
+      // B-TH-270: the docked thread has its own keys (J / K the messages, R reply, N note): the window's only outside it.
+      if (target?.closest('.fw-hd-window-thread')) return
       const key = event.key.toLowerCase()
       if (key === 'j' && now.next) {
         event.preventDefault()
@@ -135,7 +140,6 @@ export function HoldDetailModal({
     { id: 'hold', label: t('detail.tab.hold') },
     { id: 'affected', label: t('detail.tab.affected') },
     { id: 'decision', label: t('detail.tab.decision'), count: value ? value.release.checks.filter((check) => !check.ok).length || null : null },
-    { id: 'activity', label: t('detail.tab.activity') },
   ]
   const codes = hold ? `${hold.subjects.map((subject) => subject.label ?? '—').slice(0, 3).join(', ')}${hold.subjects.length > 3 ? ` ${t('subject.more', { count: hold.subjects.length - 3 })}` : ''}` : ''
   const what = hold ? (hold.subjects.length === 1 ? `${t(kindKey(hold.subjectType))} ${codes}` : `${hold.subjects.length} ${t(nounKey(hold.subjectType), { count: hold.subjects.length })}: ${codes}`) : null
@@ -181,13 +185,20 @@ export function HoldDetailModal({
       onRetry={actions?.onRetryDetail}
     >
       {value && hold && (
-        <div className="fw-q-stack">
-          {tab === 'hold' && <HoldTab value={value} model={model} actions={actions} />}
-          {tab === 'affected' && (
-            <AffectedTab affected={model.depth?.affected ?? null} prefix={model.prefix} reasons={model.reasons} onExtend={(start) => actions?.onGenealogy?.(start, hold.id)} onRetry={actions?.onRetryAffected} onOpenHold={(holdId) => actions?.onOpen?.(holdId)} />
+        // B-TH-270 (PL6): the tab's content and, with threads.read, the hold's thread docked in the window's right column.
+        <div className={thread ? 'fw-hd-window has-thread' : 'fw-hd-window'}>
+          <div className="fw-q-stack fw-hd-window-body">
+            {tab === 'hold' && <HoldTab value={value} model={model} actions={actions} />}
+            {tab === 'affected' && (
+              <AffectedTab affected={model.depth?.affected ?? null} prefix={model.prefix} reasons={model.reasons} onExtend={(start) => actions?.onGenealogy?.(start, hold.id)} onRetry={actions?.onRetryAffected} onOpenHold={(holdId) => actions?.onOpen?.(holdId)} />
+            )}
+            {tab === 'decision' && <DecisionTab value={value} model={model} actions={actions} releaseText={releaseText} />}
+          </div>
+          {thread && (
+            <aside className="fw-hd-window-thread" aria-label={t('detail.threadLabel', { hold: title })}>
+              {thread}
+            </aside>
           )}
-          {tab === 'decision' && <DecisionTab value={value} model={model} actions={actions} releaseText={releaseText} />}
-          {tab === 'activity' && (panels ?? <p className="fw-q-hint">{model.can.threadsRead ? t('detail.activityLater') : t('held.noThreads')}</p>)}
         </div>
       )}
     </DetailModal>

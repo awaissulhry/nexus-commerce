@@ -4,6 +4,9 @@ import type { ComponentType } from 'react'
 import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
 import { REQUEST_STATE_WORDS } from '@nexus/factory-domain/sales/portal-requests/state'
 import { customerSeesOf, MERGED_TABS, QUOTE_TABS, tabOf } from './model'
+// TH-6 part B (B-TH-257 follow-up)
+import { requestWithdrawnOf } from './model'
+import { CATALOGUE } from '../../../lib/i18n/messages'
 import { designScreen as listScreen } from './list/fixtures'
 import { designScreen, quote } from './record/fixtures'
 
@@ -62,6 +65,7 @@ describe('the quote on RecordFrame', () => {
     for (const tab of QUOTE_TABS) expect(tabOf(tab)).toBe(tab)
     expect(tabOf('nope')).toBe('lines')
     expect(tabOf(null)).toBe('lines')
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('lines') // TH-6 part B
   })
 
   it('one notice: the most serious shows in the body column, never above the thread', () => {
@@ -150,7 +154,58 @@ describe('the Quotes list: New messages, "from INQ-…", an accepted row’s ord
     for (const locale of ['en', 'it'] as const) expect(textOf(list('th-257-sources', locale)).length).toBeGreaterThan(100)
   })
 
-  it('Picture is not drawn: a quote row carries no picture yet (honest UI until its API)', () => {
-    expect(listView).not.toContain("colId: 'picture'")
+  // ---- TH-6 part B (B-TH-257 follow-up; grid-F01): the quote row's Picture, as the Orders sheet's (its API: GET /sales/quotes rows'
+  // `picture` + GET /sales/quotes/:id/picture, files.read only).
+  it('Picture: the first column, the small preview read once per row (never the original), the picture large on click', () => {
+    expect(listView).toContain("{ colId: 'picture', headerName: t('list.col.picture')")
+    expect(listView).toContain('<QuotePictureCell row={data} load={latest.current.actions?.loadPicture}')
+    expect(listView).toContain('<QuotePictureViewer row={row}')
+    expect(page).toContain('const picture = await readQuotePicture(api, quoteId)')
+    expect(page).toContain('return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null')
+    const cell = readFileSync(new URL('./list/view/QuotePicture.tsx', import.meta.url), 'utf8')
+    expect(cell).toContain('useRequestPicture({ id: row.id, picture: row.picture ?? null }, load, demo)')
+  })
+
+  it('the Picture words in both languages', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale].sales ?? {}
+      for (const key of ['list.col.picture', 'list.picture.open', 'list.picture.noneOf', 'list.picture.alt', 'list.picture.viewerOf', 'list.picture.small', 'list.picture.none', 'list.picture.openStyle', 'list.picture.close', 'list.picture.more', 'list.picture.moreStyles_other']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+  // ---- end TH-6 part B
+})
+
+// ---- TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN, #1564): "Customer sees" reads the request's own state ----------------
+describe('TH-6 part B: a request the customer withdrew is never "Quote being prepared"', () => {
+  it('the request’s own state decides, as the portal reads it; an older answer without it reads QUOTED as before', () => {
+    // B-TH-095 (on main) gives WITHDRAWN its own word in the portal: the office reads the same.
+    expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN', declineReason: null, closedAt: '2026-10-28T10:15:00.000Z' }, order: null }))).toBe('WITHDRAWN')
+    expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN' } }))).toBe('WITHDRAWN')
+    expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'QUOTED' } }))).toBe('QUOTE_SENT')
+    expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1' } }))).toBe('QUOTE_SENT')
+    expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'DECLINED', declineReason: 'NOT_AN_ORDER' } }))).toBe('CLOSED')
+    expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'DECLINED', declineReason: 'PRICE' } }))).toBe('DECLINED')
+  })
+
+  it('the office reads when: "The customer withdrew the request on …" beside the customer’s "Withdrawn"; nothing for any other state', () => {
+    expect(requestWithdrawnOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN', closedAt: '2026-10-28T10:15:00.000Z' } }))).toEqual({ at: '2026-10-28T10:15:00.000Z' })
+    expect(requestWithdrawnOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN' } }))).toEqual({ at: null })
+    expect(requestWithdrawnOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'QUOTED' } }))).toBeNull()
+    expect(requestWithdrawnOf(quote({ madeFrom: null }))).toBeNull()
+    const en = textOf(draw('th-6b-request-withdrawn'))
+    expect(en).toContain(`Customer sees: ${REQUEST_STATE_WORDS.WITHDRAWN.en}`)
+    expect(en).toContain('The customer withdrew the request on')
+    expect(en).not.toContain('Quote being prepared')
+    const it = textOf(draw('th-6b-request-withdrawn', 'it'))
+    expect(it).toContain(`Il cliente legge: ${REQUEST_STATE_WORDS.WITHDRAWN.it}`)
+    expect(it).toContain('Il cliente ha ritirato la richiesta il')
+    expect(textOf(draw('th-257-made-from'))).not.toContain('withdrew')
+  })
+
+  it('the order’s link to its accepted quote opens Approval & sending (where the quote’s Documents went), not an old tab', () => {
+    const orderDocs = readFileSync(new URL('../orders/record/view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    expect(orderDocs).toContain('/sales/quotes/${quote.id}?tab=approval')
+    expect(orderDocs).not.toContain('?tab=documents')
   })
 })
+// ---- end TH-6 part B

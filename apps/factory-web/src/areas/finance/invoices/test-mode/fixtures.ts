@@ -58,7 +58,7 @@ export const designScreen = defineDesignScreen<PageCase>({
     { id: 'list-two-companies', label: 'Finance · Two companies in test mode: each named with who answers', model: { role: 'finance', page: 'list', companies: [TESTING_FAKE, TESTING_SIMULATED] } },
     { id: 'list-live', label: 'Finance · Live: no banner', model: { role: 'finance', page: 'list', companies: [LIVE] } },
     { id: 'list-sales', label: 'Sales · Test mode on; New ▾ credit and debit note held with why', model: { role: 'sales', page: 'list', companies: [TESTING_FAKE] } },
-    { id: 'record-draft', label: 'Finance · A draft invoice in test mode: the banner above its tabs', model: { role: 'finance', page: 'record', companies: [TESTING_FAKE], recordCase: 'draft-ready' } },
+    { id: 'record-draft', label: 'Finance · A draft invoice in test mode: the banner in the record’s one notice', model: { role: 'finance', page: 'record', companies: [TESTING_FAKE], recordCase: 'draft-ready' } },
     { id: 'record-delivered', label: 'Finance · A delivered invoice in test mode: ⋯ offers Debit note', model: { role: 'finance', page: 'record', companies: [TESTING_SIMULATED], recordCase: 'delivered' } },
   ],
 })

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { FileCode2, FileText, Truck } from 'lucide-react'
-import { Banner, Card, EmptyState, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -16,9 +16,10 @@ import { xmlHref } from '../../daily/model'
 import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
- * Documents (design invoice tab "documents"): the legal XML (FatturaPA, what SDI receives), the courtesy PDF (it says
- * it is a copy; viewed here or downloaded), the DDTs the invoice cites, and the copies e-mailed to the customer. The
- * files are made at issue; an issued invoice whose files are still pending says so with "Make the files".
+ * Documents (design invoice tab "documents"; since B-TH-268 the second half of "SDI & documents", under SDI status): the legal XML
+ * (FatturaPA, what SDI receives), the courtesy PDF (it says it is a copy; viewed here or downloaded), the DDTs the invoice cites, and
+ * the copies e-mailed to the customer. The files are made at issue (a draft: SDI status's one card says so); an issued invoice whose
+ * files are still pending says so with "Make the files".
  */
 export function DocumentsTab({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
   const t = useT('finance')
@@ -31,11 +32,6 @@ export function DocumentsTab({ invoice, model, actions }: { invoice: Invoice; mo
   const copies = model.sdi?.value?.courtesyCopies.queued ?? []
   return (
     <div className="fw-fin-stack">
-      {invoice.status === 'DRAFT' && (
-        <Card padded>
-          <EmptyState title={t('docs.draft.title')} description={t('docs.draft.body')} />
-        </Card>
-      )}
       {invoice.filesPending && (
         <Banner
           tone="warning"

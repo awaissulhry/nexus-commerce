@@ -67,12 +67,6 @@
   gap: var(--nds-space-6) var(--nds-space-10);
 }
 
-.fw-lab-band-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-8);
-}
-
 .fw-lab-pick {
   display: flex;
   flex-wrap: wrap;

@@ -32,6 +32,10 @@ import {
   reviseDraftOf,
   reviseProblems,
   toldInstant,
+  // B-TH-267
+  MERGED_TABS,
+  RECORD_TABS,
+  tabOf,
 } from './model'
 import { dialogFor, dialogHeld, factsPatchOf, toldDialogFor } from './record/dialogs'
 import { designScreen as recordScreen } from './record/fixtures'
@@ -188,4 +192,73 @@ describe('every design case draws in both languages with no key left on screen',
       })
     }
   }
+})
+
+// ---- B-TH-267: the safety report on RecordFrame (O-CMP-SAFE; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-267: the safety report on RecordFrame — Report & photos · Accident log, the thread docked', () => {
+  const root = dirname(fileURLToPath(import.meta.url))
+  const source = (path: string) => readFileSync(join(root, path), 'utf8')
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = (recordScreen as DesignScreen<unknown>).cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return render(recordScreen as DesignScreen<unknown>, found.model, locale)
+  }
+  const text = (markup: string) => markup.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/\s+/g, ' ')
+
+  it('two tabs; every old ?tab= keeps working (R-8): Photos → Report & photos', () => {
+    expect(RECORD_TABS).toEqual(['report', 'accident'])
+    expect(MERGED_TABS).toEqual({ photos: 'report' })
+    expect(tabOf('photos')).toBe('report')
+    expect(tabOf('accident')).toBe('accident')
+    expect(tabOf('activity')).toBe('report')
+    expect(tabOf('constructor')).toBe('report')
+    expect(tabOf(null)).toBe('report')
+  })
+
+  it('Report & photos: the report, then its photos — each still opened through the report’s recorded opening (R-4)', () => {
+    const page = text(html('photos'))
+    expect(page).toContain('Report & photos')
+    expect(page).toContain('What happened')
+    expect(page).toContain('PSR-DEMO-0002-photo-1.jpg')
+    expect(text(html('photos', 'it'))).toContain('Segnalazione e foto')
+    // A safety photo never reaches the thread's Files view or the frame's file viewer: the view opens it with onOpenPhoto only,
+    // the container through openPhoto (POST …/photos/:fileId/open, the opening recorded), never the generic downloadLink.
+    const view = source('record/view/ReportRecordView.tsx')
+    expect(view).toContain('actions?.onOpenPhoto?.(photo.id)')
+    expect(view).not.toContain('openFiles')
+    expect(view).not.toContain('FileViewer')
+    const container = source('record/ReportRecord.tsx')
+    expect(container).toContain('openPhoto(api, reportId, fileId, newIdempotencyKey())')
+    expect(container).not.toContain('downloadLink')
+    expect(container).not.toContain('openFiles')
+  })
+
+  it('ONE thread docked beside both tabs, its "⋯" (R-ACT); not for this role, loading or a failed read: no thread', () => {
+    for (const id of ['report', 'accident-to-tell', 'photos', 'thread-docked', 'closed']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('tab=photos')
+    }
+    for (const id of ['loading', 'not-found', 'error', 'no-permission']) {
+      const page = html(id)
+      expect(page, id).not.toContain('class="fw-rcf-dock"')
+      expect(text(page), id).toContain('Product-safety reports')
+    }
+    const container = source('record/ReportRecord.tsx')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('report && threadRecord && can.threads ?')
+    expect(container).toContain("type: 'ProductSafetyReport'")
+  })
+
+  it('the wall (W33, W34): the docked thread speaks of the report’s customer only, never the injury', () => {
+    const page = html('thread-docked')
+    const dock = text(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Moto Demo S.r.l.')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
+    expect(dock).not.toContain('Contusione')
+    // A report from the public DoC page names no customer: notes only.
+    const publicReport = html('photos-none')
+    expect(text(publicReport.slice(publicReport.indexOf('class="fw-rcf-dock"')))).not.toContain('Moto Demo S.r.l.')
+  })
 })

@@ -118,8 +118,6 @@
   "record": {
     "backTo": "Back to {name}",
     "dangerZone": "Danger zone",
-    "dock": "Thread",
-    "dockHint": "Show the thread beside this tab (wide screens); narrower, it opens Activity.",
     "dockLabel": "Thread and history of this record",
     "tabsLabel": "Sections of this record",
     "notFoundTitle": "Not found",
@@ -455,8 +453,7 @@
     "tab": {
       "legal": "Legal & tax",
       "sites": "Sites",
-      "defaults": "Defaults",
-      "activity": "Activity"
+      "defaults": "Defaults"
     },
     "held": {
       "archived": "This company is archived."
@@ -549,8 +546,7 @@
       "structure": "Structure",
       "centres": "Work centres",
       "calendars": "Calendars",
-      "devices": "Devices",
-      "activity": "Activity"
+      "devices": "Devices"
     },
     "addLine": "Add line",
     "addStation": "Add station",
@@ -898,8 +894,7 @@
       "profile": "Profile",
       "roles": "Roles & scope",
       "partner": "Partner organisation",
-      "sessions": "Sessions & sign-ins",
-      "activity": "Activity"
+      "sessions": "Sessions & sign-ins"
     },
     "giveRole": "Give role",
     "mfaOn": "Two-factor on",
@@ -1004,8 +999,7 @@
   "worker": {
     "tab": {
       "profile": "Profile",
-      "badge": "Badge & PIN",
-      "activity": "Activity"
+      "badge": "Badge & PIN"
     },
     "held": {
       "own": "Nobody manages their own badge, PIN or roles.",
@@ -1222,8 +1216,7 @@
     "tab": {
       "permissions": "Permissions",
       "rules": "Scope rules",
-      "users": "Users",
-      "activity": "Activity"
+      "users": "Users"
     },
     "copyOf": "Custom copy of {key}",
     "readOnlySystem": "Ready-made role: read-only. It stays equal to its template.",
@@ -1511,8 +1504,7 @@
   "device": {
     "tab": {
       "binding": "Station & mode",
-      "status": "Status",
-      "activity": "Activity"
+      "status": "Status"
     },
     "held": {
       "revoked": "This device is revoked: enrol a new one."

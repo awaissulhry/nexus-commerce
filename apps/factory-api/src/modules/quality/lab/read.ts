@@ -190,7 +190,15 @@ export async function lotRecord(client: Reader, tenantId: string, lot: LotRow, v
     results: await resultsOf(client, lot.id),
     documents: await documentsOf(client, lot.id, day),
     checklist: await checklistOf(client, tenantId, lot, day, viewerId),
+    supplier: await supplierOf(client, lot.supplierId), // TH-6 part B: the Lot thread's party
   }
+}
+
+/** TH-6 part B (B-TH-267): the lot's supplier, its legal name; null when the lot names none. */
+async function supplierOf(client: Reader, partyId: string | null): Promise<{ id: string; name: string } | null> {
+  if (!partyId) return null
+  const party = await client.party.findUnique({ where: { id: partyId }, select: { id: true, legalName: true } })
+  return party ? { id: party.id, name: party.legalName } : null
 }
 
 /** GET /quality/lots/:lotId. */

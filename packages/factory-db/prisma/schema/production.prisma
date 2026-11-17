@@ -49,6 +49,9 @@
 // keeps why it was split; and an outside operation is reported by the subcontract receipt that brought the bundle back
 // (OperationScan.subcontractReceiptLineId: no worker, no station, never a person; the …_followups_stock_w2b_guards
 // trigger), so the next operation of the bundle may be scanned.
+//
+// B-PR-15 (production plan, schema wave 3/5): WorkOrderHold, a plain production or customer hold on a work order beside the
+// quality holds; a work order leaves ON_HOLD only when no ACTIVE one names it (…_brand_production_guards).
 
 /// A site's floor rules (SCR-074, B-W1-37): who a floor record names (MES-278: the monitoring switch with its legal
 /// reference), and the standard bundle size of its cutting room (MES-065). The site's row has the site's own id; a site
@@ -279,6 +282,8 @@ model WorkOrder {
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
   scheduleSlots       ScheduleSlot[]
+  // B-PR-15 (production plan, schema wave 3/5): its plain production and customer holds (quality holds stay holds.prisma's).
+  productionHolds     WorkOrderHold[]
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -322,6 +327,68 @@ enum WorkOrderStatus {
   /// W2a (MES-008): held from DRAFT, RELEASED or IN_PROGRESS (heldFromStatus), with its reason; back to that status when
   /// the hold is lifted, or CANCELLED.
   ON_HOLD
+}
+
+/// B-PR-15 (production plan, schema wave 3/5; 08-backend §4.5; B-PR-21 places and lifts them): a plain hold on a work order
+/// that is not a quality hold: PRODUCTION (the factory's own reason, a code of the PRODUCTION_HOLD reason list) or BRAND
+/// (the customer asked to pause: its accepted HOLD ask). The work order goes ON_HOLD with holdRecordType 'WorkOrderHold' and
+/// leaves ON_HOLD only when no ACTIVE hold names it (the …_brand_production_guards trigger WorkOrder_production_holds).
+/// ACTIVE → LIFTED with when, by whom and why (a hold written as history comes LIFTED whole). The office places and lifts;
+/// the floor reads its own site's (never the office's note); the customer reads only "On hold" and the words meant for it,
+/// through the API. Never deleted.
+model WorkOrderHold {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site, fixed.
+  companyId   String              @db.Uuid
+  siteId      String              @db.Uuid
+  workOrderId String              @db.Uuid
+  /// The work order's customer (null only on a work order of none), fixed: the brand wall's filter.
+  partyId     String?             @db.Uuid
+  kind        WorkOrderHoldKind
+  /// Why: a code of the tenant's PRODUCTION_HOLD reason list (records keep the code, never a reference), fixed.
+  reasonCode  String
+  /// The office's own words (at most 2000): never the floor's or the customer's to read.
+  /// @internal
+  note        String?
+  /// The words the customer reads beside "On hold" (one line, at most 500); null: the reason's words.
+  brandWords  String?
+  /// BRAND: the customer's HOLD ask it answers (an OrderChangeRequest of that customer; a plain id), fixed.
+  requestId   String?             @db.Uuid
+  status      WorkOrderHoldStatus @default(ACTIVE)
+  /// Placed when and by whom (an office person), fixed.
+  placedAt    DateTime            @default(now()) @db.Timestamptz(3)
+  placedById  String              @db.Uuid
+  /// Lifted when, by whom (an office person) and why (one line, at most 500): exactly while LIFTED.
+  liftedAt    DateTime?           @db.Timestamptz(3)
+  liftedById  String?             @db.Uuid
+  liftReason  String?
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?             @db.Uuid
+
+  // The work order of the same site.
+  workOrder WorkOrder @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A work order's holds, the active ones first (the lift, WorkOrder_production_holds).
+  @@index([tenantId, workOrderId, status])
+  // A customer's holds (the portal's "On hold", the brand wall's filter).
+  @@index([tenantId, partyId, status])
+}
+
+/// B-PR-15: what a WorkOrderHold is (factory-domain production/holds/kinds WORK_ORDER_HOLD_KINDS).
+enum WorkOrderHoldKind {
+  /// The factory's own production reason (material, capacity, a technical question…).
+  PRODUCTION
+  /// The customer asked to pause (its accepted HOLD ask).
+  BRAND
+}
+
+/// B-PR-15: a WorkOrderHold's life (production/holds/kinds WORK_ORDER_HOLD_STATUSES).
+enum WorkOrderHoldStatus {
+  ACTIVE
+  LIFTED
 }
 
 /// One cell of a work order's size grid (MES-002): the pieces of one colourway in one size, from one sales order line

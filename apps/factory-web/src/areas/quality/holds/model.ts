@@ -28,8 +28,13 @@ export const MAX = 200
 export const nextLimit = (limit: number): number => Math.min(MAX, limit + PAGE)
 
 // B-W2b-114: Affected (what the hold touches) after Hold.
-export const RECORD_TABS = ['hold', 'affected', 'decision', 'activity'] as const
+// ---- B-TH-270 (threads plan TH-6, PL6; 08-tabs O-QA-HOLD; picture 40): the hold's review window 4 → 3 — Hold · Affected · Decision.
+// Activity goes: the hold's thread is docked in the window's right column beside every tab, its tools in the thread's "⋯" (R-ACT).
+export const RECORD_TABS = ['hold', 'affected', 'decision'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Hold, the thread docked beside it. */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ activity: 'hold' })
+// ---- end B-TH-270
 
 type Params = { get(name: string): string | null } | null | undefined
 
@@ -100,7 +105,8 @@ export const modeFromAddress = (params: Params): ListMode => (params?.get('mode'
 
 export const tabFromAddress = (params: Params): RecordTab => {
   const asked = params?.get('tab') ?? ''
-  return (RECORD_TABS as readonly string[]).includes(asked) ? (asked as RecordTab) : 'hold'
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'hold' // B-TH-270 (R-8)
 }
 
 // ---- a hold in words ------------------------------------------------------------------------------------------------------

@@ -35,15 +35,16 @@ export type { InboxViewModel, InboxActions } from '../model'
  * requests of one kind with no signature (each re-read first); a request of one's own is never ticked (four eyes). It
  * fetches nothing (Approvals.tsx loads it).
  */
-export function InboxView({ model, actions, mailSwitch, conversation }: { model: InboxViewModel; actions?: InboxActions; mailSwitch?: ReactNode; conversation?: ReactNode }) {
+// B-TH-270: `thread` the request's thread docked in the review window (PL6; the page's RequestThread, or a design case's).
+export function InboxView({ model, actions, mailSwitch, thread }: { model: InboxViewModel; actions?: InboxActions; mailSwitch?: ReactNode; thread?: ReactNode }) {
   return (
     <WithMessages namespaces={[DEPTH_NS, 'approvals', 'sales', 'home', 'lists']}>
-      <Inbox_ model={model} actions={actions} mailSwitch={mailSwitch} conversation={conversation} />
+      <Inbox_ model={model} actions={actions} mailSwitch={mailSwitch} thread={thread} />
     </WithMessages>
   )
 }
 
-function Inbox_({ model, actions, mailSwitch, conversation }: { model: InboxViewModel; actions?: InboxActions; mailSwitch?: ReactNode; conversation?: ReactNode }) {
+function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel; actions?: InboxActions; mailSwitch?: ReactNode; thread?: ReactNode }) {
   const t = useT(DEPTH_NS)
   const w1 = useT('approvals')
   const sales = useT('sales')
@@ -379,7 +380,7 @@ function Inbox_({ model, actions, mailSwitch, conversation }: { model: InboxView
           }}
         />
       )}
-      {model.taskReview && <TaskReview model={model} actions={actions} conversation={conversation} kindWords={kindWords} />}
+      {model.taskReview && <TaskReview model={model} actions={actions} thread={thread} kindWords={kindWords} />}
       {/* The rules link for a phone: the band's ⋯ holds it too. */}
       {model.can.rules && controls.view === 'waiting' && shown && shown.length === 0 && !filtered && (
         <Button size="sm" variant="quiet" asChild>

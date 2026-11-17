@@ -103,15 +103,18 @@ export async function settingsOf(client: Reader, partyId: string): Promise<Porta
   }
 }
 
+/** B-PR-15: the order states still in production for the customer (something is left to make or ship). */
+const OPEN_ORDER_STATES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const
+
 /**
  * B-PR-14: how many of the customer's open orders are marked Urgent now (its OWN orders only; the limits card's "n urgent
- * now"). The marks live on BrandOrderProduction (B-PR-15, schema wave 3/5), which is not in the schema yet: until it lands no
- * order can carry a mark, so the true count is 0. B-PR-15 replaces this body with the count of the party's
- * BrandOrderProduction rows with urgency URGENT whose sales order is still open (CONFIRMED, IN_PRODUCTION, READY,
- * PARTLY_SHIPPED), read in the office scope like the rest of the card.
+ * now"). B-PR-15 (schema wave 3/5): the count of the party's BrandOrderProduction rows marked URGENT whose sales order is still
+ * open (CONFIRMED, IN_PRODUCTION, READY, PARTLY_SHIPPED; a shipped order keeps its last urgency as history and no longer
+ * counts), read in the office scope like the rest of the card. Marks count whether the customer's switch is on or off (off:
+ * the card says they are dormant).
  */
-export async function urgentNowOf(_client: Reader, _partyId: string): Promise<number> {
-  return 0
+export async function urgentNowOf(client: Reader, partyId: string): Promise<number> {
+  return client.brandOrderProduction.count({ where: { partyId, urgency: 'URGENT', salesOrder: { status: { in: [...OPEN_ORDER_STATES] } } } })
 }
 
 /** B-PR-14: the office people named on the limits card (supervisor, backup) and the customer's approver, by id: name and state. */

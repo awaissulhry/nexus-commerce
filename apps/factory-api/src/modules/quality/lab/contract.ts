@@ -138,7 +138,17 @@ const ruleView = output({ crViEvidenceRule: z.enum(EVIDENCE_RULES), source: z.en
 
 export const getLotContract = defineContract({
   params: lotParams,
-  response: { 200: output({ lot: lotView, rule: ruleView, results: z.array(listedResult), documents: z.array(listedDocument), checklist: checklistView }) },
+  response: {
+    200: output({
+      lot: lotView,
+      rule: ruleView,
+      results: z.array(listedResult),
+      documents: z.array(listedDocument),
+      checklist: checklistView,
+      // TH-6 part B (B-TH-267): the lot's supplier by name — its Lot thread's party ("Reply to <supplier>"), as Warehouse › Lots names it.
+      supplier: output({ id: id(), name: z.string() }).nullable(),
+    }),
+  },
 })
 
 export const listLotsContract = defineContract({

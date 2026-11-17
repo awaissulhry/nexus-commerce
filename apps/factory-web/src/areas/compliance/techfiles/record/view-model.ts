@@ -98,7 +98,8 @@ export interface RecordModel {
   notice: Notice | null
   /** A live change came while a pop-up was open: "Changed at …" with Reload. */
   changedAt: string | null
-  dockOpen: boolean
+  /** B-TH-267: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   fileDialog: { readonly dialog: FileDialog; readonly writing: Writing } | null
   keepers: Read<PersonOption[]> | null
   /** The certificates that cover the style (the edit pop-up's choice; evidence-options of point f). */
@@ -116,13 +117,11 @@ export interface RecordModel {
   withdraw: WithdrawState | null
   pack: PackDialogModel | null
   stepUp: StepUpState
-  keysOpen?: boolean
 }
 
 export interface RecordActions {
   onDismissNotice?: () => void
   onReload?: () => void
-  onDock?: () => void
   onRetry?: (part: 'risk' | 'reports' | 'production' | 'packs') => void
   // the band
   onComplete?: () => void

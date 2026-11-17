@@ -144,6 +144,31 @@ describe('technical files and the Annex III checklist (PRD-296)', () => {
     expect(record.completeProblems.map((issue: Json) => issue.path)).toContain('points/J_PRODUCTION_CONTROL')
   })
 
+  // ---- TH-6 part B (B-TH-267; B-TH-075: the file's thread party is its style's brand) ----
+  it('names the brand its style is made for (the thread’s party), or none for our own collection', async () => {
+    const styleId = (await admin<{ styleId: string }>('SELECT "styleId" FROM "TechnicalFile" WHERE id = $1', [seeded.technicalFileIds.open]))[0]!.styleId
+    const before = (await admin<{ brandPartyId: string | null }>('SELECT "brandPartyId" FROM "Style" WHERE id = $1', [styleId]))[0]!.brandPartyId
+    const brand = (await admin<{ id: string; legalName: string }>(`SELECT id, "legalName" FROM "Party" WHERE "tenantId" = $1 AND 'CUSTOMER' = ANY(roles) ORDER BY "legalName" LIMIT 1`, [T.tenant]))[0]!
+    // Test data written past the style's own guards (the admin's session only), then back.
+    const setBrand = async (partyId: string | null) => {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin('UPDATE "Style" SET "brandPartyId" = $2 WHERE id = $1', [styleId, partyId])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+    try {
+      await setBrand(null)
+      expect((await ok('viewer', 'GET', `/compliance/techfiles/${seeded.technicalFileIds.open}`)).file.brand).toBeNull()
+      await setBrand(brand.id)
+      expect((await ok('viewer', 'GET', `/compliance/techfiles/${seeded.technicalFileIds.open}`)).file.brand).toEqual({ id: brand.id, name: brand.legalName })
+    } finally {
+      await setBrand(before)
+    }
+  })
+  // ---- end TH-6 part B
+
   it('opens one live file per style, numbered, with the obvious evidence linked (never reviewed by the system)', async () => {
     const jkt02 = (await admin<{ styleId: string }>('SELECT "styleId" FROM "TechnicalFile" WHERE id = $1', [seeded.technicalFileIds.open]))[0]!.styleId
     const refused = await no('keeper', 'POST', '/compliance/techfiles', { styleId: jkt02 }, 409)

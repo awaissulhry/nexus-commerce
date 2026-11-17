@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { COMPANIES, inShell, NOW, panels, PREFIX, SITES } from '../shared/fixtures'
+import { COMPANIES, inShell, NOW, PREFIX, SITES } from '../shared/fixtures'
+// ---- B-TH-269: the company's docked thread in the design cases (notes only: an admin record has no party, W03) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { Calendar, CalendarDayRow } from '../../planning/settings/api'
 import type { CompanyCalendarsModel } from './calendars/model'
@@ -14,16 +16,17 @@ import { CompanyRecordView } from './view/CompanyRecordView'
  * VAT numbers and example.com PEC addresses. Each case is one state the Owner reviews.
  */
 
-type Case = { page: 'list'; model: CompaniesViewModel } | { page: 'company'; model: CompanyRecordModel; dock?: boolean; calendars?: CompanyCalendarsModel }
+// B-TH-269: `noThread` — a person without threads.read (no dock, no Thread button).
+type Case = { page: 'list'; model: CompaniesViewModel } | { page: 'company'; model: CompanyRecordModel; noThread?: boolean; calendars?: CompanyCalendarsModel }
 
 const CAN = { manageCompanies: true, viewSites: true, manageSites: true, viewCalendars: true, manageCalendars: true }
 const list = (over: Partial<CompaniesViewModel> = {}): Case => ({
   page: 'list',
   model: { prefix: PREFIX, companies: loaded(COMPANIES), asOf: NOW, can: CAN, currentCompanyId: COMPANIES[0]!.id, query: '', showArchived: false, collapsed: [], pages: 1, ...over },
 })
-const record = (over: Partial<CompanyRecordModel> = {}, dock = false): Case => ({
+const record = (over: Partial<CompanyRecordModel> = {}, noThread = false): Case => ({
   page: 'company',
-  dock,
+  noThread,
   model: { prefix: PREFIX, tab: 'legal', company: COMPANIES[0]!, sites: loaded(COMPANIES[0]!.sites), can: CAN, ...over },
 })
 const esempio = COMPANIES[1]!
@@ -101,9 +104,10 @@ const onCalendars = (over: Partial<CompanyCalendarsModel> = {}, can: Partial<typ
 function CompaniesDesign({ model }: { model: Case }) {
   if (model.page === 'list') return inShell('/admin/companies', createElement(CompaniesView, { model: model.model }))
   const company = model.model.company
-  const panel = company ? panels({ type: 'Company', id: company.id, companyId: company.id }, company.legalName) : null
+  // B-TH-269: the company's thread docked beside every tab (notes only), with threads.read; none without it.
+  const thread = company && !model.noThread ? designDockedThread({ recordType: 'Company', record: company.code, party: null }) : null
   const tab = model.calendars ? createElement(CompanyCalendarsView, { model: model.calendars }) : null
-  return inShell(`/admin/companies/${company?.id ?? 'x'}`, createElement(CompanyRecordView, { model: { ...model.model, dockOpen: model.dock }, panels: panel, calendars: tab }))
+  return inShell(`/admin/companies/${company?.id ?? 'x'}`, createElement(CompanyRecordView, { model: model.model, thread, calendars: tab }))
 }
 
 export const designScreen = defineDesignScreen<Case>({
@@ -173,8 +177,14 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'record-calendars-elsewhere', label: 'Company: changed by someone else', model: onCalendars({ changedElsewhere: true }) },
     { id: 'record-calendars-loading', label: 'Company: Calendars loading', model: onCalendars({ load: { status: 'loading' } }) },
     { id: 'record-calendars-error', label: 'Company: Calendars read failed', model: onCalendars({ load: { status: 'error', problem: 'ps.problem.offline' } }), note: 'A failed read is never drawn as an empty calendar: the reason and Try again; the other tabs keep working.' },
-    { id: 'record-activity', label: 'Company: Activity (record panels)', model: record({ tab: 'activity' }) },
-    { id: 'record-dock', label: 'Company: thread beside Legal & tax (≥ 1280 px, ⌘J)', model: record({}, true), note: 'Owner O1: wide screens only; narrower, the button opens Activity.' },
+    // ---- B-TH-269: Activity went (its tools are in the thread's "⋯"); the thread docks beside every tab.
+    {
+      id: 'record-thread',
+      label: 'Company: the thread docked beside Legal & tax',
+      model: record(),
+      note: 'B-TH-269: notes only (an admin record has no party). The old ?tab=activity address lands here with the thread open; ⌘J hides and shows it; narrower than 1280 px the band’s Thread button opens it full width.',
+    },
+    { id: 'record-no-thread', label: 'Company: without threads.read (no thread)', model: record({}, true), note: 'No dock and no Thread button: the tabs take the whole width.' },
     { id: 'record-archive', label: 'Company: archive held while a site is active', model: record({ archiving: true }) },
     { id: 'record-archive-ok', label: 'Company: archive (no active site)', model: record({ archiving: true, company: esempio, sites: loaded(SITES.filter((site) => site.companyId === esempio.id).map((site) => ({ ...site, status: 'ARCHIVED' as const }))) }) },
     { id: 'record-loading', label: 'Company: loading', model: record({ company: null, sites: loading() }) },

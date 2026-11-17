@@ -27,7 +27,7 @@ export function labCostListCases(listModel: ListModel, lots: readonly Lot[]) {
   ]
 }
 
-type LotCase = (lot: Lot, over?: Partial<LotRecordModel>, role?: RoleCase) => { readonly model: LotRecordModel; readonly role: RoleCase; readonly panels: boolean }
+type LotCase = (lot: Lot, over?: Partial<LotRecordModel>, role?: RoleCase) => { readonly model: LotRecordModel; readonly role: RoleCase; readonly thread: boolean } // B-TH-267: the docked thread, not the panels
 
 /** SCR-054-lot: the price typed with a result, refused when it is not an amount, and read back on the result. */
 export function labCostLotCases(lotCase: LotCase, lot: Lot, detail: LotDetail, draft: ResultDraft, priced: LotDetail) {

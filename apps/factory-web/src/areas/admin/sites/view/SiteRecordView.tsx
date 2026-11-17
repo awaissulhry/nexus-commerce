@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Factory, Plus, Trash2 } from 'lucide-react'
-import { Banner, Card, Field, KeyValue, Menu } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Input, NumberStepper, Pill, Select, Skeleton, Toggle } from '@nexus/ui/primitives'
 import { EditModeBar, Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -11,7 +11,9 @@ import { ListFrame } from '../../../../list-frame/ListFrame'
 import { WORK_CENTRE_KINDS, type Device, type Printer, type SiteStructure, type WorkCentre, type WorkCentreKind } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { AdminMessages, FrameState, ListKeysHelp, ListState, NoticeBanner, RecordProblem } from '../../shared/view/parts'
-import { RecordFrame } from '../../shared/view/RecordFrame'
+// ---- B-TH-269: the site on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
+import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
 import {
   archiveUses,
   floorDraft,
@@ -25,7 +27,6 @@ import {
   type PartDraft,
   type SiteDialog,
   type SiteRecordModel,
-  type SiteTab,
   type StructureRow,
 } from '../model'
 import { centreColumns, sitePrinterColumns, structureColumns, tabletColumns } from './columns'
@@ -43,25 +44,29 @@ export interface SiteRecordActions {
   onSaveFloor?: (draft: FloorDraft) => Promise<boolean>
   /** Enter on a tablet's row: open the Device record. */
   onOpen?: (href: string) => void
-  onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
 }
 
 /**
- * SCR-009 — a Site record (design 02 admin.org "Record: Site"): Structure (lines with their stations, stations standing
- * alone), Work centres, Calendars (shift ends and the floor's idle sign-out; the Owner's F1 floor setting shown as
- * coming with the floor step), Devices (the site's tablets and printers) and Activity. Fetches nothing (SiteRecord.tsx).
+ * SCR-009 — a Site record (design 02 admin.org "Record: Site"), on RecordFrame (B-TH-269; the rule of picture 38, the tabs of 08-tabs
+ * O-ADM-SITE): the band in the shell's band row (‹ its company, "<code> <name>", ONE state pill, its kind; Add station — held with why
+ * — and Add line beside it; the Thread button ⌘J, the frame's; ⋯ Archive the site and its Keyboard line), the docked thread beside
+ * every tab (notes only: an admin record has no party, W03; Activity's tools in its "⋯", R-ACT) and the tabs 5 → 4: Structure (lines
+ * with their stations, stations standing alone), Work centres, Calendars (shift ends and the floor's idle sign-out; the Owner's F1
+ * floor setting) and Devices (the site's tablets and printers). Every banner in the ONE notice of the body column. Fetches nothing
+ * (SiteRecord.tsx).
  */
-export function SiteRecordView({ model, actions, panels }: { model: SiteRecordModel; actions?: SiteRecordActions; panels?: ReactNode }) {
+// B-TH-269: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function SiteRecordView({ model, actions, thread, printThread }: { model: SiteRecordModel; actions?: SiteRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <AdminMessages>
-      <SiteRecord model={model} actions={actions} panels={panels} />
+      <SiteRecord model={model} actions={actions} thread={thread} printThread={printThread} />
     </AdminMessages>
   )
 }
 
-function SiteRecord({ model, actions, panels }: { model: SiteRecordModel; actions?: SiteRecordActions; panels?: ReactNode }) {
+function SiteRecord({ model, actions, thread, printThread }: { model: SiteRecordModel; actions?: SiteRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
   const structure = model.structure
@@ -72,10 +77,13 @@ function SiteRecord({ model, actions, panels }: { model: SiteRecordModel; action
     actions?.onDialog?.(next)
   }
 
+  const frame = { recordType: 'Site', personId: model.personId ?? null, threadLabel: t('record.dockLabel') }
+
+  // Not found, no right, a failed read, loading: the band and its state inside the frame, no thread yet.
   if (!structure) {
-    if (model.problem)
-      return (
-        <div className="fw-adm">
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back: <Link href={href('/companies')}>{t('nav.companies')}</Link>, title: model.problem ? t('nav.companies') : <Skeleton width={260} height={22} />, moreLabel: t('common.more') }}>
+        {model.problem ? (
           <RecordProblem
             problem={model.problem}
             onRetry={actions?.onRetry}
@@ -85,14 +93,13 @@ function SiteRecord({ model, actions, panels }: { model: SiteRecordModel; action
               </Button>
             }
           />
-        </div>
-      )
-    return (
-      <div className="fw-adm" aria-busy="true">
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={28} width="60%" />
-        <Skeleton height={220} />
-      </div>
+        ) : (
+          <div className="fw-adm" aria-busy="true">
+            <Skeleton height={28} width="60%" />
+            <Skeleton height={220} />
+          </div>
+        )}
+      </RecordFrame>
     )
   }
 
@@ -100,62 +107,61 @@ function SiteRecord({ model, actions, panels }: { model: SiteRecordModel; action
   const archived = site.status === 'ARCHIVED'
   const manage = model.can.manage && !archived
   const heldManage = !model.can.manage ? t('held.needs', { right: t('right.sites_manage') }) : archived ? t('site.held.archived') : null
-  const tabs: Array<{ id: SiteTab; label: string; count?: number | null }> = [
+  const tabs: TabItem[] = [
     { id: 'structure', label: t('site.tab.structure'), count: structure.stations.filter((station) => station.status === 'ACTIVE').length },
     { id: 'centres', label: t('site.tab.centres'), count: structure.workCentres.filter((centre) => centre.status === 'ACTIVE').length },
     { id: 'calendars', label: t('site.tab.calendars') },
-    ...(model.can.viewDevices ? [{ id: 'devices' as const, label: t('site.tab.devices'), count: model.devices.items ? model.devices.items.filter((device) => device.status !== 'REVOKED').length : null }] : []),
-    { id: 'activity', label: t('site.tab.activity') },
-  ]
+    ...(model.can.viewDevices ? [{ id: 'devices', label: t('site.tab.devices'), count: model.devices.items ? model.devices.items.filter((device) => device.status !== 'REVOKED').length : null }] : []),
+  ].map((item) => ({ ...item, href: `${href(`/companies/${company.id}/sites/${site.id}`)}?tab=${item.id}` }))
   const tab = tabs.some((item) => item.id === model.tab) ? model.tab : 'structure'
+  // The band's ⋯: Archive the site (with sites.manage, while it is active); the frame adds its Keyboard line.
+  const more: MenuItemDef[] = manage ? [{ id: 'archive', label: t('site.archive.action'), tone: 'danger', onSelect: () => open({ kind: 'archive', target: 'site', id: site.id }) }] : []
 
   return (
-    <div className="fw-adm">
+    <>
       <RecordFrame
-        back={{ href: `${href(`/companies/${company.id}`)}?tab=sites`, label: company.legalName }}
-        title={
-          <>
-            <span className="fw-adm-code">{site.code}</span> {site.name}
-          </>
-        }
-        meta={t(`org.kind.${site.kind}`)}
-        status={<Pill tone={STATUS_TONE[site.status] ?? 'neutral'}>{t(`status.${site.status}`)}</Pill>}
-        actions={
-          <>
-            <Button size="sm" onClick={() => open({ kind: 'line' })} heldReason={heldManage}>
-              {t('site.addLine')}
-            </Button>
-            <Button size="sm" variant="primary" onClick={() => open({ kind: 'station' })} heldReason={heldManage ?? (structure.workCentres.some((centre) => centre.status === 'ACTIVE') ? null : t('site.held.noCentre'))}>
-              {t('site.addStation')}
-            </Button>
-            {manage && (
-              <Menu
-                label={t('common.more')}
-                align="right"
-                triggerProps={{ 'aria-label': t('common.moreFor', { name: site.name }) }}
-                items={[{ id: 'archive', label: t('site.archive.action'), tone: 'danger', onSelect: () => open({ kind: 'archive', target: 'site', id: site.id }) }]}
-              />
-            )}
-          </>
-        }
-        tabs={tabs}
-        active={tab}
-        tabHref={(id) => `${href(`/companies/${company.id}/sites/${site.id}`)}?tab=${id}`}
-        dock={tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        {...frame}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={`${href(`/companies/${company.id}`)}?tab=sites`}>{company.legalName}</Link>,
+          title: (
+            <>
+              <span className="fw-adm-code">{site.code}</span> {site.name}
+            </>
+          ),
+          status: <Pill tone={STATUS_TONE[site.status] ?? 'neutral'}>{t(`status.${site.status}`)}</Pill>,
+          meta: <span>{t(`org.kind.${site.kind}`)}</span>,
+          primary: (
+            <span className="fw-adm-actions">
+              <Button size="sm" onClick={() => open({ kind: 'line' })} heldReason={heldManage}>
+                {t('site.addLine')}
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => open({ kind: 'station' })} heldReason={heldManage ?? (structure.workCentres.some((centre) => centre.status === 'ACTIVE') ? null : t('site.held.noCentre'))}>
+                {t('site.addStation')}
+              </Button>
+            </span>
+          ),
+          more,
+          moreLabel: t('common.moreFor', { name: site.name }),
+        }}
       >
-        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {archived && <Banner tone="info" title={t('site.archivedBanner')} />}
-        {!model.can.manage && !archived && <Banner tone="info" title={t('record.readOnly')} />}
-        {tab === 'structure' && <StructureTab model={model} structure={structure} manage={manage} open={open} actions={actions} />}
-        {tab === 'centres' && <CentresTab model={model} structure={structure} manage={manage} open={open} actions={actions} />}
-        {tab === 'calendars' && <CalendarsTab model={model} structure={structure} actions={actions} />}
-        {tab === 'devices' && <DevicesTab model={model} structure={structure} actions={actions} />}
-        {tab === 'activity' && panels}
+        <div className="fw-adm">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+          {/* B-TH-269: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            {model.notice && <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />}
+            {archived && <Banner tone="info" title={t('site.archivedBanner')} />}
+            {!model.can.manage && !archived && <Banner tone="info" title={t('record.readOnly')} />}
+          </RecordNotices>
+          {tab === 'structure' && <StructureTab model={model} structure={structure} manage={manage} open={open} actions={actions} />}
+          {tab === 'centres' && <CentresTab model={model} structure={structure} manage={manage} open={open} actions={actions} />}
+          {tab === 'calendars' && <CalendarsTab model={model} structure={structure} actions={actions} />}
+          {tab === 'devices' && <DevicesTab model={model} structure={structure} actions={actions} />}
+        </div>
       </RecordFrame>
       <PartDialog structure={structure} dialog={dialog} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => open(null)} actions={actions} />
-    </div>
+    </>
   )
 }
 

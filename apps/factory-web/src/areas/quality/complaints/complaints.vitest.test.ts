@@ -64,6 +64,10 @@ import {
   withPreview,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+// B-TH-266: the complaint on RecordFrame (tabs 5 → 4, the docked thread).
+import { readFileSync } from 'node:fs'
+import { MERGED_TABS, RECORD_TABS, tabOf } from './record/view-model'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 
 const params = (query: string) => new URLSearchParams(query)
 const en = CATALOGUE.en.complaints ?? {}
@@ -424,5 +428,71 @@ describe('every design case draws in both languages with no key left on screen',
 
   it('today’s design day is the fixtures’ own', () => {
     expect(TODAY).toBe('2026-10-29')
+  })
+})
+
+// ---- B-TH-266: the complaint on RecordFrame (O-QA-CMP; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-266: the complaint on RecordFrame — Complaint · Investigation · Answer · Linked records, its own thread docked', () => {
+  const screen = recordScreen as unknown as DesignScreen<unknown>
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = screen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    const View = screen.view as ComponentType<{ model: unknown }>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: found.model })))
+  }
+
+  it('four tabs; every old ?tab= keeps working (R-8): Activity → Complaint with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['complaint', 'investigation', 'answer', 'linked'])
+    expect(MERGED_TABS).toEqual({ activity: 'complaint' })
+    for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
+    expect(tabOf('activity')).toBe('complaint')
+    expect(tabOf('constructor')).toBe('complaint')
+    expect(tabOf(null)).toBe('complaint')
+    for (const locale of LOCALES) expect(CATALOGUE[locale].complaints?.['tab.activity'], locale).toBeUndefined()
+  })
+
+  it('ONE thread docked beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock hook', () => {
+    for (const id of ['new', 'safety-raised', 'linked', 'thread-docked', 'investigation', 'answer', 'closed']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('?tab=activity')
+      expect(page, id).not.toContain('fw-q-record-dock')
+    }
+    const container = readFileSync(new URL('./record/ComplaintRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('party={party} partyRole="customer"')
+    expect(container).toContain('can.threadsRead')
+    expect(container).not.toContain('?tab=activity')
+    expect(container).not.toContain('fw.complaints.dock')
+    const view = readFileSync(new URL('./record/view/ComplaintRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('onDock')
+    expect(view).toContain('_shared/record-frame/RecordFrame')
+  })
+
+  it('the safety alert sits in the ONE notice of the body column, never above the thread', () => {
+    const page = html('safety-raised')
+    const at = page.indexOf('fw-rcf-notices')
+    expect(at).toBeGreaterThan(page.indexOf('fw-rcf-body'))
+    expect(at).toBeLessThan(page.indexOf('class="fw-rcf-dock"'))
+    expect(textOf(page.slice(at, page.indexOf('class="fw-rcf-dock"')))).toMatch(/Acknowledge/)
+  })
+
+  it('the photos hint names the thread, not a tab that went', () => {
+    expect(textOf(html('new'))).toContain("the complaint's thread")
+    expect(textOf(html('new', 'it'))).toContain('conversazione del reclamo')
+  })
+
+  it('the page states draw inside the frame with no thread (loading, not found, no right)', () => {
+    for (const id of ['loading', 'not-found', 'no-permission']) expect(html(id), id).not.toContain('class="fw-rcf-dock"')
+  })
+
+  it('the wall (W14, W20, W21, W25, W34): the thread reaches this complaint\'s own customer only', () => {
+    const page = html('thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Moto Demo Srl')
+    expect(dock).not.toContain('Demo Racing Team')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
   })
 })

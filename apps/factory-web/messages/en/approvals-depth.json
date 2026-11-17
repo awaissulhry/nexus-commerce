@@ -271,10 +271,10 @@
     "noun": "request",
     "tab": {
       "change": "Change",
-      "context": "Context",
-      "conversation": "Conversation",
-      "history": "History"
+      "context": "Context & history"
     },
+    "historyTitle": "Approval history",
+    "threadLabel": "Thread of this request",
     "asked": "{who} asked on {at}",
     "decided": "{status} by {who} on {at}",
     "withdrawn": "Withdrawn on {at}",
@@ -298,10 +298,6 @@
     "due": "To decide by",
     "noMoney": "Amounts are shown only with the right to see them.",
     "open": "Open full page"
-  },
-  "conversation": {
-    "title": "No comments yet",
-    "body": "Comments between the approver and who asked stay with the request."
   },
   "sign": {
     "title": "Approve as '{meaning}'",

@@ -556,7 +556,7 @@
       "noLanguage": "No language on file",
       "wanted": "the order asks {language}",
       "fallbackTag": "Other language",
-      "open": "Download {document}",
+      "view": "Open {document} in the file viewer",
       "packingList": "Packing list (in the parcels only)",
       "whenShipped": "When the goods leave, the documents are attached and the link is mailed by themselves.",
       "allAttached": "Everything on file is attached for the customer"
@@ -1004,7 +1004,7 @@
     "contents_other": "{count} garments, parcels: {parcels}",
     "current": "Current",
     "older": "Older",
-    "download": "Download packing list {number}",
+    "view": "Open packing list {number} in the file viewer",
     "none": "No packing list yet: make it from the cartons (Lines & cartons).",
     "noneCancelled": "No packing list.",
     "note": "A packing list is made again when the cartons change; each version keeps its number. Print all opens the driver's pack in a new tab."

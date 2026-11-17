@@ -279,6 +279,7 @@ describe('B-TH-258: History in Measurements (once the Activity tab)', () => {
     expect(tabOf('photos')).toBe('photos')
     expect(tabOf('nope')).toBe('measurements')
     expect(tabOf(null)).toBe('measurements')
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('measurements') // TH-6 part B
     const photos = render(recordScreen as DesignScreen<unknown>, recordScreen.cases.find((item) => item.id === 'photos')!.model, 'en')
     expect(photos).not.toContain('id="mtm-history"')
     for (const locale of LOCALES) {

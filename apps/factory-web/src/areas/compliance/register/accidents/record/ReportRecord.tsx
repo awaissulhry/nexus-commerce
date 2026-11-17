@@ -9,6 +9,7 @@ import { useSafetyPhotos } from '../../../../../lib/safety-reports/use-photos'
 import { companyPrefix } from '../../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
 import { readFromStore } from '../../../../../record-panels/store'
+import { RecordPanels } from '../../../../../record-panels/RecordPanels'
 import { liveMatches, useLive } from '../../../../quality/_shared/hooks'
 import {
   changeReport,
@@ -27,16 +28,20 @@ import {
   type Report,
   type Revision,
 } from '../api'
-import { actionHeld, isRecordDo, isRecordTab, readProblemOf, refusalOf, reviseBodyOf, safetyCan, type RecordTab } from '../model'
+import { actionHeld, isRecordDo, readProblemOf, refusalOf, reviseBodyOf, safetyCan, tabOf, type RecordTab } from '../model'
 import { SafetyMessages } from '../parts'
 import { dialogFor, dialogHeld, factsPatchOf, toldDialogFor } from './dialogs'
 import type { DialogState, InjuryState, RecordDialog, ReportRecordModel } from './view-model'
 import { ReportRecordView } from './view/ReportRecordView'
+// ---- B-TH-267: the docked thread on the safety report (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../../shell/print/print-model'
 
 const LIVE_TYPES = ['safety_report.', 'accident_log.revised']
 
 /**
- * `/w/<company>/compliance/register/accidents/reports/<id>?tab=report|accident|photos&do=revise|told` — a product-safety report
+ * `/w/<company>/compliance/register/accidents/reports/<id>?tab=report|accident&do=revise|told` (B-TH-267: the old `photos` lands on
+ * Report & photos; the thread docked beside both tabs, the report's customer its only party, none: notes only) — a product-safety report
  * (SCR-421-record, B-W2b-357 on B-W2b-351's API): reads the report (and its accident log on that tab), runs each verb as ONE
  * call with its own Idempotency-Key and the version read, opens the injury only through `POST …/injury/open` (the API records
  * the opening first; the words live in this page's state only and leave with Hide, another report or the page), opens a photo
@@ -59,8 +64,8 @@ function RecordContainer({ reportId }: { reportId: string }) {
   const params = useSearchParams()
   const can = useMemo(() => safetyCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tabParam = params?.get('tab') ?? null
-  const tab: RecordTab = isRecordTab(tabParam) ? tabParam : 'report'
+  // B-TH-267: every old ?tab= lands (photos → Report & photos).
+  const tab: RecordTab = tabOf(params?.get('tab'))
   const doParam = params?.get('do') ?? null
   const today = romeToday()
 
@@ -254,11 +259,25 @@ function RecordContainer({ reportId }: { reportId: string }) {
     notice,
     live,
     changed,
+    personId: session.user.id,
   }
+
+  // B-TH-267: the docked thread (Head with Activity's doors, files line, Files view, feed, box), mounted only with threads.read — its only
+  // party is the customer the report names (none, as from the public DoC page: office notes only). Never the injury (it has no thread)
+  // and never the photos: their files are read only through the report's recorded opening (the generic file routes do not find them).
+  const threadRecord = report ? { type: 'ProductSafetyReport', id: report.id, companyId: report.companyId, siteId: null } : null
+  const party = report?.party ? { id: report.party.id, name: report.party.legalName } : null
+  const thread =
+    report && threadRecord && can.threads ? (
+      <OfficeRecordThread docked record={threadRecord} title={party ? `${report.number} · ${party.name}` : report.number} recordLabel={report.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
+    ) : null
+  const printThread = report && threadRecord && can.threads ? <RecordPanels record={threadRecord} title={report.number} party={party ? { ...party, emails: [] } : null} /> : null
 
   return (
     <ReportRecordView
       model={model}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => {
           void load()
