@@ -33,7 +33,11 @@ export const ALERT_RULES: readonly FanOutRule[] = Object.freeze([
       const payload = payloadOf('alert.raised').parse(raw) as unknown as { alertId: string }
       const alert = await context.tx.alert.findUnique({ where: { id: payload.alertId }, select: ALERT_SELECT })
       if (!alert || alert.state === 'RESOLVED' || !alert.rule.channels.includes('IN_APP')) return []
-      const { people } = await alertRecipients(context.tx, alert, context.now, MAX_PEOPLE)
+      // ---- B-TH-071 (PROJ.home-F04 "only the lead gets it"): a stale project tells its lead alone, in its own words.
+      const stale = alert.ruleKind === 'PROJECT_STALE' && alert.recordType === 'Project'
+      const lead = stale ? await context.tx.project.findUnique({ where: { id: alert.recordId }, select: { leadId: true } }) : null
+      const { people } = stale ? { people: lead ? [lead.leadId] : [] } : await alertRecipients(context.tx, alert, context.now, MAX_PEOPLE)
+      // ---- end B-TH-071
       const drafts: Draft[] = []
       for (const userId of people) {
         const reader = await context.reader(userId)
@@ -44,7 +48,7 @@ export const ALERT_RULES: readonly FanOutRule[] = Object.freeze([
           record: { type: alert.recordType, id: alert.recordId, label: alert.recordLabel },
           companyId: alert.companyId,
           anchor: `alert:${alert.id}`,
-          messageKey: 'notifications.alert.raised',
+          messageKey: stale ? 'notifications.projects.stale' : 'notifications.alert.raised', // B-TH-071
           params: { title: alert.rule.name, alertId: alert.id, ruleKind: alert.ruleKind },
           actorId: null,
         })

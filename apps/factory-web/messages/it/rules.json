@@ -16,7 +16,8 @@
     "EXIT_PROOF_MISSING": "Esportazioni senza la prova dell'uscita",
     "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo",
     "STAMP_DUTY_DUE": "Trimestri del bollo vicini alla scadenza",
-    "REQUEST_NUMBERING_MISSING": "Aziende le cui richieste non hanno numerazione"
+    "REQUEST_NUMBERING_MISSING": "Aziende le cui richieste non hanno numerazione",
+    "PROJECT_STALE": "Progetti oltre la data obiettivo e senza messaggi da 14 giorni"
   },
   "when": {
     "ORDER_LATE_RISK": "Quando un ordine è promesso entro {daysBeforePromise} e non è pronto, o è in ritardo",
@@ -35,7 +36,8 @@
     "EXIT_PROOF_MISSING": "Quando la prova dell'uscita di un'esportazione manca ancora dopo i giorni della sua dichiarazione",
     "MARGIN_BELOW_FLOOR": "Quando il margine di un ordine, stimato ora o finale, scende sotto il suo margine minimo",
     "STAMP_DUTY_DUE": "{daysBefore} prima della scadenza dell'imposta di bollo di un trimestre non ancora pagata",
-    "REQUEST_NUMBERING_MISSING": "Quando un'azienda riceve richieste (portale o indirizzi delle richieste) senza una numerazione delle richieste attiva"
+    "REQUEST_NUMBERING_MISSING": "Quando un'azienda riceve richieste (portale o indirizzi delle richieste) senza una numerazione delle richieste attiva",
+    "PROJECT_STALE": "Quando un progetto aperto ha superato la data obiettivo e non ha messaggi da 14 giorni (lo si dice al responsabile)"
   },
   "sentence": {
     "full": "{when} {place}, avvisa {recipient} con {channels} {cooldown}.",

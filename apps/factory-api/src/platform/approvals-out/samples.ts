@@ -6,6 +6,9 @@ import { PURCHASING_MANAGE, PURCHASING_VIEW } from '@nexus/factory-domain/purcha
 import { PURCHASING_SUBCONTRACT_MANAGE } from '@nexus/factory-domain/purchasing/subcontracting/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
+// B-TH-071: a project's approvals.
+import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { PROJECTS_MANAGE } from '@nexus/factory-domain/projects/permissions'
 import type { CommandTx } from '../../core/command'
 import { sameWords, words, type ApprovalRecord, type RecordAdapter } from './adapter'
 
@@ -109,4 +112,18 @@ export const SAMPLE_ADAPTERS: readonly RecordAdapter[] = Object.freeze([
     },
     { it: 'Lavorazione', en: 'Subcontract order' },
   ),
+  // ---- B-TH-071 (threads plan TH-5, PROJ-G15, PROJ.record-F10): asked of a project's outside company on the project's thread
+  // (reading it is threads.read, asking is keeping it: projects.manage); an office-only project is held (nobody outside), a closed
+  // one takes no request.
+  sampleAdapter(
+    'Project',
+    THREADS_READ,
+    PROJECTS_MANAGE,
+    async (client, id) => {
+      const row = await client.project.findUnique({ where: { id }, select: { companyId: true, partyId: true, number: true, name: true, status: true } })
+      return row ? { companyId: row.companyId, siteId: null, partyId: row.partyId, label: `${row.number} ${row.name}`, closed: ended(row.status, row.number, ['CLOSED']) } : null
+    },
+    { it: 'Progetto', en: 'Project' },
+  ),
+  // ---- end B-TH-071
 ])

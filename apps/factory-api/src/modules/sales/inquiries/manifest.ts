@@ -49,4 +49,8 @@ export const manifest = defineManifest({
   'PUT /sales/inquiries/:inquiryId/production-answer': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
   'GET /sales/inquiries/:inquiryId/production-answer/suggestion': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
   // ---- end B-TH-094
+  // ---- B-TH-071 (PROJ-G20): Start a project — who reads the request (sales.inquiries.view, checked in the handler) and keeps
+  // projects (projects.manage over its company and customer: createProject).
+  'POST /sales/inquiries/:inquiryId/project': { audiences: ['office'], permission: 'projects.manage', scope: 'record' },
+  // ---- end B-TH-071
 })
