@@ -11,10 +11,13 @@ export const WORKORDERS_DEFINITIONS = definePermissions('workorders', {
   view: { risk: 'read', description: 'See the work orders: their cells, frozen specification, release check, status and history, and how the frozen specification compares with the style today; print their travellers.' },
   manage: { risk: 'write', description: 'Make a draft work order from sales order lines, change its cells and revision while it is a draft, split a draft in two, its due date, priority, rush flag and note; start, complete, close or cancel it with a reason.' },
   release: { risk: 'write', description: 'Release a work order to the floor: its specification is frozen and its batch number given; a material shortage passes only with a reason.' },
+  // B-PR-13 (production plan §3; B-PR-21 uses it): the plain production hold, beside quality's holds.
+  hold: { risk: 'write', description: 'Put a work order on a production hold with the reason and the words its customer reads, and lift it.' },
 })
 
 export const WORKORDERS_VIEW = 'workorders.view' satisfies Permission
 export const WORKORDERS_MANAGE = 'workorders.manage' satisfies Permission
 export const WORKORDERS_RELEASE = 'workorders.release' satisfies Permission
+export const WORKORDERS_HOLD = 'workorders.hold' satisfies Permission
 
-export const WORKORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([WORKORDERS_VIEW, WORKORDERS_MANAGE, WORKORDERS_RELEASE])
+export const WORKORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([WORKORDERS_VIEW, WORKORDERS_MANAGE, WORKORDERS_RELEASE, WORKORDERS_HOLD])
