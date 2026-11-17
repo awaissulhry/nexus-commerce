@@ -1,6 +1,5 @@
-import type { Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
-import { can, holds, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { COSTING_VIEW } from '@nexus/factory-domain/costing/permissions'
 import { workOrderStageOf } from '@nexus/factory-domain/insights/flow'
@@ -8,6 +7,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { scopeFilterOf, viewerOf } from '../viewer'
+import { reachesWorkOrder, workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * GET /home/flow/value?companyId&siteId (B-W2b-435; design home.today `flow`: "Counts only; value per stage (cost) for people with
@@ -35,16 +35,18 @@ export async function flowValue(caller: CommandCaller, query: { readonly company
     const orders = await db.workOrder.findMany({
       where: {
         AND: [
-          scopeWhere(actor, WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+          // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the customers' work orders the person reaches.
+          workOrderWhere(actor, WORKORDERS_VIEW),
           companyId ? { companyId } : {},
           filter.site ? { siteId: filter.site.id } : {},
           { status: { in: [...OPEN] } },
         ],
       },
       take: LIMIT + 1,
-      select: { id: true, status: true, companyId: true, siteId: true },
+      select: { id: true, status: true, companyId: true, siteId: true, partyId: true },
     })
-    const shown = orders.slice(0, LIMIT).filter((order) => can(actor, COSTING_VIEW, { companyId: order.companyId, siteId: order.siteId }))
+    // B-PR-37: the cost seen per work order needs its customer too (none: every customer only).
+    const shown = orders.slice(0, LIMIT).filter((order) => can(actor, COSTING_VIEW, { companyId: order.companyId, siteId: order.siteId }) && reachesWorkOrder(actor, COSTING_VIEW, order))
     const balances = new Map<string, number>()
     for (let index = 0; index < shown.length; index += 1000) {
       const ids = shown.slice(index, index + 1000).map((order) => order.id)

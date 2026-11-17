@@ -54,6 +54,8 @@ export const listRecutsContract = defineContract({
     workOrderId: id().optional(),
     bundleId: id().optional(),
     q: z.string().trim().max(60).optional(),
+    /** B-PR-05: one customer's recuts (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(RECUT_LIMITS.rows).optional(),
   }),

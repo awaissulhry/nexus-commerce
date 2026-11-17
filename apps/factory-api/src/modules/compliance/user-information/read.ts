@@ -1,4 +1,3 @@
-import type { Prisma } from '@nexus/factory-db'
 import { versionsByBatch } from '@nexus/factory-domain/compliance/declarations/batches'
 import type { Source } from '@nexus/factory-domain/compliance/declarations/rules'
 import { batchLeaflets, languagePacks, type PackDocument } from '@nexus/factory-domain/compliance/user-information/packs'
@@ -7,7 +6,7 @@ import { differences, listsChanged, sectionsOf, sectionsToType, sourceWords, typ
 import { DRAFT_BANNER, SECTION_LAW, type SectionKey } from '@nexus/factory-domain/compliance/user-information/template'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -19,6 +18,7 @@ import { packMarkets, recompose } from './generate'
 import { renderLeaflet } from './pdf'
 // B-W2b-288 (FU2:01): a generated leaflet reads GATE-PPE-TEXTS from the PPE consultant's yes per template.
 import { ppeGateFor } from '../ppe-texts/store'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * The user information, read side (B-W2b-258; design compliance.declarations, the user-information kind): one leaflet with
@@ -90,6 +90,20 @@ const packDocumentOf = (row: Pick<LeafletRow, 'id' | 'language' | 'revision' | '
   number: row.number,
 })
 
+// ── B-PR-37 (production plan §2, the brand wall outside Production) ─────────────────────────────────────────────────────
+/**
+ * A leaflet's batch records of the work orders the person reaches (B-PR-03's workOrderWhere; a record of no work order stays):
+ * a style of our own collection is made for several customers, and another customer's batch, work order or shipment is never
+ * drawn.
+ */
+async function reachedBatches<R extends { readonly workOrderId: string | null }>(db: Reader, context: OfficeContext, records: readonly R[]): Promise<R[]> {
+  const ids = [...new Set(records.map((entry) => entry.workOrderId).filter((id): id is string => id !== null))]
+  if (ids.length === 0) return [...records]
+  const reached = new Set((await db.workOrder.findMany({ where: { AND: [workOrderWhere(actorOf(context), USER_INFORMATION_VIEW), { id: { in: ids } }] }, select: { id: true } })).map((row) => row.id))
+  return records.filter((entry) => entry.workOrderId === null || reached.has(entry.workOrderId))
+}
+// ── end B-PR-37 ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** The language packs of one style revision (PRD-351): per market of the company, its languages and their leaflets. */
 async function packsOf(db: Reader, styleId: string, companyId: string | null, revision: number) {
   const documents = await db.complianceDocument.findMany({ where: { styleId, kind: KIND, revision }, select: { id: true, language: true, revision: true, status: true, origin: true, translationOfId: true, translationStatus: true, marketCode: true, number: true } })
@@ -119,7 +133,7 @@ export async function detailOf(db: Reader, context: OfficeContext, row: LeafletR
 
   // Versions by batch (PRD-352): every signed leaflet of the style and the batches and shipments recorded with it.
   const siblings = await db.complianceDocument.findMany({ where: { styleId: row.styleId, kind: KIND, origin: 'SIGNED' }, select: { id: true, kind: true, language: true, revision: true, number: true, status: true } })
-  const records = siblings.length === 0 ? [] : await db.complianceDocumentBatch.findMany({ where: { documentId: { in: siblings.map((entry) => entry.id) } }, select: { id: true, documentId: true, batchNumber: true, workOrderId: true, shipmentId: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const records = await reachedBatches(db, context, siblings.length === 0 ? [] : await db.complianceDocumentBatch.findMany({ where: { documentId: { in: siblings.map((entry) => entry.id) } }, select: { id: true, documentId: true, batchNumber: true, workOrderId: true, shipmentId: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })) // B-PR-37
   const shipmentIds = [...new Set(records.map((entry) => entry.shipmentId).filter((id): id is string => id !== null))]
   const shipments = new Map((shipmentIds.length === 0 ? [] : await db.shipment.findMany({ where: { id: { in: shipmentIds } }, select: { id: true, number: true } })).map((entry) => [entry.id, entry.number]))
   const timeline = versionsByBatch(
@@ -206,7 +220,8 @@ export async function leafletBatches(caller: CommandCaller, query: { readonly wo
   const context = officeOf(caller)
   if (!query.workOrderId && !(query.styleId && query.batchNumber)) throw new ValidationError('Name the batch.', [{ path: 'querystring/workOrderId', message: 'A work order, or a style and a batch number.' }])
   return caller.withClient(async (db) => {
-    const reach = scopeWhere(actorOf(context), USER_INFORMATION_VIEW, { company: 'companyId' }) as Prisma.WorkOrderWhereInput
+    // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — another customer's work order is as an unknown one.
+    const reach = workOrderWhere(actorOf(context), USER_INFORMATION_VIEW)
     const order = query.workOrderId
       ? isUuid(query.workOrderId)
         ? await db.workOrder.findFirst({ where: { AND: [reach, { id: query.workOrderId }] }, select: { id: true, number: true, batchNumber: true, styleId: true, styleRevisionId: true } })
@@ -217,7 +232,7 @@ export async function leafletBatches(caller: CommandCaller, query: { readonly wo
     const revision = order?.styleRevisionId ? await db.styleRevision.findUnique({ where: { id: order.styleRevisionId }, select: { revision: true } }) : null
     const batchNumber = order ? order.batchNumber : query.batchNumber!.trim()
     const documents = await db.complianceDocument.findMany({ where: { styleId: style.id, kind: KIND }, select: { id: true, language: true, revision: true, status: true, origin: true, translationOfId: true, translationStatus: true, marketCode: true, number: true } })
-    const records = batchNumber ? await db.complianceDocumentBatch.findMany({ where: { styleId: style.id, batchNumber, documentId: { in: documents.map((entry) => entry.id) } }, select: { documentId: true, batchNumber: true, workOrderId: true, shipmentId: true } }) : []
+    const records = await reachedBatches(db, context, batchNumber ? await db.complianceDocumentBatch.findMany({ where: { styleId: style.id, batchNumber, documentId: { in: documents.map((entry) => entry.id) } }, select: { documentId: true, batchNumber: true, workOrderId: true, shipmentId: true } }) : []) // B-PR-37
     const answer = batchNumber
       ? batchLeaflets({ workOrder: order ? { id: order.id, number: order.number, batchNumber: order.batchNumber, styleId: order.styleId, revision: revision?.revision ?? null } : null, batchNumber, records, documents: documents.map(packDocumentOf) })
       : { leaflets: [], drafts: [] }

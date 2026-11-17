@@ -34,6 +34,8 @@ export const REPAIR_COLUMNS = {
   repairOutAt: true,
   version: true,
   createdAt: true,
+  // B-PR-05: its work order's one customer, for the brand wall (access.ts repairReach); never in an answer.
+  workOrder: { select: { partyId: true } },
 } as const satisfies Prisma.ReworkOrderSelect
 export type RepairRow = Prisma.ReworkOrderGetPayload<{ select: typeof REPAIR_COLUMNS }>
 
@@ -52,7 +54,8 @@ export async function lockRepair(tx: CommandTx, reworkId: string): Promise<Repai
 /** The work order as the repair reads it. */
 export async function readOrder(db: Reader, workOrderId: string) {
   if (!isUuid(workOrderId)) return null
-  return db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, holdReason: true, styleId: true, dueDate: true, rush: true } })
+  // B-PR-05: partyId, its one customer (the brand wall).
+  return db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, holdReason: true, styleId: true, dueDate: true, rush: true, partyId: true } })
 }
 
 /** The device's station with its work centre (null: a tablet of no station). */
@@ -106,6 +109,8 @@ export const DOWNGRADE_COLUMNS = {
   version: true,
   createdAt: true,
   createdById: true,
+  // B-PR-05: its cell's work order's one customer, for the brand wall (access.ts downgradeReach); never in an answer.
+  workOrderSize: { select: { workOrder: { select: { partyId: true } } } },
 } as const satisfies Prisma.GarmentDowngradeSelect
 export type DowngradeRow = Prisma.GarmentDowngradeGetPayload<{ select: typeof DOWNGRADE_COLUMNS }>
 

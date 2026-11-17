@@ -27,6 +27,7 @@ import { garmentLabelFor } from '../../compliance/labels/preview'
 import { scanProgressOf } from '../scans/progress'
 import { readOperations, readWorkOrderBundles, readWorkOrderScans } from '../scans/store'
 import { readLabelLog, type LabelLogEntry } from './label-log'
+import { reachesWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-05
 import { buyerLanguages, liveSerialsPerCell, readCells, readHeader, readLabelPrinters, readStyle, readTemplateSize, type CellRow, type LabelHeader, type LabelPrinterRow, type Reader, type SerialRow, type StyleFacts } from './store'
 
 /**
@@ -79,10 +80,13 @@ export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeC
   return context
 }
 
-/** May the caller work on this work order with the permission? (A floor device: only at its own site.) */
-export function mayLabel(context: Worker, permission: Permission, workOrder: { readonly companyId: string; readonly siteId: string }): boolean {
+/**
+ * May the caller work on this work order with the permission? (A floor device: only at its own site.) B-PR-05 (the brand wall,
+ * ../work-orders/scope): and over its one customer: another customer's work order is not found.
+ */
+export function mayLabel(context: Worker, permission: Permission, workOrder: WorkOrderReach): boolean {
   if (context.audience === 'floor' && context.siteId !== workOrder.siteId) return false
-  return can(actorOf(context), permission, { companyId: workOrder.companyId, siteId: workOrder.siteId })
+  return reachesWorkOrder(actorOf(context), permission, workOrder)
 }
 
 /** The work order the caller labels or reads: one it may reach with the permission (else not found). */

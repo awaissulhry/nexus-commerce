@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, EVERY_PARTY_WORDS, reachesEveryParty, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { QUALITY_CAPA_VIEW } from '@nexus/factory-domain/quality/capa/permissions'
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
@@ -54,15 +54,19 @@ export const SIGHT_PERMISSIONS: Readonly<Record<Sight, Permission>> = Object.fre
 
 export type SightMap = Readonly<Record<Sight, boolean>>
 
-/** What the caller may see at the site (CAPA is company-wide: at the site's company, customer by customer later). */
+/**
+ * What the caller may see at the site (CAPA is company-wide: at the site's company, customer by customer later). B-PR-06 (the
+ * brand wall): a figure counted over every customer's work (checks, inspections, NCRs, CAPAs, holds) needs every customer;
+ * incoming inspections and material lots judge suppliers' goods and name no customer.
+ */
 export function sightOf(actor: Actor, site: Pick<ReportSite, 'id' | 'companyId'>): SightMap {
   const at = { companyId: site.companyId, siteId: site.id }
   return {
-    inprocess: can(actor, QUALITY_INPROCESS_VIEW, at),
-    inspections: can(actor, QUALITY_INSPECTIONS_VIEW, at),
-    ncr: can(actor, QUALITY_NCR_VIEW, at),
-    capa: can(actor, QUALITY_CAPA_VIEW, { companyId: site.companyId }),
-    holds: can(actor, QUALITY_HOLDS_VIEW, at),
+    inprocess: reachesEveryParty(actor, QUALITY_INPROCESS_VIEW, at),
+    inspections: reachesEveryParty(actor, QUALITY_INSPECTIONS_VIEW, at),
+    ncr: reachesEveryParty(actor, QUALITY_NCR_VIEW, at),
+    capa: reachesEveryParty(actor, QUALITY_CAPA_VIEW, { companyId: site.companyId }),
+    holds: reachesEveryParty(actor, QUALITY_HOLDS_VIEW, at),
     incoming: can(actor, QUALITY_INCOMING_VIEW, at),
     lots: can(actor, QUALITY_LOTS_VIEW, at),
   }
@@ -100,6 +104,9 @@ export async function placeOf(db: Reader, caller: CommandCaller, query: { readon
     site = sites[0]
     if (!site) throw new NotFoundError('No site of this company has quality reports you may read.')
   }
+  // B-PR-06 (the brand wall): a quality report counts every customer's work at the site: it needs every customer (403 in words
+  // that name none).
+  if (!reachesEveryParty(actor, QUALITY_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
   const now = serverClock.now()
   const today = businessDate(now, site.timezone)
   const period = periodOf(query, today)

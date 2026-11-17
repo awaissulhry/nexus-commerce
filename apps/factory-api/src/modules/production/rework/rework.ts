@@ -1,7 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import type { LabelLanguage } from '@nexus/factory-domain/labels/model'
 import { PRODUCTION_REWORK } from '@nexus/factory-domain/production/rework/permissions'
 import { moveRefusal, openedFrom, openRefusal, statusAfter, type ReworkMove, type ReworkRefusal, type ReworkStatus } from '@nexus/factory-domain/production/rework/rules'
@@ -13,7 +12,8 @@ import { assertFloorReady, printTickets, ticketPrinter, type TicketAnswer } from
 import { withTicketCodes } from '../bundles/codes'
 import { splitInCommand } from '../bundles/split'
 import { readHeader as readBundleHeader } from '../bundles/store'
-import { lockRework, readBundleLive, readOperations, readOrder, readRework, readReworkReasons, readReworksOfScan, readSourceScan, REWORK_COLUMNS, reworkViews, type OrderRow, type Reader } from './store'
+import { lockRework, readBundleLive, readOperations, readOrder, readRework, readReworkReasons, readReworksOfScan, readSourceScan, REWORK_COLUMNS, reworkViews, type OrderRow, type Reader, type ReworkRow } from './store'
+import { reachesWorkOrder, viaWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-05
 
 /**
  * The rework loop (B-W2a-13; MES-126; design production.scrap "Scrap & rework", floor.operation "Rework"): garments of a
@@ -55,11 +55,18 @@ function workerOf(caller: Pick<CommandCaller, 'factoryContext'>): Worker {
   return context
 }
 
-/** May the caller act on (or read) this work order's rework? A floor device: its own site, production.rework. */
-function mayRework(context: Worker, workOrder: { readonly companyId: string; readonly siteId: string }, read = false): boolean {
-  if (context.audience === 'floor') return context.siteId === workOrder.siteId && can(actorOf(context), PRODUCTION_REWORK, workOrder)
-  return can(actorOf(context), PRODUCTION_REWORK, workOrder) || (read && can(actorOf(context), PRODUCTION_SCRAP_VIEW, workOrder))
+/**
+ * May the caller act on (or read) this work order's rework? A floor device: its own site, production.rework. B-PR-05 (the brand
+ * wall, ../work-orders/scope): and over the work order's one customer (another customer's is not found).
+ */
+function mayRework(context: Worker, workOrder: WorkOrderReach, read = false): boolean {
+  const actor = actorOf(context)
+  if (context.audience === 'floor') return context.siteId === workOrder.siteId && reachesWorkOrder(actor, PRODUCTION_REWORK, workOrder)
+  return reachesWorkOrder(actor, PRODUCTION_REWORK, workOrder) || (read && reachesWorkOrder(actor, PRODUCTION_SCRAP_VIEW, workOrder))
 }
+
+/** B-PR-05: a rework row's reach (its company and site, its work order's customer). */
+const reachOf = (row: Pick<ReworkRow, 'companyId' | 'siteId' | 'workOrder'>): WorkOrderReach => ({ companyId: row.companyId, siteId: row.siteId, partyId: row.workOrder.partyId })
 
 const postedBy = (context: Worker) => (context.audience === 'floor' ? 'FLOOR' : 'OFFICE')
 
@@ -248,7 +255,7 @@ export interface MoveInput {
 export async function moveRework(caller: CommandCaller, reworkId: string, move: ReworkMove, body: MoveInput, idempotencyKey?: string) {
   const context = workerOf(caller)
   const known = await caller.withClient((client) => readRework(client, reworkId))
-  if (!known || !mayRework(context, known)) throw new NotFoundError('Rework not found.')
+  if (!known || !mayRework(context, reachOf(known))) throw new NotFoundError('Rework not found.')
   if (move === 'cancel' && !body.reason?.trim()) throw bodyIssue('reason', 'Say why the rework is cancelled.')
   const { result, replayed } = await command(caller, { name: `production.${move}Rework`, idempotencyKey, input: { reworkId, move, ...body } }, async (tools) => {
     const { tx } = tools
@@ -302,20 +309,21 @@ export interface ListQuery {
   readonly status?: readonly ReworkStatus[] | undefined
   /** Only OPEN and IN_PROGRESS. */
   readonly open?: boolean | undefined
+  /** B-PR-05: one customer's rework (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
-
-const SCOPE = { company: 'companyId', site: 'siteId' } as const
 
 /** GET /production/rework: newest first, in pages; the floor its own site (production.rework), the office its grants. */
 export async function listRework(caller: CommandCaller, query: ListQuery) {
   const context = workerOf(caller)
   const actor = actorOf(context)
-  const scope =
+  // B-PR-05 (the brand wall): through the rework's work order (company, site and customer), of one customer when asked.
+  const scope: Prisma.ReworkOrderWhereInput =
     context.audience === 'floor'
-      ? (scopeWhere(actor, PRODUCTION_REWORK, SCOPE) as Prisma.ReworkOrderWhereInput)
-      : ({ OR: [scopeWhere(actor, PRODUCTION_REWORK, SCOPE), scopeWhere(actor, PRODUCTION_SCRAP_VIEW, SCOPE)] } as Prisma.ReworkOrderWhereInput)
+      ? (viaWorkOrder(actor, PRODUCTION_REWORK) as Prisma.ReworkOrderWhereInput)
+      : ({ OR: [viaWorkOrder(actor, PRODUCTION_REWORK), viaWorkOrder(actor, PRODUCTION_SCRAP_VIEW)] } as Prisma.ReworkOrderWhereInput)
   const where: Prisma.ReworkOrderWhereInput = {
     AND: [
       scope,
@@ -324,6 +332,7 @@ export async function listRework(caller: CommandCaller, query: ListQuery) {
       query.bundleId ? { bundleId: query.bundleId } : {},
       query.status && query.status.length > 0 ? { status: { in: [...query.status] } } : {},
       query.open ? { status: { in: ['OPEN', 'IN_PROGRESS'] } } : {},
+      query.partyId ? { workOrder: { is: { partyId: query.partyId } } } : {},
       query.cursor ? { id: { lt: query.cursor } } : {},
     ],
   }
@@ -339,7 +348,7 @@ export async function reworkRecord(caller: CommandCaller, reworkId: string) {
   const context = workerOf(caller)
   return caller.withClient(async (client: Reader) => {
     const row = await readRework(client, reworkId)
-    if (!row || !mayRework(context, row, true)) throw new NotFoundError('Rework not found.')
+    if (!row || !mayRework(context, reachOf(row), true)) throw new NotFoundError('Rework not found.')
     const [view] = await reworkViews(client, [row], { office: context.audience === 'office' })
     return { rework: view! }
   })

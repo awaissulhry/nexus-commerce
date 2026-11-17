@@ -9,6 +9,7 @@ import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf, readMaterial } from '../materials/store'
 import { STYLE_SCOPE } from '../styles/store'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * Where a material is used (B-W2b-238; PRD-036; design products.materials "Where used", the list's Used in column and its
@@ -87,7 +88,8 @@ async function openWorkOrdersOf(db: Reader, actor: Actor, revisionIds: readonly 
   if (!holds(actor, WORK_ORDERS)) return null
   if (revisionIds.length === 0) return []
   return db.workOrder.findMany({
-    where: { AND: [{ styleRevisionId: { in: [...new Set(revisionIds)] } }, { status: { in: OPEN_WORK_ORDERS } }, scopeWhere(actor, WORK_ORDERS, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput] },
+    // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the customers' work orders the actor reaches (the counts too).
+    where: { AND: [{ styleRevisionId: { in: [...new Set(revisionIds)] } }, { status: { in: OPEN_WORK_ORDERS } }, workOrderWhere(actor, WORK_ORDERS)] },
     select: { id: true, number: true, status: true, siteId: true, styleRevisionId: true },
     orderBy: [{ number: 'asc' }],
   })

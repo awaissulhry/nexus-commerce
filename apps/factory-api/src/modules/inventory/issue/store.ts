@@ -32,6 +32,8 @@ export const PICK_HEADER = {
   priority: true,
   startedAt: true,
   version: true,
+  // B-PR-05: its one customer, for the brand wall (picking.ts mayPick).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type PickHeader = Prisma.WorkOrderGetPayload<{ select: typeof PICK_HEADER }>
 

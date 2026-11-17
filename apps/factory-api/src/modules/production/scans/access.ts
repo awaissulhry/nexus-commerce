@@ -4,6 +4,7 @@ import type { ScanRefusal } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { systemContext } from '../../../platform/outbox/system'
+import { reachesWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-04a
 import { readHeader, type ScanHeader } from './store'
 
 /**
@@ -46,10 +47,23 @@ export function floorOrOffice(caller: Pick<CommandCaller, 'factoryContext'>): Fl
   return context
 }
 
-/** May the caller work on this work order with the permission? (A floor device: only at its own site.) */
-export function mayScan(context: FloorContext | OfficeContext, permission: Permission, workOrder: { readonly companyId: string; readonly siteId: string }): boolean {
+/**
+ * May the caller work on this work order with the permission? (A floor device: only at its own site.) B-PR-04a (the brand
+ * wall, ../work-orders/scope): and over its one customer: another customer's work order, or one of no customer for a person
+ * limited to some customers, is not reached (every caller answers it as an unknown one).
+ */
+export function mayScan(context: FloorContext | OfficeContext, permission: Permission, workOrder: WorkOrderReach): boolean {
   if (context.audience === 'floor' && context.siteId !== workOrder.siteId) return false
-  return can(actorOf(context), permission, { companyId: workOrder.companyId, siteId: workOrder.siteId })
+  return reachesWorkOrder(actorOf(context), permission, workOrder)
+}
+
+/**
+ * B-PR-04a: a record of a site that names no customer (a material lot, a refused scan of no work order, the site of a list):
+ * its company and site only. (A floor device: only at its own site.)
+ */
+export function maySite(context: FloorContext | OfficeContext, permission: Permission, place: { readonly companyId: string; readonly siteId: string }): boolean {
+  if (context.audience === 'floor' && context.siteId !== place.siteId) return false
+  return can(actorOf(context), permission, { companyId: place.companyId, siteId: place.siteId })
 }
 
 /** The work order the caller scans for or reads: one it may reach with the permission (else not found). */

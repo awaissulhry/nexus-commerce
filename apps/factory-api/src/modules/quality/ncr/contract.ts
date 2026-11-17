@@ -239,6 +239,8 @@ const filters = {
   lotId: id().optional(),
   supplierId: id().optional(),
   q: z.string().max(80).optional(),
+  /** B-PR-06: the customer filter (the NCRs about that customer's work); the brand wall applies first. */
+  partyId: id().optional(),
 }
 
 export const listContract = defineContract({

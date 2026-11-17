@@ -1,5 +1,6 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { ConflictError, DomainError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { parseScanId, tenantTag, type ScanType } from '@nexus/factory-domain/numbering/scan-id'
 import {
   garmentsToInspect,
@@ -25,6 +26,7 @@ import { openIncoming, scanLot } from '../incoming/open'
 import { openCheck } from '../inprocess/checks'
 import { PERMISSIONS, may, viewerOf, type Viewer } from './access'
 import { modelOf } from './models'
+import { mayOnWorkOrder, workOrderReachOf } from '../wall'
 
 /**
  * Scan to start (B-W2b-106; QHS-065; design floor.final "Scan the work order (W1) or a lot, bundle, serial or carton (W2b)",
@@ -149,13 +151,17 @@ async function foundFor(caller: CommandCaller, viewer: Viewer, typed: string): P
   const code = scan.ok ? scan.text : typed
   if (scan.ok && scan.type === 'LOCATION') return { code, found: [], problem: { it: 'Questa è l’etichetta di un’ubicazione: non si collauda.', en: 'This is a location label: nothing is inspected there.' } }
   const all = await caller.withClient((db) => lookUp(db, code, scan.ok ? scan.type : null))
+  // B-PR-06 (the brand wall): a code of customer work (a bundle, a serial, a carton, a work order, an inspection) leads only
+  // to who reaches every work order it names (its customer; none: every customer); another customer's is as an unknown code.
+  const reach = await caller.withClient((db) => workOrderReachOf(db, all.flatMap((row) => row.workOrderIds ?? [])))
+  const reaches = (permission: Permission, row: Found) => (row.workOrderIds ?? []).every((id) => reach.has(id) && mayOnWorkOrder(viewer.context, permission, reach.get(id)!))
   const seen = new Set<string>()
   const views = [PERMISSIONS.final.view, PERMISSIONS.incoming.view, PERMISSIONS.inprocess.view]
   const found = all.filter((row) => {
     const key = `${row.type}:${row.id}`
     if (seen.has(key)) return false
     seen.add(key)
-    return views.some((permission) => may(viewer, permission, row))
+    return views.some((permission) => may(viewer, permission, row) && reaches(permission, row))
   })
   return { code, found, problem: null }
 }

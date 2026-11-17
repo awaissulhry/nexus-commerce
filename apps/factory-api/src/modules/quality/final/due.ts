@@ -5,7 +5,7 @@ import { QUALITY_INSPECTIONS_RECORD, QUALITY_INSPECTIONS_VIEW } from '@nexus/fac
 import { dueProblem, inspectionOverdue } from '@nexus/factory-domain/quality/final/rules'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { officeOf } from './access'
+import { officeOf, reachesInspectionWork } from './access'
 import { readInspection } from './store'
 
 /**
@@ -50,8 +50,9 @@ export async function setInspectionsDue(caller: CommandCaller, body: DueBody, id
     for (const [index, entry] of order) {
       await tx.$queryRaw`SELECT "id" FROM "Inspection" WHERE "id" = ${entry.id}::uuid FOR UPDATE`
       const row = await readInspection(tx, entry.id)
-      if (!row || !can(actorOf(context), QUALITY_INSPECTIONS_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Inspection not found.')
-      if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Setting by when an inspection is due needs the right to record inspections over its company and site.")
+      // B-PR-06: the brand wall too (another customer's inspection is not found, as an unknown one).
+      if (!row || !can(actorOf(context), QUALITY_INSPECTIONS_VIEW, { companyId: row.companyId, siteId: row.siteId }) || !(await reachesInspectionWork(tx, context, QUALITY_INSPECTIONS_VIEW, row))) throw new NotFoundError('Inspection not found.')
+      if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId }) || !(await reachesInspectionWork(tx, context, QUALITY_INSPECTIONS_RECORD, row))) throw new ForbiddenError("Setting by when an inspection is due needs the right to record inspections over its company and site.")
       if (row.version !== entry.version) throw new StaleVersionError('Inspection', row.id, row.version, entry.version)
       const label = row.number ?? row.id.slice(0, 8)
       if (row.status !== 'OPEN') {

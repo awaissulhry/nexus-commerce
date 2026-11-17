@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, grantsFor, scopeWhere, type Permission, type WhereClause } from '@nexus/factory-domain/core/permissions'
 import { PRODUCTION_INSTRUCTIONS_VIEW } from '@nexus/factory-domain/production/instructions/permissions'
 import { asWords, type MediaKind, type Refusal, type VersionStatus, type Words } from '@nexus/factory-domain/production/instructions/rules'
 import type { CommandCaller } from '../../../core/command'
@@ -102,7 +102,42 @@ export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeC
 }
 
 export const may = (context: OfficeContext, permission: Permission, companyId: string): boolean => can(actorOf(context), permission, { companyId })
-export const viewWhere = (context: OfficeContext) => scopeWhere(actorOf(context), PRODUCTION_INSTRUCTIONS_VIEW, { company: 'companyId' })
+export const viewWhere = (context: OfficeContext) => ({ AND: [scopeWhere(actorOf(context), PRODUCTION_INSTRUCTIONS_VIEW, { company: 'companyId' }), brandWhere(context)] })
+
+// ── B-PR-37 (production plan §2, the brand wall outside Production) ─────────────────────────────────────────────────────
+/**
+ * A work instruction of one style revision is walled by the style's brand (Style.brandPartyId): a customer's private label
+ * reaches only a person whose grant (at the instruction's company) reaches that customer; an instruction of our own
+ * collection (no brand) or of an operation on every style (no revision) is open to all. Per grant, so a grant's company
+ * and its customers go together.
+ */
+function brandWhere(context: OfficeContext): WhereClause {
+  const grants = grantsFor(actorOf(context), PRODUCTION_INSTRUCTIONS_VIEW)
+  if (grants.every((grant) => grant.parties === 'all')) return {}
+  return {
+    OR: grants.map((grant) => ({
+      AND: [
+        grant.companies === 'all' ? {} : { companyId: { in: [...grant.companies] } },
+        grant.parties === 'all' ? {} : { OR: [{ styleRevisionId: null }, { styleRevision: { is: { style: { is: { OR: [{ brandPartyId: null }, { brandPartyId: { in: [...grant.parties] } }] } } } } }] },
+      ],
+    })),
+  }
+}
+
+/** The styles of these whose brand the caller reaches at the company (our own collection, no brand: every one). */
+export async function reachedStyles(db: Db, context: OfficeContext, companyId: string | null, styleIds: readonly string[]): Promise<Set<string>> {
+  const wanted = [...new Set(styleIds)]
+  if (wanted.length === 0) return new Set()
+  const rows = await db.style.findMany({ where: { id: { in: wanted } }, select: { id: true, brandPartyId: true } })
+  return new Set(rows.filter((row) => !row.brandPartyId || can(actorOf(context), PRODUCTION_INSTRUCTIONS_VIEW, { ...(companyId ? { companyId } : {}), partyId: row.brandPartyId })).map((row) => row.id))
+}
+
+/** The brand of an instruction's style (null: no style, or our own collection). */
+async function brandOf(db: Db, row: Pick<InstructionRow, 'styleId'>): Promise<string | null> {
+  if (!row.styleId) return null
+  return (await db.style.findUnique({ where: { id: row.styleId }, select: { brandPartyId: true } }))?.brandPartyId ?? null
+}
+// ── end B-PR-37 ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function assertMay(context: OfficeContext, permission: Permission, companyId: string, words: string): void {
   if (!may(context, permission, companyId)) throw new ForbiddenError(words)
@@ -167,7 +202,9 @@ export async function inWords<T>(work: () => Promise<T>): Promise<T> {
 /** The instruction, when the caller may see it (else 404: another company's instruction is not said to exist). */
 export async function readInstruction(db: Db, context: OfficeContext, instructionId: string): Promise<InstructionRow> {
   const row = isUuid(instructionId) ? await db.workInstruction.findUnique({ where: { id: instructionId }, select: INSTRUCTION }) : null
-  if (!row || !may(context, PRODUCTION_INSTRUCTIONS_VIEW, row.companyId)) throw new NotFoundError('Work instruction not found.')
+  // B-PR-37: and its style's brand (another customer's private label: not found, as an unknown instruction).
+  const brand = row ? await brandOf(db, row) : null
+  if (!row || !can(actorOf(context), PRODUCTION_INSTRUCTIONS_VIEW, { companyId: row.companyId, ...(brand ? { partyId: brand } : {}) })) throw new NotFoundError('Work instruction not found.')
   return row
 }
 

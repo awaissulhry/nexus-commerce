@@ -15,6 +15,7 @@ import { floorOf, mayScan, officeOf, refuse, systemView } from './access'
 import { decideCorrectionRequest, lockCorrectionRequest, readCorrectionRequest, readCorrectionRequests, type CorrectionRequest, type CorrectionStatus } from './corrections-store'
 import { readDefects, writeDefects } from './defects-store'
 import { refuseIfHeld, requestView, scanEvent, scanView } from './scans'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
 import { lockBundleScans, readBundleScans, readHeader, readOperations, readScan, readStations, scanWorkOrderLock, workerNames, workerUsers, type Reader, type ScanRow } from './store'
 
 /**
@@ -62,18 +63,26 @@ interface DecisionOptions {
   readonly stepUp?: (() => void) | undefined
 }
 
+/** B-PR-04a (the brand wall): the request and the work order it asks about (its company, site and one customer: mayScan). */
+async function requestAndWorkOrder(caller: CommandCaller, requestId: string) {
+  return caller.withClient(async (client) => {
+    const request = await readCorrectionRequest(client, requestId)
+    return { request, workOrder: request ? await readHeader(client, request.workOrderId) : null }
+  })
+}
+
 async function officeRequest(caller: CommandCaller, requestId: string): Promise<CorrectionRequest> {
   const context = officeOf(caller)
-  const request = await caller.withClient((client) => readCorrectionRequest(client, requestId))
-  if (!request || !mayScan(context, PRODUCTION_SCAN_CORRECT, { companyId: request.companyId, siteId: request.siteId })) throw new NotFoundError('Correction request not found.')
+  const { request, workOrder } = await requestAndWorkOrder(caller, requestId)
+  if (!request || !workOrder || !mayScan(context, PRODUCTION_SCAN_CORRECT, workOrder)) throw new NotFoundError('Correction request not found.')
   return request
 }
 
 /** The request a team leader reaches: floor.lead at the tablet's own site, else not found. */
 async function floorRequest(caller: CommandCaller, requestId: string): Promise<{ context: FloorContext; request: CorrectionRequest }> {
   const context = floorOf(caller)
-  const request = await caller.withClient((client) => readCorrectionRequest(client, requestId))
-  if (!request || !mayScan(context, 'floor.lead', { companyId: request.companyId, siteId: request.siteId })) throw new NotFoundError('Correction request not found.')
+  const { request, workOrder } = await requestAndWorkOrder(caller, requestId)
+  if (!request || !workOrder || !mayScan(context, 'floor.lead', workOrder)) throw new NotFoundError('Correction request not found.')
   return { context, request }
 }
 
@@ -303,12 +312,14 @@ async function listRows(db: Reader, requests: readonly CorrectionRequest[]) {
   return rows
 }
 
-export async function listCorrections(caller: CommandCaller, query: { readonly status?: CorrectionStatus | undefined; readonly workOrderId?: string | undefined; readonly siteId?: string | undefined; readonly limit: number }) {
+export async function listCorrections(caller: CommandCaller, query: { readonly status?: CorrectionStatus | undefined; readonly workOrderId?: string | undefined; readonly siteId?: string | undefined; readonly partyId?: string | undefined; readonly limit: number }) {
   const context = officeOf(caller)
   const actor = actorOf(context)
+  // B-PR-04a (the brand wall): only the asks of the work orders the caller reaches, of one customer when asked.
+  const workOrder: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actor, PRODUCTION_SCAN_CORRECT), query.partyId ? { partyId: query.partyId } : {}] }
   return caller.withClient(async (db) => {
     const sites = await db.site.findMany({ where: { AND: [scopeWhere(actor, PRODUCTION_SCAN_CORRECT, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput, query.siteId ? { id: query.siteId } : {}] }, select: { id: true } })
-    const requests = await readCorrectionRequests(db, { siteIds: sites.map((site) => site.id), ...(query.status ? { status: query.status } : {}), ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}) })
+    const requests = await readCorrectionRequests(db, { siteIds: sites.map((site) => site.id), ...(query.status ? { status: query.status } : {}), ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}), workOrder })
     const newestFirst = [...requests].reverse().slice(0, query.limit)
     return { requests: await listRows(db, newestFirst) }
   })

@@ -5,8 +5,8 @@ import { BUSINESS_TIME_ZONE, businessDate, businessDayRange, toUtcIso, type Busi
 import { PRODUCTION_CALLS_ANSWER, PRODUCTION_CALLS_VIEW } from '@nexus/factory-domain/production/calls/permissions'
 import { CALL_LIMITS, callsByHour, median, OPEN_CALL_STATUSES, secondsOpen, stationCallState, type CallKind, type CallStatus, type CallTile, type CallView } from '@nexus/factory-domain/production/calls/rules'
 import type { CommandCaller } from '../../../core/command'
-import { assertMay, contextOf, may, officeOf, siteScopeOf, type CallContext } from './access'
-import { answeredOf, CALL_COLUMNS, callRecord, callViews, devicePlaceOf, readCall, scopeOfCall, siteOf, type Reader } from './store'
+import { assertMay, assertMayCall, callWall, contextOf, may, mayCall, officeOf, siteScopeOf, type CallContext } from './access'
+import { answeredOf, CALL_COLUMNS, callRecord, callViews, devicePlaceOf, readCall, siteOf, type Reader } from './store'
 
 /**
  * The reads of help calls (B-W2b-35; MES-144, MES-145, MES-147; design production.calls SCR-142 "Call tiles", "Calls",
@@ -49,6 +49,8 @@ export interface ListQuery {
   readonly from?: BusinessDate | undefined
   readonly to?: BusinessDate | undefined
   readonly cursor?: string | undefined
+  /** B-PR-04a: only the calls on this customer's work orders (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
@@ -71,7 +73,8 @@ export async function listCalls(caller: CommandCaller, query: ListQuery) {
   return caller.withClient(async (db) => {
     const sites = await sitesInScope(db, context, PRODUCTION_CALLS_VIEW)
     const zone = await zoneOf(db, query.siteId)
-    const filters: Prisma.HelpCallWhereInput[] = [{ siteId: { in: query.siteId ? sites.filter((id) => id === query.siteId) : sites } }]
+    // B-PR-04a (the brand wall): a call on a work order the caller does not reach is left out.
+    const filters: Prisma.HelpCallWhereInput[] = [{ siteId: { in: query.siteId ? sites.filter((id) => id === query.siteId) : sites } }, callWall(context, PRODUCTION_CALLS_VIEW, query.partyId)]
     if (query.lineId) filters.push({ lineId: query.lineId })
     if (query.stationId) filters.push({ stationId: query.stationId })
     if (query.typeId) filters.push({ typeId: query.typeId })
@@ -96,14 +99,15 @@ export async function listCalls(caller: CommandCaller, query: ListQuery) {
 }
 
 /** GET /production/calls/counts. */
-export async function callCounts(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly lineId?: string | undefined }) {
+export async function callCounts(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly lineId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = officeOf(caller)
   const now = new Date()
   return caller.withClient(async (db) => {
     const sites = await sitesInScope(db, context, PRODUCTION_CALLS_VIEW)
     const zone = await zoneOf(db, query.siteId)
     const today = businessDayRange(businessDate(now, zone), zone)
-    const base: Prisma.HelpCallWhereInput = { siteId: { in: query.siteId ? sites.filter((id) => id === query.siteId) : sites }, ...(query.lineId ? { lineId: query.lineId } : {}) }
+    // B-PR-04a (the brand wall): the tiles count only the calls the caller reaches.
+    const base: Prisma.HelpCallWhereInput = { AND: [{ siteId: { in: query.siteId ? sites.filter((id) => id === query.siteId) : sites }, ...(query.lineId ? { lineId: query.lineId } : {}) }, callWall(context, PRODUCTION_CALLS_VIEW, query.partyId)] }
     const count = (tile: CallTile) => db.helpCall.count({ where: { AND: [base, tileWhere(tile, now, today)] } })
     const answered = await db.helpCall.findMany({ where: { AND: [base, tileWhere('ANSWERED_TODAY', now, today)] }, select: { sentAt: true, seenAt: true } })
     return {
@@ -123,7 +127,8 @@ export async function callsByHourOf(caller: CommandCaller, query: { readonly sit
     assertMay(context, PRODUCTION_CALLS_VIEW, { companyId: site.companyId, siteId: site.id }, 'Site')
     const date = query.date ?? businessDate(new Date(), site.timezone)
     const day = businessDayRange(date, site.timezone)
-    const rows = await db.helpCall.findMany({ where: { siteId: site.id, sentAt: { gte: day.start, lt: day.end }, ...(query.lineId ? { lineId: query.lineId } : {}) }, select: { sentAt: true, seenAt: true, lineId: true, type: { select: { kind: true } } } })
+    // B-PR-04a (the brand wall): only the calls the caller reaches.
+    const rows = await db.helpCall.findMany({ where: { AND: [{ siteId: site.id, sentAt: { gte: day.start, lt: day.end }, ...(query.lineId ? { lineId: query.lineId } : {}) }, callWall(context, PRODUCTION_CALLS_VIEW)] }, select: { sentAt: true, seenAt: true, lineId: true, type: { select: { kind: true } } } })
     const result = callsByHour(rows.map((row) => ({ sentAt: row.sentAt, seenAt: row.seenAt, lineId: row.lineId, kind: row.type.kind as CallKind })), site.timezone)
     const lineIds = [...new Set(rows.map((row) => row.lineId).filter((id): id is string => id !== null))]
     const lines = lineIds.length === 0 ? [] : await db.line.findMany({ where: { id: { in: lineIds } }, orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } })
@@ -138,8 +143,9 @@ export async function callRecordOf(caller: CommandCaller, callId: string) {
   return caller.withClient(async (db) => {
     const row = isUuid(callId) ? await readCall(db, callId) : null
     if (!row) throw new NotFoundError('Call not found.')
-    assertMay(context, PRODUCTION_CALLS_VIEW, scopeOfCall(row), 'Call')
-    const canAnswer = may(context, PRODUCTION_CALLS_ANSWER, scopeOfCall(row))
+    // B-PR-04a (the brand wall): a call on another customer's work order is not found.
+    assertMayCall(context, PRODUCTION_CALLS_VIEW, row)
+    const canAnswer = mayCall(context, PRODUCTION_CALLS_ANSWER, row)
     return { call: await callRecord(db, row, context, now), canAnswer, canNameOutcome: canAnswer && row.outcomeRecordType === null }
   })
 }
@@ -156,7 +162,8 @@ export async function lineBoard(caller: CommandCaller, query: { readonly lineId?
     const scope = { companyId: line.companyId, siteId: line.siteId }
     assertMay(context, PRODUCTION_CALLS_VIEW, scope, 'Line')
     const stations = await db.station.findMany({ where: { lineId: line.id, status: 'ACTIVE' }, orderBy: [{ code: 'asc' }, { id: 'asc' }], select: { id: true, code: true, name: true } })
-    const open = await db.helpCall.findMany({ where: { lineId: line.id, status: { in: OPEN } }, orderBy: [{ sentAt: 'asc' }, { id: 'asc' }], select: CALL_COLUMNS })
+    // B-PR-04a (the brand wall): the line's open calls the caller reaches (a call on another customer's work order is left out).
+    const open = await db.helpCall.findMany({ where: { AND: [{ lineId: line.id, status: { in: OPEN } }, callWall(context, PRODUCTION_CALLS_VIEW)] }, orderBy: [{ sentAt: 'asc' }, { id: 'asc' }], select: CALL_COLUMNS })
     return {
       line: { id: line.id, code: line.code, name: line.name },
       asOf: toUtcIso(now),

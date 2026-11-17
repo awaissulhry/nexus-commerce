@@ -4,6 +4,7 @@ import { HOME_VIEW } from '@nexus/factory-domain/insights/permissions'
 import { PRODUCTION_CALLS_ANSWER } from '@nexus/factory-domain/production/calls/permissions'
 import type { Draft, FanOutRule, RuleContext } from '../../../platform/notifications/fan-out'
 import { respondersOf } from './store'
+import { reachesWorkOrder } from '../work-orders/scope' // B-PR-04a
 
 /**
  * Who is told of a help call (B-W2b-35; MES-144 "call type → responder group; their phones get a push"): when a station
@@ -26,7 +27,8 @@ export const CALL_RULES: readonly FanOutRule[] = Object.freeze([
       const payload = payloadSchema.parse(raw) as { callId: string; typeId: string; code: string; stationId: string; lineId: string | null; responderTeamId: string | null }
       const call = await context.tx.helpCall.findUnique({
         where: { id: payload.callId },
-        select: { siteId: true, status: true, station: { select: { companyId: true, code: true } }, line: { select: { code: true } }, type: { select: { code: true } } },
+        // B-PR-04a: the work order's one customer (the brand wall: a call on a work order tells only who reaches it).
+        select: { siteId: true, status: true, station: { select: { companyId: true, code: true } }, line: { select: { code: true } }, type: { select: { code: true } }, workOrder: { select: { partyId: true } } },
       })
       // Answered or closed before the fan-out ran: nobody needs telling.
       if (!call || call.status === 'SOLVED' || call.status === 'CANCELLED') return []
@@ -38,6 +40,7 @@ export const CALL_RULES: readonly FanOutRule[] = Object.freeze([
       for (const userId of userIds) {
         const reader = await context.reader(userId)
         if (!reader || !holds(reader.actor, HOME_VIEW) || !can(reader.actor, PRODUCTION_CALLS_ANSWER, scope)) continue
+        if (call.workOrder && !reachesWorkOrder(reader.actor, PRODUCTION_CALLS_ANSWER, { ...scope, partyId: call.workOrder.partyId })) continue // B-PR-04a
         drafts.push({
           userId,
           category: 'ALERT',

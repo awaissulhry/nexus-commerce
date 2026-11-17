@@ -7,6 +7,7 @@ import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf, readStyle } from '../styles/store'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * Where a style is used (B-W2b-227; PRD-021; factory-domain product/where-used): GET /product/styles/:styleId/where-used,
@@ -54,7 +55,7 @@ async function quotes(db: Reader, actor: Actor, styleId: string): Promise<WhereU
   if (lines.length === 0) return groupOf('QUOTES', [])
   const versions = await db.quoteVersion.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.versionId))] } }, select: { id: true, quoteId: true, revision: true } })
   const rows = await db.quote.findMany({
-    where: { AND: [{ id: { in: [...new Set(versions.map((row) => row.quoteId))] } }, scopeWhere(actor, WHERE_USED_PERMISSION.QUOTES, { company: 'companyId' }) as Prisma.QuoteWhereInput] },
+    where: { AND: [{ id: { in: [...new Set(versions.map((row) => row.quoteId))] } }, scopeWhere(actor, WHERE_USED_PERMISSION.QUOTES, { company: 'companyId', party: 'partyId' /* B-PR-37 */ }) as Prisma.QuoteWhereInput] },
     select: { id: true, number: true, status: true, partyId: true, companyId: true, currentRevision: true, createdAt: true },
   })
   const parties = await partiesOf(
@@ -76,7 +77,7 @@ async function salesOrders(db: Reader, actor: Actor, styleId: string): Promise<W
   const lines = await db.salesOrderLine.findMany({ where: { styleId }, select: { orderId: true, quantity: true } })
   if (lines.length === 0) return groupOf('SALES_ORDERS', [])
   const rows = await db.salesOrder.findMany({
-    where: { AND: [{ id: { in: [...new Set(lines.map((line) => line.orderId))] } }, scopeWhere(actor, WHERE_USED_PERMISSION.SALES_ORDERS, { company: 'companyId' }) as Prisma.SalesOrderWhereInput] },
+    where: { AND: [{ id: { in: [...new Set(lines.map((line) => line.orderId))] } }, scopeWhere(actor, WHERE_USED_PERMISSION.SALES_ORDERS, { company: 'companyId', party: 'partyId' /* B-PR-37 */ }) as Prisma.SalesOrderWhereInput] },
     select: { id: true, number: true, status: true, partyId: true, companyId: true, orderDate: true },
   })
   const parties = await partiesOf(
@@ -102,7 +103,9 @@ async function salesOrders(db: Reader, actor: Actor, styleId: string): Promise<W
 
 async function workOrders(db: Reader, actor: Actor, styleId: string): Promise<WhereUsedGroup> {
   const rows = await db.workOrder.findMany({
-    where: { AND: [{ styleId }, scopeWhere(actor, WHERE_USED_PERMISSION.WORK_ORDERS, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput] },
+    // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the work orders of the customers the person reaches (one of no
+    // customer, or mixed before the rule, only for who reaches every customer).
+    where: { AND: [{ styleId }, workOrderWhere(actor, WHERE_USED_PERMISSION.WORK_ORDERS)] },
     select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, dueDate: true, createdAt: true },
   })
   const sizes = rows.length === 0 ? [] : await db.workOrderSize.findMany({ where: { workOrderId: { in: rows.map((row) => row.id) } }, select: { workOrderId: true, quantity: true } })
@@ -169,7 +172,7 @@ async function priceLists(db: Reader, actor: Actor, styleId: string, today: stri
 
 async function sampleRounds(db: Reader, actor: Actor, styleId: string): Promise<WhereUsedGroup> {
   const rows = await db.sampleRound.findMany({
-    where: { AND: [{ styleId }, scopeWhere(actor, WHERE_USED_PERMISSION.SAMPLE_ROUNDS, { company: 'companyId' }) as Prisma.SampleRoundWhereInput] },
+    where: { AND: [{ styleId }, scopeWhere(actor, WHERE_USED_PERMISSION.SAMPLE_ROUNDS, { company: 'companyId', party: { field: 'partyId', nullable: true } /* B-PR-37: a round of no customer is our own */ }) as Prisma.SampleRoundWhereInput] },
     select: { id: true, number: true, kind: true, roundNo: true, stage: true, partyId: true, companyId: true, dueDate: true, createdAt: true },
   })
   const parties = await partiesOf(
