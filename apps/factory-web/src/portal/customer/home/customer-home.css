@@ -544,3 +544,14 @@
 .fw-pch-draft > svg {
   flex: 0 0 auto;
 }
+
+/* B-TH-238: the Messages card's first part, "We need something from you" (its head with the warning icon). */
+.fw-pch-subtitle {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-warning-text);
+}

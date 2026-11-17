@@ -8,8 +8,9 @@ import { RefPair } from '@nexus/ui/components/RefPair/index'
 import { Button, Input, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
 import { FileRow, useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { SearchGroupRow } from '../../../shell/view/SearchView'
-import type { Conversation } from '../api'
 import type { DocumentRow, NextOrderRow, Tile } from '../model'
+// B-TH-238: the Messages card.
+import { messagesEmpty, type MessageRow, type MessagesCard } from '../model'
 import { useHomeWords } from '../words'
 import { ApproveDialog, type ApproveActions, type ApproveDialogModel } from './ApproveDialog'
 import { DocumentPreview, type DocumentPreviewActions, type DocumentPreviewModel } from '../../documents/preview/view/DocumentPreview'
@@ -19,7 +20,8 @@ import '../customer-home.css'
  * SCR-183 — the customer's Home (design portal.customer.home; SAL-063, SAL-084, SAL-086): Find anything first (on a phone
  * too, never behind an icon), What waits for you (the frame's one task list, passed in as `tasks`, the verb in the row),
  * five numbers at a glance that are links to their lists, the next five deliveries by promise, the documents new since
- * the last visit, our last three messages — or, for a new customer with nothing yet, a clear first step. Two columns on a
+ * the last visit, the Messages card (B-TH-238: what needs the customer first, then new messages, the account's conversation) — or,
+ * for a new customer with nothing yet, a clear first step. Two columns on a
  * desktop (what waits and the deliveries; the numbers, documents and messages), one column in the design's order on a
  * phone. Draws one view model and fetches nothing; the pop-ups are Approve (its own) and the document pop-up (lifted to
  * documents/preview by B-W2b-195: Home and the Documents page open a document the same way).
@@ -73,7 +75,8 @@ export interface CustomerHomeViewModel {
   tiles: { state: Async; items: readonly Tile[] } | null
   orders: { state: Async; items: readonly NextOrderRow[]; open: number | null; seeAllHref: string | null; newOrderHref: string | null; why: Readonly<Record<string, PromiseWhy>> } | null
   documents: { state: Async; items: readonly DocumentRow[]; seeAllHref: string | null; busy: string | null; problem: string | null; held: string | null } | null
-  messages: { state: Async; items: readonly (Conversation & { href: string })[] } | null
+  /** B-TH-238: the Messages card (the session's own reads); `company` the factory's name ("from <company>"); null: no right. */
+  messages: { state: Async; company: string; card: MessagesCard | null; needsYouHref: string | null } | null
   /** A read takes longer than a second: "Still loading…". */
   slow?: boolean
   approve: ApproveDialogModel | null
@@ -127,7 +130,7 @@ export function CustomerHomeView({ model, actions, tasks }: { model: CustomerHom
       {model.start && !model.welcome ? <StartCard model={model.start} onAsk={actions?.onAsk} /> : null}
       {model.welcome ? (
         // The first step fills the page; our messages beside it only when there are some (no empty column).
-        model.messages && model.messages.items.length > 0 ? (
+        model.messages?.card && !messagesEmpty(model.messages.card) ? (
           <div className="fw-pch-cols">
             <div className="fw-pch-col">
               <WelcomeHero model={model.welcome} onAsk={actions?.onAsk} />
@@ -571,7 +574,7 @@ function NewDocuments({
   )
 }
 
-// ── Recent messages from us ────────────────────────────────────────────────────────────────────────────────────────────
+// ── B-TH-238 (P-HOME.messages): Messages — what needs the customer first, then new messages, the account's conversation ──────
 function Messages({
   model,
   loading,
@@ -585,41 +588,96 @@ function Messages({
 }) {
   const { t, at } = useHomeWords()
   const ds = useDsWords()
+  const card = model.card
+  const lastLine = (row: MessageRow) =>
+    row.last ? (row.last.from === 'you' ? t('messages.lastFromYou', { when: at(row.last.at) }) : t('messages.lastFromUs', { company: model.company, when: at(row.last.at) })) : null
+  const fresh = (row: MessageRow) => (row.newCount > 0 ? <Pill tone="info">{t('messages.new', { count: row.newCount })}</Pill> : null)
+  const conversationRow = (row: MessageRow) => {
+    const name = row.ours ?? row.theirs ?? row.subject ?? ''
+    return (
+      <li key={row.key} className="fw-pch-message">
+        <span className="fw-pch-message-main">
+          <span className="fw-pch-from">
+            {row.theirs || row.ours ? <RefPair theirs={row.theirs} ours={row.ours} theirsLabel={t('orders.yours')} oursLabel={t('messages.yourNumber')} size="sm" copy={false} labels={ds.refPair} /> : <strong>{row.subject}</strong>}
+            {fresh(row)}
+          </span>
+          {lastLine(row) ? <span className="fw-pch-sub">{lastLine(row)}</span> : null}
+          {row.last?.excerpt ? <span className="fw-pch-excerpt">{row.last.excerpt}</span> : null}
+        </span>
+        <Button size="sm" asChild>
+          <a href={row.href} aria-label={t('messages.openAbout', { record: name })}>
+            {t('messages.open')}
+          </a>
+        </Button>
+      </li>
+    )
+  }
   return (
     <section className="fw-pch-section fw-pch-messages" aria-labelledby="fw-pch-messages">
       <h2 id="fw-pch-messages" className="fw-pch-title">
         {t('messages.title')}
       </h2>
-      {model.state === 'loading' ? (
+      {model.state === 'loading' || (model.state === 'ready' && !card) ? (
         loading(52, 2)
-      ) : model.state === 'error' ? (
+      ) : model.state === 'error' || !card ? (
         failed(t('messages.failed'), onRetry)
-      ) : model.items.length === 0 ? (
-        <p className="fw-pch-empty">
-          <MessageSquare size={16} aria-hidden /> <span>{t('messages.empty')}</span>
-        </p>
       ) : (
-        <ul className="fw-pch-rows" aria-label={t('messages.title')}>
-          {model.items.map((conversation) => (
-            <li key={conversation.thread.id} className="fw-pch-message">
+        <>
+          {card.needsYou.length > 0 ? (
+            <div className="fw-pch-stack">
+              <h3 className="fw-pch-subtitle">
+                <AlertCircle size={16} aria-hidden /> {t('messages.needsYou', { count: card.needsYouCount })}
+              </h3>
+              <ul className="fw-pch-rows" aria-label={t('messages.needsYouLabel')}>
+                {card.needsYou.map((row) => (
+                  <li key={row.key} className="fw-pch-message">
+                    <span className="fw-pch-message-main">
+                      <span className="fw-pch-from">
+                        {row.yours ? <strong>{row.yours}</strong> : null}
+                        <Pill tone="warning">{row.state}</Pill>
+                        {fresh(row)}
+                      </span>
+                      <span className="fw-pch-excerpt">{row.subject}</span>
+                      {lastLine(row) ? <span className="fw-pch-sub">{lastLine(row)}</span> : null}
+                    </span>
+                    <Button size="sm" variant="primary" asChild>
+                      <a href={row.href} aria-label={t('messages.answerAbout', { record: row.yours ?? row.subject ?? '' })}>
+                        {t('messages.answer')}
+                      </a>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              {card.needsYouCount > card.needsYou.length && model.needsYouHref ? <a href={model.needsYouHref}>{t('messages.needsYouAll', { count: card.needsYouCount })}</a> : null}
+            </div>
+          ) : null}
+          {messagesEmpty(card) ? (
+            <p className="fw-pch-empty">
+              <MessageSquare size={16} aria-hidden /> <span>{t('messages.empty')}</span>
+            </p>
+          ) : null}
+          {card.conversations.length > 0 ? (
+            <ul className="fw-pch-rows" aria-label={t('messages.conversationsLabel')}>
+              {card.conversations.map(conversationRow)}
+            </ul>
+          ) : null}
+          {card.more > 0 ? <p className="fw-pch-sub">{t('messages.more', { count: card.more })}</p> : null}
+          <ul className="fw-pch-rows" aria-label={t('messages.accountLabel', { company: model.company })}>
+            <li className="fw-pch-message">
               <span className="fw-pch-message-main">
                 <span className="fw-pch-from">
-                  <strong>{conversation.last.authorName ?? t('messages.fromUs')}</strong>
-                  <span className="fw-pch-sub">{at(conversation.last.at)}</span>
+                  <strong>{t('messages.account', { company: model.company })}</strong>
+                  {fresh(card.account)}
                 </span>
-                {conversation.record.theirRef || conversation.record.ourRef ? (
-                  <RefPair theirs={conversation.record.theirRef} ours={conversation.record.ourRef} theirsLabel={t('orders.yours')} oursLabel={t('orders.ours')} size="sm" copy={false} labels={ds.refPair} />
-                ) : null}
-                <span className="fw-pch-excerpt">{conversation.last.excerpt}</span>
+                <span className="fw-pch-sub">{lastLine(card.account) ?? t('messages.accountEmpty')}</span>
+                {card.account.last?.excerpt ? <span className="fw-pch-excerpt">{card.account.last.excerpt}</span> : null}
               </span>
               <Button size="sm" asChild>
-                <a href={conversation.href} aria-label={t('messages.replyTo', { record: conversation.record.ourRef ?? conversation.record.theirRef ?? '' })}>
-                  {t('messages.reply')}
-                </a>
+                <a href={card.account.href}>{card.account.last ? t('messages.open') : t('messages.write')}</a>
               </Button>
             </li>
-          ))}
-        </ul>
+          </ul>
+        </>
       )}
     </section>
   )

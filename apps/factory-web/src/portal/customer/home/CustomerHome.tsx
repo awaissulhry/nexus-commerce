@@ -7,7 +7,10 @@ import { isApiError } from '../../../lib/api/errors'
 import { formatDate, formatTime } from '../../../lib/i18n/format'
 import { useT } from '../../../lib/i18n/provider'
 import { composeDraftKey, readKeptCompose, subjectUsed } from '../../../lib/request-compose/model'
-import { fetchRequests } from '../requests/api'
+import { fetchRequests, type RequestList } from '../requests/api'
+// B-TH-238: the Messages card — the waiting requests' new messages (POST /threads/unread, the portal's own client).
+import { readUnreadWith } from '../../../lib/last-message-cell/api'
+import { messagesCardOf } from './model'
 import { WithMessages } from '../../../record-panels/i18n'
 import { searchPortal } from '../../shell/api'
 import { PORTAL_AREAS, recordPageOf } from '../../shell/nav/portal-nav'
@@ -48,7 +51,6 @@ import {
   orderCounts,
   readRecent,
   recentSearchesKey,
-  replyHref,
   requestHeld,
   tilesFor,
   tilesOf,
@@ -120,6 +122,9 @@ function HomeContainer() {
   const [orders, setOrders] = useState<Async<OrdersRead>>(LOADING)
   const [documents, setDocuments] = useState<Async<DocumentsRead>>(LOADING)
   const [messages, setMessages] = useState<Async<Conversation[]>>(LOADING)
+  // B-TH-238: the open requests (what needs the customer first) and their new messages.
+  const [waiting, setWaiting] = useState<Async<RequestList>>(LOADING)
+  const [waitingUnread, setWaitingUnread] = useState<Record<string, number>>({})
   const [openItems, setOpenItems] = useState<OpenItemsRead | null>(null)
   const [why, setWhy] = useState<Record<string, PromiseWhy>>({})
   const [slow, setSlow] = useState(false)
@@ -173,12 +178,33 @@ function HomeContainer() {
       .then((value) => setMessages({ state: 'ready', value: value.conversations }))
       .catch(keep(setMessages))
   }, [api, seesMessages])
+  // B-TH-238: the requests that wait for the customer, with the API's count (Orders & requests' first tile reads the same).
+  const readWaiting = useCallback(() => {
+    if (!seesOrders || !seesMessages) return
+    fetchRequests(api, { state: 'OPEN', limit: 50 })
+      .then((value) => setWaiting({ state: 'ready', value }))
+      .catch(keep(setWaiting))
+  }, [api, seesOrders, seesMessages])
+  useEffect(() => {
+    const asked = (waiting.value?.rows ?? []).filter((row) => row.state.needsYou)
+    if (!seesMessages || asked.length === 0) {
+      setWaitingUnread({})
+      return
+    }
+    const control = new AbortController()
+    readUnreadWith(api)(asked.map((row) => ({ recordType: 'Inquiry', recordId: row.id })), control.signal)
+      .then((counts) => setWaitingUnread(Object.fromEntries(counts.map((count) => [count.recordId, count.newCount]))))
+      // Not read: no marks (the rows stay; a count is never guessed).
+      .catch(() => undefined)
+    return () => control.abort()
+  }, [api, seesMessages, waiting.value])
   const readAll = useCallback(() => {
     readHome()
     readOrders()
     readDocuments()
     readMessages()
-  }, [readHome, readOrders, readDocuments, readMessages])
+    readWaiting()
+  }, [readHome, readOrders, readDocuments, readMessages, readWaiting])
 
   useEffect(() => {
     readAll()
@@ -200,6 +226,11 @@ function HomeContainer() {
   const live = usePortalLive({
     onChange: (change) => {
       if (liveEvents.has(change.type) || change.type.startsWith('partner_task.') || change.type.startsWith('partner_notification.')) readAll()
+      // B-TH-238: a message or a request of this customer moved: the Messages card reads again in place.
+      else if (change.type.startsWith('thread.') || change.type.startsWith('inquiry.')) {
+        readMessages()
+        readWaiting()
+      }
     },
     onReconnect: readAll,
   })
@@ -443,7 +474,27 @@ function HomeContainer() {
             }
           : null,
         documents: seesDocuments ? { state: documents.state, items: docs.map((entry) => entry.row), seeAllHref: built.documents ? `${prefix}/documents` : null, busy: viewer.busy, problem: viewer.problem ? t('documents.openFailed') : null, held: docHeld } : null,
-        messages: seesMessages ? { state: messages.state, items: (messages.value ?? []).map((conversation) => ({ ...conversation, href: replyHref(prefix, conversation, (type, id) => recordPageOf(frame.kinds, type, id)) })) } : null,
+        // B-TH-238: what needs the customer first, then new messages, the account's conversation — the session's own reads only.
+        // The card waits for the requests' first read too (what needs the customer comes first: nothing jumps in above).
+        messages: seesMessages
+          ? {
+              state: messages.state === 'ready' && seesOrders && waiting.state === 'loading' ? 'loading' : messages.state,
+              company: frame.me.company.name,
+              card: messages.value && !(seesOrders && waiting.state === 'loading')
+                ? messagesCardOf({
+                    prefix,
+                    partyId: frame.me.party.id,
+                    locale,
+                    waiting: waiting.value?.rows ?? [],
+                    needsYouCount: waiting.value?.counts.needsYou ?? null,
+                    conversations: messages.value,
+                    unread: waitingUnread,
+                    recordPage: (type, id) => recordPageOf(frame.kinds, type, id),
+                  })
+                : null,
+              needsYouHref: built.orders ? `${prefix}/orders?chip=NEEDS_YOU` : null,
+            }
+          : null,
         slow,
         approve: approve
           ? {
@@ -471,6 +522,7 @@ function HomeContainer() {
         onRetryMessages: () => {
           setMessages(LOADING)
           readMessages()
+          readWaiting()
         },
         onWhy,
         onPreview: (id) => {

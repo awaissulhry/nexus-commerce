@@ -575,5 +575,16 @@
     "request": "Richiesta",
     "catalogue": "Catalogo",
     "order": "Ordine"
+  },
+  "tiles": {
+    "label": "Cosa aspetta",
+    "NEEDS_YOU": "Ci serve qualcosa da voi",
+    "OPEN_REQUESTS": "Richieste aperte",
+    "OPEN_ORDERS": "Ordini aperti",
+    "hint": {
+      "NEEDS_YOU": "Richieste su cui vi abbiamo chiesto qualcosa",
+      "OPEN_REQUESTS": "Inviate, non ancora un ordine",
+      "OPEN_ORDERS": "Non ancora consegnati"
+    }
   }
 }

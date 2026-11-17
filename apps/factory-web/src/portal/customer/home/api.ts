@@ -81,15 +81,19 @@ export type DocumentsRead = z.infer<typeof documentsSchema>
 export const fetchNewDocuments = (api: ApiClient, signal?: AbortSignal): Promise<DocumentsRead> =>
   api.get('/portal/customer-documents', { query: { new: 'true', limit: 5 }, schema: documentsSchema, signal })
 
-// ── our last messages ──────────────────────────────────────────────────────────────────────────────────────────────────
+// ── the Messages card (B-TH-238: every conversation the person may read, by its last message, with its new messages) ──────
 export const conversationSchema = z.object({
   record: z.object({ type: z.string(), id: z.string(), theirRef: z.string().nullable(), ourRef: z.string().nullable(), subtitle: z.string().nullable(), status: z.string().nullable() }),
   thread: z.object({ id: z.string(), status: z.string() }),
   last: z.object({ id: z.string(), side: z.string(), channel: z.string(), authorName: z.string().nullable(), excerpt: z.string(), attachmentCount: z.number(), at: z.string() }),
+  /** B-TH-027 / B-TH-238: the messages new to this person (the party's shared messages only); 0 when the answer had none. */
+  newCount: z.number().default(0),
 })
 export type Conversation = z.infer<typeof conversationSchema>
+/** B-TH-238: the conversations by their last message from EITHER side (yours or ours), the most the card reads. */
+export const MESSAGES_READ = 12
 export const fetchRecentMessages = (api: ApiClient, signal?: AbortSignal): Promise<{ conversations: Conversation[] }> =>
-  api.get('/portal/threads', { query: { from: 'company', limit: 3 }, schema: z.object({ conversations: z.array(conversationSchema) }), signal })
+  api.get('/portal/threads', { query: { from: 'any', limit: MESSAGES_READ }, schema: z.object({ conversations: z.array(conversationSchema) }), signal })
 
 // ── the open invoices' amount (Finance) ────────────────────────────────────────────────────────────────────────────────
 export const openItemsSchema = z.object({

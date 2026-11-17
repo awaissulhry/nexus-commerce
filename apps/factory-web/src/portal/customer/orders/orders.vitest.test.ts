@@ -56,6 +56,12 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
 import { REQUESTS, requestRow } from '../requests/design-data'
 import type { OrdersListViewModel } from './view/OrdersListView'
+// B-TH-238: the tiles (their chips, the customer's own reads).
+import type { ApiClient } from '../../../lib/api/client'
+import { fetchRequests } from '../requests/api'
+import { fetchOrders } from './api'
+import { requestCountsOf } from './fixtures'
+import { apiChipOf, isListChip, listTiles, NEEDS_YOU, OPEN_ORDERS, OPEN_REQUESTS, ordersInChip, requestsInChip, TILE_CHIPS } from './model'
 
 /**
  * SCR-184 (B-W2b-191): the customer's Orders & tracking, pure — the list's address and the record's tabs, the tracker's
@@ -398,3 +404,83 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
     }
   })
 })
+
+// ---- B-TH-238 (P-CUS-ORD-LIST.tiles-F01; wall W05, W10): the tiles — We need something from you · Open requests · Open orders ----
+describe('B-TH-238 — the tiles of Orders & requests', () => {
+  const screen = listScreen as unknown as DesignScreen<unknown>
+  const render = (locale: 'it' | 'en', id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
+  const counts = requestCountsOf(REQUESTS)
+
+  it('three tiles from the customer’s own reads: the first is Home’s number (the same read), each a filter of the list', () => {
+    const read = ordersRead('OPEN')
+    expect(listTiles({ counts }, read)).toEqual([
+      { chip: NEEDS_YOU, value: counts.needsYou },
+      { chip: OPEN_REQUESTS, value: counts.open },
+      { chip: OPEN_ORDERS, value: read.chips.find((entry) => entry.chip === 'OPEN')!.count },
+    ])
+    // Unknown is "—", never 0.
+    expect(listTiles(null, null).map((tile) => tile.value)).toEqual([null, null, null])
+    // Each tile's rows: the requests that need the customer, the open requests, the open orders (no request among them).
+    expect(requestsInChip(NEEDS_YOU, REQUESTS).map((row) => row.state.code)).toEqual(['NEED_INFO'])
+    expect(requestsInChip(OPEN_REQUESTS, REQUESTS)).toHaveLength(counts.open)
+    expect(requestsInChip(OPEN_ORDERS, REQUESTS)).toEqual([])
+    expect([ordersInChip(NEEDS_YOU), ordersInChip(OPEN_REQUESTS), ordersInChip(OPEN_ORDERS)]).toEqual([false, false, true])
+    expect([apiChipOf(OPEN_ORDERS), apiChipOf(NEEDS_YOU), apiChipOf('IN_PRODUCTION'), apiChipOf(null)]).toEqual(['OPEN', null, 'IN_PRODUCTION', null])
+    for (const chip of TILE_CHIPS) {
+      expect(isListChip(chip, ['OPEN'])).toBe(true)
+      expect(listQuery(chip, '')).toBe(`?chip=${chip}`)
+      for (const locale of ['it', 'en'] as const) {
+        expect(has(locale, `tiles.${chip}`), `${locale} ${chip}`).toBe(true)
+        expect(has(locale, `tiles.hint.${chip}`), `${locale} ${chip} hint`).toBe(true)
+      }
+    }
+  })
+
+  it('on screen: the tiles above the list, a pressed tile shows its rows only; Brand Beta’s alone, no office series', () => {
+    const list = render('en', 'th-223-list')
+    for (const words of ['We need something from you', 'Open requests', 'Open orders']) expect(list).toContain(words)
+    expect(list).toContain('nds-metric btn')
+    expect(list).not.toContain('nds-metric btn active')
+    const needs = render('en', 'th-238-needs-you')
+    expect(needs).toContain('nds-metric btn active')
+    expect(needs).toContain('Rain jackets like last spring, 40 pieces')
+    expect(needs).not.toContain('Winter gloves for the shop, sizes S to XL')
+    for (const id of ['th-238-needs-you', 'th-238-open-requests', 'th-238-open-orders']) {
+      for (const locale of ['it', 'en'] as const) {
+        const html = render(locale, id)
+        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
+        expect(html.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+      }
+    }
+    expect(render('it', 'th-223-list')).toContain('Ci serve qualcosa da voi')
+  })
+
+  it('W05/W10: customer B’s tiles never move with customer A’s requests or orders (two customers, each its own reads)', async () => {
+    type Json = Record<string, unknown>
+    const world: Record<'alpha' | 'beta', { requests: Json[]; orders: ReturnType<typeof ordersRead> }> = {
+      alpha: { requests: [{ ...requestRow(1, 'NEED_INFO'), id: BRAND_ALPHA.ids.order, customerRef: BRAND_ALPHA.customerRef }], orders: ordersRead('OPEN') },
+      beta: { requests: [...REQUESTS], orders: ordersRead('OPEN') },
+    }
+    const apiOf = (key: 'alpha' | 'beta') =>
+      ({
+        get: async (path: string, options: { schema: { parse: (value: unknown) => unknown } }) => {
+          const own = world[key]
+          if (path === '/portal/inquiries') return options.schema.parse({ rows: own.requests, counts: requestCountsOf(own.requests as unknown as typeof REQUESTS), complete: true })
+          if (path === '/portal/sales-orders') return own.orders
+          throw new Error(`unexpected GET ${path}`)
+        },
+      }) as unknown as ApiClient
+    const tilesOf = async (key: 'alpha' | 'beta') => {
+      const api = apiOf(key)
+      return listTiles(await fetchRequests(api, { state: 'ALL', limit: 200 }), await fetchOrders(api, { chip: 'OPEN' }))
+    }
+    const before = await tilesOf('beta')
+    const alphaBefore = await tilesOf('alpha')
+    // Customer A moves: two more requests wait for it, and it has more open orders.
+    world.alpha.requests.push({ ...requestRow(2, 'NEED_INFO'), id: BRAND_ALPHA.ids.file }, { ...requestRow(3, 'SENT'), id: BRAND_ALPHA.ids.thread })
+    world.alpha.orders = { ...world.alpha.orders, chips: world.alpha.orders.chips.map((entry) => (entry.chip === 'OPEN' ? { ...entry, count: entry.count + 5 } : entry)) }
+    expect(await tilesOf('beta')).toEqual(before)
+    expect(await tilesOf('alpha')).not.toEqual(alphaBefore)
+  })
+})
+// ---- end B-TH-238

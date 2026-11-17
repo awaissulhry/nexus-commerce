@@ -6,6 +6,9 @@ import { at, inTransitRead, orderWords, ordersRead, PREFIX, ROWS, shellOf, words
 // B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
 import { CLOSED_REQUESTS, listRows, type ListChip } from './model'
+// B-TH-238: the tiles above the list.
+import { listTiles, NEEDS_YOU, OPEN_ORDERS, OPEN_REQUESTS, type TileChip } from './model'
+import type { RequestRow } from '../requests/api'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
 import type { OrdersListViewModel } from './view/OrdersListView'
 
@@ -51,7 +54,9 @@ const chipCase = (chip: OrderChip) => listCase(() => ({ chip, read: ordersRead(c
 // ── B-TH-223: Orders & requests, read by Brand Beta ─────────────────────────────────────────────────────────────────
 function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () => ({})): CustomerCaseBuilder {
   return (locale) => {
-    const model = listModel({ prefix: BETA, requests: { state: 'ready', rows: REQUESTS, complete: true }, newOrderHref: `${BETA}/orders/new`, ...build(locale) })
+    const base = listModel({ prefix: BETA, requests: { state: 'ready', rows: REQUESTS, complete: true }, newOrderHref: `${BETA}/orders/new`, ...build(locale) })
+    // B-TH-238: the tiles from Beta's own reads (the requests' counts as the API counts them, the orders' Open chip).
+    const model: OrdersListViewModel = { ...base, tiles: base.tiles !== undefined ? base.tiles : listTiles(base.requests.state === 'ready' ? { counts: requestCountsOf(base.requests.rows) } : null, base.read) }
     const shown = model.read ? listRows(model.chip ?? model.read.chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, locale).length : 0
     return {
       shell: betaShellOf(locale, listBandOf({ words: orderWords(locale), asOf: model.read?.asOf ?? null, rows: shown, chip: model.chip, q: model.q, prefix: BETA, newOrder: `${BETA}/orders/new` }), '/orders'),
@@ -59,6 +64,10 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
     }
   }
 }
+/** B-TH-238: the requests' counts as GET /portal/inquiries says them (what needs the customer, the open ones). */
+export const requestCountsOf = (rows: readonly RequestRow[]) => ({ needsYou: rows.filter((row) => row.state.needsYou).length, open: rows.filter((row) => row.state.open).length })
+/** B-TH-238: a tile's own rows (the two request tiles read no order; "Open orders" reads the API's Open). */
+const betaTile = (chip: TileChip) => betaCase(() => (chip === OPEN_ORDERS ? { chip, read: ordersRead('OPEN'), rows: ordersRead('OPEN').items } : { chip, read: { ...ordersRead('OPEN'), items: [], count: 0 }, rows: [] }))
 const betaChip = (chip: ListChip) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
 const all = ordersRead('ALL')
 
@@ -70,6 +79,10 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'th-223-list', label: 'Orders & requests: the open ones (requests first)', model: betaCase(), note: 'One list: Number (their PO, then the customer’s own number: “Your request 7”, “Your order 11” — never INQ-, SO-, RQ-), Kind, Subject, Date, State (true states), Wanted or promised, Pieces, Value (price roles), Next shipment. The request that needs them on top. New order is the band’s primary.' },
     // B-TH-230 (TH-2): New messages — the person's own, on their own requests and orders only; a door to the conversation.
     { id: 'th-230-new-messages', label: 'New messages: "● 2 new" on a request and an order of this customer', model: betaCase(() => ({ unread: { [REQUESTS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[0]!.id]: { newCount: 1, lastAt: '2026-11-16T15:10:00.000Z' } } })), note: 'One read for the rows shown: the count holds only messages shared with this customer (never an office note) and only its own requests and orders. The cell opens the request’s page or the order’s Messages.' },
+    // B-TH-238 (P-CUS-ORD-LIST.tiles): We need something from you · Open requests · Open orders — each filters the list.
+    { id: 'th-238-needs-you', label: 'Tile: we need something from you (the same number as Home’s Messages card)', model: betaTile(NEEDS_YOU), note: 'Only the requests we asked something about; the tile is pressed; Clear brings the open list back.' },
+    { id: 'th-238-open-requests', label: 'Tile: open requests', model: betaTile(OPEN_REQUESTS) },
+    { id: 'th-238-open-orders', label: 'Tile: open orders (a catalogue order still waiting for us among them)', model: betaTile(OPEN_ORDERS) },
     { id: 'th-223-all', label: 'Everything', model: betaChip('ALL'), note: 'Every request and every order, closed ones too.' },
     { id: 'th-223-requested', label: 'Requested: the requests and the catalogue order still waiting for us', model: betaChip('REQUESTED') },
     { id: 'th-223-closed', label: 'Closed requests: never vanished', model: betaChip(CLOSED_REQUESTS), note: 'Declined, closed and made-into-an-order requests stay findable under their own choice.' },
