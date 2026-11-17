@@ -300,6 +300,11 @@
         "assigned": "{actor} gave you request {record}",
         "newRequest": "New request {record} came in: take it or give it to someone"
       },
+      "projects": {
+        "addedYou": "{actor} added you to {record}",
+        "removedYou": "{actor} took you out of {record}",
+        "stale": "{record} is past its target date and quiet for 14 days: close or update it"
+      },
       "mail": {
         "assigned": "{actor} gave you a mail of {title}: {record}",
         "followUpDue": "No answer yet to {record} ({title}): it is back in your queue"

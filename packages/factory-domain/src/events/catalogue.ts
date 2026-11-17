@@ -171,6 +171,9 @@ import { events as safetyReports } from '../safety-reports/events'
 import { events as quoteSpeedups } from '../quote-speedups/events'
 // B-W2b-309: order changes (freeze rules, a priced change, the new yes decided, customer-supplied materials).
 import { events as orderChanges } from '../order-changes/events'
+// ---- B-TH-066: projects (made, changed, status, links, people).
+import { events as projects } from '../projects/events'
+// ---- end B-TH-066
 // B-W2b-358: the made-to-measure office.
 import { events as mtmOffice } from '../mtm-office/events'
 // B-W2b-360: fittings, alterations and remakes.
@@ -718,6 +721,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...alertRoutes,
   // B-W2b-415
   ...integrationHealth,
+  // B-TH-066
+  ...projects,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

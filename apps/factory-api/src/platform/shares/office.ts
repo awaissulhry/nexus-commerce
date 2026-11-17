@@ -89,6 +89,8 @@ function heldOf(scope: RecordScope): 'ALL_COMPANIES' | 'NO_PARTY' | null {
 const HELD_WORDS = {
   ALL_COMPANIES: 'This record is shared by every company: invite the partner on its quote or order instead.',
   NO_PARTY: 'This record has no customer, supplier, workshop or brand: there is nobody outside to invite.',
+  // B-TH-069: a closed project takes no invitation (closing ended them all; reopen it first).
+  PROJECT_CLOSED: 'This project is closed: reopen it before inviting anyone.',
 } as const
 
 const held = (code: keyof typeof HELD_WORDS): DomainError => new DomainError('invalid_state', HELD_WORDS[code], [{ path: `held/${code}`, message: HELD_WORDS[code] }])
@@ -187,6 +189,9 @@ export async function inviteToRecord(request: FastifyRequest, body: InviteBody, 
     needs(actor, adapter, scope, 'manage')
     const code = heldOf(scope)
     if (code) throw held(code)
+    // ---- B-TH-069
+    if (body.recordType === 'Project' && (await client.project.findUnique({ where: { id: body.recordId }, select: { status: true } }))?.status === 'CLOSED') throw held('PROJECT_CLOSED')
+    // ---- end B-TH-069
     const contact = body.contactId && isUuid(body.contactId) ? await client.partyContact.findFirst({ where: { id: body.contactId, partyId: scope.partyId!, status: 'ACTIVE' }, select: { id: true, name: true, email: true, language: true } }) : null
     const party = await client.party.findUnique({ where: { id: scope.partyId! }, select: { language: true } })
     const company = await client.company.findUnique({ where: { id: scope.companyId! }, select: { legalName: true, tradeName: true } })

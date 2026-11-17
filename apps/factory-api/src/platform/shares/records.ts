@@ -11,6 +11,9 @@ import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/p
 import { SALES_RETURNS_MANAGE, SALES_RETURNS_VIEW } from '@nexus/factory-domain/sales/returns/permissions'
 import { SHARE_FIELDS, type ShareFieldKind } from '@nexus/factory-domain/shares/rules'
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+// B-TH-069: a project's invitations.
+import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { PROJECTS_MANAGE } from '@nexus/factory-domain/projects/permissions'
 import type { CommandTx } from '../../core/command'
 
 /**
@@ -116,6 +119,14 @@ export const SHARE_RECORDS: Readonly<Record<string, ShareRecordAdapter>> = Objec
     const row = await client.supplierClaim.findUnique({ where: { id }, select: { number: true, kind: true, status: true, remedy: true, sentAt: true } })
     return row ? { reference: row.number, theirRef: null, values: { number: row.number, kind: row.kind, status: row.status, remedy: row.remedy, sentAt: instant(row.sentAt) } } : null
   }),
+  // ---- B-TH-069 (threads plan TH-5, PROJ-G09, PROJ.members-F08): an outside designer joins a project by link — its number, name,
+  // status and target date; never its lead, goal, outcome or people. Seeing who is invited is reading the project (threads.read);
+  // inviting is keeping it (projects.manage). Every invitation ends when the project closes (modules/product/projects).
+  Project: adapter('Project', THREADS_READ, PROJECTS_MANAGE, async (client, id) => {
+    const row = await client.project.findUnique({ where: { id }, select: { number: true, name: true, status: true, targetDate: true } })
+    return row ? { reference: `${row.number} ${row.name}`, theirRef: null, values: { number: row.number, name: row.name, status: row.status, targetDate: day(row.targetDate) } } : null
+  }),
+  // ---- end B-TH-069
 })
 
 /** The adapter of a record type, or undefined when no partner can be invited to it. */

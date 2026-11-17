@@ -69,7 +69,11 @@ describe('portal search: how a partner query matches its record (B-W2b-168; SAL-
 
 describe('portal search: the contract, the groups and the permission', () => {
   it('groups by the partner kind’s portal', () => {
-    expect(GROUPS_OF_KIND.CUSTOMER).toEqual(['orders', 'documents', 'returns'])
+    // B-TH-073: a customer's portal also finds its own styles and sample rounds (Samples).
+    expect(GROUPS_OF_KIND.CUSTOMER).toEqual(['orders', 'documents', 'returns', 'samples', 'projects'])
+    // B-TH-069: a supplier's and a workshop's projects too (one outside company per project; never a customer's).
+    expect(GROUPS_OF_KIND.SUPPLIER).toContain('projects')
+    expect(GROUPS_OF_KIND.SUBCONTRACTOR).toContain('projects')
     expect(GROUPS_OF_KIND.SUPPLIER[0]).toBe('pos')
     expect(GROUPS_OF_KIND.SUBCONTRACTOR[0]).toBe('jobs')
     for (const groups of Object.values(GROUPS_OF_KIND)) for (const group of groups) expect(PARTNER_SEARCH_GROUPS).toContain(group)

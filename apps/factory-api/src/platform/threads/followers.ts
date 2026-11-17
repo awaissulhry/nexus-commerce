@@ -7,7 +7,7 @@ import type { Actor, ScopedRecord } from '@nexus/factory-domain/core/permissions
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { events as threadEvents } from '@nexus/factory-domain/threads/events'
-import { FOLLOWERS_SHOWN, followChange, type FollowReason } from '@nexus/factory-domain/threads/followers'
+import { addedReason, FOLLOWERS_SHOWN, followChange, type FollowReason } from '@nexus/factory-domain/threads/followers'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { heldRoles } from '../auth/roles/access'
@@ -29,6 +29,8 @@ import { mayOnThread } from './records'
  */
 
 const followersChanged = threadEvents.find((event) => event.type === 'thread.followers_changed')!
+// B-TH-068: a colleague added by hand is told (the notification centre's "added you").
+const followerAdded = threadEvents.find((event) => event.type === 'thread.follower_added')!
 
 export type FollowTools = Pick<CommandTools, 'tx' | 'now' | 'audit' | 'emit'>
 
@@ -41,15 +43,17 @@ export interface FollowedRecord extends RecordRef {
 /**
  * Inside a command: the person follows the record for this reason, unless they have a follow row already (muted or not).
  * True when a row was added. No permission check: the caller checked that the person may read the record's thread.
+ * B-TH-068: `partyId` is a portal person's party (a project member of its outside company, reason ADDED: the database refuses
+ * any other); an office person's row names none.
  */
-export async function followInCommand(tools: FollowTools, record: FollowedRecord, userId: string, reason: FollowReason, createdById: string | null): Promise<boolean> {
+export async function followInCommand(tools: FollowTools, record: FollowedRecord, userId: string, reason: FollowReason, createdById: string | null, /* B-TH-068 */ partyId: string | null = null): Promise<boolean> {
   const id = newId()
   const { count } = await tools.tx.recordFollower.createMany({
-    data: [{ id, recordType: record.type, recordId: record.id, userId, reason, createdAt: tools.now, updatedAt: tools.now, createdById }],
+    data: [{ id, recordType: record.type, recordId: record.id, userId, reason, createdAt: tools.now, updatedAt: tools.now, createdById, ...(partyId ? { partyId } : {}) }],
     skipDuplicates: true,
   })
   if (count === 0) return false
-  tools.audit({ action: 'threads.follow', recordType: 'RecordFollower', recordId: id, companyId: record.companyId, siteId: record.siteId, after: { recordType: record.type, recordId: record.id, userId, reason } })
+  tools.audit({ action: 'threads.follow', recordType: 'RecordFollower', recordId: id, companyId: record.companyId, siteId: record.siteId, after: { recordType: record.type, recordId: record.id, userId, reason, ...(partyId ? { partyId } : {}) } })
   tools.emit(eventFor(followersChanged, { subject: record.id, companyId: record.companyId, siteId: record.siteId, payload: { recordType: record.type, recordId: record.id } }))
   return true
 }
@@ -85,9 +89,13 @@ export async function unfollowInCommand(tools: FollowTools, record: FollowedReco
 }
 // ---- end B-PR-08a (T5)
 
-/** The people who follow a record and did not mute it (the fan-out's readers of its news). */
+/**
+ * The OFFICE people who follow a record and did not mute it (the fan-out's readers of its news). B-TH-068: a project's portal
+ * members (rows that name their party) are never here: the portal's own news tells them (platform/portal/notifications), each by
+ * their party's rules, never the office's fan-out.
+ */
 export async function followersOf(client: FactoryClient | CommandTx, record: RecordRef): Promise<string[]> {
-  const rows = await client.recordFollower.findMany({ where: { recordType: record.type, recordId: record.id, muted: false }, orderBy: { createdAt: 'asc' }, select: { userId: true } })
+  const rows = await client.recordFollower.findMany({ where: { recordType: record.type, recordId: record.id, muted: false, partyId: null }, orderBy: { createdAt: 'asc' }, select: { userId: true } })
   return rows.map((row) => row.userId)
 }
 
@@ -109,7 +117,7 @@ export async function listFollowers(caller: CommandCaller, record: RecordRef) {
     if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
     const where = { recordType: record.type, recordId: record.id }
     // One after another: a scoped client is one transaction (no Promise.all on it).
-    const rows = await client.recordFollower.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: FOLLOWERS_SHOWN, select: { userId: true, reason: true, muted: true, createdAt: true, createdById: true } })
+    const rows = await client.recordFollower.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: FOLLOWERS_SHOWN, select: { userId: true, reason: true, muted: true, createdAt: true, createdById: true, partyId: true } })
     const count = await client.recordFollower.count({ where })
     const mine = await client.recordFollower.findFirst({ where: { ...where, userId: context.actorId }, select: { muted: true, reason: true } })
     const names = new Map(
@@ -127,6 +135,8 @@ export async function listFollowers(caller: CommandCaller, record: RecordRef) {
         muted: row.muted,
         since: toUtcIso(row.createdAt),
         addedBy: row.createdById && row.createdById !== row.userId ? { id: row.createdById, name: names.get(row.createdById) ?? '' } : null,
+        // B-TH-068: a portal person of the record's outside company (a project member), not one of our colleagues.
+        outside: row.partyId !== null,
       })),
     }
   })
@@ -168,7 +178,11 @@ export async function setMyFollow(caller: CommandCaller, record: RecordRef, body
   return listFollowers(caller, record)
 }
 
-/** POST /threads/<type>/<id>/followers: add a colleague who may read the record's thread (they chose nothing: CHOSE, made by me). */
+/**
+ * POST /threads/<type>/<id>/followers: add a colleague who may read the record's thread. B-TH-068 (PROJ-G04, PROJ-G05): they chose
+ * nothing — reason ADDED, made by me ("added by Marco", not "chose to follow"), and they are told (thread.follower_added → the
+ * notification centre's "added you", platform/notifications/rules/projects.ts); adding myself is my own choice (CHOSE).
+ */
 export async function addFollower(caller: CommandCaller, record: RecordRef, body: { readonly userId: string }, idempotencyKey?: string) {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
@@ -178,12 +192,17 @@ export async function addFollower(caller: CommandCaller, record: RecordRef, body
   if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
   const followed = recordOf(record, scope)
   await command(caller, { name: 'threads.addFollower', idempotencyKey, input: { recordType: record.type, recordId: record.id, userId: body.userId } }, async (tools) => {
-    const user = await tools.tx.user.findFirst({ where: { id: body.userId, status: 'ACTIVE' }, select: { id: true } })
+    // B-TH-068: a colleague is an office person (a portal person joins a project only as its outside company's member: projects).
+    const user = await tools.tx.user.findFirst({ where: { id: body.userId, status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
     if (!user || !(await personReads(tools.tx, context.tenantId, user.id, scope, tools.now, record.type))) {
       const message = 'This person cannot read this record: only someone who may see it can follow it.'
       throw new ValidationError(message, [{ path: 'body/userId', message }])
     }
-    const added = await followInCommand(tools, followed, user.id, 'CHOSE', context.actorId)
+    // ---- B-TH-068: ADDED by a colleague (the database requires the adder, someone else); my own follow stays CHOSE.
+    const reason = addedReason(user.id, context.actorId)
+    const added = await followInCommand(tools, followed, user.id, reason, context.actorId)
+    if (added && reason === 'ADDED') tools.emit(eventFor(followerAdded, { subject: record.id, companyId: followed.companyId, siteId: followed.siteId, payload: { recordType: record.type, recordId: record.id, userId: user.id, byId: context.actorId } }))
+    // ---- end B-TH-068
     if (!added) tools.audit({ action: 'threads.followUnchanged', recordType: 'RecordFollower', recordId: record.id, companyId: followed.companyId, siteId: followed.siteId, after: { userId: user.id, following: true } })
     return null
   })

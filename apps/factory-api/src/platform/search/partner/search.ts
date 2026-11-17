@@ -9,7 +9,7 @@ import { compareHits, partnerMatchOf, singleOf, type PartnerHit } from '@nexus/f
 import { PORTAL_SEARCH } from '@nexus/factory-domain/search/partner/permissions'
 import { queryWords, SEARCH_LIMITS, type SearchQuery } from '@nexus/factory-domain/search/text'
 import { systemCallerOf } from '../../files/files'
-import { kindsOfSession, partnerCallerOf, type PartnerCaller } from './session'
+import { kindsOfSession, partnerCallerOf, partnerReaderOf, type PartnerCaller } from './session'
 import type { PartnerRecord, PartnerView } from './view'
 import { PARTNER_VIEWS, viewFits } from './views'
 
@@ -112,7 +112,8 @@ export async function searchForPartner(request: FastifyRequest, params: PartnerS
   )
   const capped = indexed.length > PARTNER_SEARCH_LIMITS.candidates
 
-  // 2.–4. Lookups, the wall and the match, in the partner's own scope.
+  // 2.–4. Lookups, the wall and the match, in the partner's own scope. B-TH-069: each view reads for the person (members only).
+  const reader = partnerReaderOf(request, caller)
   return request.withClient(async (client) => {
     const wanted = new Map<string, Set<string>>(views.map((view) => [view.recordType, new Set<string>()]))
     for (const candidate of indexed.slice(0, PARTNER_SEARCH_LIMITS.candidates)) wanted.get(candidate.recordType)?.add(candidate.recordId)
@@ -126,7 +127,7 @@ export async function searchForPartner(request: FastifyRequest, params: PartnerS
     for (const view of views) {
       const ids = [...wanted.get(view.recordType)!]
       if (ids.length === 0) continue
-      for (const record of await view.read(client, ids)) {
+      for (const record of await view.read(client, ids, reader)) {
         if (!mayFind(caller, view, record)) continue
         const hit = partnerMatchOf(query, record)
         if (!hit) continue
