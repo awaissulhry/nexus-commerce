@@ -151,6 +151,8 @@ describe('the index (worker side)', () => {
     // The customer as records show it: the trade name, the legal name among the words.
     expect(order).toMatchObject({ number: 'SEED-SO-0001', title: 'Seed Racing', area: 'sales', viewPermission: 'orders.view', companyId: companyA, partyId: id('party:P1'), siteId: null })
     expect(order.searchText).toMatch(/^seed-so-0001 seed racing .*seed-c1 .*customer one/)
+    // B-TH-057 (ORD-G07): + the styles of its lines, by code.
+    expect(order.searchText.split(' ')).toContain('seed-jkt-01')
     for (const row of await admin<{ id: string; netAmount: number; grossAmount: number; vatAmount: number }>('SELECT id, "netAmount", "grossAmount", "vatAmount" FROM "SalesOrder"')) {
       const text = (await entry('SalesOrder', row.id))?.searchText as string
       for (const amount of [row.netAmount, row.grossAmount, row.vatAmount].filter((value) => value > 0)) {

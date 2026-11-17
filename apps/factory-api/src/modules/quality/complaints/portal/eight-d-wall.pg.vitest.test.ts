@@ -15,7 +15,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../../../platform/
 import { addUser, startHarness, type Harness, type TestTenant } from '../../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../../platform/outbox/system'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../../testing/timeouts'
-import { editCapa } from '../../capa/capa'
+import { capaRecord, editCapa } from '../../capa/capa'
 import { makeReport } from '../../capa/report'
 import { addSources, removeSource } from '../../capa/sources'
 import { logComplaint } from '../log'
@@ -72,6 +72,14 @@ async function fileText(fileId: string): Promise<string> {
 
 let betaComplaint: { id: string; number: string }
 
+/** B-TH-232: what the CAPA's record says beside a complaint source about sharing the 8D on it (a code, or null). */
+async function recordShareHeld(complaintId: string): Promise<string | null | undefined> {
+  const { record } = await capaRecord(office(), EIGHT_D)
+  const source = record.sources.find((entry) => entry.recordId === complaintId)
+  expect(findMarkers(source, fixtureMarkers(BRAND_BETA))).toEqual([])
+  return source?.record?.shareHeld
+}
+
 beforeAll(async () => {
   h = await startHarness('eight_d_wall')
   h.clock.set(new Date())
@@ -110,6 +118,8 @@ describe('T15: an 8D goes to a customer only with that customer’s complaints (
     await makeReport(h.files, office(), EIGHT_D, { language: 'en' })
     expect(await shareHeld()).toBe('OTHER_CUSTOMER')
     expect(await admin('SELECT id FROM "StoredFile" WHERE "recordType" = $1 AND "recordId" = $2 AND "sourceFileId" IS NOT NULL', ['Complaint', CMP1])).toEqual([])
+    // B-TH-232: the CAPA's record says so before the click, a code beside the complaint (never a name).
+    expect(await recordShareHeld(CMP1)).toBe('OTHER_CUSTOMER')
   })
 
   it('an internal 8D that also answers a brand B complaint is not shared; taken off, its older report is not either', async () => {
@@ -117,12 +127,14 @@ describe('T15: an 8D goes to a customer only with that customer’s complaints (
     await addSources(office(), EIGHT_D, { version: await version(), sources: [{ recordType: 'Complaint', recordId: betaComplaint.id }] })
     await makeReport(h.files, office(), EIGHT_D, { language: 'en' })
     expect(await shareHeld()).toBe('OTHER_CUSTOMERS_COMPLAINTS')
+    expect(await recordShareHeld(CMP1)).toBe('OTHER_CUSTOMERS_COMPLAINTS') // B-TH-232
     const source = await one<{ id: string }>('SELECT id FROM "CapaSource" WHERE "capaId" = $1 AND "recordId" = $2', [EIGHT_D, betaComplaint.id])
     await removeSource(office(), EIGHT_D, source.id, { version: await version() })
     // The kept version still prints brand B's complaint number.
     expect(await shareHeld()).toBe('REPORT_OUTDATED')
     // A new version: only brand A's complaint, so it goes — and the shared PDF holds nothing of brand B.
     await makeReport(h.files, office(), EIGHT_D, { language: 'en' })
+    expect(await recordShareHeld(CMP1)).toBeNull() // B-TH-232: brand B's complaint is off the CAPA
     const shared = await shareEightD(h.files, office(), CMP1, {})
     expect(shared.shared.made).toBe(true)
     const text = await fileText(shared.shared.fileId)

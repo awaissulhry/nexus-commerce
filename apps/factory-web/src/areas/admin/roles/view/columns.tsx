@@ -105,7 +105,7 @@ export function holderColumns(ctx: { t: Translate; locale: Locale; prefix: strin
       minWidth: 220,
       cellRenderer: cell<Holder>(({ user }) => <IdentityCell noImage title={user.displayName} titleAttr={user.displayName} href={`${adminHref(ctx.prefix, `/users/${user.id}`)}?tab=roles`} sub={user.email} />),
     },
-    { colId: 'where', headerName: t('users.col.where'), valueGetter: ({ data }) => (data ? scopeWords(data.scope, ctx.companies, t('scope.all')) || '—' : ''), flex: 1.6, minWidth: 200 },
+    { colId: 'where', headerName: t('users.col.where'), valueGetter: ({ data }) => (data ? scopeWords(data.scope, ctx.companies, t('scope.all'), (count) => t('scope.customers', { count }) /* B-TH-232 */) || '—' : ''), flex: 1.6, minWidth: 200 },
     { colId: 'to', headerName: t('user.col.to'), valueGetter: ({ data }) => (!data ? '' : data.validTo ? formatDate(data.validTo, { locale }) : t('user.noEnd')), flex: 0.8, minWidth: 130 },
   ]
 }

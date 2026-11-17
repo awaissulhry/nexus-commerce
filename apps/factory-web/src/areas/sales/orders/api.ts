@@ -139,10 +139,20 @@ export interface OrderQuery {
   /** B-TH-225: the label on the garment (a brand party's id, or `own`), and one company (`?brand=`, `?company=`). */
   brand?: string | null
   companyId?: string | null
+  // ── B-TH-057 (TH-4): the server sort (`customer`, `brand`, `promise`, `daysLate`, `ordered`, `-` the other way round) and the
+  // custom field filter (`cf`), both terms of the page's address, so a saved view and the file keep them ──
+  sort?: OrderSort | null
+  cf?: string | null
   q?: string
   cursor?: string | null
   limit?: number
 }
+
+// ── B-TH-057: what the sheet sorts by on the server (apps/factory-api modules/sales/orders/sort.ts) ──
+export const ORDER_SORT_KEYS = ['customer', 'brand', 'promise', 'daysLate', 'ordered'] as const
+export type OrderSortKey = (typeof ORDER_SORT_KEYS)[number]
+export type OrderSort = OrderSortKey | `-${OrderSortKey}`
+// ── end B-TH-057 ──
 
 export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSignal): Promise<OrderPage> {
   return api.get('/sales/orders', {
@@ -155,6 +165,8 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       partyId: query.partyId ?? undefined, // B-TH-201
       brand: query.brand ?? undefined, // B-TH-225
       companyId: query.companyId ?? undefined, // B-TH-225
+      sort: query.sort ?? undefined, // B-TH-057
+      cf: query.cf?.trim() || undefined, // B-TH-057
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -173,9 +185,9 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null } = {}): Promise<OrderBoard> {
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } = {}): Promise<OrderBoard> {
   return api.get('/sales/orders/board', {
-    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */ },
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */ },
     schema: boardSchema,
     signal,
   })

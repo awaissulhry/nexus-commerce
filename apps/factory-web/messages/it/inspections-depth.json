@@ -262,7 +262,8 @@
       "NO_SUCH_VERSION": "Quella versione non esiste più: rileggi le versioni.",
       "NO_SHIPMENT": "Spedizione non trovata.",
       "SHARED_PRODUCTION": "Questo ordine di produzione fa capi anche per un altro cliente: il suo rapporto non va a un solo cliente. Condividi invece il certificato di conformità di questa spedizione."
-    }
+    },
+    "sharedProduction": "{status}: questo ordine di produzione fa capi anche per un altro cliente — va invece il suo certificato di conformità"
   },
   "checks": {
     "heading": "Controlli di {code} v{number}",
@@ -789,6 +790,18 @@
         "reading": "I piani sono in lettura.",
         "failed": "Non è stato possibile leggere i piani."
       }
+    }
+  },
+  "certificate": {
+    "go": "Condividi il certificato di conformità di {shipment}",
+    "done": "Certificato di conformità versione {version} condiviso su {shipment}.",
+    "refused": "Il certificato di conformità non è stato condiviso.",
+    "held": {
+      "noRight": "Tenere e condividere un certificato di conformità richiede i permessi di creare e condividere i documenti qualità.",
+      "NOT_CERTIFIABLE": "Questa spedizione ora non può avere un certificato di conformità: i motivi sono qui sotto.",
+      "NO_VERSION": "Nessuna versione del certificato è tenuta: tienine prima una.",
+      "NO_SUCH_VERSION": "Quella versione del certificato non esiste più: riprova.",
+      "NO_SHIPMENT": "Spedizione non trovata."
     }
   }
 }

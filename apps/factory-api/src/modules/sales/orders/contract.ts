@@ -8,6 +8,7 @@ import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-
 // B-TH-017: None / Part / All (rule C8).
 import { INVOICED_STATES } from '@nexus/factory-domain/sales/orders/invoiced'
 import { MAX_TEXT, SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
+import { ORDER_SORTS } from './sort' // B-TH-057
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -192,6 +193,10 @@ const filterFields = {
   /** The label on the garment: orders with a line of a style of this brand party, or `own` (our own collection). */
   brand: z.union([id(), z.literal('own')]).optional(),
   // ── end B-TH-225 ──
+  // ── B-TH-057 (threads plan TH-4, SHEET-G05: screen = file) ──
+  /** The custom fields' filter (`code:A,B;code>=X`, platform/fields filters): the list, its counts and its file keep the same rows. */
+  cf: z.string().trim().min(1).max(2000).optional(),
+  // ── end B-TH-057 ──
 }
 
 export const listOrdersContract = defineContract({
@@ -206,7 +211,11 @@ export const listOrdersContract = defineContract({
     /** B-W2b-323: a change waits for the customer to accept it (reapprovalNeededAt set), the order not closed or cancelled. */
     reaccept: flag.optional(),
     ...filterFields,
-    cursor: id().optional(),
+    // ── B-TH-057 (SHEET-G15): the server sort; with it the cursor is the page before's sort key and id (opaque) ──
+    /** customer, brand, promise, daysLate, ordered; `-` in front: the other way round. None: newest first. */
+    sort: z.enum(ORDER_SORTS).optional(),
+    cursor: z.string().trim().min(1).max(600).optional(),
+    // ── end B-TH-057 ──
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
@@ -260,7 +269,8 @@ export const listOrdersContract = defineContract({
           // ── end B-TH-017 ──────────────────────────────────────────────────────────────────────────────────────────────
         }),
       ),
-      nextCursor: id().nullable(),
+      /** B-TH-057: the next page's cursor (an id newest first; an opaque sort key and id in a server sort). */
+      nextCursor: z.string().nullable(),
     }),
   },
 })

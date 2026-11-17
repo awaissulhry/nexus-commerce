@@ -499,6 +499,12 @@
     "held": {
       "manage": "Importing orders needs the right to change orders",
       "run": "Importing needs the right to run imports and upload files"
+    },
+    "memory": {
+      "same": "Columns read as in {customer}’s last sheet ({file}, {day}).",
+      "offer": "{customer}’s last sheet with these headers ({file}, {day}) used other columns.",
+      "use": "Use them",
+      "busy": "Checking the sheet again…"
     }
   },
   "week": {

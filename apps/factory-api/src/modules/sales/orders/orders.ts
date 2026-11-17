@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { BOARD_LANES, daysLate, OPEN_STATUSES, SALES_ORDER_STATUSES, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
@@ -9,6 +9,8 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/p
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { customFilter } from '../../../platform/fields/registry' // B-TH-057 (SHEET-G05)
+import { type OrderSortKey, type OrderSortTerm } from './sort' // B-TH-057 (SHEET-G15)
 import { ORDER_DEPOSIT_ONLY } from '../deposits/deposits'
 import { assertMay, officeContextOf } from './access'
 import { makeOrderInCommand } from './make'
@@ -49,16 +51,22 @@ export interface ListFilters {
   readonly reaccept?: 'true' | 'false' | undefined
   readonly promiseFrom?: BusinessDate | undefined
   readonly promiseTo?: BusinessDate | undefined
-  /** Number or customer reference, case-insensitive. */
+  /** Number or customer reference, case-insensitive. B-TH-057: also the customer, a line's style code and the garment's label. */
   readonly q?: string | undefined
   /** B-TH-225: the label on the garment — a line's style of this brand party, or `own` (our own collection: no brand). */
   readonly brand?: string | undefined
+  /** B-TH-057 (SHEET-G05): the custom fields' `cf` term (platform/fields filters), applied by the list as by its file. */
+  readonly cf?: string | undefined
 }
 
 export interface ListQuery extends ListFilters {
+  /** Without `sort`: the last id read (newest first). With `sort`: the opaque cursor of the page before (sort key + id). */
   readonly cursor?: string | undefined
   readonly limit: number
+  /** B-TH-057 (SHEET-G15): `customer`, `brand`, `promise`, `daysLate`, `ordered`; `-` in front: the other way round. */
+  readonly sort?: OrderSortTerm | undefined
 }
+
 
 // B-TH-019: exported for the Customer switcher's counts (./customers), the one definition of late.
 export const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
@@ -66,6 +74,25 @@ export const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => (
 const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
 // B-W2b-323: the customer must accept a change (W2a's amendment flag, a priced change of B-W2b-309), the order still running.
 const reacceptWhere: Prisma.SalesOrderWhereInput = { reapprovalNeededAt: { not: null }, status: { notIn: ['CLOSED', 'CANCELLED'] } }
+
+// ── B-TH-057 (ORD-G07): the search reads the number, the customer PO, the customer (name, trade name, code), a line's style
+// code and the label on the garment (a brand's name or code) — a label only of a party the reader's orders.view reaches, as
+// the Brand cell names it (row-extras.ts), so a person limited to some customers never finds an order by a hidden label. ──
+function searchWhere(context: OfficeContext, q: string): Prisma.SalesOrderWhereInput {
+  const words = { contains: q, mode: 'insensitive' as const }
+  const named: Prisma.PartyWhereInput = { OR: [{ legalName: words }, { tradeName: words }, { code: words }] }
+  const reached = scopeWhere(actorOf(context), ORDERS_VIEW, { party: 'id' }) as Prisma.PartyWhereInput
+  return {
+    OR: [
+      { number: words },
+      { customerRef: words },
+      { party: named },
+      { lines: { some: { style: { code: words } } } },
+      { lines: { some: { style: { brandParty: { AND: [reached, named] } } } } },
+    ],
+  }
+}
+// ── end B-TH-057 ──
 
 // B-TH-019: exported for the Customer switcher (./customers): the same scope and terms as the list.
 export function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate): Prisma.SalesOrderWhereInput {
@@ -81,7 +108,7 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.reaccept === 'true' ? reacceptWhere : {}, // B-W2b-323
       filters.promiseFrom ? { promiseDate: { gte: asDay(filters.promiseFrom) } } : {},
       filters.promiseTo ? { promiseDate: { lte: asDay(filters.promiseTo) } } : {},
-      filters.q ? { OR: [{ number: { contains: filters.q, mode: 'insensitive' } }, { customerRef: { contains: filters.q, mode: 'insensitive' } }] } : {},
+      filters.q ? searchWhere(context, filters.q) : {}, // B-TH-057 (ORD-G07)
       filters.brand ? { lines: { some: { style: { brandPartyId: filters.brand === 'own' ? null : filters.brand } } } } : {}, // B-TH-225
     ],
   }
@@ -89,19 +116,126 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
 
 type DepositState = 'NOT_NEEDED' | 'MISSING' | 'OPEN' | 'PAID' | 'WAIVED'
 
+// ── B-TH-057 (SHEET-G05, SHEET-G15) ─────────────────────────────────────────────────────────────────────────────────────
+type Reader = Parameters<Parameters<CommandCaller['withClient']>[0]>[0]
+
+/**
+ * The `cf` term as a filter on the orders (platform/fields registry customFilter, the one the export wrapper applies): the
+ * records its clauses keep, less those a "has none" clause drops; no term: every order. A clause on a field the person does
+ * not see is refused (400 at query/cf), never dropped — the screen holds what the file holds.
+ */
+async function customWhere(client: Reader, context: OfficeContext, cf: string | undefined): Promise<Prisma.SalesOrderWhereInput> {
+  const match = await customFilter(client as unknown as Prisma.TransactionClient, 'SalesOrder', cf, actorOf(context))
+  if (!match) return {}
+  return { AND: [match.include ? { id: { in: [...match.include] } } : {}, match.exclude.size > 0 ? { id: { notIn: [...match.exclude] } } : {}] }
+}
+
+const collator = new Intl.Collator('it', { sensitivity: 'base', numeric: true })
+/** A sort key: a group (a value, a label of our own collection, a hidden label, nothing to sort by) and the value inside it. */
+type SortKey = readonly [group: number, value: string | number | null]
+/** The groups after the values stay last whichever way the sort runs (no promise, no lateness, no label). */
+const LAST_GROUP = 3
+
+function compareKeys(a: SortKey, b: SortKey, desc: boolean): number {
+  const lastA = a[0] === LAST_GROUP
+  const lastB = b[0] === LAST_GROUP
+  if (lastA !== lastB) return lastA ? 1 : -1
+  const way = desc ? -1 : 1
+  if (a[0] !== b[0]) return (a[0] - b[0]) * way
+  const [x, y] = [a[1], b[1]]
+  if (x === y) return 0
+  if (x === null || y === null) return x === null ? 1 : -1
+  return (typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y))) * way
+}
+
+interface SortCursor {
+  readonly s: OrderSortTerm
+  readonly k: SortKey
+  readonly i: string
+}
+const cursorOf = (cursor: SortCursor): string => Buffer.from(JSON.stringify(cursor)).toString('base64url')
+function readCursor(text: string, sort: OrderSortTerm): SortCursor {
+  try {
+    const cursor = JSON.parse(Buffer.from(text, 'base64url').toString('utf8')) as Partial<SortCursor>
+    if (cursor.s === sort && typeof cursor.i === 'string' && isUuid(cursor.i) && Array.isArray(cursor.k) && cursor.k.length === 2 && typeof cursor.k[0] === 'number') return cursor as SortCursor
+  } catch {
+    // said below
+  }
+  throw new ValidationError('This page belongs to another sort: read the list from its start again.', [{ path: 'query/cursor', message: 'The cursor of a page of this sort.' }])
+}
+
+/**
+ * One page of the orders in a server sort (SHEET-G15): every order the terms keep is read once with only what its key needs,
+ * sorted here by its key and then its id (the same way round), and the page starts after the cursor's key and id — a row
+ * added or moved meanwhile never repeats nor hides a row already read. The keys:
+ *   customer  the customer's name;      ordered  the order date;      promise  the promise (none: last);
+ *   daysLate  days past the promise while not shipped (factory-domain daysLate; on time 0, shipped or no promise: last);
+ *   brand     the first label the Brand cell names (row-extras.ts): a label's name the reader may see, then our own collection,
+ *             then a label the reader may not see whose it is (all alike: its name never orders a row), then no line (last).
+ */
+async function sortedPage(client: Reader, context: OfficeContext, where: Prisma.SalesOrderWhereInput, query: ListQuery & { readonly sort: OrderSortTerm }, today: BusinessDate): Promise<{ ids: string[]; nextCursor: string | null }> {
+  const sort = query.sort
+  const desc = sort.startsWith('-')
+  const key = (desc ? sort.slice(1) : sort) as OrderSortKey
+  const rows = await client.salesOrder.findMany({ where, select: { id: true, partyId: true, status: true, orderDate: true, promiseDate: true, party: { select: { legalName: true } } } })
+  const actor = actorOf(context)
+  // The brand sort's facts: each order's lines in their order with their style's label, and the labels' names.
+  const linesOf = new Map<string, (string | null)[]>()
+  if (key === 'brand' && rows.length > 0) {
+    const lines = await client.salesOrderLine.findMany({ where: { orderId: { in: rows.map((row) => row.id) } }, select: { orderId: true, style: { select: { brandPartyId: true } } }, orderBy: [{ orderId: 'asc' }, { seq: 'asc' }] })
+    for (const line of lines) linesOf.set(line.orderId, [...(linesOf.get(line.orderId) ?? []), line.style.brandPartyId])
+  }
+  const labels = [...new Set([...linesOf.values()].flat().filter((party): party is string => party !== null))]
+  const labelNames = new Map(labels.length > 0 ? (await client.party.findMany({ where: { id: { in: labels } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]) : [])
+  const keyOf = (row: (typeof rows)[number]): SortKey => {
+    if (key === 'customer') return [0, row.party.legalName]
+    if (key === 'ordered') return [0, dayOf(row.orderDate)]
+    const promise = dayOrNull(row.promiseDate)
+    if (key === 'promise') return promise === null ? [LAST_GROUP, null] : [0, promise]
+    if (key === 'daysLate') {
+      const late = daysLate(row.status as SalesOrderStatus, promise, today)
+      return late === null ? [LAST_GROUP, null] : [0, late]
+    }
+    const own = linesOf.get(row.id) ?? []
+    if (own.length === 0) return [LAST_GROUP, null]
+    const names = own.flatMap((party) => (party && (party === row.partyId || can(actor, ORDERS_VIEW, { partyId: party })) ? [labelNames.get(party) ?? ''] : []))
+    if (names.length > 0) return [0, [...names].sort(collator.compare)[0]!]
+    if (own.includes(null)) return [1, null]
+    return [2, null]
+  }
+  const keyed = rows.map((row) => ({ id: row.id, key: keyOf(row) }))
+  const compare = (a: { id: string; key: SortKey }, b: { id: string; key: SortKey }): number => compareKeys(a.key, b.key, desc) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) * (desc ? -1 : 1)
+  keyed.sort(compare)
+  const after = query.cursor ? readCursor(query.cursor, sort) : null
+  const start = after ? keyed.findIndex((row) => compare(row, { id: after.i, key: after.k }) > 0) : 0
+  const page = start < 0 ? [] : keyed.slice(start, start + query.limit)
+  const more = start >= 0 && keyed.length > start + query.limit
+  return { ids: page.map((row) => row.id), nextCursor: more ? cursorOf({ s: sort, k: page.at(-1)!.key, i: page.at(-1)!.id }) : null }
+}
+// ── end B-TH-057 ──
+
 /** The orders the caller may see (its companies and parties), newest first, with SCR-038's columns. */
+// B-TH-057: + the `cf` term, and a server sort (`sort`) with its own cursor.
 export async function listOrders(caller: CommandCaller, query: ListQuery) {
   const context = officeContextOf(caller)
   const today = todayNow()
-  const where: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, query, today), query.cursor ? { id: { lt: query.cursor } } : {}] }
+  if (!query.sort && query.cursor !== undefined && !isUuid(query.cursor)) throw new ValidationError('This page belongs to a sorted list: read the list from its start again.', [{ path: 'query/cursor', message: 'The last id read.' }])
   return caller.withClient(async (client) => {
-    const rows = await client.salesOrder.findMany({
-      where,
-      orderBy: { id: 'desc' },
-      take: query.limit + 1,
-      select: { id: true, number: true, companyId: true, partyId: true, customerRef: true, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true },
-    })
-    const page = rows.slice(0, query.limit)
+    const scoped: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, query, today), await customWhere(client, context, query.cf)] }
+    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true } as const
+    let page: Prisma.SalesOrderGetPayload<{ select: typeof select }>[]
+    let nextCursor: string | null
+    if (query.sort) {
+      const sorted = await sortedPage(client, context, scoped, { ...query, sort: query.sort }, today)
+      const found = sorted.ids.length > 0 ? await client.salesOrder.findMany({ where: { AND: [scoped, { id: { in: sorted.ids } }] }, select }) : []
+      const byId = new Map(found.map((row) => [row.id, row]))
+      page = sorted.ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
+      nextCursor = sorted.nextCursor
+    } else {
+      const rows = await client.salesOrder.findMany({ where: { AND: [scoped, query.cursor ? { id: { lt: query.cursor } } : {}] }, orderBy: { id: 'desc' }, take: query.limit + 1, select })
+      page = rows.slice(0, query.limit)
+      nextCursor = rows.length > query.limit ? page[page.length - 1]!.id : null
+    }
     const ids = page.map((row) => row.id)
     const lines = ids.length > 0 ? await client.salesOrderLine.groupBy({ by: ['orderId'], where: { orderId: { in: ids } }, _sum: { quantity: true }, _count: { _all: true } }) : []
     // B-TH-017: + the request's id (its deposit invoice) and every shipment (their delivery notes).
@@ -164,7 +298,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           ...extras.get(row.id)!,
         }
       }),
-      nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
+      nextCursor, // B-TH-057
     }
   })
 }
@@ -178,11 +312,12 @@ const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'wait
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
-  const base = whereOf(context, filters, today)
   return caller.withClient(async (client) => {
+    // B-TH-057 (SHEET-G05): the counts follow the custom field filter as the rows do.
+    const base: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, filters, today), await customWhere(client, context, filters.cf)] }
     const grouped = await client.salesOrder.groupBy({ by: ['status'], where: base, _count: { _all: true } })
     const countOf = (status: SalesOrderStatus) => grouped.find((row) => row.status === status)?._count._all ?? 0
     const late = await client.salesOrder.count({ where: { AND: [base, lateWhere(today)] } })

@@ -499,6 +499,12 @@
     "held": {
       "manage": "Importare ordini richiede il permesso di modificare gli ordini",
       "run": "Importare richiede il permesso di eseguire importazioni e caricare file"
+    },
+    "memory": {
+      "same": "Colonne lette come nell’ultimo foglio di {customer} ({file}, {day}).",
+      "offer": "L’ultimo foglio di {customer} con queste intestazioni ({file}, {day}) usava altre colonne.",
+      "use": "Usale",
+      "busy": "Controllo di nuovo il foglio…"
     }
   },
   "week": {

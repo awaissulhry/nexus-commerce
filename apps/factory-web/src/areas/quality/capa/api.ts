@@ -93,7 +93,9 @@ export const recordSchema = z.object({
       note: z.string().nullable(),
       createdAt: z.string(),
       createdById: z.string().nullable(),
-      record: z.object({ number: z.string(), title: z.string().nullable(), state: z.string(), severity: z.string().nullable(), category: z.string().nullable(), siteId: z.string().nullable(), namesThisCapa: z.boolean() }).nullable(),
+      // B-TH-232: `shareHeld` — the 8D may not go to this complaint's customer (written for another customer, or it also answers
+      // another customer's complaint): Share with the customer is held with the reason before the click.
+      record: z.object({ number: z.string(), title: z.string().nullable(), state: z.string(), severity: z.string().nullable(), category: z.string().nullable(), siteId: z.string().nullable(), namesThisCapa: z.boolean(), shareHeld: z.enum(['OTHER_CUSTOMER', 'OTHER_CUSTOMERS_COMPLAINTS']).nullable().optional() }).nullable(),
     }),
   ),
   containment: z.array(

@@ -34,7 +34,9 @@ export const reportsContract = defineContract({
       inspection: output({ id: id(), number: z.string(), status: z.string(), workOrderId: id(), signed: z.boolean() }),
       versions: z.array(versionView),
       /** The shipments that carry garments of the inspection's work order (those the caller sees). */
-      shipments: z.array(output({ id: id(), number: z.string(), status: z.string(), customer: z.string().nullable(), shareable: z.boolean(), problem: z.string().nullable() })),
+      // B-TH-232: `held` — why it cannot take the report: STATE (not packed, or cancelled), SHARED_PRODUCTION (the work order also
+      // makes garments for another customer: its own certificate of conformity goes instead); null: it can.
+      shipments: z.array(output({ id: id(), number: z.string(), status: z.string(), customer: z.string().nullable(), shareable: z.boolean(), problem: z.string().nullable(), held: z.enum(['STATE', 'SHARED_PRODUCTION']).nullable() })),
       shares: z.array(shareView),
       ready,
       may,

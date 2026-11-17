@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { IN_PROCESS_KINDS } from '@nexus/factory-domain/quality/inprocess/rules'
 import { AMENDED_RECORDS } from '@nexus/factory-domain/quality/amendments/rules'
 import type { DesignScreen } from '../../../../lib/design/design-screen'
+import { ApiError } from '../../../../lib/api/errors' // B-TH-232
+import { scanText } from '../../../../lib/testing/brand-scan' // B-TH-232
+import { BRAND_ALPHA, BRAND_BETA } from '../../../../lib/testing/two-brands' // B-TH-232
+import { CERTIFICATE_REFUSALS, certificateRefusal } from '../report/certificate' // B-TH-232
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { messagesFor } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
@@ -36,6 +40,7 @@ import {
   reportHeld,
   rowKey,
   sampleOf,
+  shareHeld, // B-TH-232
   signHoldsOf,
   unionRows,
   type ListRow,
@@ -211,3 +216,46 @@ describe('SCR-076-report, -reports, -incoming, -inline: every design case in bot
     expect(report).toContain('Condividi link al rapporto')
   })
 })
+
+// ── B-TH-232 (threads plan TH-2: the office side of the wall in words; B-TH-032, WALL-G07, W16) ──
+describe('B-TH-232 a work order of several customers: its report goes to none, the certificate of conformity instead', () => {
+  it('Share is held with its own words (not "not packed yet")', () => {
+    const state = { canShare: true, versions: 2, shareable: false, busy: false }
+    expect(shareHeld({ ...state, held: 'SHARED_PRODUCTION' })).toBe('share.held.SHARED_PRODUCTION')
+    expect(shareHeld({ ...state, held: 'STATE' })).toBe('share.held.notShareable')
+    expect(shareHeld(state)).toBe('share.held.notShareable')
+    expect(shareHeld({ ...state, shareable: true, held: null })).toBeNull()
+  })
+
+  it('the certificate’s refusals are said in our words, one per code, else the kind', () => {
+    const error = (code: string) => new ApiError('conflict', 409, 'invalid_state', 'x', null, [{ path: `held/${code}`, message: 'DEMO-SH-0044: 2 garments wait for their release.' }])
+    expect(certificateRefusal(error('NOT_CERTIFIABLE'))).toEqual({ key: 'certificate.held.NOT_CERTIFIABLE', lines: ['DEMO-SH-0044: 2 garments wait for their release.'] })
+    expect(certificateRefusal(new ApiError('forbidden', 403, 'forbidden', 'x'))).toEqual({ key: 'certificate.held.noRight', lines: [] })
+    expect(certificateRefusal(new Error('x'))).toEqual({ key: 'certificate.refused', lines: [] })
+  })
+
+  it('every word exists in it and en and names no customer (W16: scanText finds nothing of either brand)', () => {
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['inspections-depth'])['inspections-depth'] as Record<string, string>
+      const keys = ['share.held.SHARED_PRODUCTION', 'share.sharedProduction', 'certificate.go', 'certificate.done', 'certificate.refused', ...CERTIFICATE_REFUSALS.map((code) => `certificate.held.${code}`), 'certificate.held.noRight']
+      for (const key of keys) {
+        expect(words[key], `${locale} ${key}`).toBeTruthy()
+        expect(scanText(words[key]!, BRAND_ALPHA)).toEqual([])
+        expect(scanText(words[key]!, BRAND_BETA)).toEqual([])
+      }
+    }
+  })
+
+  it('the design case offers the certificate of the shipment, and draws in both languages', () => {
+    for (const id of ['shared-production', 'shared-production-done', 'shared-production-held']) {
+      const entry = (reportScreen as unknown as DesignScreen<unknown>).cases.find((item) => item.id === id)!
+      expect(entry, id).toBeTruthy()
+      for (const locale of LOCALES) {
+        const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(reportScreen.view as ComponentType<{ model: unknown }>, { model: entry.model })))
+        expect(html, `${id} ${locale}`).toContain('DEMO-SH-0044')
+        expect(scanText(html.replace(/<[^>]+>/g, ' '), BRAND_ALPHA)).toEqual([])
+      }
+    }
+  })
+})
+// ── end B-TH-232 ──
