@@ -1,8 +1,9 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import type { DowngradeRefusal, RepairRefusal } from '@nexus/factory-domain/production/repair/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
+import { reachesWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-05
 
 /**
  * Who may do what at the repair station and with second quality (B-W2b-126): each rework and work order is checked with can()
@@ -23,15 +24,26 @@ export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeC
   return context
 }
 
-/** May the caller do this on a record of that company and site? A floor device: only at its own site. */
-export function may(context: FloorContext | OfficeContext, permission: Permission, record: { readonly companyId: string; readonly siteId: string }): boolean {
+/**
+ * May the caller do this on a work order's record? A floor device: only at its own site. B-PR-05 (production plan §2, the brand
+ * wall, ../work-orders/scope): the record names its work order's one customer (`partyId`): another customer's is not found.
+ */
+export function may(context: FloorContext | OfficeContext, permission: Permission, record: WorkOrderReach): boolean {
   if (context.audience === 'floor' && context.siteId !== record.siteId) return false
-  return can(actorOf(context), permission, record)
+  return reachesWorkOrder(actorOf(context), permission, record)
 }
 
-export function assertMay(context: FloorContext | OfficeContext, permission: Permission, record: { readonly companyId: string; readonly siteId: string } | null, what: string): asserts record is { readonly companyId: string; readonly siteId: string } {
+export function assertMay(context: FloorContext | OfficeContext, permission: Permission, record: WorkOrderReach | null, what: string): asserts record is WorkOrderReach {
   if (!record || !may(context, permission, record)) throw new NotFoundError(`${what} not found.`)
 }
+
+// ── B-PR-05 (the brand wall) ──
+/** A rework row's reach (read with its work order's customer: store.ts REPAIR_COLUMNS). */
+export const repairReach = (row: { readonly companyId: string; readonly siteId: string; readonly workOrder: { readonly partyId: string | null } }): WorkOrderReach => ({ companyId: row.companyId, siteId: row.siteId, partyId: row.workOrder.partyId })
+
+/** A downgrade's reach (read with its cell's work order's customer: store.ts DOWNGRADE_COLUMNS). */
+export const downgradeReach = (row: { readonly companyId: string; readonly siteId: string; readonly workOrderSize: { readonly workOrder: { readonly partyId: string | null } } }): WorkOrderReach => ({ companyId: row.companyId, siteId: row.siteId, partyId: row.workOrderSize.workOrder.partyId })
+// ── end B-PR-05 ──
 
 export class RepairRefusedError extends ConflictError {
   override name = 'RepairRefusedError'

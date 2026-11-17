@@ -16,7 +16,7 @@ import {
 } from '@nexus/factory-domain/production/cutorders/plies'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import type { FloorContext, OfficeContext } from '../../../core/context'
-import { invalid, may, refuse, workerOf } from './access'
+import { invalid, may, partiesOf, refuse, workerOf } from './access'
 import { emitPlyRun } from './emit'
 import { jobKey, labelTarget, queueLabel } from './printing'
 import { plyLinesOf, PLY_RUN_COLUMNS, readCutOrder, readLines, type CutOrderRow, type LayRow, LAY_COLUMNS, type PlyRunRow } from './store'
@@ -39,7 +39,7 @@ async function layFor(caller: CommandCaller, layId: string): Promise<{ context: 
     const order = lay ? await readCutOrder(db, lay.cutOrderId) : null
     return { lay, order }
   })
-  if (!found.lay || !found.order || !may(context, PRODUCTION_CUT, found.order)) throw new NotFoundError('Lay not found.')
+  if (!found.lay || !found.order || !may(context, PRODUCTION_CUT, found.order, partiesOf(found.order))) throw new NotFoundError('Lay not found.')
   return { context, lay: found.lay, order: found.order }
 }
 
@@ -134,7 +134,10 @@ async function runFor(caller: CommandCaller, runId: string): Promise<{ context: 
   const context = workerOf(caller)
   const run = isUuid(runId) ? await caller.withClient((db) => db.plyRun.findUnique({ where: { id: runId }, select: PLY_RUN_COLUMNS })) : null
   if (!run) throw new NotFoundError('Ply run not found.')
-  const { lay, order } = await layFor(caller, run.layId)
+  // B-PR-04b (the brand wall): a run of a lay the caller does not reach answers as an unknown run.
+  const { lay, order } = await layFor(caller, run.layId).catch((error: unknown) => {
+    throw error instanceof NotFoundError ? new NotFoundError('Ply run not found.') : error
+  })
   return { context, run, lay, order }
 }
 

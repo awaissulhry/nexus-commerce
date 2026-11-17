@@ -28,6 +28,8 @@ export const ORDER_COLUMNS = {
   priority: true,
   styleId: true,
   lineId: true,
+  // B-PR-04b: its one customer, for the brand wall (access.ts seen + ofWorkOrder).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type OrderRow = Prisma.WorkOrderGetPayload<{ select: typeof ORDER_COLUMNS }>
 

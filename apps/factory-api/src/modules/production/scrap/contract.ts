@@ -110,6 +110,8 @@ export const listReplacementsContract = defineContract({
     kind: kind.optional(),
     /** Comma-separated statuses (the recut list: kind=RECUT&status=OPEN). */
     status: commaList(REPLACEMENT_STATUSES).optional(),
+    /** B-PR-05: one customer's requests (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -158,6 +160,8 @@ export const scrapListContract = defineContract({
     kind: z.enum(['SCRAP', 'REWORK']).optional(),
     /** B-W2b-53: only the scans whose scrap waits for the team leader's approval (the tile's filter). */
     approval: z.enum(['WAITING']).optional(),
+    /** B-PR-05: one customer's rows (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(500).default(100),
   }),
   response: {
@@ -275,7 +279,8 @@ const waitingRow = {
 }
 
 export const officeWaitingContract = defineContract({
-  querystring: input({ siteId: id().optional(), workOrderId: id().optional() }),
+  // B-PR-05: partyId = one customer's (inside the caller's reach).
+  querystring: input({ siteId: id().optional(), workOrderId: id().optional(), partyId: id().optional() }),
   response: { 200: output({ rows: z.array(output(waitingRow)), refusalTiles: z.array(refusalTile) }) },
 })
 

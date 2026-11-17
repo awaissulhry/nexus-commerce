@@ -22,7 +22,7 @@ import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { lockLotRolls } from '../../inventory/rolls/facts'
 import { activeHoldsOf } from '../../quality/holds/checks'
-import { invalid, may, notFound, officeOf, refuse } from './access'
+import { invalid, may, notFound, officeOf, partiesOf, refuse } from './access'
 import { emitOrder } from './emit'
 import { recordOf } from './read'
 import { decimalText, plannedOnRolls, readCutOrder, readLayRolls, readLays, readLines, rejectedRolls, type CutOrderRow, type Reader } from './store'
@@ -126,7 +126,7 @@ export async function rollCandidates(caller: CommandCaller, cutOrderId: string, 
   const allowanceCm = query.allowanceCm ?? 0
   return caller.withClient(async (db) => {
     const order = await readCutOrder(db, cutOrderId)
-    if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order)) return notFound('Cut order')
+    if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order, partiesOf(order))) return notFound('Cut order')
     const marker = fabricMarker(order!)
     if (!marker) refuse({ code: 'NO_MARKER', message: `Cut order ${order!.number} ${order!.kind === 'LEATHER' ? 'cuts leather hide by hide: it takes no rolls' : 'has no marker yet: a roll gives plies of a marker'}.` })
     const lays = await readLays(db, [order!.id])
@@ -200,8 +200,8 @@ async function managedLay(caller: CommandCaller, cutOrderId: string, layId: stri
     const lay = order && isUuid(layId) ? await db.lay.findUnique({ where: { id: layId }, select: { id: true, cutOrderId: true } }) : null
     return { order, lay }
   })
-  if (!found.order || !may(context, PRODUCTION_CUTTING_VIEW, found.order) || !found.lay || found.lay.cutOrderId !== cutOrderId) return notFound('Lay')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order!)) throw new ForbiddenError('Allocating rolls needs the right to plan cut orders at the site.')
+  if (!found.order || !may(context, PRODUCTION_CUTTING_VIEW, found.order, partiesOf(found.order)) || !found.lay || found.lay.cutOrderId !== cutOrderId) return notFound('Lay')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order!, partiesOf(found.order!))) throw new ForbiddenError('Allocating rolls needs the right to plan cut orders at the site.')
   return { context, order: found.order! }
 }
 

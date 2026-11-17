@@ -118,6 +118,8 @@ export const listReworkContract = defineContract({
     status: statusList.optional(),
     /** true: OPEN and IN_PROGRESS only. */
     open: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** B-PR-05: one customer's rework (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
