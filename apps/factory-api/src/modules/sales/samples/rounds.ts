@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import type { CancelRoundBody, CreateRoundBody, MoveRoundBody, RoundListQuery, RoundView, UpdateRoundBody } from '@nexus/factory-domain/sales/samples/contracts'
@@ -197,6 +197,8 @@ export async function createRound(caller: CommandCaller, body: CreateRoundBody, 
   const checked = await caller.withClient(async (db) => {
     const style = await db.style.findUnique({ where: { id: body.styleId }, select: STYLE_COLUMNS })
     if (!style || (style.companyId !== null && !may(context, SALES_SAMPLES_VIEW, { companyId: style.companyId, partyId: null }))) throw new NotFoundError('Style not found.')
+    // B-PR-10 (the brand wall): another customer's private-label style is not found, as an unknown one.
+    if (style.brandPartyId !== null && !can(actorOf(context), SALES_SAMPLES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.')
     // The company it is numbered in: the style's; a tenant-wide style's: the one named, else the screen's.
     const companyId = style.companyId ?? body.companyId ?? context.companyId ?? null
     if (companyId === null) badBody('companyId', `Style ${style.code} is every company's: say which company the round is for.`)
