@@ -93,7 +93,7 @@ describe('T16: an inspection of a work order with cells of A and B is not shared
   it('a work order of brand A alone: its report goes on brand A’s shipment (as before)', async () => {
     await ok('POST', `/quality/inspections/${inspection()}/reports`, { language: 'en' }, 201)
     const read = await ok('GET', `/quality/inspections/${inspection()}/reports`, undefined, 200)
-    expect(read.shipments.find((row: Json) => row.id === shipping.shipmentId)).toMatchObject({ shareable: true, problem: null })
+    expect(read.shipments.find((row: Json) => row.id === shipping.shipmentId)).toMatchObject({ shareable: true, problem: null, held: null /* B-TH-232 */ })
   })
 
   it('once the work order also makes garments for brand B, the report is held and the shipment says why', async () => {
@@ -111,7 +111,7 @@ describe('T16: an inspection of a work order with cells of A and B is not shared
 
     const read = await ok('GET', `/quality/inspections/${inspection()}/reports`, undefined, 200)
     const row = read.shipments.find((entry: Json) => entry.id === shipping.shipmentId)
-    expect(row).toMatchObject({ shareable: false, problem: expect.stringMatching(/also makes garments for another customer.*certificate of conformity/) })
+    expect(row).toMatchObject({ shareable: false, problem: expect.stringMatching(/also makes garments for another customer.*certificate of conformity/), held: 'SHARED_PRODUCTION' /* B-TH-232 */ })
     expect(findMarkers(row, fixtureMarkers(BRAND_BETA))).toEqual([])
 
     const refused = await call('POST', `/quality/inspections/${inspection()}/reports/share`, { shipmentId: shipping.shipmentId })

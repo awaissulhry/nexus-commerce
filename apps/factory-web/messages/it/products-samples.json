@@ -383,6 +383,7 @@
     "moved": "{number} spostato in {stage}."
   },
   "new": {
+    "privateStyle": "Questo modello è un’esclusiva (private label) di {brand}: i suoi campioni si fanno solo per {brand} (un pilota del team di {brand} conta come {brand}). Un giro per un altro cliente viene rifiutato.",
     "title": "Nuova richiesta di campione",
     "submit": "Crea",
     "style": "Modello",

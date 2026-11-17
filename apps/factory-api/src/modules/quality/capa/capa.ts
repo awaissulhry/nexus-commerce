@@ -127,6 +127,14 @@ export async function recordOf(db: Reader, row: CapaRow, context: OfficeContext,
   const causes = causeIds.length === 0 ? [] : await db.causeCode.findMany({ where: { id: { in: causeIds } }, select: { id: true, code: true, labelIt: true, labelEn: true, process: true }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] })
   const documents = await db.generatedDocument.findMany({ where: { recordType: CAPA_RECORD, recordId: row.id, kind: 'EIGHT_D' }, select: { id: true, version: true, language: true, number: true, fileId: true, createdAt: true, createdById: true }, orderBy: { version: 'desc' } })
 
+  // ── B-TH-232 (the office side of B-TH-031's wall, in words before the click): why "Share with the customer" of the 8D is held
+  // for a complaint — the CAPA is written for another customer, or it also answers another customer's complaint (the share's own
+  // check, complaints/portal/publish.ts, refuses the same and also an outdated kept report). A code, never a name. ──
+  const complaintParties = sources.flatMap((source) => (source.recordType === 'Complaint' ? [facts.complaints.get(source.recordId)?.partyId ?? null] : []))
+  const eightDShareHeld = (partyId: string): 'OTHER_CUSTOMER' | 'OTHER_CUSTOMERS_COMPLAINTS' | null =>
+    row.customerId !== null ? (row.customerId === partyId ? null : 'OTHER_CUSTOMER') : complaintParties.some((party) => party !== partyId) ? 'OTHER_CUSTOMERS_COMPLAINTS' : null
+  // ── end B-TH-232 ──
+
   const status = row.status as CapaStatus
   const type = row.type as CapaType
   const closing = closeChecks({ type, status, actions: actions.map((action) => ({ status: action.status as 'OPEN' | 'DONE' | 'CANCELLED' })) })
@@ -145,9 +153,9 @@ export async function recordOf(db: Reader, row: CapaRow, context: OfficeContext,
       const ncr = source.recordType === 'Nonconformance' ? facts.ncrs.get(source.recordId) : undefined
       const complaint = source.recordType === 'Complaint' ? facts.complaints.get(source.recordId) : undefined
       const record = ncr && mayNcr(ncr)
-        ? { number: ncr.number, title: ncr.title, state: ncr.stage, severity: ncr.severity, category: null, siteId: ncr.siteId, namesThisCapa: ncr.capaId === row.id }
+        ? { number: ncr.number, title: ncr.title, state: ncr.stage, severity: ncr.severity, category: null, siteId: ncr.siteId, namesThisCapa: ncr.capaId === row.id, shareHeld: null }
         : complaint && mayComplaint(complaint)
-          ? { number: complaint.number, title: complaint.customerRef, state: complaint.status, severity: null, category: complaint.category, siteId: null, namesThisCapa: true }
+          ? { number: complaint.number, title: complaint.customerRef, state: complaint.status, severity: null, category: complaint.category, siteId: null, namesThisCapa: true, shareHeld: eightDShareHeld(complaint.partyId) /* B-TH-232 */ }
           : null
       return { id: source.id, recordType: source.recordType as SourceType, recordId: source.recordId, note: source.note, createdAt: iso(source.createdAt)!, createdById: source.createdById, record }
     }),

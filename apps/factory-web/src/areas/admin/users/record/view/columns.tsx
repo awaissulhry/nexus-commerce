@@ -26,7 +26,7 @@ export function assignmentColumns(ctx: { t: Translate; locale: Locale; prefix: s
       minWidth: 190,
       cellRenderer: cell<Assignment>((assignment) => <IdentityCell noImage title={name(assignment)} titleAttr={name(assignment)} href={adminHref(ctx.prefix, `/roles/${assignment.roleId}`)} />),
     },
-    { colId: 'where', headerName: t('users.col.where'), valueGetter: ({ data }) => (data ? scopeWords(data, ctx.companies, t('scope.all')) || '—' : ''), flex: 1.8, minWidth: 200 },
+    { colId: 'where', headerName: t('users.col.where'), valueGetter: ({ data }) => (data ? scopeWords(data, ctx.companies, t('scope.all'), (count) => t('scope.customers', { count }) /* B-TH-232 */) || '—' : ''), flex: 1.8, minWidth: 200 },
     { colId: 'from', headerName: t('user.col.from'), valueGetter: ({ data }) => (data ? formatDate(data.validFrom, { locale }) : ''), flex: 0.8, minWidth: 120 },
     { colId: 'to', headerName: t('user.col.to'), valueGetter: ({ data }) => (data ? until(data) : ''), flex: 0.8, minWidth: 120 },
     {

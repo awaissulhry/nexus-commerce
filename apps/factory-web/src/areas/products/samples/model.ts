@@ -464,6 +464,18 @@ export function newDraftHeld(draft: NewDraft, style: StyleDetail | null, can: Sa
   return null
 }
 
+// ── B-TH-232 (threads plan TH-2, the office side of B-TH-034's wall in words; WALL-G15, W12) ──
+/**
+ * The customer field's note while a round is asked for another customer than a private-label style's own: the round will be
+ * refused (refusal/PRIVATE_STYLE). Words only, never a hold: a rider of the brand's team counts as the brand, and the picker does
+ * not know whose team a rider is (the API decides). The office sees whose label it is; nothing reaches a customer.
+ */
+export function privateStyleNote(draft: Pick<NewDraft, 'partyId'>, style: Pick<StyleDetail, 'brand'> | null): Phrase | null {
+  if (!style?.brand || !draft.partyId || draft.partyId === style.brand.id) return null
+  return { key: 'new.privateStyle', params: { brand: style.brand.name } }
+}
+// ── end B-TH-232 ──
+
 export function newBodyOf(draft: NewDraft, style: StyleDetail, companyId: string | null, can: SamplesCan): CreateRoundBody {
   const colours = style.colourways.map((colourway) => colourway.id)
   const cells = cellsOfGrid(draft.grid, [ANY_COLOUR, ...colours], style.sizes)

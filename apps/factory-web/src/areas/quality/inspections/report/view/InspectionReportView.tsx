@@ -29,6 +29,11 @@ export interface ReportModel {
   /** `?share=1`: the window opened on Share report link (the share part first). */
   readonly shareFirst: boolean
   readonly share: { readonly shipmentId: string | null; readonly version: number | null; readonly send: boolean; readonly busy: boolean; readonly problem: string | null; readonly lines: readonly string[]; readonly done: { readonly shipment: string; readonly version: number; readonly sent: boolean; readonly withdrawn: number } | null }
+  /**
+   * B-TH-232: the shipment's certificate of conformity, offered on a shipment whose work order also makes another customer's
+   * garments (its report goes to no single customer): kept and shared in one step; absent: not offered (a design case of before).
+   */
+  readonly certificate?: { readonly may: boolean; readonly busy: boolean; readonly problem: string | null; readonly lines: readonly string[]; readonly done: { readonly shipment: string; readonly version: number } | null }
 }
 
 export interface ReportActions {
@@ -38,6 +43,8 @@ export interface ReportActions {
   onDownload?: (fileId: string) => void
   onShareDraft?: (draft: { shipmentId?: string | null; version?: number | null; send?: boolean }) => void
   onShare?: () => void
+  /** B-TH-232: keep and share the shipment's certificate of conformity instead of the report. */
+  onShareCertificate?: (shipmentId: string) => void
 }
 
 /**
@@ -68,7 +75,10 @@ function Report({ model, actions }: { model: ReportModel; actions?: ReportAction
   const keepReason = keepHeld({ canMake: reports?.may.make ?? false, signed: reports?.inspection.signed ?? false, pdf: model.pdf !== null, busy: model.keeping })
   const share = model.share
   const shipment = reports?.shipments.find((entry) => entry.id === share.shipmentId) ?? null
-  const shareReason = shareHeld({ canShare: reports?.may.share ?? false, versions: reports?.versions.length ?? 0, shareable: shipment?.shareable ?? false, busy: share.busy })
+  const shareReason = shareHeld({ canShare: reports?.may.share ?? false, versions: reports?.versions.length ?? 0, shareable: shipment?.shareable ?? false, busy: share.busy, held: shipment?.held ?? null /* B-TH-232 */ })
+  // B-TH-232 (W16): a work order of several customers' garments — its report goes to none of them; the certificate goes instead.
+  const certificate = model.certificate
+  const sharedProduction = shipment?.held === 'SHARED_PRODUCTION'
   const shareHeldWords = shareReason ? td(shareReason) : !share.shipmentId ? td('share.held.pick') : null
   const shareSection = reports && (
     <Section id="share" title={td('share.heading')} sub={td('share.sub')}>
@@ -100,12 +110,39 @@ function Report({ model, actions }: { model: ReportModel; actions?: ReportAction
               label={
                 <span className="fw-q-cell">
                   <span>{td('share.shipment', { number: entry.number, customer: entry.customer ?? '—' })}</span>
-                  <span className="fw-q-hint">{entry.shareable ? td(`share.status.${entry.status}`) : td('share.notShareable', { status: td(`share.status.${entry.status}`) })}</span>
+                  <span className="fw-q-hint">{entry.shareable ? td(`share.status.${entry.status}`) : entry.held === 'SHARED_PRODUCTION' ? td('share.sharedProduction', { status: td(`share.status.${entry.status}`) }) /* B-TH-232 */ : td('share.notShareable', { status: td(`share.status.${entry.status}`) })}</span>
                 </span>
               }
             />
           ))}
         </fieldset>
+      )}
+      {/* B-TH-232: the shipment's certificate of conformity instead of the report of a work order of several customers. */}
+      {sharedProduction && shipment && certificate && (
+        <Banner
+          tone={certificate.done ? 'success' : 'info'}
+          title={certificate.done ? td('certificate.done', { shipment: certificate.done.shipment, version: certificate.done.version }) : td('share.held.SHARED_PRODUCTION')}
+          action={
+            certificate.done ? undefined : (
+              <Button size="sm" onClick={() => actions?.onShareCertificate?.(shipment.id)} heldReason={!certificate.may ? td('certificate.held.noRight') : certificate.busy ? t('common.working') : null}>
+                {certificate.busy ? <Spinner size={12} /> : <Share2 size={13} aria-hidden />} {td('certificate.go', { shipment: shipment.number })}
+              </Button>
+            )
+          }
+        >
+          {certificate.problem && (
+            <>
+              <p>{td(certificate.problem)}</p>
+              {certificate.lines.length > 0 && (
+                <ul className="fw-q-lines">
+                  {certificate.lines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </Banner>
       )}
       {reports.versions.length > 0 && (
         <Field label={td('share.version')}>

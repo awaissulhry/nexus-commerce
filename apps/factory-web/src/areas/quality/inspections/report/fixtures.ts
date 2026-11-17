@@ -19,6 +19,13 @@ interface ReportCase {
 
 const SHARE: ReportModel['share'] = { shipmentId: REPORTS.shipments[0]!.id, version: null, send: false, busy: false, problem: null, lines: [], done: null }
 
+// ── B-TH-232 (W16): a work order that also makes garments for another customer — its report goes to no single customer; the
+// shipment's certificate of conformity is offered instead (made-up). ──
+const SHARED_SHIPMENT = { id: '99210000-0000-4000-8000-000000000003', number: 'DEMO-SH-0044', status: 'PACKED', customer: 'Demo Moto S.r.l.', shareable: false, held: 'SHARED_PRODUCTION' as const }
+const SHARED_REPORTS = { ...REPORTS, shipments: [SHARED_SHIPMENT] }
+const CERTIFICATE: NonNullable<ReportModel['certificate']> = { may: true, busy: false, problem: null, lines: [], done: null }
+// ── end B-TH-232 ──
+
 const model = (over: Partial<ReportModel> = {}, role: RoleCase = 'owner'): ReportCase => ({
   role,
   model: { allowed: true, language: 'it', reports: ready(REPORTS), pdf: demoPdf(['Rapporto di ispezione DEMO-INS-0010', 'ANTEPRIMA - non conservato']), pdfProblem: null, keeping: false, kept: null, keepProblem: null, canSend: true, shareFirst: false, share: SHARE, ...over },
@@ -48,6 +55,10 @@ export const designScreen = defineDesignScreen<ReportCase>({
     { id: 'share-refused', label: 'Share refused: the shipment carries none of these garments', model: model({ share: { ...SHARE, problem: 'share.held.NOT_ON_SHIPMENT', lines: ['DEMO-SH-0042 carries no garment of DEMO-WO-0142.'] } }) },
     { id: 'share-draft', label: 'A draft shipment picked: Share held (not packed yet)', model: model({ share: { ...SHARE, shipmentId: REPORTS.shipments[1]!.id } }) },
     { id: 'no-versions', label: 'No version kept yet: Share held until one is kept', model: model({ reports: ready({ ...REPORTS, versions: [], shares: [] }) }) },
+    // B-TH-232 (W16): the work order also makes another customer's garments.
+    { id: 'shared-production', label: 'A work order of several customers: the report goes to none; the shipment’s certificate of conformity instead', model: model({ reports: ready(SHARED_REPORTS), share: { ...SHARE, shipmentId: SHARED_SHIPMENT.id }, certificate: CERTIFICATE }), note: 'The words name the work order, never the other customer.' },
+    { id: 'shared-production-done', label: 'The certificate of conformity shared on the shipment', model: model({ reports: ready(SHARED_REPORTS), share: { ...SHARE, shipmentId: SHARED_SHIPMENT.id }, certificate: { ...CERTIFICATE, done: { shipment: SHARED_SHIPMENT.number, version: 1 } } }) },
+    { id: 'shared-production-held', label: 'The certificate cannot be made yet: the reasons below', model: model({ reports: ready(SHARED_REPORTS), share: { ...SHARE, shipmentId: SHARED_SHIPMENT.id }, certificate: { ...CERTIFICATE, problem: 'certificate.held.NOT_CERTIFIABLE', lines: ['DEMO-SH-0044: 2 garments wait for their final release.'] } }) },
     { id: 'no-shipment', label: 'No shipment carries these garments yet', model: model({ reports: ready({ ...REPORTS, shipments: [], shares: [] }) }) },
     { id: 'no-send', label: 'Without shipping.manage: "and mail the link" held with the reason', model: model({ canSend: false }, 'inspector') },
     { id: 'read-only', label: 'Read-only: Keep and Share held with the reason', model: model({ reports: ready({ ...REPORTS, may: { make: false, share: false } }), canSend: false }, 'readOnly') },

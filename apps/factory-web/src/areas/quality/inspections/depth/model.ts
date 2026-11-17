@@ -222,9 +222,11 @@ export function keepHeld(state: { canMake: boolean; signed: boolean; pdf: boolea
 }
 
 /** Why Share on a shipment is held (a key), or null. */
-export function shareHeld(state: { canShare: boolean; versions: number; shareable: boolean; busy: boolean }): string | null {
+// B-TH-232: `held` — a shipment of a work order that also makes another customer's garments says so (not "not packed yet").
+export function shareHeld(state: { canShare: boolean; versions: number; shareable: boolean; busy: boolean; held?: 'STATE' | 'SHARED_PRODUCTION' | null }): string | null {
   if (!state.canShare) return 'share.held.noRight'
   if (state.versions === 0) return 'share.held.noVersion'
+  if (state.held === 'SHARED_PRODUCTION') return 'share.held.SHARED_PRODUCTION'
   if (!state.shareable) return 'share.held.notShareable'
   if (state.busy) return 'common.working'
   return null

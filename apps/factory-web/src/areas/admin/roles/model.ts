@@ -77,7 +77,8 @@ export interface RoleRecordModel {
 }
 
 /** The rules every role keeps whatever it holds (A1 §2.3, §3.11; PLT-033, PLT-035): message keys, read-only. */
-export const ALWAYS_RULES = ['released', 'floorNoCost', 'partnerPrice', 'ownRequest', 'ownRoles', 'lastAdmin', 'stepUp'] as const
+// B-TH-232 (threads plan decision 17, WALL-G11): + customerLimit — what a role given for some customers only limits, said plainly.
+export const ALWAYS_RULES = ['released', 'floorNoCost', 'partnerPrice', 'ownRequest', 'ownRoles', 'lastAdmin', 'stepUp', 'customerLimit'] as const
 
 /** The permissions the role holds, by area, as the catalogue orders them (the "plain" card's lines). */
 export function heldAreas(role: Role, catalogue: PermissionCatalogue | null): Array<{ area: string; count: number; total: number }> {
@@ -99,7 +100,8 @@ export interface Holder {
   /** The assignment's id (a person may hold a role twice, in two places). */
   id: string
   user: User
-  scope: { allCompanies: boolean; companyIds: string[]; siteIds: string[] }
+  // B-TH-232: + partyIds — the customers the assignment is limited to (none: every customer).
+  scope: { allCompanies: boolean; companyIds: string[]; siteIds: string[]; partyIds: string[] }
   validTo: string | null
 }
 
@@ -108,6 +110,6 @@ export function holdersOf(role: Role, users: readonly User[]): Holder[] {
   return users.flatMap((user) =>
     user.roles
       .filter((held) => held.roleId === role.id)
-      .map((held) => ({ id: held.assignmentId, user, scope: { allCompanies: held.allCompanies, companyIds: held.companyIds, siteIds: held.siteIds }, validTo: held.validTo })),
+      .map((held) => ({ id: held.assignmentId, user, scope: { allCompanies: held.allCompanies, companyIds: held.companyIds, siteIds: held.siteIds, partyIds: held.partyIds /* B-TH-232 */ }, validTo: held.validTo })),
   )
 }

@@ -383,6 +383,7 @@
     "moved": "{number} moved to {stage}."
   },
   "new": {
+    "privateStyle": "This style is {brand}’s private label: its samples are made for {brand} only (a rider of {brand}’s team counts as {brand}). A round for another customer is refused.",
     "title": "New sample request",
     "submit": "Create",
     "style": "Style",
