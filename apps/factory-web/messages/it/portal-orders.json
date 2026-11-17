@@ -49,25 +49,26 @@
   "chips": {
     "label": "Quali ordini",
     "chip": "{name}: {count}",
-    "clear": "Togli i filtri"
+    "clear": "Togli i filtri",
+    "closedRequests": "Richieste chiuse"
   },
   "list": {
-    "title": "Ordini e tracciamento",
-    "label": "I tuoi ordini",
+    "title": "Ordini e richieste",
+    "label": "I vostri ordini e richieste",
     "fileName": "ordini",
     "search": "Cerca nei tuoi ordini",
-    "searchHint": "Vostro ordine, nostro ordine o codice modello…",
-    "count_one": "{count} ordine",
-    "count_other": "{count} ordini",
-    "countOf": "{shown} di {count} ordini",
+    "searchHint": "Il vostro numero, il nostro ordine, un codice modello o l’oggetto della richiesta…",
+    "count_one": "{count} ordine o richiesta",
+    "count_other": "{count} ordini e richieste",
+    "countOf": "{shown} di {count} ordini e richieste",
     "more": "Mostra altri",
-    "failed": "Non è stato possibile leggere i tuoi ordini",
+    "failed": "Non è stato possibile leggere i vostri ordini e richieste",
     "failedBody": "Non è cambiato nulla. Riprova tra poco.",
-    "empty": "Nessun ordine per ora.",
-    "emptyBody": "I tuoi ordini compaiono qui appena li confermiamo.",
-    "noMatch": "Nessun ordine con questi filtri",
+    "empty": "Ancora nessun ordine o richiesta.",
+    "emptyBody": "Ciò che inviate con Nuovo ordine appare qui per primo, con il punto in cui si trova; gli ordini seguono appena li facciamo.",
+    "noMatch": "Nulla corrisponde a questi filtri",
     "noMatchSearch": "Nessun risultato per «{q}».",
-    "noMatchChip": "Al momento nessun ordine è in questo gruppo.",
+    "noMatchChip": "Al momento in questo gruppo non c’è nulla.",
     "clear": "Togli i filtri",
     "requestWaits": "Da confermare da noi",
     "asked": "data richiesta",
@@ -76,15 +77,16 @@
     "piecesOpen_one": "{count} aperto",
     "piecesOpen_other": "{count} aperti",
     "allShipped": "Tutto spedito",
-    "eta": "previsto il {date}"
+    "eta": "previsto il {date}",
+    "needsYou": "Attende la vostra risposta",
+    "wanted": "desiderata",
+    "updated": "aggiornata il {date}",
+    "piecesAsked": "{count} chiesti",
+    "requestsFailed": "Non è stato possibile leggere le vostre richieste: si vedono solo gli ordini."
   },
   "col": {
-    "order": "Ordine",
     "yourPo": "Vostro ordine",
-    "ourOrder": "Nostro ordine",
-    "orderedOn": "Ordinato",
     "status": "Stato",
-    "promise": "Promessa",
     "pieces": "Pezzi",
     "ordered": "Ordinati",
     "shipped": "Spediti",
@@ -92,14 +94,22 @@
     "value": "Valore netto",
     "currency": "Valuta",
     "nextShipment": "Prossima spedizione",
-    "actions": "Azioni"
+    "actions": "Azioni",
+    "number": "Numero",
+    "kind": "Tipo",
+    "yours": "Vostro numero",
+    "subject": "Oggetto",
+    "date": "Data",
+    "wanted": "Desiderata o promessa"
   },
   "row": {
     "open": "Apri l’ordine",
     "lines": "Righe",
     "shipments": "Spedizioni e tracciamento",
     "messages": "Messaggi",
-    "menu": "Azioni per l’ordine {number}"
+    "menu": "Azioni per l’ordine {number}",
+    "openRequest": "Apri la richiesta",
+    "requestMenu": "Azioni per {name}"
   },
   "bulk": {
     "export": "Esporta {count}"
@@ -133,7 +143,7 @@
     "filtersSearch": "Mostrati: {chip} · ricerca «{q}»",
     "chipOpen": "Aperti",
     "printedBy": "Stampato da {name} il {when}",
-    "capped": "I primi {shown} di {count} ordini."
+    "capped": "I primi {shown} di {count} ordini e richieste."
   },
   "record": {
     "title": "Ordine {number}",
@@ -560,5 +570,10 @@
     "cutToMax": "{cell}: ridotto a {max}.",
     "pasted": "{applied} incollati, {skipped} esclusi.",
     "issues": "Controlla queste taglie"
+  },
+  "kind": {
+    "request": "Richiesta",
+    "catalogue": "Catalogo",
+    "order": "Ordine"
   }
 }

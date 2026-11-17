@@ -1,0 +1,60 @@
+{
+  "title": "Your request {seq}",
+  "titleNone": "Your request",
+  "back": "Orders & requests",
+  "state": {
+    "label": "Where it stands",
+    "since": "since {when}",
+    "madeOrder": "Made into {order}",
+    "madeQuote": "Quote: {quote} (sent to you by e-mail)",
+    "theOrder": "your order",
+    "theQuote": "your quote"
+  },
+  "hint": {
+    "SENT": "We have it; nobody has picked it up yet. You can add to it below.",
+    "BEING_REVIEWED": "Someone in sales is working on it. You can add to it below.",
+    "NEED_INFO": "We asked you something: answer below.",
+    "QUOTE_BEING_PREPARED": "We are preparing a quote for it. It comes to you by e-mail when it is ready.",
+    "QUOTE_SENT": "We sent you a quote by e-mail. You accept it from that e-mail.",
+    "QUOTE_ACCEPTED": "You accepted the quote: we make the order from it.",
+    "ORDER_WAITING": "The order waits for our approval. It is not confirmed yet.",
+    "ORDER_CONFIRMED": "Your order is confirmed. Follow it in Orders & requests.",
+    "DECLINED": "We cannot take this request. Our message, if we wrote one, is below.",
+    "CLOSED": "This request is closed. Write below if you still need something."
+  },
+  "question": {
+    "title": "We need something from you",
+    "quote": "Our question, {when}:",
+    "none": "Our question is in the messages below.",
+    "answer": "Answer"
+  },
+  "details": {
+    "title": "What you asked",
+    "subject": "Subject",
+    "ref": "Your PO",
+    "date": "Wanted by",
+    "shipTo": "Deliver to",
+    "shipToWaiting": "waits for our check",
+    "received": "Sent",
+    "lines": "Lines",
+    "line": "{style}: {sizes}",
+    "lineQuantity": "{style}: {count} pieces",
+    "pieces": "Pieces",
+    "none": "Nothing more than your message."
+  },
+  "thread": {
+    "title": "Messages about this request"
+  },
+  "missing": {
+    "title": "Request not found",
+    "body": "This request is not one of yours, or it no longer exists.",
+    "back": "Back to Orders & requests"
+  },
+  "failed": {
+    "title": "This request could not be read",
+    "body": "Nothing changed. Try again in a moment.",
+    "retry": "Try again"
+  },
+  "offline": "No connection — showing what was loaded at {time}",
+  "loading": "Reading your request…"
+}

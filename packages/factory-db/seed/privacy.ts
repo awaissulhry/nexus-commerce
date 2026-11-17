@@ -70,12 +70,32 @@ const TEXTS: Readonly<Record<'worker' | 'workerDraft' | 'staff' | 'public', Read
     it: [SAMPLE_IT, 'Bozza della versione 2026-11: aggiunge i tempi di conservazione.'].join('\n\n'),
   },
   staff: {
-    it: [SAMPLE_IT, "Cosa conserva il sistema di chi lavora in ufficio: chi ha cambiato cosa (registro delle modifiche) e la posta di lavoro tenuta sulle schede."].join('\n\n'),
-    en: [SAMPLE_EN, 'What the system keeps about office staff: who changed what (the audit trail) and work mail kept on record threads.'].join('\n\n'),
+    it: [
+      SAMPLE_IT,
+      "Cosa conserva il sistema di chi lavora in ufficio: chi ha cambiato cosa (registro delle modifiche) e la posta di lavoro tenuta sulle schede.",
+      // TH-2 (B-TH-023, PR-26): each person's own read marks, named in the notice.
+      "Fino a quale messaggio hai letto ogni conversazione: solo per te (nessuno vede chi ha letto cosa), cancellato con i tuoi dati.",
+    ].join('\n\n'),
+    en: [
+      SAMPLE_EN,
+      'What the system keeps about office staff: who changed what (the audit trail) and work mail kept on record threads.',
+      // TH-2 (B-TH-023, PR-26): each person's own read marks, named in the notice.
+      'How far you have read each conversation: for you only (nobody sees who read what), erased with your data.',
+    ].join('\n\n'),
   },
   public: {
-    it: [SAMPLE_IT, 'Informativa per clienti, fornitori e contatti: quali dati trattiamo, perché, per quanto e i vostri diritti.'].join('\n\n'),
-    en: [SAMPLE_EN, 'Notice for customers, suppliers and contacts: which data we process, why, for how long, and your rights.'].join('\n\n'),
+    it: [
+      SAMPLE_IT,
+      'Informativa per clienti, fornitori e contatti: quali dati trattiamo, perché, per quanto e i vostri diritti.',
+      // TH-2 (B-TH-023, PR-26): a portal person's own read marks.
+      'Nel portale: fino a quale messaggio hai letto ogni conversazione, solo per te, cancellato con i tuoi dati.',
+    ].join('\n\n'),
+    en: [
+      SAMPLE_EN,
+      'Notice for customers, suppliers and contacts: which data we process, why, for how long, and your rights.',
+      // TH-2 (B-TH-023, PR-26): a portal person's own read marks.
+      'In the portal: how far you have read each conversation, for you only, erased with your data.',
+    ].join('\n\n'),
   },
 }
 
@@ -316,7 +336,7 @@ export async function seed(context: SeedContext): Promise<PrivacySeed> {
       purpose: 'Access control and accountability of changes (made up).',
       legalBasis: 'Employment contract and legitimate interest (art. 6(1)(b) and (f)) (made up).',
       dataSubjects: ['office staff'],
-      dataCategories: ['name', 'work e-mail', 'actions in the audit trail', 'work mail on record threads'],
+      dataCategories: ['name', 'work e-mail', 'actions in the audit trail', 'work mail on record threads', 'own read marks on threads'],
       recipients: ['administrators'],
       processors: ['hosting, EU (made up)', 'e-mail delivery, EU (made up)'],
       transfers: 'None outside the EEA (made up).',

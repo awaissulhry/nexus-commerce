@@ -6,7 +6,7 @@ import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, typ
  * of every portal page: a step that builds a page sets its `built` here (and a record page its line in RECORD_PAGES), nothing
  * else. Addresses are the portal's own, without `/p/<party code>` (the frame adds it).
  *
- *   Customer       Home · Orders (Orders & tracking, New order & reorder) · Quotes & samples (Quotes & requests, Samples &
+ *   Customer       Home · Orders (Orders & requests, New order) · Quotes & samples (Quotes & requests, Samples &
  *                  tech packs, Catalogue)
  *                  · Documents · Returns & claims · Account
  *   Supplier       Home · Orders & jobs (Purchase orders for a supplier, Jobs for a workshop) · Deliveries · Documents · Profile
@@ -84,9 +84,9 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     // B-W2b-191: the customer's Orders & tracking.
     built: true,
     pages: [
-      // B-W2b-191: the customer's Orders & tracking (SCR-184).
-      { id: 'orders.list', label: 'nav.ordersTracking', href: '/orders', permission: 'portal.salesOrders.view', built: true },
-      // B-W2b-194: New order & reorder (SCR-185).
+      // B-W2b-191: the customer's Orders & tracking (SCR-184). B-TH-223: "Orders & requests" (its requests beside its orders).
+      { id: 'orders.list', label: 'nav.ordersRequests', href: '/orders', permission: 'portal.salesOrders.view', built: true },
+      // B-W2b-194: New order & reorder (SCR-185). B-TH-220: New order as an e-mail.
       { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: true },
     ],
   },
@@ -161,6 +161,8 @@ export interface PortalRecordPage {
 export const RECORD_PAGES: readonly PortalRecordPage[] = [
   // B-W2b-191: the customer's order (Status & progress first).
   { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: true },
+  // B-TH-222: the customer's request (its true state and its thread; SCR-185-request).
+  { kinds: ['CUSTOMER'], type: 'Inquiry', href: (id) => `/orders/requests/${id}`, built: true },
   { kinds: ['CUSTOMER'], type: 'Quote', href: (id) => `/quotes/${id}`, built: false },
   // B-W2b-179: the supplier's purchase order (its Lines tab first).
   { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: true },
@@ -178,6 +180,9 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   // B-W2b-195: an invoice (a "Pay invoice" request, a notification) opens Documents on it: its Pay pop-up, or why not.
   { kinds: ['CUSTOMER'], type: 'Invoice', href: (id) => `/documents?invoice=${encodeURIComponent(id)}`, built: true },
 ]
+
+// B-TH-220: whether a page is built (an area without pages, or one page of an area): its links may lead there.
+export const pageBuilt = (id: string, areas: readonly PortalAreaDef[] = PORTAL_AREAS): boolean => areas.some((area) => (area.id === id && area.built) || (area.pages ?? []).some((page) => page.id === id && page.built))
 
 /** Who is looking: their permissions and partner kind(s) (a preview: every kind of the party). */
 export interface PortalAccess {

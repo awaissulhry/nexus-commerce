@@ -96,7 +96,6 @@ type Typed = Record<string, Record<string, number>>
 interface SentInfo {
   number: string
   customerRef: string | null
-  confirmBy: string | null
   lines: number
   pieces: number
   net: string | null
@@ -641,7 +640,6 @@ function NewOrderContainer() {
       setSent({
         number: answer.sent.number,
         customerRef: answer.request.customerRef,
-        confirmBy: answer.sent.confirmBy,
         lines: answer.request.summary.lines,
         pieces: answer.request.summary.pieces,
         net: answer.request.summary.net ?? null,

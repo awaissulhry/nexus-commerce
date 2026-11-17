@@ -4,6 +4,7 @@ import { PROGRESS_STAGE_WORDS, PROGRESS_STAGES } from '@nexus/factory-domain/sal
 import { PROMISE_REASON_WORDS } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { SHIPMENT_MILESTONE_WORDS, SHIPMENT_STATUS_WORDS, TRACKING_WORDS } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CHIP_WORDS, CUSTOMER_STATUS_WORDS, MILESTONE_WORDS, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { formatDateTime } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
@@ -93,6 +94,8 @@ function row(n: number, status: CustomerOrderStatus, over: Partial<OrderRow> = {
     id: id(n),
     customerRef: `BA-PO-${770 + n}`,
     number: `SO-2026-01${String(40 + n).padStart(2, '0')}`,
+    // B-TH-303: the customer's own count beside the office's number.
+    yourNumber: customerNumberOf('ORDER', 10 + n),
     orderedOn: dayAt(-30 + n),
     status,
     words: CUSTOMER_STATUS_WORDS[status],
@@ -121,7 +124,7 @@ export const ROWS: readonly OrderRow[] = [
   }),
   row(2, 'IN_PRODUCTION', { pieces: { ordered: 60, shipped: 0, open: 60 } }),
   row(3, 'CONFIRMED', { customerRef: null, pieces: { ordered: 1, shipped: 0, open: 1 }, netAmount: 189000 }),
-  { ...row(4, 'REQUESTED'), kind: 'REQUEST', number: 'RQ-2026-0012', orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 24, shipped: 0, open: 24 } },
+  { ...row(4, 'REQUESTED'), kind: 'REQUEST', number: 'RQ-2026-0012', yourNumber: null, orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 24, shipped: 0, open: 24 } },
   row(5, 'READY', { pieces: { ordered: 30, shipped: 0, open: 30 }, nextShipment: { id: id(105), number: 'SH-2026-0240', status: 'PACKED', words: SHIPMENT_STATUS_WORDS.PACKED, date: dayAt(1), carrierName: 'Corriere Demo', expectedDeliveryAt: null } }),
   row(6, 'DELIVERED', { promiseDate: dayAt(-6), pieces: { ordered: 20, shipped: 20, open: 0 } }),
   row(7, 'CANCELLED', { promiseDate: null, pieces: { ordered: 12, shipped: 0, open: 0 } }),

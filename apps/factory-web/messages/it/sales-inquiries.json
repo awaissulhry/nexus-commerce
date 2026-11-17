@@ -119,7 +119,8 @@
     "NEED_INFO": "Servono informazioni",
     "QUOTED": "Preventivata",
     "DECLINED": "Rifiutata",
-    "LOST": "Persa"
+    "LOST": "Persa",
+    "ORDERED": "Ordinata"
   },
   "source": {
     "OFFICE": "Ufficio",
@@ -529,12 +530,14 @@
     "NOT_OUR_PRODUCT": "Non è un nostro prodotto",
     "PRICE": "Prezzo",
     "OTHER": "Altro",
+    "NOT_AN_ORDER": "Non è un ordine",
     "hint": {
       "CAPACITY": "Non riusciamo a produrlo nei tempi",
       "LEAD_TIME": "La data che vogliono è troppo vicina",
       "NOT_OUR_PRODUCT": "Non facciamo questo tipo di prodotto",
       "PRICE": "Il loro prezzo obiettivo non è raggiungibile",
-      "OTHER": "Scrivi perché"
+      "OTHER": "Scrivi perché",
+      "NOT_AN_ORDER": "Non chiede nulla da produrre (una domanda, una richiesta di catalogo)"
     },
     "note": "Perché, a parole",
     "noteHint": "Facoltativo; resta sulla richiesta",

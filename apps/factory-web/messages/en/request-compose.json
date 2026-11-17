@@ -1,0 +1,74 @@
+{
+  "compose": {
+    "label": "Your request"
+  },
+  "to": {
+    "label": "Goes to",
+    "why": "This portal sends to this company only."
+  },
+  "subject": {
+    "label": "Subject (optional)",
+    "hint": "Empty: we use the first line of your message.",
+    "used": "Empty: we use “{subject}”."
+  },
+  "message": {
+    "label": "Your message",
+    "hint": "In your own words and language. Plain text: we read it exactly as you wrote it."
+  },
+  "problem": {
+    "tooLong": "The subject and the message are 20 000 characters at most together.",
+    "refLong": "Your PO is {max} characters at most.",
+    "datePast": "The day you want the goods is today or later.",
+    "shipTo": "That is not one of your delivery addresses: choose another one."
+  },
+  "kept": {
+    "at": "Draft kept on this device · {time}",
+    "failed": "Not kept on this device.",
+    "retry": "Retry",
+    "offline": "You are offline: your text stays on this device."
+  },
+  "files": {
+    "title": "Files",
+    "closed": "Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail."
+  },
+  "details": {
+    "title": "Add details (optional)",
+    "none": "Nothing here is needed to send.",
+    "ref": "Your PO",
+    "refHint": "Your own order number, if you have one.",
+    "date": "Wanted by",
+    "dateHint": "The day you would like the goods. Our answer says what we can do.",
+    "shipTo": "Deliver to",
+    "shipToHint": "One of your delivery addresses.",
+    "shipToWaiting": "A new address: we check it before the first delivery. You can still send.",
+    "shipToUsual": "Not chosen",
+    "shipToChoiceWaiting": "{place} (waits for our check)",
+    "shipToFailed": "Your delivery addresses could not be read.",
+    "sumRef": "Your PO {ref}",
+    "sumDate": "wanted by {date}",
+    "sumShipTo": "to {place}"
+  },
+  "same": {
+    "title": "You sent these words at {time}.",
+    "titleAs": "You sent these words at {time} as {yours}.",
+    "body": "Send them again only if you mean a second request.",
+    "anyway": "Send again anyway"
+  },
+  "send": {
+    "discard": "Discard draft",
+    "send": "Send",
+    "sending": "Sending…"
+  },
+  "held": {
+    "preview": "A preview of the portal: nothing is sent.",
+    "closed": "Orders by portal are not open yet.",
+    "sending": "Sending…",
+    "offline": "You are offline: your text stays here.",
+    "empty": "Write what you need first.",
+    "problems": "Fix what is marked first."
+  },
+  "state": {
+    "retry": "Try again",
+    "loading": "Loading…"
+  }
+}

@@ -1,35 +1,41 @@
 'use client'
 
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Download, ExternalLink, MoreHorizontal, PackageSearch, WifiOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, PressableRow, type MenuItemDef } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Input, Pill } from '@nexus/ui/primitives'
+import { Button, FilterChip, Input, Pill, Tag } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
-import type { InTransitRead, InTransitRow, OrderChip, OrderRow, OrdersRead } from '../api'
-import { opens, recordHref, shipmentTone, statusTone, transitSteps } from '../model'
+import type { RequestRow } from '../../requests/api'
+import type { InTransitRead, InTransitRow, OrderRow, OrdersRead } from '../api'
+import { kindKey, listChips, listRows, ownRef, recordHref, rowHref, rowState, shipmentTone, transitSteps, yoursOf, type ListChip, type ListRow } from '../model'
 import { useOrderWords } from '../words'
 import { Loading, PricesNote, ReadFailed } from './parts'
 import '../orders.css'
 
 /**
- * SCR-184 › Orders & tracking (design portal.customer.orders: sec:chips "Which orders", sec:orders-grid "Your orders",
- * sec:in-transit "On the way"): saved filters with counts in customer words, the orders in the shared list frame (select-all,
- * shift range, x / Space, Export N while rows are selected, keys only in the footer's info icon, cards on a phone), their
- * PO first, sorted by the promise date; the parcels on their way across all orders. Prices only with the price grain.
+ * SCR-184 › Orders & requests (B-W2b-191; B-TH-223, B-TH-303 — picture 21 drawn to the approved look: design
+ * portal.customer.orders sec:chips, sec:orders-grid, sec:in-transit; threads plan P-CUS-ORD-LIST.list): saved filters with
+ * counts in customer words (the requests counted in, and "Closed requests" so nothing vanishes), the customer's requests and
+ * orders in ONE list in the shared list frame (select-all, shift range, x / Space, Export N while rows are selected, keys only in
+ * the footer's info icon, cards on a phone): their PO first and the customer's OWN number ("Your request 7", "Your order 12" —
+ * never the office's series), the kind, the subject of a request, the true state, wanted or promised, pieces, the value with the
+ * price grain, the next shipment; requests first, then the orders by the promise date; the parcels on their way.
  */
 
 export interface OrdersListViewModel {
   state: 'loading' | 'error' | 'ready'
   read: OrdersRead | null
-  /** Every row read so far (pages of 50). */
+  /** Every order row read so far (pages of 50). */
   rows: readonly OrderRow[]
+  // B-TH-223: the customer's requests (GET /portal/inquiries, every state; `none`: not part of the reader's access).
+  requests: { state: 'loading' | 'error' | 'ready' | 'none'; rows: readonly RequestRow[]; complete: boolean }
   /** The chip asked in the address (null: the API's default, Open). */
-  chip: OrderChip | null
+  chip: ListChip | null
   q: string
   prefix: string
   selected: readonly string[]
@@ -47,21 +53,33 @@ export interface OrdersListViewModel {
 }
 
 export interface OrdersListActions {
-  onChip?: (chip: OrderChip) => void
+  onChip?: (chip: ListChip) => void
   onSearch?: (q: string) => void
   onClear?: () => void
   onSelect?: (ids: string[]) => void
-  onOpen?: (row: OrderRow) => void
+  onOpen?: (row: ListRow) => void
   onRetry?: () => void
   onShowUpdates?: () => void
   onMore?: () => void
   onExport?: (ids: readonly string[] | null) => void
   onHelp?: () => void
   onRetryTransit?: () => void
+  onRetryRequests?: () => void
   onOpenShipment?: (row: InTransitRow) => void
 }
 
+// B-TH-223: "Next shipment" shows from 1600 px (a 1920 screen): below, "On the way" names the parcels and the other columns
+// keep their words whole without the grid scrolling sideways. Server and first render: the wide layout's absence.
+const WIDE = '(min-width: 1600px)'
+const subscribeWide = (onChange: () => void) => {
+  const query = window.matchMedia(WIDE)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+const useWide = (): boolean => useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => false)
+
 export function OrdersListView({ model, actions }: { model: OrdersListViewModel; actions?: OrdersListActions }) {
+  const wide = useWide()
   const words = useOrderWords()
   const { t, locale, day, time } = words
   const ds = useDsWords()
@@ -69,18 +87,23 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
   latest.current = { model, actions }
   const read = model.read
   const seesPrices = read?.seesPrices ?? true
-  const rows = model.state === 'loading' && !read ? null : model.rows
-  const chip = read?.chip ?? model.chip ?? 'OPEN'
+  const chip: ListChip = model.chip ?? read?.chip ?? 'OPEN'
+  // B-TH-223: requests first, then the orders read; null while the first read runs.
+  const rows = model.state === 'loading' && !read ? null : listRows(chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, locale)
+  const chips = read ? listChips(read.chips, model.requests.state === 'ready' ? model.requests : null, locale, t('chips.closedRequests')) : []
 
-  const columns = useMemo((): ColDef<OrderRow>[] => {
-    const OrderCell = ({ data }: ICellRendererParams<OrderRow>) => {
+  const columns = useMemo((): ColDef<ListRow>[] => {
+    const NumberCell = ({ data }: ICellRendererParams<ListRow>) => {
       if (!data) return null
-      const pair = <RefPair theirs={data.customerRef} ours={data.number} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} layout="stacked" size="sm" copy={false} match={latest.current.model.q || null} labels={ds.refPair} />
-      if (!opens(data)) return <span className="fw-pord-cell">{pair}</span>
+      const own = ownRef(data, locale)
+      const theirs = data.kind === 'request' ? data.request.customerRef : data.order.customerRef
+      const pair = theirs || own ? <RefPair theirs={theirs} ours={own?.value ?? null} theirsLabel={t('ref.yours')} oursLabel={own?.label ?? ''} layout="stacked" size="sm" copy={false} match={latest.current.model.q || null} labels={ds.refPair} /> : <span className="fw-pord-sub">—</span>
+      const href = rowHref(latest.current.model.prefix, data)
+      if (!href) return <span className="fw-pord-cell">{pair}</span>
       return (
         <a
           className="fw-pord-rowlink"
-          href={recordHref(latest.current.model.prefix, data.id)}
+          href={href}
           onClick={(event) => {
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
             event.preventDefault()
@@ -91,22 +114,49 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
         </a>
       )
     }
-    const OrderedCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span>{data.orderedOn ? day(data.orderedOn) : '—'}</span> : null)
-    const StatusCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <span className="fw-pord-stack">
-          <Pill tone={statusTone(data.status)} truncate>
-            {data.words[locale]}
-          </Pill>
-          {data.kind === 'REQUEST' ? <span className="fw-pord-sub fw-pord-clip">{t('list.requestWaits')}</span> : null}
-        </span>
-      ) : null
-    const PromiseCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    const KindCell = ({ data }: ICellRendererParams<ListRow>) => (data ? <Tag tone={data.kind === 'request' ? 'info' : 'neutral'}>{t(kindKey(data))}</Tag> : null)
+    const SubjectCell = ({ data }: ICellRendererParams<ListRow>) => (data ? data.kind === 'request' ? <span className="fw-pord-subject" title={data.request.subject}>{data.request.subject}</span> : <span className="fw-pord-sub">—</span> : null)
+    const DateCell = ({ data }: ICellRendererParams<ListRow>) => {
       if (!data) return null
-      if (!data.promiseDate)
-        return data.requestedDate ? (
+      if (data.kind === 'order') return <span>{data.order.orderedOn ? day(data.order.orderedOn) : '—'}</span>
+      const received = data.request.receivedAt.slice(0, 10)
+      const updated = data.request.updatedAt.slice(0, 10)
+      return (
+        <span className="fw-pord-stack">
+          <span>{day(received)}</span>
+          {updated !== received ? <span className="fw-pord-sub fw-pord-clip">{t('list.updated', { date: day(updated) })}</span> : null}
+        </span>
+      )
+    }
+    const StatusCell = ({ data }: ICellRendererParams<ListRow>) => {
+      if (!data) return null
+      const state = rowState(data, locale)
+      return (
+        <span className="fw-pord-stack">
+          <Pill tone={state.tone} truncate>
+            {state.words}
+          </Pill>
+          {data.kind === 'request' && data.request.state.needsYou ? <span className="fw-pord-sub fw-pord-clip">{t('list.needsYou')}</span> : null}
+          {data.kind === 'order' && data.order.kind === 'REQUEST' ? <span className="fw-pord-sub fw-pord-clip">{t('list.requestWaits')}</span> : null}
+        </span>
+      )
+    }
+    const PromiseCell = ({ data }: ICellRendererParams<ListRow>) => {
+      if (!data) return null
+      if (data.kind === 'request')
+        return data.request.wantedDate ? (
           <span className="fw-pord-stack">
-            <span>{day(data.requestedDate)}</span>
+            <span>{day(data.request.wantedDate)}</span>
+            <span className="fw-pord-sub fw-pord-clip">{t('list.wanted')}</span>
+          </span>
+        ) : (
+          <span className="fw-pord-sub">—</span>
+        )
+      const order = data.order
+      if (!order.promiseDate)
+        return order.requestedDate ? (
+          <span className="fw-pord-stack">
+            <span>{day(order.requestedDate)}</span>
             <span className="fw-pord-sub fw-pord-clip">{t('list.asked')}</span>
           </span>
         ) : (
@@ -114,23 +164,27 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
         )
       return (
         <span className="fw-pord-stack">
-          <span>{day(data.promiseDate)}</span>
-          {data.promiseMoved && data.originalPromiseDate ? <span className="fw-pord-moved fw-pord-clip">{t('list.moved', { date: day(data.originalPromiseDate) })}</span> : null}
+          <span>{day(order.promiseDate)}</span>
+          {order.promiseMoved && order.originalPromiseDate ? <span className="fw-pord-moved fw-pord-clip">{t('list.moved', { date: day(order.originalPromiseDate) })}</span> : null}
         </span>
       )
     }
-    const PiecesCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <span className="fw-pord-stack">
-          <span className="fw-pord-clip">{t('list.piecesShipped', { shipped: data.pieces.shipped, ordered: data.pieces.ordered })}</span>
-          {data.pieces.open > 0 ? <span className="fw-pord-sub fw-pord-clip">{t('list.piecesOpen', { count: data.pieces.open })}</span> : null}
-        </span>
-      ) : null
-    const ValueCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span className="fw-pord-num">{words.money(data.netAmount, data.currency)}</span> : null)
-    const NextCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    const PiecesCell = ({ data }: ICellRendererParams<ListRow>) => {
       if (!data) return null
-      const next = data.nextShipment
-      if (!next) return <span className="fw-pord-sub">{data.pieces.open === 0 && data.pieces.shipped > 0 ? t('list.allShipped') : '—'}</span>
+      if (data.kind === 'request') return data.request.pieces > 0 ? <span className="fw-pord-clip">{t('list.piecesAsked', { count: data.request.pieces })}</span> : <span className="fw-pord-sub">—</span>
+      return (
+        <span className="fw-pord-stack">
+          <span className="fw-pord-clip">{t('list.piecesShipped', { shipped: data.order.pieces.shipped, ordered: data.order.pieces.ordered })}</span>
+          {data.order.pieces.open > 0 ? <span className="fw-pord-sub fw-pord-clip">{t('list.piecesOpen', { count: data.order.pieces.open })}</span> : null}
+        </span>
+      )
+    }
+    const ValueCell = ({ data }: ICellRendererParams<ListRow>) => (data ? data.kind === 'order' ? <span className="fw-pord-num">{words.money(data.order.netAmount, data.order.currency)}</span> : <span className="fw-pord-sub">—</span> : null)
+    const NextCell = ({ data }: ICellRendererParams<ListRow>) => {
+      if (!data) return null
+      if (data.kind === 'request') return <span className="fw-pord-sub">—</span>
+      const next = data.order.nextShipment
+      if (!next) return <span className="fw-pord-sub">{data.order.pieces.open === 0 && data.order.pieces.shipped > 0 ? t('list.allShipped') : '—'}</span>
       return (
         <span className="fw-pord-stack">
           <span className="fw-pord-clip">{[next.date ? day(next.date) : null, next.carrierName].filter(Boolean).join(' · ') || next.number}</span>
@@ -141,30 +195,42 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
         </span>
       )
     }
-    const MoreCell = ({ data }: ICellRendererParams<OrderRow>) => {
-      if (!data || !opens(data)) return null
+    const MoreCell = ({ data }: ICellRendererParams<ListRow>) => {
+      if (!data) return null
       const prefix = latest.current.model.prefix
+      const name = yoursOf(data, locale) ?? t(kindKey(data))
+      if (data.kind === 'request') {
+        const href = rowHref(prefix, data)!
+        return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.requestMenu', { name }) }} items={[{ id: 'open', label: t('row.openRequest'), href }]} />
+      }
+      if (!rowHref(prefix, data)) return null
+      const id = data.order.id
       const items: MenuItemDef[] = [
-        { id: 'open', label: t('row.open'), href: recordHref(prefix, data.id) },
-        { id: 'lines', label: t('row.lines'), href: recordHref(prefix, data.id, 'lines') },
-        { id: 'shipments', label: t('row.shipments'), href: recordHref(prefix, data.id, 'shipments') },
-        { id: 'messages', label: t('row.messages'), href: recordHref(prefix, data.id, 'messages') },
+        { id: 'open', label: t('row.open'), href: recordHref(prefix, id) },
+        { id: 'lines', label: t('row.lines'), href: recordHref(prefix, id, 'lines') },
+        { id: 'shipments', label: t('row.shipments'), href: recordHref(prefix, id, 'shipments') },
+        { id: 'messages', label: t('row.messages'), href: recordHref(prefix, id, 'messages') },
       ]
-      return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { number: data.number ?? '' }) }} items={items} />
+      // B-TH-303: the menu names the customer's own number, never the office's.
+      return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.requestMenu', { name }) }} items={items} />
     }
-    const column = (colId: string, header: string, cellRenderer: ColDef<OrderRow>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number; maxWidth?: number }): ColDef<OrderRow> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
+    const column = (colId: string, header: string, cellRenderer: ColDef<ListRow>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number; maxWidth?: number }): ColDef<ListRow> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
+    const subjectOf = (row?: ListRow) => (row?.kind === 'request' ? row.request.subject : '')
+    // Minimum widths fit a 1440 screen without the grid scrolling sideways (the flex shares the rest at 1920, with Next shipment).
     return [
-      // The phone card's title is the column's text: their PO first, our order.
-      { ...column('order', t('col.order'), OrderCell, { flex: 1.3, minWidth: 214 }), valueGetter: ({ data }) => (data ? [data.customerRef, data.number].filter(Boolean).join(' · ') : '') },
-      { ...column('ordered', t('col.orderedOn'), OrderedCell, { flex: 0.6, minWidth: 110 }), valueGetter: ({ data }) => (data?.orderedOn ? day(data.orderedOn) : '') },
-      { ...column('status', t('col.status'), StatusCell, { flex: 0.9, minWidth: 136 }), valueGetter: ({ data }) => data?.words[locale] ?? '' },
-      { ...column('promise', t('col.promise'), PromiseCell, { flex: 0.7, minWidth: 122 }), valueGetter: ({ data }) => (data?.promiseDate ? day(data.promiseDate) : '') },
-      { ...column('pieces', t('col.pieces'), PiecesCell, { flex: 0.8, minWidth: 122 }), valueGetter: ({ data }) => (data ? [t('list.piecesShipped', { shipped: data.pieces.shipped, ordered: data.pieces.ordered }), data.pieces.open > 0 ? t('list.piecesOpen', { count: data.pieces.open }) : null].filter(Boolean).join(' · ') : '') },
-      ...(seesPrices ? [{ ...column('value', t('col.value'), ValueCell, { flex: 0.7, minWidth: 124 }), valueGetter: ({ data }: { data?: OrderRow }) => (data ? words.money(data.netAmount, data.currency) : '') }] : []),
-      { ...column('next', t('col.nextShipment'), NextCell, { flex: 1.1, minWidth: 160 }), valueGetter: ({ data }) => (data?.nextShipment ? [data.nextShipment.date ? day(data.nextShipment.date) : null, data.nextShipment.carrierName].filter(Boolean).join(' · ') : '') },
+      // The phone card's title is the column's text: their PO first, the customer's own number.
+      { ...column('number', t('col.number'), NumberCell, { flex: 1.3, minWidth: 176 }), valueGetter: ({ data }) => (data ? [data.kind === 'request' ? data.request.customerRef : data.order.customerRef, yoursOf(data, locale)].filter(Boolean).join(' · ') || t(kindKey(data)) : '') },
+      { ...column('kind', t('col.kind'), KindCell, { flex: 0.6, minWidth: 104 }), valueGetter: ({ data }) => (data ? t(kindKey(data)) : '') },
+      { ...column('subject', t('col.subject'), SubjectCell, { flex: 1.2, minWidth: 124 }), valueGetter: ({ data }) => subjectOf(data) },
+      { ...column('date', t('col.date'), DateCell, { flex: 0.6, minWidth: 104 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? day(data.request.receivedAt.slice(0, 10)) : data.order.orderedOn ? day(data.order.orderedOn) : '') : '') },
+      { ...column('status', t('col.status'), StatusCell, { flex: 0.9, minWidth: 136 }), valueGetter: ({ data }) => (data ? rowState(data, locale).words : '') },
+      { ...column('promise', t('col.wanted'), PromiseCell, { flex: 0.7, minWidth: 124 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? (data.request.wantedDate ? day(data.request.wantedDate) : '') : data.order.promiseDate ? day(data.order.promiseDate) : '') : '') },
+      { ...column('pieces', t('col.pieces'), PiecesCell, { flex: 0.8, minWidth: 104 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? (data.request.pieces > 0 ? t('list.piecesAsked', { count: data.request.pieces }) : '') : [t('list.piecesShipped', { shipped: data.order.pieces.shipped, ordered: data.order.pieces.ordered }), data.order.pieces.open > 0 ? t('list.piecesOpen', { count: data.order.pieces.open }) : null].filter(Boolean).join(' · ')) : '') },
+      ...(seesPrices ? [{ ...column('value', t('col.value'), ValueCell, { flex: 0.7, minWidth: 104 }), valueGetter: ({ data }: { data?: ListRow }) => (data?.kind === 'order' ? words.money(data.order.netAmount, data.order.currency) : '') }] : []),
+      ...(wide ? [{ ...column('next', t('col.nextShipment'), NextCell, { flex: 1, minWidth: 140 }), valueGetter: ({ data }) => (data?.kind === 'order' && data.order.nextShipment ? [data.order.nextShipment.date ? day(data.order.nextShipment.date) : null, data.order.nextShipment.carrierName].filter(Boolean).join(' · ') : '') } as ColDef<ListRow>] : []),
       { ...column('actions', t('col.actions'), MoreCell, { width: 72, minWidth: 72, maxWidth: 72 }), pinned: 'right', suppressHeaderMenuButton: true },
     ]
-  }, [t, locale, day, words, ds.refPair, seesPrices])
+  }, [t, locale, day, words, ds.refPair, seesPrices, wide])
 
   const count = model.selected.length
   const bulk = (
@@ -175,6 +241,7 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
 
   const searching = model.q.trim() !== ''
   const filtered = searching || (model.chip !== null && model.chip !== 'OPEN')
+  const requestsShown = model.requests.state === 'ready' ? listRows(chip, model.q, model.requests.rows, [], locale).length : 0
   const state: ReactNode =
     model.state === 'error' ? (
       <EmptyState title={t('list.failed')} description={t('list.failedBody')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('state.retry')}</Button>} />
@@ -193,20 +260,20 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
     ) : undefined
 
   const ownKeys: ListKey[] = []
-  const shownCount = read ? (rows && rows.length < read.count ? t('list.countOf', { shown: rows.length, count: read.count }) : t('list.count', { count: read.count })) : ''
+  // The orders read so far against the chip's count, plus the chip's requests (every one is read).
+  const total = read ? read.count + requestsShown : 0
+  const shownCount = read && rows ? (rows.length < total ? t('list.countOf', { shown: rows.length, count: total }) : t('list.count', { count: total })) : ''
 
   return (
     <div className="fw-pord">
       {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
       <div className="fw-pord-chiprow">
         <div className="fw-pord-chips" role="group" aria-label={t('chips.label')}>
-          {read
-            ? read.chips.map((entry) => (
-                <FilterChip key={entry.chip} pressed={entry.chip === chip} onClick={() => actions?.onChip?.(entry.chip)} aria-label={t('chips.chip', { name: entry.words[locale], count: entry.count })}>
-                  {entry.words[locale]} <span className="fw-pord-chip-count">{entry.count}</span>
-                </FilterChip>
-              ))
-            : null}
+          {chips.map((entry) => (
+            <FilterChip key={entry.chip} pressed={entry.chip === chip} onClick={() => actions?.onChip?.(entry.chip)} aria-label={t('chips.chip', { name: entry.label, count: entry.count })}>
+              {entry.label} <span className="fw-pord-chip-count">{entry.count}</span>
+            </FilterChip>
+          ))}
         </div>
         {filtered ? (
           <Button size="sm" variant="quiet" onClick={() => actions?.onClear?.()}>
@@ -215,7 +282,8 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
         ) : null}
       </div>
       {read && !read.seesPrices ? <PricesNote /> : null}
-      <ListFrame<OrderRow>
+      {model.requests.state === 'error' ? <ReadFailed title={t('list.requestsFailed')} onRetry={actions?.onRetryRequests} /> : null}
+      <ListFrame<ListRow>
         label={t('list.label')}
         title={t('list.title')}
         listKey={null}
@@ -243,9 +311,9 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
         more={model.more ? { label: t('list.more'), onMore: () => actions?.onMore?.(), held: model.more.loading ? t('held.busy') : model.offlineSince ? t('held.offline') : null } : null}
         keys={ownKeys}
         onHelp={actions?.onHelp}
-        onOpen={(row) => (opens(row) ? actions?.onOpen?.(row) : undefined)}
+        onOpen={(row) => (rowHref(model.prefix, row) ? actions?.onOpen?.(row) : undefined)}
         state={state}
-        cards={{ hrefOf: (row) => (opens(row) ? recordHref(model.prefix, row.id) : null) }}
+        cards={{ hrefOf: (row) => rowHref(model.prefix, row) }}
         keysOpen={model.keysOpen}
       />
       <InTransit model={model} actions={actions} />
@@ -260,6 +328,8 @@ function InTransit({ model, actions }: { model: OrdersListViewModel; actions?: O
   const ds = useDsWords()
   const transit = model.transit
   if (transit.state === 'ready' && (transit.read?.items.length ?? 0) === 0) return null
+  // B-TH-303: a parcel names its order by the customer's own number (from the orders read), never the office's series.
+  const own = new Map(model.rows.map((row) => [row.id, ownRef({ kind: 'order', id: row.id, order: row }, locale)]))
   return (
     <section className="fw-pord-section" aria-labelledby="fw-pord-transit">
       <h2 id="fw-pord-transit" className="fw-pord-h2">
@@ -278,12 +348,12 @@ function InTransit({ model, actions }: { model: OrdersListViewModel; actions?: O
               stacked
               label={
                 <span className="fw-pord-transit-head">
-                  <RefPair theirs={row.order.customerRef} ours={row.order.number} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} />
+                  <RefPair theirs={row.order.customerRef} ours={own.get(row.order.id)?.value ?? null} theirsLabel={t('ref.yours')} oursLabel={own.get(row.order.id)?.label ?? ''} size="sm" copy={false} labels={ds.refPair} />
                   <span className="fw-pord-sub">{t('transit.shipment', { number: row.number })}</span>
                 </span>
               }
               onClick={() => actions?.onOpenShipment?.(row)}
-              description={t('transit.open', { number: row.order.number })}
+              description={t('transit.open', { number: [row.order.customerRef, own.get(row.order.id) ? `${own.get(row.order.id)!.label} ${own.get(row.order.id)!.value}` : null].filter(Boolean).join(' · ') })}
               actions={
                 row.trackingLinks && row.trackingLinks.length > 0 ? (
                   <Button asChild size="sm" variant="quiet">

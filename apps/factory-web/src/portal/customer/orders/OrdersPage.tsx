@@ -5,9 +5,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
-import { fetchInTransit, fetchOrders, isOrderChip, PAGE_SIZE, type InTransitRead, type OrderChip, type OrderRow, type OrdersRead } from './api'
+import { fetchRequests, type RequestRow } from '../requests/api'
+import { fetchInTransit, fetchOrders, ORDER_CHIPS, PAGE_SIZE, type InTransitRead, type OrderRow, type OrdersRead } from './api'
 import { listBandOf } from './band'
-import { listQuery, NAV_KEY, NS, opens, ordersCsv, recordHref } from './model'
+import { CLOSED_REQUESTS, isListChip, listCsv, listQuery, listRows, NAV_KEY, NS, opens, ordersInChip, recordHref, rowHref, type ListChip } from './model'
 import { saveText, useOffline } from './hooks'
 import { OrdersListView } from './view/OrdersListView'
 import { OrdersPrintView } from './view/OrdersPrintView'
@@ -15,10 +16,12 @@ import { NotInAccess } from './view/parts'
 import { useOrderWords } from './words'
 
 /**
- * `/p/<party>/orders` for a customer (B-W2b-191; design portal.customer.orders): reads GET /portal/sales-orders with the
- * chip and search of the address (pages of 50 by `offset`), and "On the way" (GET …/in-transit), fills the band (Updated,
- * Export this view, Print this list), keeps the selection (Export N), tells of changes on the live channel without moving
- * the rows ("N updates · Show"), and keeps what was loaded when the connection is gone. `?print=1` is the print view.
+ * `/p/<party>/orders` for a customer — Orders & requests (B-W2b-191; B-TH-223, B-TH-303; design portal.customer.orders): reads
+ * GET /portal/sales-orders with the chip and search of the address (pages of 50 by `offset`), the customer's requests (GET
+ * /portal/inquiries, every state, up to 200: the chip and the search narrow them here), and "On the way" (GET …/in-transit);
+ * fills the band (Updated, New order, Export this view, Print this list), keeps the selection (Export N), tells of changes on
+ * the live channel without moving the rows ("N updates · Show"; a request's event reads the requests again), and keeps what
+ * was loaded when the connection is gone. `?print=1` is the print view.
  */
 export function CustomerOrdersPage() {
   return (
@@ -55,8 +58,11 @@ function ListContainer() {
   const { t, locale, day } = words
   const offline = useOffline()
   const chipParam = search?.get('chip') ?? null
-  const chip: OrderChip | null = isOrderChip(chipParam) ? chipParam : null
+  const chip: ListChip | null = isListChip(chipParam, ORDER_CHIPS) ? chipParam : null
   const q = search?.get('q') ?? ''
+  // B-TH-223: the requests are read whole (every state) and narrowed here; a reader without the orders' right reads none.
+  const seesRequests = frame.me.permissions.includes('portal.salesOrders.view')
+  const [requests, setRequests] = useState<{ state: 'loading' | 'error' | 'ready' | 'none'; rows: RequestRow[]; complete: boolean }>({ state: seesRequests ? 'loading' : 'none', rows: [], complete: true })
 
   const [read, setRead] = useState<OrdersRead | null>(null)
   const [rows, setRows] = useState<OrderRow[]>([])
@@ -72,10 +78,11 @@ function ListContainer() {
     const control = new AbortController()
     reading.current = control
     try {
-      const next = await fetchOrders(api, { chip, q }, control.signal)
+      // Closed requests hold no order: the orders' read only brings the chips' counts then.
+      const next = chip !== null && !ordersInChip(chip) ? await fetchOrders(api, { chip: 'OPEN', q, limit: 1 }, control.signal) : await fetchOrders(api, { chip: chip as Exclude<ListChip, typeof CLOSED_REQUESTS> | null, q }, control.signal)
       if (control.signal.aborted) return
       setRead(next)
-      setRows(next.items)
+      setRows(chip !== null && !ordersInChip(chip) ? [] : next.items)
       setState('ready')
       setUpdates(0)
       setSelected((current) => current.filter((id) => next.items.some((row) => row.id === id)))
@@ -84,6 +91,19 @@ function ListContainer() {
       setState(isApiError(error) && error.kind === 'forbidden' ? 'forbidden' : 'error')
     }
   }, [api, chip, q])
+
+  const loadRequests = useCallback(async () => {
+    if (!seesRequests) return
+    try {
+      const next = await fetchRequests(api, { state: 'ALL', limit: 200 })
+      setRequests({ state: 'ready', rows: next.rows, complete: next.complete })
+    } catch {
+      setRequests((current) => ({ ...current, state: 'error' }))
+    }
+  }, [api, seesRequests])
+  useEffect(() => {
+    void loadRequests()
+  }, [loadRequests])
 
   const loadTransit = useCallback(async () => {
     try {
@@ -105,7 +125,7 @@ function ListContainer() {
   // J / K on an order walk the list the person came from.
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(NAV_KEY, JSON.stringify(rows.filter(opens).map((row) => row.id)))
+      window.sessionStorage.setItem(NAV_KEY, JSON.stringify((chip !== null && !ordersInChip(chip) ? [] : rows).filter(opens).map((row) => row.id)))
     } catch {
       // No storage (a private window): J / K simply have no list.
     }
@@ -114,16 +134,21 @@ function ListContainer() {
   usePortalLive({
     onChange: (change) => {
       if (read?.live.events.includes(change.type)) setUpdates((count) => count + 1)
+      // B-TH-223: a request of this customer moved (our answer, a quote, its order): its row reads again in place.
+      if (change.type.startsWith('inquiry.')) void loadRequests()
       void loadTransit()
     },
-    onReconnect: () => setUpdates((count) => count + 1),
+    onReconnect: () => {
+      setUpdates((count) => count + 1)
+      void loadRequests()
+    },
   })
 
   const more = async () => {
-    if (!read || loadingMore) return
+    if (!read || loadingMore || (chip !== null && !ordersInChip(chip))) return
     setLoadingMore(true)
     try {
-      const next = await fetchOrders(api, { chip, q, offset: rows.length })
+      const next = await fetchOrders(api, { chip: chip as Exclude<ListChip, typeof CLOSED_REQUESTS> | null, q, offset: rows.length })
       setRows((current) => [...current, ...next.items.filter((row) => !current.some((old) => old.id === row.id))])
     } catch {
       setState('error')
@@ -132,15 +157,17 @@ function ListContainer() {
     }
   }
 
-  const go = (nextChip: OrderChip | null, nextQ: string) => router.replace(`${pathname}${listQuery(nextChip, nextQ)}`, { scroll: false })
+  const go = (nextChip: ListChip | null, nextQ: string) => router.replace(`${pathname}${listQuery(nextChip, nextQ)}`, { scroll: false })
+  // B-TH-223: the file holds the rows shown (requests and orders), each with the customer's own number.
+  const shownRows = listRows(chip ?? read?.chip ?? 'OPEN', q, requests.state === 'ready' ? requests.rows : [], rows, locale)
   const exportRows = (ids: readonly string[] | null) => {
-    const shown = ids ? rows.filter((row) => ids.includes(row.id)) : rows
-    saveText(`${t('list.fileName')}.csv`, ordersCsv(shown, t, locale, read?.seesPrices ?? false, day))
+    const shown = ids ? shownRows.filter((row) => ids.includes(row.id)) : shownRows
+    saveText(`${t('list.fileName')}.csv`, listCsv(shown, t, locale, read?.seesPrices ?? false, day))
   }
 
   // B-W2b-194: New order (a person who may order, not in a preview).
   const newOrder = frame.me.permissions.includes('portal.orderRequests.manage') && !frame.me.preview ? `${frame.prefix}/orders/new` : null
-  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, rows: rows.length, chip, q, prefix: frame.prefix, onExport: () => exportRows(null), newOrder }))
+  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, rows: shownRows.length, chip, q, prefix: frame.prefix, onExport: () => exportRows(null), newOrder }))
 
   const [loadedAt, setLoadedAt] = useState<string | null>(null)
   useEffect(() => {
@@ -155,13 +182,14 @@ function ListContainer() {
         state: state === 'loading' && !read ? 'loading' : state === 'error' ? 'error' : 'ready',
         read,
         rows,
+        requests,
         chip,
         q,
         prefix: frame.prefix,
         selected,
         updates,
         offlineSince: offline ? loadedAt : null,
-        more: read && rows.length < read.count ? { loading: loadingMore } : null,
+        more: read && (chip === null || ordersInChip(chip)) && rows.length < read.count ? { loading: loadingMore } : null,
         transit,
         // B-W2b-194: the empty state's New order.
         newOrderHref: newOrder,
@@ -171,7 +199,10 @@ function ListContainer() {
         onSearch: (next) => go(chip, next),
         onClear: () => go(null, ''),
         onSelect: setSelected,
-        onOpen: (row) => router.push(recordHref(frame.prefix, row.id)),
+        onOpen: (row) => {
+          const href = rowHref(frame.prefix, row)
+          if (href) router.push(href)
+        },
         onRetry: () => {
           setState('loading')
           void load()
@@ -179,6 +210,10 @@ function ListContainer() {
         onShowUpdates: () => void load(),
         onMore: () => void more(),
         onExport: exportRows,
+        onRetryRequests: () => {
+          setRequests((current) => ({ ...current, state: 'loading' }))
+          void loadRequests()
+        },
         onRetryTransit: () => {
           setTransit({ state: 'loading', read: null })
           void loadTransit()
@@ -189,39 +224,49 @@ function ListContainer() {
   )
 }
 
-/** tab:print — every row of the view (up to 200), its filters written at the top. */
+/** tab:print — every row of the view (up to 200 orders and the chip's requests), its filters written at the top. */
 function PrintContainer() {
   const frame = usePortalFrame()
   const api = usePortalApi()
   const search = useSearchParams()
   const { t, locale } = useOrderWords()
   const chipParam = search?.get('chip') ?? null
-  const chip: OrderChip | null = isOrderChip(chipParam) ? chipParam : null
+  const chip: ListChip | null = isListChip(chipParam, ORDER_CHIPS) ? chipParam : null
   const q = search?.get('q') ?? ''
+  const seesRequests = frame.me.permissions.includes('portal.salesOrders.view')
   const [read, setRead] = useState<OrdersRead | null>(null)
+  const [requests, setRequests] = useState<RequestRow[]>([])
   const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading')
   const [printedAt] = useState(() => new Date().toISOString())
 
   const load = useCallback(async () => {
     try {
-      setRead(await fetchOrders(api, { chip, q, limit: PAGE_SIZE * 4 }))
+      const [orders, asked] = await Promise.all([
+        chip !== null && !ordersInChip(chip) ? fetchOrders(api, { chip: 'OPEN', q, limit: 1 }) : fetchOrders(api, { chip: chip as Exclude<ListChip, typeof CLOSED_REQUESTS> | null, q, limit: PAGE_SIZE * 4 }),
+        seesRequests ? fetchRequests(api, { state: 'ALL', limit: 200 }) : Promise.resolve(null),
+      ])
+      setRead(chip !== null && !ordersInChip(chip) ? { ...orders, items: [], count: 0 } : orders)
+      setRequests(asked?.rows ?? [])
       setState('ready')
     } catch {
       setState('error')
     }
-  }, [api, chip, q])
+  }, [api, chip, q, seesRequests])
   useEffect(() => {
     void load()
   }, [load])
 
   usePortalBand({ title: t('print.title') })
-  const chipWords = read?.chips.find((entry) => entry.chip === read.chip)?.words[locale] ?? t('print.chipOpen')
+  const current: ListChip = chip ?? read?.chip ?? 'OPEN'
+  const rows = read ? listRows(current, q, requests, read.items, locale) : []
+  const asked = rows.filter((row) => row.kind === 'request').length
+  const chipWords = current === CLOSED_REQUESTS ? t('chips.closedRequests') : (read?.chips.find((entry) => entry.chip === current)?.words[locale] ?? t('print.chipOpen'))
   return (
     <OrdersPrintView
       model={{
         state,
-        rows: read?.items ?? [],
-        count: read?.count ?? 0,
+        rows,
+        count: (read?.count ?? 0) + asked,
         seesPrices: read?.seesPrices ?? false,
         filters: { chip: chipWords, q },
         partyName: frame.me.party.name,

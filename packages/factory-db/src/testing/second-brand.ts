@@ -16,6 +16,7 @@ import { seedUuid, type SeedContext } from '../seeding'
  *   Message       the office's message to the party and the party's answer (PARTNER audience)
  *   StoredFile    a file of the order shared with the party's portal (its seeded bytes: seed-files.ts)
  *   Notification  the portal buyer's notice of the order
+ *   ThreadRead    the portal buyer's read mark on the order's thread, at the office's message (B-TH-023)
  *
  * Written in tenant A's office scope, as the app does; ids start with `ffffffff` so no generated test takes one of them as
  * "the first row" it copies. Every name, address and number is invented (`example.com`). Idempotent: a second run adds
@@ -46,10 +47,11 @@ export interface SecondBrand {
   readonly messageIds: readonly string[]
   readonly fileId: string
   readonly notificationId: string
+  readonly threadReadId: string
 }
 
 /** The tables the fixture writes a partner row of, each with its party column (the partner policy key). */
-export const SECOND_BRAND_TABLES = ['Thread', 'Message', 'SalesOrder', 'StoredFile', 'Notification'] as const
+export const SECOND_BRAND_TABLES = ['Thread', 'Message', 'SalesOrder', 'StoredFile', 'Notification', 'ThreadRead'] as const
 
 export async function seedSecondBrand({ db, namespace }: SeedContext): Promise<SecondBrand> {
   const id = (key: string): string => `ffffffff${seedUuid(namespace, `second-brand:${key}`).slice(8)}`
@@ -67,6 +69,7 @@ export async function seedSecondBrand({ db, namespace }: SeedContext): Promise<S
     messageIds: [id('message:out'), id('message:in')],
     fileId: id('file:partner'),
     notificationId: id('notification:order'),
+    threadReadId: id('thread-read:buyer'),
   }
   const stamp = { createdAt: AT, updatedAt: AT, createdById: actorId }
   const address = { name: 'Seed Brand Two S.r.l.', street: 'Via Seconda 2', postalCode: '20100', city: 'Milano', province: 'MI', country: 'IT' }
@@ -218,6 +221,23 @@ export async function seedSecondBrand({ db, namespace }: SeedContext): Promise<S
             actorId,
             createdAt: minutes(10),
             updatedAt: minutes(10),
+          },
+        ],
+        skipDuplicates: true,
+      })
+      // B-TH-023: the buyer's read mark on the order's thread (their party's, at the message shared with it).
+      await tx.threadRead.createMany({
+        data: [
+          {
+            id: made.threadReadId,
+            threadId: made.threadId,
+            userId: made.userId,
+            partyId: made.partyId,
+            key: `read:${made.threadId}:${made.userId}`,
+            lastReadMessageId: made.messageIds[0]!,
+            readAt: minutes(15),
+            createdAt: minutes(15),
+            updatedAt: minutes(15),
           },
         ],
         skipDuplicates: true,
