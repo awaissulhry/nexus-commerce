@@ -138,14 +138,19 @@ const inChip = (chip: OrderChip, entry: OrderRow) =>
   chip === 'ALL' ? true : chip === 'OPEN' ? OPEN.includes(entry.status) : chip === 'SHIPPED' ? entry.status === 'SHIPPED' || entry.status === 'PARTLY_SHIPPED' : chip === 'DATE_MOVED' ? entry.movedLately : entry.status === chip
 
 export function ordersRead(chip: OrderChip = 'OPEN', rows: readonly OrderRow[] | null = null, over: Partial<OrdersRead> = {}): OrdersRead {
-  const items = rows ?? ROWS.filter((entry) => inChip(chip, entry))
+  return readOf(ROWS, chip, rows, over)
+}
+
+/** A read of the list over one customer's rows (`world`): the chips count that customer's rows only. */
+function readOf(world: readonly OrderRow[], chip: OrderChip, rows: readonly OrderRow[] | null, over: Partial<OrdersRead>): OrdersRead {
+  const items = rows ?? world.filter((entry) => inChip(chip, entry))
   const seesPrices = over.seesPrices ?? true
   return {
     asOf: at(0),
     seesPrices,
     progressShared: true,
     chip,
-    chips: ORDER_CHIPS.map((entry) => ({ chip: entry, count: ROWS.filter((item) => inChip(entry, item)).length, words: CHIP_WORDS[entry] })),
+    chips: ORDER_CHIPS.map((entry) => ({ chip: entry, count: world.filter((item) => inChip(entry, item)).length, words: CHIP_WORDS[entry] })),
     count: items.length,
     items: seesPrices ? [...items] : items.map(({ netAmount: _netAmount, ...rest }) => rest),
     live: LIVE,
@@ -175,6 +180,45 @@ export function inTransitRead(over: Partial<InTransitRead> = {}): InTransitRead 
     ...over,
   }
 }
+
+// ── B-TH-223 (fix-portal-1): Brand Beta's own order rows ─────────────────────────────────────────────────────────────
+// The reader of the wall scans (Orders & requests, its tiles and its sheet) lists ITS orders: its own ids, its own purchase-order
+// codes (BETA-PO-…), its own count, the office's numbers and parcels of its own — never a row of the world above (BA-PO-…), so
+// the cases stay honest once the grid draws its rows. Made up, of the shape the API answers.
+const betaId = (n: number) => `b2b2b2b2-0000-4000-8000-${String(300 + n).padStart(12, '0')}`
+function betaRow(n: number, status: CustomerOrderStatus, over: Partial<OrderRow> = {}): OrderRow {
+  return row(n, status, { id: betaId(n), customerRef: `BETA-PO-${String(80 + n).padStart(4, '0')}`, number: `SO-2026-02${50 + n}`, yourNumber: customerNumberOf('ORDER', 20 + n), netAmount: 615000 + n * 12000, ...over })
+}
+export const BETA_ROWS: readonly OrderRow[] = [
+  betaRow(1, 'PARTLY_SHIPPED', {
+    promiseDate: dayAt(13),
+    originalPromiseDate: dayAt(6),
+    promiseMoved: true,
+    movedLately: true,
+    pieces: { ordered: 52, shipped: 20, open: 32 },
+    nextShipment: { id: betaId(101), number: 'SH-2026-0351', status: 'IN_TRANSIT', words: SHIPMENT_STATUS_WORDS.IN_TRANSIT, date: dayAt(-1), carrierName: 'Corriere Demo', expectedDeliveryAt: at(32) },
+  }),
+  betaRow(2, 'IN_PRODUCTION', { pieces: { ordered: 80, shipped: 0, open: 80 } }),
+  betaRow(3, 'CONFIRMED', { customerRef: null, pieces: { ordered: 2, shipped: 0, open: 2 }, netAmount: 214000 }),
+  { ...betaRow(4, 'REQUESTED'), kind: 'REQUEST', number: 'RQ-2026-0025', yourNumber: null, orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 36, shipped: 0, open: 36 } },
+  betaRow(5, 'READY', { pieces: { ordered: 44, shipped: 0, open: 44 }, nextShipment: { id: betaId(105), number: 'SH-2026-0355', status: 'PACKED', words: SHIPMENT_STATUS_WORDS.PACKED, date: dayAt(1), carrierName: 'Corriere Demo', expectedDeliveryAt: null } }),
+  betaRow(6, 'DELIVERED', { promiseDate: dayAt(-7), pieces: { ordered: 24, shipped: 24, open: 0 } }),
+  betaRow(7, 'CANCELLED', { promiseDate: null, pieces: { ordered: 16, shipped: 0, open: 0 } }),
+]
+/** Brand Beta's list read (its own rows and chip counts). */
+export function betaOrdersRead(chip: OrderChip = 'OPEN', rows: readonly OrderRow[] | null = null, over: Partial<OrdersRead> = {}): OrdersRead {
+  return readOf(BETA_ROWS, chip, rows, over)
+}
+/** Brand Beta's parcels on the way (its own shipment of its own first order). */
+export function betaInTransitRead(over: Partial<InTransitRead> = {}): InTransitRead {
+  const first = BETA_ROWS[0]!
+  const [item] = inTransitRead().items
+  return inTransitRead({
+    items: [{ ...item!, shipmentId: betaId(101), number: 'SH-2026-0351', order: { id: first.id, number: first.number!, customerRef: first.customerRef }, expectedDeliveryAt: at(32), trackingNumbers: ['DEMO00067890'], trackingLinks: [{ trackingNumber: 'DEMO00067890', url: 'https://tracking.example/DEMO00067890', words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } }], lastEvent: { at: at(-4), status: 'IN_TRANSIT', words: TRACKING_WORDS.IN_TRANSIT, description: 'Hub Demo', location: 'Verona', parcelSeq: 1 } }],
+    ...over,
+  })
+}
+// ── end B-TH-223 (fix-portal-1) ──
 
 // ── one order ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const sizes = (run: Record<string, [number, number]>) => Object.entries(run).map(([size, [ordered, shipped]]) => ({ size, ordered, shipped, open: ordered - shipped, closedShort: 0, unitPrice: '185.000000' }))

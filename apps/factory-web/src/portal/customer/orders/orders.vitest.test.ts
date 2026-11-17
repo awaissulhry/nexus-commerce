@@ -55,6 +55,8 @@ import { designScreen as recordScreen } from './record/fixtures'
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
 import { REQUESTS, requestRow } from '../requests/design-data'
+// B-TH-223 (fix-portal-1): Brand Beta's own rows; the Alpha world's codes no Beta case may carry.
+import { BETA_ROWS, inTransitRead } from './design-data'
 import type { OrdersListViewModel } from './view/OrdersListView'
 import type { CustomerCaseBuilder } from './view/CustomerCase'
 // B-TH-238: the tiles (their chips, the customer's own reads).
@@ -404,6 +406,31 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
     const open = listCsv(listRows('OPEN', '', REQUESTS, [], 'en'), t, 'en', true, day)
     for (const words of ['We need something from you', 'Quote being prepared', 'Being reviewed', 'Sent', 'Order waiting for approval']) expect(open).toContain(words)
     expect(open).not.toMatch(/Quote sent|Order confirmed/)
+  })
+
+  // B-TH-223 (fix-portal-1): the server render draws no grid row, so the scans above pass whatever the rows hold; the rows
+  // themselves (the list read, the rows handed to the grid, the parcels, the unread marks) must be Brand Beta's own.
+  it('no row of a Brand Beta case carries a code of the Alpha world (its PO codes, ids, order and parcel numbers)', () => {
+    const alphaCodes = [
+      ...ROWS.flatMap((row) => [row.id, row.customerRef, row.number, row.nextShipment?.id, row.nextShipment?.number]),
+      ...inTransitRead().items.flatMap((item) => [item.shipmentId, item.number, item.order.id, ...item.trackingNumbers]),
+    ].filter((code): code is string => typeof code === 'string' && code !== '')
+    const betaCases = screen.cases.filter((item) => /^th-(?:223|230|238|246)-/.test(item.id))
+    expect(betaCases.length).toBeGreaterThanOrEqual(14)
+    for (const entry of betaCases) {
+      for (const locale of ['it', 'en'] as const) {
+        const body = (entry.model as CustomerCaseBuilder)(locale).body
+        if (body.kind !== 'list') continue
+        const { read, rows, transit, unread } = body.model
+        const data = JSON.stringify({ read, rows, transit, unread })
+        expect(alphaCodes.filter((code) => data.includes(code)), `${entry.id} (${locale})`).toEqual([])
+        expect(data.match(/\bBA-PO-\d+/)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
+        expect(scanText(data, BRAND_ALPHA), `${entry.id} (${locale})`).toEqual([])
+      }
+    }
+    // Beta's rows are there to be checked: its own purchase-order codes, ids and parcels.
+    expect(BETA_ROWS.filter((row) => row.customerRef !== null).every((row) => row.customerRef!.startsWith('BETA-PO-'))).toBe(true)
+    expect(BETA_ROWS.some((row) => ROWS.some((alpha) => alpha.id === row.id || alpha.number === row.number))).toBe(false)
   })
 
   it('every case of the list draws its own numbers, never the office’s order numbers', () => {
