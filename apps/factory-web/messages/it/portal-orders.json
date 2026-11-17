@@ -39,7 +39,8 @@
     "newOrder": "Nuovo ordine",
     "downloadAll": "Scarica tutto (Excel)",
     "downloading": "Preparazione del file…",
-    "downloadAllHint": "Tutti gli ordini di questa vista con le vostre colonne, in un unico file Excel."
+    "downloadAllHint": "Tutti gli ordini di questa vista con le vostre colonne, in un unico file Excel.",
+    "ask": "Fateci una richiesta…"
   },
   "keys": {
     "search": "Cerca nei tuoi ordini",
@@ -724,6 +725,167 @@
         "gone": "Questa foto non è più condivisa.",
         "alt": "Foto {name}"
       }
+    }
+  },
+  "ask": {
+    "title": "Richiesta · {number}",
+    "step": {
+      "what": "Passo 1 di 3 · Cosa desiderate",
+      "details": "Passo 2 di 3 · I dettagli",
+      "impact": "Passo 3 di 3 · Cosa comporta"
+    },
+    "hint": "Scegliete cosa volete chiederci. Decidiamo noi e vi rispondiamo qui e nella conversazione dell'ordine.",
+    "what": "Cosa volete chiederci",
+    "next": "Avanti",
+    "send": "Invia la richiesta",
+    "failed": "Non siamo riusciti a leggere cosa potete chiedere su questo ordine.",
+    "waiting": "La vostra richiesta del {day} attende la nostra risposta.",
+    "waitingNoDay": "La vostra richiesta attende la nostra risposta.",
+    "counter": "Vi proponiamo un'alternativa: rispondete in Cosa vi aspetta",
+    "colourNote": "Per cambiare un colore scriveteci nella conversazione dell'ordine.",
+    "sent": "La vostra richiesta è stata inviata. Rispondiamo qui e via e-mail.",
+    "kind": {
+      "CHANGE": {
+        "title": "Cambiare taglie, quantità, la data o l'indirizzo di consegna",
+        "hint": "Scegliete taglie e data; prima dell'invio vi diciamo cosa comporta."
+      },
+      "CANCEL": {
+        "title": "Annullare l'ordine o alcune righe",
+        "hint": "Diteci quali righe e perché."
+      },
+      "RUSH": {
+        "title": "Renderlo urgente (Urgente – richiesto)",
+        "hint": "Rivediamo la data e vi rispondiamo; potete indicare la data entro cui vi serve."
+      },
+      "HOLD": {
+        "title": "Mettere in pausa la lavorazione",
+        "hint": "Fermiamo la lavorazione dell'ordine finché non ci chiedete di riprendere."
+      },
+      "RESUME": {
+        "title": "Riprendere la lavorazione",
+        "hint": "Riprendiamo la lavorazione dell'ordine e vi confermiamo la data."
+      },
+      "SPLIT_SHIPMENT": {
+        "title": "Spedire prima ciò che è pronto",
+        "hint": "Indicate i capi da spedire prima; il resto parte quando è pronto."
+      },
+      "SAMPLE_ROUND": {
+        "title": "Un altro campione",
+        "hint": "Scegliete la riga e il tipo di campione."
+      }
+    },
+    "verdict": {
+      "NOT_OPEN": "Questa richiesta non è disponibile per i vostri ordini. Scriveteci nella conversazione dell'ordine.",
+      "NOT_ASKABLE": "Non è possibile in questa fase dell'ordine.",
+      "WAITING": "La vostra richiesta del {day} attende la nostra risposta.",
+      "WAITING_NO_DAY": "La vostra richiesta attende la nostra risposta.",
+      "READY": "Non serve: è già tutto pronto per la spedizione.",
+      "READY_HOLD": "È già tutto pronto per la spedizione: per fermarla scriveteci nella conversazione dell'ordine.",
+      "LOCKED": "Abbiamo riportato l'ordine a Normale: chiedeteci nella conversazione dell'ordine.",
+      "ALREADY_URGENT": "L'ordine è già urgente: per chiedere di più indicate la data entro cui vi serve.",
+      "PAUSED": "L'ordine è già in pausa: chiedeteci di riprendere quando volete.",
+      "NOT_PAUSED": "L'ordine non è in pausa.",
+      "SHIPS_AS_READY": "L'ordine si spedisce già a parti, man mano che sono pronte.",
+      "CLOSED_SHORT": "Non possibile: questa riga è chiusa.",
+      "CUT": "Non possibile: il taglio è iniziato il {day}. Potete chiedere i primi capi di produzione (TOP).",
+      "CUT_NO_DAY": "Non possibile: il taglio è già iniziato. Potete chiedere i primi capi di produzione (TOP).",
+      "LEATHER_CUT": "Non possibile: la pelle è stata tagliata il {day}. Potete chiedere i primi capi di produzione (TOP).",
+      "LEATHER_CUT_NO_DAY": "Non possibile: la pelle è già stata tagliata. Potete chiedere i primi capi di produzione (TOP)."
+    },
+    "held": {
+      "closed": "Ora questa richiesta non è possibile: la sua scheda dice perché.",
+      "waiting": "Una richiesta di questo tipo attende la nostra risposta: prima ritiratela, o rispondete alla nostra proposta."
+    },
+    "problem": {
+      "choose": "Scegliete cosa volete chiederci.",
+      "long": "Il testo è troppo lungo: al massimo 2000 caratteri.",
+      "past": "Scegliete una data da oggi in poi.",
+      "rushLater": "L'ordine è già promesso per quella data o prima: scegliete una data precedente, o lasciatela vuota.",
+      "holdWhy": "Dite in poche parole perché volete mettere in pausa.",
+      "splitNothing": "Indicate i capi di ogni taglia da spedire prima.",
+      "splitWhole": "Questo è l'intero ordine: parte già tutto insieme. Indicate solo ciò che deve partire prima.",
+      "sampleLine": "Scegliete la riga del campione.",
+      "sampleKind": "Scegliete il tipo di campione.",
+      "sampleClosed": "Ora questo tipo di campione non è possibile su questa riga."
+    },
+    "details": {
+      "RUSH": "Diteci quando vi serve. Rivediamo la data e vi rispondiamo: la vostra data cambia solo quando ve la confermiamo.",
+      "HOLD": "Mettiamo in pausa la lavorazione dell'ordine finché non ci chiedete di riprendere. Una pausa può spostare la vostra data.",
+      "RESUME": "Riprendiamo la lavorazione e vi confermiamo la data.",
+      "SPLIT_SHIPMENT": "Indicate i capi di ogni taglia da spedire prima. Il resto parte quando è pronto.",
+      "SAMPLE_ROUND": "Scegliete la riga e il tipo di campione. Un campione di pre-produzione o un set taglie è possibile solo prima che inizi il taglio."
+    },
+    "split": {
+      "caption": "Capi da spedire prima",
+      "most": "Al massimo {count}"
+    },
+    "sample": {
+      "line": "Riga",
+      "linePick": "Scegliete una riga…",
+      "kind": "Tipo di campione",
+      "kinds": {
+        "PRE_PRODUCTION": "Campione di pre-produzione",
+        "SIZE_SET": "Set taglie",
+        "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)",
+        "BRAND": "Un campione per il vostro marchio"
+      },
+      "hints": {
+        "PRE_PRODUCTION": "Fatto come sarà fatto l'ordine, prima che inizi il taglio.",
+        "SIZE_SET": "Un capo per ogni taglia, prima che inizi il taglio.",
+        "TOP_OF_PRODUCTION": "I primi capi usciti dalla linea.",
+        "BRAND": "Un campione per il vostro uso (fiere, foto)."
+      }
+    },
+    "date": {
+      "RUSH": "Serve entro (facoltativo)",
+      "SPLIT_SHIPMENT": "Prima parte entro (facoltativo)",
+      "promise": "Ora vi promettiamo il {date}.",
+      "optional": "Lasciatela vuota se va bene qualsiasi data."
+    },
+    "note": {
+      "label": "Le vostre parole (facoltative)",
+      "hint": "Tutto ciò che dovremmo sapere.",
+      "why": "Perché volete mettere in pausa?",
+      "whyHint": "Bastano poche parole."
+    },
+    "review": {
+      "hint": "Controllate cosa chiedete e cosa comporta. Nulla cambia finché non rispondiamo.",
+      "what": "Chiedete",
+      "first": "Parte prima",
+      "cell": "Riga {seq}, taglia {size}: {count}",
+      "go": "Vedete cosa comporta"
+    },
+    "impact": {
+      "title": "Cosa comporta",
+      "nothingFrozen": "Nulla di ciò che chiedete è bloccato.",
+      "frozen": "Una parte di ciò che chiedete è bloccata: diventa una modifica con prezzo.",
+      "blocked": "Una parte di ciò che chiedete non si può più cambiare.",
+      "frozenLabel": "Cosa è bloccato",
+      "state": {
+        "BLOCKED": "Non modificabile",
+        "CHANGE_REQUEST": "Modifica con prezzo"
+      },
+      "cost": "Costo",
+      "fee": "Si applica un costo di {fee}.",
+      "mayApply": "Può essere previsto un costo: ve lo diciamo noi.",
+      "noPrice": "Nessun costo.",
+      "earliestLabel": "Data più vicina",
+      "earliest": "Dal {date} circa — ve la confermiamo noi.",
+      "earliestLater": "Dal {date} circa, dopo la data che avete chiesto — ve la confermiamo noi.",
+      "earliestNone": "Vi diamo una data appena l'abbiamo pianificata.",
+      "partial": "(Alcune righe non sono ancora datate.)",
+      "note": {
+        "RUSH": "Rivediamo la data e ve la confermiamo.",
+        "HOLD": "Una pausa può spostare la vostra data.",
+        "RESUME": "Alla ripresa vi confermiamo la data.",
+        "SPLIT_SHIPMENT": "Il resto parte quando è pronto.",
+        "SAMPLE_ROUND": "Un altro campione può spostare la vostra data."
+      },
+      "afterRelease": "Quando abbiamo già rilasciato una riga in produzione, cambiarne taglie o quantità significa annullarla e rifarla, oppure chiuderla prima.",
+      "failed": "Non siamo riusciti a leggere cosa comporta.",
+      "reading": "Stiamo ancora leggendo cosa comporta…",
+      "failedHeld": "Prima leggete cosa comporta: riprovate qui sopra.",
+      "blockedHeld": "Una parte di ciò che chiedete non si può più cambiare: tornate indietro e cambiate la richiesta."
     }
   }
 }

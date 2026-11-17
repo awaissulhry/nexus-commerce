@@ -198,6 +198,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   with every production read: released / taken back per line and size, checks, final inspections (report PDF from
   `…/quality/report/:inspectionId` in the order's PDF viewer, saved under our own name), holds, shared photos (`GET /files/:id/preview`,
   one at a time in `QualityPhotoDialog`). Never the inspection's number, a work order or a person of ours.
+  F-PR-13: the order's Ask dialog (`orders/ask-model.ts` pure, `view/AskDialog.tsx`, `view/AskImpact.tsx`; band "Ask us…", `?ask=<KIND>`
+  opens it at a kind): change, cancel and the production asks the customer's limits open (B-PR-25 rules `asks`); a waiting one is
+  withdrawn there, a countered one answered in Waiting for you; step 3 = `POST …/change-requests/impact` (also in the change and
+  cancel pop-ups' review steps): frozen in the API's words, cost (an amount only with prices), earliest date, our notes.
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
