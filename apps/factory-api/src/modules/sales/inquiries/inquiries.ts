@@ -246,6 +246,14 @@ async function assertCustomer(db: Reader, context: OfficeContext, partyId: strin
   if (party.status === 'ARCHIVED') badBody(path, 'This customer is archived.')
 }
 
+// ---- B-TH-221 (wall W23): a request's delivery address is its own customer's (the portal's own rule, B-TH-010) ----
+async function assertShipTo(db: Reader, partyId: string | null, addressId: string, path = 'shipToAddressId'): Promise<void> {
+  if (partyId === null) badBody(path, 'A delivery address is named with its customer, never with a prospect.')
+  const address = await db.partyAddress.findFirst({ where: { id: addressId, partyId, status: 'ACTIVE', kinds: { has: 'SHIP_TO' } }, select: { id: true } })
+  if (!address) badBody(path, 'Not one of this customer’s delivery addresses.')
+}
+// ---- end B-TH-221
+
 /** The person at the customer who asked: an active contact of that party, not erased. */
 async function assertContact(db: Reader, partyId: string, contactId: string, path = 'contactId'): Promise<void> {
   const contact = await db.partyContact.findUnique({ where: { id: contactId }, select: { partyId: true, status: true, erasedAt: true } })
@@ -368,6 +376,8 @@ export async function checkNew(caller: CommandCaller, context: OfficeContext, ma
     if (!(await db.company.findUnique({ where: { id: made.companyId }, select: { id: true } }))) badBody('companyId', 'No such company.')
     if (made.partyId) await assertCustomer(db, context, made.partyId, made.companyId)
     if (made.partyId && made.contactId) await assertContact(db, made.partyId, made.contactId)
+    // B-TH-221 (W23): the delivery address an office request names is one of ITS customer's own active delivery addresses.
+    if (made.shipToAddressId) await assertShipTo(db, made.partyId, made.shipToAddressId)
     await checkedLines(db, made.companyId, made.lines, 'body/lines', made.partyId)
     if (made.assigneeId && !(await mayKeep(db, context.tenantId, made.assigneeId, { companyId: made.companyId, partyId: made.partyId }, serverClock.now()))) badBody('assigneeId', ASSIGNEE_REFUSED)
   })
@@ -446,6 +456,9 @@ export async function createInquiry(caller: CommandCaller, body: CreateInquiryBo
     note: body.note ?? null,
     lines: body.lines ?? [],
     assigneeId: body.assigneeId ?? null,
+    // B-TH-221: the customer's PO and delivery address, as the portal's New order sends them.
+    customerRef: body.customerRef ?? null,
+    shipToAddressId: body.shipToAddressId ?? null,
   }
   await checkNew(caller, context, made)
   const { result } = await command(caller, { name: 'sales.inquiries.create', idempotencyKey, input: { ...body, targetUnitPrice: markMoney('price', made.targetUnitPrice) } }, async (tools) => {

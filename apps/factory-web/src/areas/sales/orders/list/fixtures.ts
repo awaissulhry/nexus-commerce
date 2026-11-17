@@ -65,6 +65,8 @@ const newOrder = (over: Partial<NewOrderDialogModel> = {}): NewOrderDialogModel 
   contactId: '',
   customerRef: '',
   number: 'SO-2026-0089',
+  // B-TH-221: the one pointer — a written request goes to Incoming's New request.
+  incomingHref: `${PREFIX}/sales/incoming?new=1`,
   ...over,
 })
 
@@ -133,7 +135,7 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'board-one-state', label: 'Board with In production pressed: that lane only', model: board('sales', { rows: 'IN_PRODUCTION', lanes: lanesOf('sales').filter((lane) => lane.status === 'IN_PRODUCTION') }) },
     { id: 'notice', label: 'A notice above the list', model: base('sales', { notice: { tone: 'danger', words: { key: 'problem.read.unavailable' } } }) },
     // ---- B-W2a-50 ---------------------------------------------------------------------------------------------------------
-    { id: 'new-order', label: 'W2a · Sales · New order: search the customer (c opens it)', model: base('sales', { newOrder: newOrder() }), note: 'Pick a customer: the contact and the customer PO come next; Create draft order opens its Lines.' },
+    { id: 'new-order', label: 'W2a · Sales · New order: search the customer (c opens it); B-TH-221: a written request goes to Incoming (the one pointer)', model: base('sales', { newOrder: newOrder() }), note: 'Pick a customer: the contact and the customer PO come next; Create draft order opens its Lines. A request to answer first goes to Incoming’s New request.' },
     { id: 'new-order-picked', label: 'W2a · Sales · New order: the customer picked, the orders contact chosen, the number it will get', model: base('sales', { newOrder: newOrder({ party: PARTY, contactId: PARTY.contacts[0]!.id, customerRef: 'PO-ESEMPIO-89' }) }) },
     { id: 'new-order-blocked', label: 'W2a · Sales · New order: a blocked customer (Create held with the reason)', model: base('sales', { newOrder: newOrder({ party: { ...PARTY, status: 'BLOCKED' } }) }) },
     { id: 'new-order-companies', label: 'W2a · Owner · New order: two selling companies; no number series yet', model: base('owner', { newOrder: newOrder({ companies: DEMO_COMPANIES, number: null }) }) },

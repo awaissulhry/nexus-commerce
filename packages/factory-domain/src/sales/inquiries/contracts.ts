@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, currency, id, input, instant, output, unitPrice } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, SIZE_CODE, STYLE_DRAFTS_MAX, TYPED_SOURCES } from './rules'
 // B-TH-026: a style draft's fields are the style library's.
 import { PPE_CATEGORIES, PRODUCT_TYPES } from '../../product/styles/rules'
@@ -79,6 +79,16 @@ const asked = {
   assigneeId: id().optional(),
 }
 
+// ---- B-TH-221 (threads plan O-SAL-INQ-LIST.band-F02): the office's New request carries the customer's PO and its delivery
+// address as the portal's New order does (B-TH-010, the columns of B-TH-009); the address is one of THAT customer's own (W23).
+const officeDetails = {
+  /** The customer's own order number, if they gave one. */
+  customerRef: line(INQUIRY_LIMITS.customerRef).optional(),
+  /** One of the customer's active delivery addresses (never with a prospect). */
+  shipToAddressId: id().optional(),
+}
+// ---- end B-TH-221
+
 /** "New inquiry (phone or visit)" (SCR-105 inquiries.new): the customer (and contact) or a prospect, what is asked. */
 export const createInquiryBody = input({
   companyId: id(),
@@ -89,6 +99,7 @@ export const createInquiryBody = input({
   contactId: id().optional(),
   prospect: prospectBody.optional(),
   ...asked,
+  ...officeDetails, // B-TH-221
 })
 export type CreateInquiryBody = z.output<typeof createInquiryBody>
 
@@ -113,6 +124,7 @@ export const fromMailBody = input({
   note: text(INQUIRY_LIMITS.note).optional(),
   lines: z.array(lineBody).max(INQUIRY_LIMITS.lines).optional(),
   assigneeId: id().optional(),
+  ...officeDetails, // B-TH-221
 })
 export type FromMailBody = z.output<typeof fromMailBody>
 
@@ -468,6 +480,26 @@ export const mailDraftView = output({
 
 /** People an inquiry may be given to (the Assign popover): ACTIVE office people who keep inquiries there; by name, nobody counted. */
 export const assigneesView = output({ people: z.array(output({ id: id(), name: z.string(), me: z.boolean() })), complete: z.boolean() })
+
+// ---- B-TH-221 (wall W23): New request's customer picker ------------------------------------------------------------------
+/**
+ * The customers and brands a person may make a request for at a company: active, and reached by BOTH their
+ * sales.inquiries.manage and their parties.view (a person limited to customer A never reads customer B's name here). `q`
+ * finds by code or name; `total` says how many match beyond `limit`; `limited` says no grant reaches every customer.
+ */
+export const inquiryCustomersQuery = input({
+  companyId: id(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(200),
+})
+export type InquiryCustomersQuery = z.output<typeof inquiryCustomersQuery>
+export const inquiryCustomersView = output({
+  customers: z.array(output({ id: id(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable() })),
+  /** How many customers match (a count, not money). */
+  total: notMoney(z.number().int()),
+  limited: z.boolean(),
+})
+// ---- end B-TH-221
 
 /** The inquiry a quote or order came from, with its tech pack in force (null: none). */
 export const sourceView = output({
