@@ -49,6 +49,8 @@ import { printDispatchHandler } from '../../platform/print/handler'
 import { printRelays, usePrintRelays } from '../../platform/print/service'
 import { useSecrets } from '../../platform/secrets/service'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Answer, type Harness, type TestTenant } from '../../platform/auth/sessions/testing/harness'
+// th3b follow-up 6: the flows that want ONE clock set the harness clock as the server's.
+import { useServerClock } from '../../core/time'
 
 /**
  * The golden flow's world (B-W1-06a): the auth harness (a throwaway database from the migrations, the real app with its
@@ -116,6 +118,19 @@ export function harnessStart(now: Date): Date {
   return month(new Date(now.getTime() + HARNESS_DRIFT_MS)) === month(now) ? now : new Date(now.getTime() - HARNESS_DRIFT_MS)
 }
 
+// ---- th3b follow-up 6 (threads plan TH-3; th2-backend notes, Open 4): ONE clock for a flow. The harness clock (sign-in, two-factor,
+// the portal's routes, presigned URLs) moves 30 s at every two-factor step, while the office's commands ran on the server's: a
+// portal request dated by the one and closed on the other made the TH-1b / TH-2 flows wait real minutes after their set-up. A flow
+// that calls this runs its commands on the harness clock too (core/time.ts useServerClock), so every row of it is dated by one
+// clock; close() puts the system clock back. The W1 and daily flows keep the two clocks they were written for.
+export function oneClock(world: World): void {
+  useServerClock(world.h.clock)
+}
+
+/** The database's own "not in the future" checks allow 5 minutes: a flow on one clock keeps the harness clock within them. */
+export const DATABASE_FUTURE_MS = 5 * 60_000
+// ---- end th3b follow-up 6
+
 export async function startWorld(): Promise<World> {
   const h = await startHarness('golden')
   // Commands run on the server clock (core/command.ts); the harness clock (sign-in, two-factor, presigned URLs, the
@@ -159,6 +174,7 @@ export async function startWorld(): Promise<World> {
     id,
     async close() {
       for (const useClock of [useCertificatesClock, useLabelsClock, useRegisterClock, useStyleComplianceClock, useShipmentDocumentsClock]) useClock(undefined)
+      useServerClock(undefined) // th3b follow-up 6
       useVies(undefined)
       useSdi(undefined)
       useCarrier(undefined)

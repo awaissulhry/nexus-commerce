@@ -39,6 +39,10 @@ export const manifest = defineManifest({
   'GET /sales/reports/backlog': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
   'GET /sales/reports/returns': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
   'GET /sales/reports/quote-speed': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
+  // ---- B-TH-052 (threads plan L2-G10): the request-to-order figure — sales.reports.view over the screen's company; it counts only
+  // the requests the reader reaches with sales.inquiries.view (`record`).
+  'GET /sales/reports/requests': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
+  // ---- end B-TH-052
   // B-W2b-428 (kpis/, facts/): the metric layer, office only. The KPI library with home.kpis.view, its versions, the standard
   // KPIs, their uses and a rebuild of the facts with home.kpis.manage; every value also asks its measures' list permissions and
   // grains, a rebuild the companies of the person's grant (`record`).

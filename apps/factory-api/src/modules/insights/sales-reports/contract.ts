@@ -28,8 +28,11 @@ const head = {
   today: businessDate(),
   asOf: instant(),
 }
-/** What the reader may see: orders (orders.view), quotes (quotes.view), returns (sales.returns.view), amounts (`values`: the price grain). */
-const sight = output({ orders: z.boolean(), quotes: z.boolean(), returns: z.boolean(), values: z.boolean() })
+/**
+ * What the reader may see: orders (orders.view), quotes (quotes.view), returns (sales.returns.view), amounts (`values`: the price
+ * grain); B-TH-052: requests (sales.inquiries.view).
+ */
+const sight = output({ orders: z.boolean(), quotes: z.boolean(), returns: z.boolean(), values: z.boolean(), requests: z.boolean() })
 const pct = () => z.string().regex(/^\d{1,3}\.\d$/).nullable()
 
 const valueFigures = {
@@ -222,3 +225,45 @@ export const quoteSpeedContract = defineContract({
     }),
   },
 })
+
+// ---- B-TH-052 (threads plan L2-G10, X-SAL-REPORTS.drill; web B-TH-235): the request-to-order figure ----------------------------
+/**
+ * GET /sales/reports/requests: the requests received in the period (by week or month of arrival) and what each became now —
+ * quoted, ordered (straight from it, or from its quote), declined, lost, still open; "Not an order" apart and out of the rates —
+ * in all, per bucket and per customer (the prospects in ONE group: key `prospects`, no name, no person's data). Each group names
+ * its customer (`partyId`) so the page opens Incoming with that customer and the bucket's days. Counts only, no money; only the
+ * requests the reader reaches with sales.inquiries.view (`sight.requests` false: `all` null, no buckets or groups).
+ */
+const requestFigures = output({
+  received: z.number().int(),
+  open: z.number().int(),
+  quoted: z.number().int(),
+  ordered: z.number().int(),
+  declined: z.number().int(),
+  lost: z.number().int(),
+  notAnOrder: z.number().int(),
+  /** quoted ÷ (received − not an order), one decimal. */
+  quotedPct: pct(),
+  /** ordered ÷ (received − not an order), one decimal. */
+  orderedPct: pct(),
+})
+
+export const requestsContract = defineContract({
+  querystring: input({ ...period, by: z.enum(INTAKE_BUCKETS).default('week') }),
+  response: {
+    200: output({
+      ...head,
+      sight,
+      by: z.enum(INTAKE_BUCKETS),
+      /** Null: requests are not in the reader's role (the panel says so, never 0). */
+      all: requestFigures.nullable(),
+      buckets: z.array(output({ key: z.string(), from: businessDate(), to: businessDate(), figures: requestFigures })),
+      /** By customer, the most requests first (at most 50; `more` counts the rest): `key` the customer's id or `prospects`. */
+      groups: z.array(output({ key: z.string(), partyId: id().nullable(), code: z.string().nullable(), name: z.string().nullable(), figures: requestFigures, buckets: z.array(output({ key: z.string(), figures: requestFigures })) })),
+      more: z.number().int(),
+      complete: z.boolean(),
+    }),
+  },
+})
+export type RequestsQuery = z.infer<typeof requestsContract.querystring>
+// ---- end B-TH-052

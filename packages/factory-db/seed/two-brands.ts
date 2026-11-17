@@ -190,7 +190,11 @@ export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
         await tx.roleAssignment.upsert({ where: { id: assignmentId }, create: { id: assignmentId, ...row, createdAt: T.setup }, update: row, select })
       }
       const settings = { partyId, portalOn: false, progressShared: false, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer'] }
-      await tx.portalSettings.upsert({ where: { id: id('portal-settings') }, create: { id: id('portal-settings'), ...settings, createdAt: T.setup, createdById: actorId }, update: settings, select })
+      // ---- th3b fix: ONE row per party, its id the party's (the PortalSettings convention, B-W2b-152; the party's id starts with
+      // ffffffff too). A second row of the party under another id made "switch the portal on" fail (the office's settings read by
+      // the party, then updated by the party's id) and the portal's on/off read either row (order-news T06 red with this seed).
+      await tx.portalSettings.upsert({ where: { id: partyId }, create: { id: partyId, ...settings, createdAt: T.setup, createdById: actorId }, update: settings, select })
+      // ---- end th3b fix
     }),
   )
   return made

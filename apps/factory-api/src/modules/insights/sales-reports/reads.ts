@@ -29,6 +29,10 @@ import type { BacklogQuery, IntakeQuery, PeriodQuery } from './contract'
 import { backlogOf, intakeOf, quoteSpeedOf as readQuoteSpeed, returnsOf, shippedPiecesOf } from './facts'
 // B-W2b-380 (XF6:06): the reasons by their group.
 import { reasonGroupOf, reasonGroupsOf } from './reason-groups'
+// B-TH-052: the request-to-order figure.
+import { requestFold } from '@nexus/factory-domain/insights/sales-reports/rules'
+import type { RequestsQuery } from './contract'
+import { requestsOf } from './facts'
 
 /**
  * The sales reports' answers (B-W2b-348): what facts.ts reads, folded by factory-domain insights/sales-reports/rules. Amounts are
@@ -249,3 +253,28 @@ export async function quoteSpeedAnswer(caller: CommandCaller, query: PeriodQuery
     return { ...headOf(place), sight: place.sight, companyCurrency: place.companyCurrency, ...speedView(speed), won: valueView(speed.won), complete: read.complete }
   })
 }
+
+// ---- B-TH-052 (threads plan L2-G10): the request-to-order figure ---------------------------------------------------------------
+/** GET /sales/reports/requests (Sales › Reports, the intake panel's funnel; web B-TH-235): received → quoted → ordered, per customer. */
+export async function requestsAnswer(caller: CommandCaller, query: RequestsQuery) {
+  return caller.withClient(async (db) => {
+    const place = await placeOf(db, caller, query)
+    const read = await requestsOf(db, place)
+    const fold = requestFold(read.entries, place.sight.requests ? intakeBucketsOf(place.period, query.by) : [])
+    const shown = fold.groups.slice(0, SALES_REPORT_LIMITS.groups)
+    return {
+      ...headOf(place),
+      sight: place.sight,
+      by: query.by,
+      all: place.sight.requests ? fold.all : null,
+      buckets: fold.buckets,
+      groups: shown.map((group) => {
+        const customer = group.partyId ? read.customers.get(group.partyId) : undefined
+        return { key: group.key, partyId: group.partyId, code: customer?.code ?? null, name: customer?.name ?? null, figures: group.figures, buckets: group.buckets }
+      }),
+      more: Math.max(0, fold.groups.length - shown.length),
+      complete: read.complete,
+    }
+  })
+}
+// ---- end B-TH-052

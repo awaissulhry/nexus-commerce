@@ -15,15 +15,16 @@ export const MAIL_COLUMNS = { ...MAIL_SORT, status: true, heldReason: true, vers
  * message (MATCHED, MANUAL; email in's own seam `joinThread`), shared with the inquiry's customer. Nothing happens when the
  * inquiry names no mail or no customer, or the mail is in a thread already.
  */
-export async function joinMailInCommand(tools: CommandTools, context: OfficeContext, inquiry: Pick<InquiryData, 'id' | 'companyId' | 'number' | 'sourceEmailId' | 'partyId' | 'contactId'>): Promise<void> {
-  if (!inquiry.sourceEmailId || !inquiry.partyId) return
+export async function joinMailInCommand(tools: CommandTools, context: OfficeContext, inquiry: Pick<InquiryData, 'id' | 'companyId' | 'number' | 'sourceEmailId' | 'partyId' | 'contactId'>): Promise<boolean> {
+  // B-TH-042: whether the mail joined now (true), or nothing happened (false).
+  if (!inquiry.sourceEmailId || !inquiry.partyId) return false
   const { tx, now } = tools
   await tx.$queryRaw`SELECT id FROM "InboundEmail" WHERE id = ${inquiry.sourceEmailId}::uuid FOR UPDATE`
   const mail = await tx.inboundEmail.findUnique({ where: { id: inquiry.sourceEmailId }, select: MAIL_COLUMNS })
-  if (!mail || !canTransition(inboundMachine, mail.status, 'MATCHED') || (mail.status !== 'TRIAGE' && mail.status !== 'HELD')) return
-  if (mail.emailMessageId && (await tx.message.findFirst({ where: { emailMessageId: mail.emailMessageId }, select: { id: true } }))) return
+  if (!mail || !canTransition(inboundMachine, mail.status, 'MATCHED') || (mail.status !== 'TRIAGE' && mail.status !== 'HELD')) return false
+  if (mail.emailMessageId && (await tx.message.findFirst({ where: { emailMessageId: mail.emailMessageId }, select: { id: true } }))) return false
   const { thread } = await ensureThread(tools, { type: 'Inquiry', id: inquiry.id }, context.actorId)
-  if (thread.partyId === null) return
+  if (thread.partyId === null) return false
   const contactId = inquiry.contactId ?? (mail.senderPartyId === thread.partyId ? mail.senderContactId : null)
   const { messageId } = await joinThread(tools, thread, mail, [], contactId)
   await tx.inboundEmail.update({
@@ -40,4 +41,5 @@ export async function joinMailInCommand(tools: CommandTools, context: OfficeCont
     after: { status: 'MATCHED', matchedBy: 'MANUAL', threadId: thread.id, recordType: 'Inquiry', recordId: inquiry.id, messageId, files: 0, sortedAt: toUtcIso(now) },
   })
   emitSorted(tools, mail, 'MATCHED', thread.id, messageId)
+  return true
 }
