@@ -34,7 +34,7 @@ function showBytes(win: Window | null, bytes: Uint8Array, contentType: string, n
 }
 
 /**
- * The supplier record's Questionnaire tab (`/w/<company>/purchasing/suppliers/<id>?tab=questionnaire`, mounted through the
+ * The supplier record's Questionnaire tab (`/w/<company>/purchasing/suppliers/<id>?tab=documents`, B-TH-260: part of Documents & questionnaire; mounted through the
  * party record's `questionnaire` slot; B-W2b-172): reads the supplier's questionnaire (`GET /purchasing/suppliers/:id/
  * questionnaire`), sends the link (ONE Idempotency-Key while the dialog is open: a retry never mails twice; a link given
  * to pass on is shown once, in memory only), reviews an answer (accepted, or questions back on the supplier's thread; the

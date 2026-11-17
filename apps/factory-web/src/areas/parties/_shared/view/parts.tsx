@@ -1,11 +1,8 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
-import Link from 'next/link'
-import { MessageSquare } from 'lucide-react'
-import { Banner, Card, DetailPopover, EmptyState, KeyValue, Tabs, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import type { ReactNode } from 'react'
+import { Banner, Card, DetailPopover, EmptyState, KeyValue } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -171,13 +168,6 @@ export function viesWords(t: (key: string, params?: Record<string, string | numb
   return date && standing.state !== 'UNCHECKED' && standing.state !== 'NOT_APPLICABLE' ? t(`vies.stateOn.${standing.state}`, { date }) : t(`vies.state.${standing.state}`)
 }
 
-export function ViesPill({ standing }: { standing: ViesStanding }) {
-  const t = useT('parties')
-  const locale = useLocale()
-  if (standing.state === 'NOT_APPLICABLE') return null
-  return <Pill tone={VIES_TONE[standing.state]}>{t('vies.pill', { state: viesWords(t, standing, locale) })}</Pill>
-}
-
 /**
  * The VIES cell of a list row and the VIES line of a record (design customers.viesResult: a DetailPopover with the
  * result, its date, the consultation number and the trader's name and address as VIES gave them, and Check again).
@@ -232,99 +222,8 @@ export function ViesMark({ standing, check, onCheck, checkHeld, busy }: { standi
   )
 }
 
-export interface RecordTabItem {
-  id: string
-  label: string
-  /** Null draws nothing (unknown), 0 is an answer. */
-  count?: number | null
-}
-
-/**
- * The record frame (design 00 §2.2; Owner L1: the record's tabs always in view): ‹ back (a real link to the list),
- * the record's name, its identity, its state, at most two actions and ⋯; then the record's sections as link tabs
- * (`?tab=`), with counts. The shell has no slot for a record's band yet (`usePageBand`, 00 §6.3): the record draws its
- * head at the top of the page with the DS DetailHeader in its two-row form (the dense one never wraps on a phone).
- * Owner O1: on a wide screen (1280 px and wider) the thread can stay beside any tab (⌘J); narrower it opens Activity.
- */
-export function RecordFrame({
-  back,
-  title,
-  meta,
-  status,
-  actions,
-  tabs,
-  active,
-  tabHref,
-  dock,
-  dockOpen,
-  onDock,
-  children,
-}: {
-  back: { href: string; label: string }
-  title: ReactNode
-  meta?: ReactNode
-  status?: ReactNode
-  actions?: ReactNode
-  tabs: readonly RecordTabItem[]
-  active: string
-  tabHref: (tab: string) => string
-  dock?: ReactNode
-  dockOpen?: boolean
-  onDock?: () => void
-  children?: ReactNode
-}) {
-  const t = useT('parties')
-  useEffect(() => {
-    if (!dock || !onDock) return
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        onDock()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [dock, onDock])
-
-  const items: TabItem[] = tabs.map((tab) => ({ id: tab.id, label: tab.label, count: tab.count, href: tabHref(tab.id) }))
-  const showDock = !!dock && !!dockOpen
-  return (
-    <div className="fw-pty-record">
-      <div className="fw-pty-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={back.href}>{back.label}</Link>}
-          title={title}
-          meta={meta}
-          status={status}
-          actions={
-            <>
-              {actions}
-              {dock && (
-                <Button size="sm" variant={dockOpen ? 'tonal' : 'secondary'} active={!!dockOpen} aria-pressed={!!dockOpen} onClick={() => onDock?.()} title={t('record.dockHint')}>
-                  <MessageSquare size={14} aria-hidden /> {t('record.dock')}
-                  <span className="fw-pty-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
-              )}
-            </>
-          }
-        />
-        <Tabs ariaLabel={t('record.tabsLabel')} tabs={items} active={active} size="sm" overflow="scroll" />
-      </div>
-      <div className={showDock ? 'fw-pty-record-body has-dock' : 'fw-pty-record-body'}>
-        <div className="fw-pty-record-main">{children}</div>
-        {showDock && (
-          <aside className="fw-pty-record-dock" aria-label={t('record.dockLabel')}>
-            {dock}
-          </aside>
-        )}
-      </div>
-    </div>
-  )
-}
+// B-TH-260: the parties' own record frame (band, tabs, the old dock) went: both sides are on the shared RecordFrame
+// (areas/_shared/record-frame), the thread docked there.
 
 /** A record page whose record is missing, whose read failed, or which the person may not open. */
 export function RecordProblem({ problem, back, onRetry }: { problem: string; back: ReactNode; onRetry?: () => void }) {
