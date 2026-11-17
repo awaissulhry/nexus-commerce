@@ -1,0 +1,31 @@
+/* B-TH-209 — the thread's Head (T1): one 44 px row, design-system tokens only (light and dark come from the tokens). */
+
+.fw-rth { container: fw-rth / inline-size; flex: none; height: 44px; display: flex; align-items: center; gap: var(--nds-space-8); padding: 0 var(--nds-space-8) 0 var(--nds-space-12); border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-surface); min-width: 0; }
+.fw-rth-grow { flex: 1; min-width: 0; }
+.fw-rth-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--nds-text-strong); font-size: var(--nds-font-size-base); }
+.fw-rth-pillwrap { display: inline-flex; min-width: 0; border-radius: var(--nds-radius-pill); }
+.fw-rth-pillwrap:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rth-closed { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-rth-closed > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-rth-viewchip { flex: none; display: inline-flex; align-items: center; gap: var(--nds-space-4); height: 26px; padding: 0 var(--nds-space-8) 0 var(--nds-space-10); border: 1px solid var(--nds-tonal-border); border-radius: var(--nds-radius-pill); background: var(--nds-info-soft); color: var(--nds-info-text); font: inherit; font-size: var(--nds-font-size-sm); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.fw-rth-viewchip:hover { background: var(--nds-surface-hover); }
+.fw-rth-viewchip:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rth-counts { display: inline-flex; align-items: center; gap: var(--nds-space-4); flex: none; }
+.fw-rth-count { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-variant-numeric: tabular-nums; }
+.fw-rth-menu { flex: none; }
+.fw-rth.is-compact { padding-left: var(--nds-space-12); }
+/* The count chips fold into the "⋯" on a narrow dock from the first paint (the view's measure then adds their counts to the doors). */
+@container fw-rth (max-width: 559px) { .fw-rth-counts { display: none; } }
+
+/* The portal's plain line (no office count, no owner, no waiting time). */
+.fw-rth-portal { margin: 0; min-height: 44px; display: flex; align-items: center; gap: var(--nds-space-8); padding: 0 var(--nds-space-16); border-bottom: 1px solid var(--nds-border-subtle); color: var(--nds-text-2); font-size: var(--nds-font-size-base); }
+
+/* The design case: the Head in a stand-in thread column at the dock's widths and the phone's. */
+.fw-rth-frames { display: flex; flex-direction: column; gap: var(--nds-space-24); padding: var(--nds-space-16); }
+.fw-rth-frame { display: flex; flex-direction: column; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-2xl); background: var(--nds-surface); overflow: hidden; max-width: 100%; }
+.fw-rth-frame.is-438 { width: 438px; }
+.fw-rth-frame.is-718 { width: 718px; }
+.fw-rth-frame.is-375 { width: 375px; }
+.fw-rth-frame-label { margin: 0 0 var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-rth-feed { height: 96px; background: var(--nds-surface-sunken); }
+.fw-rth-open { padding: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }

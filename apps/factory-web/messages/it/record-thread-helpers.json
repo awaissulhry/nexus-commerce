@@ -1,0 +1,45 @@
+{
+  "mention": {
+    "list": "Colleghi che possono leggere questo record",
+    "button": "Menziona un collega",
+    "cannotReadShort": "non può leggere questo record",
+    "cannotRead": "{name} non può leggere questo record: non vedrebbe la nota e non viene avvisato.",
+    "nobody": "Nessuno di nome “{name}” può leggere questo record: nessuno viene avvisato.",
+    "tooMany": "Una nota avvisa al massimo {max} persone: le altre non vengono avvisate."
+  },
+  "replies": {
+    "label": "Risposte salvate",
+    "menu": "Risposte salvate, il cliente legge in {language}",
+    "shared": "Condivise con l'ufficio",
+    "mine": "Mie",
+    "languageTheirs": "{language} · la lingua del cliente",
+    "loading": "Lettura delle risposte salvate…",
+    "loadingHint": "Un momento.",
+    "failed": "Impossibile leggere le risposte salvate",
+    "retry": "Riprova",
+    "none": "Ancora nessuna risposta salvata",
+    "noneHint": "Qui compaiono le risposte salvate scritte in italiano o in inglese.",
+    "notForThis": "Ancora nessuna risposta salvata per questo tipo di record",
+    "notForThisHint": "Le risposte salvate sono per ordini, offerte, ordini d'acquisto, pratiche di assistenza, spedizioni e clienti o fornitori.",
+    "filling": "La compilo con i dati di questo record…",
+    "missing_one": "Uno spazio che questo record non ha potuto compilare:",
+    "missing_other": "{count} spazi che questo record non ha potuto compilare:"
+  },
+  "language": {
+    "it": "italiano",
+    "en": "inglese"
+  },
+  "draft": {
+    "kept": "Bozza tenuta su questo dispositivo · salvata alle {time}"
+  },
+  "design": {
+    "noteMark": "Nota interna · la leggono solo i tuoi colleghi",
+    "replyMark": "Risposta al cliente",
+    "noteLabel": "Nota interna",
+    "replyLabel": "Risposta al cliente",
+    "notePlaceholder": "Scrivi una nota interna per i colleghi · @ menziona un collega",
+    "replyPlaceholder": "Scrivi al cliente",
+    "addNote": "Aggiungi nota",
+    "send": "Invia"
+  }
+}

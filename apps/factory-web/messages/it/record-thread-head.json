@@ -1,0 +1,93 @@
+{
+  "label": "Thread di {record}",
+  "answers": {
+    "us": "Tocca a noi · {wait}",
+    "customer": "Tocca al cliente · {wait}",
+    "supplier": "Tocca al fornitore · {wait}",
+    "partner": "Tocca al partner · {wait}",
+    "tipUs": "{party} ha scritto per ultimo, {when}. Contato in ore di orologio da quel messaggio.",
+    "tipParty": "Abbiamo scritto per ultimi a {party}, {when}. Contato in ore di orologio da quel messaggio."
+  },
+  "wait": {
+    "minutes": "{n} min",
+    "hours": "{n} h",
+    "days": "{n} g"
+  },
+  "closed": {
+    "by": "Chiuso da {name}, {date}",
+    "noName": "Chiuso, {date}"
+  },
+  "offline": "Offline · aggiornato alle {time}",
+  "view": {
+    "label": "Vista",
+    "menu": "Scegli cosa mostra il thread",
+    "all": "Tutto",
+    "shared": {
+      "customer": "Con il cliente",
+      "supplier": "Con il fornitore",
+      "partner": "Con il partner"
+    },
+    "notes": "Note interne",
+    "changes": "Modifiche",
+    "clear": "Mostra {view}: mostra tutti i messaggi"
+  },
+  "count": {
+    "tasks": "Attività ({count})",
+    "approvals": "Approvazioni ({count})",
+    "partners": "Partner ({count})",
+    "followers": "Chi segue ({count})"
+  },
+  "width": {
+    "label": "Larghezza del thread",
+    "third": "Un terzo",
+    "forty": "40 %",
+    "half": "Metà",
+    "full": "Tutta la larghezza",
+    "hide": "Nascondi il thread",
+    "reset": "Larghezza predefinita"
+  },
+  "more": {
+    "label": "Strumenti del thread"
+  },
+  "act": {
+    "task": "Aggiungi attività",
+    "approve": "Chiedi a un partner di approvare",
+    "share": "Condividi con un partner",
+    "followers": "Chi segue",
+    "followersN": "Chi segue ({count})",
+    "follow": "Segui",
+    "unfollow": "Non seguire più",
+    "mute": "Silenzia",
+    "unmute": "Riattiva le notifiche",
+    "muteHint": "Le novità si fermano; le menzioni arrivano comunque.",
+    "remind": "Ricordamelo",
+    "reminderSet": "Promemoria per il {at}",
+    "print": "Stampa o salva come PDF",
+    "close": "Chiudi thread…",
+    "closeHint": "Il cliente non potrà più scrivere qui.",
+    "reopen": "Riapri",
+    "openTasks": "{count} aperte",
+    "openApprovals": "{count} in attesa di risposta",
+    "invited": "{count} invitati"
+  },
+  "held": {
+    "noRight": "Ti serve il diritto “{right}”.",
+    "noRole": "Il tuo ruolo non lo consente qui.",
+    "noParty": "Questo record non ha un cliente o un fornitore.",
+    "offline": "Sei offline.",
+    "followFirst": "Prima segui il record.",
+    "notShareable": "Questo record resta interno alla fabbrica: non si condivide mai con un cliente o un fornitore."
+  },
+  "portal": {
+    "needInfo": "Ci serve qualcosa da te",
+    "lastFromYou": "Ultimo messaggio: da te, {date}",
+    "lastFromUs": "Ultimo messaggio: da {factory}, {date}",
+    "none": "Ancora nessun messaggio"
+  },
+  "design": {
+    "frame438": "Dock stretto, circa 438 px",
+    "frame718": "Dock largo, circa 718 px",
+    "frame375": "Telefono, 375 px",
+    "frameLabel": "Colonna del thread larga {width} px"
+  }
+}

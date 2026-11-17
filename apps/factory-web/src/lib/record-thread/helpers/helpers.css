@@ -1,0 +1,25 @@
+/* B-TH-208 — the composer's helpers (T8): MentionInput, Saved replies, the local draft line. DS tokens only. */
+
+.fw-rtm { position: relative; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-rtm-list { position: absolute; z-index: 30; left: var(--nds-space-8); right: var(--nds-space-8); bottom: calc(100% - var(--nds-space-8)); margin: 0; padding: var(--nds-space-4); list-style: none; max-height: 248px; overflow-y: auto; background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); box-shadow: var(--nds-shadow-menu); }
+.fw-rtm-option { display: flex; align-items: center; gap: var(--nds-space-8); min-height: 32px; padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-sm); color: var(--nds-text); cursor: pointer; font-size: var(--nds-font-size-base); }
+.fw-rtm-option.is-active { background: var(--nds-surface-hover); outline: 2px solid var(--nds-text); outline-offset: -2px; }
+.fw-rtm-option.is-held { cursor: not-allowed; color: var(--nds-text-muted); }
+.fw-rtm-avatar { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--nds-radius-round); background: var(--nds-pill-neutral-bg); color: var(--nds-pill-neutral-fg); font-size: var(--nds-font-size-micro); font-weight: 700; }
+.fw-rtm-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-rtm-warn { margin-left: auto; display: inline-flex; align-items: center; gap: var(--nds-space-4); color: var(--nds-warning-text); font-size: var(--nds-font-size-sm); white-space: nowrap; }
+.fw-rtm-warnings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.fw-rtm-warnings li { display: flex; align-items: flex-start; gap: var(--nds-space-4); color: var(--nds-warning-text); font-size: var(--nds-font-size-sm); }
+.fw-rtm-warnings svg { flex: none; margin-top: 3px; }
+.fw-rtm-replies { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.fw-rtm-hint { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.fw-rtm-hint.is-warning { color: var(--nds-warning-text); }
+
+/* The design case: the helpers in a stand-in composer at the dock's width and the phone's. */
+.fw-rtm-stage { display: flex; flex-wrap: wrap; gap: var(--nds-space-24); padding: var(--nds-space-16); padding-top: 220px; }
+.fw-rtm-composer { display: flex; flex-direction: column; gap: var(--nds-space-8); width: 519px; max-width: 100%; padding: var(--nds-space-10) var(--nds-space-12) var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-2xl); background: var(--nds-warning-soft); }
+.fw-rtm-composer.is-375 { width: 375px; }
+.fw-rtm-composer.is-reply { background: var(--nds-info-soft); }
+.fw-rtm-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.fw-rtm-grow { flex: 1; min-width: 0; }
+.fw-rtm-label { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
