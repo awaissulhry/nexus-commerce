@@ -55,10 +55,13 @@ export interface FactoryDatabaseOptions {
 }
 
 /**
- * The default number of clients kept: 16 × about 90 MB of heap (plus 10-25 MB each outside it) stays well under the
+ * The default number of clients kept: 15 × at most 138 MB of heap (plus 10-25 MB each outside it) stays well under the
  * default ~4 GB heap. One tenant with a few sites and the parties signed in to the portal needs fewer.
+ * 2026-11-17 (TH schema waves 5-7, #1556): one client measured 131.45 MB (client.vitest), past the 130 MB bound; as that
+ * test says, the capacity went down first (16 → 15) and the bound up (130 → 138): 15 × 138 = 2070 MB ≤ 16 × 130 = 2080 MB,
+ * the same total as before.
  */
-export const DEFAULT_CLIENT_CAPACITY = 16
+export const DEFAULT_CLIENT_CAPACITY = 15
 
 export interface FactoryDatabase {
   /** Runs `work` with the client of this scope. The scope is checked first; a missing tenant, site or party throws. */

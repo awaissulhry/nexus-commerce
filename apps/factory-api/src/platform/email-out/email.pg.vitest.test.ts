@@ -77,9 +77,13 @@ async function queuedEvent(outboundId: string): Promise<EventEnvelope> {
   }
 }
 
+// B-TH-048 (undo send): a thread mail waits 10 s after Send; the worker here reads a clock past that window (undo-send.pg
+// tests the window itself).
+const AFTER_WINDOW = { now: () => new Date(Date.now() + 11_000) }
+
 /** Runs the worker's handler of email.queued for a mail (as the worker would, in the tenant's system context). */
 async function work(outboundId: string, tenantId = tenant.id): Promise<void> {
-  await emailSendHandler(() => h.email).handle(await queuedEvent(outboundId), { caller: system(tenantId), attempt: 1 })
+  await emailSendHandler(() => h.email, { clock: AFTER_WINDOW }).handle(await queuedEvent(outboundId), { caller: system(tenantId), attempt: 1 })
 }
 
 /** A FAKE (or SANDBOX) SES account with a webhook secret and, for SANDBOX, sealed credentials. */
@@ -290,7 +294,9 @@ describe('sending from a record thread (COL-024)', () => {
     const audit = await first(`SELECT "requestId" FROM "AuditLog" WHERE action = 'email.send' AND "recordId" = $1`, [outboundId])
     const events = await admin(`SELECT type, "correlationId", payload FROM "OutboxEvent" WHERE "correlationId" = $1 ORDER BY type`, [audit.requestId])
     expect(events.map((event) => event.type)).toEqual(['email.queued', 'thread.message_posted'])
-    expect(events[0]!.payload).toEqual({ outboundId, threadId: message.threadId, messageId: message.id })
+    // B-TH-048: the mail leaves 10 s after it was queued (its sender may take it back meanwhile); its message waits with it.
+    expect(events[0]!.payload).toEqual({ outboundId, threadId: message.threadId, messageId: message.id, sendAfter: new Date(row.queuedAt.getTime() + 10_000).toISOString() })
+    expect(message.held).toBe(true)
     expect(h.ses.mails.length).toBe(before)
   })
 
@@ -389,7 +395,7 @@ describe('sending from a record thread (COL-024)', () => {
 
     const raced = (await send(sales, quote, { to: ['race@example.com'], body: 'Una volta.' })).body.email.id
     const before = h.ses.mails.length
-    const outcomes = await Promise.all([1, 2].map(() => deliverOutbound(h.email, system(), raced, { retry: true, build: threadMailBuilder(h.email, system()) })))
+    const outcomes = await Promise.all([1, 2].map(() => deliverOutbound(h.email, system(), raced, { retry: true, clock: AFTER_WINDOW, build: threadMailBuilder(h.email, system()) })))
     expect(outcomes.sort()).toEqual(['sent', 'settled'])
     expect(h.ses.mails.length).toBe(before + 1)
     expect(await sendCalls(raced)).toHaveLength(1)
@@ -489,7 +495,7 @@ describe('the walls', () => {
       webOrigin: 'http://localhost:3200',
       ses: sesMailAdapter({ clientFor: transport.clientFor }),
     })
-    expect(await deliverOutbound(runtime, system(), id, { retry: true, build: threadMailBuilder(runtime, system()) })).toBe('sent')
+    expect(await deliverOutbound(runtime, system(), id, { retry: true, clock: AFTER_WINDOW, build: threadMailBuilder(runtime, system()) })).toBe('sent')
     expect(await outboundOf(id)).toMatchObject({ status: 'SENT', sesMessageId: 'ses-sandbox-0001' })
     expect(transport.requests).toHaveLength(1)
     expect(JSON.parse(transport.requests[0]!.body).Destination.BccAddresses).toEqual(['archive@sandbox.mail-a.example.com'])

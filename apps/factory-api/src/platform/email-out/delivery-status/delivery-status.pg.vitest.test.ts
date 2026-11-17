@@ -68,7 +68,8 @@ async function sent(to: string): Promise<Json> {
   expect(answer.status, JSON.stringify(answer.body)).toBe(201)
   const id = answer.body.email.id as string
   const queued = await first(`SELECT * FROM "OutboxEvent" WHERE type = 'email.queued' AND subject = $1`, [id])
-  await emailSendHandler(() => h.email).handle(envelopeOf(queued), { caller: system(), attempt: 1 })
+  // B-TH-048: the worker reads a clock past the mail's 10 s undo window.
+  await emailSendHandler(() => h.email, { clock: { now: () => new Date(Date.now() + 11_000) } }).handle(envelopeOf(queued), { caller: system(), attempt: 1 })
   const row = await outboundOf(id)
   expect(row.status).toBe('SENT')
   return row

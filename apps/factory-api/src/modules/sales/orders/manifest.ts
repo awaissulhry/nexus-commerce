@@ -41,4 +41,6 @@ export const manifest = defineManifest({
   'GET /sales/orders/:orderId/picture': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-058: the overall view's totals (scopeWhere like the list: a customer-limited person reads only its customers' figures).
   'GET /sales/orders/summary': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-TH-077: what points at the order (can() on the order; complaints, returns and the gates' events each by their own right).
+  'GET /sales/orders/:orderId/links': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })

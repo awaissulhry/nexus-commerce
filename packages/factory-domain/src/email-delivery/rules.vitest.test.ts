@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { addressOfSuppression, deliveryStateOf, deliveryTimeOf, isUnblocked, maskAddress, unblockedAddress, unblockProblems } from './rules'
 
 describe('the delivery log (PLT-149)', () => {
-  it('puts each status in one of five states', () => {
-    expect(['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED'].map((status) => deliveryStateOf(status as never))).toEqual(['WAITING', 'WAITING', 'SENT', 'DELIVERED', 'PROBLEM', 'PROBLEM', 'FAILED'])
+  // B-TH-048: a mail taken back is WITHDRAWN, its own state (no failure), at the time it was taken back.
+  it('puts each status in one of six states', () => {
+    expect(['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'].map((status) => deliveryStateOf(status as never))).toEqual(['WAITING', 'WAITING', 'SENT', 'DELIVERED', 'PROBLEM', 'PROBLEM', 'FAILED', 'WITHDRAWN'])
+    const queuedAt = new Date('2026-11-17T08:00:00Z')
+    const withdrawnAt = new Date('2026-11-17T08:00:06Z')
+    const row = { queuedAt, sentAt: null, deliveredAt: null, bouncedAt: null, complainedAt: null, failedAt: null }
+    expect(deliveryTimeOf({ ...row, status: 'WITHDRAWN', withdrawnAt })).toEqual(withdrawnAt)
+    expect(deliveryTimeOf({ ...row, status: 'WITHDRAWN' })).toEqual(queuedAt)
   })
 
   it('shows the time of the latest state', () => {

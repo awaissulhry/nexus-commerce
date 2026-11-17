@@ -22,6 +22,11 @@ export const messageDeliveryView = output({
   bouncedAt: instant().nullable(),
   complainedAt: instant().nullable(),
   failedAt: instant().nullable(),
+  // ---- B-TH-048 (undo send): WAITING with an undoUntil is "Sending… · Undo" (its sender may take it back until then);
+  // WITHDRAWN is "Taken back", at withdrawnAt.
+  undoUntil: instant().nullable(),
+  withdrawnAt: instant().nullable(),
+  // ---- end B-TH-048
   /** The task its bounce made (the newest), while the reader sees the record. */
   task: output({ id: id(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']) }).nullable(),
 })

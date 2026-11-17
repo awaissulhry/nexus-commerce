@@ -3,7 +3,7 @@ import type { Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { DomainError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
-import { fieldSeenBy } from '@nexus/factory-domain/fields/access'
+import { fieldOnRecord, fieldPartySeenBy, fieldSeenBy } from '@nexus/factory-domain/fields/access'
 import { clauseProblem, meets, parseFilter } from '@nexus/factory-domain/fields/filters'
 import type { FieldAudience, FieldStatus, FieldType } from '@nexus/factory-domain/fields/rules'
 import { checkValue, isMoneyValue, sameStored, storedOf, type OptionFacts, type StoredValue } from '@nexus/factory-domain/fields/values'
@@ -19,7 +19,8 @@ import { recordFactsOf, recordsOfModel, isCustomModel, type CustomModel, type Cu
  * fields.personal.view, a partner only what the portal shows).
  *
  *   fieldsOfModel(client, model)              the fields of a record type with their lists (archived ones on request)
- *   fieldsSeen(actor, fields, companyId)      the ones this person sees, of the record's company or every company
+ *   fieldsSeen(actor, fields, companyId, partyId)  the ones this person sees, of the record's company or every company and
+ *                                             (B-TH-056) of the record's customer or every customer
  *   valuesOfRecords(client, model, ids)       the values of records, by record and field
  *   referenceWords(client, actor, …)          the words of person, link and file values (a link only when its record
  *                                             may be seen; else null)
@@ -72,6 +73,8 @@ export interface FieldRow {
   readonly picklist: PicklistRow | null
   /** The list's values as a value check reads them (empty for a field without a list). */
   readonly options: readonly OptionFacts[]
+  /** B-TH-056: the one customer the field is for (null: every customer). */
+  readonly partyId: string | null
 }
 
 export interface ValueRow {
@@ -128,6 +131,7 @@ function fieldRowOf(row: FieldRecord, lists: ReadonlyMap<string, PicklistRow>): 
     updatedAt: row.updatedAt,
     picklist,
     options: picklist?.options ?? [],
+    partyId: row.partyId ?? null, // B-TH-056
   }
 }
 
@@ -150,9 +154,23 @@ export async function fieldById(client: Client, fieldId: string): Promise<FieldR
 /** A field of every company applies to every record; a company's field to that company's records and tenant-wide ones. */
 export const appliesTo = (field: Pick<FieldRow, 'companyId'>, companyId: string | null): boolean => field.companyId === null || companyId === null || field.companyId === companyId
 
-/** The fields this person sees, of the record's company (undefined: any company — a list across companies). */
-export const fieldsSeen = (actor: Actor, fields: readonly FieldRow[], companyId?: string | null): FieldRow[] =>
-  fields.filter((field) => fieldSeenBy(actor, field) && (companyId === undefined || appliesTo(field, companyId)))
+/**
+ * The fields this person sees, of the record's company (undefined: any company — a list across companies). B-TH-056: a field
+ * for one customer only for who reaches that customer (its portal people; office people whose roles reach it for the record
+ * type's view permission), and — with `partyId` (the record's customer; null: a record of none) — only on that customer's
+ * records; undefined: any customer (a list across customers draws such a column on its customer's rows only).
+ */
+export const fieldsSeen = (actor: Actor, fields: readonly FieldRow[], companyId?: string | null, partyId?: string | null): FieldRow[] =>
+  fields.filter(
+    (field) =>
+      fieldSeenBy(actor, field) &&
+      fieldPartySeenBy(actor, field, viewOfModel(field.recordType)) &&
+      (companyId === undefined || appliesTo(field, companyId)) &&
+      (partyId === undefined || fieldOnRecord(field, partyId)),
+  )
+
+/** B-TH-056: the view permission of a model's records (the first record type of the model: a Party's is parties.view). */
+const viewOfModel = (model: string) => recordsOfModel(model)[0]?.view ?? 'fields.view'
 
 /** The values of records of a model, by record id then field id. */
 export async function valuesOfRecords(client: Client, model: string, recordIds: readonly string[], fieldIds?: readonly string[]): Promise<Map<string, Map<string, ValueRow>>> {
@@ -317,7 +335,8 @@ async function referenceProblem(client: Client, field: FieldRow, value: string, 
  */
 export async function writeValuesInCommand(tools: CommandTools, record: CustomRecord, facts: RecordFacts, entries: readonly ValueEntry[], actor: Actor, actorId: string): Promise<{ readonly set: string[]; readonly cleared: string[] }> {
   const model = record.model
-  const fields = new Map(fieldsSeen(actor, await fieldsOfModel(tools.tx, model), facts.companyId).map((field) => [field.code, field]))
+  // B-TH-056: a field for another customer is no field of this record (refused as unknown: never told it exists).
+  const fields = new Map(fieldsSeen(actor, await fieldsOfModel(tools.tx, model), facts.companyId, facts.partyId ?? null).map((field) => [field.code, field]))
   const current = (await valuesOfRecords(tools.tx, model, [facts.id])).get(facts.id) ?? new Map<string, ValueRow>()
   const issues: Issue[] = []
   const planned: { readonly field: FieldRow; readonly before: ValueRow | null; readonly value: StoredValue | null }[] = []

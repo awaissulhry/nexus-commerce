@@ -75,6 +75,7 @@ const OUTBOUND = {
   bouncedAt: true,
   complainedAt: true,
   failedAt: true,
+  withdrawnAt: true, // B-TH-048: a mail taken back is at the time it was
 } as const satisfies Prisma.EmailOutboundSelect
 type OutboundRow = Prisma.EmailOutboundGetPayload<{ select: typeof OUTBOUND }>
 
@@ -102,6 +103,7 @@ function atBetween(from: Date | undefined, to: Date | undefined): Prisma.EmailOu
       { status: 'BOUNCED', bouncedAt: range },
       { status: 'COMPLAINED', complainedAt: range },
       { status: 'FAILED', failedAt: range },
+      { status: 'WITHDRAWN', withdrawnAt: range }, // B-TH-048
     ],
   }
 }

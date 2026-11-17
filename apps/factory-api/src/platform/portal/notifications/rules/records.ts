@@ -12,7 +12,8 @@ import { recordLabelOf } from '../../../threads/labels'
 import { partnerViewOf } from '../../../search/partner/views'
 import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
-import type { PartnerDraft, PartnerRule } from './types'
+import type { PartnerDraft, PartnerRule, PartnerRuleContext } from './types'
+import { events as emailEvents } from '@nexus/factory-domain/email/events' // B-TH-048
 // th2-backend step 7 (§0.5): a customer's order, quote or request by its own number, never the office's series.
 import { customerRefOf, type CustomerNumberKind } from '@nexus/factory-domain/sales/customer-numbers'
 
@@ -32,7 +33,9 @@ import { customerRefOf, type CustomerNumberKind } from '@nexus/factory-domain/sa
  *   supplier_claim.sent         CLAIMS    "New claim SC-…"                     to the supplier's people
  *   thread.message_posted       MESSAGES  "New message from <Company> on …"   our OUTBOUND message to the partner, to the
  *                                         people who read the record's shared thread (threads.read); B-TH-045: also on a
- *                                         thread with no company (the account conversation), and a batch is one bell item
+ *                                         thread with no company (the account conversation), and a batch is one bell item;
+ *                                         B-TH-048: a mail from the thread's composer only when it leaves its undo window
+ *                                         (email.status_changed SENT or FAILED), never one taken back
  * Each to the record's party's readers (portal ON, active, roles reaching the record's company) who hold portal.home.view.
  * The portal pages of these records come later (B-W2b-174…): a step that adds a page may narrow its record's rule to the
  * roles that open it.
@@ -185,32 +188,60 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     async drafts(context, raw) {
       const event = payload<{ threadId: string; messageId: string; recordType: string; recordId: string; direction: string; audience: string; batchId?: string }>(threadEvents, 'thread.message_posted', raw)
       if (event.direction !== 'OUTBOUND' || event.audience !== 'PARTNER') return []
-      const thread = await context.tx.thread.findUnique({ where: { id: event.threadId }, select: { companyId: true, partyId: true, recordType: true, recordId: true } })
-      if (!thread?.partyId) return []
-      const partyId = thread.partyId
-      // th2-backend step 7: a customer's order, quote or request by its own number; any other record by its label.
-      const named = await customerNamed(context.tx, thread.recordType, thread.recordId)
-      const label = named?.label ?? (await recordLabelOf(context.tx, thread.recordType, thread.recordId)) ?? thread.recordType
-      // ── B-TH-045 (threads plan TH-3, thread-G04): a thread with no company — the account conversation of a customer every company
-      // serves (its Party record is tenant-wide) — tells the party's people too: one draft per company whose portal they may use (the
-      // fan-out tells each person once, under the first). The party is the thread's, never the event's (W06).
-      // Only a record the customer opens in its portal (its partner view: the account itself): a company-less thread of a record with
-      // no portal page (a rider's measurements) stays news for the office alone.
-      if (!thread.companyId && !partnerViewOf(thread.recordType)) return []
-      const companies = thread.companyId ? [thread.companyId] : (await context.tx.company.findMany({ orderBy: { id: 'asc' }, take: MAX_COMPANIES, select: { id: true } })).map((row) => row.id)
-      const threadScope = { companyId: thread.companyId, partyId }
-      return companies.map((companyId) => ({
-        partyId,
-        companyId,
-        record: { type: thread.recordType, id: thread.recordId, label },
-        messageKey: 'portal.message.posted' as const,
-        params: named?.params ?? {},
-        anchor: `message:${event.messageId}`,
-        // A batch of ours (one answer to several records of the customer) is one bell item.
-        batchId: event.batchId ?? null,
-        forReader: (reader: PartnerReader) => home({ companyId, partyId })(reader) && can(reader.actor, THREADS_READ, threadScope),
-      }))
-      // ── end B-TH-045
+      // B-TH-048: a mail that waits in its undo window is news only once it leaves (portalNews.mailLeft): never one taken back.
+      if (await windowedMail(context.tx, event.messageId)) return []
+      return messageDrafts(context, event)
     },
   },
+  // ── B-TH-048 (undo send, threads plan TH-3): the news of our mail from a thread's composer comes when it leaves its 10 seconds
+  // (sent, or failed: its message is no longer held, so the customer reads it in its portal); a mail taken back never tells anyone.
+  {
+    name: 'portalNews.mailLeft',
+    events: ['email.status_changed'],
+    async drafts(context, raw) {
+      const event = payload<{ outboundId: string; status: string }>(emailEvents, 'email.status_changed', raw)
+      if (event.status !== 'SENT' && event.status !== 'FAILED') return []
+      const mail = await context.tx.emailOutbound.findUnique({ where: { id: event.outboundId }, select: { threadId: true, messageId: true, sendAfter: true } })
+      if (!mail?.threadId || !mail.messageId || mail.sendAfter === null) return []
+      const message = await context.tx.message.findUnique({ where: { id: mail.messageId }, select: { direction: true, audience: true, held: true } })
+      if (!message || message.direction !== 'OUTBOUND' || message.audience !== 'PARTNER' || message.held) return []
+      return messageDrafts(context, { threadId: mail.threadId, messageId: mail.messageId })
+    },
+  },
+  // ── end B-TH-048
 ])
+
+// ── B-TH-048: the mail of a message that waited in an undo window (sendAfter), if any.
+async function windowedMail(tx: CommandTx, messageId: string): Promise<boolean> {
+  return (await tx.emailOutbound.findFirst({ where: { messageId, sendAfter: { not: null } }, select: { id: true } })) !== null
+}
+
+/** The news of our OUTBOUND shared message to the thread's party (portalNews.messagePosted; B-TH-048's portalNews.mailLeft). */
+async function messageDrafts(context: PartnerRuleContext, event: { readonly threadId: string; readonly messageId: string; readonly batchId?: string }): Promise<readonly PartnerDraft[]> {
+  const thread = await context.tx.thread.findUnique({ where: { id: event.threadId }, select: { companyId: true, partyId: true, recordType: true, recordId: true } })
+  if (!thread?.partyId) return []
+  const partyId = thread.partyId
+  // th2-backend step 7: a customer's order, quote or request by its own number; any other record by its label.
+  const named = await customerNamed(context.tx, thread.recordType, thread.recordId)
+  const label = named?.label ?? (await recordLabelOf(context.tx, thread.recordType, thread.recordId)) ?? thread.recordType
+  // ── B-TH-045 (threads plan TH-3, thread-G04): a thread with no company — the account conversation of a customer every company
+  // serves (its Party record is tenant-wide) — tells the party's people too: one draft per company whose portal they may use (the
+  // fan-out tells each person once, under the first). The party is the thread's, never the event's (W06).
+  // Only a record the customer opens in its portal (its partner view: the account itself): a company-less thread of a record with
+  // no portal page (a rider's measurements) stays news for the office alone.
+  if (!thread.companyId && !partnerViewOf(thread.recordType)) return []
+  const companies = thread.companyId ? [thread.companyId] : (await context.tx.company.findMany({ orderBy: { id: 'asc' }, take: MAX_COMPANIES, select: { id: true } })).map((row) => row.id)
+  const threadScope = { companyId: thread.companyId, partyId }
+  return companies.map((companyId) => ({
+    partyId,
+    companyId,
+    record: { type: thread.recordType, id: thread.recordId, label },
+    messageKey: 'portal.message.posted' as const,
+    params: named?.params ?? {},
+    anchor: `message:${event.messageId}`,
+    // A batch of ours (one answer to several records of the customer) is one bell item.
+    batchId: event.batchId ?? null,
+    forReader: (reader: PartnerReader) => home({ companyId, partyId })(reader) && can(reader.actor, THREADS_READ, threadScope),
+  }))
+  // ── end B-TH-045
+}

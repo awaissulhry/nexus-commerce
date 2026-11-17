@@ -147,7 +147,8 @@
       "DELIVERED": "Delivered",
       "BOUNCED": "Bounced",
       "COMPLAINED": "Marked as spam",
-      "FAILED": "Not sent"
+      "FAILED": "Not sent",
+      "WITHDRAWN": "Taken back"
     },
     "forFloor": "For the floor",
     "emailTo": "To {to} · {subject}",

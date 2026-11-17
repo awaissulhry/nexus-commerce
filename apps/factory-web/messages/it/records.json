@@ -147,7 +147,8 @@
       "DELIVERED": "Consegnata",
       "BOUNCED": "Respinta",
       "COMPLAINED": "Segnalata come spam",
-      "FAILED": "Non inviata"
+      "FAILED": "Non inviata",
+      "WITHDRAWN": "Invio annullato"
     },
     "forFloor": "Per il reparto",
     "emailTo": "A {to} · {subject}",

@@ -378,6 +378,10 @@ export interface MessageInput {
   // N orders of one customer): its events carry it, and each reader's notifications of the batch fold into one bell item.
   readonly batchId?: string
   // ---- end B-TH-045
+  // ---- B-TH-048 (undo send): the OUTBOUND mail's message waits with its mail (Message.held): no customer reads it until the mail
+  // leaves its window (the database releases it); written only with a mail that has a sendAfter (email-out sendEmail).
+  readonly held?: boolean
+  // ---- end B-TH-048
 }
 
 /**
@@ -417,6 +421,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
       emailMessageId: input.emailMessageId ?? null,
       at,
       createdAt: tools.now,
+      ...(input.held ? { held: true } : {}), // B-TH-048
     },
     select: MESSAGE_OFFICE,
   })
