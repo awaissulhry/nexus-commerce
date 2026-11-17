@@ -63,15 +63,16 @@ const officeNumber = async (inquiryId: string) => (await admin<{ number: string 
 const ownRequests = async (partyId: string) => (await admin<{ n: number }>(w, 'SELECT count(*)::int AS n FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2', [w.tenant.id, partyId]))[0]!.n
 
 /**
- * The harness clock (a clock the test moves; each two-factor step moved it 30 s on) within 4 minutes of the database's: a request
- * closes "not in the future" (5 minutes of difference allowed). It goes back no further than the newest role given (a role must
- * have started), and real time catches up with it for the rest (the harness clock stands still while real time runs).
+ * The harness clock (a clock the test moves; each two-factor step moved it 30 s on) no later than real time before the first
+ * request: a portal request is dated by the app's (harness) clock, while the office closes it on the server's — a request is
+ * closed "not before it came and not in the future". It goes back no further than the newest role given (a role must have
+ * started); real time catches up with it for the rest (the harness clock stands still while real time runs).
  */
 async function settleClock(): Promise<void> {
   const [latest] = await admin<{ at: Date | null }>(w, 'SELECT max("validFrom") AS at FROM "RoleAssignment" WHERE "tenantId" = $1', [w.tenant.id])
   w.h.clock.set(new Date(Math.min(w.h.clock.now().getTime(), Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000))))
   const ahead = w.h.clock.now().getTime() - Date.now()
-  if (ahead > 240_000) await new Promise((resolve) => setTimeout(resolve, ahead - 240_000))
+  if (ahead > 0) await new Promise((resolve) => setTimeout(resolve, ahead + 1000))
 }
 
 beforeAll(async () => {
