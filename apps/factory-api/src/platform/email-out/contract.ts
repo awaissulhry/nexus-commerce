@@ -93,7 +93,17 @@ export const takeBackEmailContract = defineContract({
   response: {
     200: output({
       email: emailView,
-      text: output({ to: z.array(z.string()), cc: z.array(z.string()), bcc: z.array(z.string()), subject: z.string(), body: z.string(), attachments: z.array(id()) }),
+      text: output({
+        to: z.array(z.string()),
+        cc: z.array(z.string()),
+        bcc: z.array(z.string()),
+        subject: z.string(),
+        body: z.string(),
+        attachments: z.array(id()),
+        // th3-web-c follow-up (B-TH-236): what it answered or corrected (B-TH-050), so the composer reopens with its "Replying to …".
+        replyToMessageId: id().nullable(),
+        correctsMessageId: id().nullable(),
+      }),
     }),
   },
 })
