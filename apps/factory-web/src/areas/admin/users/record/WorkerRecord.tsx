@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { editWorker, issueBadge, listCompanies, listRoles, listWorkers, resetPin, revokeBadge, setWorkerRoles, setWorkerStatus, type Role, type Worker } from '../../shared/api'
 import { problemKey, problemNotice, type Notice } from '../../shared/model'
 import type { RevealModel } from '../../shared/view/OneTimeReveal'
@@ -86,11 +86,11 @@ export function WorkerRecord({ workerId }: { workerId: string }) {
     }
   }
 
-  // B-TH-269: the worker's thread (notes only, docked closed by the view) with threads.read and workers.view; the print view keeps the
-  // panels' print form.
+  // B-TH-269: the worker's thread (notes only, docked closed by the view) with threads.read and workers.view; the print view prints
+  // the thread with ThreadPrint (B-TH-280).
   const record = worker && personThreadMounted('Worker', held) ? { type: 'Worker', id: worker.id, companyId, siteId: worker.siteId } : null
   const thread = worker && record ? <OfficeRecordThread docked record={record} title={worker.displayName} recordLabel={worker.displayName} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = worker && record ? <RecordPanels record={record} title={worker.displayName} /> : null
+  const printThread = worker && record ? <ThreadPrint record={record} title={worker.displayName} /> : null
 
   return (
     <WorkerRecordView

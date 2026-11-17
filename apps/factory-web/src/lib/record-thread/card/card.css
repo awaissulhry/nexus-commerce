@@ -385,3 +385,11 @@
   color: var(--nds-text-2);
 }
 /* ---- end B-TH-255 */
+
+/* B-TH-286 (T3-F12): a pinned card's pin beside its time (the files line's "2 pinned" lists it). */
+.fw-rt-pinned {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-2);
+  margin-inline-end: 2px;
+}

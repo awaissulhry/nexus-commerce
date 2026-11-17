@@ -21,7 +21,7 @@ import { machineTabOf, type MachineDraft, type MachineRecordModel, type MachineT
 import { MachineRecordView } from './view/MachineRecordView'
 // ---- B-TH-265: the docked thread on the machine (RecordFrame; new: the API had this thread, the page showed none) ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { printHref } from '../../../../shell/print/print-model'
 // ---- end B-TH-265
 
@@ -324,12 +324,12 @@ export function MachineRecord({ machineId }: { machineId: string }) {
   const model: MachineRecordModel = { prefix, can, tab, loaded, timeZone: TIME_ZONE, live, asOf, sites, classes, edit, suppliers, busy, field, retire, notice, depth, personId: session.user.id /* B-TH-265 */ }
 
   // B-TH-265: the machine's thread docked beside every tab (notes only: a machine's supplier is no party of its maintenance; its company
-  // and site), with threads.read; its tools are in the thread's "⋯" (R-ACT). The print view keeps the record panels' print form.
+  // and site), with threads.read; its tools are in the thread's "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const machineNow = value?.card.machine ?? null
   const record = machineNow ? { type: 'Machine', id: machineNow.id, companyId: machineNow.companyId, siteId: machineNow.siteId } : null
   const readsThreads = session.permissions.includes('threads.read')
   const thread = machineNow && record && readsThreads ? <OfficeRecordThread docked record={record} title={machineNow.assetNumber} recordLabel={machineNow.assetNumber} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = machineNow && record && readsThreads ? <RecordPanels record={record} title={machineNow.assetNumber} /> : null
+  const printThread = machineNow && record && readsThreads ? <ThreadPrint record={record} title={machineNow.assetNumber} /> : null
 
   return (
     <MachineRecordView

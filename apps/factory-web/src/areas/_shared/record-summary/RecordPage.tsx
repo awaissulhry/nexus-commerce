@@ -2,19 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useLocale } from '../lib/i18n/provider'
-import { recordAddress } from '../lib/records/record-links'
-import { useOfficeApi, useOfficeSession } from '../lib/session/context'
-import { companyPrefix } from '../lib/session/session'
-import { OFFICE_PAGES } from '../shell/nav/office-nav'
-import { printHref } from '../shell/print/print-model'
-import { OfficeRecordThread } from '../areas/_shared/record-thread/OfficeRecordThread'
+import { useLocale } from '../../../lib/i18n/provider'
+import { recordAddress } from '../../../lib/records/record-links'
+import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
+import { companyPrefix } from '../../../lib/session/session'
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { printHref } from '../../../shell/print/print-model'
+import { OfficeRecordThread } from '../record-thread/OfficeRecordThread'
 // ---- B-TH-272: the generic record page (PL5) — a summary and the full-page thread replace the six inner panels ----
-import { readPartyFacts, readRecordSummary, readThreadParty, type RecordSummary } from '../areas/_shared/record-summary/api'
-import { namesRecord, openerOf, parentHrefOf, partyRoleOf, recordLabelOf, recordName, summaryStateOf, type SummaryState } from '../areas/_shared/record-summary/model'
-import { GenericRecordView } from '../areas/_shared/record-summary/view/GenericRecordView'
-import { useLiveChanges } from './live'
-import { RecordPanels } from './RecordPanels'
+// B-TH-280: moved here from the old record-panels folder (it is an office page); the print view prints the thread with ThreadPrint.
+import { readPartyFacts, readRecordSummary, type RecordSummary } from './api'
+import { namesRecord, openerOf, parentHrefOf, partyRoleOf, recordLabelOf, recordName, summaryStateOf, type SummaryState } from './model'
+import { GenericRecordView } from './view/GenericRecordView'
+import { useLiveChanges } from '../../../record-panels/live'
+import { ThreadPrint } from '../record-thread/ThreadPrint'
 // ---- end B-TH-272
 
 /**
@@ -23,8 +24,9 @@ import { RecordPanels } from './RecordPanels'
  * company and site ids). Its six inner panels (thread, tasks, files, approvals, partners, history) became ONE full-page thread — the
  * office's docked thread, whose Head ⋯ holds the old panels' doors (R-ACT), View › Changes the history, Files the files — and a
  * summary from GET /records/<type>/<id>/summary (B-TH-076): type, number, state and the record it belongs to, in the reader's own
- * scope. A record outside it answers 404: "You cannot see this record", no thread. The thread's party (GET /threads … limit 1, then
- * GET /parties/<id> with parties.view) names "Reply to <party>"; without it the thread offers office notes only. The summary is
+ * scope. A record outside it answers 404: "You cannot see this record", no thread. The record's party comes with the summary (office
+ * only; follow-up th9-web-b): "Reply to <party>" works before the first message; whom the party is to us ("Waiting on customer" /
+ * "supplier") from GET /parties/<id> with parties.view, else the neutral "partner". A record with no party: office notes only. The summary is
  * read again when a live change names the record, and after the stream comes back. `/records/Project/<id>` goes to the project's
  * own page (B-TH-249).
  */
@@ -85,24 +87,24 @@ function GenericRecord({ type, id }: { type: string; id: string }) {
   }, [load])
   useLiveChanges({ onChange: (change) => (namesRecord(change.fields, id) ? void load() : undefined), onReconnect: () => void load() }, state === 'ready' || state === 'error')
 
-  // ---- the thread's party, once the record is readable: "Reply to <party>" (notes only without it) ----------------------------
-  const [party, setParty] = useState<Party | null>(null)
-  const readable = state === 'ready'
+  // ---- follow-up (th9-web-b): the record's party comes with its summary (office readers only), so "Reply to <party>" is offered
+  // before the first message (the thread, and so its party, exists only after one). Whom it is to us — the head's "Waiting on
+  // customer" / "supplier" — from its roles (GET /parties/<id>, parties.view); unread, the neutral "partner" (never a guess).
+  const summaryParty = state === 'ready' ? (summary?.party ?? null) : null
+  const summaryPartyId = summaryParty?.id ?? null
+  const [role, setRole] = useState<{ readonly partyId: string; readonly role: Party['role'] } | null>(null)
   useEffect(() => {
-    if (!readable) return
+    if (!summaryPartyId || !seesParties) return
     const abort = new AbortController()
-    void (async () => {
-      try {
-        const partyId = await readThreadParty(api, record, abort.signal)
-        if (!partyId || !seesParties) return
-        const facts = await readPartyFacts(api, partyId, abort.signal)
-        setParty({ id: facts.id, name: facts.name, role: partyRoleOf(facts.roles) })
-      } catch {
-        // The thread works without it: office notes only (no "Reply to").
-      }
-    })()
+    readPartyFacts(api, summaryPartyId, abort.signal)
+      .then((facts) => setRole({ partyId: facts.id, role: partyRoleOf(facts.roles) }))
+      .catch(() => {
+        // Only the head's word: without it the party is "partner", and Reply still works.
+      })
     return () => abort.abort()
-  }, [api, record, readable, seesParties])
+  }, [api, summaryPartyId, seesParties])
+  const party: Party | null = summaryParty ? { id: summaryParty.id, name: summaryParty.name, role: role?.partyId === summaryParty.id ? role.role : 'partner' } : null
+  // ---- end follow-up
 
   const name = recordName({ summary, opener, type, id, locale })
   const recordLabel = recordLabelOf(summary, opener, name)
@@ -121,7 +123,7 @@ function GenericRecord({ type, id }: { type: string; id: string }) {
       printHref={printHref(pathname, search?.toString() ?? '')}
     />
   ) : null
-  const printThread = ready ? <RecordPanels record={threadRecord} title={name} party={party ? { id: party.id, name: party.name, emails: [] } : null} /> : null
+  const printThread = ready ? <ThreadPrint record={threadRecord} title={name} party={party ? { id: party.id, name: party.name } : null} {...(party ? { partyRole: party.role } : {})} /> : null
 
   return (
     <GenericRecordView

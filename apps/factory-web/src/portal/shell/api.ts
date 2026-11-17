@@ -151,6 +151,17 @@ export const fetchThread = (api: ApiClient, type: string, id: string, cursor?: s
   api.get(recordPath(type, id), { query: { limit: 50, ...(cursor ? { cursor } : {}) }, schema: partnerThreadSchema, signal })
 export const postMessage = (api: ApiClient, type: string, id: string, body: string, idempotencyKey: string) =>
   api.post(`${recordPath(type, id)}/messages`, { body: { body }, schema: z.object({ message: partnerMessage }), idempotencyKey })
+// ---- B-TH-286 (B-TH-091; wall W08): the conversation's pins as a portal reader may see them — only the pins of messages shared with its
+// own customer (the API's partner policy), never an office note's pin and never who pinned it.
+const partnerPin = z.object({
+  messageId: z.string(),
+  pinnedAt: z.string(),
+  message: z.object({ authorName: z.string().nullable(), excerpt: z.string(), at: z.string(), attachmentCount: z.number().int(), removed: z.boolean() }),
+})
+export type PartnerPinRead = z.infer<typeof partnerPin>
+export const fetchPins = (api: ApiClient, type: string, id: string, signal?: AbortSignal) =>
+  api.get(`/threads/${encodeURIComponent(type)}/${encodeURIComponent(id)}/pins`, { schema: z.object({ pins: z.array(partnerPin) }), signal }).then((answer) => answer.pins)
+// ---- end B-TH-286
 // B-TH-229: the person read the conversation up to a message (a preview of the portal by the office writes nothing: the API's rule).
 export const markThreadRead = (api: ApiClient, type: string, id: string, messageId: string) =>
   api.post(`${recordPath(type, id)}/read`, { body: { messageId }, schema: z.object({ reading: z.object({ newCount: z.number().int() }).passthrough() }), idempotencyKey: newIdempotencyKey() })

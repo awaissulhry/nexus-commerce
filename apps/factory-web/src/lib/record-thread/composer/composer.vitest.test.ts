@@ -209,6 +209,98 @@ describe('B-TH-236: what the message answers or corrects, the amount, the floor�
 })
 // ---- end B-TH-236 / B-TH-237
 
+// ---- B-TH-287 (B-TH-092; T5-F10, T8-F07; wall W08): the composer's draft on the server — what a save sends, what a read restores ----
+import { draftFromServer, draftToSave, newerCopy, savedKey, worthKeeping, type ServerDraftIn } from './server-draft'
+import type { DraftFile } from '../attachments/model'
+import { CATALOGUE } from '../../i18n/messages'
+
+describe('B-TH-287 — the draft on the server', () => {
+  const done = (id: string, audience: 'OFFICE' | 'PARTY'): DraftFile => ({ key: `k-${id}`, name: `${id}.pdf`, sizeBytes: 10, contentType: 'application/pdf', source: 'device', phase: 'done', fileId: id, audience })
+  const parts = (over: Partial<Parameters<typeof draftToSave>[0]> = {}) => ({ draft: { mode: 'note' as const, body: 'Check the collar', forFloor: false }, to: [], cc: [], subject: '', files: [], ...over })
+  const server = (over: Partial<ServerDraftIn> = {}): ServerDraftIn => ({ audience: 'OFFICE', body: 'Kept words', fields: { mode: 'note' }, attachments: [], savedAt: '2026-11-17T09:42:00.000Z', version: 3, ...over })
+
+  it('an office note saves as OFFICE with its words; nothing names a person or a party (the API takes the person from the session)', () => {
+    const save = draftToSave(parts())!
+    expect(save).toMatchObject({ audience: 'OFFICE', body: 'Check the collar', attachments: [] })
+    expect(JSON.stringify(save)).not.toMatch(/userId|partyId|personId/)
+  })
+
+  it('a reply saves as PARTNER with its subject, To and Cc; files that went up keep their audience; a file on its way is not kept', () => {
+    const save = draftToSave(
+      parts({
+        draft: { mode: 'reply', body: 'Hello', forFloor: false },
+        to: [{ address: 'buyer@example.com', name: null, kind: 'PARTY', organisation: null }],
+        cc: [{ address: 'cc@example.com', name: null, kind: null, organisation: null }],
+        subject: 'SO-2026-0142',
+        files: [done('f-1', 'PARTY'), { ...done('f-2', 'OFFICE'), phase: 'uploading' }],
+      }),
+    )!
+    expect(save.audience).toBe('PARTNER')
+    expect(save.fields).toMatchObject({ mode: 'reply', subject: 'SO-2026-0142', to: ['buyer@example.com'], cc: ['cc@example.com'], fileAudiences: { 'f-1': 'PARTY' } })
+    expect(save.attachments).toEqual(['f-1'])
+  })
+
+  it('an empty box keeps nothing (the server’s draft is discarded); files alone are worth keeping', () => {
+    expect(draftToSave(parts({ draft: { mode: 'note', body: '   ', forFloor: false } }))).toBeNull()
+    expect(worthKeeping(parts({ draft: { mode: 'note', body: '', forFloor: false }, files: [done('f-1', 'OFFICE')] }))).toBe(true)
+  })
+
+  it('a read restores the box safely: a portal message comes back as an office note, a reply only to who may still send it', () => {
+    expect(draftFromServer(server(), { reply: true }).draft).toEqual({ mode: 'note', body: 'Kept words', forFloor: false })
+    const reply = server({ audience: 'PARTNER', fields: { mode: 'reply', subject: 'S', to: ['Buyer@Example.com'], cc: [] } })
+    expect(draftFromServer(reply, { reply: true })).toMatchObject({ mode: 'reply', subject: 'S', to: [{ address: 'buyer@example.com' }] })
+    // No right to mail (or no customer any more): the words stay, as an office note, with no recipients.
+    expect(draftFromServer(reply, { reply: false })).toMatchObject({ mode: 'note', to: [], subject: '' })
+    expect(draftFromServer(server({ audience: 'PARTNER', fields: { mode: 'portal' } }), { reply: true }).mode).toBe('note')
+  })
+
+  it('restores the files the person may still open with their audience; a locked sheet or a file gone stays out', () => {
+    const read = draftFromServer(
+      server({
+        fields: { mode: 'note', fileAudiences: { a: 'PARTY' } },
+        attachments: [
+          { id: 'a', originalName: 'a.pdf', contentType: 'application/pdf', sizeBytes: 1, status: 'AVAILABLE' },
+          { id: 'b', originalName: '', contentType: 'application/pdf', sizeBytes: 1, status: 'AVAILABLE', locked: 'MEASUREMENTS' },
+          { id: 'c', originalName: 'c.pdf', contentType: 'application/pdf', sizeBytes: 1, status: 'DELETED' },
+        ],
+      }),
+      { reply: true },
+    )
+    expect(read.files.map((file) => [file.fileId, file.audience, file.phase])).toEqual([['a', 'PARTY', 'done']])
+  })
+
+  it('a correction keeps its way; one that went another way is let go', () => {
+    const link = { kind: 'correct', messageId: 'm-1', who: null, at: '2026-11-16T09:00:00.000Z', way: 'reply' }
+    expect(draftFromServer(server({ audience: 'PARTNER', fields: { mode: 'reply', link } }), { reply: true }).draft.link).toMatchObject({ kind: 'correct', messageId: 'm-1' })
+    expect(draftFromServer(server({ audience: 'PARTNER', fields: { mode: 'reply', link } }), { reply: false }).draft.link).toBeUndefined()
+  })
+
+  it('keeps the office numbers a saved reply put in a note, so a switch to the customer still swaps them (§0.5)', () => {
+    const numbers = [{ office: 'INQ-2026-0042', customer: '#7' }]
+    const save = draftToSave(parts({ draft: { mode: 'note', body: 'About INQ-2026-0042', forFloor: false, numbers } }))!
+    expect(save.fields.numbers).toEqual(numbers)
+    const read = draftFromServer(server({ body: 'About INQ-2026-0042', fields: { mode: 'note', numbers: [...numbers, { office: '', customer: null }, 'junk'] } }), { reply: true })
+    expect(read.draft.numbers).toEqual(numbers)
+    expect(switchMode(read.draft, 'reply', []).draft.body).toBe('About #7')
+  })
+
+  it('on arrival the newer of the device copy and the server’s goes in the box', () => {
+    expect(newerCopy(null, null)).toBeNull()
+    expect(newerCopy({ savedAt: 1 }, null)).toBe('local')
+    expect(newerCopy(null, { savedAt: '2026-11-17T09:42:00.000Z' })).toBe('server')
+    expect(newerCopy({ savedAt: Date.parse('2026-11-17T09:43:00.000Z') }, { savedAt: '2026-11-17T09:42:00.000Z' })).toBe('local')
+    expect(newerCopy({ savedAt: Date.parse('2026-11-17T09:41:00.000Z') }, { savedAt: '2026-11-17T09:42:00.000Z' })).toBe('server')
+  })
+
+  it('the line’s words are keys of record-thread-helpers `draft.*` in it and en', () => {
+    for (const saved of [{ state: 'saved', at: 'x' }, { state: 'replaced', at: 'x' }, { state: 'saving' }, { state: 'failed' }, { state: 'offline' }] as const) {
+      const key = savedKey(saved)
+      for (const locale of ['en', 'it'] as const) expect(CATALOGUE[locale]['record-thread-helpers']?.[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+})
+// ---- end B-TH-287
+
 // ---- th-backend-g step 1 (threads plan §0.5, counts do not leak; lead's decision) ------------------------------------------------
 describe('th-backend-g step 1: a saved reply names the office’s numbers in a note, the customer’s own once it goes to the customer', () => {
   it('fills for who reads it: the office in a note, the customer in a reply or the portal', () => {

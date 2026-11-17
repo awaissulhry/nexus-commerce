@@ -63,7 +63,9 @@ export interface StartModel {
   /** Who can give the right to order (their admins). */
   admins: readonly string[]
   /** The unsent New order kept on this device: its subject (or first line) and when it was kept (written). */
-  draft: { subject: string; at: string } | null
+  // ---- B-TH-287: `where` — saved on the server ("saved 10:42"), or kept on this device only (absent: this device).
+  draft: { subject: string; at: string; where?: 'server' | 'device' } | null
+  // ---- end B-TH-287
 }
 
 export interface CustomerHomeViewModel {
@@ -345,7 +347,7 @@ function StartCard({ model, onAsk }: { model: StartModel; onAsk?: () => void }) 
         <p className="fw-pch-draft">
           <FilePen size={16} aria-hidden />
           <span className="fw-pch-draft-text">
-            <strong>{t('start.draft', { subject: model.draft.subject })}</strong> <span className="fw-pch-sub">{t('start.draftKept', { time: model.draft.at })}</span>
+            <strong>{t('start.draft', { subject: model.draft.subject })}</strong> <span className="fw-pch-sub">{t(model.draft.where === 'server' ? 'start.draftSaved' /* B-TH-287 */ : 'start.draftKept', { time: model.draft.at })}</span>
           </span>
           <Button size="sm" asChild>
             <a href={model.newOrderHref}>{t('start.continue')}</a>

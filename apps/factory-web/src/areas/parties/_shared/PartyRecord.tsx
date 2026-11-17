@@ -6,7 +6,8 @@ import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 // ---- B-TH-260: the party's thread docked beside every tab (RecordFrame; Activity's tools in its "⋯"), its band's Projects (n) ----
 import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../shell/print/print-model'
@@ -324,7 +325,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
   }
 
   // ---- B-TH-260: the party's thread docked beside every tab (its Head holds Activity's doors, R-ACT; its Files view the old Documents
-  // tab's files), with threads.read; the print view keeps the record panels' print form. Brand wall (W03, W04, W08, W20, W21, W25,
+  // tab's files), with threads.read; the print view prints the thread with ThreadPrint (B-TH-280). Brand wall (W03, W04, W08, W20, W21, W25,
   // W34, W35, W36): the party's own thread — "Reply to <this party>" only, files of this party only; the same Party thread as the
   // other side's page when a party is both customer and supplier.
   const name = party ? partyName(party) : ''
@@ -335,9 +336,12 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
     ) : null
   const printThread =
     party && record && can.threads ? (
-      <RecordPanels record={record} title={name} party={{ id: party.id, name, emails: party.contacts.filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!) }} />
+      <ThreadPrint record={record} title={name} party={{ id: party.id, name }} partyRole={side === 'customers' ? 'customer' : 'supplier'} />
     ) : null
   // ---- end B-TH-260
+  // ---- B-TH-280: the party's custom fields (one set for both sides) at the end of the Overview, as the old panels drew them above theirs.
+  const fields = party && tab === 'overview' ? <RecordCustomFields record={{ type: config.recordType, id: party.id }} title={name} /> : null
+  // ---- end B-TH-280
 
   return (
     <PartyRecordView
@@ -370,6 +374,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
       }}
       thread={thread}
       printThread={printThread}
+      fields={fields /* B-TH-280 */}
       terms={party && terms ? terms(party, () => void load()) : null}
       items={party && items ? items(party, () => void load()) : null}
       portal={party && portal && tab === 'portal' ? portal(party) : null}

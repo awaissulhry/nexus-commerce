@@ -57,19 +57,7 @@
     }
   },
   "set": {
-    "label": "Ricordamelo e i promemoria che ho impostato su questo record",
-    "title": "Promemoria che ho impostato",
-    "remind": "Ricordamelo",
-    "count_one": "{count} promemoria impostato da me",
-    "count_other": "{count} promemoria impostati da me",
-    "message": "Su un messaggio",
-    "done": "Fatto: il promemoria su {record}",
-    "remove": "Elimina il promemoria su {record}",
-    "notice": {
-      "set": "Promemoria impostato.",
-      "done": "Promemoria fatto.",
-      "removed": "Promemoria eliminato."
-    }
+    "message": "Su un messaggio"
   },
   "waiting": {
     "title": "In attesa di altri",
@@ -283,13 +271,34 @@
       "OFF": "No"
     },
     "event": {
-      "MENTIONED": { "label": "Menzionato", "hint": "qualcuno ti ha @menzionato" },
-      "ASSIGNED": { "label": "Assegnato", "hint": "un'attività, una riga di Oggi o una richiesta data a te, e ogni nuova richiesta di un cliente di cui rispondi alle richieste" },
-      "APPROVAL_WAITING": { "label": "Approvazione in attesa", "hint": "una richiesta aspetta il tuo sì" },
-      "APPROVAL_DECIDED": { "label": "Approvazione decisa", "hint": "una richiesta che hai fatto è stata decisa" },
-      "FOLLOWING_CHANGED": { "label": "Record che seguo cambiato", "hint": "un record o una vista salvata che segui è cambiato" },
-      "AREA_ALERT": { "label": "Allerta sulla mia area", "hint": "una regola di allerta è scattata per te" },
-      "MAIL_ASSIGNED": { "label": "E-mail assegnata", "hint": "un'e-mail di una casella di gruppo data a te" }
+      "MENTIONED": {
+        "label": "Menzionato",
+        "hint": "qualcuno ti ha @menzionato"
+      },
+      "ASSIGNED": {
+        "label": "Assegnato",
+        "hint": "un'attività, una riga di Oggi o una richiesta data a te, e ogni nuova richiesta di un cliente di cui rispondi alle richieste"
+      },
+      "APPROVAL_WAITING": {
+        "label": "Approvazione in attesa",
+        "hint": "una richiesta aspetta il tuo sì"
+      },
+      "APPROVAL_DECIDED": {
+        "label": "Approvazione decisa",
+        "hint": "una richiesta che hai fatto è stata decisa"
+      },
+      "FOLLOWING_CHANGED": {
+        "label": "Record che seguo cambiato",
+        "hint": "un record o una vista salvata che segui è cambiato"
+      },
+      "AREA_ALERT": {
+        "label": "Allerta sulla mia area",
+        "hint": "una regola di allerta è scattata per te"
+      },
+      "MAIL_ASSIGNED": {
+        "label": "E-mail assegnata",
+        "hint": "un'e-mail di una casella di gruppo data a te"
+      }
     },
     "cellLabel": "{event} per {channel}",
     "source": {

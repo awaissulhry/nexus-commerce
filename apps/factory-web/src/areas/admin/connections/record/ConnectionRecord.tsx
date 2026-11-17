@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { getCompany } from '../../shared/api'
 import { failed, problemKey, problemNotice, type Notice } from '../../shared/model'
 import { getAccount, listCalls, listInbound, setPaused, type InboundDelivery, type InboundStatus, type IntegrationAccount, type IntegrationCall } from '../api'
@@ -107,11 +107,11 @@ export function ConnectionRecord({ accountId }: { accountId: string }) {
   }, [tab, readInbound])
 
   // B-TH-269: the account's thread docked beside every tab (notes only: no party on an admin record, W03), with threads.read AND
-  // integrations.view (B-TH-005); Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  // integrations.view (B-TH-005); Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const record = account ? { type: 'IntegrationAccount', id: account.id, companyId: account.companyId, siteId: null } : null
   const mayThread = mayReadConnectionThread(held)
   const thread = account && record && mayThread ? <OfficeRecordThread docked record={record} title={account.label} recordLabel={account.label} party={null} printHref={printHref(pathname ?? '', params?.toString() ?? '')} /> : null
-  const printThread = account && record && mayThread ? <RecordPanels record={record} title={account.label} /> : null
+  const printThread = account && record && mayThread ? <ThreadPrint record={record} title={account.label} /> : null
 
   return (
     <ConnectionRecordView

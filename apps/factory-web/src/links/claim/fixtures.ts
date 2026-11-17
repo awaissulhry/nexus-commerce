@@ -28,7 +28,7 @@ function item(n: number, overrides: Partial<ClaimItem> = {}): ClaimItem {
     salesOrderLineId: id(n),
     size: 'M',
     description: 'Giacca demo, Nero, size M',
-    order: { id: id(900), number: 'SO-2026-0042', lineSeq: n * 10 },
+    order: { id: id(900), yourNumber: { seq: 4, words: { en: 'Your order 4', it: 'Il vostro ordine 4' } }, yourRef: 'BA-PO-118', lineSeq: n * 10 }, // follow-up (th9-web-b)
     invoice: null,
     style: { code: 'DEMO-JKT-01', name: 'Giacca in pelle demo' },
     colourway: { code: 'NER', name: 'Nero' },

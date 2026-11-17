@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+import type { ServerDraftBody } from '../../../lib/request-compose/server-draft' // B-TH-287
 
 /**
  * New order & reorder in the portal (apps/factory-api modules/sales/portal-ordering, B-W2b-190; SAL-072, SAL-073, SAL-074;
@@ -273,3 +274,34 @@ export async function fileContent(file: File): Promise<string> {
   for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
   return btoa(binary)
 }
+
+// ---- B-TH-287 (threads plan TH-9, N6; P-CUS-NEW.message-F02): the New order as an e-mail kept on the server — ONE draft per person
+// (apps/factory-api platform/threads/drafts.ts, `GET|PUT|DELETE /portal/drafts/new-request`). The person comes from the session: the
+// body names no person, party or company (W08, W37). Sending the request clears it in the send's own command.
+export const serverDraftSchema = z.object({
+  recordType: z.string().nullable(),
+  recordId: z.string().nullable(),
+  audience: z.string().nullable(),
+  body: z.string(),
+  fields: z.record(z.string(), z.unknown()),
+  attachments: z.array(z.object({ id: z.string() }).passthrough()),
+  savedAt: z.string(),
+  version: z.number().int(),
+})
+export type ServerDraftRead = z.infer<typeof serverDraftSchema>
+
+const DRAFT_PATH = '/portal/drafts/new-request'
+
+/** The person's New order draft on the server, or null: none. */
+export const fetchNewRequestDraft = async (api: ApiClient, signal?: AbortSignal): Promise<ServerDraftRead | null> =>
+  (await api.get(DRAFT_PATH, { schema: z.object({ draft: serverDraftSchema.nullable() }), signal })).draft
+
+/** Saves it (the version last read: a newer one saved meanwhile in another tab is replaced, and `replacedNewer` says so). */
+export const saveNewRequestDraft = (api: ApiClient, body: ServerDraftBody, idempotencyKey: string = newIdempotencyKey()): Promise<{ draft: ServerDraftRead; replacedNewer: boolean }> =>
+  api.request('PUT', DRAFT_PATH, { body, schema: z.object({ draft: serverDraftSchema, replacedNewer: z.boolean() }), idempotencyKey })
+
+/** Discards it (Discard draft; a save that landed after a send). */
+export const discardNewRequestDraft = async (api: ApiClient, idempotencyKey: string = newIdempotencyKey()): Promise<void> => {
+  await api.request('DELETE', DRAFT_PATH, { schema: z.object({ draft: z.null() }), idempotencyKey })
+}
+// ---- end B-TH-287

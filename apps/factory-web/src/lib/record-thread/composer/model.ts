@@ -13,7 +13,7 @@ import { amountProblem, floorPriceFound } from '../helpers/amount'
  * B-TH-237 (TH-3, G15): a third audience, "In the portal only" — a message the customer reads in its portal, no e-mail (POST
  * …/replies), offered when the record's customer may read it there. B-TH-236: Reply / Correct name the message they answer or
  * correct ("Replying to Alma, 14 Nov ×"); a correction goes the way the message went; the amount field (price readers, an office
- * note only) and the floor's price check hold Send with the reason. Not built until the back end has it: drafts on the server (N6).
+ * note only) and the floor's price check hold Send with the reason. B-TH-287: drafts on the server (N6) — composer/server-draft.ts.
  */
 
 export const COMPOSER_MODES = ['note', 'reply', 'portal'] as const

@@ -87,5 +87,23 @@
   "sheet": {
     "open": "Measurement sheet",
     "recorded": "Measurement sheet: body data — each opening is recorded."
+  },
+  "pins": {
+    "chip_one": "{count} pinned",
+    "chip_other": "{count} pinned",
+    "label_one": "{count} pinned message: open the list",
+    "label_other": "{count} pinned messages: open the list",
+    "title_one": "{count} pinned message",
+    "title_other": "{count} pinned messages",
+    "someone": "Someone",
+    "office": "Office note",
+    "go": "Go to the message of {who}: {words}",
+    "by": "Pinned by {name}, {date}",
+    "unpin": "Unpin",
+    "unpinLabel": "Unpin “{words}”",
+    "everyone": "Pinned for everyone on this record. A pin points at its message; it is never a copy.",
+    "removed": "Message removed after a privacy request",
+    "filesOnly_one": "{count} file",
+    "filesOnly_other": "{count} files"
   }
 }

@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { storeUrl } from '../../../../record-panels/store'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { answerClaim, cancelClaim, claimReasons, closeClaim, ddtPdfLink, fileAddress, getClaim, makeLetter, removeClaimPhoto, removeLine, returnGoods, sendCheck, sendClaim, updateClaim, uploadClaimPhoto, type Claim, type PickerReason } from '../api'
@@ -316,7 +316,7 @@ function Container({ claimId }: { claimId: string }) {
 
   const model: ClaimRecordModel = { prefix, can, tab, claim, live, personId: session.user.id /* B-TH-263 */, changed, notice, busy, dialog, dialogProblem, form, formProblem, saving, reasons, timeZone: TIME_ZONE, photos, photoStep, uploading }
   // B-TH-263: the docked thread (Head with Activity's doors, files line, Files view, feed, box), the claim's own supplier only; the print
-  // view keeps the panels' print form.
+  // view prints the thread with ThreadPrint (B-TH-280).
   const record = value ? { type: 'SupplierClaim', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
   const title = value ? `${value.number} · ${value.supplier.name}` : ''
 
@@ -324,7 +324,7 @@ function Container({ claimId }: { claimId: string }) {
     <ClaimRecordView
       model={model}
       thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
-      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.supplier.id, name: value.supplier.name, emails: [] }} /> : null}
+      printThread={value && record ? <ThreadPrint record={record} title={title} party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier" /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => {

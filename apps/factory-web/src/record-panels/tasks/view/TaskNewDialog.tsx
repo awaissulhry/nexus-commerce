@@ -4,13 +4,13 @@ import { useEffect, useId, useState, type KeyboardEvent } from 'react'
 import { Plus } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, Select, Skeleton } from '@nexus/ui/primitives'
-import { DateField, Modal, Textarea } from '../../lib/i18n/ds-parts'
-import { INTL_LOCALE } from '../../lib/i18n/locales'
-import { useLocale, useT } from '../../lib/i18n/provider'
-import { WithMessages } from '../i18n'
-import type { PanelRead } from '../model'
-import { CHECKLIST_MAX, draftProblem, emptyDraft, type Assignable, type TaskDraft } from '../tasks/model'
-import '../record-panels.css'
+import { DateField, Modal, Textarea } from '../../../lib/i18n/ds-parts'
+import { INTL_LOCALE } from '../../../lib/i18n/locales'
+import { useLocale, useT } from '../../../lib/i18n/provider'
+import { WithMessages } from '../../i18n'
+import type { PanelRead } from '../../model'
+import { CHECKLIST_MAX, draftProblem, emptyDraft, type Assignable, type TaskDraft } from '../model'
+import '../tasks.css'
 
 export interface TaskNewDialogProps {
   /** The record it is on ("New task on Q-2026-0142"); null: a task of its own. */
@@ -79,7 +79,7 @@ function Dialog({ recordLabel, people, me, held = null, busy = false, initial, o
       size="md"
       title={recordLabel ? t('tasks.new.titleOn', { record: recordLabel }) : t('tasks.new.title')}
       footer={
-        <span className="fw-rp-dialog-buttons">
+        <span className="fw-rtask-buttons">
           <Button variant="secondary" onClick={onClose}>
             {t('tasks.new.cancel')}
           </Button>
@@ -89,11 +89,11 @@ function Dialog({ recordLabel, people, me, held = null, busy = false, initial, o
         </span>
       }
     >
-      <div className="fw-rp-task-form" onKeyDown={onKey}>
+      <div className="fw-rtask-form" onKeyDown={onKey}>
         <Field label={t('tasks.new.field.title')} required htmlFor={titleId}>
           <Input id={titleId} value={draft.title} onChange={(event) => set({ title: event.target.value })} autoFocus maxLength={400} placeholder={t('tasks.new.field.titlePlaceholder')} />
         </Field>
-        <div className="fw-rp-task-form-row">
+        <div className="fw-rtask-form-row">
           <Field label={t('tasks.new.field.assignee')} hint={t(recordLabel ? 'tasks.new.field.assigneeHintRecord' : 'tasks.new.field.assigneeHint')}>
             {people.status === 'loading' ? (
               <Skeleton height={32} />

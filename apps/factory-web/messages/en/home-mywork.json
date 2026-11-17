@@ -57,19 +57,7 @@
     }
   },
   "set": {
-    "label": "Remind me and the reminders I set on this record",
-    "title": "Reminders I set",
-    "remind": "Remind me",
-    "count_one": "{count} reminder I set",
-    "count_other": "{count} reminders I set",
-    "message": "About a message",
-    "done": "Done: the reminder on {record}",
-    "remove": "Remove the reminder on {record}",
-    "notice": {
-      "set": "Reminder set.",
-      "done": "Reminder done.",
-      "removed": "Reminder removed."
-    }
+    "message": "About a message"
   },
   "waiting": {
     "title": "Waiting on others",
@@ -283,13 +271,34 @@
       "OFF": "Off"
     },
     "event": {
-      "MENTIONED": { "label": "Mentioned", "hint": "someone @mentioned you" },
-      "ASSIGNED": { "label": "Assigned", "hint": "a task, a Today row or a request given to you, and each new request of a customer whose requests you answer" },
-      "APPROVAL_WAITING": { "label": "Approval waiting", "hint": "a request waits for your yes" },
-      "APPROVAL_DECIDED": { "label": "Approval decided", "hint": "a request you asked for was decided" },
-      "FOLLOWING_CHANGED": { "label": "Record I follow changed", "hint": "a followed record or saved view changed" },
-      "AREA_ALERT": { "label": "Alert on my area", "hint": "an alert rule fired for you" },
-      "MAIL_ASSIGNED": { "label": "Mail assigned", "hint": "a mail of a team inbox given to you" }
+      "MENTIONED": {
+        "label": "Mentioned",
+        "hint": "someone @mentioned you"
+      },
+      "ASSIGNED": {
+        "label": "Assigned",
+        "hint": "a task, a Today row or a request given to you, and each new request of a customer whose requests you answer"
+      },
+      "APPROVAL_WAITING": {
+        "label": "Approval waiting",
+        "hint": "a request waits for your yes"
+      },
+      "APPROVAL_DECIDED": {
+        "label": "Approval decided",
+        "hint": "a request you asked for was decided"
+      },
+      "FOLLOWING_CHANGED": {
+        "label": "Record I follow changed",
+        "hint": "a followed record or saved view changed"
+      },
+      "AREA_ALERT": {
+        "label": "Alert on my area",
+        "hint": "an alert rule fired for you"
+      },
+      "MAIL_ASSIGNED": {
+        "label": "Mail assigned",
+        "hint": "a mail of a team inbox given to you"
+      }
     },
     "cellLabel": "{event} by {channel}",
     "source": {

@@ -1,21 +1,17 @@
 /**
- * SCR-006 — the record panels' pure part (A2 §2.1; features COL-001, COL-002, COL-003, COL-024, COL-045, COL-050,
- * COL-078): the view model every record page's panels draw, and the rules the composer, the files list and the live
- * refresh follow. No React, no API: the tests hold it, the view draws it, the container (RecordPanels.tsx) fills it.
+ * The record modules' shared pure part (A2 §2.1; COL-045, COL-050): the API's file and thread words the clients read (api.ts),
+ * a record's file as the files-in-depth parts draw it, the followers the Follow control draws, the upload rules (kinds, audiences,
+ * types, sizes) and the live refresh of a record's thread. B-TH-280: the old record panels' view model (their thread, files,
+ * history and tasks panels, the composer and the history rules) went with the panels; the office's docked thread
+ * (areas/_shared/record-thread, lib/record-thread) draws a record's thread now. No React, no API.
  *
  * The API's words (enums, limits) are mirrored here from their source, named on each line; an answer that does not
  * match them is a `contract` error in the client (api.ts), never half-read.
  */
 
-import type { FileDepthModel } from './files/model'
 // B-TH-084: the design files the API takes (download-only), as factory-domain lists them.
 import { ARTWORK_TYPES, DESIGN_TYPE_BY_EXTENSION, DESIGN_TYPES } from '@nexus/factory-domain/files/design'
 import type { FollowReason } from '@nexus/factory-domain/threads/followers'
-import type { ApprovalsPanelModel } from './approvals/model'
-// B-W2b-307 (PLT-104): the record's approval history in the Approvals tab.
-import type { ApprovalHistoryModel } from '../shell/panels/approvals/model'
-// B-W2b-200
-import type { SharesPanelModel } from './share/model'
 
 /** apps/factory-api platform/files/rules.ts FILE_KINDS (B-W2b-96: AUDIO, a voice note of a machine request or job, QHS-189). */
 export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO'] as const
@@ -31,31 +27,16 @@ export const QUARANTINE_REASONS = ['size_mismatch', 'type_mismatch', 'checksum_m
 export type QuarantineReason = (typeof QUARANTINE_REASONS)[number]
 /** factory-domain threads/rules.ts. */
 export const MESSAGE_DIRECTIONS = ['INTERNAL_NOTE', 'OUTBOUND', 'INBOUND'] as const
-export type MessageDirection = (typeof MESSAGE_DIRECTIONS)[number]
 export const MESSAGE_AUDIENCES = ['OFFICE', 'PARTNER'] as const
 export const MESSAGE_CHANNELS = ['APP', 'EMAIL', 'PORTAL'] as const
-export type MessageChannel = (typeof MESSAGE_CHANNELS)[number]
 export const AUTHOR_KINDS = ['USER', 'WORKER', 'PARTY', 'SYSTEM'] as const
-export type AuthorKind = (typeof AUTHOR_KINDS)[number]
 export const THREAD_STATUSES = ['OPEN', 'CLOSED'] as const
-export type ThreadStatus = (typeof THREAD_STATUSES)[number]
 /** factory-domain email/rules.ts OUTBOUND_STATUSES (B-TH-048: WITHDRAWN, a mail taken back in its 10 seconds after Send). */
 export const EMAIL_STATUSES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'] as const
-export type EmailStatus = (typeof EMAIL_STATUSES)[number]
 /** factory-domain threads/timeline.ts TIMELINE_KINDS, plus "all". */
 export const TIMELINE_KINDS = ['message', 'change', 'file'] as const
 export type TimelineKind = (typeof TIMELINE_KINDS)[number]
 export type TimelineFilter = 'all' | TimelineKind
-export const TIMELINE_FILTERS: readonly TimelineFilter[] = ['all', ...TIMELINE_KINDS]
-
-/** factory-domain threads/rules.ts MAX_BODY_LENGTH, MAX_MENTIONS, MAX_ATTACHMENTS. */
-export const MAX_BODY_LENGTH = 20_000
-export const MAX_MENTIONS = 20
-export const MAX_ATTACHMENTS = 20
-/** factory-domain email/rules.ts MAX_RECIPIENTS, MAX_SUBJECT_LENGTH, MAX_ATTACHMENT_BYTES. */
-export const MAX_RECIPIENTS = 50
-export const MAX_SUBJECT_LENGTH = 200
-export const MAX_EMAIL_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 const MIB = 1_048_576
 const PDF = 'application/pdf'
@@ -86,15 +67,7 @@ export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: read
 /** B-W2b-96 (QHS-189): the records a voice note is added to; elsewhere the panel does not offer AUDIO (it still lists one). */
 export const AUDIO_RECORD_TYPES: readonly string[] = ['MaintenanceRequest', 'MaintenanceJob']
 
-/** How long fiscal documents are kept at least (c.c. art. 2220; DPR 600/1973 art. 22), as the API sets it. */
-export const FISCAL_RETENTION_YEARS = 10
-
-// ── the view model ────────────────────────────────────────────────────────────────────────────────────────────────
-
-// B-W2b-188: 'approvals' (the tab of a record an approval names; its words are the record-approvals catalogue's).
-// B-W2b-200: 'shares' (the Partners tab of a record a partner can be invited to; its words are the record-shares catalogue's).
-export type PanelTab = 'thread' | 'tasks' | 'files' | 'history' | 'approvals' | 'shares'
-export const PANEL_TABS: readonly PanelTab[] = ['thread', 'tasks', 'files', 'history']
+// ── a record, its party, a file ────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface PanelRecord {
   /** The record's model name, as the API names it (`Certificate`, `Quote`). */
@@ -106,68 +79,16 @@ export interface PanelRecord {
   siteId?: string | null
 }
 
-/** The record's customer, supplier or brand: the only party its shared messages and files may reach. */
+/** The record's customer, supplier or brand: the only party its shared files may reach (an upload offers Partner / Link with one). */
 export interface PanelParty {
   id: string
   name: string
-  /** Its known addresses, for the email's To line (the parties module fills them; W0 has none). */
   emails: readonly string[]
-}
-
-/** What the person may do here: from their permissions over the record (the API checks each call again). */
-export interface PanelAbilities {
-  /** threads.post: write an internal note. */
-  post: boolean
-  /** email.send: send a mail to the record's party. */
-  email: boolean
-  /** threads.manage: close or reopen the thread. */
-  manage: boolean
-  /** files.read: the files and their downloads. */
-  readFiles: boolean
-  /** files.upload. */
-  upload: boolean
-  /** files.manage: share a file beyond the office when it is uploaded. */
-  share: boolean
 }
 
 export interface PanelPerson {
   id: string
   name: string
-}
-
-export interface MessageAttachment {
-  id: string
-  name: string
-  sizeBytes: number
-  contentType: string
-  status: FileStatus
-}
-
-export interface PanelEmail {
-  to: readonly string[]
-  subject: string
-  status: EmailStatus
-}
-
-export interface PanelMessage {
-  id: string
-  direction: MessageDirection
-  channel: MessageChannel
-  authorKind: AuthorKind
-  /** Null: a system message, or a writer the reader may not see. */
-  authorName: string | null
-  /** A floor worker wrote it and the site's legal gate keeps back who: the message says a person did. */
-  authorHidden?: boolean
-  /** The tablets read this note too (B-W2b-F5): the office ticked "For the floor", or the floor wrote it. */
-  forFloor?: boolean
-  /** ISO instant (UTC). */
-  at: string
-  body: string
-  /** The people a note mentioned, by name; null for a person the panel does not know ("someone"). */
-  mentions: readonly (string | null)[]
-  attachments: readonly MessageAttachment[]
-  /** For a mail the office sent: to whom, its subject and where it is. */
-  email: PanelEmail | null
 }
 
 export interface PanelFile {
@@ -192,146 +113,10 @@ export interface PanelFile {
   version?: number
 }
 
-/** An upload this screen is making, before its file is on the list. */
-export interface PanelUpload {
-  key: string
-  name: string
-  sizeBytes: number
-  phase: 'hashing' | 'uploading' | 'confirming' | 'failed'
-  /** Why it failed: a message key of the `records` catalogue. */
-  problem?: string
-}
-
-export type PanelTimelineEntry =
-  | {
-      kind: 'message'
-      id: string
-      at: string
-      direction: MessageDirection
-      channel: MessageChannel
-      authorName: string | null
-      /** A floor worker wrote it and the site's legal gate keeps back who: the row says a person did. */
-      authorHidden?: boolean
-      excerpt: string
-      attachmentCount: number
-    }
-  | {
-      kind: 'change'
-      id: string
-      at: string
-      /** The command (`compliance.certificates.issue`). */
-      action: string
-      /** Who did it: a name when the panel knows the person, else null (the audience says who). */
-      actorName: string | null
-      actorAudience: 'OFFICE' | 'FLOOR' | 'PARTNER' | 'LINK' | 'SYSTEM'
-      /** A floor worker did it and the site's legal gate keeps back who: the row says a person did. */
-      actorHidden?: boolean
-      status: { from: string | null; to: string | null } | null
-      fields: readonly string[]
-      /** The values, only when the API gave them (audit.read over the row; money only with its grain). */
-      values: { before: unknown; after: unknown } | null
-      reason: string | null
-    }
-  | {
-      kind: 'file'
-      id: string
-      at: string
-      name: string
-      fileKind: FileKind
-      status: FileStatus
-      visibility: readonly FileAudience[]
-    }
-
-/** A list that loads: null while it is read the first time. */
-export interface Loaded<T> {
-  items: readonly T[] | null
-  /** More (older) entries exist. */
-  more: boolean
-  /** The read failed: a message key. */
-  problem?: string | null
-}
-
-/**
- * Only a work order has tablets working on it, so only its composer offers the tick "For the floor" (B-W2b-F5). A note stays
- * in the office unless its writer ticks it; ticked, the tablets read it on My work (B-W2b-71). The API holds the same rule.
- */
-export const noteMayGoToFloor = (recordType: string): boolean => recordType === 'WorkOrder'
-
-export interface RecordPanelsViewModel {
-  record: PanelRecord
-  /** The record's name as its page shows it ("Certificate 0000-17092-A"), for the panel's accessible name. */
-  title: string
-  party: PanelParty | null
-  can: PanelAbilities
-  /** The tab open at first. Default thread. */
-  tab?: PanelTab
-  /** Null: the record has no message yet. */
-  thread: { status: ThreadStatus; version: number } | null
-  messages: Loaded<PanelMessage>
-  files: Loaded<PanelFile>
-  uploads: readonly PanelUpload[]
-  timeline: Loaded<PanelTimelineEntry>
-  timelineFilter: TimelineFilter
-  /** Who a note may mention (the person themself left out). */
-  people: readonly PanelPerson[]
-  /** The person signed in (their own messages say "you"). */
-  me?: string | null
-  /** A notice over the panels: a message key of the `records` catalogue, with its tone. */
-  notice?: { key: string; tone: 'success' | 'info' | 'warning' | 'danger' } | null
-  /** A PDF open in the viewer: the file and its bytes (or address). */
-  preview?: { fileId: string; name: string; src: string | Uint8Array } | null
-  /** The composer opens on this mode (design fixtures). */
-  composerMode?: ComposerMode
-  /** Text already in the composer (design fixtures). */
-  composerText?: string
-  /** The tick "For the floor" starts on (design fixtures). */
-  composerForFloor?: boolean
-  /** The composer is sending. */
-  sending?: boolean
-  /** B-W2a-40: the record's open tasks (the Tasks tab; absent: a host without tasks, no tab). */
-  tasks?: PanelTasks
-  /** B-W2a-40: who follows the record (the Follow toggle and Followers (N); absent: none; null while it is read). */
-  followers?: PanelFollowers | null
-  /** B-W2b-177: the files in depth (documents and their expiry, what a move needs, versions, markup); absent: W0's panel. */
-  depth?: FileDepthModel
-  /** B-W2b-188: the record's approval requests to its partner (absent: no Approvals tab). */
-  approvals?: ApprovalsPanelModel
-  /** B-W2b-200: the partners invited to the record by link (absent: no Partners tab). */
-  shares?: SharesPanelModel
-  /** B-W2b-307 (PLT-104): every approval of the record, newest first (absent: a type without approvals, or no approvals.view). */
-  approvalHistory?: ApprovalHistoryModel
-}
-
-// ── tasks and followers on the record (B-W2a-40; COL-037, COL-011; design shell.panels side panel, popups) ────────────
-
-/** One of the record's open tasks, as the Tasks tab draws it. */
-export interface PanelTask {
-  id: string
-  title: string
-  /** Its place in My tasks (the task's popup), with the company prefix. */
-  href: string
-  due: { date: string; days: number; word: 'OVERDUE' | 'TODAY' | 'SOON' | null } | null
-  assignee: { id: string; name: string; me: boolean } | null
-  progress: { done: number; total: number } | null
-  /** The reader may tick it (tasks.manage, and threads.post here). */
-  canChange: boolean
-}
+// ── followers on the record (B-W2a-40; COL-011; the Follow control of the docked thread's Head) ────────────
 
 /** A part that loads on its own. */
 export type PanelRead<T> = { status: 'loading' } | { status: 'error'; problem: string } | { status: 'ready'; data: T }
-
-export interface PanelTasks {
-  /** Null while it is read the first time. */
-  items: readonly PanelTask[] | null
-  problem?: string | null
-  /** Why "+ Add task" is held (a message key of `records`), or null. */
-  addHeld: string | null
-  /** The New task dialog, open, with who may be given it. */
-  dialog?: { people: PanelRead<readonly { id: string; name: string; me: boolean }[]> } | null
-  /** "Done: <title> · Undo" after a tick (the Undo puts it back). */
-  undo?: { title: string } | null
-  busy?: boolean
-}
 
 export interface PanelFollower {
   userId: string
@@ -359,229 +144,6 @@ export interface PanelFollowers {
 }
 
 /**
- * @mention typed in a note (design admin records' activity feeds, "@mention a person or team in a note", W2a; COL-006):
- * the people whose display name follows an `@` in the text, as a whole name (case aside, not part of a longer word).
- * Teams come with People (W2b): persons only.
- */
-export function mentionsInText(body: string, people: readonly PanelPerson[]): string[] {
-  const text = body.toLocaleLowerCase()
-  const word = /[\p{L}\p{N}]/u
-  // Every whole-name match with where it sits; a shorter name inside a longer one at the same @ ("@Bea" in "@Bea Rossi") is not a mention of its own.
-  const hits: { id: string; at: number; end: number }[] = []
-  for (const person of people) {
-    const name = person.name.trim().toLocaleLowerCase()
-    if (name.length === 0) continue
-    for (let at = text.indexOf(`@${name}`); at >= 0; at = text.indexOf(`@${name}`, at + 1)) {
-      const before = at === 0 ? '' : text[at - 1]!
-      const after = text[at + name.length + 1] ?? ''
-      if ((before === '' || !word.test(before)) && (after === '' || !word.test(after))) hits.push({ id: person.id, at, end: at + name.length + 1 })
-    }
-  }
-  const kept = hits.filter((hit) => !hits.some((other) => other !== hit && other.at === hit.at && other.end > hit.end))
-  return [...new Set(kept.sort((a, b) => a.at - b.at).map((hit) => hit.id))]
-}
-
-/** The `@` word being typed at the end of the note (null: none), to suggest whom it names. */
-export function mentionQuery(body: string): string | null {
-  // A name may have up to three words ("@Live Coll" still suggests Live Colleague).
-  const match = MENTION_TAIL.exec(body)
-  return match ? match[2]! : null
-}
-
-/** The `@words` being typed at the end of the note: up to three words of a name. */
-const MENTION_TAIL = /(^|\s)@([^\s@]{0,40}(?: [^\s@]{0,40}){0,2})$/u
-
-/** The people a typed `@word` may name (their name starts with it, or a word of it does), at most five. */
-export function mentionSuggestions(query: string, people: readonly PanelPerson[], chosen: readonly string[]): PanelPerson[] {
-  const wanted = query.toLocaleLowerCase()
-  return people
-    .filter((person) => !chosen.includes(person.id))
-    .filter((person) => {
-      const name = person.name.toLocaleLowerCase()
-      return name.startsWith(wanted) || name.split(/\s+/).some((part) => part.startsWith(wanted))
-    })
-    .slice(0, 5)
-}
-
-/** The note with the `@word` at its end replaced by the person's whole name (and a space to type on). */
-export function completeMention(body: string, person: PanelPerson): string {
-  return body.replace(MENTION_TAIL, (_, space: string) => `${space}@${person.name} `)
-}
-
-// ── the composer (COL-003: internal note vs external message; COL-024: mail as the person) ──────────────────────────
-
-export type ComposerMode = 'note' | 'email'
-
-/**
- * The composer's modes, in order. An internal note needs threads.post; a message to the party needs a party on the
- * record AND email.send — never one without the other, so a note can never be mistaken for a message that leaves.
- */
-export function composerModes(input: { can: Pick<PanelAbilities, 'post' | 'email'>; party: PanelParty | null }): ComposerMode[] {
-  const modes: ComposerMode[] = []
-  if (input.can.post) modes.push('note')
-  if (input.can.email && input.party !== null) modes.push('email')
-  return modes
-}
-
-/** Why the composer is not offered at all (a message key), or null when it is. */
-export function composerAbsentReason(input: { can: Pick<PanelAbilities, 'post' | 'email'>; party: PanelParty | null }): string | null {
-  if (composerModes(input).length > 0) return null
-  return input.can.email && input.party === null ? 'composer.absent.noParty' : 'composer.absent.noPermission'
-}
-
-/** The addresses typed in a To line (commas, semicolons, spaces or new lines between them). */
-export function parseAddresses(text: string): { valid: string[]; invalid: string[] } {
-  const parts = text.split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean)
-  const valid: string[] = []
-  const invalid: string[] = []
-  for (const part of parts) {
-    const address = part.replace(/^<|>$/g, '').toLowerCase()
-    if (/^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]+$/.test(address) && address.length <= 254) {
-      if (!valid.includes(address)) valid.push(address)
-    } else invalid.push(part)
-  }
-  return { valid, invalid }
-}
-
-export interface ComposerDraft {
-  mode: ComposerMode
-  body: string
-  /** Email: the To line as typed. */
-  to: string
-  subject: string
-  mentions: readonly string[]
-  attachments: readonly string[]
-  /** A note the tablets read too: the tick, on a work order only. */
-  forFloor: boolean
-}
-
-/**
- * Why the send is held (a message key and its parameters), or null when it may go. First that applies: the thread is
- * closed, it is sending, the text is empty or too long, (email) no or a wrong address, too many addresses, no subject on
- * a first mail (an answer takes the last mail's), a subject too long, attachments too large together; too many mentions
- * or files.
- */
-export function composerHeld(
-  draft: ComposerDraft,
-  context: {
-    threadClosed: boolean
-    sending: boolean
-    files: readonly Pick<PanelFile, 'id' | 'sizeBytes'>[]
-    /** The thread has a mail already, whose subject an answer without one takes ("Re: …"). */
-    hasMail?: boolean
-  },
-): { key: string; params?: Record<string, string | number> } | null {
-  if (context.threadClosed) return { key: 'composer.held.closed' }
-  if (context.sending) return { key: 'composer.held.sending' }
-  const length = [...draft.body].length
-  if (draft.body.trim() === '') return { key: draft.mode === 'note' ? 'composer.held.emptyNote' : 'composer.held.emptyEmail' }
-  if (length > MAX_BODY_LENGTH) return { key: 'composer.held.tooLong', params: { count: length - MAX_BODY_LENGTH } }
-  if (draft.attachments.length > MAX_ATTACHMENTS) return { key: 'composer.held.tooManyFiles', params: { max: MAX_ATTACHMENTS } }
-  if (draft.mode === 'note') {
-    if (draft.mentions.length > MAX_MENTIONS) return { key: 'composer.held.tooManyMentions', params: { max: MAX_MENTIONS } }
-    return null
-  }
-  const { valid, invalid } = parseAddresses(draft.to)
-  if (invalid.length > 0) return { key: 'composer.held.badAddress', params: { address: invalid[0] } }
-  if (valid.length === 0) return { key: 'composer.held.noRecipient' }
-  if (valid.length > MAX_RECIPIENTS) return { key: 'composer.held.tooManyRecipients', params: { max: MAX_RECIPIENTS } }
-  if (draft.subject.trim() === '' && !context.hasMail) return { key: 'composer.held.noSubject' }
-  if ([...draft.subject].length > MAX_SUBJECT_LENGTH) return { key: 'composer.held.subjectTooLong', params: { max: MAX_SUBJECT_LENGTH } }
-  const bytes = draft.attachments.reduce((sum, id) => sum + (context.files.find((file) => file.id === id)?.sizeBytes ?? 0), 0)
-  if (bytes > MAX_EMAIL_ATTACHMENT_BYTES) return { key: 'composer.held.attachmentsTooLarge' }
-  return null
-}
-
-/**
- * The record's files a message may carry: AVAILABLE ones for a note; for a mail only those already shared with the
- * record's party (the portal or a link), because the mail hands the party its bytes (COL-050).
- */
-export function attachableFiles(files: readonly PanelFile[], mode: ComposerMode, party: PanelParty | null): PanelFile[] {
-  return files.filter((file) => {
-    if (file.status !== 'AVAILABLE') return false
-    if (mode === 'note') return true
-    return party !== null && file.partyId === party.id && (file.visibility.includes('PARTNER') || file.visibility.includes('LINK'))
-  })
-}
-
-// ── files: audiences, versions, retention ───────────────────────────────────────────────────────────────────────
-
-export interface AudienceBadge {
-  audience: FileAudience | 'OFFICE_ONLY'
-  tone: 'neutral' | 'info' | 'warning'
-  /** A message key of the `records` catalogue. */
-  key: string
-}
-
-/**
- * Who sees a file (COL-050), as badges: "Office only" when nobody else does; otherwise the office and each audience
- * beyond it. A file a party sees (portal or link) is marked as leaving the office (warning tone), so a person never
- * attaches it to a note thinking it is internal.
- */
-export function audienceBadges(visibility: readonly FileAudience[]): AudienceBadge[] {
-  const shared = FILE_AUDIENCES.filter((audience) => audience !== 'OFFICE' && visibility.includes(audience))
-  if (shared.length === 0) return [{ audience: 'OFFICE_ONLY', tone: 'neutral', key: 'files.audience.officeOnly' }]
-  return [
-    { audience: 'OFFICE', tone: 'neutral', key: 'files.audience.OFFICE' },
-    ...shared.map((audience): AudienceBadge => ({ audience, tone: audience === 'FLOOR' ? 'info' : 'warning', key: `files.audience.${audience}` })),
-  ]
-}
-
-export interface FileGroup {
-  key: string
-  /** The newest file of the name: the one in use. */
-  latest: PanelFile
-  /** Its older versions, newest first. */
-  earlier: PanelFile[]
-}
-
-/**
- * The record's files as documents with versions: files of the same kind and name (case and spaces aside) are versions of
- * one document, the newest on top. DELETED files are left out (the history keeps them). The API keeps no version chain
- * of its own (one StoredFile per upload), so a new version is a new upload with the same name.
- */
-export function fileGroups(files: readonly PanelFile[]): FileGroup[] {
-  const groups = new Map<string, PanelFile[]>()
-  for (const file of files) {
-    if (file.status === 'DELETED') continue
-    const key = `${file.kind}:${file.name.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim()}`
-    groups.set(key, [...(groups.get(key) ?? []), file])
-  }
-  const newest = (a: PanelFile, b: PanelFile) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
-  return [...groups.entries()]
-    .map(([key, list]) => {
-      const sorted = [...list].sort(newest)
-      return { key, latest: sorted[0], earlier: sorted.slice(1) }
-    })
-    .sort((a, b) => newest(a.latest, b.latest))
-}
-
-export interface RetentionFact {
-  key: string
-  tone: 'neutral' | 'warning'
-  /** The date to show (ISO), when the fact has one. */
-  until?: string
-}
-
-/**
- * What keeps a file from being deleted, read only (COL-045, PLAN §2.8): a legal hold; a retention date still ahead (a
- * fiscal archive file: ten years at least, c.c. art. 2220). Nothing when the file may go.
- */
-export function retentionFacts(file: Pick<PanelFile, 'kind' | 'retainUntil' | 'legalHold'>, now: Date): RetentionFact[] {
-  const facts: RetentionFact[] = []
-  if (file.legalHold) facts.push({ key: 'files.retention.legalHold', tone: 'warning' })
-  if (file.retainUntil !== null && Date.parse(file.retainUntil) > now.getTime()) {
-    facts.push({ key: file.kind === 'FISCAL_ARCHIVE' ? 'files.retention.fiscal' : 'files.retention.until', tone: 'neutral', until: file.retainUntil })
-  }
-  return facts
-}
-
-/** A file the viewer can show inline: an available PDF. */
-export function canPreview(file: Pick<PanelFile, 'status' | 'contentType'>): boolean {
-  return file.status === 'AVAILABLE' && file.contentType.split(';')[0].trim().toLowerCase() === PDF
-}
-
-/**
  * Record types whose files (all, or some kinds) only their own module uploads (apps/factory-api platform/files/owned.ts
  * MODULE_OWNED_FILES): the generic upload answers 409 for them, so the panel does not offer those kinds. `all`: every kind.
  */
@@ -604,7 +166,7 @@ export function ownedKinds(recordType: string): readonly FileKind[] {
  * The kinds a person may choose at upload (those the record's module does not own: `owned` lists the others, which
  * are added on the record's own page), and the audiences, for this record and person.
  */
-export function uploadChoices(input: { can: Pick<PanelAbilities, 'share'>; party: PanelParty | null; record: Pick<PanelRecord, 'type' | 'siteId' | 'companyId'> }): {
+export function uploadChoices(input: { can: { readonly share: boolean /* files.manage: share beyond the office at upload */ }; party: PanelParty | null; record: Pick<PanelRecord, 'type' | 'siteId' | 'companyId'> }): {
   kinds: readonly FileKind[]
   owned: readonly FileKind[]
   audiences: FileAudience[]
@@ -661,64 +223,11 @@ export function contentTypeOf(name: string): string {
   return BY_EXTENSION[extension] ?? 'application/octet-stream'
 }
 
-/** The `accept` list of the file picker for a kind. */
-export function acceptFor(kind: FileKind): string {
-  const types = new Set(KIND_RULES[kind].contentTypes)
-  const extensions = Object.entries(BY_EXTENSION).filter(([, type]) => types.has(type)).map(([extension]) => `.${extension}`)
-  return [...types, ...extensions].join(',')
-}
-
 // ── the timeline (COL-002) ──────────────────────────────────────────────────────────────────────────────────────────
 
 /** The `kinds` query of a filter chip. */
 export function timelineKinds(filter: TimelineFilter): string | undefined {
   return filter === 'all' ? undefined : filter
-}
-
-const VERBS: Readonly<Record<string, string>> = {
-  create: 'created',
-  update: 'updated',
-  delete: 'deleted',
-  issue: 'issued',
-  suspend: 'suspended',
-  reinstate: 'reinstated',
-  withdraw: 'withdrawn',
-  archive: 'archived',
-  postNote: 'noted',
-  setStatus: 'statusChanged',
-  send: 'sent',
-  requestUpload: 'uploadStarted',
-  completeUpload: 'uploaded',
-  setVisibility: 'shared',
-  setRetention: 'retentionChanged',
-  assign: 'assigned',
-  release: 'released',
-  reject: 'rejected',
-}
-
-/** A change's action in words: the message key of its verb (`history.verb.issued`), `history.verb.changed` otherwise. */
-export function changeVerbKey(action: string): string {
-  const verb = action.slice(action.lastIndexOf('.') + 1)
-  return `history.verb.${VERBS[verb] ?? 'changed'}`
-}
-
-/** A value of a change, in one short line (the API's before and after are JSON). */
-export function valueText(value: unknown): string {
-  if (value === null || value === undefined) return '—'
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  const text = JSON.stringify(value)
-  return text.length > 120 ? `${text.slice(0, 117)}…` : text
-}
-
-/** The fields a change shows with before → after: those whose values the API gave, each as one line. */
-export function changedValues(entry: Extract<PanelTimelineEntry, { kind: 'change' }>): Array<{ field: string; before: string; after: string }> {
-  if (!entry.values) return []
-  const before = (entry.values.before ?? {}) as Record<string, unknown>
-  const after = (entry.values.after ?? {}) as Record<string, unknown>
-  if (typeof before !== 'object' || typeof after !== 'object') return []
-  const fields = entry.fields.length > 0 ? entry.fields : [...new Set([...Object.keys(before), ...Object.keys(after)])]
-  return fields.filter((field) => field in before || field in after).map((field) => ({ field, before: valueText(before[field]), after: valueText(after[field]) }))
 }
 
 // ── live refresh (`GET /live`: thread.message_posted, file.available, email.status_changed) ─────────────────────────

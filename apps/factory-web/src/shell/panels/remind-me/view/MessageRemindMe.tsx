@@ -8,7 +8,7 @@ import { askRemindMe } from '../model'
 
 /**
  * A message's "Remind me" (design shell.panels popup remind-me, opened from "a message's ⋯"): a quiet button in the message's
- * head that asks the record's Remind me control (RecordRemindMe, beside Follow) to open about this message.
+ * head that asks the docked thread's Remind me (areas/_shared/record-thread/use-thread-reminder) to open about this message.
  */
 export function MessageRemindMe({ record, messageId }: { record: { readonly type: string; readonly id: string }; messageId: string }) {
   return (

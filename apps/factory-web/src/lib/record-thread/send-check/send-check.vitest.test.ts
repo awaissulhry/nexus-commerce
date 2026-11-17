@@ -1,6 +1,5 @@
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
-import { MIS_SEND_WARNINGS, RECIPIENT_KINDS as MIS_SEND_KINDS } from '../../../shell/panels/mis-send/model'
 import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
 import { scanText } from '../../testing/brand-scan'
 import { everyCase, leftKeys, render, textOf } from '../parts/testing'
@@ -30,9 +29,11 @@ const bruno: Recipient = { address: BRAND_BETA.contact.email, name: BRAND_BETA.c
 const check = (more: Partial<SendCheck> = {}): SendCheck => ({ party: { id: 'a', name: BRAND_ALPHA.tradeName }, recipients: [], warnings: [], attachments: [], outsideCustomer: [], ...more })
 
 describe('the codes are the API’s (the mis-send read)', () => {
-  it('the same six warnings and four recipient kinds as the old panels’ check', () => {
-    expect([...CHECK_WARNINGS]).toEqual([...MIS_SEND_WARNINGS])
-    expect([...RECIPIENT_KINDS]).toEqual([...MIS_SEND_KINDS])
+  // B-TH-280: the old record panels' guard (shell/panels/mis-send) went; the codes are compared with the API's own list
+  // (apps/factory-api platform/email-out/mis-send/rules.ts MIS_SEND_WARNINGS, RECIPIENT_KINDS) as written there.
+  it('the same six warnings and four recipient kinds as the API', () => {
+    expect([...CHECK_WARNINGS]).toEqual(['OTHER_ORGANISATION', 'UNKNOWN_RECIPIENT', 'MENTIONS_COST', 'NAMES_OTHER_CUSTOMER', 'INTERNAL_MENTION', 'OFFICE_FILE'])
+    expect([...RECIPIENT_KINDS]).toEqual(['PARTY', 'OTHER_PARTY', 'OURS', 'UNKNOWN'])
   })
 })
 

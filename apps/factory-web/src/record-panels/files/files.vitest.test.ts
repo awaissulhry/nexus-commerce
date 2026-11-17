@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -7,14 +8,18 @@ import type { Rule, RulesAnswer } from '../../areas/admin/documents/required/api
 import { LOCALES } from '../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../lib/i18n/messages'
 import { I18nProvider } from '../../lib/i18n/provider'
+import type { ApiFile } from '../api'
 import type { PanelFile } from '../model'
 import { designScreen as filesScreen } from './fixtures'
-import { compareHeld, expiryTag, markupHeld, markupSaveHeld, moveState, openMoves, pick, restoreHeld, seriesGroups, tagBody, tagHeld, tagProblem, type DocumentsState } from './model'
+import { compareHeld, expiryTag, markupHeld, markupSaveHeld, missingOf, panelFileOf, pick, restoreHeld, tagBody, tagHeld, tagProblem, type DocumentsState } from './model'
 import { documentsStateOf, versionRowsOf } from './use-file-depth'
+// B-TH-280: the depth parts as the docked thread's Files view slots draw them.
+import type { FilesDepthCaseModel } from './view/FilesDepthCase'
+import { DepthActions, DepthTags, DepthTop } from './view/DepthParts'
 
 /**
- * B-W2b-177: the files panel in depth (SCR-006-files) and Admin › Required documents (SCR-014-required) — their pure rules,
- * and every design case drawn in it and en with no message key left on screen.
+ * B-W2b-177: the files in depth (SCR-006-files; B-TH-280: in the docked thread's Files view) and Admin › Required documents
+ * (SCR-014-required) — their pure rules, and every design case drawn in it and en with no message key left on screen.
  */
 
 const file = (id: string, extra: Partial<PanelFile> = {}): PanelFile => ({
@@ -35,20 +40,6 @@ const file = (id: string, extra: Partial<PanelFile> = {}): PanelFile => ({
 })
 
 describe('files in depth (SCR-006-files)', () => {
-  it('groups a series by its first version, the newest number on top; files without versions by name, as before', () => {
-    const groups = seriesGroups([
-      file('a', { versionNo: 1, seriesId: null, supersededAt: '2026-10-21T09:00:00Z' }),
-      file('b', { versionNo: 2, seriesId: 'a', name: 'pattern (marked).pdf', createdAt: '2026-10-21T09:00:00Z' }),
-      file('c', { name: 'old.pdf' }),
-      file('d', { name: 'old.pdf', createdAt: '2026-10-19T10:00:00Z' }),
-      file('e', { status: 'DELETED', versionNo: 1 }),
-    ])
-    expect(groups.map((group) => [group.latest.id, group.earlier.map((item) => item.id)])).toEqual([
-      ['b', ['a']],
-      ['c', ['d']],
-    ])
-  })
-
   it('says each expiry and what each move still needs', () => {
     const doc = { fileId: 'f', name: 'x', category: 'DECLARATION', ofParty: false }
     expect(expiryTag({ ...doc, expiresOn: null, expiryState: 'NONE', daysLeft: null })).toBeNull()
@@ -58,9 +49,46 @@ describe('files in depth (SCR-006-files)', () => {
     const met = { toStatus: 'SENT', requirements: [{ ruleId: '1', category: 'PROOF', level: 'BLOCK' as const, reason: 'MET' as const, fileId: 'f', expiresOn: null }] }
     const warn = { toStatus: 'RECEIVED', requirements: [{ ruleId: '2', category: 'TEST_REPORT', level: 'WARN' as const, reason: 'MISSING' as const, fileId: null, expiresOn: null }] }
     const block = { toStatus: 'CONFIRMED', requirements: [{ ruleId: '3', category: 'SUPPLIER_CERTIFICATE', level: 'BLOCK' as const, reason: 'EXPIRED' as const, fileId: 'g', expiresOn: '2026-10-28' }] }
-    expect(moveState(block)).toEqual({ blocks: 1, warnings: 0 })
-    expect(openMoves([met, warn, block]).map((move) => move.toStatus)).toEqual(['CONFIRMED', 'RECEIVED'])
+    // ---- B-TH-280: what the next moves still need, as the Files view's "Missing before …" lines: the blocking ones first, an expired
+    // document with its day, nothing met, nothing while the documents are read.
+    const documents = { status: 'ready' as const, value: { moves: [met, warn, block] } as unknown as DocumentsState }
+    expect(missingOf(documents)).toEqual([
+      { id: 'CONFIRMED:3', category: 'SUPPLIER_CERTIFICATE', toStatus: 'CONFIRMED', level: 'BLOCK', expiredOn: '2026-10-28' },
+      { id: 'RECEIVED:2', category: 'TEST_REPORT', toStatus: 'RECEIVED', level: 'WARN', expiredOn: null },
+    ])
+    expect(missingOf({ status: 'loading' })).toEqual([])
+    expect(missingOf({ status: 'failed', problem: 'depth.problem.failed' })).toEqual([])
+    // ---- end B-TH-280
   })
+
+  // ---- B-TH-280: the old record panels' fileOf, moved with the depth parts
+  it('maps the record’s file as the depth parts take it (its series version only when the API names one)', () => {
+    const api = { id: 'f1', originalName: 'pattern.pdf', kind: 'DOCUMENT', contentType: 'application/pdf', sizeBytes: 10, status: 'AVAILABLE', visibility: ['OFFICE', 'PARTNER'], partyId: 'p1', retainUntil: null, legalHold: undefined, quarantineReason: null, availableAt: '2026-10-20T10:00:00Z', createdAt: '2026-10-20T10:00:00Z', versionNo: 2, seriesId: 'f0', supersededAt: null, version: 4 } as unknown as ApiFile
+    expect(panelFileOf(api)).toMatchObject({ id: 'f1', name: 'pattern.pdf', partyId: 'p1', legalHold: false, versionNo: 2, seriesId: 'f0', supersededAt: null, version: 4 })
+    const plain = panelFileOf({ ...api, versionNo: undefined } as unknown as ApiFile)
+    expect(plain).not.toHaveProperty('versionNo')
+    expect(plain.version).toBe(4)
+  })
+
+  it('lives in the docked thread’s Files view: its slots, one documents read, no record panels', () => {
+    const docked = readFileSync(new URL('../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('useFileDepth(')
+    expect(docked).toContain('slots={depthSlots')
+    for (const part of ['<DepthTop ', '<DepthTags ', '<DepthActions ', '<DepthDialogs ']) expect(docked).toContain(part)
+    // One GET /files/documents: the view's "Missing before …" lines come from the depth's own read.
+    expect(docked).not.toContain('readDocuments(')
+    expect(docked).toContain('missingOf(depth.model.documents)')
+    const view = readFileSync(new URL('../../lib/record-thread/files-view/view/FilesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('export interface FilesViewSlots')
+    expect(view).toContain('slots?.tags?.(file.id)')
+    // A sheet locked for this reader has no depth actions.
+    expect(view).toContain('file.locked ? null : (slots?.rowActions?.(file.id) ?? null)')
+    for (const name of ['fixtures.ts', 'view/DepthParts.tsx', 'view/FilesDepthCase.tsx', 'use-file-depth.ts']) {
+      const source = readFileSync(new URL(`./${name}`, import.meta.url), 'utf8')
+      expect(source, name).not.toMatch(/RecordPanels|record-panels\.css|fw-rp-/)
+    }
+  })
+  // ---- end B-TH-280
 
   it('holds what a file may not do here, with the reason', () => {
     const ready = { status: 'ready' as const, value: { mayTag: true } as DocumentsState }
@@ -163,13 +191,20 @@ const LEFT_KEY = /\b(?:req|docs|depth|versions|tag|markup|required|files|expiry|
 describe('every design case in it and en, no key on screen; both catalogues have the same keys', () => {
   for (const locale of LOCALES) {
     it(`in ${locale}`, () => {
-      for (const screen of [filesScreen, requiredScreen]) {
-        const View = screen.view as ComponentType<{ model: unknown }>
-        for (const item of screen.cases) {
-          const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: item.model })))
-          expect(html.length, item.id).toBeGreaterThan(500)
-          expect(html.match(LEFT_KEY)?.[0] ?? null, `${screen.screen} ${item.id} (${locale})`).toBeNull()
-        }
+      // B-TH-280: SCR-006-files draws the Files view (a DS Modal, drawn after hydration only): its depth parts are drawn here as the
+      // view's slots draw them — above the list, and each file's tags and actions.
+      for (const item of filesScreen.cases) {
+        const model = item.model as FilesDepthCaseModel
+        const parts = createElement('div', null, createElement(DepthTop, { depth: model.depth }), ...model.files.map((one) => createElement('div', { key: one.id }, createElement(DepthTags, { depth: model.depth, file: one }), createElement(DepthActions, { depth: model.depth, file: one }))))
+        const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, parts))
+        expect(html.length, item.id).toBeGreaterThan(500)
+        expect(html.match(LEFT_KEY)?.[0] ?? null, `${filesScreen.screen} ${item.id} (${locale})`).toBeNull()
+      }
+      for (const item of requiredScreen.cases) {
+        const View = requiredScreen.view as ComponentType<{ model: unknown }>
+        const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: item.model })))
+        expect(html.length, item.id).toBeGreaterThan(500)
+        expect(html.match(LEFT_KEY)?.[0] ?? null, `${requiredScreen.screen} ${item.id} (${locale})`).toBeNull()
       }
     })
   }

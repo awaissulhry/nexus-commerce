@@ -480,3 +480,38 @@ describe('B-TH-253 — the projects in Home’s Messages card', () => {
     expect(renderCase('th-253-projects', 'it')).toContain('Progetti')
   })
 })
+
+// ---- B-TH-287 (P-HOME.actions-F02, P-CUS-NEW.message-F02; wall W08, W37): the New order draft saved on the server ---------------------
+describe('B-TH-287 — Home: "Draft: … · saved 10:42 · Continue" from the server', () => {
+  const draw = (start: StartModel, locale: 'it' | 'en' = 'en') => {
+    const model = { prefix: '/p/BRAND-BETA', search: null, welcome: null, tiles: null, orders: null, documents: null, messages: null, approve: null, document: null, start } as CustomerHomeViewModel
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['portal-customer-home', 'ds-words']) }, createElement(CustomerHomeView, { model, tasks: null })))
+  }
+
+  it('a draft saved on the server says "saved", one kept here only says "kept on this device"; Continue opens New order', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const saved = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [], draft: { subject: BRAND_BETA.customerRef, at: '10:42', where: 'server' } }, locale)
+      expect(saved).toContain(locale === 'en' ? 'saved 10:42' : 'salvata alle 10:42')
+      expect(saved).not.toContain(locale === 'en' ? 'kept on this device' : 'tenuta su questo dispositivo')
+      expect(saved).toMatch(/href="\/p\/BRAND-BETA\/orders\/new">[^<]*(Continue|Continua)/)
+      expect(saved).not.toMatch(KEY)
+      expect(scanText(saved, BRAND_ALPHA)).toEqual([])
+      const device = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [], draft: { subject: BRAND_BETA.customerRef, at: '10:42', where: 'device' } }, locale)
+      expect(device).toContain(locale === 'en' ? 'kept on this device · 10:42' : 'tenuta su questo dispositivo · 10:42')
+    }
+  })
+
+  it('no right to order, or a preview (no New order address): no draft line at all', () => {
+    expect(draw({ newOrderHref: null, buyer: false, admins: [], draft: { subject: 'x', at: '10:42', where: 'server' } })).not.toContain('Draft:')
+  })
+
+  it('the design case draws in Italian and English with no raw key', () => {
+    const entry = designScreen.cases.find((item) => item.id === 'th9-287-draft-saved')!
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+      expect(html).toContain(locale === 'en' ? 'saved ' : 'salvata alle ')
+      expect(html).not.toMatch(KEY)
+    }
+  })
+})
+// ---- end B-TH-287

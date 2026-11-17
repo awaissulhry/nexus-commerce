@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import type { PanelFollowers, PanelRead, RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { PanelFollowers, PanelRead } from '../../../../record-panels/model'
 import type { Assignable } from '../../../../record-panels/tasks/model'
 import type { ApprovalsPanelModel } from '../../../../record-panels/approvals/model'
 import { AskDialog } from '../../../../record-panels/approvals/view/AskDialog'
 import { SHARES_NS, type SharesPanelModel } from '../../../../record-panels/share/model'
 import { InviteDialog } from '../../../../record-panels/share/view/InviteDialog'
-import { FollowersControl } from '../../../../record-panels/view/FollowersControl'
-import { TaskNewDialog } from '../../../../record-panels/view/TaskNewDialog'
+import { FollowersControl } from '../../../../record-panels/tasks/view/FollowersControl'
+import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
 import { RemindMeDialog } from '../../../../shell/panels/remind-me/view/RemindMeDialog'
 import { CloseThreadConfirm } from '../../popups/view/Confirms'
 import type { DockWidth, HeadDoor, HeadModel, ThreadView } from '../model'
@@ -58,8 +58,11 @@ function Case({ model }: { model: HeadCaseModel }) {
   const [view, setView] = useState<ThreadView>(model.head.view)
   const [width, setWidth] = useState<DockWidth | null>(model.head.width)
   const [follow, setFollow] = useState(model.head.follow)
+  // ---- B-TH-288: Done and the search, played in the case (made-up hits; nothing is asked).
+  const [done, setDone] = useState(model.head.done)
+  const [search, setSearch] = useState(model.head.search ?? null)
   const close = () => setOpen(null)
-  const head: HeadModel = { ...model.head, view, width, follow }
+  const head: HeadModel = { ...model.head, view, width, follow, ...(done !== undefined ? { done } : {}), search }
   const actions = {
     onDoor: (door: HeadDoor) => {
       if (door === 'follow' && follow) return setFollow({ following: !follow.following, muted: false })
@@ -70,6 +73,13 @@ function Case({ model }: { model: HeadCaseModel }) {
     onWidth: (choice: DockWidth | 'hide' | 'reset') => setWidth(choice === 'hide' ? width : choice === 'reset' ? 'forty' : choice),
     onCloseThread: () => setOpen('close'),
     onOwner: () => setOpen('owner'),
+    // ---- B-TH-288
+    onDone: (next: boolean) => setDone(next ? { at: new Date(model.head.now).toISOString(), by: 'Alex Demo' } : null),
+    onSearch: (next: boolean) => setSearch((now) => (now ? { ...now, open: next } : now)),
+    search: {
+      onQuery: (query: string) => setSearch((now) => (now ? { ...now, query, state: query.trim().length >= 2 ? 'ready' : query.trim() === '' ? 'idle' : 'short' } : now)),
+      onPick: () => setSearch((now) => (now ? { ...now, open: false } : now)),
+    },
   }
   const { dialogs } = model
   return (
@@ -81,7 +91,7 @@ function Case({ model }: { model: HeadCaseModel }) {
             {model.portal ? <PortalHeadLine model={model.portal} /> : <RecordThreadHead model={frame === 375 ? { ...head, compact: true, width: null } : head} actions={actions} />}
             {open === 'followers' && frame === model.frames[0] ? (
               <div className="fw-rth-open">
-                <FollowersControl model={{ followers: { ...dialogs.followers, open: true } } as unknown as RecordPanelsViewModel} />
+                <FollowersControl model={{ followers: { ...dialogs.followers, open: true } }} />
               </div>
             ) : (
               <div className="fw-rth-feed" aria-hidden />

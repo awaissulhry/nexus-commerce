@@ -34,7 +34,7 @@ export type { SampleRecordActions, SampleRecordModel } from '../view-model'
  * new tab.
  */
 // B-TH-262: `thread` is the docked thread (the office's OfficeRecordThread docked, or a design case's), `printThread` what the print view
-// shows of it (the record panels' print form).
+// shows of it (ThreadPrint: the thread for paper, B-TH-280).
 export function SampleRecordView({ model, actions, thread, printThread }: { model: SampleRecordModel; actions?: SampleRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <SamplesMessages>

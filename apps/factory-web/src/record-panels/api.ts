@@ -72,9 +72,6 @@ export const messageSchema = z.object({
 })
 export type ApiMessage = z.infer<typeof messageSchema>
 
-const threadPage = z.object({ thread: threadSchema.nullable(), messages: z.array(messageSchema), nextCursor: z.string().nullable() })
-export type ThreadPage = z.infer<typeof threadPage>
-
 export const fileSchema = z.object({
   id: z.string(),
   companyId: z.string().nullable(),
@@ -166,11 +163,6 @@ export interface RecordKey {
   id: string
 }
 
-/** GET /threads/<type>/<id>: the thread and a page of its messages, newest first. */
-export function readThread(api: ApiClient, record: RecordKey, cursor?: string | null, signal?: AbortSignal): Promise<ThreadPage> {
-  return api.get(recordPath(record.type, record.id), { query: { cursor: cursor ?? undefined, limit: 30 }, schema: threadPage, signal })
-}
-
 /** GET /threads/<type>/<id>/emails: the mail sent from the thread and where each one is. */
 export function listEmails(api: ApiClient, record: RecordKey, signal?: AbortSignal): Promise<{ emails: ApiEmail[] }> {
   return api.get(`${recordPath(record.type, record.id)}/emails`, { query: { limit: 200 }, schema: z.object({ emails: z.array(emailSchema) }), signal })
@@ -199,15 +191,6 @@ export function listFiles(api: ApiClient, record: RecordKey, signal?: AbortSigna
 export function postNote(api: ApiClient, record: RecordKey, input: { body: string; mentions: readonly string[]; attachments: readonly string[]; forFloor?: boolean }): Promise<unknown> {
   return api.post(`${recordPath(record.type, record.id)}/notes`, {
     body: { body: input.body, mentions: [...input.mentions], attachments: [...input.attachments], ...(input.forFloor ? { forFloor: true } : {}) },
-    idempotencyKey: newIdempotencyKey(),
-  })
-}
-
-/** POST /threads/<type>/<id>/emails: a mail to the record's party, as the person (COL-024). */
-export function sendEmail(api: ApiClient, record: RecordKey, input: { to: readonly string[]; subject?: string; body: string; attachments: readonly string[]; sendOutside?: boolean }): Promise<unknown> {
-  return api.post(`${recordPath(record.type, record.id)}/emails`, {
-    // B-TH-202: the person's recorded "Send outside this customer" tick (the brand wall, B-TH-004), only when given.
-    body: { to: [...input.to], ...(input.subject ? { subject: input.subject } : {}), body: input.body, attachments: [...input.attachments], ...(input.sendOutside ? { sendOutside: true } : {}) },
     idempotencyKey: newIdempotencyKey(),
   })
 }

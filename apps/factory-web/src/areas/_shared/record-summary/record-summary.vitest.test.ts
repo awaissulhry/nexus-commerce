@@ -33,6 +33,14 @@ const view = designScreen.view as ComponentType<{ model: unknown }>
 const caseOf = (id: string) => designScreen.cases.find((item) => item.id === id)!.model
 
 describe('the summary answer (B-TH-076) as the page reads it', () => {
+  // ---- follow-up (th9-web-b): the office answer names the record's party; a portal-shaped answer without it still reads (absent).
+  it('reads the record’s party of the office answer, null for none, absent when the answer has none', () => {
+    const base = { recordType: 'SalesOrder', recordId: 'o1', type: W('Sales order', 'Ordine di vendita'), label: 'SO-1', state: null, parent: null }
+    expect(summarySchema.parse({ summary: { ...base, party: { id: 'p1', name: BRAND_ALPHA.tradeName } } }).summary.party).toEqual({ id: 'p1', name: BRAND_ALPHA.tradeName })
+    expect(summarySchema.parse({ summary: { ...base, party: null } }).summary.party).toBeNull()
+    expect(summarySchema.parse({ summary: base }).summary.party).toBeUndefined()
+  })
+  // ---- end follow-up
   it('reads the office answer; their reference is null when the API leaves it out; a parent or none', () => {
     const answer = summarySchema.parse({ summary: { recordType: 'Ddt', recordId: 'd1', type: W('Delivery note', 'Documento di trasporto'), label: 'DDT-1', state: null, parent: null, extra: 'ignored' } })
     expect(answer.summary.theirRef).toBeNull()
@@ -167,8 +175,8 @@ describe('the page (SCR-006-generic)', () => {
   })
 })
 
-describe('the container (record-panels/RecordPage.tsx)', () => {
-  const source = readFileSync(new URL('../../../record-panels/RecordPage.tsx', import.meta.url), 'utf8')
+describe('the container (record-summary/RecordPage.tsx)', () => {
+  const source = readFileSync(new URL('./RecordPage.tsx', import.meta.url), 'utf8')
 
   it('reads the summary first and mounts the office thread full page only once the record is readable (no RecordFrame dock)', () => {
     expect(source).toContain('readRecordSummary(api, record, signal)')
@@ -177,14 +185,20 @@ describe('the container (record-panels/RecordPage.tsx)', () => {
     expect(source).toContain('<GenericRecordView')
   })
 
-  it('names "Reply to <party>" from the thread’s party only with parties.view; notes only otherwise', () => {
+  // ---- follow-up (th9-web-b): the party comes with the summary (office only), so "Reply to <party>" works before the first message.
+  it('names "Reply to <party>" from the summary’s party — before any message —, its role only with parties.view, else “partner”', () => {
+    expect(source).toContain('summary?.party ?? null')
+    expect(source).not.toContain('readThreadParty')
     expect(source).toContain("session.permissions.includes('parties.view')")
-    expect(source).toContain('if (!partyId || !seesParties) return')
+    expect(source).toContain('if (!summaryPartyId || !seesParties) return')
+    expect(source).toContain("role?.partyId === summaryParty.id ? role.role : 'partner'")
     expect(source).toContain('party={party ? { id: party.id, name: party.name } : null}')
   })
+  // ---- end follow-up
 
-  it('keeps the project’s own address (B-TH-249) and the panels’ print form', () => {
+  it('keeps the project’s own address (B-TH-249) and prints the thread with ThreadPrint (B-TH-280)', () => {
     expect(source).toContain("if (type === 'Project') return <ToProjectPage id={id} />")
-    expect(source).toContain('<RecordPanels record={threadRecord}')
+    expect(source).toContain('<ThreadPrint record={threadRecord}')
+    expect(source).not.toContain('RecordPanels')
   })
 })

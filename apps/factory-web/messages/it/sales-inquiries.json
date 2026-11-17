@@ -826,7 +826,14 @@
       "portal": "Chiedi a {customer}: la domanda va nel suo portale (riceve l'avviso del portale per e-mail). La richiesta poi aspetta la risposta.",
       "mail": "Chiedi a {customer}: la domanda parte per e-mail dalla richiesta dopo il controllo di invio. La richiesta poi aspetta la risposta."
     },
-    "atFirst": "È la prima riga di questa vista"
+    "atFirst": "È la prima riga di questa vista",
+    "pinNote": {
+      "action": "Sposta nella conversazione come nota fissata",
+      "hint": "Un solo posto per le note interne: diventa una nota interna fissata per prima nella conversazione e questo campo si svuota.",
+      "done": "La nota della richiesta ora è la prima nota interna fissata della conversazione.",
+      "none": "Questa richiesta non ha più una nota da spostare.",
+      "offline": "Sei offline."
+    }
   },
   "orderStatus": {
     "CONFIRMED": "Confermato",

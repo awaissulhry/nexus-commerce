@@ -9,7 +9,8 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useOrderMargin } from './margin/use-margin'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import { findStyles, getStyle, listVersions, type StyleDetail, type VersionsAnswer } from '../../quotes/api'
 import {
   applyAmendment,
@@ -475,7 +476,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     <OrderRecordView
       model={model}
       delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
-      // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view keeps the panels' print form.
+      // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view prints the thread with ThreadPrint (B-TH-280).
       thread={
         value ? (
           <OfficeRecordThread
@@ -489,7 +490,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
           />
         ) : null
       }
-      printThread={value ? <RecordPanels record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName, emails: [] } : null} /> : null}
+      printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
+      // B-TH-280: the order's custom fields at the end of its first tab (Lines), as the old panels drew them above theirs.
+      fields={value && tab === 'lines' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
       actions={{
         onPortal: () => {
           const current = order.status === 'ready' ? order.value : null

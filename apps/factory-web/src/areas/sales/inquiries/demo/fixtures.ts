@@ -1,8 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { permissionCheck } from '../../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
 // B-TH-217: the reading pane's thread in the design cases (RecordThread v1 on made-up messages).
 import { DEMO_NOW, demoThread, OFFICE_PEOPLE } from '../../../../lib/record-thread/demo-data'
 import { RecordThread, type RecordThreadActions, type RecordThreadModel } from '../../../../lib/record-thread/RecordThread'
@@ -510,15 +508,6 @@ export const MAIL_DRAFT: MailDraft = {
 
 /** The same mail once it was made into an inquiry. */
 export const MAIL_TAKEN: MailDraft = { ...MAIL_DRAFT, inquiry: { id: ROWS[1]!.id, number: ROWS[1]!.number }, refusal: { code: 'MAIL_TAKEN', message: 'x' } }
-
-// ---- the record panels of the Activity tab and of Files & specs (the panels' own made-up cases) ---------------------------------
-
-const panelsCase = (id: string): RecordPanelsViewModel => (panelsScreen.cases.find((one) => one.id === id) ?? panelsScreen.cases[0]!).model
-export const panelsOf = (view: InquiryView, which: 'conversation' | 'files'): RecordPanelsViewModel => ({
-  ...panelsCase(which),
-  record: { type: 'Inquiry', id: view.id, companyId: view.companyId, siteId: null },
-  title: `${view.number} · ${view.party?.name ?? view.fromWords}`,
-})
 
 // ---- B-TH-217: the reading pane's thread in the design cases (made up; nothing is sent) ----------------------------------------
 

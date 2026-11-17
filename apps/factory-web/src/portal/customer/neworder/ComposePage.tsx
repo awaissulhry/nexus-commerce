@@ -27,7 +27,6 @@ import {
   type LastSent,
   type ShipToChoice,
 } from '../../../lib/request-compose/model'
-import type { RequestComposeModel } from '../../../lib/request-compose/view/RequestCompose'
 import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
 import { pageBuilt } from '../../shell/nav/portal-nav'
@@ -47,12 +46,16 @@ import { filesOutcome } from '../../../lib/request-compose/files'
 import { useRequestFiles } from '../requests/use-request-files'
 import { requestHref } from '../requests/model'
 import { useOrderingWords } from './words'
+// B-TH-287: the draft on the server (one per person), beside the copy on this device.
+import { draftSaver, fromServerDraft, keptLineOf, newerDraft, type DeviceKept, type ServerSave } from '../../../lib/request-compose/server-draft'
+import { discardNewRequestDraft, fetchNewRequestDraft, saveNewRequestDraft, type ServerDraftRead } from './api'
 
 /**
  * `/p/<party>/orders/new` for a customer — New order as an e-mail (B-TH-220, B-TH-303; threads plan P-CUS-NEW; Owner ask "send
  * orders exactly like an email"). Reads whether the company takes requests (GET /portal/inquiries/open: held BEFORE typing,
  * the API's own words), the person's delivery addresses (with portal.addresses.view) and its open requests (the side column),
- * keeps the draft on THIS device while it is typed (until drafts live on the server, N6), carries a catalogue style or a past
+ * keeps the draft on the server (B-TH-287: GET|PUT|DELETE /portal/drafts/new-request, "Draft saved 10:42") and on THIS device
+ * (offline, or a save that failed), carries a catalogue style or a past
  * order into the message when the address names one (`styles=`, `reorder=&line=`), and sends POST /portal/inquiries with ONE
  * Idempotency-Key per content (a double click, a retry after a lost answer: one request). The body names no party and no
  * company: the session's (W11). Same words twice within ten minutes asks first. The receipt says the customer's own number.
@@ -100,7 +103,7 @@ function ComposeContainer() {
   const [requests, setRequests] = useState<Async<RequestRow[]>>({ state: can('portal.salesOrders.view') ? 'loading' : 'none', value: [] })
   const [draft, setDraft] = useState<ComposeDraft>(EMPTY_COMPOSE)
   const [loaded, setLoaded] = useState(false)
-  const [kept, setKept] = useState<RequestComposeModel['kept']>({ state: 'none' })
+  const [kept, setKept] = useState<DeviceKept>({ state: 'none' })
   const [shown, setShown] = useState<Partial<Record<ComposeField, true>>>({})
   const [refused, setRefused] = useState<Partial<Record<ComposeField, string>>>({})
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -148,18 +151,96 @@ function ComposeContainer() {
   }, [readOpen, readAddresses, readRequests])
   usePortalLive({ onChange: (change) => (change.type.startsWith('inquiry.') ? void readRequests() : undefined), onReconnect: () => void readRequests() })
 
-  // The draft kept on this device (read after mounting: the server and the first client render agree on an empty compose).
+  // ---- B-TH-287: the draft on the server — ONE saver (a pause in typing saves, leaving saves; a send or a discard never lets a late save
+  // bring the words back). Only a buyer outside a preview asks the server (a preview of the portal saves nothing; offline waits).
+  const [server, setServer] = useState<ServerSave>({ state: 'idle' })
+  const serverOn = mayOrder && !preview
+  const serverOnRef = useRef(serverOn)
+  serverOnRef.current = serverOn
+  const offlineRef = useRef(offline)
+  offlineRef.current = offline
+  const keepKeyRef = useRef(keepKey)
+  keepKeyRef.current = keepKey
+  const timeOf = useCallback((ms: number) => formatTime(new Date(ms).toISOString(), { locale, timeZone: DEFAULT_TIME_ZONE }), [locale])
+  const saver = useMemo(
+    () =>
+      draftSaver({
+        enabled: () => serverOnRef.current && !offlineRef.current,
+        save: async (body) => {
+          const answer = await saveNewRequestDraft(api, body)
+          return { savedAt: answer.draft.savedAt, version: answer.draft.version, replacedNewer: answer.replacedNewer }
+        },
+        discard: () => discardNewRequestDraft(api),
+        onSaved: (saved) => {
+          setServer({ state: 'saved', at: saved.savedAt, replaced: saved.replacedNewer })
+          // The device's copy says the server has the same words (nothing typed since), at the server's time.
+          if (!saved.typedSince) writeKeptCompose(storageOf(), keepKeyRef.current, saved.draft, saved.savedAt, true)
+        },
+        onFailed: () => setServer({ state: 'failed' }),
+        onDiscarded: () => setServer({ state: 'idle' }),
+      }),
+    [api],
+  )
+  // Leaving (another page of the portal, the tab hidden, the page closed): what waits is saved now; no timer stays behind.
   useEffect(() => {
-    const found = readKeptCompose(storageOf(), keepKey, Date.now())
-    if (found) {
-      setDraft(found.draft)
-      setKept({ state: 'kept', at: formatTime(new Date(found.savedAt).toISOString(), { locale, timeZone: DEFAULT_TIME_ZONE }) })
-      if (found.draft.customerRef || found.draft.wantedDate || found.draft.shipToAddressId) setDetailsOpen(true)
+    const away = () => {
+      if (document.visibilityState === 'hidden') saver.flush()
     }
-    setLoaded(true)
+    const leave = () => saver.flush()
+    document.addEventListener('visibilitychange', away)
+    window.addEventListener('pagehide', leave)
+    return () => {
+      document.removeEventListener('visibilitychange', away)
+      window.removeEventListener('pagehide', leave)
+      saver.flush()
+      saver.stop()
+    }
+  }, [saver])
+  // Back online: what was typed meanwhile goes to the server.
+  useEffect(() => {
+    if (!offline) saver.flush()
+  }, [offline, saver])
+
+  // The draft on arrival (read after mounting: the server and the first client render agree on an empty compose): the newer of the
+  // server's and this device's copy; a device copy the server no longer keeps (sent or discarded elsewhere) is forgotten.
+  useEffect(() => {
+    let gone = false
+    const device = readKeptCompose(storageOf(), keepKey, Date.now())
+    const restore = (read: ServerDraftRead | null, readOk: boolean) => {
+      if (gone) return
+      if (read) saver.known(read.version)
+      const chosen = newerDraft(fromServerDraft(read), device, readOk)
+      if (chosen?.forget) writeKeptCompose(storageOf(), keepKey, EMPTY_COMPOSE, Date.now())
+      else if (chosen) {
+        setDraft(chosen.draft)
+        if (chosen.source === 'server') {
+          setServer({ state: 'saved', at: chosen.savedAt, replaced: false })
+          const copied = writeKeptCompose(storageOf(), keepKey, chosen.draft, chosen.savedAt, true)
+          if (copied !== null && copied !== 'failed') setKept({ state: 'kept', at: timeOf(copied.savedAt) })
+        } else {
+          setKept({ state: 'kept', at: timeOf(chosen.savedAt) })
+          // This device's newer words go to the server too.
+          if (serverOnRef.current) saver.typed(chosen.draft)
+        }
+        if (chosen.draft.customerRef || chosen.draft.wantedDate || chosen.draft.shipToAddressId) setDetailsOpen(true)
+      }
+      setLoaded(true)
+    }
+    if (!serverOnRef.current) {
+      restore(null, false)
+      return
+    }
+    fetchNewRequestDraft(api).then(
+      (read) => restore(read, true),
+      () => restore(null, false),
+    )
+    return () => {
+      gone = true
+    }
     // Read once per person and portal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keepKey])
+  // ---- end B-TH-287
 
   const keep = useCallback(
     (next: ComposeDraft) => {
@@ -180,6 +261,7 @@ function ComposeContainer() {
         const next = { ...current, [field]: value }
         if (keepTimer.current) clearTimeout(keepTimer.current)
         keepTimer.current = setTimeout(() => keep(next), 600)
+        saver.typed(next) // B-TH-287: on the server after a pause
         return next
       })
       // New words are a new request: a new key; the "same words" question and a refusal at the field go.
@@ -193,7 +275,7 @@ function ComposeContainer() {
         return rest
       })
     },
-    [keep],
+    [keep, saver],
   )
 
   // A style from the catalogue or a past order, carried into the message once (then the address forgets it).
@@ -214,6 +296,7 @@ function ComposeContainer() {
             setDraft((current) => {
               const next = withCarried(current, text)
               keep(next)
+              saver.typed(next) // B-TH-287
               return next
             })
             setNotice(t('request.styleNotice', { count: found.length }))
@@ -224,6 +307,7 @@ function ComposeContainer() {
           setDraft((current) => {
             const next = withCarried(current, text)
             keep(next)
+            saver.typed(next) // B-TH-287
             return next
           })
           setNotice(t('request.reorderNotice', { yours: text.yours }))
@@ -234,7 +318,7 @@ function ComposeContainer() {
         router.replace(`${frame.prefix}/orders/new`, { scroll: false })
       }
     })()
-  }, [loaded, mayOrder, search, api, locale, t, keep, router, frame.prefix])
+  }, [loaded, mayOrder, search, api, locale, t, keep, router, frame.prefix, saver])
 
   // ── send ──
   const closed = open.state === 'ready' && !open.open
@@ -262,8 +346,13 @@ function ComposeContainer() {
       setSending(true)
       setFailed(null)
       setSame(null)
+      saver.sending() // B-TH-287: no save goes while the request does
       try {
         const result = await sendRequest(api, sendBodyOf(draft), key.current)
+        // ---- B-TH-287: the send cleared the server's draft in its own command; a save that was on its way is taken back.
+        saver.sent()
+        setServer({ state: 'idle' })
+        // ---- end B-TH-287
         writeLastSent(storageOf(), sentKey, { fingerprint: fingerprintOf(draft), at: Date.now(), yours: result.receipt.yourNumber?.words ?? null })
         writeKeptCompose(storageOf(), keepKey, EMPTY_COMPOSE, Date.now())
         if (keepTimer.current) clearTimeout(keepTimer.current)
@@ -280,6 +369,7 @@ function ComposeContainer() {
         void readRequests()
         return true
       } catch (error) {
+        saver.sendFailed() // B-TH-287: the words wait to be saved again
         const kind = isApiError(error) ? error.kind : null
         if (isApiError(error) && kind === 'conflict' && closedRefusal(error.issues)) void readOpen()
         if (isApiError(error) && kind === 'invalid') {
@@ -302,17 +392,22 @@ function ComposeContainer() {
         setSending(false)
       }
     },
-    [held, draft, today, sentKey, api, keepKey, frame, readRequests, readOpen, t, files],
+    [held, draft, today, sentKey, api, keepKey, frame, readRequests, readOpen, t, files, saver],
   )
 
   // Leaving loses nothing while the draft is kept here; without storage (a private window) it asks first.
   // B-TH-282: files held in the page are not kept on this device: leaving with them asks first too.
+  // B-TH-287: a draft saved on the server is kept too (leaving saves what was typed since).
   const filesWaiting = !answer && files.held.some((file) => file.problem === null && file.state === 'held')
-  usePortalUnsaved('portal:new-request', { dirty: (!answer && typedIn(draft) && kept.state !== 'kept') || filesWaiting, what: t('request.unsaved'), save: () => send() })
+  usePortalUnsaved('portal:new-request', { dirty: (!answer && typedIn(draft) && kept.state !== 'kept' && server.state !== 'saved') || filesWaiting, what: t('request.unsaved'), save: () => send() })
 
   const discard = () => {
     if (keepTimer.current) clearTimeout(keepTimer.current)
     writeKeptCompose(storageOf(), keepKey, EMPTY_COMPOSE, Date.now())
+    // ---- B-TH-287: the server's copy goes too.
+    saver.discarded()
+    setServer({ state: 'idle' })
+    // ---- end B-TH-287
     setDraft(EMPTY_COMPOSE)
     setKept({ state: 'none' })
     setShown({})
@@ -359,7 +454,7 @@ function ComposeContainer() {
                 problems,
                 shipTo: { state: addresses.state, choices },
                 detailsOpen,
-                kept,
+                kept: keptLineOf(server, kept, timeOf), // B-TH-287
                 offline,
                 readOnly: preview,
                 sending,
@@ -394,7 +489,12 @@ function ComposeContainer() {
           onSend: () => void send(),
           onSendAnyway: () => void send(true),
           onDiscard: () => (typedIn(draft) ? setDiscardOpen(true) : discard()),
-          onRetryKeep: () => keep(draft),
+          // B-TH-287: Retry keeps it on this device and saves it on the server now.
+          onRetryKeep: () => {
+            keep(draft)
+            saver.typed(draft)
+            saver.flush()
+          },
           onRetryShipTo: () => {
             setAddresses({ state: 'loading', value: [] })
             void readAddresses()

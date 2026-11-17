@@ -6,12 +6,12 @@ import { draftOf } from './model'
 import { CustomFieldsPanel, type CustomFieldsModel } from './view/CustomFieldsPanel'
 
 /**
- * SCR-520 — the custom-fields section of a record (B-W2b-431; design admin.fields "The record panels show a custom-fields
- * section"), above the record panels of every record that takes custom fields — made-up data only (PLAN §3.1). Cases:
- * an order's values by section, a reader without the right to change the order or the price grain (the money field is
- * absent, Edit says why), Edit with one control per type, a refusal at its field, the link picker with what search found,
- * someone saved first, loading and an error. A record type without custom fields, or a record the person may not see,
- * has no section at all.
+ * SCR-520 — the custom-fields section of a record (B-W2b-431; design admin.fields "The record panels show a
+ * custom-fields section"), at the end of the first tab of every record page that takes custom fields (B-TH-280: the
+ * record frame's `fields` slot) — made-up data only (PLAN §3.1). Cases: an order's values by section, a reader without
+ * the right to change the order or the price grain (the money field is absent, Edit says why), Edit with one control
+ * per type, a refusal at its field, the link picker with what search found, someone saved first, loading and an error.
+ * A record type without custom fields, or a record the person may not see, has no section at all.
  */
 
 const ACTIVE: Field[] = DEMO_ORDER_FIELDS.filter((field) => field.status === 'ACTIVE').map(({ valueCount: _count, createdAt: _created, updatedAt: _updated, ...field }) => field)
@@ -69,7 +69,7 @@ const READER_VALUES = VALUES.filter((value) => READER_FIELDS.some((field) => fie
 
 export const designScreen = defineDesignScreen<CustomFieldsModel>({
   screen: 'SCR-520',
-  title: 'A record’s custom fields: the section above the record panels (Admin › Fields & lists)',
+  title: 'A record’s custom fields: the section at the end of the record’s first tab (Admin › Fields & lists)',
   view: CustomFieldsPanel,
   cases: [
     { id: 'values', label: 'An order’s custom fields', model: model(), note: 'By section, in the reader’s language: a value the list no longer offers stays, marked; the money field carries its grain; the personal one is marked.' },

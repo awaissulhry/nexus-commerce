@@ -31,7 +31,8 @@ import {
 } from './model'
 
 /**
- * The files panel in depth, as a container hook RecordPanels.tsx mounts (B-W2b-177): reads the record's documents
+ * The files in depth, as a container hook the docked thread mounts for its Files view (B-W2b-177; B-TH-280, the old record
+ * panels' Files tab went): reads the record's documents
  * (GET /files/documents) with every files read, and does what the parts ask — the Versions pop-up (GET …/history, side
  * by side of two pictures read once each, restore), what a file is and until when (PUT …/document at the row's version),
  * markup (a picture or a PDF page drawn on with the DS PhotoCapture: the picture's marked copy sent as the next version
@@ -148,7 +149,7 @@ export interface FileDepthOptions {
   readonly prefix: string
   /** Read the record's files again (after a restore, a tag, a marked picture). */
   readonly reloadFiles: () => void
-  /** Open a PDF in the panel's own viewer. */
+  /** Open a PDF in the thread's one file viewer. */
   readonly openPdf: (fileId: string) => void
 }
 

@@ -290,6 +290,11 @@ export interface RecordSummary extends SummaryLink {
   readonly theirRef: string | null
   readonly state: { readonly code: string; readonly words: Words } | null
   readonly parent: SummaryLink | null
+  // ---- follow-up (th9-web-b): the record's party — the customer or supplier its shared messages reach — for an OFFICE reader only, so
+  // the docked thread offers "Reply to <party>" before the first message (the thread, and so its party, exists only after one). The
+  // portal answer never carries it (absent): a portal reader is told nothing it does not already own (brand wall).
+  readonly party?: { readonly id: string; readonly name: string } | null
+  // ---- end follow-up
 }
 
 const stateOf = (code: string | null): RecordSummary['state'] => (code ? { code, words: stateWordsOf(code) } : null)
@@ -301,8 +306,13 @@ export async function readRecordSummary(caller: CommandCaller, record: RecordRef
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   return caller.withClient(async (client) => {
-    const { scope } = await officeRecord(client, record)
+    const { scope, thread } = await officeRecord(client, record)
     if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+    // ---- follow-up (th9-web-b): the party a reply reaches — the thread's when it exists, else the one it will be made with (the record's
+    // own party; none for a record never shared: officeRecord already leaves a work order's, hold's or NCR's wall party out).
+    const partyId = thread ? thread.partyId : scope.partyId
+    const partyRow = partyId ? await client.party.findUnique({ where: { id: partyId }, select: { id: true, legalName: true, tradeName: true } }) : null
+    // ---- end follow-up
     const reader = readerOf(record.type)
     const read = reader ? await reader(client, record.id) : null
     let parent: SummaryLink | null = null
@@ -322,6 +332,7 @@ export async function readRecordSummary(caller: CommandCaller, record: RecordRef
         theirRef: null,
         state: stateOf(read?.state ?? null),
         parent,
+        party: partyRow ? { id: partyRow.id, name: partyRow.tradeName ?? partyRow.legalName } : null, // follow-up (th9-web-b): office only
       },
     }
   })

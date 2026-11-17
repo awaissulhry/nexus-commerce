@@ -45,7 +45,7 @@ export type { QuoteRecordViewModel, QuoteRecordActions } from '../record-model'
  */
 // B-TH-257: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view
 // shows of it.
-type Slots = { thread?: ReactNode; printThread?: ReactNode; sendActions?: DocumentSendActions; /** B-W2b-165: Approval & sending › Proofs (the container mounts it). */ proofs?: ReactNode; /** B-W2b-316: the W2b parts (lines-depth/slots.ts). */ depth?: QuoteDepthSlots; /** B-W2b-432: the send panel's language and message template. */ sendParts?: SendParts }
+type Slots = { thread?: ReactNode; printThread?: ReactNode; /** B-TH-280: the custom fields (the container passes them on Lines only). */ fields?: ReactNode; sendActions?: DocumentSendActions; /** B-W2b-165: Approval & sending › Proofs (the container mounts it). */ proofs?: ReactNode; /** B-W2b-316: the W2b parts (lines-depth/slots.ts). */ depth?: QuoteDepthSlots; /** B-W2b-432: the send panel's language and message template. */ sendParts?: SendParts }
 
 export function QuoteRecordView({ model, actions, ...slots }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions } & Slots) {
   return (
@@ -106,7 +106,7 @@ function QuoteRecord({ model, actions, ...slots }: { model: QuoteRecordViewModel
   return <ReadyRecord quote={loaded.value} model={model} actions={actions} {...slots} />
 }
 
-function ReadyRecord({ quote, model, actions, thread, printThread, sendActions, proofs, depth, sendParts }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions } & Slots) {
+function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendActions, proofs, depth, sendParts }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions } & Slots) {
   const t = useT('sales')
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/quotes/${quote.id}`
@@ -258,6 +258,7 @@ function ReadyRecord({ quote, model, actions, thread, printThread, sendActions, 
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
+        fields={fields /* B-TH-280 */}
         wide={isWideTab(model.tab)}
         band={{
           back: <Link href={quotesHref(model.prefix)}>{t('record.back')}</Link>,

@@ -1,20 +1,19 @@
-import { createElement } from 'react'
 import { defineDesignScreen } from '../../lib/design/design-screen'
-import type { RecordPanelsViewModel } from '../model'
-import { RecordPanelsView } from '../view/RecordPanelsView'
+import { designScreen as historyScreen } from '../../shell/panels/approvals/fixtures'
 import type { OfficeRequest } from './api'
 import type { ApprovalsPanelModel } from './model'
+import { ApprovalsWindowCase, type ApprovalsWindowCaseModel } from './view/ApprovalsWindowCase'
 
 /**
- * SCR-006-approvals — the record panels' Approvals tab (B-W2b-188; "Ask a partner to approve"): made-up order, customer,
- * people and addresses only. The requests in every state (waiting, approved with changes by link with a marked photo,
- * refused in the portal, withdrawn, expired), the empty tab, loading, a read error, no right to ask, a record that
- * cannot be asked about now (the API's words), the ask dialog (open, its checks, a refusal), the link given once, and
- * the withdraw confirm.
+ * SCR-006-approvals — a record's requests to its partner (B-W2b-188; "Ask a partner to approve"), B-TH-280: in the Approvals
+ * window the docked thread's Ask door opens once something is asked (the old record panels' tab went), with the record's
+ * approval history under them. Made-up order, customer, people and addresses only. The requests in every state (waiting,
+ * approved with changes by link with a marked photo, refused in the portal, withdrawn, expired), nothing asked yet, loading, a
+ * read error, no right to ask, a record that cannot be asked about now (the API's words), the ask dialog (open, its checks, a
+ * refusal) stacked over the window, the link given once, and the withdraw confirm.
  */
 
 const id = (n: number) => `0190f0e2-5151-7000-8000-${String(n).padStart(12, '0')}`
-const RECORD = { type: 'SalesOrder', id: id(1), companyId: id(2), siteId: null }
 const NOW = Date.parse('2026-11-10T09:00:00.000Z')
 
 function request(n: number, over: Partial<OfficeRequest> = {}): OfficeRequest {
@@ -77,33 +76,23 @@ function approvals(over: Partial<ApprovalsPanelModel> = {}): ApprovalsPanelModel
   return { can: { ask: true }, read: KINDS, ask: null, files: FILES, party: PARTY, withdraw: null, busy: false, notice: null, link: null, now: NOW, ...over }
 }
 
-const base = (over: Partial<ApprovalsPanelModel> = {}): RecordPanelsViewModel => ({
-  record: RECORD,
-  title: 'Ordine SO-2026-0042',
-  party: { id: id(3), name: PARTY.name, emails: PARTY.emails },
-  can: { post: true, email: true, manage: true, readFiles: true, upload: true, share: true },
-  thread: null,
-  messages: { items: [], more: false },
-  files: { items: [], more: false },
-  uploads: [],
-  timeline: { items: [], more: false },
-  timelineFilter: 'all',
-  people: [],
-  tab: 'approvals',
+/** The record's approval history under the requests (SCR-352's made-up purchase-order lines). */
+const HISTORY = historyScreen.cases.find((item) => item.id === 'w2b-307-signed')?.model ?? null
+
+const base = (over: Partial<ApprovalsPanelModel> = {}, history: ApprovalsWindowCaseModel['history'] = HISTORY): ApprovalsWindowCaseModel => ({
   approvals: approvals(over),
+  history,
+  record: 'SO-2026-0042',
 })
 
-function ApprovalsDesign({ model }: { model: RecordPanelsViewModel }) {
-  return createElement(RecordPanelsView, { model })
-}
-
-export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
+export const designScreen = defineDesignScreen<ApprovalsWindowCaseModel>({
   screen: 'SCR-006-approvals',
-  title: 'Record panels › Approvals: ask a partner to approve',
-  view: ApprovalsDesign,
+  title: 'The Approvals window: ask a partner to approve, withdraw, the record’s approval history',
+  view: ApprovalsWindowCase,
   cases: [
-    { id: 'list', label: 'Requests in every state', model: base(), note: 'Waiting (Withdraw), approved with changes by link with a marked photo, refused in the portal, withdrawn with its reason, expired. The tab counts the ones that wait.' },
-    { id: 'empty', label: 'Nothing asked yet', model: base({ read: { ...KINDS, requests: [] } }) },
+    { id: 'list', label: 'Requests in every state', model: base(), note: 'Waiting (Withdraw), approved with changes by link with a marked photo, refused in the portal, withdrawn with its reason, expired; the record’s approval history under them. The Head’s count chip counts the ones that wait.' },
+    { id: 'no-history', label: 'Requests only (no right to the approval history)', model: base({}, null), note: 'Without approvals.view the history is absent, never a locked box.' },
+    { id: 'empty', label: 'Nothing asked yet, an approval history only', model: base({ read: { ...KINDS, requests: [] } }), note: 'The door opens this window for the history; with neither it opens the Ask dialog at once.' },
     { id: 'loading', label: 'Loading', model: base({ read: { status: 'loading' } }) },
     { id: 'error', label: 'The requests could not be read', model: base({ read: { status: 'failed', problem: 'problem.read' } }), note: 'Our words and Try again; never an empty list.' },
     { id: 'no-right', label: 'A person who may only see (production manager)', model: base({ can: { ask: false } }), note: 'Ask and Withdraw held with the reason.' },

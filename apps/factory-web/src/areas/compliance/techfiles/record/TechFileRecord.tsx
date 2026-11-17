@@ -8,7 +8,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { isStepUpCancelled, liveMatches, useLive, useStepUp } from '../../../quality/_shared/hooks'
 import {
   addItem,
@@ -539,13 +539,13 @@ export function TechFileRecord({ fileId }: { fileId: string }) {
   const current = record.value
   // ---- B-TH-267 (N14, B-TH-075): the technical file's ONE thread, docked beside every tab, for a reader of threads. Its party is the
   // style's brand (the record read names it: "Reply to <brand>"); our own collection's file has none — the office's notes only. The
-  // print view keeps the record panels' print form.
+  // print view prints the thread with ThreadPrint (B-TH-280).
   const threads = session.permissions.includes('threads.read')
   const fileRef = { type: 'TechnicalFile', id: current.file.id, companyId: current.file.companyId, siteId: null }
   const threadTitle = `${current.file.number} · ${current.file.style.code}`
   const brand = current.file.brand ?? null
   const thread = threads ? <OfficeRecordThread docked record={fileRef} title={threadTitle} recordLabel={current.file.number} party={brand ? { id: brand.id, name: brand.name } : null} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = threads ? <RecordPanels record={fileRef} title={threadTitle} party={brand ? { id: brand.id, name: brand.name, emails: [] } : null} /> : null
+  const printThread = threads ? <ThreadPrint record={fileRef} title={threadTitle} party={brand ? { id: brand.id, name: brand.name } : null} /> : null
   // ---- end B-TH-267
 
   return (

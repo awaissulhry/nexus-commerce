@@ -310,3 +310,80 @@ describe('B-TH-255 — the View filters by audience: choices by what the thread 
   })
 })
 // ---- end B-TH-255
+
+// ---- B-TH-288 (B-TH-093 Done, B-TH-097 search; T1-F08, T1-F13; walls W08, W28) ----------------------------------------------------
+import { hitSideKey, markWords, searchReady, type ThreadSearchModel } from './model'
+import { RecordThreadHead } from './view/RecordThreadHead'
+import { render as drawAll, textOf } from '../parts/testing'
+
+describe('B-TH-288 — Done and search in the thread head', () => {
+  const head = (over: Partial<HeadModel> = {}, locale: 'it' | 'en' = 'en') => drawAll(createElement(RecordThreadHead, { model: base(over) }), locale)
+  const search = (over: Partial<ThreadSearchModel> = {}): ThreadSearchModel => ({ open: true, query: 'collar', state: 'ready', hits: [{ id: 'm-1', excerpt: 'Collar in yellow piping', direction: 'INBOUND' }], total: 1, words: ['collar'], ...over })
+
+  it('the ⋯ offers Mark done on open work and Open again on done work, held with why; never on a closed thread', () => {
+    expect(menuRows(base({ done: null, doneHeld: null }))).toContainEqual({ kind: 'done', done: false, held: null })
+    expect(menuRows(base({ done: { at: '2026-11-17T09:00:00.000Z', by: 'Alex Demo' }, doneHeld: null }))).toContainEqual({ kind: 'done', done: true, held: null })
+    expect(menuRows(base({ done: null, doneHeld: { key: 'held.offline' } }))).toContainEqual({ kind: 'done', done: false, held: { key: 'held.offline' } })
+    expect(menuRows(base({ done: null, closed: { by: 'Alex Demo', at: '2026-11-16T09:00:00.000Z' } })).some((row) => row.kind === 'done')).toBe(false)
+    // Not offered at all until the office read says it (a design case without it, a portal line).
+    expect(menuRows(base()).some((row) => row.kind === 'done')).toBe(false)
+  })
+
+  it('done work says Done with who and when — not closed: the customer can still write — in it and en', () => {
+    const done = { at: '2026-11-17T09:00:00.000Z', by: 'Alex Demo' }
+    expect(textOf(head({ done, answers: null }))).toContain('Done · Alex Demo')
+    expect(textOf(head({ done, answers: null }, 'it'))).toContain('Fatta · Alex Demo')
+    const words = createTranslator('en', messagesFor('en', ['record-thread-head'])['record-thread-head'] ?? {})
+    expect(words('act.doneHint')).toMatch(/not closed/)
+    expect(words('done.tip')).toMatch(/can still write/)
+    // A closed thread says Closed, never Done.
+    expect(textOf(head({ done, closed: { by: 'Alex Demo', at: '2026-11-16T09:00:00.000Z' } }))).not.toContain('Done ·')
+  })
+
+  it('search is offered to the office only: the icon when the container offers it, the field over the row when open', () => {
+    expect(head({ search: null })).not.toContain('fw-rth-search')
+    const closed = head({ search: search({ open: false, query: '', state: 'idle', hits: [], total: 0, words: [] }) })
+    expect(textOf(closed)).not.toContain('Messages that match')
+    expect(closed).toContain('aria-keyshortcuts="/"')
+    const open = head({ search: search() })
+    expect(open).toContain('fw-rth is-searching')
+    expect(open).toContain('role="search"')
+    expect(textOf(open)).toContain('1 message matches')
+    expect(open).toContain('<mark>Collar</mark>')
+    // The phone head has no room for the icon: the ⋯ carries it.
+    expect(menuRows(base({ compact: true, search: search({ open: false }) }))).toContainEqual({ kind: 'search' })
+  })
+
+  it('says every state in words: hint, too short, searching, none, failed — in it and en, no key left on screen', () => {
+    for (const locale of ['en', 'it'] as const) {
+      for (const state of ['idle', 'short', 'searching', 'failed'] as const) {
+        const html = head({ search: search({ state, hits: [], total: 0 }) }, locale)
+        expect(textOf(html)).not.toMatch(/\bsearch\.[a-zA-Z]/)
+      }
+      expect(textOf(head({ search: search({ hits: [], total: 0 }) }, locale))).toContain(locale === 'en' ? 'No message has these words.' : 'Nessun messaggio contiene queste parole.')
+    }
+  })
+
+  it('marks the query’s words in a hit (case and accents aside) and names the hit’s side', () => {
+    expect(markWords('Collar in yellow piping', ['collar', 'PIPING'])).toEqual([
+      { text: 'Collar', hit: true },
+      { text: ' in yellow ', hit: false },
+      { text: 'piping', hit: true },
+    ])
+    expect(markWords('Colletto giallo', ['GIALLÒ'.normalize('NFC')]).some((part) => part.hit)).toBe(true)
+    expect(markWords('anything', [])).toEqual([{ text: 'anything', hit: false }])
+    expect(hitSideKey('INBOUND')).toBe('search.side.theirs')
+    expect(hitSideKey('OUTBOUND')).toBe('search.side.ours')
+    expect(hitSideKey('INTERNAL_NOTE')).toBe('search.side.note')
+    expect(hitSideKey(null)).toBe('search.side.other')
+    expect(searchReady('a')).toBe(false)
+    expect(searchReady(' ab ')).toBe(true)
+  })
+
+  it('a follow-up reminder says “if no answer” on the Remind me line', () => {
+    const rows = menuRows(base({ reminder: { at: '2026-11-20T09:00:00.000Z', followUp: true } }))
+    expect(rows.find((row) => row.kind === 'door' && row.door === 'remind')).toMatchObject({ hint: { key: 'act.followUpSet' } })
+    expect(menuRows(base({ reminder: { at: '2026-11-20T09:00:00.000Z' } })).find((row) => row.kind === 'door' && row.door === 'remind')).toMatchObject({ hint: { key: 'act.reminderSet' } })
+  })
+})
+// ---- end B-TH-288

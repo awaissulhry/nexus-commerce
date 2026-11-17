@@ -36,6 +36,11 @@ export const waitingMailSchema = z.object({ count: z.number().int(), reasons: z.
 export type WaitingMail = z.infer<typeof waitingMailSchema>
 // ---- end B-TH-255
 
+// ---- B-TH-288 (B-TH-093; T1-F13): Done — a work state apart from Close, office only: when and by whom (null: open work).
+export const doneSchema = z.object({ at: z.string(), by: z.object({ id: z.string(), name: z.string().nullable() }) })
+export type ThreadDone = z.infer<typeof doneSchema>
+// ---- end B-TH-288
+
 const page = z.object({
   thread: threadSchema.nullable(),
   messages: z.array(officeMessageSchema /* B-TH-255 */),
@@ -43,6 +48,7 @@ const page = z.object({
   reading: readingSchema.nullable().optional(),
   head: headSchema.optional(),
   waitingMail: waitingMailSchema.nullable().optional() /* B-TH-255 */,
+  done: doneSchema.nullable().optional() /* B-TH-288 */,
 })
 export type ThreadPageAnswer = z.infer<typeof page>
 
@@ -245,3 +251,111 @@ export async function useFileOn(api: ApiClient, fileId: string, target: { record
   return { id: answer.file.id }
 }
 // ---- end B-TH-231
+
+// ---- B-TH-286 (B-TH-091; T2-F07 "2 pinned", T3-F12 "Pin for everyone"): pins — a message pinned for everyone on the record (a pointer,
+// never a copy of its words). The office reads every pin and who pinned it; each write answers the conversation's pins again.
+export const pinSchema = z.object({
+  messageId: z.string(),
+  pinnedAt: z.string(),
+  pinnedBy: z.object({ id: z.string(), name: z.string().nullable() }).optional(),
+  message: z.object({
+    authorName: z.string().nullable(),
+    excerpt: z.string(),
+    at: z.string(),
+    audience: z.enum(['OFFICE', 'PARTNER']).optional(),
+    attachmentCount: z.number().int(),
+    removed: z.boolean(),
+  }),
+})
+export type ApiPin = z.infer<typeof pinSchema>
+const pinsAnswer = z.object({ pins: z.array(pinSchema) })
+
+/** GET …/pins: the conversation's pins, oldest pin first. */
+export async function readPins(api: ApiClient, record: RecordKey, signal?: AbortSignal): Promise<ApiPin[]> {
+  return (await api.get(`${threadPath(record)}/pins`, { schema: pinsAnswer, signal })).pins
+}
+
+/** PUT …/pins/<messageId> (threads.post): pinned for everyone; pinning one already pinned changes nothing. */
+export async function pinMessage(api: ApiClient, record: RecordKey, messageId: string): Promise<ApiPin[]> {
+  return (await api.request('PUT', `${threadPath(record)}/pins/${enc(messageId)}`, { schema: pinsAnswer, idempotencyKey: globalThis.crypto.randomUUID() })).pins
+}
+
+/** DELETE …/pins/<messageId> (threads.post): unpinned (the history keeps who did it). */
+export async function unpinMessage(api: ApiClient, record: RecordKey, messageId: string): Promise<ApiPin[]> {
+  return (await api.request('DELETE', `${threadPath(record)}/pins/${enc(messageId)}`, { schema: pinsAnswer, idempotencyKey: globalThis.crypto.randomUUID() })).pins
+}
+
+/** POST /threads/Inquiry/<id>/pins/note: the request's own note becomes a pinned office note (the field emptied, one command). */
+export async function pinRequestNote(api: ApiClient, inquiryId: string): Promise<{ pins: ApiPin[]; messageId: string }> {
+  return api.post(`/threads/Inquiry/${enc(inquiryId)}/pins/note`, { body: {}, schema: z.object({ pins: z.array(pinSchema), messageId: z.string() }), idempotencyKey: globalThis.crypto.randomUUID() })
+}
+// ---- end B-TH-286
+
+// ---- B-TH-287 (B-TH-092; T5-F10, T8-F07): the composer's draft on the server — one per person and record, the person's own only
+// (the API takes the person from the session), kept until sent (the send's own command clears it) or discarded.
+const draftAttachmentSchema = z.object({ id: z.string(), kind: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), locked: z.literal('MEASUREMENTS').optional() })
+export const serverDraftSchema = z.object({
+  recordType: z.string().nullable(),
+  recordId: z.string().nullable(),
+  audience: z.enum(['OFFICE', 'PARTNER']).nullable(),
+  body: z.string(),
+  fields: z.record(z.string(), z.unknown()),
+  attachments: z.array(draftAttachmentSchema),
+  savedAt: z.string(),
+  version: z.number().int(),
+})
+export type ServerDraft = z.infer<typeof serverDraftSchema>
+
+/** GET …/draft: the person's draft of this record, or null. */
+export async function readServerDraft(api: ApiClient, record: RecordKey, signal?: AbortSignal): Promise<ServerDraft | null> {
+  return (await api.get(`${threadPath(record)}/draft`, { schema: z.object({ draft: serverDraftSchema.nullable() }), signal })).draft
+}
+
+/** PUT …/draft with the version last read: the newest save wins (`replacedNewer`: another tab's newer draft was replaced). */
+export async function saveServerDraft(
+  api: ApiClient,
+  record: RecordKey,
+  body: { audience: 'OFFICE' | 'PARTNER'; body: string; fields: Record<string, unknown>; attachments: readonly string[]; version?: number },
+): Promise<{ draft: ServerDraft; replacedNewer: boolean }> {
+  return api.request('PUT', `${threadPath(record)}/draft`, {
+    body: { audience: body.audience, body: body.body, fields: body.fields, attachments: [...body.attachments], ...(body.version !== undefined ? { version: body.version } : {}) },
+    schema: z.object({ draft: serverDraftSchema, replacedNewer: z.boolean() }),
+    idempotencyKey: globalThis.crypto.randomUUID(),
+  })
+}
+
+/** DELETE …/draft: discarded (none: nothing changes). */
+export async function discardServerDraft(api: ApiClient, record: RecordKey): Promise<void> {
+  await api.request('DELETE', `${threadPath(record)}/draft`, { schema: z.object({ draft: z.null() }), idempotencyKey: globalThis.crypto.randomUUID() })
+}
+
+// B-TH-287 (B-TH-098): the customer's own language for what is written to them (`message`: their language when it is one of the five,
+// else English) — the docked thread's Saved replies put it first.
+export async function readMessageLanguage(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<string | null> {
+  const answer = await api.get('/templates/language', { query: { partyId }, schema: z.object({ message: z.object({ language: z.string() }).passthrough().optional() }).passthrough(), signal })
+  return answer.message?.language ?? null
+}
+// ---- end B-TH-287
+
+// ---- B-TH-288 (B-TH-093, B-TH-097; T1-F08, T1-F13): Done, and search inside the thread (office only) ---------------------------
+/** PUT …/done (threads.post): marked done (true) or open work again (false); the customer can still write either way. */
+export async function setThreadDone(api: ApiClient, record: RecordKey, done: boolean): Promise<ThreadDone | null> {
+  return (await api.request('PUT', `${threadPath(record)}/done`, { body: { done }, schema: z.object({ done: doneSchema.nullable() }), idempotencyKey: globalThis.crypto.randomUUID() })).done
+}
+
+/**
+ * GET /search?type=Message&recordType&recordId: the messages of THIS record's thread whose words or file names match (the server's
+ * index, never a search over the messages loaded on screen); each hit was read again against its thread by the API.
+ */
+const threadHits = z.object({
+  words: z.array(z.string()),
+  tooShort: z.boolean(),
+  results: z.array(z.object({ recordId: z.string(), subtitle: z.string().nullable(), status: z.string().nullable(), indexedAt: z.string() }).passthrough()),
+  total: z.number().int(),
+  nextOffset: z.number().int().nullable(),
+})
+export type ThreadHits = z.infer<typeof threadHits>
+export function searchThread(api: ApiClient, record: RecordKey, q: string, signal?: AbortSignal): Promise<ThreadHits> {
+  return api.get('/search', { query: { q, type: 'Message', recordType: record.type, recordId: record.id, limit: 20 }, schema: threadHits, signal })
+}
+// ---- end B-TH-288

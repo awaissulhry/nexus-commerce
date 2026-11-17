@@ -5,7 +5,7 @@ import { PORTAL_REQUEST_LIMITS, requestTextOf, subjectOf } from '@nexus/factory-
  * compose holds, what holds Send (in words, keys of `request-compose`), the body the API takes — never a party or a company:
  * the portal's session is ONE company and ONE customer (W11), and the office's New request (B-TH-221) adds its own picker —,
  * the subject that will be used, the counter near the end of the box, the optional details' summary line, the draft kept on
- * this device until drafts live on the server (N6, L2-G14), and the guard against sending the same words twice. Shared by
+ * this device (B-TH-287: the portal's New order also keeps it on the server, ./server-draft.ts), and the guard against sending the same words twice. Shared by
  * the portal's New order and the office's New request: no office or portal code here (check-view-boundaries).
  */
 
@@ -125,12 +125,15 @@ export function detailsSummary(draft: ComposeDraft, shipTo: readonly ShipToChoic
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
-// ── the draft kept on this device (until drafts live on the server: N6, B-TH-092) ───────────────────────────────────
+// ── the draft kept on this device (B-TH-287: beside the server's copy, lib/request-compose/server-draft.ts) ──────────────
 export const DRAFT_DAYS = 30
 
 export interface KeptCompose {
   readonly draft: ComposeDraft
   readonly savedAt: number
+  // ---- B-TH-287: this copy was also saved on the server (a server that keeps none any more: it was sent or discarded elsewhere).
+  readonly onServer?: boolean
+  // ---- end B-TH-287
 }
 
 /** One draft per person and portal (a person may reach two companies' portals: each keeps its own). */
@@ -148,7 +151,9 @@ export function readKeptCompose(storage: Pick<Storage, 'getItem'> | null, key: s
     if (now - value.savedAt > DRAFT_DAYS * 86_400_000) return null
     const draft = (value.draft ?? {}) as Record<string, unknown>
     const kept: ComposeDraft = { subject: text(draft.subject), message: text(draft.message), customerRef: text(draft.customerRef), wantedDate: /^\d{4}-\d{2}-\d{2}$/.test(text(draft.wantedDate)) ? text(draft.wantedDate) : '', shipToAddressId: text(draft.shipToAddressId) }
-    return typedIn(kept) ? { draft: kept, savedAt: value.savedAt } : null
+    // ---- B-TH-287: whether this copy was saved on the server too.
+    return typedIn(kept) ? { draft: kept, savedAt: value.savedAt, ...(value.onServer === true ? { onServer: true } : {}) } : null
+    // ---- end B-TH-287
   } catch {
     return null
   }
@@ -158,15 +163,17 @@ export function readKeptCompose(storage: Pick<Storage, 'getItem'> | null, key: s
  * Keeps the draft on this device (an empty one is forgotten). The answer: what is kept now, `null` when nothing is kept
  * (empty, or no storage: a private window keeps nothing), or `'failed'` when the device refused it.
  */
-export function writeKeptCompose(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, key: string, draft: ComposeDraft, now: number): KeptCompose | null | 'failed' {
+export function writeKeptCompose(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, key: string, draft: ComposeDraft, now: number, /* B-TH-287 */ onServer = false): KeptCompose | null | 'failed' {
   if (!storage) return null
   try {
     if (!typedIn(draft)) {
       storage.removeItem(key)
       return null
     }
-    storage.setItem(key, JSON.stringify({ draft, savedAt: now }))
-    return { draft, savedAt: now }
+    // ---- B-TH-287: `onServer` — the same words were saved on the server too.
+    storage.setItem(key, JSON.stringify(onServer ? { draft, savedAt: now, onServer: true } : { draft, savedAt: now }))
+    return onServer ? { draft, savedAt: now, onServer: true } : { draft, savedAt: now }
+    // ---- end B-TH-287
   } catch {
     return 'failed'
   }
