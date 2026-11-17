@@ -18,8 +18,9 @@ import { workOrders as workOrderExport } from '../../../platform/exports/sources
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from '../testing/two-brands'
 
 /**
- * B-PR-03 (production plan §2, the brand wall; wall test PW-03 of 08-steps-backend: "office.p2: P1's work order 404; list,
- * counts and export hold no P1 row; traveller 404; office.all sees both; a legacy mixed work order only for office.all") on
+ * B-PR-03 (production plan §2, the brand wall; 06-tree §0.6 PW-02 (list, counts, export) and PW-03 (the record and every
+ * route of it), and PW-06's Floor now WIP; the step's wall test: "office.p2: P1's work order 404; list, counts and export hold
+ * no P1 row; traveller 404; office.all sees both; a legacy mixed work order only for office.all") on
  * the local stack with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login, so
  * row-level security and the one-customer guards are real), the core, files, production and numbering seeds, and the
  * production two-brand harness (../testing/two-brands.ts: brand A = the seeds' P1, brand B = the threads' second brand, a work
