@@ -12,6 +12,10 @@ import { RELATIVE_DAYS } from '@nexus/factory-domain/views/quick/relative'
 import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { PRIORITY_LIMITS } from '@nexus/factory-domain/production/work-orders/priority'
 import { TRAVELLER_BULK_LIMIT } from '@nexus/factory-domain/production/work-orders/bulk'
+// B-PR-34: the list by risk — its sorts, risks, what blocks a work order, what it waits on, a raise's reasons.
+import { HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
+import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
+import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from './risk'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -38,6 +42,24 @@ const customerFacts = {
   mixedCustomers: z.boolean(),
 }
 // ── end B-PR-03 ──
+
+// ── B-PR-34 (production plan, the work order list by risk; ./risk) ──
+/**
+ * A work order's risk on the list (null: finished): LATE (open past its due date, `daysLate`), AT_RISK (its bars on the WORKING
+ * plan end after its due date, or a person raised its order to At risk: `raised` is that raise's reason), BLOCKED (on hold, or its
+ * order waits on the customer or on material), ON_TRACK; `blockedBy` whatever the state. Computed per read from what is stored.
+ */
+const riskFacts = output({
+  state: z.enum(WORK_ORDER_RISKS),
+  daysLate: z.number().int().nullable(),
+  plannedEnd: businessDate().nullable(),
+  planAfterDue: z.boolean(),
+  raised: z.enum(HEALTH_REASON_CODES).nullable(),
+  blockedBy: z.enum(BLOCKED_BY).nullable(),
+})
+/** What an open work order's order(s) wait on (the keeper's: the customer, a supplier, a workshop, us) and since when; null: none known. */
+const waitingFacts = output({ on: z.enum(WAITING_ON), since: instant().nullable() })
+// ── end B-PR-34 ──
 
 const operation = output({
   id: id().nullable(),
@@ -166,7 +188,18 @@ export const listContract = defineContract({
     rush: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     /** B-PR-03: one customer's work orders (inside the caller's reach: another customer's gives none). */
     partyId: id().optional(),
-    cursor: id().optional(),
+    // ── B-PR-34 ──
+    /** `newest` (default), `risk` (late, at risk, blocked, on track, then finished; each by due date) or `due`. */
+    sort: z.enum(LIST_SORTS).optional(),
+    /** Open work orders whose order waits on the customer (BRAND), a supplier, a workshop or us. */
+    waitingOn: z.enum(WAITING_ON).optional(),
+    /** Open work orders of one risk. */
+    risk: z.enum(WORK_ORDER_RISKS).optional(),
+    /** Open work orders blocked by a hold, the customer or material. */
+    blockedBy: z.enum(BLOCKED_BY).optional(),
+    // ── end B-PR-34 ──
+    /** The `nextCursor` of the page before (newest: a work order id; risk and due: a position token of that sort). */
+    cursor: z.string().trim().min(1).max(80).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
@@ -205,9 +238,13 @@ export const listContract = defineContract({
           splitFrom: output({ id: id(), number: z.string() }).nullable(),
           releasedAt: instant().nullable(),
           createdAt: instant(),
+          /** B-PR-34: its risk (null: finished) and what it waits on (null: finished, or nothing known). */
+          risk: riskFacts.nullable(),
+          waitingOn: waitingFacts.nullable(),
         }),
       ),
-      nextCursor: id().nullable(),
+      /** B-PR-34: a work order id (newest) or a position token (risk, due). */
+      nextCursor: z.string().nullable(),
     }),
   },
 })
@@ -219,7 +256,8 @@ export const countsContract = defineContract({
     200: output({
       /** Work orders the caller may see per state; `open` = draft + released + in progress; `late` = open past the due date. */
       // B-W2a-46: onHold (design wo-metrics "On hold (W2a)").
-      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int(), onHold: z.number().int() }),
+      // B-PR-34: atRisk (open, not late, at risk) and waitingOnCustomer (open, its order waits on the customer).
+      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int(), onHold: z.number().int(), atRisk: z.number().int(), waitingOnCustomer: z.number().int() }),
     }),
   },
 })
