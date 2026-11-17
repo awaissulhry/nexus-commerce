@@ -29,6 +29,8 @@ import { activeTenants, asSystem, systemContext } from '../../outbox/system'
 import { recordLabelOf } from '../../threads/labels'
 import { mayOnThread, resolveRecord } from '../../threads/records'
 import { officeOf } from '../tasks'
+// B-TH-096 (threads plan TH-9, N16): a reminder on a message I shared with the customer is a follow-up that stops on their answer.
+import { isFollowUp, stopAnsweredFollowUps } from '../../threads/follow-ups'
 
 /**
  * Remind me about this (B-W2b-388; COL-041; design shell.panels popup remind-me, side panel "Reminders I set", home.tasks
@@ -68,6 +70,8 @@ export const REMINDER_COLUMNS = {
   doneAt: true,
   version: true,
   createdAt: true,
+  // B-TH-096: what tells a follow-up (the message's side and author).
+  message: { select: { direction: true, audience: true, authorId: true } },
 } as const satisfies Prisma.ReminderSelect
 export type ReminderRow = Prisma.ReminderGetPayload<{ select: typeof REMINDER_COLUMNS }>
 
@@ -94,6 +98,8 @@ export function reminderView(row: ReminderRow) {
     state: stateOf(row),
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
+    // B-TH-096: "Reminds you 18 Nov if no answer" — it stops by itself when the customer answers.
+    followUp: isFollowUp(row),
   }
 }
 
@@ -326,6 +332,8 @@ export async function runReminders(options: ReminderRunOptions): Promise<Reminde
   const requestId = `tasks-reminders-${newId()}`
   for (const tenantId of await activeTenants(options.database)) {
     try {
+      // B-TH-096: answered follow-ups (or of a closed conversation) stop first, so they never come back.
+      await stopAnsweredFollowUps(options.database, tenantId, requestId)
       const now = (options.clock ?? serverClock).now()
       const { due, changed } = await asSystem(options.database, tenantId, requestId, async (client) => {
         const atTime = await client.reminder.findMany({

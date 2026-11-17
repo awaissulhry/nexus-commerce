@@ -26,6 +26,8 @@ export const manifest = defineManifest({
   // issued and sent by the routes above (invoices.issue + step-up); a credit note has no permission of its own.
   'GET /invoicing/shipped-not-invoiced': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'POST /invoicing/invoices/from-ddts': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  // B-TH-062 (threads plan TH-4): what invoicing chosen orders' shipped goods makes, for Finance only (a read; nothing made).
+  'GET /invoicing/from-ddts/candidates': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   // B-W2b-GB02 (G148): the immediate invoice of a shipment without a DDT.
   'POST /invoicing/invoices/from-shipment': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'DELETE /invoicing/invoices/:invoiceId/deductions/:lineId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },

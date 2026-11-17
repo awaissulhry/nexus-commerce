@@ -21,11 +21,15 @@
 // Records of parallel W2b-5 waves are not keyed into: the approval of an override is named by B-W2b-276's approval kinds
 // (CREDIT_OVERRIDE), a credit check (B-W2b-281's CreditCheck) names its terms row's party and company.
 //
-// Who sees what (ownership/sales-intake.json): the office reads and writes; the floor, the portal and links read nothing here
-// (the customer portal's inquiries are W3; a partyId here is the policy key, with no partner grant). Money: an inquiry's target
-// price and a credit limit, both @grain price. Personal data: an inquiry's prospect (name, company, e-mail, phone), kept for
-// answering the request (GDPR art. 6(1)(b): steps at the request of the person before a contract) under its lawful basis,
-// blanked by erasure; who placed, released or set a row is a person inside the one record.
+// Who sees what (ownership/sales-intake.json): the office reads and writes; the floor and links read nothing here. TH-1b
+// (threads plan, schema wave 1/9, B-TH-009): a customer's portal people READ their own inquiries and their lines (the
+// partner role, by party; InquiryLine carries its inquiry's party, copied by the database), never the office's columns (the
+// assignee, the office note, the words a decline or loss was closed with, the decline reason, who closed it, the prospect, the
+// mail, the tech pack, the target price, who typed it); the portal's request is made in the tenant's office scope (B-TH-010),
+// so the partner role writes nothing here. Money: an inquiry's target price, a line's price shown and a credit limit, all
+// @grain price. Personal data: an inquiry's prospect (name, company, e-mail, phone), kept for answering the request (GDPR
+// art. 6(1)(b): steps at the request of the person before a contract) under its lawful basis, blanked by erasure; who
+// placed, released or set a row is a person inside the one record.
 
 /// Where an inquiry came from (SAL-032, SAL-033).
 enum InquirySource {
@@ -90,6 +94,11 @@ model Inquiry {
   companyId            String                @db.Uuid
   /// From the company's INQUIRY series (INQ-…), unique in the company; given at insert, never changed.
   number               String
+  /// TH-1b (threads schema wave 2/9, B-TH-104; Owner decision PR-06, pick A): the customer's own running number of its
+  /// requests ("Your request 7"), 1, 2, 3 … per company and customer, given by the database when the inquiry first has its
+  /// customer (made for it, or a prospect matched to it), never changed by anyone; null for a prospect. Shown to the customer
+  /// beside the office number, so no customer learns how much the others ask from the shared INQUIRY series.
+  customerSeq          Int?
   /// How it came, and the mail it was made from (MAIL exactly: an InboundEmail of the tenant, one inquiry per mail; its
   /// attachments stay files of the mail). Both fixed once made, as is when it came (not in the future).
   source               InquirySource
@@ -113,6 +122,14 @@ model Inquiry {
   request              String
   /// The day the customer wants the goods by, when said.
   wantedDate           DateTime?             @db.Date
+  /// TH-1b (schema wave 1/9, B-TH-009; L2-G01): the customer's own reference for what it asks (its PO or request number,
+  /// "BA-PO-4521"), as it gave it in the portal or the office typed it; one line up to 100 characters. Carried to the quote's
+  /// and the order's customerRef when they are made from it.
+  customerRef          String?
+  /// TH-1b (B-TH-009; L2-G01): where the customer wants the goods: one of its own SHIP_TO addresses, not archived (a delivery
+  /// address its portal person added may still wait for the office's check: the office decides it with the order, as for a
+  /// portal order request); only with the inquiry's party.
+  shipToAddressId      String?               @db.Uuid
   /// The target unit price the customer named, net, in `currency` (0 or more); null: none.
   /// @grain price
   targetUnitPrice      Decimal?              @db.Decimal(18, 6)
@@ -131,11 +148,14 @@ model Inquiry {
   /// DECLINED: why (OTHER with closeNote).
   declineReason        InquiryDeclineReason?
   /// When it ended (QUOTED, DECLINED, LOST) and by whom, exactly then; the words of a decline or a loss (LOST and a decline
-  /// OTHER need them; up to 2000 characters).
+  /// OTHER need them; up to 2000 characters). The words are the office's own reading (B-TH-009): what the customer is told
+  /// is a message of the thread.
   closedAt             DateTime?             @db.Timestamptz(3)
   closedById           String?               @db.Uuid
+  /// @internal
   closeNote            String?
-  /// The office's notes (up to 4000 characters); the one column a closed inquiry still changes.
+  /// The office's notes (up to 4000 characters); the one column a closed inquiry still changes. Office only (B-TH-009).
+  /// @internal
   note                 String?
   version              Int                   @default(1)
   createdAt            DateTime              @default(now()) @db.Timestamptz(3)
@@ -148,9 +168,13 @@ model Inquiry {
   contact  PartyContact? @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   assignee User?         @relation("InquiryAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   quote    Quote?        @relation(fields: [tenantId, partyId, quoteId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // TH-1b (B-TH-009): the delivery address asked, of the inquiry's own party (Restrict, as above).
+  shipTo   PartyAddress? @relation("InquiryShipTo", fields: [tenantId, partyId, shipToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines    InquiryLine[]
 
   @@unique([tenantId, companyId, number])
+  // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
+  @@unique([tenantId, companyId, partyId, customerSeq])
   // The target of its lines' reference.
   @@unique([tenantId, id])
   // The queue (status, oldest first), someone's inquiries ("Mine"), a customer's.
@@ -161,10 +185,16 @@ model Inquiry {
 
 /// One thing an inquiry asks for (design inquiry.req.form): a style (in a colourway, or a colour in words) or, until the
 /// office picks a style, a description; the pieces by size when given, else a total. Written only while its inquiry is open.
+/// TH-1b (B-TH-009; PR-05): its style is one of our own collection (no brand) or a private-label style of the inquiry's own
+/// customer (or of the team its rider rides for), never another customer's private label.
 model InquiryLine {
   id          String   @id @db.Uuid
   tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   inquiryId   String   @db.Uuid
+  /// TH-1b (schema wave 1/9, B-TH-009): its inquiry's party, copied by the database at every write of the line and when the
+  /// inquiry's party is set (the app never writes it): the partner policy's key, so a customer reads the lines of its own
+  /// requests. Null while the inquiry is a prospect's.
+  partyId     String?  @db.Uuid
   /// Its place: 10, 20, 30 …
   seq         Int
   /// The style asked, when known, and its colourway (only with the style); or the colour as the customer wrote it.
@@ -177,6 +207,10 @@ model InquiryLine {
   sizes       Json     @default("{}")
   /// Pieces in all (1 to 1 000 000): the sum of the sizes when they are given; null: not said.
   quantity    Int?
+  /// TH-1b (B-TH-009; L2-G08): the net unit price the customer was shown for it when it asked (the portal's catalogue price,
+  /// in the inquiry's currency; 0 or more); null: no price was shown.
+  /// @grain price
+  unitPriceShown Decimal? @db.Decimal(18, 6)
   note        String?
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
@@ -189,6 +223,8 @@ model InquiryLine {
   colourway Colourway? @relation("InquiryLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, inquiryId, seq])
+  // TH-1b (B-TH-009): a customer's request lines (the partner policy's key).
+  @@index([tenantId, partyId])
 }
 
 /// What a customer requirement is about (SAL-014).

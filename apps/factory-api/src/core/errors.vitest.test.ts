@@ -1,7 +1,7 @@
 import Fastify from 'fastify'
 import { describe, expect, it } from 'vitest'
 import { ERROR_CODES, ForbiddenError, NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { ApiError, BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, errorBodyFor, installErrorHandling, mapError, STATUS_OF } from './errors'
+import { ApiError, BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, DATABASE_RULE_ISSUE, DATABASE_RULE_NEUTRAL, databaseRuleWords, errorBodyFor, installErrorHandling, mapError, STATUS_OF } from './errors'
 
 const fastifyError = (code: string, statusCode: number, message = 'fastify said something') =>
   Object.assign(new Error(message), { code, statusCode })
@@ -24,6 +24,16 @@ const BUSY_ERRORS = {
   'P2034 deadlock or serialization failure': prismaError('P2034', 'Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
   'P2037 no connection slot left on the server': prismaError('P2037', 'Too many database connections opened: sorry, too many clients already'),
 } as const
+
+/**
+ * TH-0A Open 3: a rule of the database that no chosen refusal claims is no longer a 500: it is the generic 409 in the rule's own
+ * words (refusal/DATABASE_RULE), never the chosen refusal's issue.
+ */
+function expectOtherRule(error: unknown): void {
+  const mapped = mapError(error)
+  expect(mapped).toMatchObject({ status: 409, code: 'conflict', unexpected: false })
+  expect(mapped.issues?.map((issue) => issue.path)).toEqual([DATABASE_RULE_ISSUE])
+}
 
 describe('mapError()', () => {
   it('has a status for every stable code', () => {
@@ -106,7 +116,7 @@ describe('mapError()', () => {
       unexpected: false,
     })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'inventory: stock move x takes 2 from location y, which holds 1 of it' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-367: answers the database's carrier refusal of a shipment write as a 409 in words, never a 500", () => {
@@ -116,7 +126,7 @@ describe('mapError()', () => {
     const words = "This shipment records the customer's collection (who collected it, the plate, the signature): it stays a collection by the customer."
     expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'shipping/CUSTOMER_COLLECTED', message: words }], unexpected: false })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'carriers: pickup request x cannot move from FAILED to CONFIRMED' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-409: answers the database's customs refusals (a declaration, an EORI, a broker's pack link) as a 409 in words, never a 500", () => {
@@ -130,7 +140,7 @@ describe('mapError()', () => {
     })
     expect(mapError(link)).toMatchObject({ status: 409, issues: [{ path: 'refusal/CUSTOMS' }] })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'links: the files of link x never change' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-385: answers the database's notification refusals (a device turned off meanwhile, a view only its owner sees) as a 409 in words, never a 500", () => {
@@ -142,7 +152,7 @@ describe('mapError()', () => {
     const view = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: "views: view x is its owner's alone; only its owner follows it" } } })
     expect(mapError(view)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'views/ONLY_ME' }] })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'notifications: TRUNCATE on "PushSubscription" is refused' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-435: answers the database's morning e-mail and alert route refusals (a switch turned off meanwhile, a route wider than its rule) as a 409 in words, never a 500", () => {
@@ -152,7 +162,7 @@ describe('mapError()', () => {
     const wider = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: "alerts: route x never widens its rule's place: the rule looks at company y, the site is of another" } } })
     expect(mapError(wider)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'route/WIDER' }] })
     const truncate = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'insights: TRUNCATE on "InsightsSettings" is refused' } } })
-    expect(mapError(truncate).status).toBe(500)
+    expectOtherRule(truncate)
   })
 
   it("B-W2b-388: answers the database's reminder refusals (done from another tab, a message of another record) as a 409 in words, never a 500", () => {
@@ -161,7 +171,7 @@ describe('mapError()', () => {
     const message = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'tasks: the message of reminder x is of the thread of its record (PO-1), not of Quote' } } })
     expect(mapError(message)).toMatchObject({ status: 409, issues: [{ path: 'body/messageId' }] })
     const truncate = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'tasks: TRUNCATE on "Reminder" is refused' } } })
-    expect(mapError(truncate).status).toBe(500)
+    expectOtherRule(truncate)
   })
 
   it("B-W2b-370: answers the database's write-off, reminder stop and handed-over refusals as a 409 in words, never a 500", () => {
@@ -175,7 +185,7 @@ describe('mapError()', () => {
     })
     expect(mapError(stopped)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'receivables/REMINDER_STOPPED' }] })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'bank: statement x is what the bank said; it never changes' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-376: answers the database's closed-work-order refusals as a 409 in words, never a 500", () => {
@@ -189,7 +199,7 @@ describe('mapError()', () => {
     })
     expect(mapError(stands)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'costing/CLOSE_STANDS' }] })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'cost: close c is judged against the company close tolerance in force (5 %), not 10 %' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-373: answers the database's archived-role refusals as a 409 in words, never a 500", () => {
@@ -203,7 +213,7 @@ describe('mapError()', () => {
     })
     expect(mapError(frozen)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'roles/ROLE_ARCHIVED' }] })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is still held: end its assignments first, then archive it' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
 
   it("B-W2b-384: answers the database's packing refusals as a 409 in words, never a 500 (W1's pack route with a serial in no carton)", () => {
@@ -228,8 +238,61 @@ describe('mapError()', () => {
     const words = 'This contact was erased on request: its name, e-mail and phone stay blank and it stays archived. Add a new contact for new details.'
     expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'privacy/CONTACT_ERASED', message: words }], unexpected: false })
     const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'parties: the erasure of contact x has when and by whom, both or neither' } } })
-    expect(mapError(other).status).toBe(500)
+    expectOtherRule(other)
   })
+
+  // TH-0A Open 3 ----------------------------------------------------------------------------------------------------------
+  it("TH-0A Open 3: answers any other rule of the database as a 409 in the rule's words, ids taken out, for every office-side audience", () => {
+    const id = '0190f1f2-0000-7000-8000-00000000abcd'
+    const rule = prismaError('P2039', 'Database error. Code: `23514`.', {
+      driverAdapterError: { cause: { kind: 'postgres', originalCode: '23514', originalMessage: `service: safety report ${id} reached us at a time not in the future, and what it tells happened by then` } },
+    })
+    const words = 'Safety report reached us at a time not in the future, and what it tells happened by then.'
+    const expected = { status: 409, code: 'conflict', message: words, issues: [{ path: DATABASE_RULE_ISSUE, message: words }], unexpected: false, guard: expect.stringContaining(id) }
+    for (const audience of [undefined, 'office', 'floor', 'platform', 'system']) expect(mapError(rule, audience), String(audience)).toEqual(expected)
+    // Toward a customer: never the rule's text (it can carry another record's number or code), one neutral sentence.
+    for (const audience of ['partner', 'link']) expect(mapError(rule, audience), audience).toEqual({ ...expected, message: DATABASE_RULE_NEUTRAL, issues: [{ path: DATABASE_RULE_ISSUE, message: DATABASE_RULE_NEUTRAL }] })
+    // A restrict_violation rule ("never deleted", "never changes") too, with a record type and id in brackets.
+    const restrict = prismaError('P2014', 'x', { driverAdapterError: { cause: { originalCode: '23001', originalMessage: `threads: thread ${id} is never deleted; it is the record's history (SalesOrder:${id})` } } })
+    expect(mapError(restrict, 'office')).toMatchObject({ status: 409, message: "Thread is never deleted; it is the record's history (SalesOrder)." })
+    expect(JSON.stringify(mapError(restrict, 'office').issues)).not.toContain(id)
+  })
+
+  it('TH-0A Open 3: toward a customer every rule is one neutral sentence, also one that names another record; the office keeps the words', () => {
+    const rule = prismaError('P2039', 'x', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'portal follow-ups: supplier upload 0190f1f2-0000-7000-8000-00000000abcd names a record of another party' } },
+    })
+    expect(mapError(rule, 'office').message).toBe('Supplier upload names a record of another party.')
+    for (const audience of ['partner', 'link']) {
+      expect(mapError(rule, audience)).toMatchObject({ status: 409, code: 'conflict', message: DATABASE_RULE_NEUTRAL, issues: [{ path: DATABASE_RULE_ISSUE, message: DATABASE_RULE_NEUTRAL }] })
+    }
+  })
+
+  it('TH-0A Open 3: a CHECK constraint, another SQLSTATE, a raise without the rule form and an unknown error stay a logged 500', () => {
+    const internal = { status: 500, code: 'internal_error', message: 'Something went wrong. The error was logged.', unexpected: true }
+    const cases = [
+      prismaError('P2039', 'x', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'new row for relation "Message" violates check constraint "Message_body_check"' } } }),
+      prismaError('P2014', 'x', { driverAdapterError: { cause: { originalCode: '23001', originalMessage: 'update or delete on table "Thread" violates RESTRICT setting of foreign key constraint "Message_thread_fkey" on table "Message"' } } }),
+      prismaError('P2002', 'x', { driverAdapterError: { cause: { originalCode: '23505', originalMessage: 'threads: the reply token is taken' } } }),
+      prismaError('P2010', 'x', { driverAdapterError: { cause: { originalCode: 'P0001', originalMessage: 'made-up failure at the issue' } } }),
+      prismaError('P2010', 'x', { driverAdapterError: { cause: { originalCode: '22012', originalMessage: 'division by zero' } } }),
+      prismaError('P2039', 'x', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'threads: ' } } }),
+      new Error('threads: message x has neither text nor attachments'),
+    ]
+    for (const error of cases) expect(mapError(error, 'partner'), (error as Error).message).toEqual(internal)
+  })
+
+  it('TH-0A Open 3: the words of a rule are tidy', () => {
+    const id = '0190f1f2-0000-7000-8000-00000000abcd'
+    expect(databaseRuleWords(`threads: message ${id} has neither text nor attachments`)).toBe('Message has neither text nor attachments.')
+    expect(databaseRuleWords(`portal follow-ups: the file of supplier upload ${id} is a file of the record it is for (PurchaseOrder:${id}), not of ${id}`)).toBe(
+      'The file of supplier upload is a file of the record it is for (PurchaseOrder), not of.',
+    )
+    expect(databaseRuleWords(`sales: return ${id} came from the customer (${id}): it starts REQUESTED.`)).toBe('Return came from the customer: it starts REQUESTED.')
+    expect(databaseRuleWords('Runtime role factory_runtime must be NOLOGIN')).toBeNull()
+    expect(databaseRuleWords('new row for relation "X" violates check constraint "Y"')).toBeNull()
+  })
+  // ---- end TH-0A Open 3
 
   it('writes the error body', () => {
     expect(errorBodyFor('not_found', 'req-1')).toEqual({ error: { code: 'not_found', message: 'Not found.', requestId: 'req-1' } })

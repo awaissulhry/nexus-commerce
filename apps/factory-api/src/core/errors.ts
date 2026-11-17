@@ -115,6 +115,8 @@ export interface MappedError {
   readonly unexpected: boolean
   /** Seconds the caller waits before trying again (the Retry-After header). Only a busy database sets it. */
   readonly retryAfterSeconds?: number
+  /** TH-0A Open 3: the database rule's own text, for the log only (never on the wire). Only a refusal by a rule sets it. */
+  readonly guard?: string
 }
 
 /** B-W2b-F2: the answer to a busy database, in words, and how long the caller waits before trying again. */
@@ -352,8 +354,58 @@ function digestRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
-/** What an error becomes on the wire. Pure, so the mapping is tested without a server. */
-export function mapError(error: unknown): MappedError {
+// TH-0A Open 3 (threads plan, follow-up of #1527) ---------------------------------------------------------------------------
+/**
+ * Every rule the database keeps (a guard trigger) refuses in one form: `RAISE EXCEPTION '<area>: <what is true>' USING ERRCODE =
+ * 'check_violation'` (or `restrict_violation`), e.g. `threads: message <id> has neither text nor attachments`. The refusals above
+ * turn some of them into chosen words; any other one, when a write reached it past its command's own check (a race, a path that
+ * forgot it, a clock ahead of the database's), was a 500 for every audience (TH-0A found it through a portal command). It is a
+ * 409 `conflict` in the rule's own words (issue `refusal/DATABASE_RULE`), for every audience: the area taken off, every record id
+ * taken out (an id is no word a person can use, and it could name another customer's record), the first letter a capital.
+ * Toward a customer (a portal or link session) every rule's refusal is one neutral sentence (§0 the brand wall, lead 11-17: a
+ * rule's text can carry another record's number or code, e.g. 'transfer %', 'lot %', so no rule text ever reaches a customer); the
+ * office keeps the words, and the log keeps the rule's own text. A PostgreSQL CHECK constraint's own
+ * message ('new row for relation … violates check constraint …'), any other SQLSTATE and an unknown error stay a logged 500.
+ */
+export const DATABASE_RULE_ISSUE = 'refusal/DATABASE_RULE'
+export const DATABASE_RULE_NEUTRAL = 'This cannot be saved as it is.'
+const RULE_FORM = /^([a-z][a-z0-9 -]{0,59}): (\S[\s\S]*)$/
+const RULE_CODES: ReadonlySet<string> = new Set(['23514', '23001'])
+const RECORD_ID = /:?\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi
+const CUSTOMER_AUDIENCES: ReadonlySet<string> = new Set(['partner', 'link'])
+
+/** A rule's text in words (null: not a rule's refusal): the area off, every record id out, tidy spaces, a capital and a full stop. */
+export function databaseRuleWords(original: string): string | null {
+  const form = RULE_FORM.exec(original.trim())
+  if (!form) return null
+  const words = form[2]!
+    .replace(RECORD_ID, '')
+    .replace(/\(\s*[,;]?\s*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:)])/g, '$1')
+    .replace(/\(\s+/g, '(')
+    .replace(/[,;:\s]+$/, '')
+    .replace(/\.+$/, '')
+    .trim()
+  if (words === '') return null
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}.`
+}
+
+function databaseRuleRefusal(error: unknown, audience: string | undefined): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (typeof cause?.originalCode !== 'string' || !RULE_CODES.has(cause.originalCode) || typeof cause.originalMessage !== 'string') return null
+  const words = databaseRuleWords(cause.originalMessage)
+  if (!words) return null
+  const message = audience !== undefined && CUSTOMER_AUDIENCES.has(audience) ? DATABASE_RULE_NEUTRAL : words
+  return { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: DATABASE_RULE_ISSUE, message }], unexpected: false, guard: cause.originalMessage }
+}
+// ---- end TH-0A Open 3
+
+/**
+ * What an error becomes on the wire. Pure, so the mapping is tested without a server. `audience` (the request's, when it had a
+ * context) only chooses the words of a database rule's refusal toward a customer (TH-0A Open 3).
+ */
+export function mapError(error: unknown, audience?: string): MappedError {
   if (error instanceof DomainError) {
     const issues = error.issues && error.issues.length > 0 ? { issues: error.issues } : {}
     return { status: STATUS_OF[error.code], code: error.code, message: error.message, ...issues, unexpected: false }
@@ -405,6 +457,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-332
   const askedLine = askedLineRefusal(error)
   if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }
+  // TH-0A Open 3: any other rule of the database, after every chosen refusal above.
+  const rule = databaseRuleRefusal(error, audience)
+  if (rule) return rule
   if (isBusyDatabaseError(error)) {
     return { status: STATUS_OF.not_ready, code: 'not_ready', message: BUSY_MESSAGE, unexpected: false, retryAfterSeconds: BUSY_RETRY_AFTER_SECONDS }
   }
@@ -440,7 +495,7 @@ function contextFields(request: FastifyRequest): { audience?: string; tenantId?:
 /** Installs the error handler and the not-found handler on the root instance. */
 export function installErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((error: unknown, request: FastifyRequest, reply: FastifyReply) => {
-    const mapped = mapError(error)
+    const mapped = mapError(error, contextFields(request).audience)
     if (mapped.unexpected) {
       request.log.error({ err: error }, 'request failed')
       // B-W2a-42 (PLT-218): the redacted report; route pattern, never the URL.
@@ -449,6 +504,9 @@ export function installErrorHandling(app: FastifyInstance): void {
       // B-W2b-F2: a busy database is not a bug, but the operator must see it (with the error, never on the wire).
       request.log.warn({ err: error, code: mapped.code, status: mapped.status }, 'database busy')
       void reply.header('retry-after', String(mapped.retryAfterSeconds))
+    } else if (mapped.guard !== undefined) {
+      // TH-0A Open 3: a write reached a rule of the database past its command's check; the operator sees the rule's own text.
+      request.log.warn({ code: mapped.code, status: mapped.status, guard: mapped.guard }, 'database rule refused a write')
     } else {
       request.log.info({ code: mapped.code, status: mapped.status }, 'request refused')
     }
