@@ -145,7 +145,8 @@
       "PDF": "Apri il PDF in una nuova scheda",
       "XML": "Apri l’XML (la fattura legale) in una nuova scheda",
       "FILE": "Apri il file in una nuova scheda"
-    }
+    },
+    "askInvoice": "Chiedi di questa fattura"
   },
   "for": {
     "shipment": "Spedizione {label}",
@@ -238,7 +239,9 @@
       "receipt": "Ti inviamo la ricevuta per e-mail.",
       "transfer": "Puoi sempre pagare con bonifico: le nostre coordinate bancarie sono sulla fattura.",
       "transferDeposit": "Puoi sempre pagare con bonifico: le nostre coordinate bancarie sono sul preventivo."
-    }
+    },
+    "ask": "Fai una domanda",
+    "askOf": "Chiedi della fattura {number}"
   },
   "method": {
     "CARD": "Carta",

@@ -1,21 +1,109 @@
 /*
- * The invite-link page (SCR-270, Join a record) LAYOUT inside the link frame (comfortable density, phone first): one
- * column of cards — why, the record, shared files, messages, e-mail me. Controls are the design system's; semantic tokens
- * only.
+ * The invite-link page (SCR-270, Join a record) LAYOUT inside the link frame (comfortable density, phone first). Controls are the
+ * design system's; semantic tokens only.
+ * B-TH-274 (threads plan TH-6, PL7): the record's thread is the main column — its files strip, the conversation, Add files — and
+ * from 1280 px the side column (why you are here, the record, E-mail me) sits beside it at about a third, sticky; narrower, the
+ * thread is the whole page and the side column waits behind "i" (a sheet). From 1280 px the link frame drops its phone width for
+ * this page only (no page max-width, no dead space at 1920: Owner rule 2026-10-29).
  */
 .fw-inv-stack,
 .fw-inv-card,
 .fw-inv-thread,
-.fw-inv-upload {
+.fw-inv-upload,
+.fw-inv-main,
+.fw-inv-side,
+.fw-inv-sheet {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-12);
   min-width: 0;
 }
 
-.fw-inv-stack {
+.fw-inv-stack,
+.fw-inv-main,
+.fw-inv-side {
   gap: var(--nds-space-16);
 }
+
+/* ---- B-TH-274: two columns from 1280 px (inviteLayout: TWO_COLUMNS_FROM); the side column behind "i" narrower ---------------- */
+.fw-inv-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-inv-side {
+  display: none;
+}
+
+.fw-inv-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (min-width: 1280px) {
+  .fw-link:has(.fw-inv-page) {
+    max-width: none;
+  }
+
+  .fw-inv-page {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+    gap: var(--nds-space-24);
+  }
+
+  .fw-inv-side {
+    display: flex;
+    position: sticky;
+    top: var(--nds-space-16);
+  }
+
+  .fw-inv-bar {
+    display: none;
+  }
+}
+
+/* The thread's files strip: the newest files by name, then "All files (N)" — the one place for files on the page. */
+.fw-inv-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.fw-inv-strip-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-inv-strip-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-inv-strip-files > li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-inv-strip > .nds-banner {
+  flex-basis: 100%;
+}
+/* ---- end B-TH-274 */
 
 .fw-inv-h2,
 .fw-inv-h3 {

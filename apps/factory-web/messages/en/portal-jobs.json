@@ -460,8 +460,6 @@
     "kit": "Kit received",
     "progress": "Progress",
     "sendback": "Send back",
-    "documents": "Documents",
-    "messages": "Messages",
     "toDo": "To do"
   },
   "docs": {
@@ -543,5 +541,8 @@
     "held": {
       "name": "Your name: at most 200 characters."
     }
+  },
+  "thread": {
+    "label": "Messages about job {number}"
   }
 }

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -43,6 +44,15 @@ import {
   type PickedPhoto,
   type StartDraft,
 } from './model'
+// ---- B-TH-275
+import { caseThreadHref, newOnCase, RECORD_TABS } from './model'
+import { returnBandOf, complaintBandOf } from './band'
+import { returnWords } from './design-data'
+import { repairBandOf } from './repair/band'
+import { REPAIR_THREAD_TYPE, repairTabOf } from './repair/model'
+import { designScreen as repairScreen } from './repair/fixtures'
+import { portalArrivalOf } from '../../shell/record/model'
+// ---- end B-TH-275
 import { designScreen as recordScreen } from './record/fixtures'
 
 /**
@@ -77,10 +87,10 @@ describe('addresses and tabs', () => {
     expect(listQuery(null, '', { start: 'RETURN' })).toBe('?start=RETURN')
   })
 
-  it('a return and a complaint open their own page on Status; Messages lands on the thread', () => {
+  it('a return and a complaint open their own page on Status; Messages lands on the docked thread (B-TH-275)', () => {
     expect(caseHref('/p/X', 'RETURN', 'r1')).toBe('/p/X/returns/r1?tab=status')
     expect(caseHref('/p/X', 'COMPLAINT', 'c1', 'request')).toBe('/p/X/returns/complaints/c1?tab=request')
-    expect(caseHref('/p/X', 'RETURN', 'r1', 'messages')).toBe('/p/X/returns/r1?tab=messages#messages')
+    expect(caseThreadHref('/p/X', 'RETURN', 'r1')).toBe('/p/X/returns/r1?tab=messages')
     expect(tabOf('nonsense')).toBe('status')
     expect(tabOf('request')).toBe('request')
     expect(threadTypeOf('RETURN')).toBe('ReturnAuthorisation')
@@ -291,3 +301,90 @@ describe('SCR-187 design cases', () => {
     })
   }
 })
+
+// ---- B-TH-275 (threads plan TH-6; P-CUS-RET, P-CUS-CMP, P-CUS-REP, P-CUS-RET-LIST; picture 22): the cases on the portal record
+// frame — tabs 3 → 2, the conversation docked (no Messages tab, no Ask modal), the repair's OWN thread, the list's new-messages mark.
+describe('B-TH-275 — returns, complaints and repairs dock their conversation', () => {
+  const draw = (screen: DesignScreen<unknown>, id: string, locale: 'it' | 'en' = 'en') =>
+    renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, Object.keys(CATALOGUE[locale])) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
+
+  it('tabs 3 → 2 (Request, Status); an old ?tab=messages lands on Status with the conversation shown and focused', () => {
+    expect([...RECORD_TABS]).toEqual(['request', 'status'])
+    expect((RECORD_TABS as readonly string[]).includes('messages')).toBe(false)
+    expect(tabOf('messages')).toBe('status')
+    expect(tabOf(null)).toBe('status')
+    const href = caseThreadHref('/p/X', 'COMPLAINT', 'c1')
+    expect(href).toBe('/p/X/returns/complaints/c1?tab=messages')
+    expect(portalArrivalOf(href.slice(href.indexOf('?')))).toEqual({ openThread: true, focus: true })
+  })
+
+  it('the bands: two link tabs, "Ask a question" about the case itself', () => {
+    const words = returnWords('en')
+    const ret = returnRecord('AUTHORISED')
+    const band = returnBandOf({ words, record: ret, tab: 'status', prefix: '/p/X', facts: { photosHeld: null, cancelHeld: null, labelHref: null, creditNotes: [] } })
+    expect(band.tabs?.items.map((item) => item.id)).toEqual(['request', 'status'])
+    expect(band.ask).toEqual({ type: 'ReturnAuthorisation', id: ret.id, label: ret.number })
+    const complaint = complaintRecord('INVESTIGATING')
+    const cband = complaintBandOf({ words, record: complaint, tab: 'request', prefix: '/p/X', photosHeld: null })
+    expect(cband.tabs?.items.map((item) => item.id)).toEqual(['request', 'status'])
+    expect(cband.ask?.type).toBe('Complaint')
+  })
+
+  it('a repair has its OWN thread (RepairOrder, B-TH-081): docked, and "Ask a question" asks about the repair', () => {
+    expect(REPAIR_THREAD_TYPE).toBe('RepairOrder')
+    expect(repairTabOf('messages')).toBe('status')
+    const html = draw(repairScreen as unknown as DesignScreen<unknown>, 'estimate')
+    expect(html.match(/<aside/g)?.length).toBe(1)
+    expect(html).toContain('id="messages"')
+    expect(html).toContain('data-mode="docked"')
+    const page = readFileSync(new URL('./repair/RepairPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('<PortalThread type={REPAIR_THREAD_TYPE} id={repair.id} showRecord={false} />')
+    const bandSource = readFileSync(new URL('./repair/band.ts', import.meta.url), 'utf8')
+    expect(bandSource).toContain("ask: { type: 'RepairOrder', id: repair.id, label: repair.number }")
+    expect(typeof repairBandOf).toBe('function')
+  })
+
+  it('a return and a complaint: ONE docked conversation beside the tab; narrower, "Messages (2 new)"', () => {
+    const screen = recordScreen as unknown as DesignScreen<unknown>
+    const docked = draw(screen, 'approved')
+    expect(docked.match(/<aside/g)?.length).toBe(1)
+    expect(docked).toContain('id="messages"')
+    expect(docked).not.toContain('tab=messages')
+    const narrow = draw(screen, 'th-275-narrow')
+    expect(narrow).toContain('data-mode="stacked"')
+    expect(narrow).toContain('Messages (2 new)')
+    expect(draw(screen, 'complaint-narrow')).toContain('Messages (2 new)')
+    // The case pages draw no office SO- order number (plan §0.5): the replacement order and the complaint's order in words.
+    for (const entry of screen.cases) expect(draw(screen, entry.id).match(/\bSO-\d{4}-\d+/)?.[0] ?? null, entry.id).toBeNull()
+  })
+
+  it('the list: the person’s own new messages per case; the cell and the row’s Messages open the case with its conversation shown', () => {
+    expect(newOnCase({ r1: { newCount: 2 } }, 'r1')).toBe(2)
+    expect(newOnCase({ r1: { newCount: 2 } }, 'r2')).toBe(0)
+    expect(newOnCase(null, 'r1')).toBe(0)
+    // The column only with the thread right (`unread` null: no column); its door and the row menu's Messages are the same address.
+    const view = readFileSync(new URL('./view/ReturnsListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('...(latest.current.model.unread')
+    expect(view).toContain("href={caseThreadHref(latest.current.model.prefix, data.type, data.id)}")
+    expect(view).toContain("{ id: 'messages', label: t('row.messages'), href: caseThreadHref(prefix, data.type, data.id) }")
+    // ONE read of the cases shown, by each case's own thread type (a return's, a complaint's), through the portal's own client.
+    const page = readFileSync(new URL('./ReturnsPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('(read?.items ?? []).map((item) => ({ recordType: threadTypeOf(item.type), id: item.id }))')
+    expect(page).toContain('unread: readsThreads ? unread : null')
+    expect(listScreen.cases.some((item) => item.id === 'th-275-new-messages')).toBe(true)
+  })
+
+  it('the words of the docked conversation exist in both languages; no Messages tab word is left', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = CATALOGUE[locale][NS]!
+      expect(words['messages.labelReturn'], locale).toBeTruthy()
+      expect(words['messages.labelComplaint'], locale).toBeTruthy()
+      expect(words['status.replacementOpen'], locale).toBeTruthy()
+      expect(words['request.orderOpen'], locale).toBeTruthy()
+      expect(words['tabs.messages']).toBeUndefined()
+      expect(words['messages.hint']).toBeUndefined()
+      expect(CATALOGUE[locale]['returns-repair']!['portal.record.messagesLabel'], locale).toBeTruthy()
+    }
+  })
+})
+// ---- end B-TH-275

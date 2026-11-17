@@ -83,7 +83,8 @@
     "TRIMS_IN": "Trims in",
     "PP_SAMPLE": "Pre-production sample approved",
     "LAB_PASSED": "Lab passed",
-    "OTHER": "Other"
+    "OTHER": "Other",
+    "SIZE_SET": "Size set approved"
   },
   "kindHint": {
     "SAMPLE_APPROVED": "Passes by itself when the sample round it names is approved.",
@@ -91,7 +92,8 @@
     "TRIMS_IN": "Marked done when the trims are in.",
     "PP_SAMPLE": "Passes by itself when the pre-production round it names is approved.",
     "LAB_PASSED": "Marked done when the lab results are in and passed.",
-    "OTHER": "Say what it is: marked done by hand."
+    "OTHER": "Say what it is: marked done by hand.",
+    "SIZE_SET": "Passes by itself when the size set round it names is approved."
   },
   "milestone": {
     "START": "Production start",
@@ -244,7 +246,9 @@
     "SALESMAN": "Salesman sample, round {no}",
     "PRE_PRODUCTION": "Pre-production, round {no}",
     "CERTIFICATION": "Certification, round {no}",
-    "BRAND": "Brand sample, round {no}"
+    "BRAND": "Brand sample, round {no}",
+    "SIZE_SET": "Size set, round {no}",
+    "TOP_OF_PRODUCTION": "Top of production, round {no}"
   },
   "form": {
     "addTitle": "Add a gate",

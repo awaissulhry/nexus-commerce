@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ReplyRecordType } from '@nexus/factory-domain/templates/replies'
+import type { MessageLanguage } from '@nexus/factory-domain/templates/message-languages' // th-backend-g step 3: the five languages
 import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client'
 import { replySchema, type SavedReply } from '../../../../_shared/document-send/template/api'
 
@@ -24,12 +25,12 @@ const one = z.object({ reply: replySchema })
 const path = (replyId: string) => `/templates/replies/${encodeURIComponent(replyId)}`
 
 /** Every saved reply the reader keeps or may use for a company (its own and every company's), any language and record. */
-export const listSavedReplies = (api: ApiClient, query: { companyId?: string | null; language?: 'it' | 'en' | null; recordType?: ReplyRecordType | null } = {}, signal?: AbortSignal) =>
+export const listSavedReplies = (api: ApiClient, query: { companyId?: string | null; language?: MessageLanguage | null; recordType?: ReplyRecordType | null } = {}, signal?: AbortSignal) =>
   api.get('/templates/replies', { query: { companyId: query.companyId ?? undefined, language: query.language ?? undefined, recordType: query.recordType ?? undefined }, schema: listAnswer, signal })
 
 export interface SavedReplyBody {
   name: string
-  language: 'it' | 'en'
+  language: MessageLanguage // th-backend-g step 3
   body: string
   recordType: ReplyRecordType | null
   companyId: string | null

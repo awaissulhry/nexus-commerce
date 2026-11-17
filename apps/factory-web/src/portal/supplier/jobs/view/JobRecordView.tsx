@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Camera, CheckCheck, FileText, PackageCheck, Truck } from 'lucide-react'
 import { Banner, Card, Disclosure, EmptyState, Field, KeyValue, ProgressBar } from '@nexus/ui/components'
 import { SizeGridEditor } from '@nexus/ui/grid/size-grid/index'
@@ -40,12 +40,14 @@ import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import '../jobs.css'
 
 /**
- * SCR-193 › one job (design portal.supplier.jobs rec "Job": tabs Kit received, Progress, Send back, Documents, Messages):
+ * SCR-193 › one job (design portal.supplier.jobs rec "Job"; B-TH-277 tabs 5 → 3: Kit received with its documents, Progress,
+ * Send back — the job's conversation docks beside every tab, drawn by the page's portal record frame, never here):
  * what the job is (operations, style, pieces, our kit, due back, our notes) and its answer; the kit as on our DDT with ONE
  * big "All received as listed" or a count per line (a shortfall with words and a photo of the damage); today's finished
  * pieces per size on the stacked size grid (a phone), the day it finishes by, the reports so far, a problem told in the
  * job's messages; what comes back (finished, scrap with a reason, unused material, your DDT, parcels, the day, who
- * carries), reviewed before it goes; the documents; the job's messages. Every button that waits says why. No price (C2).
+ * carries), reviewed before it goes; the documents (job sheet, kit DDTs, your DDTs, your photos) under Kit received. Every
+ * button that waits says why. No price (C2).
  */
 
 export interface JobRecordViewModel {
@@ -96,7 +98,7 @@ export interface JobRecordActions {
   review?: { onSend?: () => void; onClose?: () => void }
 }
 
-export function JobRecordView({ model, actions, children }: { model: JobRecordViewModel; actions?: JobRecordActions; children?: ReactNode }) {
+export function JobRecordView({ model, actions }: { model: JobRecordViewModel; actions?: JobRecordActions }) {
   const { t } = useJobWords()
   if (model.state === 'loading' || (model.state === 'ready' && !model.page)) return <Loading />
   if (model.state === 'missing') return <EmptyState title={t('record.missing')} description={t('record.missingBody')} action={<Button asChild><a href={`${model.prefix}/jobs`}>{t('list.title')}</a></Button>} />
@@ -109,12 +111,6 @@ export function JobRecordView({ model, actions, children }: { model: JobRecordVi
       {model.tab === 'kit' ? <KitTab model={model} job={job} actions={actions} /> : null}
       {model.tab === 'progress' ? <ProgressTab model={model} job={job} actions={actions} /> : null}
       {model.tab === 'sendback' ? <SendBackTab model={model} job={job} actions={actions} /> : null}
-      {model.tab === 'documents' ? <DocumentsTab model={model} job={job} /> : null}
-      {model.tab === 'messages' ? (
-        <section id="messages" className="fw-pjob-section" aria-label={t('tabs.messages')}>
-          {children}
-        </section>
-      ) : null}
       {model.accept ? <AcceptDialog model={model.accept} onDraft={actions?.accept?.onDraft} onSend={actions?.accept?.onSend} onDecline={actions?.accept?.onDecline} onClose={actions?.accept?.onClose} /> : null}
       {model.decline ? <DeclineDialog model={model.decline} onDraft={actions?.decline?.onDraft} onSend={actions?.decline?.onSend} onClose={actions?.decline?.onClose} /> : null}
       {model.photo ? <PhotoDialog model={model.photo} onCapture={actions?.photo?.onCapture} onClose={actions?.photo?.onClose} /> : null}
@@ -353,6 +349,8 @@ function KitTab({ model, job, actions }: { model: JobRecordViewModel; job: Job; 
           </ul>
         </Card>
       ) : null}
+      {/* B-TH-277: the Documents tab merged here — the kit's papers sit with the kit (job sheet, our DDT, your DDTs, your photos). */}
+      <KitDocuments model={model} job={job} />
     </section>
   )
 }
@@ -593,14 +591,14 @@ function SendBackTab({ model, job, actions }: { model: JobRecordViewModel; job: 
   )
 }
 
-// ── Documents ────────────────────────────────────────────────────────────────────────────────────────────────────────
-function DocumentsTab({ model, job }: { model: JobRecordViewModel; job: Job }) {
+// ── Documents (B-TH-277: a card of Kit received, no tab of its own) ─────────────────────────────────────────────────
+function KitDocuments({ model, job }: { model: JobRecordViewModel; job: Job }) {
   const { t, day } = useJobWords()
   const kitDdts = [...new Map(job.kit.lines.filter((line) => line.ddt).map((line) => [line.ddt!.number, line.ddt!])).values()]
   const yourDdts = job.returns.filter((notice) => notice.ddt).map((notice) => ({ id: notice.id, ddt: notice.ddt! }))
   const photos = job.kit.lines.flatMap((line) => line.photos.map((photo) => ({ ...photo, seq: line.seq })))
   return (
-    <section className="fw-pjob-section" aria-label={t('docs.title')}>
+    <section className="fw-pjob-docs-card" aria-label={t('docs.title')}>
       <Card padded className="fw-pjob-card">
         <h2 className="fw-pjob-h2">{t('docs.title')}</h2>
         <ul className="fw-pjob-docs" aria-label={t('docs.title')}>

@@ -8,12 +8,14 @@ import { NS as RETURNS_NS } from '../model'
 import { NotInAccess } from '../view/parts'
 import { NS } from './model'
 import { RepairRecordView, type RepairRecordViewModel } from './RepairRecordView'
+// B-TH-275: the repair's own conversation (the shell's ThreadView over made-up messages), docked by the record frame.
+import { ThreadView, type ThreadViewModel } from '../../../shell/view/ThreadView'
 
 /**
  * SCR-358 as one case of the design review (B-W2b-342): the portal frame (B-W2b-173's PortalShellView, its band filled as
  * the live page fills it) around one repair, with made-up data. The live page composes the same view.
  */
-export type RepairCaseModel = { shell: PortalShellViewModel; body: { kind: 'record'; model: RepairRecordViewModel } | { kind: 'noAccess'; admins: readonly string[] } }
+export type RepairCaseModel = { shell: PortalShellViewModel; body: { kind: 'record'; model: RepairRecordViewModel; thread?: ThreadViewModel | null } | { kind: 'noAccess'; admins: readonly string[] } }
 export type RepairCaseBuilder = (locale: Locale) => RepairCaseModel
 
 export function RepairCase({ model: build }: { model: RepairCaseBuilder }) {
@@ -21,7 +23,9 @@ export function RepairCase({ model: build }: { model: RepairCaseBuilder }) {
   const model = build(locale)
   return (
     <WithMessages namespaces={[NS, RETURNS_NS, 'ds-words', 'portal', 'shell', 'lists']}>
-      <PortalShellView model={model.shell}>{model.body.kind === 'record' ? <RepairRecordView model={model.body.model} /> : <NotInAccess admins={model.body.admins} homeHref={model.shell.prefix} />}</PortalShellView>
+      <PortalShellView model={model.shell}>
+        {model.body.kind === 'record' ? <RepairRecordView model={model.body.model}>{model.body.thread ? <ThreadView model={model.body.thread} /> : null}</RepairRecordView> : <NotInAccess admins={model.body.admins} homeHref={model.shell.prefix} />}
+      </PortalShellView>
     </WithMessages>
   )
 }

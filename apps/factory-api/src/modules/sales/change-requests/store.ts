@@ -3,12 +3,12 @@ import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain
 import {
   askedSummary,
   cutoffsOf,
-  KIND_WORDS,
+  ORDER_REQUEST_KIND_WORDS,
   REQUEST_STATUS_WORDS,
   type AskedCell,
   type Cutoffs,
   type CutStart,
-  type RequestKind,
+  type OrderRequestKind,
   type RequestStatus,
   type RuleLine,
   type Words,
@@ -233,9 +233,12 @@ export interface ViewFacts {
   readonly reasons: ReadonlyMap<string, Words>
 }
 
-/** A request as both audiences see it (the office adds its own fields). */
+/**
+ * A request as both audiences see it (the office adds its own fields). B-PR-23: every kind of request is read and said in words
+ * (the production asks beside CHANGE and CANCEL), and a COUNTERED one too; Sales answers CHANGE and CANCEL only.
+ */
 export function requestView(row: RequestRow, cells: readonly AskedCell[], facts: ViewFacts) {
-  const kind = row.kind as RequestKind
+  const kind = row.kind as OrderRequestKind
   const status = row.status as RequestStatus
   const summary = askedSummary(kind, cells, { requestedDate: dayOrNull(row.requestedDate), shipToAddressId: row.shipToAddressId })
   const shipTo = row.shipToAddressId ? (facts.addresses.get(row.shipToAddressId) ?? null) : null
@@ -245,7 +248,7 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
     orderNumber: facts.orderNumber,
     customerRef: facts.customerRef,
     kind,
-    kindWords: KIND_WORDS[kind],
+    kindWords: ORDER_REQUEST_KIND_WORDS[kind],
     status,
     words: REQUEST_STATUS_WORDS[status],
     askedAt: toUtcIso(row.createdAt),

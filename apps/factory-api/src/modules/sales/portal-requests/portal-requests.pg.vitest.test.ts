@@ -19,6 +19,9 @@ import { unsubscribeKeyOf } from '../../../platform/portal/notifications/mail'
 import { assignInquiry, askInfo, declineInquiry, updateInquiry } from '../inquiries/inquiries'
 import { quoteInquiry } from '../inquiries/quote'
 import { numberingMissingFindings } from './open'
+// th-backend-g step 2: the receipt mail.
+import { headerOf, textOf } from '../../../adapters/ses/fake'
+import { sendRequestReceipt } from '../inquiries/receipt'
 
 /**
  * The customer's request through the portal (threads plan TH-1b: B-TH-010 send, B-TH-103 reads, B-TH-011 states and news,
@@ -302,3 +305,42 @@ describe('follow-up th-backend-d: the portal search says Closed for a "Not an or
   })
 })
 // ---- end follow-up th-backend-d
+
+// ---- th-backend-g step 2 (threads plan B-TH-279 "request received — the receipt with its number"; P-CUS-NEW.receipt-F02 "a 'request
+// received' mail in their language; the page says so if it could not be sent"): the receipt goes to the ONE person who sent the request,
+// at once, once per request, in the customer's language, with the customer's own number (never the office's INQ-…); the reply lands on
+// the request's thread; the portal's own notice of the request is not mailed to that person as well.
+describe('th-backend-g step 2: the receipt mail goes to the person who sent the request — them only, once', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('one receipt per portal request, to its sender only; its own number, never the office series; the answer said it went', async () => {
+    expect(sent.receipt.mailed).toBe(true)
+    expect(otherSent.receipt.mailed).toBe(true)
+    const receipts = await admin<{ id: string; recordId: string; to: string[]; subject: string }>(`SELECT id, "recordId", "to", subject FROM "EmailOutbound" WHERE "tenantId" = $1 AND "templateKey" = 'request.received' ORDER BY "createdAt", id`, [T])
+    const ofBuyer = await admin<{ id: string }>(`SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2 AND source = 'PORTAL'`, [T, P1])
+    expect(ofBuyer.length).toBeGreaterThanOrEqual(2)
+    for (const request of ofBuyer) expect(receipts.filter((row) => row.recordId === request.id).map((row) => row.to)).toEqual([[people.buyer]])
+    expect(receipts.filter((row) => row.recordId === otherSent.request.id).map((row) => row.to)).toEqual([[people.other]])
+    // Never to anyone else: every receipt went to the one person who sent its request.
+    expect(new Set(receipts.flatMap((row) => row.to))).toEqual(new Set([people.buyer, people.other]))
+    const first = receipts.find((row) => row.recordId === sent.request.id)!
+    expect(first.subject).toMatch(/^(We received your request 2|Abbiamo ricevuto la sua richiesta 2)$/)
+    const mail = h.ses.mails.find((one) => one.outboundId === first.id)!
+    expect(mail.to).toEqual([people.buyer])
+    const text = textOf(mail.raw)
+    expect(text).toContain('Team jackets for the spring')
+    expect(text).not.toMatch(/INQ-\d{4}-\d{4}/)
+    expect(text).not.toContain(officeNumber)
+    expect(text).not.toContain('ten rain covers') // the other customer's words
+    const thread = await one<{ replyToken: string }>(`SELECT "replyToken" FROM "Thread" WHERE "recordType" = 'Inquiry' AND "recordId" = $1`, [sent.request.id])
+    expect(headerOf(mail.raw, 'Reply-To')).toContain(`r-${thread.replyToken}@`)
+    expect(headerOf(mail.raw, 'Auto-Submitted')).toBe('auto-generated')
+  })
+
+  it('the portal notice of the request is not mailed to its sender as well (said in the delivery log); a second send finds the first receipt', async () => {
+    const notice = await one<{ id: string }>(`SELECT n.id FROM "Notification" n JOIN "User" u ON u.id = n."userId" WHERE n."recordId" = $1 AND n."messageKey" = 'portal.request.received' AND u.email = $2`, [sent.request.id, people.buyer])
+    expect(await admin(`SELECT outcome::text AS outcome, detail FROM "NotificationDelivery" WHERE "notificationId" = $1`, [notice.id])).toEqual([{ outcome: 'SKIPPED', detail: 'the person who sent the request gets its receipt mail' }])
+    const again = await sendRequestReceipt(callerFor(h.database, systemContext(T, `test-${newId()}`)), h.email, { inquiryId: sent.request.id, to: { email: people.buyer, name: 'bea.buyer', language: null }, clock: h.clock })
+    expect(again.sent).toBe(true)
+    expect((await admin(`SELECT id FROM "EmailOutbound" WHERE "recordId" = $1 AND "templateKey" = 'request.received'`, [sent.request.id])).length).toBe(1)
+  })
+})
+// ---- end th-backend-g step 2

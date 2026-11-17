@@ -1,0 +1,35 @@
+{
+  "band": {
+    "home": "Home",
+    "reading": "Reading the record…",
+    "partOf": "Part of",
+    "moreLabel": "More actions on this record"
+  },
+  "summary": {
+    "label": "About this record",
+    "type": "Type",
+    "number": "Number",
+    "noNumber": "No number",
+    "state": "State",
+    "partOf": "Part of",
+    "theirRef": "Their reference",
+    "hint": "The conversation, its files and its history are in the thread: Files opens every file, View › Changes shows what changed, and its ⋯ holds tasks, approvals and sharing."
+  },
+  "thread": {
+    "label": "Thread of {record}"
+  },
+  "missing": {
+    "title": "You cannot see this record",
+    "body": "It does not exist, or it is outside what you may open.",
+    "home": "Back to Home"
+  },
+  "noRight": {
+    "title": "You cannot read this record's conversation",
+    "body": "It needs the right “{right}”. Ask an administrator of your company."
+  },
+  "failed": {
+    "title": "The record could not be read",
+    "body": "Check the connection and try again.",
+    "retry": "Try again"
+  }
+}

@@ -184,6 +184,8 @@ export function orderRecord(over: Partial<OrderRecord['order']> = {}, rest: Part
       id: ORDER_ID,
       customerRef: 'BA-PO-771',
       number: 'SO-2026-0141',
+      // B-TH-275: the customer's own number — what the order page shows (the office's number above is read, never drawn).
+      yourNumber: customerNumberOf('ORDER', 11),
       status: 'PARTLY_SHIPPED',
       words: CUSTOMER_STATUS_WORDS.PARTLY_SHIPPED,
       orderDate: dayAt(-29),
@@ -280,7 +282,7 @@ export function withoutPrices(record: OrderRecord): OrderRecord {
 
 /** A made-to-measure order for a rider: no right of withdrawal. */
 export function mtmRecord(): OrderRecord {
-  const base = orderRecord({ id: id(3), number: 'SO-2026-0143', customerRef: null, status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED, noWithdrawal: true, promiseMoved: false, originalPromiseDate: dayAt(19), promiseDate: dayAt(19), netAmount: 189000, vatAmount: 41580, grossAmount: 230580 })
+  const base = orderRecord({ id: id(3), number: 'SO-2026-0143', yourNumber: customerNumberOf('ORDER', 13), customerRef: null, status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED, noWithdrawal: true, promiseMoved: false, originalPromiseDate: dayAt(19), promiseDate: dayAt(19), netAmount: 189000, vatAmount: 41580, grossAmount: 230580 })
   return {
     ...base,
     promiseHistory: [],
@@ -535,7 +537,8 @@ export function threadOf(locale: Locale): ThreadViewModel {
       side: 'company',
       channel: 'email',
       author: { name: 'Giulia Esempio', mine: false },
-      body: locale === 'it' ? 'Buongiorno, la prima spedizione di SO-2026-0141 è partita ieri.' : 'Good morning, the first shipment of SO-2026-0141 left yesterday.',
+      // B-TH-275: our message names the customer's own number (plan §0.5).
+      body: locale === 'it' ? 'Buongiorno, la prima spedizione del vostro ordine 11 è partita ieri.' : 'Good morning, the first shipment of your order 11 left yesterday.',
       attachments: [],
       at: at(-20),
       atText: formatDateTime(at(-20), { locale }),

@@ -114,8 +114,16 @@ function MailTemplates({ model, actions }: { model: MailTemplatesModel; actions?
             <span className="fw-tpl-cell">
               <span>
                 <Pill tone={data.slot.inUse === 'CODE' ? 'neutral' : 'success'}>{t(`tpl.inUse.${data.slot.inUse}`)}</Pill>
+                {/* th-backend-g step 3 (B-TH-098): Claude's draft of the code's words, not read yet in this language. */}
+                {data.unread && (
+                  <>
+                    {' '}
+                    <Pill tone="warning">{t('tpl.mail.draftUnread')}</Pill>
+                  </>
+                )}
               </span>
               {version && <span className="fw-adm-hint">{t('tpl.editor.version', { revision: version.revision })}</span>}
+              {data.unread && <span className="fw-adm-hint">{t('tpl.mail.draftUnreadHint', { language: words.language(data.language) })}</span>}
             </span>
           )
         },

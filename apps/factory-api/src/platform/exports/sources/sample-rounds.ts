@@ -22,9 +22,10 @@ const STAGE_WORDS = {
   it: { REQUESTED: 'Richiesto', IN_MAKING: 'In lavorazione', SENT: 'Spedito', UNDER_REVIEW: 'In valutazione', DECIDED: 'Deciso', CANCELLED: 'Annullato' },
   en: { REQUESTED: 'Requested', IN_MAKING: 'In making', SENT: 'Sent', UNDER_REVIEW: 'Under review', DECIDED: 'Decided', CANCELLED: 'Cancelled' },
 } as const
+// B-PR-23: the size set and top of production rounds too.
 const KIND_WORDS = {
-  it: { PROTO: 'Prototipo', FIT: 'Fit', SALESMAN: 'Campionario vendita', PRE_PRODUCTION: 'Pre-produzione', CERTIFICATION: 'Campione per prova CE', BRAND: 'Campione del brand' },
-  en: { PROTO: 'Proto', FIT: 'Fit', SALESMAN: 'Salesman', PRE_PRODUCTION: 'Pre-production', CERTIFICATION: 'CE test sample', BRAND: 'Brand sample' },
+  it: { PROTO: 'Prototipo', FIT: 'Fit', SALESMAN: 'Campionario vendita', PRE_PRODUCTION: 'Pre-produzione', CERTIFICATION: 'Campione per prova CE', BRAND: 'Campione del brand', SIZE_SET: 'Set di taglie', TOP_OF_PRODUCTION: 'Primi capi di produzione (TOP)' },
+  en: { PROTO: 'Proto', FIT: 'Fit', SALESMAN: 'Salesman', PRE_PRODUCTION: 'Pre-production', CERTIFICATION: 'CE test sample', BRAND: 'Brand sample', SIZE_SET: 'Size set', TOP_OF_PRODUCTION: 'Top of production' },
 } as const
 const DECISION_WORDS = {
   it: { APPROVED: 'Approvato', APPROVED_WITH_COMMENTS: 'Approvato con commenti', REJECTED: 'Respinto' },

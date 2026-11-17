@@ -1,4 +1,5 @@
 import { BrandHealth, BrandStage, BrandUrgency, HealthReason, IssueSource, IssueStatus, UrgencyActor, WaitingOn, WorkOrderHoldKind, WorkOrderHoldStatus } from '../src/generated/prisma/enums'
+import { seedAt } from '../src/seed-calendar' // B-PR-23: the need-by date is the seeds' future
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seedSecondBrand } from '../src/testing/second-brand'
 import { seed as seedAuth } from './auth'
@@ -7,6 +8,7 @@ import { seed as seedPortalAuth } from './portal-auth'
 import { seed as seedProduction } from './production'
 import { seed as seedQuality } from './quality'
 import { seed as seedSales } from './sales'
+import { seed as seedSalesPricing } from './sales-pricing' // B-PR-23
 
 /**
  * B-PR-15 (production plan, schema wave 3/5; review fix R-57): a customer's production state of its orders, an issue that needs
@@ -27,11 +29,12 @@ import { seed as seedSales } from './sales'
  *                    assignee until a supervisor is set: B-PR-42a seeds the supervisors)
  *   SEED-WO-0001 (P1, site A1)   a PRODUCTION hold for missing material, placed and lifted on its release day: history, so no
  *                                work order changes state (the floor reads it, the office's note never).
- *
- * Left for B-PR-23 (R-57's "Urgent – asked"): the open RUSH request. Today the office list of change requests and the portal
- * order's request list read every kind but answer only CHANGE and CANCEL (modules/sales/change-requests office.ts officeList,
- * portal.ts, store.ts KIND_WORDS), so a seeded RUSH row would break those reads until the production asks have their own
- * columns, words and reads (B-PR-23, B-PR-24, B-PR-46a).
+ *   SEED-SO-0004 (P1, CONFIRMED, typed by the office; no production state row yet)   B-PR-23 (R-57's "Urgent – asked"): P1's
+ *                                portal buyer asked it Urgent with a need-by date (a RUSH request, OPEN, no batch, no impact
+ *                                kept: B-PR-24 gives the impact its shape), written in P1's own partner scope as the portal
+ *                                does, so the database's rules for the asks run. The office list of change requests and the
+ *                                portal order's list read it in words ("Urgent – asked"); Sales does not answer it (Home ›
+ *                                Approvals does, B-PR-26/27b); it never blocks a change or a cancel of the order.
  *
  * The CLI runs the seeds in name order, so this one runs the seeds whose rows it names first (each idempotent): auth, files,
  * sales (SEED-SO-0001), production (SEED-SO-0002, SEED-WO-0001), quality (SEED-SO-0003), the portal people (P1's buyer) and
@@ -54,6 +57,8 @@ const T = {
   held: new Date('2026-11-15T11:00:00.000Z'),
   lifted: new Date('2026-11-15T14:00:00.000Z'),
   switched: new Date('2026-11-13T08:00:00.000Z'),
+  // B-PR-23
+  asked: new Date('2026-11-14T15:00:00.000Z'),
 } as const
 const day = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`)
 
@@ -67,6 +72,8 @@ export interface BrandProductionSeed {
   readonly issue: { readonly id: string; readonly taskId: string; readonly messageId: string; readonly partyId: string }
   /** The lifted production hold on SEED-WO-0001. */
   readonly holdId: string
+  /** B-PR-23: P1's open RUSH request ("Urgent – asked") on SEED-SO-0004. */
+  readonly urgentAsk: { readonly requestId: string; readonly orderId: string }
 }
 
 export async function seed(context: SeedContext): Promise<BrandProductionSeed> {
@@ -78,6 +85,7 @@ export async function seed(context: SeedContext): Promise<BrandProductionSeed> {
   const quality = await seedQuality(context)
   const portal = await seedPortalAuth(context)
   const second = await seedSecondBrand(context)
+  const pricing = await seedSalesPricing(context) // B-PR-23: SEED-SO-0004
   const id = (key: string): string => seedUuid(namespace, key)
   /** An id that sorts last: no generated test copies the row (see above). */
   const lastId = (key: string): string => `ffffffff${id(key).slice(8)}`
@@ -96,6 +104,9 @@ export async function seed(context: SeedContext): Promise<BrandProductionSeed> {
   const batchIds = { marked: id('brand-production:batch:P1:marked'), locked: id('brand-production:batch:P1:locked') }
   const issue = { id: id('brand-production:issue:second-brand:SO-B001'), taskId: lastId('brand-production:task:second-brand:SO-B001'), messageId: second.messageIds[1]!, partyId: second.partyId }
   const holdId = id('brand-production:hold:WO-0001')
+  // B-PR-23: P1's "Urgent – asked" on SEED-SO-0004 (an ordinary id: the generated isolation tests copy portal-sales' first,
+  // plain OPEN change request, whose id starts with eight zeros).
+  const urgentAsk = { requestId: id('brand-production:ask:P1:SO-0004:rush'), orderId: pricing.order.orderId }
   /** When Seed Brand Two reported its problem: its portal message in the order's thread (second-brand.ts minutes(20)). */
   const reported = new Date('2026-10-29T08:20:00.000Z')
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: ownerId })
@@ -262,5 +273,27 @@ export async function seed(context: SeedContext): Promise<BrandProductionSeed> {
     }),
   )
 
-  return { rowIds, orderIds, batchIds, issue, holdId }
+  // B-PR-23: "Urgent – asked" — P1's buyer asks SEED-SO-0004 Urgent, needed by a day to come; in P1's own scope (the portal's
+  // command), once.
+  await db.withScope({ audience: 'partner', tenantId, actorId: buyer, partyId: p1 }, (client) =>
+    client.orderChangeRequest.createMany({
+      data: [
+        {
+          id: urgentAsk.requestId,
+          companyId: companyA,
+          partyId: p1,
+          orderId: urgentAsk.orderId,
+          kind: 'RUSH',
+          reason: 'Seed: our shop opens the new season early; we need this order by then.',
+          requestedDate: seedAt('2026-12-04T00:00:00.000Z'),
+          createdAt: T.asked,
+          updatedAt: T.asked,
+          createdById: buyer,
+        },
+      ],
+      skipDuplicates: true,
+    }),
+  )
+
+  return { rowIds, orderIds, batchIds, issue, holdId, urgentAsk }
 }

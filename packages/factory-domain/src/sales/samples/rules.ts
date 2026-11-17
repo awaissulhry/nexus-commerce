@@ -22,7 +22,9 @@ import type { Issue } from '../../core/errors'
  * SENT (from REQUESTED or IN_MAKING), received moves it to UNDER_REVIEW (from SENT). Never backwards on its own.
  */
 
-export const SAMPLE_KINDS = ['PROTO', 'FIT', 'SALESMAN', 'PRE_PRODUCTION', 'CERTIFICATION', 'BRAND'] as const
+// B-PR-23 (production plan, schema wave 4/5): SIZE_SET (gates the order, GateKind SIZE_SET) and TOP_OF_PRODUCTION (gates
+// nothing), each asked of the brand as a SAMPLE approval (B-PR-29).
+export const SAMPLE_KINDS = ['PROTO', 'FIT', 'SALESMAN', 'PRE_PRODUCTION', 'CERTIFICATION', 'BRAND', 'SIZE_SET', 'TOP_OF_PRODUCTION'] as const
 export type SampleKind = (typeof SAMPLE_KINDS)[number]
 
 export const SAMPLE_STAGES = ['REQUESTED', 'IN_MAKING', 'SENT', 'UNDER_REVIEW', 'DECIDED', 'CANCELLED'] as const
@@ -53,6 +55,9 @@ export const KIND_WORDS: Readonly<Record<SampleKind, Words>> = Object.freeze({
   PRE_PRODUCTION: { it: 'Pre-produzione', en: 'Pre-production' },
   CERTIFICATION: { it: 'Campione per prova CE', en: 'CE test sample' },
   BRAND: { it: 'Campione del brand', en: 'Brand sample' },
+  // B-PR-23
+  SIZE_SET: { it: 'Set di taglie', en: 'Size set' },
+  TOP_OF_PRODUCTION: { it: 'Primi capi di produzione (TOP)', en: 'Top of production' },
 })
 
 export const STAGE_WORDS: Readonly<Record<SampleStage, Words>> = Object.freeze({

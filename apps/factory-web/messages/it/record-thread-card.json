@@ -120,5 +120,25 @@
     "sending": "Invio a {party} in corso…",
     "button": "Annulla ({seconds})",
     "label": "Riprendi la mail: restano {seconds} secondi"
+  },
+  "erased": {
+    "line": "Messaggio rimosso dopo una richiesta di privacy",
+    "short": "Messaggio rimosso (richiesta di privacy)"
+  },
+  "skipped": {
+    "line_one": "{count} file di questa e-mail non è stato tenuto: {files}",
+    "line_other": "{count} file di questa e-mail non sono stati tenuti: {files}",
+    "item": "{name} ({reason})",
+    "reason": {
+      "type_not_allowed": "tipo non accettato",
+      "too_large": "troppo grande",
+      "empty": "file vuoto",
+      "too_many": "troppi file in una sola e-mail",
+      "other": "non tenuto"
+    }
+  },
+  "filesOnly": {
+    "line_one": "{count} file",
+    "line_other": "{count} file"
   }
 }

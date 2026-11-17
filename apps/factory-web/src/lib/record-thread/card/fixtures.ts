@@ -52,6 +52,23 @@ const pricedNote = { ...cards[1]!, id: 'priced-1', body: 'Agreed with the buyer 
 const sending = { ...ours, id: 'undo-1', at: DEMO_NOW, body: 'Good morning, the size chart follows.', files: [], mine: true, email: { to: [BRAND_ALPHA.contact.email], subject: 'Re: size chart', status: 'QUEUED' as const, id: 'mail-undo-1', undoUntil: new Date(NOW_MS + 7_000).toISOString() } }
 // ---- end B-TH-236
 
+// ---- B-TH-255 (B-TH-079; picture 2's erased card and "files not kept" line): made-up messages — a customer's mail whose writer was
+// erased after a privacy request, a message of files only (empty words: NOT erased), and an inbound mail whose logo and clip were not kept.
+const erased: CardMessage = { ...mail, id: 'erased-1', author: null, body: '', files: [], erased: true }
+const filesOnly: CardMessage = { ...mail, id: 'files-only-1', at: '2026-11-17T09:20:00.000Z', body: '', files: [{ id: 'fo-1', name: 'collar-detail.jpg', sizeBytes: 820_000, contentType: 'image/jpeg', status: 'AVAILABLE' }, { id: 'fo-2', name: 'size-run-v2.pdf', sizeBytes: 140_000, contentType: 'application/pdf', status: 'AVAILABLE' }] }
+const skippedMail: CardMessage = {
+  ...mail,
+  id: 'skipped-1',
+  at: '2026-11-17T09:35:00.000Z',
+  body: 'Here is the logo for the chest print and a short clip of the sample on the bike.',
+  files: [],
+  skipped: [
+    { name: 'logo.ai', contentType: 'application/postscript', sizeBytes: 2_400_000, reason: 'type_not_allowed' },
+    { name: 'clip.mov', contentType: 'video/quicktime', sizeBytes: 61_000_000, reason: 'too_large' },
+  ],
+}
+// ---- end B-TH-255
+
 export const designScreen = defineDesignScreen<CardGalleryModel>({
   screen: 'SCR-006-card',
   title: 'Record thread · the message card (T3)',
@@ -135,6 +152,20 @@ export const designScreen = defineDesignScreen<CardGalleryModel>({
       note: 'The sender’s mail waits 10 seconds: “Sending to Brand Alpha… · Undo (7)”. Taken back = the text is back in the box; then the honest words: Sent → Delivered.',
     },
     // ---- end B-TH-236
+    // ---- B-TH-255
+    {
+      id: 'erased',
+      label: 'Erased after a privacy request; a message of files only',
+      model: alpha([erased, filesOnly]),
+      note: '“Message removed after a privacy request” in place of the words (never an empty grey card). A message that only carries files shows its files and no empty body: it is NOT the erased card.',
+    },
+    {
+      id: 'skipped',
+      label: 'Files an e-mail brought that were not kept',
+      model: alpha([skippedMail]),
+      note: '“2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too large)” under the customer’s mail — the office only; a signature logo is never listed.',
+    },
+    // ---- end B-TH-255
     {
       id: 'brand-beta',
       label: 'Brand Beta’s copy (brand wall)',

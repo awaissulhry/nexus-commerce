@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { MAX_ANSWER, MAX_NOTE, REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES, CUTOFF_STATUSES, MAX_CUTOFF_DAYS } from '@nexus/factory-domain/sales/change-requests/rules'
+import { MAX_ANSWER, MAX_NOTE, ORDER_REQUEST_KINDS, REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES, CUTOFF_STATUSES, MAX_CUTOFF_DAYS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_SIZE_QUANTITY, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { money } from '@nexus/factory-domain/money/marked'
@@ -54,7 +54,8 @@ const requestFields = {
   orderNumber: z.string(),
   /** Their purchase order number. */
   customerRef: z.string().nullable(),
-  kind: z.enum(REQUEST_KINDS),
+  /** B-PR-23: any kind of request on the order (the production asks too), each with its words; the portal asks CHANGE and CANCEL. */
+  kind: z.enum(ORDER_REQUEST_KINDS),
   kindWords: words,
   status: z.enum(REQUEST_STATUSES),
   words,
@@ -163,7 +164,7 @@ const officeRequest = output({
   answeredBy: z.string().nullable(),
   /** The amendment an accepted change made. */
   amendment: output({ id: id(), revision: z.number().int() }).nullable(),
-  /** The reader may accept or refuse it now (orders.manage over the order, the request OPEN). */
+  /** The reader may accept or refuse it now (orders.manage over the order, the request OPEN; B-PR-23: a CHANGE or a CANCEL — a production ask is answered in Approvals). */
   mayAnswer: z.boolean(),
 })
 
@@ -182,7 +183,8 @@ export const officeListContract = defineContract({
       items: z.array(officeRequest),
       /** Rows in the status asked (and the filters). */
       count: z.number().int(),
-      counts: output({ OPEN: z.number().int(), ACCEPTED: z.number().int(), REFUSED: z.number().int(), WITHDRAWN: z.number().int() }),
+      // B-PR-23: COUNTERED (our counter-offer waits for the customer).
+      counts: output({ OPEN: z.number().int(), ACCEPTED: z.number().int(), REFUSED: z.number().int(), WITHDRAWN: z.number().int(), COUNTERED: z.number().int() }),
       live,
     }),
   },

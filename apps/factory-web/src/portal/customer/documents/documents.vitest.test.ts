@@ -32,6 +32,9 @@ import {
   UNAVAILABLE_REASONS,
 } from './model'
 import type { CustomerDocument } from './preview/api'
+// B-TH-276
+import { readFileSync } from 'node:fs'
+import { invoiceConversationHref, oldMessagesHref, payAskHref, rowAskHref } from './model'
 import { DOCUMENT_LANGUAGES, languageWords, mainFileOf, neighbourOf, openRefusal, previewRowOf, versionLines } from './preview/model'
 
 /**
@@ -296,3 +299,59 @@ describe('SCR-186 design cases', () => {
     expect(html).not.toContain('To pay')
   })
 })
+
+// ---- B-TH-276 (P-CUS-DOCS.library [P10]; PL3-F03: no Ask modal; walls W09, W11–W14) ---------------------------------------------
+describe('B-TH-276 — an invoice’s conversation is its own page, never a pop-up', () => {
+  const PREFIX = '/p/BRAND-BETA'
+
+  it('the conversation page is the portal’s generic page with view=conversation (the route does not send it on to Documents)', () => {
+    expect(invoiceConversationHref(PREFIX, UUID(7))).toBe(`/p/BRAND-BETA/open/Invoice/${UUID(7)}?view=conversation`)
+  })
+
+  it('an old ?invoice=<id>&tab=messages goes to that page; ?invoice= alone still opens Pay here; a bad id asks nothing', () => {
+    expect(oldMessagesHref(PREFIX, addressOf(params(`invoice=${UUID(2)}&tab=messages`), isLibraryChip))).toBe(`/p/BRAND-BETA/open/Invoice/${UUID(2)}?view=conversation`)
+    expect(oldMessagesHref(PREFIX, addressOf(params(`invoice=${UUID(2)}`), isLibraryChip))).toBeNull()
+    expect(oldMessagesHref(PREFIX, addressOf(params('invoice=1;drop&tab=messages'), isLibraryChip))).toBeNull()
+    expect(oldMessagesHref(PREFIX, addressOf(params('tab=messages'), isLibraryChip))).toBeNull()
+  })
+
+  it('the page replaces the old address with the conversation (Back does not bounce) and opens no pop-up for it', () => {
+    const page = readFileSync(new URL('./DocumentsPage.tsx', import.meta.url), 'utf8')
+    expect(page).toMatch(/const conversation = oldMessagesHref\(frame\.prefix, address\)\s*if \(conversation\) \{\s*handled\.current = id\s*router\.replace\(conversation\)/)
+    expect(page).not.toContain("frame.ask({ type: 'Invoice'")
+  })
+
+  it('a To pay invoice row links its own invoice’s conversation (a deposit request: none; no prefix: none)', () => {
+    const invoice = { target: { kind: 'invoice' as const, id: UUID(31) } }
+    const deposit = { target: { kind: 'deposit' as const, id: UUID(32) } }
+    expect(payAskHref(PREFIX, invoice)).toBe(`/p/BRAND-BETA/open/Invoice/${UUID(31)}?view=conversation`)
+    expect(payAskHref(PREFIX, deposit)).toBeNull()
+    expect(payAskHref(undefined, invoice)).toBeNull()
+    const view = readFileSync(new URL('./view/ToPay.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const ask = payAskHref(latest.current.model.prefix, data)')
+    expect(view).toMatch(/<a className="fw-pdoc-asklink" href=\{ask\}/)
+  })
+
+  it('a library row of an invoice (a credit note’s too) asks about that invoice; any other record: no such line', () => {
+    const credit = libraryRowOf(doc(3, { kind: 'CREDIT_NOTE', group: 'FINANCE', for: { type: 'Invoice', id: UUID(61), label: 'FT-2', order: null } }), 'en', new Set())
+    expect(credit.forId).toBe(UUID(61))
+    expect(rowAskHref(PREFIX, credit)).toBe(`/p/BRAND-BETA/open/Invoice/${UUID(61)}?view=conversation`)
+    expect(rowAskHref(PREFIX, libraryRowOf(doc(4), 'en', new Set()))).toBeNull()
+    expect(rowAskHref(PREFIX, libraryRowOf(doc(5, { for: null }), 'en', new Set()))).toBeNull()
+    expect(readFileSync(new URL('./view/Library.tsx', import.meta.url), 'utf8')).toContain("...(ask ? [{ id: 'ask', label: t('row.askInvoice'), href: ask }] : [])")
+  })
+
+  it('the links carry only the row’s own invoice id (the page reads it through the partner view: another customer’s is “not found”)', () => {
+    const href = payAskHref(PREFIX, { target: { kind: 'invoice', id: UUID(40) } })!
+    expect(href.match(/[0-9a-f-]{36}/g)).toEqual([UUID(40)])
+  })
+
+  it('the new words exist in both languages', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = CATALOGUE[locale]['portal-documents'] ?? {}
+      for (const key of ['pay.ask', 'pay.askOf', 'row.askInvoice']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      expect(words['pay.askOf']).toContain('{number}')
+    }
+  })
+})
+// ---- end B-TH-276

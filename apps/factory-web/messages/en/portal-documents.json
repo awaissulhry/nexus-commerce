@@ -145,7 +145,8 @@
       "PDF": "Open the PDF in a new tab",
       "XML": "Open the XML (the legal invoice) in a new tab",
       "FILE": "Open the file in a new tab"
-    }
+    },
+    "askInvoice": "Ask about this invoice"
   },
   "for": {
     "shipment": "Shipment {label}",
@@ -238,7 +239,9 @@
       "receipt": "We send you the receipt by e-mail.",
       "transfer": "You can always pay by bank transfer: our bank details are on the invoice.",
       "transferDeposit": "You can always pay by bank transfer: our bank details are on the quote."
-    }
+    },
+    "ask": "Ask a question",
+    "askOf": "Ask about invoice {number}"
   },
   "method": {
     "CARD": "Card",

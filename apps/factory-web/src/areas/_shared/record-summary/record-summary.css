@@ -1,0 +1,73 @@
+/*
+ * B-TH-272 — the generic record page (PL5): the summary card of the side column and the reading state. The columns, the band and the
+ * phone rule are the project page's frame (areas/products/projects/record/record.css: the thread ~2/3, the side ~1/3 from 1280 px, no
+ * page max-width). Layout only, design-system tokens only.
+ */
+
+.fw-rsum {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rsum-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-rsum-number {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.fw-rsum-muted,
+.fw-rsum-hint {
+  color: var(--nds-text-muted);
+}
+
+.fw-rsum-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rsum-part {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+
+/* Reading: the thread's place and the summary's, as the page will stand (one column below 1280 px). */
+.fw-rsum-reading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-rsum-reading-thread,
+.fw-rsum-reading-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rsum-reading-side {
+  display: none;
+}
+
+@media (min-width: 1280px) {
+  .fw-rsum-reading {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .fw-rsum-reading-side {
+    display: flex;
+  }
+}

@@ -7,7 +7,8 @@ import { bySubjectIn, defineIndexer, idWhere, partyName } from '../indexer'
  * grant), no site. Never the instructions, the charge (a price) or a person. Asked, changed, moved, cancelled and decided
  * re-read it; a customer renamed or a style renamed re-indexes their rounds.
  */
-const KIND_WORDS: Readonly<Record<string, string>> = { PROTO: 'Proto', FIT: 'Fit', SALESMAN: 'Salesman', PRE_PRODUCTION: 'Pre-production', CERTIFICATION: 'CE test sample', BRAND: 'Brand sample' }
+// B-PR-23: the size set and top of production rounds too.
+const KIND_WORDS: Readonly<Record<string, string>> = { PROTO: 'Proto', FIT: 'Fit', SALESMAN: 'Salesman', PRE_PRODUCTION: 'Pre-production', CERTIFICATION: 'CE test sample', BRAND: 'Brand sample', SIZE_SET: 'Size set', TOP_OF_PRODUCTION: 'Top of production' }
 
 export default defineIndexer({
   recordType: 'SampleRound',

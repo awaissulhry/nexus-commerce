@@ -87,5 +87,30 @@
     "line_one": "New since your last visit · {count} message",
     "line_other": "New since your last visit · {count} messages",
     "lineMany": "New since your last visit · 200+ messages"
+  },
+  "hidden": {
+    "line_one": "{count} new message hidden by this view",
+    "line_other": "{count} new messages hidden by this view",
+    "showAll": "Show all"
+  },
+  "waiting": {
+    "review_one": "{count} mail for this conversation waits in Mail to sort",
+    "review_other": "{count} mails for this conversation wait in Mail to sort",
+    "reviewWhy_one": "{count} mail for this conversation waits in Mail to sort — {why}",
+    "reviewWhy_other": "{count} mails for this conversation wait in Mail to sort — {why}",
+    "reviewMany": "50 or more mails for this conversation wait in Mail to sort",
+    "reviewManyWhy": "50 or more mails for this conversation wait in Mail to sort — {why}",
+    "colleague_one": "A reply waits for a colleague to check it",
+    "colleague_other": "{count} replies wait for a colleague to check them",
+    "colleagueMany": "50 or more replies wait for a colleague to check them",
+    "open": "Review",
+    "reason": {
+      "UNKNOWN_SENDER": "sender not a contact",
+      "DMARC_FAIL": "the sender's domain failed its check",
+      "SPAM": "marked as spam",
+      "THREAD_CLOSED": "this conversation is closed",
+      "TRIAGE": "not sorted yet",
+      "other": "to be checked"
+    }
   }
 }

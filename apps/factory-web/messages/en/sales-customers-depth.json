@@ -488,7 +488,9 @@
     "SALESMAN": "Salesman",
     "PRE_PRODUCTION": "Pre-production",
     "CERTIFICATION": "Certification",
-    "BRAND": "Brand"
+    "BRAND": "Brand",
+    "SIZE_SET": "Size set",
+    "TOP_OF_PRODUCTION": "Top of production"
   },
   "sampleStage": {
     "REQUESTED": "Requested",

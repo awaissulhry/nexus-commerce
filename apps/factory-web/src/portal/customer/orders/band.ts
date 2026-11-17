@@ -2,6 +2,8 @@ import type { MenuItemDef } from '@nexus/ui/components'
 import type { PortalBand, PortalBandAction } from '../../shell/frame'
 import type { OrderRecord } from './api'
 import { listQuery, recordHref, statusTone, type ListChip, type RecordTab } from './model'
+// B-TH-275: the order named by the customer's own number (plan §0.5).
+import { orderNameOf } from './model'
 import type { OrderWords } from './words'
 
 /**
@@ -79,10 +81,13 @@ export function orderBandOf(input: {
     ...(facts.moves > 0 ? [{ id: 'history', label: t('band.history'), onSelect: () => input.onHistory?.() }] : []),
     ...(facts.confirmation ? [{ id: 'confirmation', label: t('band.confirmation'), onSelect: () => input.onConfirmation?.() }] : []),
   ]
+  // ---- B-TH-275 (P-CUS-ORD.band; plan §0.5, B-TH-303): "Your order 12" — the customer's own number, never the office's SO- series;
+  // their PO first in the band's references. Four tabs: the conversation docks beside them (no Messages tab, no Ask modal).
+  const name = orderNameOf(order, locale, t)
   return {
-    title: t('record.title', { number: order.number }),
+    title: name,
     back: { href: `${input.prefix}/orders`, label: t('list.title') },
-    refs: { theirs: order.customerRef, ours: order.number },
+    refs: order.customerRef ? { theirs: order.customerRef, ours: null } : null,
     status: { label: order.words[locale], tone: statusTone(order.status) },
     actions,
     more,
@@ -94,10 +99,10 @@ export function orderBandOf(input: {
         { id: 'lines', label: t('tabs.lines'), count: record.lines.length, href: tabHref('lines') },
         { id: 'shipments', label: t('tabs.shipments'), count: facts.shipments, href: tabHref('shipments') },
         { id: 'documents', label: t('tabs.documents'), href: tabHref('documents') },
-        { id: 'messages', label: t('tabs.messages'), href: tabHref('messages') },
       ],
     },
-    ask: { type: 'SalesOrder', id: order.id, label: order.number },
+    ask: { type: 'SalesOrder', id: order.id, label: name },
+    // ---- end B-TH-275
     keys: [
       { keys: ['j', 'k'], words: t('keys.orders') },
       { keys: ['←', '→'], words: t('keys.tabs') },

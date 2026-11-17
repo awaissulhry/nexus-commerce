@@ -117,8 +117,7 @@
   "tabs": {
     "label": "Sections of the case",
     "request": "Request",
-    "status": "Status",
-    "messages": "Messages"
+    "status": "Status"
   },
   "record": {
     "titleReturn": "Return {number}",
@@ -172,7 +171,8 @@
     "cancelled": "Return {number} is cancelled. You can start a new one any time."
   },
   "messages": {
-    "hint": "Write to us about this case here; we answer in the same conversation. You can also answer our e-mails."
+    "labelReturn": "Messages about return {number}",
+    "labelComplaint": "Messages about quality claim {number}"
   },
   "unsaved": {
     "start": "Your return or claim is not sent yet.",
@@ -230,7 +230,8 @@
     "noPhotos": "No photos yet.",
     "photoAdded": "Added {date}",
     "view": "View",
-    "addPhotos": "Add photos"
+    "addPhotos": "Add photos",
+    "orderOpen": "Open the order"
   },
   "status": {
     "where": "Where it is",
@@ -279,7 +280,8 @@
     "documentsNone": "No letter or report shared yet.",
     "letter": "Our answer letter",
     "letterV": "Our answer letter (version {version})",
-    "eightDReport": "8D report"
+    "eightDReport": "8D report",
+    "replacementOpen": "Open the order"
   },
   "grade": {
     "NEW": "As new",

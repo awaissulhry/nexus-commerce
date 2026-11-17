@@ -76,6 +76,10 @@ export type RepairTab = (typeof REPAIR_TABS)[number]
 export const repairTabOf = (value: string | null | undefined): RepairTab => ((REPAIR_TABS as readonly string[]).includes(value ?? '') ? (value as RepairTab) : 'status')
 
 export const repairHref = (prefix: string, id: string, tab?: RepairTab): string => `${prefix}/returns/repairs/${encodeURIComponent(id)}${tab ? `?tab=${tab}` : ''}`
+// ---- B-TH-275 (P-CUS-REP.thread; B-TH-081): the repair's own conversation is the RepairOrder thread (its partner view), docked on its
+// page (an old `?tab=messages` lands on Status with it shown: the frame's arrival rule).
+export const REPAIR_THREAD_TYPE = 'RepairOrder'
+// ---- end B-TH-275
 
 const SHOWN: Readonly<Record<Repair['steps'][number]['state'], MilestoneStep['state']>> = { DONE: 'done', CURRENT: 'current', WAITING: 'todo', SKIPPED: 'skipped' }
 

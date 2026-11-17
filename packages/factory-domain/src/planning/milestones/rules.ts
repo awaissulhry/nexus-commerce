@@ -24,11 +24,13 @@ import type { BusinessDate } from '../../core/time'
  * shipment stays B-W2b-254's (compliance/gates). A pre-production gate holds the scheduling of the work, not its release.
  */
 
-export const GATE_KINDS = ['SAMPLE_APPROVED', 'LEATHER_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'LAB_PASSED', 'OTHER'] as const
+// B-PR-23 (production plan, schema wave 4/5): SIZE_SET, the size set approved (passed by its SIZE_SET round, as PP_SAMPLE by its
+// PRE_PRODUCTION round).
+export const GATE_KINDS = ['SAMPLE_APPROVED', 'LEATHER_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'LAB_PASSED', 'OTHER', 'SIZE_SET'] as const
 export type GateKind = (typeof GATE_KINDS)[number]
 
-/** The kinds that may name a sample round (PP_SAMPLE: a PRE_PRODUCTION round). */
-export const SAMPLE_GATE_KINDS = ['SAMPLE_APPROVED', 'PP_SAMPLE'] as const satisfies readonly GateKind[]
+/** The kinds that may name a sample round (PP_SAMPLE: a PRE_PRODUCTION round; B-PR-23 SIZE_SET: a SIZE_SET round). */
+export const SAMPLE_GATE_KINDS = ['SAMPLE_APPROVED', 'PP_SAMPLE', 'SIZE_SET'] as const satisfies readonly GateKind[]
 export const isSampleGate = (kind: GateKind): boolean => (SAMPLE_GATE_KINDS as readonly string[]).includes(kind)
 
 /** A sample round's decisions that pass a gate naming it (the database's rule). */
@@ -141,11 +143,11 @@ export const GATE_REFUSALS = [
   'GATE_EXISTS',
   /** OTHER says what it is (a label). */
   'LABEL_NEEDED',
-  /** Only a sample gate (SAMPLE_APPROVED, PP_SAMPLE) names a sample round. */
+  /** Only a sample gate (SAMPLE_APPROVED, PP_SAMPLE, B-PR-23 SIZE_SET) names a sample round. */
   'ROUND_ONLY_SAMPLE',
   /** The round is not one of the order's styles for its customer (or internal), or not of the order's company. */
   'ROUND_NOT_OF_ORDER',
-  /** A PP_SAMPLE gate waits for a PRE_PRODUCTION round. */
+  /** A PP_SAMPLE gate waits for a PRE_PRODUCTION round (B-PR-23: a SIZE_SET gate for a SIZE_SET round). */
   'ROUND_KIND',
   /** A gate that names a round passes once that round is approved (approved, or approved with comments). */
   'ROUND_NOT_APPROVED',
@@ -197,6 +199,8 @@ export function shapeRefusal(kind: GateKind, label: string | null, round: GateFa
   if (kind === 'OTHER' && (label === null || label.trim() === '')) return refusal('LABEL_NEEDED', 'Say what the gate is: a gate of kind Other needs its words.')
   if (round !== null && !isSampleGate(kind)) return refusal('ROUND_ONLY_SAMPLE', 'Only a sample gate (sample approved, pre-production sample) names a sample round.')
   if (round !== null && kind === 'PP_SAMPLE' && round.kind !== 'PRE_PRODUCTION') return refusal('ROUND_KIND', `A pre-production sample gate waits for a pre-production round; ${round.number} is a ${round.kind.toLowerCase().replace(/_/g, ' ')} round.`)
+  // B-PR-23: the size set gate waits for a size set round (the database's rule).
+  if (round !== null && kind === 'SIZE_SET' && round.kind !== 'SIZE_SET') return refusal('ROUND_KIND', `A size set gate waits for a size set round; ${round.number} is a ${round.kind.toLowerCase().replace(/_/g, ' ')} round.`)
   return null
 }
 

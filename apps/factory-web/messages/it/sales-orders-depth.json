@@ -478,7 +478,8 @@
     "TRIMS_IN": "Accessori arrivati",
     "PP_SAMPLE": "Campione di preproduzione",
     "LAB_PASSED": "Prova di laboratorio superata",
-    "OTHER": "Controllo"
+    "OTHER": "Controllo",
+    "SIZE_SET": "Set di taglie"
   },
   "list": {
     "col": {

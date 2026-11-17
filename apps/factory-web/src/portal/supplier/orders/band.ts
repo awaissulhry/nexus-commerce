@@ -1,4 +1,4 @@
-import { formatTime } from '../../../lib/i18n/format'
+import { DEFAULT_TIME_ZONE, formatDateTime, formatTime } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { PortalBand } from '../../shell/frame'
 import { copyHref, type OrderChip, type OrderPage } from './api'
@@ -7,7 +7,7 @@ import { recordHref, stateTone, type RecordTab } from './model'
 /**
  * The frame's band of each supplier page (design portal.supplier.home h, portal.supplier.orders h, rec "Purchase order"):
  * one builder per page, used by the live page and its design cases alike. At most two actions, the primary last; the ⋯
- * items (the frame ends them with "Ask a question"); the record's link tabs.
+ * items (the frame ends them with "Ask a question", which focuses the docked conversation: B-TH-273); the record's link tabs.
  */
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
@@ -87,7 +87,8 @@ export function orderBandOf(input: {
     more: [
       ...(answering ? [{ id: 'decline', label: t('band.decline'), disabled: input.confirmHeld !== null, description: input.confirmHeld ?? undefined, onSelect: () => input.onDecline?.() }] : []),
       ...(page.changes ? [{ id: 'changes', label: t('changes.title', { version: page.changes.revision }), onSelect: () => input.onVersion?.(page.changes!.revision) }] : []),
-      { id: 'pdf', label: t('band.pdf'), href: copyHref(page.order.id, locale), target: '_blank' as const },
+      // B-TH-277: the order as sent (price-free PDF, a new tab) — the Documents tab's first file; Lines' facts link it too.
+      { id: 'pdf', label: t('band.pdf'), description: page.order.sentAt ? t('docs.sentOn', { at: formatDateTime(page.order.sentAt, { locale, timeZone: DEFAULT_TIME_ZONE }) }) : undefined, href: copyHref(page.order.id, locale), target: '_blank' as const },
     ],
     tabs: {
       label: t('tabs.label'),
@@ -96,8 +97,8 @@ export function orderBandOf(input: {
         { id: 'lines', label: t('tabs.lines'), count: page.lines.length, href: tabHref('lines') },
         { id: 'confirm', label: t('tabs.confirm'), href: tabHref('confirm'), ...(answering ? { badge: t('tabs.toAnswer') } : {}) },
         { id: 'asn', label: t('tabs.asn'), count: input.notices, href: tabHref('asn') },
-        { id: 'documents', label: t('tabs.documents'), href: tabHref('documents') },
-        { id: 'messages', label: t('tabs.messages'), href: `${tabHref('messages')}#messages` },
+        // B-TH-277 (tabs 5 → 3): no Documents (the order as sent is on Lines and in ⋯, the DDTs on Ship notices, what we ask for on
+        // Confirm or propose) and no Messages (the PO's conversation docks beside every tab: the portal record frame).
       ],
     },
     ask: { type: 'PurchaseOrder', id: page.order.id, label: page.order.documentNumber },

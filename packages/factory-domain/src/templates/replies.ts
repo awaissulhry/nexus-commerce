@@ -34,6 +34,37 @@ export const REPLY_PLACEHOLDERS: Readonly<Record<ReplyRecordType, readonly strin
   Inquiry: [...COMMON_REPLY_PLACEHOLDERS, 'inquiry.number', 'inquiry.subject', 'inquiry.wantedDate', /* B-TH-098: the customer's own number (§0.5) */ 'inquiry.yourNumber'],
 })
 
+// ---- th-backend-g step 1 (threads plan §0.5 "counts do not leak", lead's decision) -------------------------------------------
+/**
+ * Who reads the filled text: CUSTOMER — a mail or a portal message to the record's customer (the default: a text that may reach a
+ * customer is filled for one); OFFICE — an office note, read by the office only. The record numbers a customer has a number of its
+ * own for (NUMBER_PLACEHOLDERS) are the customer's own running number ("#7") in a text to a customer, never the office's shared
+ * series (INQ-…, QT-…, SO-…: their count would tell how much the other customers ask and order); the office keeps its series in an
+ * office note. A prospect (no customer yet) has no number of its own: its request keeps the office's number. A supplier's purchase
+ * order, a service case and a delivery note keep their own numbers (no customer series; DDTs and invoices are the legal series).
+ */
+export const REPLY_AUDIENCES = ['CUSTOMER', 'OFFICE'] as const
+export type ReplyAudience = (typeof REPLY_AUDIENCES)[number]
+
+/** The placeholders of each record type whose value is a customer record's number (the office's series, or the customer's own). */
+export const NUMBER_PLACEHOLDERS: Readonly<Partial<Record<ReplyRecordType, readonly string[]>>> = Object.freeze({
+  SalesOrder: ['order.number'],
+  Quote: ['quote.number'],
+  Shipment: ['order.number'],
+  Inquiry: ['inquiry.number'],
+})
+
+/** One number a filled text holds, as the office writes it and as its customer reads it (null: the customer has none of its own yet). */
+export interface NumberPair {
+  readonly placeholder: string
+  readonly office: string
+  readonly customer: string | null
+}
+
+/** The value of a number placeholder for the reader: the office's series in office text, else the customer's own (null: none yet). */
+export const numberFor = (audience: ReplyAudience, pair: Pick<NumberPair, 'office' | 'customer'>): string | null => (audience === 'OFFICE' ? pair.office : pair.customer)
+// ---- end th-backend-g step 1
+
 /** The placeholders a saved reply for this record type (null: any record) may use. */
 export const replyPlaceholdersOf = (recordType: string | null): readonly string[] => (isReplyRecordType(recordType) ? REPLY_PLACEHOLDERS[recordType] : COMMON_REPLY_PLACEHOLDERS)
 

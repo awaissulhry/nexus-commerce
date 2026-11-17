@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { addDropped, contentTypeOf, draftOfRecordFile, kindOf, sendable, uploadAudience, type DraftFile, type RecordFile } from '../../../lib/record-thread/attachments/model'
 import { messageLink, type CardMessage } from '../../../lib/record-thread/card/model'
+import { cardDepth } from '../../../lib/record-thread/card/model' // B-TH-255
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
 // TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
 import { draftKey, mentionsIn, readDraft, writeDraft, type LocalDraft } from '../../../lib/record-thread/helpers/model'
@@ -143,7 +144,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       // B-TH-229: the reading on arrival draws "New since your last visit" for the whole visit (marking read does not move it).
       setArrival((seen) => seen ?? { firstNewId: page.reading?.firstNewMessageId ?? null, newCount: page.reading?.newCount ?? 0 })
       setServer((current) => {
-        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head })
+        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head, waitingMail: page.waitingMail /* B-TH-255 */ })
         setWork((now) => afterRead(now, next))
         return next
       })
@@ -352,7 +353,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // ── what the column draws ──────────────────────────────────────────────────────────────────────────────────────────
   const names = useMemo(() => new Map<string, string>([...people.map((person) => [person.id, person.name] as const), [session.user.id, session.user.displayName]]), [people, session.user])
   const cards = useMemo<CardMessage[]>(
-    () => server.messages.map((message) => cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable })),
+    // B-TH-255 (T3-F14, T3-F15): each card also says whether its writer was erased and which files of its mail were not kept.
+    () => server.messages.map((message) => ({ ...cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable }), ...cardDepth(message) })),
     [server.messages, emails, deliveries, names, prefix, session.user.id, undoable],
   )
   const closed = server.thread?.status === 'CLOSED' ? closedBy(changes, names) : null
@@ -400,6 +402,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // B-TH-229
     firstNewId: arrival?.firstNewId ?? null,
     newSince: arrival?.newCount ?? 0,
+    // B-TH-255 (T4-F10): the mail for this conversation that waits for a person; Review opens Home › Mail to sort (email.triage only:
+    // the API's `mayReview` says whether this reader may; anyone else reads that a reply waits for a colleague, never why or from whom).
+    waitingMail: server.waitingMail ? { ...server.waitingMail, reviewHref: server.waitingMail.mayReview ? `${prefix}/home/mail-to-sort` : null } : null,
   }
 
   const model: RecordThreadModel = {
