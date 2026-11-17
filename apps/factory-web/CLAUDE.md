@@ -525,6 +525,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   routes only: one group per order, the customer's PO first; Order · Lines · Measurements newest first; the measurement lock line counted;
   a PDF or picture shown beside the list, Download; phone: the list, a file full screen, ‹ / Esc back) and "Order thread" (one button, or a
   menu for several orders): the order's thread in the work order's dock, on the order's own company (`order.companyId` of the route).
+- F-PR-21 `src/areas/_shared/production-supervisor/` (catalogue `production-supervisor`, CSS `fw-psv-`) — THE production supervisor
+  assign dialog (DS Modal sm + ListboxPanel, the Inquiries Assign pattern; `use-assign-supervisor.ts`: the pick list per customer and
+  company crossed, ONE `POST /production/orders/supervisor`, one result per order, the API's English `why` said from its code) and the
+  band's `SupervisorFact` (by name inside one record; "You muted this order" for the supervisor himself). Mounted by the work order band
+  (Change…) and Work orders ("Assign supervisor…", ≤ 100 orders; the Supervisor column Me / Someone else / Not set; Mine = `?supervisor=me`);
+  the Customer card and the limits card mount the same dialog.
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

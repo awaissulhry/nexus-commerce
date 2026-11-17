@@ -368,5 +368,11 @@
     "write": "Non è stato possibile salvare: riprova.",
     "read": "Non è stato possibile leggere: riprova.",
     "forbiddenRead": "Non puoi vederlo."
+  },
+  "supervisor": {
+    "column": "Supervisore",
+    "tile": "Miei",
+    "assign": "Assegna supervisore…",
+    "cardMe": "Supervisore: io"
   }
 }

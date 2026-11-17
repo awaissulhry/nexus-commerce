@@ -368,5 +368,11 @@
     "write": "It could not be saved: try again.",
     "read": "It could not be read: try again.",
     "forbiddenRead": "You may not see this."
+  },
+  "supervisor": {
+    "column": "Supervisor",
+    "tile": "Mine",
+    "assign": "Assign supervisor…",
+    "cardMe": "Supervisor: me"
   }
 }

@@ -42,6 +42,8 @@ import { OrderFilesButton, OrderFilesDialog, OrderThreadButton } from '../order-
 import { finishHeld } from '../../daily/model'
 import { previewHeld, reportFirst, customerFactOf } from '../overview/model'
 import { BandFacts } from './BandFacts'
+// F-PR-21: THE assign dialog (the band's Change…).
+import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
 // ---- end F-PR-05a
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
@@ -140,7 +142,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign) return
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || typing) return
       // F-PR-05a: ⌘↵ takes the band's primary — Report finished while released garments wait, else the next step.
       if (reportPrimary) {
@@ -292,7 +294,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
         meta: (
           <>
             {/* F-PR-05a: customer, its sales orders and POs, % done, health and waiting on lead the band's facts. */}
-            <BandFacts workOrder={workOrder} model={model} />
+            <BandFacts workOrder={workOrder} model={model} onChangeSupervisor={actions?.supervisor?.onOpen} />
             {workOrder.rush && (
               <Tag tone="danger">
                 <Zap size={11} aria-hidden /> {ts('rush.word')}
@@ -395,6 +397,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       {model.close && <CloseParts workOrder={workOrder} model={model.close} actions={actions?.close} />}
       {/* B-TH-265 */}
       {model.orderFiles && <OrderFilesDialog number={workOrder.number} model={model.orderFiles} choices={model.threadChoices ?? []} actions={actions?.orderFiles} />}
+      {/* F-PR-21 */}
+      {model.supervisor?.assign && <AssignSupervisorDialog model={model.supervisor.assign} actions={actions?.supervisor} />}
     </RecordFrame>
   )
 }

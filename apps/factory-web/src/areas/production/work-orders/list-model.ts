@@ -11,6 +11,8 @@ import type { BulkReleaseModel } from './every-shift/model'
 import type { BlockedBy, ListSort, WaitingOn, WorkOrderRisk } from '../_shared/api'
 import type { CustomerFilterState } from '../_shared/customer/model'
 import type { ListTerms } from './list/model'
+// F-PR-21: the production supervisor (Mine, the column, THE assign dialog).
+import type { AssignSupervisorActions, AssignSupervisorModel } from '../../_shared/production-supervisor/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -63,6 +65,14 @@ export interface WorkOrdersListModel {
   /** The clock the waiting ages count from (ms): the read's, so the cells do not move between renders. */
   now?: number
   // ── end F-PR-03
+  // ── F-PR-21 ──
+  /** Mine (`?supervisor=me`). */
+  supervisor?: 'me' | null
+  /** production.brand.manage: "Assign supervisor…" on a selection (held in words without it). */
+  supervisorCan?: { readonly manage: boolean }
+  /** THE assign dialog while open. */
+  assign?: AssignSupervisorModel | null
+  // ── end F-PR-21
 }
 
 export interface WorkOrdersListActions {
@@ -98,6 +108,11 @@ export interface WorkOrdersListActions {
   /** The columns on screen (a costly column is read only while shown: the readiness word). */
   onShownColumns?: (ids: readonly string[]) => void
   // ── end F-PR-03
+  // ── F-PR-21 ──
+  /** "Assign supervisor…" on these selected work orders (their orders; at most ASSIGN_MAX). */
+  onAssignSupervisor?: (ids: readonly string[]) => void
+  supervisor?: AssignSupervisorActions
+  // ── end F-PR-21
 }
 
 export type { BulkReleaseModel }

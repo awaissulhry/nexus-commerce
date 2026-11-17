@@ -101,7 +101,8 @@ describe('F-PR-03 — the tiles', () => {
   it('Drafts · Released · In progress · Late · At risk · On hold · Waiting on customer; the last two as the API’s filters', () => {
     const counts = { draft: 2, released: 1, inProgress: 4, completed: 1, open: 7, late: 2, onHold: 1, atRisk: 3, waitingOnCustomer: 2 }
     const tiles = listTiles(terms(''), counts)
-    expect(tiles.map((tile) => [tile.id, tile.count])).toEqual([['draft', 2], ['released', 1], ['inProgress', 4], ['late', 2], ['atRisk', 3], ['onHold', 1], ['waitingOnCustomer', 2]])
+    // F-PR-21: Mine first (`?supervisor=me`; its count not in this answer: "—").
+    expect(tiles.map((tile) => [tile.id, tile.count])).toEqual([['mine', null], ['draft', 2], ['released', 1], ['inProgress', 4], ['late', 2], ['atRisk', 3], ['onHold', 1], ['waitingOnCustomer', 2]])
     expect(tiles.find((tile) => tile.id === 'atRisk')!.next).toEqual({ risk: 'AT_RISK' })
     const pressed = listTiles(terms('risk=AT_RISK&waitingOn=BRAND'), counts)
     expect(pressed.filter((tile) => tile.active).map((tile) => tile.id)).toEqual(['atRisk', 'waitingOnCustomer'])

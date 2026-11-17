@@ -14,6 +14,8 @@ import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_
 // ---- B-TH-265: the work order on RecordFrame — its docked thread (its own notes, or an order's picked beside it), "Order files (n)" ----
 import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { filesReady, leftOut, orderFilesOf, orderGroup, twoGroupsOf, twoOrdersOf } from './order-files/fixtures'
+// F-PR-21
+import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
 import { threadChoices, type ThreadPick } from './order-files/model'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
@@ -165,6 +167,8 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       gates: null,
       preview: { can: role === 'owner' || role === 'manager', busy: false },
       partiesView: (ROLES[role] as readonly string[]).includes('parties.view'),
+      // F-PR-21: the supervisor fact (drawn when the work order carries one); Change… only with production.brand.manage.
+      supervisor: { can: role === 'owner' || role === 'manager', assign: null },
       ...over,
     },
   }
@@ -272,6 +276,21 @@ export const designScreen = defineDesignScreen<RecordCase>({
       })(),
     },
     // ---- end F-PR-25
+    // ---- F-PR-21: the supervisor fact in the band (by name inside this one record) and its Change… ----
+    { id: 'supervisor-order', label: 'F-PR-21 · "Supervisor Bea Esempio · this order" with Change…', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'ORDER', me: false }, youMuted: null }) } }) },
+    { id: 'supervisor-default', label: 'F-PR-21 · "· customer default" (no supervisor of its own); held Change… without the right', model: recordCase('sales', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'BRAND', me: false }, youMuted: null }) } }) },
+    { id: 'supervisor-muted', label: 'F-PR-21 · To the supervisor himself, who muted the order: "You muted this order"', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-me', name: 'Alex Demo', active: true, from: 'ORDER', me: true }, youMuted: true }) } }) },
+    { id: 'supervisor-inactive', label: 'F-PR-21 · A supervisor no longer active, said in words', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-old', name: 'Dora Campione', active: false, from: 'BRAND', me: false }, youMuted: null }) } }) },
+    { id: 'supervisor-not-set', label: 'F-PR-21 · "Supervisor: not set" with Change…', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: null, youMuted: null }) } }) },
+    {
+      id: 'supervisor-change',
+      label: 'F-PR-21 · Change… opens THE assign dialog over the work order’s order',
+      model: recordCase('manager', 'IN_PROGRESS', {
+        workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'BRAND', me: false }, youMuted: null }) },
+        supervisor: { can: true, assign: { targets: targetsOfRecord(workOrder('IN_PROGRESS')), leftOut: 0, current: { name: 'Bea Esempio', from: 'BRAND' }, people: { status: 'ready', people: [{ id: 'user-demo-me', name: 'Alex Demo', me: true }, { id: 'user-demo-bea', name: 'Bea Esempio', me: false }], complete: true }, busy: false, problem: null, result: null } },
+      }),
+    },
+    // ---- end F-PR-21
     { id: 'changed', label: 'Someone changed it while the page holds an edit: Reload', model: recordCase('manager', 'IN_PROGRESS', { changed: { at: '2026-10-29T09:42:00.000Z' }, draft: { editing: true } }) },
     { id: 'notice', label: 'After a write: a notice', model: recordCase('manager', 'RELEASED', { notice: { tone: 'success', words: { key: 'notice.released', params: { batch: 'BA-00049' } } } }) },
     { id: 'owner', label: 'Owner: everything', model: recordCase('owner', 'IN_PROGRESS') },

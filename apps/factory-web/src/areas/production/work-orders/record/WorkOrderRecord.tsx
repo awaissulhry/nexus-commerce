@@ -69,6 +69,9 @@ import { customerFactOf, previewRecord } from './overview/model'
 import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
 import { openPreview } from '../../../admin/users/partners/preview'
 // ---- end F-PR-05a
+// F-PR-21: the band's supervisor fact and its Change… (THE assign dialog over the work order's orders).
+import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
+import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -414,6 +417,16 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
       .finally(() => setPreviewing(false))
   }, [api, value, previewing])
   // ---- end F-PR-05a
+  // ---- F-PR-21: Change… sets the work order's orders' own supervisor (or the customer default); a Send reads the work order again
+  // (its supervisor by name and, for the supervisor himself, whether he muted it). production.brand.manage, else held in words.
+  const assign = useAssignSupervisor(api, () => void load())
+  const openAssign = useCallback(() => {
+    if (!value || !session.permissions.includes('production.brand.manage')) return
+    const targets = targetsOfRecord(value)
+    if (targets.length === 0) return
+    assign.open(targets, { current: value.supervisor ? { name: value.supervisor.name, from: value.supervisor.from } : null })
+  }, [value, session.permissions, assign.open])
+  // ---- end F-PR-21
   // ---- B-TH-280: the work order's custom fields at the end of its first tab (Overview & release), as the old panels drew them above
   // theirs: the record frame's slot (the tab bodies stay the production lane's).
   const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'WorkOrder', id: value.id }} title={value.number} /> : null
@@ -463,6 +476,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     gates: gates.part,
     preview: { can: session.permissions.includes('partners.preview'), busy: previewing },
     partiesView: session.permissions.includes('parties.view'),
+    // F-PR-21
+    supervisor: { can: session.permissions.includes('production.brand.manage'), assign: assign.model },
   }
 
   return (
@@ -608,6 +623,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         health: health.actions,
         onRetryGates: gates.retry,
         onPreview: preview,
+        // F-PR-21
+        supervisor: { ...assign.actions, onOpen: openAssign },
         onWaitingAt: (seq) => {
           const query = new URLSearchParams(params?.toString() ?? '')
           query.set('tab', 'bundles')
