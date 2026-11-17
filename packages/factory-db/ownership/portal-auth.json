@@ -10,7 +10,7 @@
       }
     },
     "PortalSettings": {
-      "about": "A party's portal: switched on and off, production progress shared or not (Owner answer C1), the limits of its admin, by the office (sales.customers and purchasing.suppliers › Portal access); read in the system scope when its people sign in and act. Office only.",
+      "about": "A party's portal: switched on and off, production progress shared or not (Owner answer C1), the limits of its admin, by the office (sales.customers and purchasing.suppliers › Portal access); read in the system scope when its people sign in and act. B-PR-12 (production plan, schema wave 2/5): a customer's production limits too: productionLevel (what it sees), productionUrgencyOn and productionUrgentMax (urgency and its quota), productionSupervisorId, productionSupervisorSetAt and productionBackupId (the office people on its production), productionAskKinds (the production asks open to it), productionApproverId (its named approver), overrideFourEyes (a second person for overrides). Office only: the partner role has no grant here, so a customer never reads its supervisor, backup, quota or switches (PW-15).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {

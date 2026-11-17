@@ -12,7 +12,10 @@ import { ITEM_KINDS, ITEM_SOURCINGS, ITEM_TRACKINGS, MATERIAL_STATUSES, TANNAGES
 import { OPERATION_STATUSES, WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { BUNDLE_CODE_MODES, FLOOR_RULE_MODES } from '@nexus/factory-domain/production/settings/floor-rules'
+import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
 import { MONITORING_BASES, SCAN_SUBJECTS } from '@nexus/factory-domain/production/settings/monitoring'
+import { REQUEST_KINDS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { DOCUMENT_TEMPLATE_KINDS } from '@nexus/factory-domain/templates/documents'
 import {
   BundleCodeMode,
@@ -29,12 +32,14 @@ import {
   ItemTracking,
   MasterStatus,
   MonitoringBasis,
+  OrderChangeRequestKind,
   PartyRole,
   PeoplePurpose,
   PrivacyDpiaStatus,
   PrivacyNoticeKind,
   PrivacyNoticeStatus,
   ProcessingActivityStatus,
+  ProductionShareLevel,
   RetentionAction,
   RetentionSweepMode,
   RetentionSweepStatus,
@@ -117,4 +122,8 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   mirror('ShadeRule', ShadeRule, 'inventory/reservations/shade SHADE_RULES', SHADE_RULES, true),
   mirror('FloorRuleMode', FloorRuleMode, 'production/settings/floor-rules FLOOR_RULE_MODES', FLOOR_RULE_MODES, true),
   mirror('BundleCodeMode', BundleCodeMode, 'production/settings/floor-rules BUNDLE_CODE_MODES', BUNDLE_CODE_MODES, true),
+  // B-PR-12 (production plan, schema wave 2/5): what a customer sees of its production, and the asks it may make of an order
+  // (CHANGE and CANCEL of the portal, the production asks beside them).
+  mirror('ProductionShareLevel', ProductionShareLevel, 'production-brand/levels PRODUCTION_SHARE_LEVELS', PRODUCTION_SHARE_LEVELS, true),
+  mirror('OrderChangeRequestKind', OrderChangeRequestKind, 'sales/change-requests/rules REQUEST_KINDS + production-brand/kinds PRODUCTION_REQUEST_KINDS', [...REQUEST_KINDS, ...PRODUCTION_REQUEST_KINDS] as const, true),
 ])

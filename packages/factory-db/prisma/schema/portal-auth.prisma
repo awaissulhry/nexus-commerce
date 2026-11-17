@@ -10,7 +10,10 @@
 //                     expired, tried-out or replaced code never opens again (the …_portal_identity_w2b_guards triggers).
 //   PortalSettings    per party: the portal OFF until the office switches it on (every party ships OFF; the first live
 //                     partner is switched on by hand), production progress OFF until the office shares it with that
-//                     customer (Owner answer C1), how many people and which partner roles the partner's admin may give.
+//                     customer (Owner answer C1), how many people and which partner roles the partner's admin may give;
+//                     B-PR-12 (production plan, schema wave 2/5): the customer's production limits (what it sees, urgency
+//                     and its quota, its supervisor and backup, the production asks open to it, its named approver, the
+//                     second person for overrides).
 //   CompanyBranding   per company: logo, logo for dark, accent, the sender name of partner mail, the portal's label:
 //                     whose portal it is, shown before anything is typed. An unbranded company keeps the DS colours.
 //
@@ -74,21 +77,75 @@ model PortalSettings {
   /// live sign-in also waits for a published PORTAL_TERMS notice (GATE-PRIVACY, checked by the API).
   portalOn        Boolean  @default(false)
   /// Owner answer C1: production progress (cut, sewn, inspected, packed per line and size) shows in this customer's
-  /// portal only while this is on; OFF by default. Only for a party with the CUSTOMER or BRAND role.
+  /// portal only while this is on; OFF by default. Only for a party with the CUSTOMER or BRAND role. B-PR-12: on exactly
+  /// while productionLevel is PROGRESS or more (the database keeps the two in step); dropped once every reader reads the
+  /// level (B-PR-40).
   progressShared  Boolean  @default(false)
   /// How many people (active and invited partner users) the portal holds, 1 to 1000; null: no limit.
   maxUsers        Int?
   /// The partner roles (Role.key, audience PARTNER) its people may hold, each once; empty: every partner role of its
   /// kind. The partner's admin invites and raises only within them.
   allowedRoleKeys String[] @default([])
+  // ── B-PR-12 (production plan, schema wave 2/5; lead picks L7, L18, L21): the customer's limits on its production. Office
+  // only, like every column here: the partner role has no grant on this table, so a customer never reads its supervisor,
+  // backup, quota or switches (PW-15). Every production column but the quota and the second-person switch is set above its
+  // default only for a party with the CUSTOMER or BRAND role.
+  /// What this customer sees of its orders in production (the portal's My production), each level adding to the one
+  /// before: STATUS (stage, since when, expected date), PROGRESS (+ pieces per line and size), GATES (+ its gates and
+  /// dates), QUALITY (+ quality results and photos). Copied once from progressShared (on → PROGRESS); until progressShared
+  /// is dropped (B-PR-40) the database keeps it equal to "productionLevel is PROGRESS or more" (either one written moves the
+  /// other; both written must agree).
+  productionLevel           ProductionShareLevel     @default(STATUS)
+  /// This customer may mark its orders Urgent on My production (L18); off by default (the preset "Production partner"
+  /// turns it on). While on, a RUSH request ("Urgent – asked") is open to it too (R-50); switched off, its marks stay but
+  /// order nothing (R-46).
+  productionUrgencyOn       Boolean                  @default(false)
+  /// How many of its orders may be Urgent at once without asking us, 0 to 20 (L18); over it a mark becomes a RUSH request.
+  productionUrgentMax       Int                      @default(3)
+  /// The office person who supervises this customer's production (L21; an active office user when named) and since when:
+  /// both or neither. The customer is never told who (R-41). Made inactive, never deleted (Restrict).
+  productionSupervisorId    String?                  @db.Uuid
+  productionSupervisorSetAt DateTime?                @db.Timestamptz(3)
+  /// The supervisor's backup (L21, L24; an active office user when named): only beside a supervisor, never the same person.
+  productionBackupId        String?                  @db.Uuid
+  /// The production asks open to this customer, each once (L7): HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND only. RUSH
+  /// follows productionUrgencyOn, never this list (R-50); CHANGE and CANCEL follow the company's cut-offs and the role's
+  /// ask right. Empty: none.
+  productionAskKinds        OrderChangeRequestKind[] @default([])
+  /// The one person of this customer who answers its production approvals (L7; an active portal user of this party when
+  /// named); null: any of its people with portal.approve.
+  productionApproverId      String?                  @db.Uuid
+  /// The factory's overrides of this customer's production need a second person (R-06). Switched on once, by the copy
+  /// step, for the customers listed for a second person at release (QualitySettings.secondPersonPartyIds).
+  overrideFourEyes          Boolean                  @default(false)
+  // ── end B-PR-12
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
   createdById     String?  @db.Uuid
 
   party Party @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-PR-12: the supervisor, the backup and the approver (the Inquiry assignee's pattern: a person is made inactive, never deleted).
+  productionSupervisor User? @relation("PortalSettingsSupervisor", fields: [tenantId, productionSupervisorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  productionBackup     User? @relation("PortalSettingsBackup", fields: [tenantId, productionBackupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  productionApprover   User? @relation("PortalSettingsApprover", fields: [tenantId, productionApproverId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, partyId])
+  // B-PR-12: the customers a person supervises ("Mine", B-PR-42a).
+  @@index([tenantId, productionSupervisorId])
+}
+
+/// What a customer sees of its orders in production (B-PR-12, lead pick L7; plan §3), in this order: each level adds to the
+/// one before (the database compares them in this order).
+enum ProductionShareLevel {
+  /// The plain stage and since when, the next stage, the expected date, the health and what it waits on.
+  STATUS
+  /// + the pieces per line and size at each stage (today's "production progress", Owner answer C1).
+  PROGRESS
+  /// + its gates (target and passed dates), the promise history and the published plan's stage dates.
+  GATES
+  /// + the quality of its own work: released and reversed pieces, results of single-customer lots, holds by reason, photos.
+  QUALITY
 }
 
 /// A company's branding (PLT-228, SAL-064; design admin.documents › Branding, portal.signin brand head, the link frame):
