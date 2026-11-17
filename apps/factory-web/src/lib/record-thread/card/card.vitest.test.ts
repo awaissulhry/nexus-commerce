@@ -23,6 +23,9 @@ import {
 // B-TH-236
 import { amountWords, correctionWay, excerptOf, showsUndo, undoLeft } from './model'
 import { MessageCard } from './view/MessageCard'
+// B-TH-255
+import { SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { bodyKind, cardDepth, SKIP_REASON_CODES, skippedLine, skipReasonKey } from './model'
 
 /** B-TH-298 — the message card (T3): each kind, its audience in words and colour, the folds, the files, Retry keeps the text. */
 
@@ -269,3 +272,77 @@ describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amoun
   })
 })
 // ---- end B-TH-236
+
+// ---- B-TH-255 (B-TH-079; T3-F14, T3-F15): the erased card, told apart from a message of files only; an e-mail’s files not kept ------
+describe('B-TH-255 — erased after a privacy request vs files only; the files an e-mail did not keep', () => {
+  const card = (message: CardMessage, locale: 'en' | 'it' = 'en') => render(createElement(MessageCard, { message, context: CONTEXT }), locale)
+  const PHOTO = { id: 'p-1', name: 'collar.jpg', sizeBytes: 820_000, contentType: 'image/jpeg', status: 'AVAILABLE' as const }
+
+  it('bodyKind: erased says so; empty words with files is files (NEVER erased); words are words; nothing is nothing', () => {
+    expect(bodyKind({ erased: true, body: '', files: [] })).toBe('erased')
+    expect(bodyKind({ erased: false, body: '', files: [PHOTO] })).toBe('files')
+    expect(bodyKind({ body: '', files: [] })).toBe('empty')
+    expect(bodyKind({ body: '', files: [], hiddenFiles: 1 })).toBe('files')
+    expect(bodyKind({ body: '  ', files: [], lockedSheets: 1 })).toBe('files')
+    expect(bodyKind({ body: 'Hello', files: [PHOTO] })).toBe('text')
+  })
+
+  it('the erased card: "Message removed after a privacy request", no empty body, in it and en', () => {
+    const erased: CardMessage = { ...MAIL, id: 'e-1', author: null, body: '', files: [], erased: true }
+    const html = card(erased)
+    expect(textOf(html)).toContain('Message removed after a privacy request')
+    expect(html).toContain('fw-rt-msg is-theirs is-erased')
+    expect(html).not.toContain('class="fw-rt-body')
+    expect(textOf(card(erased, 'it'))).toContain('Messaggio rimosso dopo una richiesta di privacy')
+  })
+
+  it('a message of files only is NOT the erased card: its files, no removal words, no empty body', () => {
+    const filesOnly: CardMessage = { ...MAIL, id: 'fo-1', body: '', files: [PHOTO] }
+    const html = card(filesOnly)
+    expect(textOf(html)).not.toContain('removed')
+    expect(html).not.toContain('is-erased')
+    expect(html).not.toContain('class="fw-rt-body')
+    expect(textOf(html)).toContain('collar.jpg')
+  })
+
+  it('the files an e-mail did not keep, by name and why; a signature logo is never listed (the codes are factory-domain’s)', () => {
+    expect([...SKIP_REASON_CODES].sort()).toEqual(SKIP_REASONS.filter((reason) => reason !== 'inline').sort())
+    expect(skipReasonKey('too_large')).toBe('skipped.reason.too_large')
+    expect(skipReasonKey('something_new')).toBe('skipped.reason.other')
+    expect(skippedLine(undefined)).toBeNull()
+    expect(skippedLine([{ name: 'sig.png', contentType: 'image/png', sizeBytes: 900, reason: 'inline' }])).toBeNull()
+    const mail: CardMessage = {
+      ...MAIL,
+      id: 's-1',
+      skipped: [
+        { name: 'logo.ai', contentType: 'application/postscript', sizeBytes: 2_400_000, reason: 'type_not_allowed' },
+        { name: 'clip.mov', contentType: 'video/quicktime', sizeBytes: 61_000_000, reason: 'too_large' },
+        { name: 'sig.png', contentType: 'image/png', sizeBytes: 900, reason: 'inline' },
+      ],
+    }
+    const text = textOf(card(mail))
+    expect(text).toContain('2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too large)')
+    expect(text).not.toContain('sig.png')
+    expect(textOf(card({ ...mail, skipped: [mail.skipped![1]!] }, 'it'))).toContain('1 file di questa e-mail non è stato tenuto: clip.mov (troppo grande)')
+    expect(textOf(card(MAIL))).not.toContain('were not kept')
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['record-thread-card'] ?? {}
+      for (const code of [...SKIP_REASON_CODES, 'other']) expect(words[`skipped.reason.${code}`], `${locale} ${code}`).toBeTruthy()
+    }
+  })
+
+  it('cardDepth carries the API’s flags onto the card; none when the API said nothing', () => {
+    expect(cardDepth({})).toEqual({})
+    expect(cardDepth({ erased: false, skippedAttachments: [] })).toEqual({})
+    expect(cardDepth({ erased: true, skippedAttachments: [{ name: 'a.zip', contentType: 'application/zip', sizeBytes: 1, reason: 'type_not_allowed' }] })).toEqual({ erased: true, skipped: [{ name: 'a.zip', contentType: 'application/zip', sizeBytes: 1, reason: 'type_not_allowed' }] })
+  })
+
+  it('the B-TH-255 cases draw with no key left; Brand Beta never shows on Brand Alpha’s cards', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) {
+      expect(leftKeys(html, ['erased', 'skipped', 'filesOnly']), `${locale} ${id}`).toEqual([])
+      if (id === 'erased' || id === 'skipped') expect(scanText(textOf(html), BRAND_BETA), `${locale} ${id}`).toEqual([])
+    }
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['erased', 'skipped']))
+  })
+})
+// ---- end B-TH-255

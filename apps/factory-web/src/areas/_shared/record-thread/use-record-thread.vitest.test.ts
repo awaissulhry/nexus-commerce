@@ -8,6 +8,8 @@ import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readS
 // B-TH-229
 import { markThreadRead, setThreadOwner } from './api'
 import { readMarker } from './state'
+// B-TH-255
+import { readHiddenNew, readThreadPage } from './api'
 
 /** B-TH-212 — the office container of RecordThread v1: its calls, a live read that never drops the draft, the errors in words. */
 
@@ -251,3 +253,66 @@ describe('B-TH-300 — the docked thread’s container', () => {
     expect(docked).not.toMatch(/from '[^']*\/portal\//)
   })
 })
+
+// ---- B-TH-255 (B-TH-079): the feed tells everything — the View sent to the API, the office read's depth, the mail that waits -------
+describe('B-TH-255 — the View asks the API what it hides; the office read keeps erased, skipped files and the mail that waits', () => {
+  const getting = (answer: unknown) => {
+    const calls: Array<{ path: string; query?: unknown }> = []
+    const api = {
+      get: async (path: string, options: { query?: unknown; schema: { parse: (v: unknown) => unknown } }) => {
+        calls.push({ path, query: options.query })
+        return options.schema.parse(answer)
+      },
+    } as unknown as ApiClient
+    return { api, calls }
+  }
+
+  it('readHiddenNew: GET …/timeline with the view’s audience and kinds, one entry; only the count is used', async () => {
+    const { api, calls } = getting({ entries: [], nextCursor: null, hiddenNew: 2, waitingMail: null })
+    expect(await readHiddenNew(api, { type: 'SalesOrder', id: 'o 1' }, { audience: 'PARTNER', kinds: 'message' })).toBe(2)
+    expect(calls).toEqual([{ path: '/threads/SalesOrder/o%201/timeline', query: { audience: 'PARTNER', kinds: 'message', limit: 1 } }])
+    const changes = getting({ entries: [], nextCursor: null, hiddenNew: 5, waitingMail: null })
+    expect(await readHiddenNew(changes.api, { type: 'SalesOrder', id: 'o1' }, { audience: 'ALL', kinds: 'change' })).toBe(5)
+    expect(changes.calls[0]!.query).toEqual({ audience: 'ALL', kinds: 'change', limit: 1 })
+  })
+
+  it('the thread page keeps a message’s `erased` and its `skippedAttachments`, and the read’s `waitingMail` (never a sender)', async () => {
+    const message = { ...msg('m1', '2026-11-17T09:00:00Z'), body: '', author: { kind: 'PARTY', id: null, name: null }, erased: true }
+    const mail = { ...msg('m2', '2026-11-17T09:10:00Z'), skippedAttachments: [{ name: 'logo.ai', contentType: 'application/postscript', sizeBytes: 10, reason: 'type_not_allowed' }] }
+    const { api, calls } = getting({ thread: null, messages: [mail, message], nextCursor: null, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: false } })
+    const page = await readThreadPage(api, { type: 'SalesOrder', id: 'o1' }, null)
+    expect(calls[0]!.path).toBe('/threads/SalesOrder/o1')
+    expect(page.messages.find((item) => item.id === 'm1')?.erased).toBe(true)
+    expect(page.messages.find((item) => item.id === 'm2')?.skippedAttachments).toEqual([{ name: 'logo.ai', contentType: 'application/postscript', sizeBytes: 10, reason: 'type_not_allowed' }])
+    expect(page.waitingMail).toEqual({ count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: false })
+    expect(JSON.stringify(page.waitingMail)).not.toMatch(/@|from|sender/i)
+  })
+
+  it('a live re-read keeps the waiting mail when the page says nothing of it; null when it says none', () => {
+    const waitingMail = { count: 2, reasons: ['UNKNOWN_SENDER'], mayReview: true }
+    const first = applyNewest(EMPTY_SERVER, { thread, messages: [msg('m1', '2026-11-17T09:00:00Z')], nextCursor: null, waitingMail })
+    expect(first.waitingMail).toEqual(waitingMail)
+    expect(applyNewest(first, { thread, messages: [msg('m1', '2026-11-17T09:00:00Z')], nextCursor: null }).waitingMail).toEqual(waitingMail)
+    expect(applyNewest(first, { thread, messages: [msg('m1', '2026-11-17T09:00:00Z')], nextCursor: null, waitingMail: null }).waitingMail).toBeNull()
+  })
+
+  it('the container: every card carries its depth; Review opens Mail to sort only for a reader who may (mayReview)', () => {
+    const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain('...cardDepth(message)')
+    expect(container).toContain('waitingMail: page.waitingMail')
+    expect(container).toContain("reviewHref: server.waitingMail.mayReview ? `${prefix}/home/mail-to-sort` : null")
+  })
+
+  it('the docked thread: a view is never remembered, asks the API only while on, and marks nothing read while it hides messages', () => {
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain("useEffect(() => setView('all'), [key.type, key.id])")
+    expect(docked).toMatch(/const query = viewQuery\(shown\)\s*if \(!query \|\| !can\.read\) \{\s*setHiddenNew\(0\)/)
+    expect(docked).toContain('readHiddenNew(api, key, query, controller.signal)')
+    expect(docked).toContain("onSeen: shown === 'all' ? actions.onSeen : undefined")
+    expect(docked).toContain("onShowAll: () => setView('all')")
+    expect(docked).toContain("hiddenNew: shown === 'all' ? 0 : hiddenNew")
+    // No view is kept on the device (storage) — a new visit opens on All.
+    expect(docked).not.toMatch(/localStorage|sessionStorage/)
+  })
+})
+// ---- end B-TH-255

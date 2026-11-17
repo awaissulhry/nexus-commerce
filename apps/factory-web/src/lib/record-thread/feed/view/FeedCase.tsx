@@ -8,7 +8,8 @@ export function FeedCase({ model }: { model: FeedModel }) {
   return (
     <ThreadMessages>
       <div className="fw-rt-case">
-        <Feed model={model} actions={{}} />
+        {/* B-TH-255: "Show all" drawn on the line of what the View hides (the live thread puts the View back to All). */}
+        <Feed model={model} actions={{ onShowAll: () => undefined }} />
       </div>
     </ThreadMessages>
   )

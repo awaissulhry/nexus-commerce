@@ -26,12 +26,38 @@ export const headSchema = z.object({
 export type ThreadHead = z.infer<typeof headSchema>
 // ---- end B-TH-229
 
-const page = z.object({ thread: threadSchema.nullable(), messages: z.array(messageSchema), nextCursor: z.string().nullable(), reading: readingSchema.nullable().optional(), head: headSchema.optional() })
+// ---- B-TH-255 (B-TH-079; T3-F14, T3-F15, T4-F10): the office read's depth — a message erased after a privacy request, an inbound mail's
+// files not kept (never a signature logo), and the mail for this conversation that waits for a person. Codes stay strings here (an
+// unknown one is said plainly, never a failed read): the card and the feed name each in words.
+const skippedSchema = z.object({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.string() })
+export const officeMessageSchema = messageSchema.extend({ erased: z.boolean().optional(), skippedAttachments: z.array(skippedSchema).optional() })
+export type OfficeMessage = z.infer<typeof officeMessageSchema>
+export const waitingMailSchema = z.object({ count: z.number().int(), reasons: z.array(z.string()), mayReview: z.boolean() })
+export type WaitingMail = z.infer<typeof waitingMailSchema>
+// ---- end B-TH-255
+
+const page = z.object({
+  thread: threadSchema.nullable(),
+  messages: z.array(officeMessageSchema /* B-TH-255 */),
+  nextCursor: z.string().nullable(),
+  reading: readingSchema.nullable().optional(),
+  head: headSchema.optional(),
+  waitingMail: waitingMailSchema.nullable().optional() /* B-TH-255 */,
+})
 export type ThreadPageAnswer = z.infer<typeof page>
 
 export function readThreadPage(api: ApiClient, record: RecordKey, cursor: string | null, signal?: AbortSignal): Promise<ThreadPageAnswer> {
   return api.get(threadPath(record), { query: { cursor: cursor ?? undefined, limit: THREAD_PAGE }, schema: page, signal })
 }
+
+// ---- B-TH-255 (B-TH-079, T1-F05): how many messages new to the reader the Head's View hides — the timeline read with the view's
+// audience and kinds (one entry is enough: only `hiddenNew` is used; the entries are the timeline's own page).
+const hiddenAnswer = z.object({ hiddenNew: z.number().int() })
+export async function readHiddenNew(api: ApiClient, record: RecordKey, query: { audience: 'ALL' | 'PARTNER' | 'OFFICE'; kinds: 'message' | 'change' }, signal?: AbortSignal): Promise<number> {
+  const answer = await api.get(`${threadPath(record)}/timeline`, { query: { audience: query.audience, kinds: query.kinds, limit: 1 }, schema: hiddenAnswer, signal })
+  return answer.hiddenNew
+}
+// ---- end B-TH-255
 
 // ---- B-TH-229 (B-TH-027 / B-TH-028): the person's own read mark; who answers the thread ---------------------------------------
 /** POST …/read: the person read the thread up to this message (the mark only moves forward); their reading after it. */
