@@ -148,6 +148,11 @@ model User {
   // they have read each conversation (their own read marks, office or portal; never the floor).
   ownedThreads            Thread[]               @relation("ThreadOwner")
   threadReads             ThreadRead[]
+  // B-PR-12 portal-auth.prisma (production plan, schema wave 2/5): the customers whose production they supervise or back up
+  // (an office person), and whose production approvals they answer (a customer's portal person).
+  supervisedPortalSettings PortalSettings[] @relation("PortalSettingsSupervisor")
+  backupPortalSettings     PortalSettings[] @relation("PortalSettingsBackup")
+  approverPortalSettings   PortalSettings[] @relation("PortalSettingsApprover")
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

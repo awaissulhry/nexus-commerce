@@ -266,6 +266,27 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
       { seq: 20, size: '52', quantity: 2 },
     ])
     expect((await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 50 })).items).toEqual([])
+    // ── B-PR-12 (schema wave 2/5): a production ask (HOLD; its own words and people come with B-PR-24 and B-PR-27b) never shows
+    // as a change request on Home › Approvals. Planted with the triggers off, then taken away again.
+    const ask = newId()
+    const planted = async (sql: string, values: unknown[]) => {
+      await h.db.admin.query('BEGIN')
+      try {
+        await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+        await h.db.admin.query(sql, values)
+        await h.db.admin.query('COMMIT')
+      } catch (error) {
+        await h.db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    await planted(
+      `INSERT INTO "OrderChangeRequest" SELECT * FROM jsonb_populate_record(NULL::"OrderChangeRequest", (SELECT to_jsonb(r) || $1::jsonb FROM "OrderChangeRequest" r WHERE r.id = $2::uuid))`,
+      [JSON.stringify({ id: ask, kind: 'HOLD', status: 'OPEN', answer: null, answeredAt: null, answeredById: null, amendmentId: null, version: 1 }), request.id],
+    )
+    expect((await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 50 })).items).toEqual([])
+    await planted('DELETE FROM "OrderChangeRequest" WHERE id = $1', [ask])
+    // ── end B-PR-12
     expect((await thrown(acceptRequest(office(), request.id, { version: 2 }, undefined, h.clock))).issues[0].path).toBe('request/ACCEPTED')
 
     // The customer reads the answer (never who answered) and is told by e-mail.

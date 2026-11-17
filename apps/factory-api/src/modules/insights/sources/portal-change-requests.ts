@@ -2,6 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import type { AttentionCandidate } from '@nexus/factory-domain/insights/attention'
 import { orderChangeRequestWords } from '@nexus/factory-domain/insights/words'
+import { REQUEST_KINDS, type RequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { capped, partyNames, SOURCE_LIMIT, type Source } from './common'
 
@@ -11,12 +12,14 @@ import { capped, partyNames, SOURCE_LIMIT, type Source } from './common'
  * the office). An OPEN request of an order the viewer sees (orders.view over its company and customer); it is the viewer's
  * when they manage that customer's orders (orders.manage: insights/attention's act). The row opens the order (its Changes
  * tab answers it: modules/sales/change-requests accept / refuse); one row per request. Oldest first: the customer waits.
+ * B-PR-12: only CHANGE and CANCEL (the kinds these words say); the production asks of schema wave 2/5 (RUSH, HOLD, …) come to
+ * Today with their own words and people (B-PR-24, B-PR-27b), never as a change request.
  */
 export const portalChangeRequests: Source = async ({ caller, viewer }) => {
   const scope = scopeWhere(viewer.actor, ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.OrderChangeRequestWhereInput
   return caller.withClient(async (db) => {
     const found = await db.orderChangeRequest.findMany({
-      where: { AND: [scope, { status: 'OPEN' }] },
+      where: { AND: [scope, { status: 'OPEN', kind: { in: [...REQUEST_KINDS] } }] }, // B-PR-12: CHANGE and CANCEL only
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: SOURCE_LIMIT + 1,
       select: { id: true, companyId: true, partyId: true, orderId: true, kind: true, createdAt: true },
@@ -35,7 +38,7 @@ export const portalChangeRequests: Source = async ({ caller, viewer }) => {
         severity: 'MEDIUM',
         record: { type: 'SalesOrder', id: row.orderId, label: number },
         scope: { companyId: row.companyId, siteId: null, partyId: row.partyId },
-        ...orderChangeRequestWords({ number, customer: names.get(row.partyId) ?? 'The customer', kind: row.kind, sizes: own.filter((cell) => cell.size !== null).length, lines: new Set(own.map((cell) => cell.orderLineId)).size }),
+        ...orderChangeRequestWords({ number, customer: names.get(row.partyId) ?? 'The customer', kind: row.kind as RequestKind /* B-PR-12: the where above */, sizes: own.filter((cell) => cell.size !== null).length, lines: new Set(own.map((cell) => cell.orderLineId)).size }),
         due: null,
         since: row.createdAt,
         // One row per request (an order has at most one OPEN, but an answered one may be followed by another).
