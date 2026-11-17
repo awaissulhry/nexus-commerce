@@ -131,6 +131,29 @@ describe('quick filters (PLT-167)', () => {
       for (const day of RELATIVE_DAYS) expect(t(`quick.day.${day}`), `${locale} ${day}`).not.toMatch(KEY)
     }
   })
+
+  // F-PR-03: one of the list's own words for one term (the work orders' Waiting on, Health, Blocked by), a heading with its choices.
+  it('a word choice: one value at a time among its own, a heading and a ticked item each, its chip "Filter: Choice"', () => {
+    const waiting: ListQuick = {
+      filters: [{ id: 'waitingOn', kind: 'choice', label: 'Waiting on', choices: [{ value: 'BRAND', label: 'Customer' }, { value: 'US', label: 'Us' }] }],
+      values: { waitingOn: 'BRAND' },
+      onChange: () => undefined,
+    }
+    const filter = waiting.filters[0]!
+    expect(quickValueOf(filter, 'BRAND')).toBe('BRAND')
+    expect(quickValueOf(filter, 'SUPPLIER')).toBeNull()
+    expect(toggledQuick(filter, 'BRAND', 'US')).toBe('US')
+    expect(toggledQuick(filter, 'BRAND', 'BRAND')).toBeNull()
+    expect(toggledQuick(filter, null, 'SUPPLIER')).toBeNull()
+    expect(activeQuick(waiting).map((entry) => entry.value)).toEqual(['BRAND'])
+    for (const [, t] of translators) {
+      const items = quickMenuItems(waiting, t)
+      expect(items.map((item) => item.id)).toEqual(['h-waitingOn', 'waitingOn:BRAND', 'waitingOn:US', 's-clear', 'clear'])
+      expect(items.find((item) => item.id === 'waitingOn:BRAND')?.checked).toBe(true)
+      expect(items.find((item) => item.id === 'waitingOn:US')?.label).toBe('Us')
+      expect(t('quick.chipDate', { filter: 'Waiting on', day: 'Customer' })).toBe('Waiting on: Customer')
+    }
+  })
 })
 
 describe('inline edit and bulk edit (PLT-166, PLT-182)', () => {

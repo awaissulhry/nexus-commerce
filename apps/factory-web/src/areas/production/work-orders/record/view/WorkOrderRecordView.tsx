@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, PauseCircle, ShieldOff, Unlock, Zap } from 'lucide-react'
+import { FileX, PackageCheck, PauseCircle, ShieldOff, Unlock, Zap } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
@@ -38,6 +38,11 @@ import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { hasOrderFiles } from '../order-files/model'
 import { OrderFilesButton, OrderFilesDialog } from '../order-files/view/OrderFiles'
 // ---- end B-TH-265
+// ---- F-PR-05a: the band facts (customer, sales orders and POs, % done, health, waiting on), Report finished as the main step, Preview ----
+import { finishHeld } from '../../daily/model'
+import { previewHeld, reportFirst, customerFactOf } from '../overview/model'
+import { BandFacts } from './BandFacts'
+// ---- end F-PR-05a
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
@@ -135,8 +140,14 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open) return
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !stepHeld) {
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog) return
+      if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || typing) return
+      // F-PR-05a: ⌘↵ takes the band's primary — Report finished while released garments wait, else the next step.
+      if (reportPrimary) {
+        if (finishWait) return
+        event.preventDefault()
+        actions?.daily?.onDialog?.({ kind: 'finish' })
+      } else if (step.kind && !stepHeld) {
         event.preventDefault()
         openStep()
       }
@@ -189,7 +200,25 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   const tspec = useT(SPEC_NS)
   const heldWords = useScopedT('production')
   const splitWait = splitHeld(workOrder, model.can)
+  // ---- F-PR-05a: while released garments wait to go into stock, Report finished is the band's primary and the next step moves to
+  // the ⋯ (first line, held with its reason); "Preview as <customer>" opens its portal as it sees it (partners.preview).
+  const tw = useT(DAILY_NAMESPACE)
+  const daily = model.daily ?? null
+  const finished = daily?.finished?.value ?? null
+  const reportPrimary = !!daily && reportFirst(workOrder, finished)
+  const finishWait = daily && reportPrimary ? say(tw, finishHeld(workOrder, finished, daily.can)) : null
+  const fact = customerFactOf(workOrder)
+  const previewWait = model.preview ? previewHeld(fact, model.preview.can, model.preview.busy) : null
+  const stepLine: MenuItemDef[] =
+    reportPrimary && step.kind
+      ? [{ id: 'step', label: step.kind === 'release' && checksOpen > 0 ? t('step.releaseOpen', { count: checksOpen }) : t(`step.${step.kind}`), disabled: stepHeld !== null, ...(stepHeld ? { description: stepHeld } : {}), onSelect: openStep }]
+      : []
+  const previewLine: MenuItemDef[] = model.preview
+    ? [{ id: 'preview', label: t('band.preview', { name: fact.kind === 'customer' ? (model.partiesView ? fact.name : fact.code) : t('band.theCustomer') }), disabled: previewWait !== null, description: previewWait ? t(previewWait.key, previewWait.params) : t('band.previewHint'), onSelect: () => actions?.onPreview?.() }]
+    : []
+  // ---- end F-PR-05a
   const more: MenuItemDef[] = [
+    ...stepLine,
     { id: 'split', label: ts('split.open'), disabled: splitWait !== null, ...(splitWait ? { description: heldWords(splitWait.key, splitWait.params) } : {}), onSelect: () => actions?.onOpenSplit?.() },
     ...documentDoors(workOrder, model.prefix).map((door) => ({ id: door.id, label: ts(door.label.key, door.label.params), description: ts(door.description.key), href: door.href, target: '_blank' as const })),
     // B-W2b-245 (design pop:wo-change "⋯"): a change to this work order's spec is a change request.
@@ -201,13 +230,12 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
         void navigator.clipboard?.writeText(workOrder.number).catch(() => undefined)
       },
     },
+    ...previewLine,
     // Danger last, never beside the primary.
     ...(mayCancel(workOrder, model.can) ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
   ]
 
   // B-W2a-46 (wo-hold "band second action"): Put on hold, or Release the hold while it is held.
-  const daily = model.daily ?? null
-  const tw = useT(DAILY_NAMESPACE)
   // A notice's key may name its catalogue (`production-work-orders:notice.held`); else it is the area's.
   const notices = useScopedT('production')
   const activeHolds = (daily?.holds?.value ?? []).filter((hold) => hold.status === 'ACTIVE')
@@ -224,13 +252,18 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   ) : null
   const holdWords = workOrder.hold ? (activeHolds[0] ? holdReasonWords(activeHolds[0].reasonCode, daily?.reasons ?? null, locale) : (workOrder.hold.reason ?? '—')) : null
 
-  const customers = [...new Set(workOrder.orders.map((order) => order.partyName))]
   const colourways = [...new Set(workOrder.cells.map((cell) => cell.colourwayCode))]
+  // F-PR-05a: Report finished (moved out of the Bundles tab) while released garments wait; else the next step.
+  const reportButton = reportPrimary ? (
+    <Button size="sm" variant="primary" heldReason={finishWait} onClick={() => actions?.daily?.onDialog?.({ kind: 'finish' })} aria-keyshortcuts="Meta+Enter Control+Enter">
+      <PackageCheck size={14} aria-hidden /> {tw('finished.report', { count: finished?.garments.canReport ?? 0 })}
+    </Button>
+  ) : null
   // The band's primary: the step, and the hold beside it (at most two actions; the rest in the ⋯).
   const primary =
-    stepButton || holdButton ? (
+    reportButton || stepButton || holdButton ? (
       <span className="fw-pr-actions">
-        {stepButton}
+        {reportButton ?? stepButton}
         {holdButton}
       </span>
     ) : undefined
@@ -258,6 +291,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
         status: <Pill tone={STATUS_TONE[workOrder.status]}>{t(`status.${workOrder.status}`)}</Pill>,
         meta: (
           <>
+            {/* F-PR-05a: customer, its sales orders and POs, % done, health and waiting on lead the band's facts. */}
+            <BandFacts workOrder={workOrder} model={model} />
             {workOrder.rush && (
               <Tag tone="danger">
                 <Zap size={11} aria-hidden /> {ts('rush.word')}
@@ -275,7 +310,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
                 {workOrder.daysLate && workOrder.daysLate > 0 ? t('record.dueLate', { date: formatDate(`${workOrder.dueDate}T12:00:00Z`, { locale }), count: workOrder.daysLate }) : t('record.due', { date: formatDate(`${workOrder.dueDate}T12:00:00Z`, { locale }) })}
               </Tag>
             )}
-            <span className="fw-pr-hint">{[workOrder.site.code, ...customers].join(' · ')}</span>
+            <span className="fw-pr-hint">{workOrder.site.code}</span>
             {/* B-TH-265 (agreement T9): the orders' own files, read through the work order's own route. */}
             {model.orderFiles && hasOrderFiles(model.orderFiles.files) && <OrderFilesButton model={model.orderFiles} actions={actions?.orderFiles} />}
           </>
@@ -325,6 +360,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
           {/* B-W2b-424: the Undo after a close; a closed work order's close (who, when, why) with Reopen…. */}
           {model.close ? <CloseBanners workOrder={workOrder} model={model.close} actions={actions?.close} /> : workOrder.status === 'CLOSED' && <Banner tone="info" title={t('record.closed')} />}
           {!model.can.manage && !model.can.release && <Banner tone="info" title={t('record.readOnly')} />}
+          {/* F-PR-05a (L8): a work order made before the one-customer rule says so once. */}
+          {fact.kind === 'mixed' && <Banner tone="warning" title={t('band.mixedBanner')} />}
         </RecordNotices>
 
         {model.tab === 'overview' && <OverviewTab workOrder={workOrder} model={model} actions={actions} />}

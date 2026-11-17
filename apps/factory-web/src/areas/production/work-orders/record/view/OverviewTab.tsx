@@ -5,13 +5,13 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, Circle, Pencil, XCircle } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, ProgressBar } from '@nexus/ui/components'
 import { SizeGridEditor, SizeGridView } from '@nexus/ui/grid'
-import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, Spinner, Tag } from '@nexus/ui/primitives'
 import { DateField } from '../../../../../lib/i18n/ds-parts'
-import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'
 import { sizeGridCopy } from '../../../_shared/grid-copy'
-import { checkItems, draftGrid, gridChanged, mayEditDetails, onlyMaterialShort, percentOf, SIZE_LAYERS, sizeRunOf, sizesFromRound, stepTotals, type SizeLayer } from '../../../_shared/model'
+import { checkItems, draftGrid, gridChanged, mayEditDetails, onlyMaterialShort, percentOf, sizeRunOf, sizesFromRound, stepTotals } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { PartState } from './WorkOrderRecordView'
 import { beforeRelease, readinessView } from '../../daily/model'
@@ -19,23 +19,34 @@ import { HoldsCard, ReadinessLine } from '../../daily/view/DailyParts'
 import { SHIFT_NAMESPACE } from '../../every-shift/model'
 // B-W2b-245: 'Compare with the current master' (wo-frozen) and the size run's frozen banner (wo-sizegrid).
 import { FrozenSpecLine, SizeRunFrozen } from '../../spec/view/SpecParts'
+// ---- F-PR-05a: Gates & readiness, ONE progress table, Health with Raise to At risk ----
+import { GatesCard } from '../gates/view/GatesCard'
+import { HealthCard } from '../health/view/HealthCard'
+import { ProgressTable } from '../overview/view/ProgressTable'
+// ---- end F-PR-05a
 
 /**
  * Overview & release (design wo-release, wo-frozen, wo-facts, wo-sizes-mini): a draft's release check (each condition
  * in words, the failed ones with what holds them), or what the release froze; the work order's facts with its due date
- * and priority (editable until closed); the size run with a layer at a time — quantity, cut, bundled, sewn, finished or
- * what is left — and the step totals; a draft's sizes edited here (saved together, never more than is open).
+ * and priority (editable until closed); a draft's sizes edited here (saved together, never more than is open).
+ * F-PR-05a (06-tree A.4 tab 1, top to bottom): the release check / frozen spec · Gates & readiness (planning.view: the order's gates,
+ * the material readiness, a door to Materials) · ONE progress table (the 6-way layer switch went: Ordered · Cut · In bundles · Sewn
+ * · Finished · Still to finish per colourway × size) · holds as today · Health (the customer's chip, a person's raise with the
+ * office's note, Raise to At risk) · facts (customer, sales order and due moved to the band).
  */
 export function OverviewTab({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
+  // F-PR-05a: the readiness line sits in Gates & readiness when that card is drawn (planning.view, an order), else where it was.
+  const gatesShown = !!model.gates && workOrder.orders.length > 0
+  const readiness = <ReadinessLine readiness={readinessView(workOrder, model.check.value, model.daily?.readiness?.value ?? null)} />
   return (
     <div className="fw-pr-stack">
-      <div className="fw-pr-cards fw-pr-cards--wide">
-        {beforeRelease(workOrder) ? <ReleaseCheckCard workOrder={workOrder} model={model} actions={actions} /> : <FrozenCard workOrder={workOrder} model={model} actions={actions} />}
-        <FactsCard workOrder={workOrder} model={model} actions={actions} />
-      </div>
+      {beforeRelease(workOrder) ? <ReleaseCheckCard workOrder={workOrder} model={model} actions={actions} readinessHere={!gatesShown} /> : <FrozenCard workOrder={workOrder} model={model} actions={actions} readinessHere={!gatesShown} />}
+      {gatesShown && model.gates && <GatesCard part={model.gates} prefix={model.prefix} readiness={readiness} materialsHref={`${model.prefix}/production/work-orders/${workOrder.id}?tab=materials`} onRetry={actions?.onRetryGates} />}
+      <SizeRunCard workOrder={workOrder} model={model} actions={actions} />
       {/* B-W2a-46 (wo-side "holds (W2a)"): the work order's holds, Put on hold / Release the hold. */}
       {model.daily && <HoldsCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} />}
-      <SizeRunCard workOrder={workOrder} model={model} actions={actions} />
+      {model.health && <HealthCard model={model.health} daysLate={workOrder.daysLate} actions={actions?.health} />}
+      <FactsCard workOrder={workOrder} model={model} actions={actions} />
     </div>
   )
 }
@@ -47,7 +58,7 @@ const STATE_ICON = {
   BLOCKED: <XCircle size={16} className="fw-pr-ico is-blocked" aria-hidden />,
 } as const
 
-function ReleaseCheckCard({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
+function ReleaseCheckCard({ workOrder, model, actions, readinessHere }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; readinessHere: boolean }) {
   const t = useT('production')
   const check = model.check.value
   if (!check) return <PartState label={t('overview.check')} problem={model.check.problem} onRetry={() => actions?.onRetryPart?.('check')} />
@@ -78,8 +89,8 @@ function ReleaseCheckCard({ workOrder, model, actions }: { workOrder: WorkOrder;
           </li>
         ))}
       </ul>
-      {/* B-W2a-46 (wo-release "material available or expected (W2a readiness)"). */}
-      <ReadinessLine readiness={check.readiness ?? null} />
+      {/* B-W2a-46 (wo-release "material available or expected (W2a readiness)"); F-PR-05a: in Gates & readiness when drawn. */}
+      {readinessHere && <ReadinessLine readiness={check.readiness ?? null} />}
       {onlyMaterialShort(check) && <p className="fw-pr-hint">{t('overview.overrideHint')}</p>}
       <p className="fw-pr-hint">{t('overview.notFrozen')}</p>
     </Card>
@@ -92,7 +103,7 @@ export function translateParams(t: (key: string, params?: Record<string, string 
   return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, typeof value === 'string' && /^(reason|kind)\.[A-Z_]+$/.test(value) ? t(value) : value]))
 }
 
-function FrozenCard({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
+function FrozenCard({ workOrder, model, actions, readinessHere }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; readinessHere: boolean }) {
   const t = useT('production')
   const locale = useLocale()
   const override = workOrder.release?.materialOverride ?? null
@@ -114,7 +125,7 @@ function FrozenCard({ workOrder, model, actions }: { workOrder: WorkOrder; model
         ]}
       />
       {override && <Banner tone="warning" title={t('overview.override', { reason: override.reason })} />}
-      <ReadinessLine readiness={readinessView(workOrder, null, model.daily?.readiness?.value ?? null)} />
+      {readinessHere && <ReadinessLine readiness={readinessView(workOrder, null, model.daily?.readiness?.value ?? null)} />}
       {/* B-W2b-245: the newer spec, Compare with the current master and Change request replace W1's "a change request comes later". */}
       {model.spec ? <FrozenSpecLine model={model.spec} actions={actions?.spec} /> : <p className="fw-pr-hint">{t('overview.frozenHint')}</p>}
     </Card>
@@ -195,8 +206,7 @@ function FactsCard({ workOrder, model, actions }: { workOrder: WorkOrder; model:
             { label: t('overview.style'), value: `${workOrder.style.code} · ${workOrder.style.name}`, hint: workOrder.revision ? t('overview.revisionValue', { revision: workOrder.revision.revision }) : t('overview.noRevision') },
             { label: t('overview.kind'), value: t(`kindOf.${workOrder.kind}`) },
             { label: t('overview.site'), value: `${workOrder.site.code} · ${workOrder.site.name}` },
-            { label: t('overview.customers'), value: [...new Set(workOrder.orders.map((order) => order.partyName))].join(', ') || '—', hint: workOrder.orders.map((order) => order.number).join(' · ') },
-            { label: t('overview.due'), value: workOrder.dueDate ? formatDate(`${workOrder.dueDate}T12:00:00Z`, { locale }) : '—', hint: workOrder.daysLate && workOrder.daysLate > 0 ? t('list.daysLate', { count: workOrder.daysLate }) : undefined },
+            // F-PR-05a: the customer, its sales orders and the due date are the band's facts now (06-tree A.4 O-WO-facts).
             { label: t('overview.priority'), value: workOrder.rush ? ts('rush.priority', { priority: workOrder.priority }) : String(workOrder.priority) },
             ...(workOrder.splitFrom ? [{ label: ts('split.fromLabel'), value: <Link className="fw-pr-link" href={`${model.prefix}/production/work-orders/${workOrder.splitFrom.id}`}>{workOrder.splitFrom.number}</Link> }] : []),
             ...(workOrder.splits?.length ? [{ label: ts('split.toLabel'), value: <span className="fw-pr-inline">{workOrder.splits.map((split) => <Link key={split.id} className="fw-pr-link" href={`${model.prefix}/production/work-orders/${split.id}`}>{ts('split.child', { number: split.number, count: split.pieces })}</Link>)}</span> }] : []),
@@ -216,8 +226,8 @@ function SizeRunCard({ workOrder, model, actions }: { workOrder: WorkOrder; mode
   const locale = useLocale()
   const copy = useMemo(() => sizeGridCopy(t), [t])
   const draft = workOrder.status === 'DRAFT'
-  const layer: SizeLayer = draft ? 'quantity' : model.sizeLayer
-  const run = sizeRunOf(workOrder, layer)
+  // F-PR-05a: a draft edits its quantities in the size grid; from the release on ONE progress table shows every step.
+  const run = sizeRunOf(workOrder, 'quantity')
   const totals = stepTotals(workOrder)
   const [editing, setEditing] = useState(!!model.draft?.grid)
   const [grid, setGrid] = useState<Record<string, Record<string, number>>>(model.draft?.grid ?? draftGrid(workOrder))
@@ -237,9 +247,7 @@ function SizeRunCard({ workOrder, model, actions }: { workOrder: WorkOrder; mode
               <Pencil size={13} aria-hidden /> {t('size.edit')}
             </Button>
           )
-        ) : (
-          <SegmentedControl size="sm" wrap ariaLabel={t('size.layer')} value={layer} onChange={(value) => actions?.onSizeLayer?.(value as SizeLayer)} options={SIZE_LAYERS.map((value) => ({ value, label: t(`size.layers.${value}`) }))} />
-        )}
+        ) : null}
       </div>
       {/* B-W2b-245 (wo-sizegrid "Released and later: read-only Banner 'Frozen at release: a change needs a change request'"). */}
       {!draft && model.spec && <SizeRunFrozen model={model.spec} actions={actions?.spec} />}
@@ -265,8 +273,10 @@ function SizeRunCard({ workOrder, model, actions }: { workOrder: WorkOrder; mode
             copy={copy}
             caption={t('size.title')}
           />
+        ) : draft ? (
+          <SizeGridView colours={run.colours} sizes={run.sizes} value={run.value} locale={numberLocale} copy={copy} caption={t('size.layers.quantity')} />
         ) : (
-          <SizeGridView colours={run.colours} sizes={run.sizes} value={run.value} locale={numberLocale} copy={copy} caption={t(`size.layers.${layer}`)} />
+          <ProgressTable workOrder={workOrder} />
         )}
       </div>
       {editing && (
@@ -288,7 +298,7 @@ function SizeRunCard({ workOrder, model, actions }: { workOrder: WorkOrder; mode
           <span className="fw-pr-hint">{t('size.editHint')}</span>
         </div>
       )}
-      {!draft && run.uncounted && <p className="fw-pr-hint">{t('size.uncounted')}</p>}
+      {!draft && totals.cut === null && totals.bundled === null && totals.sewn === null && totals.finished === null && <p className="fw-pr-hint">{t('size.uncounted')}</p>}
       {draft && !editing && <p className="fw-pr-hint">{t('size.draftHint')}</p>}
       {!draft && <p className="fw-pr-hint">{t('size.frozenHint')}</p>}
     </Card>

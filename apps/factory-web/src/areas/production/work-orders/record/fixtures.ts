@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { WorkOrderStatus } from '../../_shared/api'
-import { bundlesOf, canOf, cutLogOf, FINAL, inShell, PICK, PREFIX, PRINTERS, releaseCheck, wipOf, workOrder, type Role } from '../../_shared/fixtures'
+import { at, bundlesOf, canOf, cutLogOf, FINAL, inShell, PICK, PREFIX, PRINTERS, releaseCheck, ROLES, wipOf, workOrder as baseWorkOrder, type Role } from '../../_shared/fixtures'
 import { PART_LOADING, type WorkOrderRecordModel } from './record-model'
-import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, releaseCheckW2a } from '../daily/demo/fixtures'
+import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, NOTHING_TO_FINISH, releaseCheckW2a } from '../daily/demo/fixtures'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
 // B-W2b-320: Materials › Substitute… (made-up).
 import { BOM_LINES, dialogModel as subDialog, SUB_CAN } from '../../../warehouse/picking/substitute/demo/fixtures'
@@ -17,6 +17,12 @@ import { filesReady, leftOut, orderFilesOf, orderGroup } from './order-files/fix
 import { threadChoices, type ThreadPick } from './order-files/model'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
+// ---- F-PR-05a: the band facts (customer, orders and POs, % done, health, waiting on), Report finished first, the Overview's gates,
+// ONE progress table and Health with Raise to At risk (made-up customer, orders, gates and a raise) ----
+import type { Milestones } from '../../../planning/milestones/api'
+import type { BrandHealthView } from './health/api'
+import type { HealthModel } from './health/model'
+// ---- end F-PR-05a
 
 /**
  * SCR-070 — the work order studio (design production.workorders "Record: Work order") with made-up data only: a draft
@@ -40,6 +46,84 @@ export interface RecordCase {
 }
 
 const ready = <T,>(value: T) => ({ value, problem: null })
+
+// ---- F-PR-05a: every made-up work order has its one customer (B-PR-03's record); its order's health and gates ----
+const CUSTOMER = { id: '0190f0e2-6666-7000-8000-000000000001', code: 'ALPHA', name: 'Moto Demo S.r.l.' }
+type WorkOrderOf = typeof baseWorkOrder
+const workOrder: WorkOrderOf = (status, extra = {}) => baseWorkOrder(status, { partyId: CUSTOMER.id, customer: CUSTOMER, mixedCustomers: false, ...extra })
+const ORDER = baseWorkOrder('IN_PROGRESS').orders[0]!
+export const healthView = (over: Partial<BrandHealthView> = {}): BrandHealthView => ({
+  orderId: ORDER.id,
+  number: ORDER.number,
+  partyId: CUSTOMER.id,
+  kept: true,
+  computed: 'ON_TRACK',
+  health: 'ON_TRACK',
+  reasonCode: null,
+  raise: null,
+  waitingOn: 'US',
+  waitingSince: at(28, 9),
+  version: 4,
+  ...over,
+})
+const RAISE: NonNullable<BrandHealthView['raise']> = { reasonCode: 'MATERIAL_LATE', note: 'Pelle rossa in ritardo dalla conceria; rientro sabato', setAt: at(27, 15, 20), setBy: { id: 'user-bea', name: 'Bea Esempio' }, until: '2026-11-03', stands: true }
+export const healthModel = (role: Role, over: Partial<HealthModel> = {}, view: BrandHealthView | null = healthView()): HealthModel => ({
+  orders: [{ orderId: ORDER.id, number: ORDER.number, read: { value: view, problem: null } }],
+  // Design: the owner and the production manager steer the customer's production (production.brand.manage, B-PR-13).
+  can: role === 'owner' || role === 'manager',
+  dialog: null,
+  busy: false,
+  problem: null,
+  ...over,
+})
+const ACTION = { allowed: true, refusal: null, needs: null }
+const gate = (n: number, kind: 'PP_SAMPLE' | 'LEATHER_APPROVED' | 'TRIMS_IN' | 'LAB_PASSED', state: 'WAITING' | 'PASSED', targetDate: string, passedOn: string | null) => ({
+  id: `0190f0e2-4545-7000-8000-00000000000${n}`,
+  salesOrderId: ORDER.id,
+  kind,
+  label: null,
+  targetDate,
+  sampleRound: null,
+  owner: { id: 'user-bea', name: 'Bea Esempio' },
+  ownerId: 'user-bea',
+  makerId: null,
+  state,
+  passedOn,
+  passedAt: passedOn ? `${passedOn}T10:00:00.000Z` : null,
+  passedBy: null,
+  via: null,
+  startedBefore: null,
+  leather: null,
+  holds: 0,
+  version: 1,
+  actions: { pass: ACTION, startBefore: ACTION, edit: ACTION, remove: ACTION },
+})
+const GATES = [gate(1, 'PP_SAMPLE', 'PASSED', '2026-10-20', '2026-10-22'), gate(2, 'LEATHER_APPROVED', 'PASSED', '2026-10-21', '2026-10-21'), gate(3, 'LAB_PASSED', 'WAITING', '2026-10-25', null)]
+export const MILESTONES: Milestones = {
+  today: '2026-10-29',
+  timeZone: 'Europe/Rome',
+  tiles: { SAMPLE: 0, LEATHER_NOT_RECEIVED: 0, LEATHER_NOT_PASSED: 0, TRIMS: 0, OTHER: 1 },
+  orders: [
+    {
+      id: ORDER.id,
+      number: ORDER.number,
+      companyId: baseWorkOrder('IN_PROGRESS').companyId,
+      customer: CUSTOMER,
+      status: 'IN_PRODUCTION',
+      promiseDate: '2026-11-06',
+      customerRef: ORDER.customerRef,
+      workOrders: { count: 1, notStarted: 0, byKind: [] },
+      gates: GATES,
+      milestones: GATES.map((entry, index) => ({ id: `ms-${index}`, kind: 'GATE' as const, gateId: entry.id, gateKind: entry.kind, label: null, salesOrderId: ORDER.id, target: entry.targetDate, actual: entry.passedOn, state: entry.state === 'PASSED' ? ('DONE' as const) : ('WAITING' as const), late: index === 0 ? 2 : index === 2 ? 4 : 0, owner: entry.owner })),
+      waiting: ['OTHER'],
+      late: 1,
+      next: null,
+      mayAddGate: ACTION,
+    },
+  ],
+  truncated: false,
+}
+// ---- end F-PR-05a
 
 export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<WorkOrderRecordModel> = {}): RecordCase {
   const can = canOf(role)
@@ -65,7 +149,6 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       dialog: null,
       dialogProblem: null,
       reprint: null,
-      sizeLayer: 'finished',
       waitingAt: null,
       bundleOpen: null,
       cutOpen: null,
@@ -77,6 +160,11 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       daily: dailyFor(DAILY_ROLE_OF[role], status),
       // B-W2b-130.
       leather: ready(LEATHER_ONE),
+      // F-PR-05a: the order's health (planning's gates only in the cases that show them: planning.view).
+      health: healthModel(role),
+      gates: null,
+      preview: { can: role === 'owner' || role === 'manager', busy: false },
+      partiesView: (ROLES[role] as readonly string[]).includes('parties.view'),
       ...over,
     },
   }
@@ -135,10 +223,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'release-refused', label: 'The release check changed since the page read it: a notice, the check read again', model: draft('manager', 'blocked', { notice: { tone: 'danger', words: { key: 'release.refused', params: { count: 2 } } } }) },
     { id: 'draft-sizes-edit', label: 'A draft: its sizes in edit (saved together)', model: draft('manager', 'ready', { draft: { grid: { BLK: { '48': 4, '50': 6, '52': 4, '54': 4 }, RED: { '50': 3, '52': 3 } } } }) },
     { id: 'released', label: 'Released, not started: the frozen spec, Start', model: recordCase('manager', 'RELEASED') },
-    { id: 'in-progress', label: 'In progress: the size run counts finished per cell (switch the layer), Complete held until every garment is finished', model: recordCase('manager', 'IN_PROGRESS') },
-    { id: 'in-progress-cut', label: 'In progress: the size run showing Cut', model: recordCase('manager', 'IN_PROGRESS', { sizeLayer: 'cut' }) },
-    { id: 'ready-to-complete', label: 'Every garment finished: Complete (⌘↵)', model: recordCase('manager', 'IN_PROGRESS', { wip: ready(wipOf(true)) }) },
-    { id: 'complete-dialog', label: 'Complete: what it does', model: recordCase('manager', 'IN_PROGRESS', { wip: ready(wipOf(true)), dialog: { kind: 'move', move: 'complete' } }) },
+    { id: 'in-progress', label: 'In progress: released garments wait — Report finished is the band’s primary (Complete in ⋯); ONE progress table', model: recordCase('manager', 'IN_PROGRESS') },
+    { id: 'in-progress-nothing-released', label: 'In progress, nothing released yet: Complete held until every garment is finished', model: recordCase('manager', 'IN_PROGRESS', { daily: dailyFor('manager', 'IN_PROGRESS', { finished: { value: NOTHING_TO_FINISH, problem: null } }) }) },
+    { id: 'ready-to-complete', label: 'Every garment finished, none released to stock yet: Complete (⌘↵)', model: recordCase('manager', 'IN_PROGRESS', { wip: ready(wipOf(true)), daily: dailyFor('manager', 'IN_PROGRESS', { finished: { value: NOTHING_TO_FINISH, problem: null } }) }) },
+    { id: 'complete-dialog', label: 'Complete: what it does', model: recordCase('manager', 'IN_PROGRESS', { wip: ready(wipOf(true)), dialog: { kind: 'move', move: 'complete' }, daily: dailyFor('manager', 'IN_PROGRESS', { finished: { value: NOTHING_TO_FINISH, problem: null } }) }) },
     { id: 'start-dialog', label: 'Start by hand: when work began without a scan', model: recordCase('manager', 'RELEASED', { dialog: { kind: 'move', move: 'start' } }) },
     { id: 'facts-edit', label: 'Due date and priority in edit (⌘S saves)', model: recordCase('manager', 'IN_PROGRESS', { draft: { editing: true, dueDate: '2026-11-13', priority: '9' } }) },
     { id: 'cancel-dialog', label: 'Cancel: the reason, and what happens to what was issued and cut', model: recordCase('manager', 'IN_PROGRESS', { dialog: { kind: 'cancel' } }) },
@@ -243,5 +331,20 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2b-320-substitute', label: 'B-W2b-320 · Materials › Substitute… (the warehouse’s Use a substitute)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', substitute: { can: SUB_CAN, status: 'IN_PROGRESS', dialog: null } }) },
     { id: 'w2b-320-substitute-open', label: 'B-W2b-320 · Substitute…: pick the BOM line first, then its choices', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', substitute: { can: SUB_CAN, status: 'IN_PROGRESS', dialog: subDialog({ lines: { value: BOM_LINES, problem: null }, bomLineId: BOM_LINES[0]!.bomLineId }) } }) },
     { id: 'w2b-320-substitute-held', label: 'B-W2b-320 · Substitute… held: a draft work order', model: draft('manager', 'blocked', { tab: 'materials', substitute: { can: SUB_CAN, status: 'DRAFT', dialog: null } }) },
+    // ---- F-PR-05a: band facts, Report finished first, the Overview body (gates, ONE progress table, health with Raise to At risk) ----
+    { id: 'band-facts', label: 'F-PR-05a · The band: customer (a link), SO and PO, % done, due, health, waiting on; Report finished as the main step', model: recordCase('owner', 'IN_PROGRESS'), note: 'Complete moved to the ⋯ while released garments wait; ⌘↵ reports them. ⋯ Preview as Moto Demo S.r.l. opens its portal (read-only, an hour).' },
+    { id: 'band-code', label: 'F-PR-05a · Without parties.view: the customer by its code, no link', model: recordCase('manager', 'IN_PROGRESS') },
+    { id: 'overview-gates', label: 'F-PR-05a · Overview: Gates & readiness (planning.view) — each gate a door to Time & action, the readiness line, Materials', model: recordCase('owner', 'IN_PROGRESS', { gates: { value: [MILESTONES], problem: null } }) },
+    { id: 'overview-gates-loading', label: 'F-PR-05a · Gates & readiness: being read', model: recordCase('owner', 'IN_PROGRESS', { gates: { value: null, problem: null } }) },
+    { id: 'overview-gates-failed', label: 'F-PR-05a · Gates & readiness: the read failed, Try again', model: recordCase('owner', 'IN_PROGRESS', { gates: { value: null, problem: 'error.offline' } }) },
+    { id: 'overview-progress', label: 'F-PR-05a · ONE progress table: Ordered · Cut · In bundles · Sewn · Finished · Still to finish per colourway × size (the switch went)', model: recordCase('manager', 'IN_PROGRESS') },
+    { id: 'health-raised', label: 'F-PR-05a · Health: raised to At risk by a person — the reason the customer reads, the note Office only, until when', model: recordCase('manager', 'IN_PROGRESS', { health: healthModel('manager', {}, healthView({ health: 'AT_RISK', reasonCode: 'MATERIAL_LATE', raise: RAISE, waitingOn: 'SUPPLIER', waitingSince: at(24, 9) })) }) },
+    { id: 'health-raise-dialog', label: 'F-PR-05a · Raise to At risk: a curated reason (the customer reads it) and an office-only note', model: recordCase('manager', 'IN_PROGRESS', { health: healthModel('manager', { dialog: { orderId: ORDER.id }, draft: { reasonCode: 'CAPACITY', note: 'Linea 2 ferma per manutenzione fino a giovedì' } }) }) },
+    { id: 'health-raise-refused', label: 'F-PR-05a · Raise refused (the health changed meanwhile): said in the dialog, read again', model: recordCase('manager', 'IN_PROGRESS', { health: healthModel('manager', { dialog: { orderId: ORDER.id }, problem: { key: 'raise.refused' }, draft: { reasonCode: 'CAPACITY', note: '' } }) }) },
+    { id: 'health-late', label: 'F-PR-05a · Health: already late — Raise held with the reason (raising would change nothing)', model: recordCase('manager', 'IN_PROGRESS', { health: healthModel('manager', {}, healthView({ computed: 'LATE', health: 'LATE', waitingOn: 'BRAND', waitingSince: at(26, 15) })) }) },
+    { id: 'health-not-kept', label: 'F-PR-05a · Health: the order is not followed yet (confirmed orders only)', model: recordCase('manager', 'RELEASED', { health: healthModel('manager', {}, healthView({ kept: false, computed: null, health: null, waitingOn: null, waitingSince: null, version: null })) }) },
+    { id: 'health-failed', label: 'F-PR-05a · Health: the read failed, Try again (never drawn as on track)', model: recordCase('manager', 'IN_PROGRESS', { health: { ...healthModel('manager'), orders: [{ orderId: ORDER.id, number: ORDER.number, read: { value: null, problem: 'error.offline' } }] } }) },
+    { id: 'health-no-right', label: 'F-PR-05a · Team leader: health read-only — Raise held (production.brand.manage)', model: recordCase('teamLeader', 'IN_PROGRESS') },
+    { id: 'mixed', label: 'F-PR-05a · A work order made before the one-customer rule: Mixed customers in the band and one banner; Preview held', model: recordCase('owner', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { partyId: null, customer: null, mixedCustomers: true }) } }) },
   ],
 })
