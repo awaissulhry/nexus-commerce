@@ -263,7 +263,8 @@
     "lastJobs": "Ultimi interventi",
     "noJobs": "Ancora nessun intervento.",
     "machineRecord": "Scheda macchina",
-    "jobRecord": "Intervento {number}"
+    "jobRecord": "Intervento {number}",
+    "threadLabel": "Note sulla richiesta per {machine}"
   },
   "trail": {
     "reported": "Segnalata da {who}",

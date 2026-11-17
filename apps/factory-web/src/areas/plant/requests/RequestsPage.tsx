@@ -31,6 +31,8 @@ import { confirmWorks, getDeepRequest, listDeepRequests, lockAsUnsafe, mergeRequ
 import { depthProblemOf, groupOfDuplicates, mediaViews, mergeBody, mergeDraftOf, routedWords, type MergeGroup } from './depth/model'
 import type { RequestDetailModel, RequestDialog, RequestRows, RequestsListModel, SectionRead, SiteChoice } from './view-model'
 import { RequestsView } from './view/RequestsView'
+// ---- B-TH-271 (PL6): the request's own thread docked in its detail window (office notes only) ----
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
 
 /**
  * `/w/<company>/plant/requests` (SCR-148): the queue of the address (`?view=` a saved row, `?tile=` a tile pressed,
@@ -204,6 +206,26 @@ function RequestsContainer() {
   }, [address.open, can.view, loadDetail])
 
   const record: DeepRequestRecord | null = detail?.loaded.status === 'ready' ? detail.loaded.value : null
+
+  // ---- B-TH-271 (PL6; O-PLT-REQ.thread): the request's thread docked in the detail window beside its content — office notes only (a
+  // maintenance request has no party: no "Reply to"), Activity's tools in its "⋯" (R-ACT); only with threads.read. An empty thread
+  // folds to a slim "Add a note" column (the thread tells the window whether it is still empty).
+  const readsThreads = session.permissions.includes('threads.read')
+  const [threadEmpty, setThreadEmpty] = useState(false)
+  const opened = record?.request ?? null
+  const thread =
+    opened && readsThreads ? (
+      <OfficeRecordThread
+        key={opened.id}
+        docked
+        record={{ type: 'MaintenanceRequest', id: opened.id, companyId: opened.companyId, siteId: opened.siteId }}
+        title={`${opened.machine.assetNumber} · ${formatDateTime(opened.reportedAt, { locale, timeZone: TIME_ZONE })}`}
+        recordLabel={opened.machine.assetNumber}
+        party={null}
+        onEmpty={setThreadEmpty}
+      />
+    ) : null
+  // ---- end B-TH-271
 
   // ---- live ----------------------------------------------------------------------------------------------------------------
   const refreshTiles = useCoalesced(() => {
@@ -527,6 +549,8 @@ function RequestsContainer() {
   return (
     <RequestsView
       model={model}
+      thread={thread /* B-TH-271 */}
+      threadEmpty={threadEmpty}
       actions={{
         onView: (next) => go({ view: next, tile: null }),
         onTile: (next) => go({ tile: next }),

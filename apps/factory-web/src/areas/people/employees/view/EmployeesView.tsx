@@ -31,10 +31,12 @@ export type { EmployeesListActions, EmployeesListModel } from '../view-model'
  * the register on the shared list frame (People | Teams), or the floor workers with no record (that tile); leavers in
  * progress. No pay, attendance, health or per-person work column exists on this page (Statuto dei Lavoratori art. 4).
  */
-export function EmployeesView({ model, actions, extra }: { model: EmployeesListModel; actions?: EmployeesListActions; extra?: ReactNode }) {
+// B-TH-271 (PL6): `teamThread` is the open team's docked office notes (the page's OfficeRecordThread, or a design case's), `teamThreadEmpty`
+// whether they hold nothing yet (they then fold to "Add a note").
+export function EmployeesView({ model, actions, extra, teamThread, teamThreadEmpty }: { model: EmployeesListModel; actions?: EmployeesListActions; extra?: ReactNode; teamThread?: ReactNode; teamThreadEmpty?: boolean }) {
   return (
     <PeopleMessages>
-      <Employees model={model} actions={actions} extra={extra} />
+      <Employees model={model} actions={actions} extra={extra} teamThread={teamThread} teamThreadEmpty={teamThreadEmpty} />
     </PeopleMessages>
   )
 }
@@ -47,7 +49,7 @@ function CellMark({ cell }: { cell: CellState | undefined }) {
   return <AlertCircle size={13} className="fw-pp-danger" aria-label={say(t, cell.words) ?? t('cell.failed')} />
 }
 
-function Employees({ model, actions, extra }: { model: EmployeesListModel; actions?: EmployeesListActions; extra?: ReactNode }) {
+function Employees({ model, actions, extra, teamThread, teamThreadEmpty }: { model: EmployeesListModel; actions?: EmployeesListActions; extra?: ReactNode; teamThread?: ReactNode; teamThreadEmpty?: boolean }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -417,7 +419,7 @@ function Employees({ model, actions, extra }: { model: EmployeesListModel; actio
       {unlinkedTile ? (
         <UnlinkedPanel model={model} actions={actions} />
       ) : model.address.view === 'teams' ? (
-        <TeamsPanel model={model} actions={actions} viewSwitch={viewSwitch} onHelp={() => setHelp(true)} />
+        <TeamsPanel model={model} actions={actions} viewSwitch={viewSwitch} onHelp={() => setHelp(true)} thread={teamThread /* B-TH-271 */} threadEmpty={teamThreadEmpty} />
       ) : (
         <>
           <ListFrame<Employee>

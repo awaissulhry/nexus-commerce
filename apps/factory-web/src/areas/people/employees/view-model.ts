@@ -121,6 +121,8 @@ export interface EmployeesListModel {
   /** Design cases and tests. */
   selected?: readonly string[]
   helpOpen?: boolean
+  // ---- B-TH-271 (PL6): the team whose window is open in the Teams view (`?view=teams&open=<team>`; null: none).
+  openTeamId?: string | null
 }
 
 export interface EmployeesListActions {
@@ -145,6 +147,8 @@ export interface EmployeesListActions {
   onAddTeam?: () => void
   onSetLead?: (team: Team, employeeId: string | null) => void
   onArchiveTeam?: (team: Team) => void
+  /** B-TH-271 (PL6): open a team's window (its facts and its office notes), or close it (null). */
+  onOpenTeam?: (teamId: string | null) => void
   onStepDone?: (leaver: Leaver, step: LeaverStep) => void
   onStepSkip?: (leaver: Leaver, step: LeaverStep) => void
   onCancelLeaving?: (leaver: Leaver) => void
