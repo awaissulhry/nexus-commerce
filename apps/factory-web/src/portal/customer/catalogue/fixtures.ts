@@ -5,6 +5,9 @@ import { catalogueStartHref } from '../neworder/request-model'
 import { OrderingCase, type OrderingCaseBuilder } from '../neworder/view/OrderingCase'
 import { catalogueBandOf } from './band'
 import { NO_FILTERS } from './model'
+// B-TH-276: "Ask about this style" and "Ask us" as real links.
+import { accountConversationHref } from '../../shell/record/model'
+import { askStyleHref } from './model'
 import type { CatalogueViewModel } from './view/CatalogueView'
 
 /**
@@ -34,6 +37,7 @@ function page(build: (locale: Locale) => Over = () => ({}), startHeld: string | 
       offlineSince: null,
       updated: false,
       detail: null,
+      askHref: accountConversationHref(PREFIX, ACCOUNT_ID), // B-TH-276
       ...over,
     }
     const band = catalogueBandOf({ words, asOf: read?.asOf ?? null, start: catalogueStartHref(PREFIX) /* B-TH-304 */, startHeld: view.addHeld ? words.t(view.addHeld) : null })
@@ -42,6 +46,8 @@ function page(build: (locale: Locale) => Over = () => ({}), startHeld: string | 
 }
 
 const IDS = STYLES.map((style) => style.id)
+/** B-TH-276: the customer's own party (made up): "Ask us" opens its account conversation's page. */
+const ACCOUNT_ID = '0194f0e2-1940-7000-8000-000000000a01'
 const detail = (over: Partial<NonNullable<CatalogueViewModel['detail']>> = {}): NonNullable<CatalogueViewModel['detail']> => ({
   state: 'ready',
   id: IDS[0]!,
@@ -49,6 +55,8 @@ const detail = (over: Partial<NonNullable<CatalogueViewModel['detail']>> = {}): 
   ids: IDS,
   addHeld: null,
   sheetHref: `${PREFIX}/catalogue/${IDS[0]}/sheet`,
+  askHref: askStyleHref(PREFIX, IDS[0]!), // B-TH-276
+  askHeld: null,
   ...over,
 })
 
@@ -63,14 +71,22 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     { id: 'filtered', label: 'Filters on', model: page(() => ({ filters: { ...NO_FILTERS, category: 'JACKET', range: 'OWN_LABEL' }, read: catalogueRead({ styles: [STYLES[0]!] }) })), note: 'Chips with counts; Clear all.' },
     { id: 'filters-phone', label: 'The phone’s Filters (n) open', model: page(() => ({ filters: { ...NO_FILTERS, season: 'FW27' }, filtersOpen: true, read: catalogueRead({ styles: [STYLES[0]!, STYLES[1]!] }) })), note: 'On a phone the chips sit behind “Filters (1)”.' },
     { id: 'no-match', label: 'Nothing matches', model: page(() => ({ filters: { ...NO_FILTERS, q: 'XYZ-999' }, read: catalogueRead({ styles: [] }) })) },
-    { id: 'empty', label: 'No styles open yet', model: page(() => ({ read: { ...catalogueRead({ styles: [] }), total: 0, facets: { categories: [], seasons: [], ppe: [], ownLabel: 0, openRange: 0 } } })), note: '“No styles are open to you yet. Ask us.”' },
+    { id: 'empty', label: 'No styles open yet', model: page(() => ({ read: { ...catalogueRead({ styles: [] }), total: 0, facets: { categories: [], seasons: [], ppe: [], ownLabel: 0, openRange: 0 } } })), note: '“No styles are open to you yet. Ask us.” — B-TH-276: a real link to the account conversation’s page (`/open/Party/<id>`), not a pop-up.' },
     { id: 'loading', label: 'Loading', model: page(() => ({ state: 'loading', read: null })) },
     { id: 'error', label: 'The catalogue could not be read', model: page(() => ({ state: 'error', read: null })), note: 'Never drawn as an empty catalogue.' },
     { id: 'no-prices', label: 'A colleague without prices', model: page(() => ({ read: catalogueRead({}, false) })), note: 'No price anywhere and one quiet line.' },
     { id: 'may-not-order', label: 'A colleague who may not order (designer)', model: page(() => ({ read: catalogueRead({}, false) }), 'held.mayNotOrder'), note: '“Add to order” and “Start an order” held with the reason.' },
     { id: 'offline', label: 'No connection', model: page(() => ({ offlineSince: at(-1) }), 'held.offline') },
     { id: 'updated', label: 'Catalogue updated · Show', model: page(() => ({ updated: true })), note: 'Prices or styles changed since the page was read: nothing moves until Show.' },
-    { id: 'detail', label: 'pop:style-detail', model: page(() => ({ detail: detail() })), note: 'Colours with the sizes each offers and its price; the certificate; size chart and public declaration held with the reason; the style sheet in a new tab; J / K; Enter adds.' },
+    { id: 'detail', label: 'pop:style-detail', model: page(() => ({ detail: detail() })), note: 'Colours with the sizes each offers and its price; the certificate; size chart and public declaration held with the reason; the style sheet in a new tab; J / K; Enter adds. B-TH-276: “Ask about this style” opens New order (`/orders/new?styles=<id>`) with the subject “<code> <name>” and the style named in the message.' },
+    // ---- B-TH-276
+    {
+      id: 'detail-ask-held',
+      label: 'The detail for a colleague who may not send requests',
+      model: page(() => ({ read: catalogueRead({}, false), detail: detail({ detail: styleDetail(false), addHeld: 'held.mayNotOrder', askHeld: 'held.mayNotAsk' }) }), 'held.mayNotOrder'),
+      note: '“Ask about this style” and “Add to order” held with the reason; “Ask a question” in the band’s ⋯ still opens the account conversation.',
+    },
+    // ---- end B-TH-276
     { id: 'detail-no-prices', label: 'The detail without prices', model: page(() => ({ read: catalogueRead({}, false), detail: detail({ detail: styleDetail(false) }) })) },
     { id: 'detail-loading', label: 'The detail loading', model: page(() => ({ detail: detail({ state: 'loading', detail: null }) })) },
     { id: 'detail-error', label: 'The detail could not be read', model: page(() => ({ detail: detail({ state: 'error', detail: null }) })) },

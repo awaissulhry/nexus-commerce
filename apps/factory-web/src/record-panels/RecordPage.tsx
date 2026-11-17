@@ -1,36 +1,143 @@
 'use client'
 
-import { useParams, useSearchParams } from 'next/navigation'
-import { RecordPanels } from './RecordPanels'
-// ---- B-TH-249: a project has one address, its own page (Products › Development › Projects › <id>) ----
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useOfficeSession } from '../lib/session/context'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useLocale } from '../lib/i18n/provider'
+import { recordAddress } from '../lib/records/record-links'
+import { useOfficeApi, useOfficeSession } from '../lib/session/context'
 import { companyPrefix } from '../lib/session/session'
-// ---- end B-TH-249
+import { OFFICE_PAGES } from '../shell/nav/office-nav'
+import { printHref } from '../shell/print/print-model'
+import { OfficeRecordThread } from '../areas/_shared/record-thread/OfficeRecordThread'
+// ---- B-TH-272: the generic record page (PL5) — a summary and the full-page thread replace the six inner panels ----
+import { readPartyFacts, readRecordSummary, readThreadParty, type RecordSummary } from '../areas/_shared/record-summary/api'
+import { namesRecord, openerOf, parentHrefOf, partyRoleOf, recordLabelOf, recordName, summaryStateOf, type SummaryState } from '../areas/_shared/record-summary/model'
+import { GenericRecordView } from '../areas/_shared/record-summary/view/GenericRecordView'
+import { useLiveChanges } from './live'
+import { RecordPanels } from './RecordPanels'
+// ---- end B-TH-272
 
 /**
- * The record panel route, `/w/<company>/records/<type>/<id>` (SCR-006): any record's thread, files and history, for a
- * record whose own page is not built yet (lib/records/record-links.ts sends its openers here). The opener passes what
- * the panels show and file under: `?label=` (the record's number), `company=` and `site=` (its company and site ids).
- * The API checks the record itself on every call (a record the person may not see answers 404 in each panel).
+ * The generic record page, `/w/<company>/records/<type>/<id>` (SCR-006-generic; B-TH-272, threads plan PL5): any record whose own
+ * page is not built yet (lib/records/record-links.ts sends its openers here, with `?label=` its number and `company=` / `site=` its
+ * company and site ids). Its six inner panels (thread, tasks, files, approvals, partners, history) became ONE full-page thread — the
+ * office's docked thread, whose Head ⋯ holds the old panels' doors (R-ACT), View › Changes the history, Files the files — and a
+ * summary from GET /records/<type>/<id>/summary (B-TH-076): type, number, state and the record it belongs to, in the reader's own
+ * scope. A record outside it answers 404: "You cannot see this record", no thread. The thread's party (GET /threads … limit 1, then
+ * GET /parties/<id> with parties.view) names "Reply to <party>"; without it the thread offers office notes only. The summary is
+ * read again when a live change names the record, and after the stream comes back. `/records/Project/<id>` goes to the project's
+ * own page (B-TH-249).
  */
 export function RecordPage() {
   const params = useParams<{ type: string; id: string }>()
-  const search = useSearchParams()
   const type = decodeURIComponent(params.type ?? '')
   const id = decodeURIComponent(params.id ?? '')
   // ---- B-TH-249: `/records/Project/<id>` goes to the project's own page (one address per project; its thread is the page there).
   if (type === 'Project') return <ToProjectPage id={id} />
   // ---- end B-TH-249
+  return <GenericRecord key={`${type}:${id}`} type={type} id={id} />
+}
+
+// ---- B-TH-272 ----
+interface Party {
+  readonly id: string
+  readonly name: string
+  readonly role: 'customer' | 'supplier' | 'partner'
+}
+
+function GenericRecord({ type, id }: { type: string; id: string }) {
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const search = useSearchParams()
+  const pathname = usePathname()
+  const locale = useLocale()
+  const prefix = companyPrefix(session.company?.code ?? '')
+  const record = useMemo(() => ({ type, id }), [type, id])
+  const opener = useMemo(() => openerOf(search), [search])
+  const seesParties = session.permissions.includes('parties.view')
+
+  // ---- the summary (B-TH-076) -----------------------------------------------------------------------------------------------
+  const [state, setState] = useState<SummaryState>('loading')
+  const [summary, setSummary] = useState<RecordSummary | null>(null)
+  const readId = useRef(0)
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const read = ++readId.current
+      try {
+        const answer = await readRecordSummary(api, record, signal)
+        if (read !== readId.current) return
+        setSummary(answer)
+        setState('ready')
+      } catch (error) {
+        if ((error as { name?: string } | null)?.name === 'AbortError' || read !== readId.current) return
+        const next = summaryStateOf(error)
+        // A read that fails after one succeeded keeps what was read (a 404 or a lost right does not: the record left the scope).
+        setState((now) => (now === 'ready' && next === 'error' ? now : next))
+        if (next !== 'error') setSummary(null)
+      }
+    },
+    [api, record],
+  )
+  useEffect(() => {
+    const abort = new AbortController()
+    void load(abort.signal)
+    return () => abort.abort()
+  }, [load])
+  useLiveChanges({ onChange: (change) => (namesRecord(change.fields, id) ? void load() : undefined), onReconnect: () => void load() }, state === 'ready' || state === 'error')
+
+  // ---- the thread's party, once the record is readable: "Reply to <party>" (notes only without it) ----------------------------
+  const [party, setParty] = useState<Party | null>(null)
+  const readable = state === 'ready'
+  useEffect(() => {
+    if (!readable) return
+    const abort = new AbortController()
+    void (async () => {
+      try {
+        const partyId = await readThreadParty(api, record, abort.signal)
+        if (!partyId || !seesParties) return
+        const facts = await readPartyFacts(api, partyId, abort.signal)
+        setParty({ id: facts.id, name: facts.name, role: partyRoleOf(facts.roles) })
+      } catch {
+        // The thread works without it: office notes only (no "Reply to").
+      }
+    })()
+    return () => abort.abort()
+  }, [api, record, readable, seesParties])
+
+  const name = recordName({ summary, opener, type, id, locale })
+  const recordLabel = recordLabelOf(summary, opener, name)
+  const threadRecord = useMemo(() => ({ type, id, companyId: opener.companyId, siteId: opener.siteId }), [type, id, opener.companyId, opener.siteId])
+  const selfHref = `${prefix}${recordAddress({ type, id, label: summary?.label ?? opener.label ?? undefined, companyId: opener.companyId, siteId: opener.siteId }, OFFICE_PAGES)}`
+  const ready = state === 'ready' && summary !== null
+  const thread = ready ? (
+    <OfficeRecordThread
+      docked
+      record={threadRecord}
+      title={name}
+      recordLabel={recordLabel}
+      party={party ? { id: party.id, name: party.name } : null}
+      {...(party ? { partyRole: party.role } : {})}
+      recordHref={selfHref}
+      printHref={printHref(pathname, search?.toString() ?? '')}
+    />
+  ) : null
+  const printThread = ready ? <RecordPanels record={threadRecord} title={name} party={party ? { id: party.id, name: party.name, emails: [] } : null} /> : null
+
   return (
-    <RecordPanels
-      key={`${type}:${id}`}
-      record={{ type, id, companyId: search.get('company'), siteId: search.get('site') }}
-      title={search.get('label') ?? `${type} ${id.slice(0, 8)}`}
+    <GenericRecordView
+      model={{ prefix, recordType: type, recordId: id, state, summary, opener, parentHref: parentHrefOf(summary, prefix, OFFICE_PAGES) }}
+      actions={{
+        onRetry: () => {
+          setState('loading')
+          void load()
+        },
+      }}
+      thread={thread}
+      printThread={printThread}
     />
   )
 }
+// ---- end B-TH-272
 
 // ---- B-TH-249 ----
 /** Replaces the address with the project's page, keeping the thread's own terms (`?message=`, `?thread=`) and the anchor. */

@@ -2,6 +2,9 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { createTranslator, CATALOGUE } from '../../../../lib/i18n/messages'
 import type { Locale } from '../../../../lib/i18n/locales'
 import { at, PREFIX, shellOf, words as returnsWords } from '../design-data'
+// B-TH-275: the repair's own conversation, docked beside both tabs.
+import { threadOf } from '../design-data'
+import type { PortalFrameMode } from '../../../shell/record/model'
 import type { Repair } from './api'
 import { repairBandOf } from './band'
 import { answerHeldKey, NS, photosHeldKey } from './model'
@@ -13,7 +16,8 @@ import type { RepairDialog, RepairRecordViewModel } from './RepairRecordView'
  * rec "Return" › Request / Status for a repair, repair.estimate "Parts and labour, approved by the customer before work
  * starts"), MADE-UP data only: a repair at each stage (waiting for the garment with where to send it, received, an estimate
  * to answer, accepted, declined, in repair, repaired, sent back, cancelled), an alteration, the Request with the damage
- * photos, Accept (asked, refused) and Decline (with its words, empty), Add photos and a photo full size; a colleague who
+ * photos, Accept (asked, refused) and Decline (with its words, empty), Add photos and a photo full size, the repair's own
+ * conversation docked at 1440 and behind "Messages (2 new)" narrower (B-TH-275); a colleague who
  * sees no prices, one who may only read, a past estimate, an office preview, no connection, loading, a failed read, a
  * repair that is not theirs and a person without the page.
  */
@@ -113,6 +117,8 @@ interface Build {
   dialog?: RepairDialog | null
   notice?: RepairRecordViewModel['notice']
   state?: RepairRecordViewModel['state']
+  /** B-TH-275: the frame's layout (default docked, the 1440 picture). */
+  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
 }
 
 function repairCase(build: (locale: Locale) => Build): RepairCaseBuilder {
@@ -133,12 +139,13 @@ function repairCase(build: (locale: Locale) => Build): RepairCaseBuilder {
       answerHeld: answerHeldKey(input.repair.actions.answer, offline, false),
       fileHeld: input.preview ? t('portal.held.photos.PREVIEW') : offline ? t('portal.held.offline') : null,
       dialog: input.dialog ?? null,
+      frame: input.frame ?? { mode: 'docked' }, // B-TH-275
     }
     const band =
       model.state === 'ready'
         ? repairBandOf({ t, listTitle: returnsWords(locale)('list.title'), repair: input.repair, tab: model.tab, prefix: PREFIX, photosHeld })
         : { title: model.state === 'missing' ? t('portal.record.missing') : returnsWords(locale)('list.title'), back: { href: `${PREFIX}/returns`, label: returnsWords(locale)('list.title') } }
-    return { shell: shellOf(locale, band, { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model } }
+    return { shell: shellOf(locale, band, { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275 */ } }
   }
 }
 
@@ -179,6 +186,9 @@ export const designScreen = defineDesignScreen<RepairCaseBuilder>({
       })),
     },
     { id: 'photo', label: 'A photo full size', model: repairCase(() => ({ repair: repair('AWAITING_GOODS'), tab: 'request', dialog: { kind: 'photo', model: { photos: [{ id: id(3701), name: 'spalla-1.jpg' }, { id: id(3702), name: 'spalla-2.jpg' }], index: 0, state: 'loading', src: null } } })) },
+    // B-TH-275 (B-TH-081): the repair's OWN conversation docked (no longer the account's behind "Ask"); narrower behind its button.
+    { id: 'th-275-narrow', label: 'Under 1280 px: “Messages (2 new)”', model: repairCase(() => ({ repair: sent(), frame: { mode: 'stacked', newCount: 2 } })), note: 'Open at 1024 or the phone: the body leads; the button opens the repair’s conversation full width.' },
+    { id: 'th-275-narrow-open', label: 'Under 1280 px: the repair’s conversation open', model: repairCase(() => ({ repair: sent(), frame: { mode: 'stacked', viewOpen: true } })), note: '“Ask a question” in the band’s ⋯ asks about the repair itself and focuses this box.' },
     { id: 'preview', label: 'An office preview', model: repairCase(() => ({ repair: repair('ESTIMATED', { actions: { addPhotos: 'PREVIEW', answer: 'PREVIEW' } }), preview: true })), note: 'Every act held with the reason.' },
     { id: 'offline', label: 'No connection', model: repairCase(() => ({ repair: sent(), offline: true })) },
     { id: 'loading', label: 'Loading', model: repairCase(() => ({ repair: sent(), state: 'loading' })) },

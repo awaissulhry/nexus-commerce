@@ -130,6 +130,8 @@ const partnerMessage = z.object({
   author: z.object({ name: z.string().nullable(), mine: z.boolean() }),
   body: z.string(),
   attachments: z.array(z.object({ id: z.string(), originalName: z.string(), sizeBytes: z.number() })),
+  // B-TH-273 (B-TH-079, thread-G09): its writer was erased after a privacy request ("Message removed after a privacy request").
+  erased: z.boolean().optional(),
   at: z.string(),
 })
 export type PartnerMessageRead = z.infer<typeof partnerMessage>

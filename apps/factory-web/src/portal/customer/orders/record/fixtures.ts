@@ -24,14 +24,18 @@ import {
   words,
 } from '../design-data'
 import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, movesOf, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
+// B-TH-275: the customer's own reference in the pop-ups; what the order was made from.
+import { orderRefOf } from '../model'
+import { CUSTOMER_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { CustomerCase, type CustomerCaseBuilder } from '../view/CustomerCase'
 import type { OrderDialog, OrderRecordViewModel } from '../view/OrderRecordView'
 
 /**
- * SCR-184 › one order (design portal.customer.orders rec "Order"; B-W2b-191), MADE-UP data only: the five tabs (Status &
- * progress with the tracker, the promise history, your requests, production progress, the deposit and the facts; Lines with
- * each size run and the totals; Shipments & tracking with parcels, steps, papers and what is still to ship; Documents by
- * version; Messages), "Please re-confirm", every pop-up (Ask for a change: edit, held cells, review, a refusal, discard; Ask
+ * SCR-184 › one order (design portal.customer.orders rec "Order"; B-W2b-191; B-TH-275, picture 22), MADE-UP data only: the four
+ * tabs (Status & progress with the state line, "Made from your request", the tracker, the promise history, your requests,
+ * production progress, the deposit and the facts; Lines with each size run and the totals; Shipments & tracking with parcels,
+ * steps, papers and what is still to ship; Documents by version) beside the order's conversation docked at 1440 (the portal
+ * record frame; narrower: "Messages (2 new)" and its full-width view), "Please re-confirm", every pop-up (Ask for a change: edit, held cells, review, a refusal, discard; Ask
  * to cancel; Re-confirm version 2: choose, decline, signed, held; Pay the deposit on the FAKE provider: idle, its fields,
  * waiting, failed, paid; a document's preview), a role without prices, an office preview, no connection, loading, a failed
  * read and a missing order.
@@ -43,6 +47,9 @@ function recordModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = 
   return {
     state: 'ready',
     record,
+    // B-TH-275: docked beside the body (the 1440 picture); the narrow cases say `stacked`.
+    frame: { mode: 'docked' },
+    madeFrom: null,
     tab: 'status',
     prefix: PREFIX,
     offlineSince: null,
@@ -90,10 +97,14 @@ function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
     }
     return {
       shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, tab, prefix: PREFIX, facts }), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
-      body: { kind: 'record', model, thread: tab === 'messages' ? threadOf(locale) : null },
+      // B-TH-275: the order's ONE conversation docks beside every tab.
+      body: { kind: 'record', model, thread: threadOf(locale) },
     }
   }
 }
+
+/** B-TH-275: a design order's own reference (#11): the pop-ups name the customer's number, never the office's SO- series. */
+const own = (record: OrderRecord): string => orderRefOf(record.order, () => '—')
 
 const RECORD = orderRecord()
 const SHIP_TO = shipToLines(RECORD.order.shipTo)
@@ -101,11 +112,11 @@ const SHIP_TO = shipToLines(RECORD.order.shipTo)
 function changeDialog(draft: Partial<ChangeDraft> = {}, over: { problem?: string | null; discard?: boolean; rules?: ReturnType<typeof rulesOf> } = {}): OrderDialog {
   const rules = over.rules ?? rulesOf()
   const full: ChangeDraft = { ...EMPTY_CHANGE, ...draft }
-  return { kind: 'change', model: { state: 'ready', number: RECORD.order.number, rules, draft: full, held: changeHeld(rules, full, FACTS), busy: false, problem: over.problem ?? null, discard: over.discard ?? false, shipTo: SHIP_TO, today: TODAY } }
+  return { kind: 'change', model: { state: 'ready', number: own(RECORD), rules, draft: full, held: changeHeld(rules, full, FACTS), busy: false, problem: over.problem ?? null, discard: over.discard ?? false, shipTo: SHIP_TO, today: TODAY } }
 }
 const EDITED: Partial<ChangeDraft> = { cells: { [rulesOf().lines[1]!.lineId]: { '50': 8, '52': 5 } }, requestedDate: dayAt(10), note: 'Due 50 in più per il negozio di Torino.' }
 
-function cancelDialog(draft: Partial<CancelDraft> = {}, rules = rulesOf(), number = RECORD.order.number): OrderDialog {
+function cancelDialog(draft: Partial<CancelDraft> = {}, rules = rulesOf(), number = own(RECORD)): OrderDialog {
   const full: CancelDraft = { ...EMPTY_CANCEL, ...draft }
   return { kind: 'cancel', model: { state: 'ready', number, rules, draft: full, held: cancelHeld(rules, full, FACTS), busy: false, problem: null } }
 }
@@ -113,13 +124,13 @@ function cancelDialog(draft: Partial<CancelDraft> = {}, rules = rulesOf(), numbe
 const REVISED = orderRecord({ reconfirmNeeded: true })
 const reconfirm = (over: Partial<Extract<OrderDialog, { kind: 'reconfirm' }>['model']> = {}): OrderDialog => ({
   kind: 'reconfirm',
-  model: { state: 'ready', page: approvalPage(), number: REVISED.order.number, decision: null, comment: '', held: null, problem: null, busy: false, done: null, ...over },
+  model: { state: 'ready', page: approvalPage(), number: own(REVISED), decision: null, comment: '', held: null, problem: null, busy: false, done: null, ...over },
 })
 
 const MTM = mtmRecord()
 const pay = (locale: Locale, over: Partial<Extract<OrderDialog, { kind: 'pay' }>['model']> = {}): OrderDialog => ({
   kind: 'pay',
-  model: { amount: orderWords(locale).money(MTM.deposits[0]!.amount, 'EUR'), number: MTM.order.number, methods: ['CARD', 'SEPA_DEBIT'], method: 'CARD', state: 'idle', fake: true, held: null, failure: null, problem: null, ...over },
+  model: { amount: orderWords(locale).money(MTM.deposits[0]!.amount, 'EUR'), number: own(MTM), methods: ['CARD', 'SEPA_DEBIT'], method: 'CARD', state: 'idle', fake: true, held: null, failure: null, problem: null, ...over },
 })
 const NO_REQUESTS = { state: 'ready', items: [] } as const
 const PAY_OPEN = { [MTM.deposits[0]!.id]: { held: null } }
@@ -159,8 +170,35 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'documents-error', label: 'Documents could not be read', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'error', read: null } }) }) },
     { id: 'preview', label: 'A document’s preview opening', model: recordCase({ tab: 'documents', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'loading', bytes: null } } }) }) },
     { id: 'preview-error', label: 'A document that could not be opened', model: recordCase({ tab: 'documents', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'error', bytes: null } } }) }) },
-    // ── Messages ──
-    { id: 'messages', label: 'Messages', model: recordCase({ tab: 'messages' }), note: 'The order’s shared thread: our messages and e-mails, theirs; “You can also answer our e-mails”.' },
+    // ── B-TH-275: the conversation docked (no Messages tab), the state line, "Made from your request" ──
+    {
+      id: 'th-275-narrow',
+      label: 'Under 1280 px: “Messages (2 new)”',
+      model: recordCase({ model: () => ({ frame: { mode: 'stacked', newCount: 2 } }) }),
+      note: 'Open at 1024 or the phone: the body leads; the button opens the conversation full width (Back returns to the same tab and scroll). From 1280 px it docks at ~40 %.',
+    },
+    { id: 'th-275-narrow-open', label: 'Under 1280 px: the conversation open', model: recordCase({ model: () => ({ frame: { mode: 'stacked', viewOpen: true } }) }), note: '“Ask a question” in the band’s ⋯ opens this and focuses the box (no pop-up).' },
+    {
+      id: 'th-275-confirmed',
+      label: 'A confirmed order: “Your order is confirmed”, made from your request',
+      model: recordCase({
+        record: orderRecord({ status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED, promiseMoved: false }, { promiseHistory: [] }),
+        model: () => ({ madeFrom: { kind: 'request', href: `${PREFIX}/orders/requests/0190f0e2-1910-7000-8000-000000000901`, label: '#7' } }),
+      }),
+      note: 'The sentence only for a CONFIRMED order (L2-G06); the request named by the customer’s own number.',
+    },
+    {
+      id: 'th-275-waits',
+      label: 'An order waiting for our approval',
+      model: recordCase({ record: orderRecord({ status: 'REQUESTED', words: CUSTOMER_STATUS_WORDS.REQUESTED, promiseMoved: false, promiseDate: null, originalPromiseDate: null }, { promiseHistory: [] }) }),
+      note: '“We received your order: it waits for our approval” — never “confirmed” before our yes.',
+    },
+    {
+      id: 'th-275-made-quote',
+      label: 'An order made from a quote',
+      model: recordCase({ model: () => ({ madeFrom: { kind: 'quote', href: `${PREFIX}/open/Quote/0190f0e2-1910-7000-8000-000000000902?view=conversation`, label: '#3' } }) }),
+      note: 'No request of theirs behind the quote: the quote is named (its conversation page).',
+    },
     // ── pop:change-request ──
     { id: 'change', label: 'pop:change-request — Ask for a change', model: recordCase({ model: () => ({ dialog: changeDialog() }) }), note: 'Per line the sizes as ordered (stacked on a phone); line 1 is held with its reason (“the leather was cut on …”); the date, the delivery address, a note. Review waits until something is changed.' },
     { id: 'change-edited', label: 'Ask for a change: sizes changed', model: recordCase({ model: () => ({ dialog: changeDialog(EDITED) }) }), note: 'Changed cells are marked “Was 6”.' },
@@ -172,7 +210,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'cancel', label: 'pop:cancel-request — Ask to cancel', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES' }) }) }), note: 'Per line what the cut-off rules say now (held / Free · fee); the fee words; reason and note.' },
     { id: 'cancel-chosen', label: 'Ask to cancel: a line chosen, the fee', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES', lineIds: [rulesOf().lines[1]!.lineId], reasonCode: 'NOT_NEEDED' }) }) }) },
     { id: 'cancel-tried', label: 'Ask to cancel: Send with nothing chosen', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES', tried: true }) }) }), note: 'Held with its reason, under the field.' },
-    { id: 'cancel-mtm', label: 'Ask to cancel: made to measure for a consumer', model: recordCase({ record: MTM, model: () => ({ requests: NO_REQUESTS, dialog: cancelDialog({}, rulesOf({ cancel: { possible: true, code: 'FREE', day: null, words: { it: 'Libero', en: 'Free' } }, noWithdrawal: NO_WITHDRAWAL_WORDS, cancelFee: { pct: null, words: { it: 'Nessuna penale', en: 'No fee' }, currency: 'EUR', wholeOrderFee: 0 } }), MTM.order.number) }) }), note: '“No right of withdrawal applies (Codice del Consumo art. 59)”.' },
+    { id: 'cancel-mtm', label: 'Ask to cancel: made to measure for a consumer', model: recordCase({ record: MTM, model: () => ({ requests: NO_REQUESTS, dialog: cancelDialog({}, rulesOf({ cancel: { possible: true, code: 'FREE', day: null, words: { it: 'Libero', en: 'Free' } }, noWithdrawal: NO_WITHDRAWAL_WORDS, cancelFee: { pct: null, words: { it: 'Nessuna penale', en: 'No fee' }, currency: 'EUR', wholeOrderFee: 0 } }), own(MTM)) }) }), note: '“No right of withdrawal applies (Codice del Consumo art. 59)”.' },
     // ── pop:reconfirm ──
     { id: 'reconfirm', label: 'pop:reconfirm — Re-confirm order version 2', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() }, dialog: reconfirm() }) }), note: 'Our message; why it changed; line by line old → new and the totals; Confirm or Decline; the typed name signs.' },
     { id: 'reconfirm-decline', label: 'Re-confirm: decline without a reason', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() }, dialog: reconfirm({ decision: 'REFUSED', problem: 'reconfirm.problem.why' }) }) }) },

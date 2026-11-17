@@ -6,6 +6,8 @@ import { dayAt, draftPage, HIDES, noticePage, ORDER, PREFIX, sheetRead, shellOf,
 import { linesDraftOf, shipLinesOf, termsDraftOf, type Step } from '../model'
 import type { AnnounceViewModel } from '../view/AnnounceView'
 import { DeliveriesCase, type DeliveriesCaseBuilder } from '../view/DeliveriesCase'
+// B-TH-277: the order's conversation docked beside the steps (made-up, the same as the PO page's).
+import { threadOf } from '../../orders/design-data'
 
 /**
  * SCR-227 › Announce a delivery (design portal.supplier.asn sub-page `announce`: pick-lines, packing-list, transport, review;
@@ -46,7 +48,9 @@ function stepCase(step: Step, build: (locale: Locale) => { page?: NoticePage | n
     const { page = null, over = {} } = build(locale)
     const view = model({ step, page, locale, over })
     const band = page ? noticeBandOf({ t, locale, prefix: PREFIX, page, stepping: !view.done, changeHeld: null }) : newBandOf({ t, locale, prefix: PREFIX, order: view.order })
-    return { shell: shellOf(locale, { band }), body: { kind: 'announce', model: view } }
+    // B-TH-277: the order's conversation docks once the order is known (no order chosen yet: no dock).
+    const thread = view.order && view.state === 'ready' ? { model: threadOf(locale), number: view.order.number } : null
+    return { shell: shellOf(locale, { band }), body: { kind: 'announce', model: view, thread } }
   }
 }
 

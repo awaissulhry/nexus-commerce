@@ -28,6 +28,8 @@ import { VERDICT_CODES } from './api'
 // B-TH-223: the customer's requests beside its orders.
 import type { RequestRow } from '../requests/api'
 import { matchesSearch, requestHref, requestOrder, stateTone as requestStateTone, yourNumberText } from '../requests/model'
+// B-TH-275: the portal record frame's tab rule and a record's conversation page.
+import { conversationHref, tabOrFirst } from '../../shell/record/model'
 
 /**
  * SCR-184 — the customer's Orders & tracking (B-W2b-191; design portal.customer.orders), pure: the list's address, the
@@ -41,9 +43,13 @@ export const NS = 'portal-orders'
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
 
 // ── addresses ────────────────────────────────────────────────────────────────────────────────────────────────────────
-export const RECORD_TABS = ['status', 'lines', 'shipments', 'documents', 'messages'] as const
+// ---- B-TH-275 (P-CUS-ORD.body; tabs 5 → 4): the Messages tab is gone — the order's conversation docks beside every tab (the portal
+// record frame, B-TH-273). An old `?tab=messages` (a list's link, a mail, a notification) opens Status & progress with the
+// conversation shown and its box focused (the frame's arrival rule), and so does any address the page does not know.
+export const RECORD_TABS = ['status', 'lines', 'shipments', 'documents'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'status')
+export const tabOf = (value: string | null | undefined): RecordTab => tabOrFirst(RECORD_TABS, value)
+// ---- end B-TH-275
 
 /** The list's address: the chip (OPEN is the API's default and is left out) and the search. */
 export function listQuery(chip: ListChip | null, q: string, extra: Readonly<Record<string, string>> = {}): string {
@@ -57,8 +63,57 @@ export function listQuery(chip: ListChip | null, q: string, extra: Readonly<Reco
 
 export function recordHref(prefix: string, id: string, tab: RecordTab = 'status', extra: Readonly<Record<string, string>> = {}): string {
   const params = new URLSearchParams({ tab, ...extra })
-  return `${prefix}/orders/${encodeURIComponent(id)}?${params.toString()}${tab === 'messages' ? '#messages' : ''}`
+  return `${prefix}/orders/${encodeURIComponent(id)}?${params.toString()}`
 }
+
+// ---- B-TH-275: "Messages" on a row (the list's menu, its New messages cell) opens the order with its conversation shown and the box
+// focused: the frame's arrival term `tab=messages` (the page then reads Status & progress and cleans the address).
+export const orderThreadHref = (prefix: string, id: string): string => `${prefix}/orders/${encodeURIComponent(id)}?tab=messages`
+
+/**
+ * The order as the customer names it (plan §0.5, B-TH-303: its own count, never the office's SO- series): "Your order 12" for the
+ * band and the page, "#12" where one short reference is needed (a pop-up's title, the tracker's name); without a number of its own
+ * yet, the customer's own PO, else "your order".
+ */
+export function orderNameOf(order: Pick<OrderRecord['order'], 'yourNumber' | 'customerRef'>, locale: Locale, t: Translate): string {
+  if (order.yourNumber) return order.yourNumber.words[locale]
+  return order.customerRef ? t('record.titleRef', { ref: order.customerRef }) : t('record.titleNone')
+}
+export function orderRefOf(order: Pick<OrderRecord['order'], 'yourNumber' | 'customerRef'>, t: Translate): string {
+  if (order.yourNumber) return `#${order.yourNumber.seq}`
+  return order.customerRef ?? t('record.refNone')
+}
+
+/**
+ * The one state line above the tracker (L2-G06; B-TH-006): "Your order is confirmed" ONLY for a confirmed order — an order still
+ * waiting for our approval (the office's PENDING_APPROVAL, REQUESTED to the customer) says it was received and waits for our yes;
+ * any later state has its tracker and says nothing more here.
+ */
+export function stateLineKey(status: CustomerOrderStatus): 'status.confirmed' | 'status.waitsApproval' | null {
+  if (status === 'CONFIRMED') return 'status.confirmed'
+  if (status === 'REQUESTED') return 'status.waitsApproval'
+  return null
+}
+
+/** What the order was made from, as the summary read names it (B-TH-076: its parent, only when the customer opens that one too). */
+export interface SummaryParent {
+  readonly recordType: string
+  readonly recordId: string
+  readonly label: string | null
+}
+
+/**
+ * "Made from your request" (P-CUS-ORD.body): the order's request page, from the order's summary (a request it came from) or — an
+ * order made from a quote — the quote's own summary (the request the quote came from). A quote with no request of the customer's is
+ * named and opens its conversation page (the portal has no quote page yet). None: nothing drawn (an order the office typed).
+ */
+export function madeFromOf(prefix: string, orderParent: SummaryParent | null, quoteParent: SummaryParent | null): { readonly kind: 'request' | 'quote'; readonly href: string; readonly label: string | null } | null {
+  const request = orderParent?.recordType === 'Inquiry' ? orderParent : quoteParent?.recordType === 'Inquiry' ? quoteParent : null
+  if (request) return { kind: 'request', href: requestHref(prefix, request.recordId), label: request.label }
+  if (orderParent?.recordType === 'Quote') return { kind: 'quote', href: conversationHref(prefix, { type: 'Quote', id: orderParent.recordId }), label: orderParent.label }
+  return null
+}
+// ---- end B-TH-275
 
 /** A row opens its order; a request sent and not decided yet has no page of its own (it is not an order yet). */
 export const opens = (row: Pick<OrderRow, 'kind'>): boolean => row.kind === 'ORDER'
@@ -512,10 +567,10 @@ export function threadOf(row: ListRow): { readonly recordType: 'Inquiry' | 'Sale
   return opens(row.order) ? { recordType: 'SalesOrder', id: row.order.id } : null
 }
 
-/** The door of a row's New messages cell: the record's page with its conversation (a request's page holds it; an order's Messages tab). */
+/** The door of a row's New messages cell: the record's page with its conversation (a request's page holds it; an order docks it, B-TH-275). */
 export function threadHref(prefix: string, row: ListRow): string | null {
   if (row.kind === 'request') return requestHref(prefix, row.request.id)
-  return opens(row.order) ? recordHref(prefix, row.order.id, 'messages') : null
+  return opens(row.order) ? orderThreadHref(prefix, row.order.id) : null
 }
 // ---- end B-TH-230
 

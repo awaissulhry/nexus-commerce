@@ -7,6 +7,11 @@ import { PortalShellView, type PortalShellViewModel } from '../../../shell/view/
 import { ThreadView, type ThreadViewModel } from '../../../shell/view/ThreadView'
 import { NotInAccess } from '../../orders/parts'
 import { NS } from '../model'
+import { useJobWords } from '../words'
+// ---- B-TH-277: the job's conversation docked beside the tabs (the portal record frame), as the live page draws it.
+import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
+import type { PortalFrameMode } from '../../../shell/record/model'
+// ---- end B-TH-277
 import { JobRecordView, type JobRecordViewModel } from './JobRecordView'
 import { JobsListView, type JobsListViewModel } from './JobsListView'
 import { SheetView, type SheetViewModel } from './SheetView'
@@ -19,7 +24,9 @@ import { SheetView, type SheetViewModel } from './SheetView'
 
 export type JobsCaseBody =
   | { kind: 'list'; model: JobsListViewModel }
-  | { kind: 'record'; model: JobRecordViewModel; thread: ThreadViewModel | null }
+  // B-TH-277: `frame` — absent, the review frame's own width decides (phone first at 390: the "Messages" button; docked from 1280 px);
+  // given, the narrow page whatever the width (its "Messages (2 new)" button, or the conversation open).
+  | { kind: 'record'; model: JobRecordViewModel; thread: ThreadViewModel | null; frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number } }
   | { kind: 'sheet'; model: SheetViewModel }
   | { kind: 'noAccess'; admins: readonly string[] }
 
@@ -41,7 +48,7 @@ export function JobsCase({ model: build }: { model: JobsCaseBuilder }) {
         {body.kind === 'list' ? (
           <JobsListView model={body.model} />
         ) : body.kind === 'record' ? (
-          <JobRecordView model={body.model}>{body.thread ? <ThreadView model={body.thread} /> : null}</JobRecordView>
+          <RecordBody body={body} />
         ) : body.kind === 'sheet' ? (
           <SheetView model={body.model} />
         ) : (
@@ -49,5 +56,15 @@ export function JobsCase({ model: build }: { model: JobsCaseBuilder }) {
         )}
       </PortalShellView>
     </WithMessages>
+  )
+}
+
+/** B-TH-277: one job in the portal record frame — its tab, and the job's conversation docked beside it. */
+function RecordBody({ body }: { body: Extract<JobsCaseBody, { kind: 'record' }> }) {
+  const { t } = useJobWords()
+  return (
+    <PortalRecordFrame thread={body.thread ? <ThreadView model={body.thread} /> : null} threadLabel={t('thread.label', { number: body.model.page?.job.number ?? '' })} design={body.frame}>
+      <JobRecordView model={body.model} />
+    </PortalRecordFrame>
   )
 }

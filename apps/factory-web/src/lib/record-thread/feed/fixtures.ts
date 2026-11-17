@@ -40,6 +40,21 @@ const EVENTS: FeedEvent[] = [
 const thread = demoThread(BRAND_ALPHA)
 const base: FeedModel = { state: 'ready', messages: thread, events: EVENTS, context: context(BRAND_ALPHA.tradeName), more: true, older: 'idle', now: DEMO_NOW }
 
+// ---- B-TH-255 (B-TH-079): the quiet lines at the end of the feed — made-up counts and reasons; never a sender (the API sends none).
+const REVIEW = '/w/demo/home/mail-to-sort'
+const waitingReview: FeedModel = { ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: true, reviewHref: REVIEW } }
+const waitingTwo: FeedModel = { ...base, waitingMail: { count: 2, reasons: ['UNKNOWN_SENDER', 'THREAD_CLOSED', 'UNKNOWN_SENDER'], mayReview: true, reviewHref: REVIEW } }
+const waitingColleague: FeedModel = { ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: false, reviewHref: null } }
+// The With-the-customer view (the notes taken out, as the Head's View does) while an office note arrived: "1 new message hidden…".
+const sharedOnly: FeedModel = { ...base, messages: thread.filter((message) => message.kind === 'theirs' || message.kind === 'ours'), events: [], hiddenNew: 1 }
+// A folded erased message and a folded message of files only (their one lines say so; never an empty line).
+const foldedDepth: FeedModel = {
+  ...base,
+  messages: thread.map((message, index) => (index === 3 ? { ...message, author: null, body: '', files: [], erased: true } : index === thread.length - 6 ? { ...message, body: '', files: [{ id: 'fd-1', name: 'collar.jpg', sizeBytes: 640_000, contentType: 'image/jpeg', status: 'AVAILABLE' as const }, { id: 'fd-2', name: 'sizes.pdf', sizeBytes: 90_000, contentType: 'application/pdf', status: 'AVAILABLE' as const }] } : message)),
+  runOpen: true,
+}
+// ---- end B-TH-255
+
 export const designScreen = defineDesignScreen<FeedModel>({
   screen: 'SCR-006-feed',
   title: 'Record thread · the feed (T4)',
@@ -61,6 +76,13 @@ export const designScreen = defineDesignScreen<FeedModel>({
     { id: 'older-failed', label: 'Earlier page failed', model: { ...base, older: 'failed' } },
     { id: 'offline', label: 'Offline', model: { ...base, offline: { since: '2026-11-17T09:44:00.000Z' } } },
     { id: 'forbidden', label: 'No permission', model: { ...base, state: 'forbidden' } },
+    // ---- B-TH-255
+    { id: 'waiting-review', label: 'Mail waiting in Mail to sort (email.triage)', model: waitingReview, note: '“1 mail for this conversation waits in Mail to sort — sender not a contact · Review”: for a reader who may sort mail (email.triage); Review opens Home › Mail to sort. Never the sender’s address.' },
+    { id: 'waiting-two', label: 'Two mails waiting, two reasons', model: waitingTwo, note: 'Each reason once, in words; the count in the plural.' },
+    { id: 'waiting-colleague', label: 'Mail waiting — a reader without email.triage', model: waitingColleague, note: '“A reply waits for a colleague to check it”: no sender, no reason, no link (W07, W08, W22).' },
+    { id: 'hidden-new', label: 'View on: 1 new message hidden', model: sharedOnly, note: 'The Head’s View is on “With the customer” and an office note arrived: “1 new message hidden by this view · Show all” at the end, so a forgotten view never hides news.' },
+    { id: 'folded-depth', label: 'Folded: an erased message and one of files only', model: foldedDepth, note: 'Their one lines say “Message removed (privacy request)” and “2 files” — never an empty line.' },
+    // ---- end B-TH-255
     { id: 'brand-beta', label: 'Brand Beta’s copy (brand wall)', model: { ...base, messages: demoThread(BRAND_BETA), events: [], context: context(BRAND_BETA.tradeName) }, note: 'The same feed on Brand Beta’s order: nothing of Brand Alpha (B-TH-203 scan).' },
   ],
 })

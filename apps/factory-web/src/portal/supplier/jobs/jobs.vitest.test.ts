@@ -21,15 +21,18 @@ import {
   endWords,
   jobHeld,
   jobsCsv,
+  jobTabOf, // B-TH-277
   kitDraftOf,
   kitHeld,
   kitLinesAct,
   KNOWN_SCRAP,
   KNOWN_UOM,
+  MERGED_TABS, // B-TH-277
   personHeld,
   progressAct,
   progressDraftOf,
   progressHeld,
+  RECORD_TABS, // B-TH-277
   returnAct,
   returnDraftOf,
   returnHeld,
@@ -258,3 +261,32 @@ describe('SCR-192 / SCR-193 / SCR-196 design cases', () => {
     })
   }
 })
+
+// ---- B-TH-277 (threads plan TH-6, P-SUB-JOB): tabs 5 → 3 — Documents merged into Kit received, no Messages (the job's conversation
+// docks beside every tab: the portal record frame); every old address still opens a tab (R-8).
+describe('B-TH-277 — the job on the portal record frame', () => {
+  it('three tabs; an old ?tab=documents opens Kit received, ?tab=messages the next step’s tab (the frame shows the conversation)', () => {
+    expect(RECORD_TABS).toEqual(['kit', 'progress', 'sendback'])
+    expect(MERGED_TABS).toEqual({ documents: 'kit', messages: null })
+    expect(jobTabOf('documents', 'REPORT')).toBe('kit')
+    expect(jobTabOf('messages', 'SEND_BACK')).toBe('sendback')
+    expect(jobTabOf('messages', 'CONFIRM_KIT')).toBe('kit')
+    expect(jobTabOf('sendback', 'CONFIRM_KIT')).toBe('sendback')
+    expect(jobTabOf(null, 'REPORT')).toBe('progress')
+    expect(jobTabOf('constructor', 'SEND_BACK')).toBe('sendback')
+    expect(jobTabOf(null, null)).toBe('progress')
+  })
+
+  it('every design case of a read job draws the docked conversation once; the documents sit under Kit received', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const entry of (recordScreen as unknown as DesignScreen<unknown>).cases) {
+        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, Object.keys(CATALOGUE[locale])) }, createElement((recordScreen as unknown as DesignScreen<unknown>).view, { model: entry.model })))
+        if (entry.id === 'sheet') continue
+        const docked = html.match(/<aside[^>]*id="messages"/g)?.length ?? 0
+        expect(docked, `${entry.id} (${locale})`).toBe(['loading', 'error', 'missing'].includes(entry.id) ? 0 : 1)
+        expect(html, `${entry.id} (${locale}): no Messages or Documents tab`).not.toMatch(/tab=(messages|documents)/)
+      }
+    }
+  })
+})
+// ---- end B-TH-277

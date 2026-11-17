@@ -220,6 +220,12 @@ export const allNonEssentialOff = (settings: EmailSettings, draft: EmailDraft): 
 export const backOnFrequency = (topic: string): EmailFrequency => (isTopic(topic) ? defaultFrequencyOf(topic) : DEFAULT_FREQUENCY)
 // ---- end B-TH-221 follow-up
 
+// ---- B-TH-273 (PL3-F05; Owner decision 5, B-TH-045): the topic whose default is "as it happens" (messages: a message from us often
+// waits for the person's answer) says so beside its setting; a locked topic says why it is locked instead, any other nothing.
+/** The words' key of the note beside a topic's setting, or null. */
+export const emailTopicNoteKey = (topic: { readonly topic: string; readonly locked: boolean }): string | null => (!topic.locked && backOnFrequency(topic.topic) === 'INSTANT' ? 'email.defaultInstant' : null)
+// ---- end B-TH-273
+
 /** The one switch: every non-essential topic off, or back to its default (messages as it happens, the rest daily). */
 export function withNonEssential(settings: EmailSettings, draft: EmailDraft, off: boolean): EmailDraft {
   const next: Record<string, EmailFrequency> = { ...draft }

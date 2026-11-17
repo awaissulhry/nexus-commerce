@@ -1,11 +1,13 @@
 import { SHARE_FIELDS, type ShareHeldReason, type SharePermission } from '@nexus/factory-domain/shares/rules'
 import { isApiError, issuePath } from '../../lib/api/errors'
 import type { LinkState } from '../../shell/links/link-state'
-import type { ShareField, ShareMessage, SharePage } from './api'
+import type { ShareField, ShareFile, ShareMessage, SharePage } from './api'
 
 /**
  * SCR-270's rules (B-W2b-200; design links.invite), pure: what the page says from the API's codes and values, what the
  * person may do now, and the API's refusals in our words. Nothing here fetches.
+ * B-TH-274 (threads plan TH-6, PL7; L-INVITE.side, L-INVITE.thread): the page's layout — the thread as the main column, the side
+ * column beside it from 1280 px, behind "i" narrower — and the files strip of the thread (the old "Shared files" card merged in).
  */
 
 export const LINK_NS = 'link-invite'
@@ -152,6 +154,36 @@ export function writeRefusal(error: unknown): { words: Words; link?: LinkState; 
   }
 }
 
+// ---- B-TH-274 (PL7-F01; L-INVITE.side-F01, L-INVITE.thread-F01): the thread is the main column -------------------------------
+
+/** From this width the side column (Why you are here, the record, E-mail me) sits beside the thread, about a third. */
+export const TWO_COLUMNS_FROM = 1280
+
+/** How the page sits at a width: two columns (the thread ~2/3, the side ~1/3), or the thread as the whole page (the rest behind "i"). */
+export type InviteLayout = 'two-columns' | 'thread-page'
+
+export const inviteLayout = (viewport: number): InviteLayout => (viewport >= TWO_COLUMNS_FROM ? 'two-columns' : 'thread-page')
+
+/** The files strip names at most this many files; the rest are one click away in the Files view. */
+export const STRIP_FILES = 3
+
+/**
+ * The record's files as the thread's files strip shows them (the ONE place for files on the page: the old "Shared files" card is
+ * gone): the newest first, at most `max` by name, and how many more the Files view holds. Every file once.
+ */
+export function filesStrip(files: readonly ShareFile[], max = STRIP_FILES): { readonly all: ShareFile[]; readonly shown: ShareFile[]; readonly more: number } {
+  const seen = new Set<string>()
+  const all = files
+    .filter((file) => (seen.has(file.id) ? false : (seen.add(file.id), true)))
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || a.id.localeCompare(b.id))
+  const shown = all.slice(0, Math.max(0, max))
+  return { all, shown, more: all.length - shown.length }
+}
+
+/** A pop-up over the page: the side column behind "i" (narrower than 1280 px), or the Files view. */
+export type InviteSheet = 'side' | 'files' | null
+// ---- end B-TH-274
+
 // ---- the view model ------------------------------------------------------------------------------------------------------
 
 export interface InviteViewModel {
@@ -177,6 +209,8 @@ export interface InviteViewModel {
   /** "Now" for the days left (the design review fixes it). */
   now: number
   timeZone?: string
+  /** B-TH-274: the pop-up open over the page (the side column behind "i", the Files view), or null. */
+  sheet: InviteSheet
 }
 
 export interface InviteActions {
@@ -189,6 +223,8 @@ export interface InviteActions {
   onFiles?: (files: File[]) => void
   onOpenFile?: (fileId: string) => void
   onDismiss?: (what: 'post' | 'notify' | 'upload' | 'file') => void
+  /** B-TH-274: opens the side column behind "i" or the Files view; null closes it. */
+  onSheet?: (sheet: InviteSheet) => void
 }
 
 export const START: InviteViewModel = {
@@ -208,4 +244,5 @@ export const START: InviteViewModel = {
   opening: null,
   fileProblem: null,
   now: 0,
+  sheet: null,
 }

@@ -49,6 +49,10 @@
     "title": "The record",
     "empty": "Nothing more is shared about this record yet."
   },
+  "side": {
+    "title": "About this invitation",
+    "open": "About this invitation"
+  },
   "field": {
     "code": "Code",
     "name": "Name",
@@ -134,7 +138,7 @@
     }
   },
   "files": {
-    "title": "Shared files",
+    "title": "Files",
     "empty": "No files shared yet.",
     "emptyBody": "Files we share with you on this record will show here.",
     "open": "Open",
@@ -155,7 +159,11 @@
       "empty": "This file is empty.",
       "closed": "Uploads are closed for now. Please send the file to your contact by e-mail.",
       "open": "The file could not be opened. Try again."
-    }
+    },
+    "all_one": "All files ({count})",
+    "all_other": "All files ({count})",
+    "allMore": "+{more} more · all {count} files",
+    "viewTitle": "Files on this record"
   },
   "thread": {
     "title": "Messages",

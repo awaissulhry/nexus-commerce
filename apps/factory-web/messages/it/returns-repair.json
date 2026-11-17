@@ -109,7 +109,8 @@
       "tabs": "Sezioni della riparazione",
       "status": "Stato",
       "request": "Richiesta",
-      "missing": "Riparazione non trovata"
+      "missing": "Riparazione non trovata",
+      "messagesLabel": "Messaggi: {kind} {number}"
     },
     "keys": {
       "tabs": "Passa da una sezione all'altra",

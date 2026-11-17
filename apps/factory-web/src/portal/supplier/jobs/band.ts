@@ -6,7 +6,8 @@ import { jobHref, sheetHref, STATE_TONE, type RecordTab } from './model'
 
 /**
  * The frame's band of the Jobs pages (design portal.supplier.jobs h: AsOf, "Accept new jobs" primary while any wait, ⋯ Ask
- * a question; rec "Job": its link tabs): one builder per page, used by the live page and its design cases alike.
+ * a question — on a job it focuses the docked conversation, B-TH-273; rec "Job": its three link tabs, B-TH-277): one builder per
+ * page, used by the live page and its design cases alike.
  */
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
@@ -76,8 +77,7 @@ export function jobBandOf(input: {
         { id: 'kit', label: t('tabs.kit'), count: sent, href: tabHref('kit'), ...(job.nextStep === 'CONFIRM_KIT' ? { badge: t('tabs.toDo') } : {}) },
         { id: 'progress', label: t('tabs.progress'), href: tabHref('progress'), ...(job.nextStep === 'REPORT' ? { badge: t('tabs.toDo') } : {}) },
         { id: 'sendback', label: t('tabs.sendback'), count: job.returns.length, href: tabHref('sendback'), ...(job.nextStep === 'SEND_BACK' ? { badge: t('tabs.toDo') } : {}) },
-        { id: 'documents', label: t('tabs.documents'), href: tabHref('documents') },
-        { id: 'messages', label: t('tabs.messages'), href: `${tabHref('messages')}#messages` },
+        // B-TH-277 (tabs 5 → 3): Documents merged into Kit received; no Messages (the job's conversation docks beside every tab).
       ],
     },
     ask: { type: 'SubcontractOrder', id: job.id, label: job.number },

@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Minus } from 'lucide-react'
+import { Check, MessageCircleQuestion, Minus } from 'lucide-react'
 import { KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../lib/i18n/ds-parts'
@@ -13,7 +13,9 @@ import '../catalogue.css'
  * pop:style-detail (design portal.customer.catalogue "JKT-RACE": DetailModal, J / K next style, Esc closes, Enter adds to
  * order): the style's facts, its colours with the sizes each offers and the price per colour (price grain only), the PPE
  * category, standard and class. The size chart and the public declaration of conformity are not partner-readable yet: their
- * new-tab buttons are held with the reason (a gap). The style sheet opens in a new tab to print or save as PDF.
+ * new-tab buttons are held with the reason (a gap). The style sheet opens in a new tab to print or save as PDF. B-TH-276: "Ask
+ * about this style" opens New order with the subject and the style named in the message (held with the reason for a person who
+ * may not send requests).
  */
 
 export interface StyleDetailModel {
@@ -26,6 +28,10 @@ export interface StyleDetailModel {
   /** Why "Add to order" cannot act (a key), or null. */
   addHeld: string | null
   sheetHref: string | null
+  // ---- B-TH-276: "Ask about this style" — New order with the style carried in (a real link), and why it cannot open (a key).
+  askHref?: string | null
+  askHeld?: string | null
+  // ---- end B-TH-276
 }
 
 export interface StyleDetailActions {
@@ -66,6 +72,20 @@ export function StyleDetailDialog({ model, actions }: { model: StyleDetailModel;
           <Button variant="secondary" onClick={() => actions?.onClose?.()}>
             {t('dialog.close')}
           </Button>
+          {/* B-TH-276: "Ask about this style" — New order with the subject and the style named in the message (⌘-click: a new tab). */}
+          {model.askHref ? (
+            style && !model.askHeld ? (
+              <Button variant="secondary" asChild>
+                <a href={model.askHref}>
+                  <MessageCircleQuestion size={14} aria-hidden /> {t('detail.ask')}
+                </a>
+              </Button>
+            ) : (
+              <Button variant="secondary" heldReason={style ? t(model.askHeld ?? 'detail.reading') : t('detail.reading')}>
+                <MessageCircleQuestion size={14} aria-hidden /> {t('detail.ask')}
+              </Button>
+            )
+          ) : null}
           <Button variant="primary" heldReason={style ? addHeld : t('detail.reading')} onClick={() => (style ? actions?.onAdd?.(style.id) : undefined)} aria-keyshortcuts="Enter">
             {t('card.add')}
           </Button>

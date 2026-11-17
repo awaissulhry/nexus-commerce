@@ -8,10 +8,11 @@ import type { CaseDialog, CaseRecordViewModel } from '../view/CaseRecordView'
 import { ReturnsCase, type ReturnsCaseBuilder } from '../view/ReturnsCase'
 
 /**
- * SCR-187 › one case (design portal.customer.returns rec "Return": Request, Status, Messages; a complaint opens the same
- * tabs; pop:cancel-case; tab:return-label; tab:credit-note; B-W2b-197), MADE-UP data only: a return at each step
- * (requested, approved — print the label, back with us, inspected, closed with a credit note and a replacement, not
- * accepted, cancelled), its Request (what you asked, each item with its photos), its Messages, Cancel this request?
+ * SCR-187 › one case (design portal.customer.returns rec "Return"; B-TH-275, picture 22: Request and Status beside the case's
+ * docked conversation — no Messages tab; a complaint opens the same tabs; pop:cancel-case; tab:return-label; tab:credit-note;
+ * B-W2b-197), MADE-UP data only: a return at each step (requested, approved — print the label, back with us, inspected, closed
+ * with a credit note and a replacement, not accepted, cancelled), its Request (what you asked, each item with its photos), its
+ * conversation docked at 1440 and behind "Messages (2 new)" narrower, Cancel this request?
  * (asked, refused), Add photos (picked, refused files, sending, sent), a photo full size; a complaint (being investigated
  * with the 8D steps, answered with our letter and the 8D report, as a buyer who does not follow the investigation, its
  * Request); a colleague who may only read, an office preview, no connection, loading, a failed read and a case that is not
@@ -37,6 +38,8 @@ function returnModel(record: ReturnRecord, locale: Locale, over: Partial<CaseRec
     creditHeld: null,
     readsComplaints: true,
     dialog: null,
+    // B-TH-275: docked beside the body (the 1440 picture); the narrow cases say `stacked`.
+    frame: { mode: 'docked' },
     ...over,
   }
 }
@@ -59,7 +62,7 @@ function returnCase(build: (locale: Locale) => { record: ReturnRecord; tab?: Rec
         creditNotes: input.record.progress.creditNotes.map((note) => ({ id: note.id, label: note.number ?? '—' })),
       },
     })
-    return { shell: shellOf(locale, band, { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: tab === 'messages' ? threadOf(locale) : null } }
+    return { shell: shellOf(locale, band, { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275: docked beside every tab */ } }
   }
 }
 
@@ -83,11 +86,12 @@ function complaintCase(build: (locale: Locale) => { record: ComplaintRecord; tab
       creditHeld: null,
       readsComplaints: input.record.investigation !== null,
       dialog: null,
+      frame: { mode: 'docked' }, // B-TH-275
       ...input.over,
     }
     return {
       shell: shellOf(locale, complaintBandOf({ words: returnWords(locale), record: input.record, tab, prefix: PREFIX, photosHeld: held })),
-      body: { kind: 'record', model, thread: tab === 'messages' ? threadOf(locale) : null },
+      body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275 */ },
     }
   }
 }
@@ -110,7 +114,9 @@ export const designScreen = defineDesignScreen<ReturnsCaseBuilder>({
     { id: 'cancelled', label: 'Status › cancelled', model: returnCase(() => ({ record: returnRecord('CANCELLED') })) },
     { id: 'request', label: 'Request › what you asked', model: returnCase(() => ({ record: approved(), tab: 'request' })), note: 'Opened, asked in the portal, what you would like, your reference and note; each item with its pieces, size, serial, reason and photos; the request’s photos; Add photos while we have not decided.' },
     { id: 'request-decided', label: 'Request › decided (photos stay as they are)', model: returnCase(() => ({ record: returnRecord('INSPECTED'), tab: 'request' })) },
-    { id: 'messages', label: 'Messages', model: returnCase(() => ({ record: approved(), tab: 'messages' })), note: 'The return’s shared thread (PartnerThread): our messages and theirs; “You can also answer our e-mails”.' },
+    // B-TH-275: the conversation docked (no Messages tab); narrower than 1280 px behind "Messages (2 new)".
+    { id: 'th-275-narrow', label: 'Under 1280 px: “Messages (2 new)”', model: returnCase(() => ({ record: approved(), over: { frame: { mode: 'stacked', newCount: 2 } } })), note: 'Open at 1024 or the phone: the body leads; the button opens the return’s conversation full width; Back returns to the same tab.' },
+    { id: 'th-275-narrow-open', label: 'Under 1280 px: the conversation open', model: returnCase(() => ({ record: approved(), over: { frame: { mode: 'stacked', viewOpen: true } } })), note: '“Ask a question” in the band’s ⋯ opens this and focuses the box (no pop-up).' },
     { id: 'cancel', label: 'pop:cancel-case — Cancel this request?', model: returnCase(() => ({ record: approved(), over: withDialog({ kind: 'cancel', model: { number: 'R-2026-0031', busy: false, problem: null } }) })), note: '“We will close R-2026-0031. You can start a new one any time.” — Cancel request (DS ActionConfirm).' },
     { id: 'cancel-refused', label: 'Cancel refused (the goods reached us meanwhile)', model: returnCase(() => ({ record: approved(), over: withDialog({ kind: 'cancel', model: { number: 'R-2026-0031', busy: false, problem: 'problem.changed' } }) })) },
     { id: 'cancelled-notice', label: 'Cancelled: the notice', model: returnCase(() => ({ record: returnRecord('CANCELLED'), over: { notice: { tone: 'success', key: 'notice.cancelled', params: { number: 'R-2026-0031' } } } })) },
@@ -188,7 +194,7 @@ export const designScreen = defineDesignScreen<ReturnsCaseBuilder>({
     { id: 'complaint-answered', label: 'Complaint › answered: our letter and the 8D', model: complaintCase(() => ({ record: complaintRecord('ANSWERED') })), note: '“We answered: read our letter.” — the answer letter and the 8D report open in a new tab (each open logged).' },
     { id: 'complaint-buyer', label: 'Complaint › a buyer (status only)', model: complaintCase(() => ({ record: complaintRecord('INVESTIGATING', { investigation: null }) })), note: 'The investigation and our letter are for the customer’s quality contact.' },
     { id: 'complaint-request', label: 'Complaint › what you reported', model: complaintCase(() => ({ record: complaintRecord('INVESTIGATING'), tab: 'request' })) },
-    { id: 'complaint-messages', label: 'Complaint › Messages', model: complaintCase(() => ({ record: complaintRecord('INVESTIGATING'), tab: 'messages' })) },
+    { id: 'complaint-narrow', label: 'Complaint under 1280 px: “Messages (2 new)”', model: complaintCase(() => ({ record: complaintRecord('INVESTIGATING'), over: { frame: { mode: 'stacked', newCount: 2 } } })) },
     {
       id: 'viewer',
       label: 'A colleague who may only read',

@@ -3,6 +3,9 @@ import type { ApiErrorKind, ApiIssue } from '../../../lib/api/errors'
 import type { CustomerDocument, DocumentFile } from './preview/api'
 import { isPreviewable, mainFileOf, orderWords } from './preview/model'
 import type { CardOffer, ConformityStyle, DocRef, IntentStatus, LibraryChip, LibraryRead, OpenItemsRead, PaymentIntent, PayMethod, ReceivedState } from './api'
+// ---- B-TH-276 (P-CUS-DOCS.library [P10]): an invoice's conversation is its own page (the portal's generic page), never a pop-up.
+import { conversationHref } from '../../shell/record/model'
+// ---- end B-TH-276
 
 /**
  * SCR-186 — the customer's Documents (design portal.customer.documents; SAL-086, SAL-087, SAL-092, FIN-118, QHS-111), pure:
@@ -54,9 +57,33 @@ export interface DocumentsAddress {
   versions: 'current' | 'all'
   /** `?invoice=<id>`: an invoice's record opens here (RECORD_PAGES) — its Pay pop-up when it can be paid. */
   invoice: string | null
-  /** `?tab=messages` with an invoice: its conversation. */
+  /** `?tab=messages` with an invoice: an old address of its conversation (B-TH-276: replaced by the conversation's page). */
   messages: boolean
 }
+
+// ---- B-TH-276 (P-CUS-DOCS.library [P10]; PL3-F03: no Ask modal) -----------------------------------------------------------------
+/** An invoice's conversation: the portal's generic page `/open/Invoice/<id>?view=conversation` (its summary, its PDF one click away). */
+export const invoiceConversationHref = (prefix: string, invoiceId: string): string => conversationHref(prefix, { type: 'Invoice', id: invoiceId })
+
+/**
+ * An old address of an invoice's conversation (`?invoice=<id>&tab=messages`: a mail, a notification, a bookmark of before) → the
+ * conversation's page, which replaces it (Back does not bounce); null when the address asks nothing of the kind. The id is the one
+ * the address named: the page reads it through the partner view, so another customer's invoice reads "not found" there (W09).
+ */
+export function oldMessagesHref(prefix: string, address: Pick<DocumentsAddress, 'invoice' | 'messages'>): string | null {
+  return address.messages && address.invoice ? invoiceConversationHref(prefix, address.invoice) : null
+}
+
+/** "Ask about this invoice" on a library row: the conversation of the invoice the document is of (a credit note's: its invoice); else null. */
+export function rowAskHref(prefix: string, row: Pick<LibraryRow, 'forType' | 'forId'>): string | null {
+  return row.forType === 'Invoice' && row.forId ? invoiceConversationHref(prefix, row.forId) : null
+}
+
+/** "Ask about this invoice" on a To pay row: an invoice's conversation (a deposit request is not an invoice: none). */
+export function payAskHref(prefix: string | null | undefined, row: Pick<PayRow, 'target'>): string | null {
+  return prefix && row.target.kind === 'invoice' ? invoiceConversationHref(prefix, row.target.id) : null
+}
+// ---- end B-TH-276
 
 const UUID = /^[0-9a-f-]{36}$/i
 
@@ -110,6 +137,8 @@ export interface LibraryRow {
   /** The record it is of when that is not an order (a shipment, an invoice, a style). */
   readonly forLabel: string | null
   readonly forType: string | null
+  /** B-TH-276: the record's id (an invoice's: its conversation page). */
+  readonly forId: string | null
   readonly style: { readonly code: string; readonly name: string } | null
   readonly date: string
   readonly version: number
@@ -139,6 +168,7 @@ export function libraryRowOf(document: CustomerDocument, locale: Locale, opened:
     // An order's own document names the order only; a shipment's, an invoice's names it beside the order.
     forLabel: forType === 'SalesOrder' ? null : (document.for?.label ?? null),
     forType,
+    forId: document.for?.id ?? null, // B-TH-276
     style: document.style ?? null,
     date: document.date,
     version: document.version,

@@ -121,6 +121,18 @@ export function viewsOffered(input: { readonly hasShared: boolean; readonly hasN
   return THREAD_VIEWS.filter((view) => view === 'all' || (view === 'shared' && input.hasShared) || (view === 'notes' && input.hasNotes) || (view === 'changes' && input.canAudit))
 }
 
+// ---- B-TH-255 (B-TH-079, T1-F05): the View as the API reads it — the timeline's `audience` (ALL / PARTNER "With the customer" / OFFICE
+// "Office notes") with its kinds ("Changes" = the record's steps only: kinds=change). Asked only while a view is on: the answer's
+// `hiddenNew` is how many messages new to the reader the view hides ("1 new message hidden by this view · Show all"). All asks nothing.
+export type FeedAudience = 'ALL' | 'PARTNER' | 'OFFICE'
+export function viewQuery(view: ThreadView): { readonly audience: FeedAudience; readonly kinds: 'message' | 'change' } | null {
+  if (view === 'shared') return { audience: 'PARTNER', kinds: 'message' }
+  if (view === 'notes') return { audience: 'OFFICE', kinds: 'message' }
+  if (view === 'changes') return { audience: 'ALL', kinds: 'change' }
+  return null
+}
+// ---- end B-TH-255
+
 /** The dock's widths (T1-F07): one third / 40 % / 50 % / full; hide is ⌘J. */
 export type DockWidth = 'third' | 'forty' | 'half' | 'full'
 export const DOCK_WIDTHS: readonly DockWidth[] = ['third', 'forty', 'half', 'full']

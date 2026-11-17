@@ -1,5 +1,8 @@
 import type { Locale } from '../../../lib/i18n/locales'
 import { isRange, type CatalogueRead, type RangeFilter, type StyleCard, type StyleDetail } from './api'
+// ---- B-TH-276 (P-CUS-CAT.lists): "Ask about this style" is New order's request like an e-mail with the style carried in.
+import { newOrderHref } from '../neworder/model'
+// ---- end B-TH-276
 
 /**
  * The Catalogue (B-W2b-194; design portal.customer.catalogue, SCR-226), pure: the page's address and its filters, the
@@ -95,6 +98,23 @@ export function orderHeld(facts: OrderFacts): string | null {
   if (facts.offline) return 'held.offline'
   return null
 }
+
+// ---- B-TH-276 (P-CUS-CAT.lists; tree P-CUS-CAT "'Ask about this style' opens New order with the style as a line and the subject
+// filled; 'Ask a question' opens the account conversation as a page, not a modal") ---------------------------------------------
+/**
+ * "Ask about this style": New order (`/orders/new?styles=<id>` — the request like an e-mail, not the catalogue door: only `way`,
+ * `draft` or `reorder` open the door) carries the style in once — the subject "<code> <name>" and the message's line naming it
+ * (neworder/request-model stylesText) — then the address forgets it. The style id is one the person's own catalogue listed: New
+ * order reads it again through the portal's style read, so a style not open to this customer carries nothing (W12, W13).
+ */
+export const askStyleHref = (prefix: string, styleId: string): string => newOrderHref(prefix, { styles: [styleId] })
+
+/** Why "Ask about this style" cannot open (a key), or null: it sends a request, so it needs the right to send one. */
+export function askStyleHeld(facts: OrderFacts): string | null {
+  if (!facts.mayOrder) return 'held.mayNotAsk'
+  return orderHeld(facts)
+}
+// ---- end B-TH-276
 
 /** The ids in the order shown (J / K in the detail walk the results). */
 export const resultIds = (read: Pick<CatalogueRead, 'styles'> | null): string[] => (read ? read.styles.map((style) => style.id) : [])

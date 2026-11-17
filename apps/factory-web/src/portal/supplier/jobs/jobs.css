@@ -299,3 +299,11 @@
     display: none;
   }
 }
+
+/* ---- B-TH-277: the job's documents as the last card of Kit received (the Documents tab merged into it). */
+.fw-pjob-docs-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* ---- end B-TH-277 */
