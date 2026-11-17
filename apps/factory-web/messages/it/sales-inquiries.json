@@ -33,7 +33,6 @@
     "prospectsOnly": "Solo potenziali clienti (non ancora clienti)",
     "count_one": "{count} richiesta",
     "count_other": "{count} richieste",
-    "countCapped": "Le prime {count} richieste: restringi i filtri per vedere le altre",
     "countReading": "Lettura in corso…",
     "failed": "Impossibile caricare le richieste",
     "noMatch": "Nessuna riga con questi filtri",
@@ -42,7 +41,13 @@
     "emptyBody": "Nessuna richiesta. La richiesta di un cliente dal portale arriva qui da sola; una e-mail diventa richiesta da Posta da smistare (\"Crea richiesta in arrivo\"); una telefonata o una visita con Nuova richiesta.",
     "copied_one": "{count} numero copiato",
     "copied_other": "{count} numeri copiati",
-    "withheldPrice": "serve il permesso sui prezzi"
+    "withheldPrice": "serve il permesso sui prezzi",
+    "kindLabel": "Tipo",
+    "allKinds": "Ogni tipo",
+    "countMore_one": "{count} riga letta · altre da leggere",
+    "countMore_other": "{count} righe lette · altre da leggere",
+    "moreReading": "Lettura in corso…",
+    "showMore": "Mostra altre {count}"
   },
   "col": {
     "number": "Numero",
@@ -82,7 +87,8 @@
     "assign": "Assegna",
     "decline": "Rifiuta",
     "recordWalk": "Tra le righe; con una richiesta aperta, la successiva o la precedente",
-    "recordClose": "Chiudi la richiesta aperta"
+    "recordClose": "Chiudi la richiesta aperta",
+    "replyOpen": "Apri il record al messaggio in attesa"
   },
   "tile": {
     "NEW": "Nuove",
@@ -104,7 +110,10 @@
     },
     "failed": "Impossibile contare",
     "partial": "Contate sulle 1000 richieste aperte più vecchie",
-    "label": "Filtri salvati"
+    "label": "Filtri salvati",
+    "ORDERED": "Ordinate",
+    "NOT_AN_ORDER": "Non un ordine",
+    "CUSTOMER_REPLIES": "Risposte dei clienti"
   },
   "chip": {
     "label": "Filtri",
@@ -127,7 +136,8 @@
       "ORDERED": "Diventate: un ordine (subito o dal preventivo)",
       "DECLINED": "Diventate: rifiutate (non “Non è un ordine”)",
       "NOT_AN_ORDER": "Diventate: non è un ordine"
-    }
+    },
+    "kind": "Tipo: {kind}"
   },
   "notice": {
     "label": "Avvisi",
@@ -135,7 +145,6 @@
     "more_other": "Ancora {count} avvisi",
     "fewer": "Mostra un solo avviso",
     "partial": "Sono aperte più di 1000 richieste: \"Ferme da noi da oltre 1 giorno lavorativo\" conta solo le 1000 più vecchie.",
-    "capped": "L'elenco mostra le prime {count} richieste di questi filtri: restringili per vedere le altre.",
     "prospects_one": "{count} richiesta aperta viene da un potenziale cliente: abbinala a un cliente (Modifica la richiesta) prima del preventivo.",
     "prospects_other": "{count} richieste aperte vengono da potenziali clienti: abbina ognuna a un cliente (Modifica la richiesta) prima del preventivo.",
     "mail_one": "{count} e-mail aspetta in Posta da smistare",
@@ -199,7 +208,9 @@
     "unassigned_one": "{count} richiesta torna a nessuno",
     "unassigned_other": "{count} richieste tornano a nessuno",
     "declined_one": "{count} richiesta rifiutata ({reason})",
-    "declined_other": "{count} richieste rifiutate ({reason})"
+    "declined_other": "{count} richieste rifiutate ({reason})",
+    "reachOthers": "{open} richieste aperte · {others} di altri tipi lasciate fuori (ognuna si risponde a sé)",
+    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal catalogo si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni"
   },
   "held": {
     "right": "Serve il permesso delle vendite ({right})",
@@ -638,7 +649,10 @@
       "QUOTED": "{count} preventivate",
       "DECLINED": "{count} rifiutate",
       "LOST": "{count} perse",
-      "ALL": "{count} in tutto"
+      "ALL": "{count} in tutto",
+      "ORDERED": "{count} ordinate",
+      "NOT_AN_ORDER": "{count} non un ordine",
+      "CUSTOMER_REPLIES": "{count} risposte dei clienti in attesa di noi"
     }
   },
   "door": {
@@ -647,12 +661,17 @@
     "files": "Apri i file di {number}",
     "quote": "Apri il preventivo {number}",
     "parties": "Serve il permesso sui clienti",
-    "quotes": "Serve il permesso sui preventivi"
+    "quotes": "Serve il permesso sui preventivi",
+    "approvals": "Rispondi a {number} in Home › Approvazioni",
+    "order": "Apri l'ordine {number}",
+    "orders": "Serve il permesso sugli ordini",
+    "orderChanges": "Apri le modifiche dell'ordine {number}"
   },
   "funnel": {
     "state": "Mostra solo: {status}",
     "source": "Mostra solo: {source}",
-    "company": "Mostra solo: {name}"
+    "company": "Mostra solo: {name}",
+    "kind": "Mostra solo: {kind}"
   },
   "picture": {
     "open": "Immagine di {style} su {number}: aprila in grande",
@@ -678,12 +697,13 @@
     "code": "Codice",
     "openCustomer": "Apri il cliente",
     "customerTitle": "{name}",
-    "customerNote": "Tutte le richieste di questo cliente: il filtro Da qui sopra."
+    "customerNote": "Tutte le richieste di questo cliente: il filtro Da qui sopra.",
+    "kind": "Tipo"
   },
   "export": {
     "heading": "Esporta · {view}",
-    "note": "Le prime {count} righe di questa vista: l'esportazione non legge oltre finché l'elenco non legge a pagine.",
-    "notePrice": "Le prime {count} righe di questa vista; il prezzo obiettivo resta fuori (serve il permesso sui prezzi)."
+    "note": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine: richieste, ordini dal catalogo e richieste di modifica che puoi aprire. I nomi dei potenziali clienti ne fanno dati personali.",
+    "notePrice": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine; il prezzo obiettivo resta fuori (serve il permesso sui prezzi). I nomi dei potenziali clienti ne fanno dati personali."
   },
   "pane": {
     "label": "La richiesta",
@@ -769,7 +789,8 @@
     "ask": {
       "portal": "Chiedi a {customer}: la domanda va nel suo portale (riceve l'avviso del portale per e-mail). La richiesta poi aspetta la risposta.",
       "mail": "Chiedi a {customer}: la domanda parte per e-mail dalla richiesta dopo il controllo di invio. La richiesta poi aspetta la risposta."
-    }
+    },
+    "atFirst": "È la prima riga di questa vista"
   },
   "orderStatus": {
     "CONFIRMED": "Confermato",
@@ -852,5 +873,135 @@
       "type": "Scegli il tipo di prodotto",
       "scale": "Scegli la scala taglie"
     }
+  },
+  "kind": {
+    "REQUEST": "Richiesta",
+    "CATALOGUE_ORDER": "Ordine dal catalogo",
+    "CHANGE_REQUEST": "Richiesta di modifica",
+    "plural": {
+      "REQUEST": "Richieste",
+      "CATALOGUE_ORDER": "Ordini dal catalogo",
+      "CHANGE_REQUEST": "Richieste di modifica"
+    },
+    "hint": {
+      "REQUEST": "Una richiesta da portale, e-mail, telefono, fiera o visita",
+      "CATALOGUE_ORDER": "Modelli scelti dal cliente nel catalogo del suo portale: accettalo come ordine o come offerta, oppure rifiutalo",
+      "CHANGE_REQUEST": "Il cliente chiede di modificare o annullare un ordine confermato: si risponde in Home › Approvazioni"
+    }
+  },
+  "kindFacts": {
+    "catalogue_one": "{lines} riga · il loro ordine {ref}",
+    "catalogue_other": "{lines} righe · il loro ordine {ref}",
+    "change": {
+      "CHANGE": "Modifica {order}",
+      "CANCEL": "Annulla {order}"
+    }
+  },
+  "replies": {
+    "tableLabel": "Risposte dei clienti",
+    "count_one": "{count} conversazione aspetta noi",
+    "count_other": "{count} conversazioni aspettano noi",
+    "countPartial": "Più di {count} conversazioni aspettano noi: l’elenco mostra le più vecchie",
+    "more": "Mostra altre conversazioni",
+    "open": "Apri {label} al messaggio in attesa",
+    "waitClock": "Aspetta noi dal {since} (ore di orologio: l’azienda non ha un calendario lavorativo); ambra dopo {days} giorni lavorativi",
+    "waitWorking": "Aspetta noi dal {since}, in tempo lavorativo; ambra dopo {days} giorni lavorativi",
+    "col": {
+      "record": "Record",
+      "message": "Il loro ultimo messaggio",
+      "at": "Quando"
+    },
+    "empty": "Nessun cliente aspetta una risposta",
+    "emptyBody": "Una conversazione su un ordine, un’offerta, un reso o un altro record di un cliente arriva qui quando il cliente ha scritto per ultimo; la tua risposta la toglie.",
+    "noRight": "Le risposte dei clienti richiedono il permesso di leggere le conversazioni",
+    "noRightBody": "Chiedi a un amministratore il permesso «Leggere le conversazioni» (threads): l'elenco mostra solo le conversazioni dei record che puoi aprire."
+  },
+  "recordType": {
+    "SalesOrder": "Ordine",
+    "Quote": "Offerta",
+    "Invoice": "Fattura",
+    "PaymentReminder": "Sollecito",
+    "Shipment": "Spedizione",
+    "Ddt": "DDT",
+    "ReturnAuthorisation": "Reso",
+    "RepairOrder": "Riparazione",
+    "Complaint": "Reclamo",
+    "SampleRound": "Giro campioni",
+    "ServiceCase": "Assistenza",
+    "ProductSafetyReport": "Segnalazione sicurezza",
+    "Style": "Modello",
+    "Certificate": "Certificato",
+    "Capa": "8D",
+    "MeasurementProfile": "Misure",
+    "Party": "Cliente",
+    "ChangeRequest": "Modifica prodotto",
+    "ApprovalRequest": "Approvazione"
+  },
+  "catalogue": {
+    "reading": "Lettura dell'ordine dal catalogo…",
+    "failed": "Impossibile caricare l'ordine dal catalogo",
+    "noRight": "Gli ordini dal catalogo richiedono il permesso sugli ordini",
+    "noRightBody": "Chiedi a un amministratore il permesso di vedere gli ordini di questo cliente.",
+    "notFound": "Ordine dal catalogo non trovato",
+    "notFoundBody": "Non c’è, oppure non puoi aprirlo.",
+    "title": "Ordine dal catalogo {number}",
+    "acceptOrder": "Accetta come ordine",
+    "acceptQuote": "Accetta come offerta",
+    "refuse": "Rifiuta",
+    "handled": "Qualcun altro ha cambiato quest'ordine dal catalogo alle {time}",
+    "held": {
+      "DRAFT": "Il cliente lo sta ancora scrivendo",
+      "ACCEPTED": "Già accettato",
+      "REFUSED": "Già rifiutato",
+      "WITHDRAWN": "Ritirato dal cliente",
+      "right": "Solo le vendite possono accettare o rifiutare un ordine dal catalogo ({right})"
+    },
+    "accept": {
+      "badPrice": "Riga {n}: il prezzo non è un prezzo (es. 38,50)"
+    },
+    "done": {
+      "order": "{number} è diventato l'ordine {made}",
+      "quote": "{number} è diventato l'offerta {made}",
+      "droppedSize": "Riga {n}: la taglia {size} non è più offerta ed è rimasta fuori",
+      "droppedLine": "La riga {n} è rimasta fuori",
+      "warnings_one": "{count} cosa da controllare su quanto creato",
+      "warnings_other": "{count} cose da controllare su quanto creato",
+      "open": "Apri {made}",
+      "refused": "{number} rifiutato: il cliente legge le tue parole"
+    },
+    "refuseHeld": "Spiega perché: il cliente lo legge",
+    "outcome": {
+      "order": "Accettato come ordine {made}",
+      "quote": "Accettato come offerta {made}",
+      "accepted": "Accettato",
+      "refused": "Rifiutato: {reason}",
+      "withdrawn": "Ritirato dal cliente prima della nostra risposta"
+    },
+    "facts": {
+      "sent": "Inviato",
+      "sentBy": "{when} da {name}",
+      "asked": "Data chiesta",
+      "shipToWaitingHint": "Un indirizzo di consegna aggiunto dal cliente nel suo portale: accettare l'ordine lo approva",
+      "pieces_one": "{lines} riga · {pieces} pezzi",
+      "pieces_other": "{lines} righe · {pieces} pezzi",
+      "net": "Valore mostrato",
+      "note": "La loro nota"
+    },
+    "col": {
+      "sizes": "Taglie",
+      "shown": "Prezzo mostrato"
+    },
+    "lineProblem": "Riga {n}: {words}",
+    "shipToWaiting": "L'indirizzo di consegna aspetta il controllo: accettare lo approva.",
+    "refuseTitle": "Rifiuta {number}",
+    "refuseReason": "Perché (il cliente lo legge)",
+    "refuseHint": "In parole semplici, nella lingua del cliente: è quello che mostra il suo portale.",
+    "refusePreview": "{customer} legge:",
+    "acceptOrderTitle": "Accetta {number} come ordine",
+    "acceptQuoteTitle": "Accetta {number} come offerta",
+    "acceptOrderHint": "L'ordine si crea con le condizioni e gli indirizzi del cliente; il cliente legge «Confermato» con il suo numero.",
+    "acceptQuoteHint": "Un'offerta in bozza con queste righe ai prezzi di listino di oggi (le taglie non più offerte restano fuori); il cliente la legge quando la invii.",
+    "promise": "Data promessa",
+    "promiseHint": "Parte dalla data chiesta dal cliente."
   }
 }

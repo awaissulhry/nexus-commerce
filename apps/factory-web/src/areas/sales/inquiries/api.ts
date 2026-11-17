@@ -3,7 +3,7 @@ import {
   assigneesView,
   bulkAnswer,
   inquiryCustomersView,
-  inquiryList,
+  inquiryRow,
   inquiryView,
   mailDraftView,
   quoteAnswer,
@@ -14,7 +14,10 @@ import {
   type FromMailBody,
   type UpdateInquiryBody,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
-import type { DeclineReason, InquirySource, InquiryStatus, InquiryTile, RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
+import type { DeclineReason, InquirySource, InquiryStatus, RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
+// B-TH-233: Incoming's one read (B-TH-039).
+import { incomingList } from '@nexus/factory-domain/sales/incoming/contracts'
+import type { IncomingKind, IncomingTile } from '@nexus/factory-domain/sales/incoming/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, downloadLink, requestUpload } from '../../../record-panels/api'
 import { contentTypeOf, uploadProblem, type FileKind } from '../../../record-panels/model'
@@ -30,8 +33,7 @@ import { putToStore, sha256Hex } from '../../../record-panels/store'
  * thread's mail for the decline's message, and the files (the generic routes, record type Inquiry).
  */
 
-export type InquiryList = z.infer<typeof inquiryList>
-export type InquiryRow = InquiryList['rows'][number]
+export type InquiryRow = z.infer<typeof inquiryRow>
 export type InquiryView = z.infer<typeof inquiryView>
 export type InquiryLine = InquiryView['lines'][number]
 export type InquiryFile = InquiryView['files'][number]
@@ -50,46 +52,7 @@ const one = (inquiryId: string) => `${base}/${enc(inquiryId)}`
 const key = (idempotencyKey?: string) => ({ idempotencyKey: idempotencyKey ?? newIdempotencyKey() })
 const answer = z.object({ inquiry: inquiryView })
 
-/** The most rows one read brings (the API's limit). */
-export const LIST_LIMIT = 200
-
-// ---- the list -------------------------------------------------------------------------------------------------------------
-
-export interface InquiryQuery {
-  tile?: InquiryTile | null
-  /** B-TH-216: the State and Company cells narrow the list. */
-  status?: InquiryStatus | null
-  companyId?: string | null
-  source?: InquirySource | null
-  partyId?: string | null
-  prospect?: boolean
-  q?: string
-  // B-TH-235: the days the requests came and what each became (Sales › Reports' request figure).
-  receivedFrom?: string | null
-  receivedTo?: string | null
-  outcome?: RequestOutcome | null
-}
-
-export function listInquiries(api: ApiClient, query: InquiryQuery, signal?: AbortSignal): Promise<InquiryList> {
-  return api.get(base, {
-    query: {
-      tile: query.tile ?? undefined,
-      status: query.status ?? undefined,
-      companyId: query.companyId ?? undefined,
-      source: query.source ?? undefined,
-      partyId: query.prospect ? undefined : (query.partyId ?? undefined),
-      prospect: query.prospect ? 'true' : undefined,
-      q: query.q?.trim() || undefined,
-      // B-TH-235
-      receivedFrom: query.receivedFrom ?? undefined,
-      receivedTo: query.receivedTo ?? undefined,
-      outcome: query.outcome ?? undefined,
-      limit: LIST_LIMIT,
-    },
-    schema: inquiryList,
-    signal,
-  })
-}
+// B-TH-233: the list reads Incoming's one read (GET /sales/incoming, below); the old GET /sales/inquiries list is no longer read here.
 
 // ---- one inquiry ------------------------------------------------------------------------------------------------------------
 
@@ -318,6 +281,149 @@ export async function companiesWithoutNumbering(api: ApiClient, companyIds: read
   const numbered = new Set(answer.series.filter((series) => series.kind === 'INQUIRY' && series.status === 'ACTIVE').map((series) => series.companyId))
   return companyIds.filter((id) => !numbered.has(id))
 }
+
+// ---- B-TH-233 (threads plan TH-3; O-SAL-INQ-LIST.list / .tiles / .band / .pane-actions): Incoming over every door ----------------
+
+export type IncomingList = z.infer<typeof incomingList>
+export type IncomingRow = IncomingList['rows'][number]
+
+/** The most rows one page of Incoming brings (the API's INCOMING_LIMITS.list): "Show more" reads the next page by its cursor. */
+export const INCOMING_PAGE = 200
+
+export interface IncomingQuery {
+  tile: IncomingTile
+  kind?: IncomingKind | null
+  status?: InquiryStatus | null
+  source?: InquirySource | null
+  companyId?: string | null
+  partyId?: string | null
+  prospect?: boolean
+  q?: string
+  receivedFrom?: string | null
+  receivedTo?: string | null
+  outcome?: RequestOutcome | null
+}
+
+/**
+ * GET /sales/incoming (B-TH-039): requests, catalogue orders and change requests in ONE paged list — each row only for a reader
+ * who may open it (its kind's own view permission over its company and customer), the tiles counted under the same filters
+ * (B-TH-047: `counts.CUSTOMER_REPLIES` too), the cursor of the next page. `limit` 1 reads only the counts (the Customer replies
+ * view lists conversations, not rows of this read).
+ */
+export function listIncoming(api: ApiClient, query: IncomingQuery, options: { cursor?: string | null; limit?: number; signal?: AbortSignal } = {}): Promise<IncomingList> {
+  return api.get('/sales/incoming', {
+    query: {
+      tile: query.tile,
+      kind: query.kind ?? undefined,
+      status: query.status ?? undefined,
+      source: query.source ?? undefined,
+      companyId: query.companyId ?? undefined,
+      partyId: query.prospect ? undefined : (query.partyId ?? undefined),
+      prospect: query.prospect ? 'true' : undefined,
+      q: query.q?.trim() || undefined,
+      receivedFrom: query.receivedFrom ?? undefined,
+      receivedTo: query.receivedTo ?? undefined,
+      outcome: query.outcome ?? undefined,
+      limit: options.limit ?? INCOMING_PAGE,
+      cursor: options.cursor ?? undefined,
+    },
+    schema: incomingList,
+    signal: options.signal,
+  })
+}
+
+// The "Customer replies" saved view (B-TH-047: GET /threads/waiting?side=CUSTOMER) — the conversations on the customer's other
+// records whose newest shared message came from the customer, each listed only to a reader who may open its record (threads.read
+// AND the record's own view permission). The contract lives in the API (platform/threads/contract.ts B-TH-047): read here as it is.
+const waitingRow = z.object({
+  recordType: z.string(),
+  recordId: z.string(),
+  label: z.string(),
+  companyId: z.string().nullable(),
+  party: z.object({ id: z.string(), code: z.string(), name: z.string() }),
+  lastMessage: z.object({ id: z.string(), at: z.string(), channel: z.string(), authorName: z.string().nullable(), excerpt: z.string() }),
+  waiting: z.object({ since: z.string(), workingMinutes: z.number().int(), calendar: z.boolean(), amber: z.boolean(), thresholdDays: z.number().int() }),
+})
+const waitingPage = z.object({ rows: z.array(waitingRow), count: z.number().int(), complete: z.boolean(), next: z.string().nullable() })
+export type WaitingRow = z.infer<typeof waitingRow>
+export type WaitingPage = z.infer<typeof waitingPage>
+/** The most conversations one page brings (the API's WAITING_PAGE_MAX). */
+export const WAITING_PAGE = 100
+
+export function listCustomerReplies(api: ApiClient, query: { companyId?: string | null; partyId?: string | null }, options: { cursor?: string | null; signal?: AbortSignal } = {}): Promise<WaitingPage> {
+  return api.get('/threads/waiting', {
+    query: { side: 'CUSTOMER', companyId: query.companyId ?? undefined, partyId: query.partyId ?? undefined, limit: WAITING_PAGE, cursor: options.cursor ?? undefined },
+    schema: waitingPage,
+    signal: options.signal,
+  })
+}
+
+// A catalogue order in the reading pane (B-TH-040: it has a thread and opens; pane-actions-F13): GET /sales/order-requests/:id
+// and its decision — Accept as order (prices again or typed, the promise date), Accept as quote, Refuse with the words the
+// customer reads (orders.manage over its company and customer; a quote also quotes.manage). The contract lives in the API
+// (modules/sales/portal-ordering/contract.ts, the office part); prices are absent without the price grain.
+const named = z.object({ id: z.string(), code: z.string(), name: z.string() })
+const numberedRef = z.object({ id: z.string(), number: z.string() })
+const catalogueLine = z.object({
+  id: z.string(),
+  seq: z.number().int(),
+  style: named,
+  colourway: named,
+  sizes: z.array(z.object({ size: z.string(), quantity: z.number().int() })),
+  pieces: z.number().int(),
+  unitPriceShown: z.string().nullable().optional(),
+  listPriceNow: z.string().nullable().optional(),
+  amountShown: z.string().nullable().optional(),
+  note: z.string().nullable(),
+  problems: z.array(z.object({ code: z.string(), size: z.string().nullable(), words: z.object({ it: z.string(), en: z.string() }) })),
+})
+const catalogueRecord = z.object({
+  request: z.object({
+    id: z.string(),
+    number: z.string().nullable(),
+    status: z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN']),
+    words: z.object({ it: z.string(), en: z.string() }),
+    source: z.string(),
+    party: named,
+    customerRef: z.string().nullable(),
+    requestedDate: z.string().nullable(),
+    note: z.string().nullable(),
+    currency: z.string(),
+    shipTo: z.object({ id: z.string(), name: z.string().nullable(), line1: z.string(), line2: z.string().nullable(), postalCode: z.string(), city: z.string(), province: z.string().nullable(), country: z.string(), status: z.string(), approvalStatus: z.string().nullable() }).nullable(),
+    sentAt: z.string().nullable(),
+    sentBy: z.string().nullable(),
+    decidedAt: z.string().nullable(),
+    decidedBy: z.string().nullable(),
+    refuseReason: z.string().nullable(),
+    withdrawnAt: z.string().nullable(),
+    salesOrder: numberedRef.nullable(),
+    quote: numberedRef.nullable(),
+    version: z.number().int(),
+    lines: z.array(catalogueLine),
+    summary: z.object({ lines: z.number().int(), pieces: z.number().int(), netShown: z.string().nullable().optional() }),
+  }),
+  may: z.object({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
+})
+export type CatalogueRecord = z.infer<typeof catalogueRecord>
+export type CatalogueOrder = CatalogueRecord['request']
+export type CatalogueLine = CatalogueOrder['lines'][number]
+const acceptAnswer = catalogueRecord.extend({ made: z.object({ as: z.enum(['ORDER', 'QUOTE']), salesOrderId: z.string().nullable(), quoteId: z.string().nullable(), number: z.string(), dropped: z.array(z.object({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })), warnings: z.array(z.string()) }) })
+export type CatalogueAccepted = z.infer<typeof acceptAnswer>
+
+const catalogueOne = (requestId: string) => `/sales/order-requests/${enc(requestId)}`
+
+export function readCatalogueOrder(api: ApiClient, requestId: string, signal?: AbortSignal): Promise<CatalogueRecord> {
+  return api.get(catalogueOne(requestId), { schema: catalogueRecord, signal })
+}
+
+export function acceptCatalogueOrder(api: ApiClient, requestId: string, body: { version: number; as: 'ORDER' | 'QUOTE'; promiseDate?: string | null; lines?: Array<{ lineId: string; unitPrice: string }> }, idempotencyKey?: string): Promise<CatalogueAccepted> {
+  return api.post(`${catalogueOne(requestId)}/accept`, { body, schema: acceptAnswer, ...key(idempotencyKey) })
+}
+
+export function refuseCatalogueOrder(api: ApiClient, requestId: string, body: { version: number; reason: string }, idempotencyKey?: string): Promise<CatalogueRecord> {
+  return api.post(`${catalogueOne(requestId)}/refuse`, { body, schema: catalogueRecord, ...key(idempotencyKey) })
+}
+// ---- end B-TH-233
 
 /** GET /email/inbound (email.triage): how many mails wait in Mail to sort, counted on the first page of 50 (`more`: there are more). */
 export async function mailToSortCount(api: ApiClient, signal?: AbortSignal): Promise<{ count: number; more: boolean }> {

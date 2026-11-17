@@ -497,9 +497,9 @@ describe('B-TH-239: Today counts with Incoming’s own read, opens catalogue ord
 
   it('a catalogue order to decide opens Sales › Incoming with the order beside the list (it opened only its record panels before)', () => {
     const order = queueItem(item('o', { kind: 'PORTAL_ORDER_REQUEST', category: 'APPROVAL', record: { type: 'PortalOrderRequest', id: 'por 1', label: 'POR-1' } }), '/w/DEMO')
-    expect(order.href).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&open=por+1')
+    expect(order.href).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&catalogue=por+1')
     expect(order.reviewHref).toBeNull()
-    expect(catalogueOrderHref('/w/DEMO', 'x')).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&open=x')
+    expect(catalogueOrderHref('/w/DEMO', 'x')).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&catalogue=x')
     // Without Incoming built it keeps the record rule (never a link to a page that does not exist).
     expect(queueItem(item('o', { kind: 'PORTAL_ORDER_REQUEST', record: { type: 'PortalOrderRequest', id: 'p1', label: 'POR-1' } }), '/w/DEMO', new Set(['/records/[type]/[id]'])).href).toBe('/w/DEMO/records/PortalOrderRequest/p1?label=POR-1&company=c1')
     // Any other row as before.

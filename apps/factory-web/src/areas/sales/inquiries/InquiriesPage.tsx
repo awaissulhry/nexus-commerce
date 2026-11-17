@@ -13,16 +13,21 @@ import {
   assignMany,
   companiesWithoutNumbering,
   declineMany,
-  LIST_LIMIT,
   listAssignees,
   listCustomers,
-  listInquiries,
   mailToSortCount,
   readPicture,
-  type InquiryList,
-  type InquiryRow,
+  // B-TH-233: Incoming's one read, paged; the Customer replies view.
+  INCOMING_PAGE,
+  listCustomerReplies,
+  listIncoming,
+  type IncomingList,
+  type IncomingRow,
   type PartyOption,
+  type WaitingPage,
 } from './api'
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { useCatalogueOrder } from './use-catalogue-order'
 import {
   addressOf,
   addressText,
@@ -35,6 +40,14 @@ import {
   readProblem,
   fullPageHref,
   writeProblem,
+  // B-TH-233
+  approvalsHref,
+  CUSTOMER_REPLIES,
+  mergePages,
+  rowHref,
+  navIdsOf,
+  placeOf,
+  THREAD_TYPE,
   type ListAddress,
   type Notice,
   type NoticeFacts,
@@ -71,6 +84,9 @@ const keepDismissed = (keys: string[]) => {
  * request (`c`, `?new=1`; B-TH-221: the portal's compose with the customer or the prospect, `use-new-request.ts`), "Make
  * incoming request" from a mail (`?mail=<inbound mail id>`, the same window), Assign to… and Decline N over a selection (the
  * API's all-or-none bulk routes). Live `inquiry.*` changes wait behind "N updates · Show".
+ * B-TH-233: the rows come from Incoming's one read (GET /sales/incoming: requests, catalogue orders, change requests), page by page
+ * ("Show more" by its cursor); `?kind=` narrows to one kind; `?catalogue=<id>` opens a catalogue order beside the list
+ * (use-catalogue-order.tsx); `?tile=CUSTOMER_REPLIES` lists the conversations waiting on us (GET /threads/waiting?side=CUSTOMER).
  */
 export function InquiriesPage() {
   const api = useOfficeApi()
@@ -87,8 +103,10 @@ export function InquiriesPage() {
   addressRef.current = address
   const go = useCallback((next: Partial<ListAddress>) => router.replace(`${pathname}${addressText({ ...addressRef.current, ...next })}`, { scroll: false }), [router, pathname])
 
-  // ---- the list --------------------------------------------------------------------------------------------------------------
-  const [list, setList] = useState<InquiryList | null>(null)
+  // ---- the list (B-TH-233: Incoming's one read over every door, page by page; "Customer replies" its own read) -------------------
+  const [pages, setPages] = useState<IncomingList[] | null>(null)
+  const [replies, setReplies] = useState<WaitingPage[] | null>(null)
+  const [more, setMore] = useState<{ busy: boolean; problem: string | null }>({ busy: false, problem: null })
   const [problem, setProblem] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
@@ -100,25 +118,57 @@ export function InquiriesPage() {
   const query = useMemo(() => queryOf(address), [address])
   const queryKey = JSON.stringify(query)
 
+  const repliesView = address.tile === CUSTOMER_REPLIES
+  const repliesKey = JSON.stringify({ companyId: address.company, partyId: address.prospect ? null : address.party })
   const load = useCallback(async () => {
     if (!can.view) return
     const id = ++readId.current
     setProblem(null)
+    setMore({ busy: false, problem: null })
     try {
-      const answer = await listInquiries(api, JSON.parse(queryKey) as ReturnType<typeof queryOf>)
+      // "Customer replies" lists conversations (B-TH-047): Incoming's read then brings only the tiles' counts (one row).
+      const [answer, waiting] = await Promise.all([
+        listIncoming(api, JSON.parse(queryKey) as ReturnType<typeof queryOf>, repliesView ? { limit: 1 } : {}),
+        repliesView && can.thread ? listCustomerReplies(api, JSON.parse(repliesKey) as { companyId: string | null; partyId: string | null }) : Promise.resolve(null),
+      ])
       if (id !== readId.current) return
-      setList(answer)
+      setPages([answer])
+      setReplies(waiting ? [waiting] : null)
       setAsOf(new Date().toISOString())
       setUpdates(0)
     } catch (error) {
       if (id === readId.current) setProblem(readProblem(error))
     }
-  }, [api, can.view, queryKey])
+  }, [api, can.view, can.thread, queryKey, repliesView, repliesKey])
 
   useEffect(() => {
-    setList(null)
+    setPages(null)
+    setReplies(null)
     void load()
   }, [load])
+
+  // The rows read so far (each row once) with the first page's counts; "Show more" reads the next page by the last page's cursor.
+  const list = useMemo<IncomingList | null>(() => (pages && pages.length > 0 ? { ...pages[0]!, rows: repliesView ? [] : mergePages(pages), next: pages[pages.length - 1]!.next } : null), [pages, repliesView])
+  const waiting = useMemo<WaitingPage | null>(() => (replies && replies.length > 0 ? { ...replies[0]!, rows: replies.flatMap((page) => page.rows), next: replies[replies.length - 1]!.next } : null), [replies])
+  const readMore = useCallback(async () => {
+    if (more.busy) return
+    const id = readId.current
+    const cursor = repliesView ? waiting?.next : list?.next
+    if (!cursor) return
+    setMore({ busy: true, problem: null })
+    try {
+      if (repliesView) {
+        const page = await listCustomerReplies(api, JSON.parse(repliesKey) as { companyId: string | null; partyId: string | null }, { cursor })
+        if (id === readId.current) setReplies((now) => (now ? [...now, page] : [page]))
+      } else {
+        const page = await listIncoming(api, JSON.parse(queryKey) as ReturnType<typeof queryOf>, { cursor })
+        if (id === readId.current) setPages((now) => (now ? [...now, page] : [page]))
+      }
+      if (id === readId.current) setMore({ busy: false, problem: null })
+    } catch (error) {
+      if (id === readId.current) setMore({ busy: false, problem: readProblem(error) })
+    }
+  }, [api, more.busy, repliesView, waiting?.next, list?.next, repliesKey, queryKey])
 
   useEffect(() => {
     if (!can.view || !can.parties) return
@@ -130,7 +180,7 @@ export function InquiriesPage() {
   }, [api, can.view, can.parties, companyId])
 
   // ---- B-TH-216: the one notice's facts (each read only for who may act on it), the Picture cell, a row opens its request ----
-  const companies = useMemo(() => session.companies.map((entry) => ({ id: entry.id, name: entry.name })), [session.companies])
+  const companies = useMemo(() => session.companies.map((entry) => ({ id: entry.id, name: entry.name, code: entry.code })), [session.companies]) // B-TH-233: + code (list-F12)
   const [noticeFacts, setNoticeFacts] = useState<NoticeFacts>({})
   const mayNumbering = session.permissions.includes('numbering.view')
   const maySort = session.permissions.includes('email.triage')
@@ -156,7 +206,10 @@ export function InquiriesPage() {
   const live = useLiveBus(
     {
       onChange: (change) => {
-        if (change.type.startsWith('inquiry.')) setUpdates((count) => count + 1)
+        // B-TH-233: every kind of row changes live — a request, a catalogue order, a change request (the rows wait behind "N updates").
+        if (change.type.startsWith('inquiry.') || change.type.startsWith('portal_order_request.') || change.type.startsWith('order_change_request.')) setUpdates((count) => count + 1)
+        // Customer replies: a message moves a conversation in or out of the view.
+        else if (repliesView && change.type.startsWith('thread.')) setUpdates((count) => count + 1)
       },
       onReconnect: () => void load(),
     },
@@ -169,16 +222,27 @@ export function InquiriesPage() {
   const readsThreads = can.thread
   const [unreadTick, setUnreadTick] = useState(0)
   useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads)
-  useEffect(() => setUnreadTick((tick) => tick + 1), [address.open])
-  const unreadRows = useMemo(() => (list ? list.rows.map((row) => ({ recordType: 'Inquiry', id: row.id })) : []), [list])
+  useEffect(() => setUnreadTick((tick) => tick + 1), [address.open, address.catalogue])
+  // B-TH-233: each kind's own thread (a request, a catalogue order, a change request).
+  const unreadRows = useMemo(() => (list ? list.rows.map((row) => ({ recordType: THREAD_TYPE[row.kind], id: row.id })) : []), [list])
   const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
   // ---- end B-TH-230
 
   // ---- the inquiry in its DetailModal ------------------------------------------------------------------------------------------
   const [pendingVerb, setPendingVerb] = useState<RecordVerb | null>(null)
-  const ids = useMemo(() => (list ? list.rows.map((row) => row.id) : []), [list])
+  // B-TH-233: J / K and "after a decision, the next" walk the rows that open beside the list (requests and catalogue orders).
+  const ids = useMemo(() => navIdsOf(list), [list])
   const idsRef = useRef(ids)
   idsRef.current = ids
+  const rowsRef = useRef<readonly IncomingRow[]>([])
+  rowsRef.current = list?.rows ?? []
+  const openId = useCallback((id: string | null) => {
+    const row = id ? rowsRef.current.find((one) => one.id === id) : undefined
+    if (!id || !row) return go({ open: null, catalogue: null, tab: 'request' })
+    const place = placeOf(row)
+    if (place === 'catalogue') go({ open: null, catalogue: id, tab: 'request' })
+    else if (place === 'request') go({ open: id, catalogue: null, tab: id === addressRef.current.open ? addressRef.current.tab : 'request' })
+  }, [go])
   const record = useInquiry({
     inquiryId: address.open,
     tab: address.tab,
@@ -186,11 +250,27 @@ export function InquiriesPage() {
     onChanged: () => void load(),
     onDecided: (inquiryId) => {
       const next = nextAfter(idsRef.current, inquiryId)
-      if (next && next !== inquiryId) go({ open: next, tab: 'request' })
+      if (next && next !== inquiryId) openId(next)
     },
     pendingVerb,
     onPendingDone: () => setPendingVerb(null),
   })
+  // B-TH-233 (B-TH-040, pane-actions-F13): a catalogue order beside the list — its facts, its thread, Accept as order / quote, Refuse.
+  const catalogueRow = address.catalogue ? (list?.rows.find((row) => row.id === address.catalogue) ?? null) : null
+  const catalogue = useCatalogueOrder({
+    requestId: address.catalogue,
+    companyId: catalogueRow?.companyId ?? companyId,
+    onChanged: () => void load(),
+    onDecided: (requestId) => {
+      const next = nextAfter(idsRef.current, requestId)
+      if (next && next !== requestId) openId(next)
+    },
+  })
+  const catalogueNotice = catalogue.model.notice
+  useEffect(() => {
+    // The decision's receipt stays on the page when the queue moves on.
+    if (catalogueNotice && catalogueNotice.key.startsWith('catalogue.done.')) setNotice(catalogueNotice)
+  }, [catalogueNotice])
   const detailNotice = record.model.notice
   useEffect(() => {
     // A decision's receipt stays on the page when the queue moves on to the next inquiry.
@@ -199,9 +279,10 @@ export function InquiriesPage() {
   }, [detailNotice])
 
   const onRowVerb = useCallback(
-    (row: InquiryRow, verb: RowVerb) => {
+    (row: IncomingRow, verb: RowVerb) => {
+      if (row.kind !== 'REQUEST') return
       setPendingVerb(verb)
-      go({ open: row.id, tab: verb === 'quote' ? 'quote' : 'request' })
+      go({ open: row.id, catalogue: null, tab: verb === 'quote' ? 'quote' : 'request' })
     },
     [go],
   )
@@ -249,7 +330,8 @@ export function InquiriesPage() {
     },
     [api, companyId],
   )
-  const itemsOf = (inquiryIds: readonly string[]) => (list?.rows ?? []).filter((row) => inquiryIds.includes(row.id)).map((row) => ({ inquiryId: row.id, version: row.version }))
+  // B-TH-233: only requests are assigned or declined in bulk (the selection's other kinds are left out and said, model bulkReach).
+  const itemsOf = (inquiryIds: readonly string[]) => (list?.rows ?? []).flatMap((row) => (row.kind === 'REQUEST' && row.request && inquiryIds.includes(row.id) ? [{ inquiryId: row.id, version: row.request.version }] : []))
   const bulkFailed = (error: unknown) => {
     bulkKey.current = null
     const problem = writeProblem(error)
@@ -303,7 +385,6 @@ export function InquiriesPage() {
         updates,
         notice,
         dismissed,
-        limit: LIST_LIMIT,
         newRequest: newRequest.model, // B-TH-221
         bulk: bulk ? ({ ...bulk, model: { ...bulk.model, offline } } as BulkDialog) : null,
         detail: address.open ? record.model : null,
@@ -312,22 +393,37 @@ export function InquiriesPage() {
         companies, // B-TH-216
         noticeFacts, // B-TH-216
         unread: readsThreads ? unread : null, // B-TH-230
+        // ---- B-TH-233: the pages read (Show more), Customer replies, the catalogue order beside the list
+        more: { next: repliesView ? !!waiting?.next : !!list?.next, busy: more.busy, problem: more.problem, page: INCOMING_PAGE },
+        replies: repliesView ? (can.thread ? waiting : null) : undefined,
+        built: OFFICE_PAGES,
+        catalogue: address.catalogue ? catalogue.model : null,
+        // ---- end B-TH-233
       }}
-      slots={{ thread: record.thread }}
+      slots={{ thread: record.thread, catalogueThread: catalogue.thread }}
       actions={{
-        onAddress: (patch) => go({ ...patch, open: patch.open ?? null }),
+        onAddress: (patch) => go({ ...patch, open: patch.open ?? null, catalogue: patch.catalogue ?? null }),
         onClearFilters: () => go({ ...HOME_ADDRESS }),
         onRetry: () => void load(),
         onShowUpdates: () => void load(),
-        onOpen: (inquiryId) => go({ open: inquiryId, tab: inquiryId === addressRef.current.open ? addressRef.current.tab : 'request' }),
-        // B-TH-216 (grid-F29 as on the Orders sheet): the rest of a row opens the request; ⌘ / Ctrl its full page in a new tab.
-        onOpenRow: (inquiryId, newTab) => (newTab ? window.open(fullPageHref(prefix, inquiryId, addressRef.current), '_blank', 'noopener') : go({ open: inquiryId, tab: 'request' })),
+        // B-TH-233: a row opens by its kind — a request or a catalogue order beside the list, a change request in Home › Approvals.
+        onOpen: openId,
+        // B-TH-216 (grid-F29 as on the Orders sheet): the rest of a row opens it; ⌘ / Ctrl a request's full page (any other's own place) in a new tab.
+        onOpenRow: (row, newTab) => {
+          const place = placeOf(row)
+          if (place === 'approvals') return newTab ? void window.open(approvalsHref(prefix), '_blank', 'noopener') : router.push(approvalsHref(prefix))
+          if (!newTab) return openId(row.id)
+          window.open(place === 'request' ? fullPageHref(prefix, row.id, addressRef.current) : rowHref(prefix, addressRef.current, row), '_blank', 'noopener')
+        },
+        onMore: () => void readMore(),
+        onGo: (href, newTab) => (newTab ? void window.open(href, '_blank', 'noopener') : router.push(href)),
         loadPicture,
         // B-TH-217: the pane's own acts.
         pane: {
           onNext: () => {
-            const next = nextAfter(idsRef.current, addressRef.current.open ?? '')
-            go({ open: next && next !== addressRef.current.open ? next : null, tab: 'request' })
+            const current = addressRef.current.open ?? addressRef.current.catalogue ?? ''
+            const next = nextAfter(idsRef.current, current)
+            openId(next && next !== current ? next : null)
           },
           onErase: () => window.open(`${prefix}/admin/privacy?view=requests&new=1&kind=ERASURE`, '_blank', 'noopener'),
           onCloseThread: record.onCloseThread,
@@ -350,6 +446,7 @@ export function InquiriesPage() {
         onNew: () => go({ isNew: true, open: null }),
         newRequest: newRequest.actions, // B-TH-221
         record: record.actions,
+        catalogue: catalogue.actions, // B-TH-233
         onCopy: (numbers) => {
           void navigator.clipboard
             ?.writeText(numbers.join('\n'))

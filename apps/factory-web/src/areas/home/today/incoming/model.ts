@@ -59,9 +59,9 @@ export function incomingHref(prefix: string, query: Readonly<Record<string, stri
 /**
  * A catalogue order opened in Incoming's reading pane (O-HOME-TODAY.incoming-F03: Today's PORTAL_ORDER_REQUEST rows opened nowhere
  * before). The list of every catalogue order (`tile=ALL&kind=CATALOGUE_ORDER`, so a row decided meanwhile is still found) with that
- * order open beside it (`open=<id>`).
+ * order open beside it — B-TH-233: Incoming's address for a catalogue order in the pane is `catalogue=<id>` (`open=` is a request's).
  */
-export const catalogueOrderHref = (prefix: string, id: string): string => incomingHref(prefix, { tile: 'ALL', kind: 'CATALOGUE_ORDER', open: id })
+export const catalogueOrderHref = (prefix: string, id: string): string => incomingHref(prefix, { tile: 'ALL', kind: 'CATALOGUE_ORDER', catalogue: id })
 
 const known = (value: number | null | undefined): number | null => (typeof value === 'number' ? value : null)
 

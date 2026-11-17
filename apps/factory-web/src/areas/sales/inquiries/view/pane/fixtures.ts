@@ -65,7 +65,6 @@ function paneCase(view: InquiryView, role: RoleCase = 'owner', over: Partial<Inq
       updates: 0,
       notice: null,
       dismissed: [],
-      limit: 200,
       newRequest: null,
       bulk: null,
       detail: record(view, role, over),
