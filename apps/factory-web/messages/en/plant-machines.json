@@ -12,8 +12,7 @@
   },
   "tab": {
     "docs": "Documents & CE",
-    "status": "Status & downtime",
-    "tag": "Tag"
+    "status": "Status & downtime"
   },
   "tile": {
     "checks": "Checks overdue",

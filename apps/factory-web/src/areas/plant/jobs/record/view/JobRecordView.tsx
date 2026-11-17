@@ -2,17 +2,21 @@
 
 import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Ban, CalendarCheck, CheckCheck, CircleCheck, ExternalLink, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Undo2, X } from 'lucide-react'
-import { Banner, Card, Field, KeyValue, Menu, type TabItem } from '@nexus/ui/components'
-import { Button, Select, Spinner, Tag, Input } from '@nexus/ui/primitives'
+import { AlertTriangle, Ban, CalendarCheck, CheckCheck, CircleCheck, ExternalLink, FileX, Pause, Pencil, Play, RotateCcw, ShieldOff, Undo2, X } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Select, Skeleton, Spinner, Tag, Input } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
-import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
-import { RecordPanelsView, type RecordPanelsViewModel } from '../../../../../record-panels/view/RecordPanelsView'
+import { rightRef } from '../../../../../lib/i18n/rights'
 import { JOB_TYPES, PRIORITIES, type JobMove } from '../../../_shared/api'
 import { AssigneeField } from '../../../_shared/AssigneeField'
 import { ageWords, assigneeWords, dueWords, labelOf, moveHeld, nextMove, personWords } from '../../../_shared/model'
-import { JobPill, LiveLine, MachinePill, NoticeBanner, PlantMessages, PriorityTag, RecordFrame, say, StepUpDialog, SymptomText, useWords, type Translate } from '../../../_shared/parts'
+import { JobPill, MachinePill, NoticeBanner, PlantMessages, PriorityTag, say, StepUpDialog, SymptomText, useWords, type Translate } from '../../../_shared/parts'
+// ---- B-TH-265: the job on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+// ---- end B-TH-265
 import type { DeepJobRecord } from '../../../requests/depth/api'
 import { closeHeld, failureLabel, lightboxPhotos } from '../../../requests/depth/model'
 import { SignSafeDialog } from '../../../requests/view/SignSafeDialog'
@@ -35,25 +39,28 @@ const MOVE_ICON: Readonly<Record<JobMove, ReactNode>> = {
 }
 
 /**
- * SCR-149 — a maintenance job (design plant.jobs "Record: Maintenance job", a record page): the band (‹ Maintenance jobs,
- * "<number> · type", its state, priority, the machine's live status, overdue; ONE primary next step — Start, Hand back,
- * Close — and the other moves the state allows, each held with its reason; the job sheet in a new tab) and the tabs:
- * Problem (what is wrong and on which machine: the symptom, the words, the requests merged in, the machine's card with the
- * "third failure in 30 days" hint; B-W2b-140 the Unsafe lock panel — locked since, by whom, why, Sign safe here — and the
- * side panel's state, priority, technician and due time with an explicit Apply), Photos (B-W2b-140: before / after and
- * voice notes, the requests' too, upload from a phone with markup, the Lightbox), Hand-back (the one-screen close with its
- * tiles; once handed back: the failure code, the API's minutes, Reopen / Close, and B-W2b-140's Line lead confirms) and
- * Activity (the record panels). Keys: s start the work, h hand back. A floor technician is named only here (Owner W1).
+ * SCR-149 — a maintenance job (design plant.jobs "Record: Maintenance job", a record page), on RecordFrame (B-TH-265; the rule of picture
+ * 38): the band in the shell's band row (‹ Maintenance jobs, "<number> · type", ONE state pill, priority, the machine's live status,
+ * overdue, its source; ONE primary next step — Start, Hand back, Close — held with its reason; ⋯ the other moves the state allows, each
+ * held with its reason, the job sheet in a new tab, the machine, Copy the number, Cancel last), the job's thread docked beside both tabs
+ * (notes only: a job has no party; Activity's tools in its "⋯", R-ACT), ONE notice in the body column, and the tabs 4 → 2: Problem &
+ * photos (what is wrong and on which machine: the symptom, the words, the requests merged in, the machine's card with the "third failure
+ * in 30 days" hint; B-W2b-140 the Unsafe lock panel and the side panel's state, priority, technician and due time with an explicit Apply;
+ * then the photos before / after and voice notes, the requests' too, upload from a phone with markup, the Lightbox) and Hand-back (the
+ * one-screen close with its tiles; once handed back: the failure code, the API's minutes, Reopen / Close, and the Line lead confirms).
+ * Every old ?tab= keeps working (R-8). Keys: s start the work, h hand back. A floor technician is named only here (Owner W1).
  */
-export function JobRecordView({ model, actions, panels, panelsPreview }: { model: JobRecordModel; actions?: JobRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+// B-TH-265: `thread` is the docked thread (the office's OfficeRecordThread docked, or a design case's); `printThread` what the print view
+// shows of it.
+export function JobRecordView({ model, actions, thread, printThread }: { model: JobRecordModel; actions?: JobRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <PlantMessages>
-      <JobRecordBody model={model} actions={actions} panels={panels} panelsPreview={panelsPreview} />
+      <JobRecordBody model={model} actions={actions} thread={thread} printThread={printThread} />
     </PlantMessages>
   )
 }
 
-function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRecordModel; actions?: JobRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+function JobRecordBody({ model, actions, thread, printThread }: { model: JobRecordModel; actions?: JobRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -62,7 +69,7 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
   const job = value?.job ?? null
   const base = job ? `${listHref}/${encodeURIComponent(job.id)}` : listHref
   const media = value ? value.files.length + value.requestFiles.length : 0
-  const tabs: TabItem[] = JOB_TABS.map((tab) => ({ id: tab, href: tab === 'problem' ? base : `${base}?tab=${tab}`, label: t(`jobTab.${tab}`), count: tab === 'problem' && value ? value.requests.length || null : tab === 'photos' ? media || null : null }))
+  const tabs: TabItem[] = JOB_TABS.map((tab) => ({ id: tab, href: tab === 'problem' ? base : `${base}?tab=${tab}`, label: t(`jobTab.${tab}`), count: tab === 'problem' && value ? value.requests.length + media || null : null }))
   const can = { manageJobs: model.can.manageJobs && (value?.canManage ?? false), work: model.can.work && (value?.canWork ?? false) }
 
   // s: start the work; h: hand back (design kb "Record: s start work, h hand back") — never while typing or in a dialog.
@@ -90,96 +97,117 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
     return () => window.removeEventListener('keydown', onKey)
   }, [quiet, job])
 
-  let title: ReactNode = null
-  let bandActions: ReactNode = null
-  let meta: ReactNode = null
-  if (job && value) {
-    const next = nextMove(job.status)
-    const primaryHeld = next ? moveHeld(next, job, can) : null
-    const primary = next ? (
-      next === 'handBack' ? (
-        model.tab === 'handback' ? null : (
-          <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onOpenHandBack?.()} aria-keyshortcuts="h">
-            {MOVE_ICON.handBack} {t('move.handBack')}
-          </Button>
-        )
-      ) : (
-        <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.(next)} aria-keyshortcuts={next === 'start' ? 's' : undefined}>
-          {model.busy ? <Spinner size={12} /> : MOVE_ICON[next]} {t(`move.${next}`)}
-        </Button>
-      )
-    ) : null
-    const others: JobMove[] = (['plan', 'wait', 'reopen'] as const).filter((move) => move !== next && (move === 'plan' ? job.status === 'NEW' : move === 'wait' ? job.status === 'IN_PROGRESS' : job.status === 'HANDED_BACK'))
-    title = `${job.number} · ${t(`jobType.${job.type}`)}`
-    meta = (
-      <>
-        <JobPill status={job.status} />
-        <PriorityTag priority={job.priority} />
-        <MachinePill status={job.machine.status} locked={job.machine.locked} />
-        {job.overdue && <Tag tone="danger">{t('jobs.overdue')}</Tag>}
-        <Tag tone="neutral">{t(`jobSource.${job.source}`)}</Tag>
-        {job.leadConfirmed && (
-          <Tag tone="success">
-            <CircleCheck size={11} aria-hidden /> {t('lead.tag')}
-          </Tag>
-        )}
-      </>
-    )
-    bandActions = (
-      <span className="fw-pl-actions">
-        {others.map((move) => {
-          const held = moveHeld(move, job, can)
-          return (
-            <Button key={move} size="sm" heldReason={held ? t(held) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.(move)}>
-              {MOVE_ICON[move]} {t(`move.${move}`)}
-            </Button>
-          )
-        })}
-        {job.open && job.status !== 'HANDED_BACK' && (
-          <Button size="sm" variant="danger-outline" heldReason={can.manageJobs ? null : t('held.noManageJobs')} onClick={() => actions?.onCancelJob?.()}>
-            {MOVE_ICON.cancel} {t('move.cancel')}
-          </Button>
-        )}
-        {primary}
-        <Menu
-          label={<MoreHorizontal size={16} aria-hidden />}
-          align="right"
-          triggerProps={{ 'aria-label': t('record.more') }}
-          items={[
-            { id: 'sheet', label: t('jobs.sheet'), href: `${base}/sheet`, target: '_blank' },
-            { id: 'machine', label: t('list.machineRecord'), href: `${model.prefix}/plant/machines/${encodeURIComponent(job.machine.id)}`, target: '_blank' },
-            { id: 'machineJobs', label: t('record.machineJobs'), href: `${listHref}?machine=${encodeURIComponent(job.machine.id)}&view=all` },
-          ]}
-        />
-      </span>
+  const back = <Link href={listHref}>{t('record.backJobs')}</Link>
+  const frame = { recordType: 'MaintenanceJob', personId: model.personId ?? null, threadLabel: t('record.dockLabelJob') }
+
+  // Loading, not found, no right, a failed read: the band and its state inside the frame, no thread yet.
+  if (!job || !value) {
+    const loaded = model.loaded
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back, title: loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.job'), moreLabel: t('record.more') }}>
+        <div className="fw-pl-stack">
+          {loaded.status === 'loading' ? (
+            <Card padded aria-busy="true">
+              <p className="fw-pl-hint" role="status">
+                <Spinner size={14} /> {t('record.loading')}
+              </p>
+              <div className="fw-pl-stack tight">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <Skeleton key={index} height={22} />
+                ))}
+              </div>
+            </Card>
+          ) : (
+            <Card padded>
+              <EmptyState
+                icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+                title={t(loaded.status === 'error' ? 'record.failed' : loaded.status === 'forbidden' ? 'problem.forbidden' : 'record.notFound')}
+                description={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'forbidden' ? t('problem.noPermission', { right: rightRef('plant.view') }) : t('record.notFoundBody')}
+                action={
+                  loaded.status === 'error' ? (
+                    <Button size="sm" onClick={actions?.onRetry}>
+                      {t('common.retry')}
+                    </Button>
+                  ) : (
+                    <Button size="sm" asChild>
+                      <Link href={listHref}>{t('record.backJobs')}</Link>
+                    </Button>
+                  )
+                }
+              />
+            </Card>
+          )}
+        </div>
+      </RecordFrame>
     )
   }
 
-  const activity = panels ?? (panelsPreview ? <RecordPanelsView model={panelsPreview} /> : null)
+  const next = nextMove(job.status)
+  const primaryHeld = next ? moveHeld(next, job, can) : null
+  const primary = next ? (
+    next === 'handBack' ? (
+      model.tab === 'handback' ? undefined : (
+        <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onOpenHandBack?.()} aria-keyshortcuts="h">
+          {MOVE_ICON.handBack} {t('move.handBack')}
+        </Button>
+      )
+    ) : (
+      <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.(next)} aria-keyshortcuts={next === 'start' ? 's' : undefined}>
+        {model.busy ? <Spinner size={12} /> : MOVE_ICON[next]} {t(`move.${next}`)}
+      </Button>
+    )
+  ) : undefined
+  // The other moves the state allows, and Cancel last: lines of the band's ⋯, each held with its reason (at most two actions in the band).
+  const others: JobMove[] = (['plan', 'wait', 'reopen'] as const).filter((move) => move !== next && (move === 'plan' ? job.status === 'NEW' : move === 'wait' ? job.status === 'IN_PROGRESS' : job.status === 'HANDED_BACK'))
+  const heldLine = (held: string | null) => (held ? { disabled: true, description: t(held) } : model.busy ? { disabled: true, description: t('held.busy') } : {})
+  const more: MenuItemDef[] = [
+    ...others.map((move) => ({ id: move, label: t(`move.${move}`), icon: MOVE_ICON[move], ...heldLine(moveHeld(move, job, can)), onSelect: () => actions?.onMove?.(move) })),
+    { id: 'sheet', label: t('jobs.sheet'), href: `${base}/sheet`, target: '_blank' as const },
+    { id: 'machine', label: t('list.machineRecord'), href: `${model.prefix}/plant/machines/${encodeURIComponent(job.machine.id)}`, target: '_blank' as const },
+    { id: 'machineJobs', label: t('record.machineJobs'), href: `${listHref}?machine=${encodeURIComponent(job.machine.id)}&view=all` },
+    { id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(job.number).catch(() => undefined) },
+    ...(job.open && job.status !== 'HANDED_BACK' ? [{ id: 'cancel', label: t('move.cancel'), icon: MOVE_ICON.cancel, tone: 'danger' as const, ...heldLine(can.manageJobs ? null : 'held.noManageJobs'), onSelect: () => actions?.onCancelJob?.() }] : []),
+  ]
+  const meta = (
+    <>
+      <PriorityTag priority={job.priority} />
+      <MachinePill status={job.machine.status} locked={job.machine.locked} />
+      {job.overdue && <Tag tone="danger">{t('jobs.overdue')}</Tag>}
+      <Tag tone="neutral">{t(`jobSource.${job.source}`)}</Tag>
+      {job.leadConfirmed && (
+        <Tag tone="success">
+          <CircleCheck size={11} aria-hidden /> {t('lead.tag')}
+        </Tag>
+      )}
+    </>
+  )
+
   const photos = lightboxPhotos(model.media)
 
   return (
-    <RecordFrame
-      backHref={listHref}
-      backLabel={t('record.backJobs')}
-      loaded={model.loaded}
-      noun={t('record.job')}
-      title={title}
-      meta={meta}
-      actions={bandActions}
-      status={<LiveLine asOf={model.asOf} live={model.live} />}
-      tabs={tabs}
-      tab={model.tab}
-      onRetry={actions?.onRetry}
-    >
-      <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      {value && model.tab === 'problem' && <ProblemTab model={model} value={value} actions={actions} can={can} t={t} place={place} />}
-      {value && model.tab === 'photos' && <PhotosTab model={model} value={value} actions={actions} can={can} />}
-      {value && model.tab === 'handback' && <HandBackTab model={model} value={value} actions={actions} can={can} t={t} place={place} />}
-      {value && model.tab === 'activity' && (activity ?? <p className="fw-pl-hint">{t('record.activityLater')}</p>)}
-      {value && model.dialog && <RecordDialog model={model} value={value} actions={actions} can={can} />}
+    <RecordFrame {...frame} thread={thread ?? null} printThread={printThread} band={{ back, title: `${job.number} · ${t(`jobType.${job.type}`)}`, status: <JobPill status={job.status} />, meta, primary, more, moreLabel: t('record.more') }}>
+      <div className="fw-pl-stack">
+        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+
+        {/* B-TH-265: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
+          <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
+          {/* The shell's band says the tab's live state; offline, the page says since when its figures are. */}
+          {model.live === 'offline' && <Banner tone="warning" title={t('record.offline', { time: model.asOf ? formatTime(model.asOf, place) : '—' })} />}
+        </RecordNotices>
+
+        {/* B-TH-265: Problem & photos — the Problem body, then the Photos body, both as they are. */}
+        {model.tab === 'problem' && (
+          <>
+            <ProblemTab model={model} value={value} actions={actions} can={can} t={t} place={place} />
+            <PhotosTab model={model} value={value} actions={actions} can={can} />
+          </>
+        )}
+        {model.tab === 'handback' && <HandBackTab model={model} value={value} actions={actions} can={can} t={t} place={place} />}
+      </div>
+      {model.dialog && <RecordDialog model={model} value={value} actions={actions} can={can} />}
       <StepUpDialog state={model.stepUp} onSubmit={actions?.onSubmitStepUp} onCancel={actions?.onCancelStepUp} />
-      {value && model.lightbox !== null && photos.length > 0 && (
+      {model.lightbox !== null && photos.length > 0 && (
         <Lightbox
           open
           onClose={() => actions?.onPhoto?.(null)}

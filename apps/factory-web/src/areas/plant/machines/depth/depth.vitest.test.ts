@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -13,7 +14,9 @@ import { OFFICE_PAGES, WINDOW_PAGES } from '../../../../shell/nav/office-nav'
 import { MACHINES } from '../../_shared/fixtures'
 import { designScreen as machinesScreen } from '../fixtures'
 import { designScreen as machineScreen } from '../record/fixtures'
-import { MACHINE_TABS } from '../view-model'
+import { MACHINE_TABS, machineTabOf, MERGED_MACHINE_TABS } from '../view-model'
+// B-TH-265: the machine on RecordFrame.
+import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { designScreen as wallScreen } from '../wall/fixtures'
 import { changeStatus, kindFor, printTags, readDepth, readHistory, readNeeding, readTagJobs, SETTABLE } from './api'
 import { FACTS, HISTORY, MONDAY, WALL } from './fixtures'
@@ -220,5 +223,64 @@ describe('every design case of machines in depth draws in both languages with no
   it('the wall\'s own tab is a built window page', () => {
     expect(OFFICE_PAGES.has('/plant/machines/wall')).toBe(true)
     expect(WINDOW_PAGES.has('/plant/machines/wall')).toBe(true)
+  })
+})
+
+// ---- B-TH-265: the machine on RecordFrame (the rule of picture 38; 08-tabs O-PLT-MAC) ------------------------------------------------
+describe('B-TH-265 — the machine on RecordFrame: tabs 5 → 4, Documents & CE kept, the docked thread (notes only)', () => {
+  const draw = (id: string, locale: (typeof LOCALES)[number] = 'en') => renderView(machineScreen.view as ComponentType<{ model: unknown }>, machineScreen.cases.find((item) => item.id === id)!.model, locale)
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+
+  it('four tabs: Overview & tag · Documents & CE · Maintenance history · Status & downtime; an old ?tab=tag lands on Overview & tag (R-8)', () => {
+    expect(MACHINE_TABS).toEqual(['overview', 'docs', 'history', 'status'])
+    expect(MERGED_MACHINE_TABS).toEqual({ tag: 'overview', activity: 'overview' })
+    expect(machineTabOf('tag')).toBe('overview')
+    expect(machineTabOf('activity')).toBe('overview')
+    for (const tab of MACHINE_TABS) expect(machineTabOf(tab)).toBe(tab)
+    expect(machineTabOf(null)).toBe('overview')
+    expect(machineTabOf('toString')).toBe('overview')
+    const text = textOf(draw('thread-docked'))
+    for (const tab of ['Overview & tag', 'Documents & CE', 'Maintenance history', 'Status & downtime']) expect(text).toContain(tab)
+    for (const tab of ['Panoramica e targhetta', 'Documenti e CE']) expect(textOf(draw('thread-docked', 'it'))).toContain(tab)
+  })
+
+  it('Documents & CE is KEPT as its own tab with its own groups (CE first), never moved to the thread’s Files view', () => {
+    const html = draw('docs-no-ce')
+    const body = html.slice(html.indexOf('class="fw-rcf-body"'), html.indexOf('class="fw-rcf-dock"'))
+    const words = createTranslator('en', messagesFor('en', ['plant-machines'])['plant-machines']!)
+    expect(textOf(body)).toContain(words('docs.group.MACHINE_CE'))
+    const view = readFileSync(new URL('../record/view/MachineRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("model.tab === 'docs' && <DocumentsTab")
+  })
+
+  it('Overview & tag draws the Overview body, then the Tag body as it is', () => {
+    const view = readFileSync(new URL('../record/view/MachineRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toMatch(/<Overview model=\{model\}[^>]*\/>\s*\{depth && \(\s*<TagTab/)
+    expect(view).not.toContain("model.tab === 'tag'")
+  })
+
+  it('ONE thread docked beside every tab, notes only (a machine has no party): no "Reply to", no e-mail', () => {
+    for (const id of ['thread-docked', 'thread-docs', 'history', 'status']) {
+      const html = draw(id)
+      expect(html.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(html, id).toContain('aria-label="Thread tools"')
+    }
+    const dock = textOf(dockOf(draw('thread-docked')))
+    expect(dock).not.toMatch(/Reply to (?!the customer)/)
+    expect(dock).not.toMatch(/@[a-z0-9-]+\.example/)
+  })
+
+  it('without threads.read there is no thread here: no dock, no Thread button', () => {
+    const html = draw('thread-no-right')
+    expect(html).not.toContain('class="fw-rcf-dock"')
+    expect(html).not.toContain('aria-label="Thread tools"')
+  })
+
+  it('the page mounts the office thread docked with no party; the band is the shared frame’s', () => {
+    const container = readFileSync(new URL('../record/MachineRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread docked record=\{record\}[^>]*party=\{null\}/)
+    expect(container).toContain("type: 'Machine'")
+    const view = readFileSync(new URL('../record/view/MachineRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../../_shared/record-frame/RecordFrame'")
   })
 })
