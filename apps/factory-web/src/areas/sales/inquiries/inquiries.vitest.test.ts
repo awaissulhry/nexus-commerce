@@ -199,9 +199,10 @@ describe('the Request’s Apply sends only what changed', () => {
     expect(parsePrice('12.5')).toBe('12.5')
   })
 
-  it('a prospect matched to a customer sends the party once and clears the prospect; a closed inquiry only its note', () => {
-    const match = requestChanges(PROSPECT_VIEW, { ...requestDraftOf(PROSPECT_VIEW), matchPartyId: 'p1', contactId: 'c1' }, owner)
-    expect(match.body).toEqual({ version: PROSPECT_VIEW.version, partyId: 'p1', prospect: null, contactId: 'c1' })
+  it('a prospect never gets its customer by Apply (B-TH-234: Make or match the customer, the check first); a closed inquiry only its note', () => {
+    const typed = requestChanges(PROSPECT_VIEW, { ...requestDraftOf(PROSPECT_VIEW), contactId: 'c1' }, owner)
+    expect(typed.body).toBeNull()
+    expect('matchPartyId' in requestDraftOf(PROSPECT_VIEW)).toBe(false)
     const closed = requestChanges(QUOTED_VIEW, { ...requestDraftOf(QUOTED_VIEW), request: 'changed', note: 'A note' }, owner)
     expect(closed.body).toEqual({ version: QUOTED_VIEW.version, note: 'A note' })
   })
@@ -212,7 +213,7 @@ describe('Decline and refusals', () => {
     expect(declineHeld({ reason: null, note: '', message: '' }, false)?.key).toBe('decline.held.reason')
     expect(declineHeld({ reason: 'OTHER', note: ' ', message: '' }, false)?.key).toBe('refusal.OTHER_NEEDS_WORDS')
     expect(declineHeld({ reason: 'PRICE', note: '', message: '' }, false)).toBeNull()
-    expect(messageReach(VIEW, owner)).toEqual({ to: VIEW.contact!.email, held: null })
+    expect(messageReach(VIEW, owner)).toMatchObject({ to: VIEW.contact!.email, via: 'MAIL', held: null })
     expect(messageReach(PROSPECT_VIEW, owner).held?.key).toBe('decline.message.prospect')
     expect(messageReach(VIEW, inquiriesCan(ROLE_PERMISSIONS.reader)).held?.key).toBe('held.right')
   })

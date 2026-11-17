@@ -416,7 +416,7 @@ function Details({ model, view, companyName, onEdit }: { model: InquiryRecordMod
     ...(model.can.price ? [{ label: t('pane.facts.target'), value: target ? priceText(target, view.currency, INTL[locale]) : '—' }] : []),
     ...(view.party ? [{ label: t('pane.facts.contact'), value: view.contact ? (view.contact.email ? `${view.contact.name} · ${view.contact.email}` : view.contact.name) : '—' }] : []),
   ]
-  const draft = { request: view.request, wantedDate: view.wantedDate, targetPrice: '', currency: view.currency, note: view.note ?? '', contactId: view.contact?.id ?? null, matchPartyId: null, prospect: { name: '', company: '', email: '', phone: '' }, lines: [], techPackFileIds: [], techPackVersion: '' }
+  const draft = { request: view.request, wantedDate: view.wantedDate, targetPrice: '', currency: view.currency, note: view.note ?? '', contactId: view.contact?.id ?? null, prospect: { name: '', company: '', email: '', phone: '' }, lines: [], techPackFileIds: [], techPackVersion: '' }
   return (
     <div className="fw-rp-facts">
       <section className="fw-rp-sec">

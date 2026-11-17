@@ -10,6 +10,10 @@ import {
   // B-TH-228: Make order, Make style draft.
   orderAnswer,
   styleDraftAnswer,
+  // B-TH-234: answer a new customer (B-TH-042).
+  customerCheckView,
+  makeCustomerAnswer,
+  type MakeCustomerBody,
   type CreateInquiryBody,
   type FromMailBody,
   type UpdateInquiryBody,
@@ -85,7 +89,12 @@ export function resumeInquiry(api: ApiClient, inquiryId: string, version: number
   return api.post(`${one(inquiryId)}/resume`, { body: { version }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
-export function declineInquiry(api: ApiClient, inquiryId: string, body: { version: number; reason: DeclineReason; note?: string }, idempotencyKey?: string): Promise<InquiryView> {
+/**
+ * POST …/decline. B-TH-234 (on B-TH-043): with `message` ("Send to the customer" ticked) ONE message goes in the same command — a reply
+ * the customer reads in its portal on a portal request, else a mail to the request's contact (the recipient rule: `sendOutside`
+ * ticked for an address of another party). Never with "Not an order", never to a prospect (refused in words).
+ */
+export function declineInquiry(api: ApiClient, inquiryId: string, body: { version: number; reason: DeclineReason; note?: string; message?: { body: string; subject?: string; sendOutside?: boolean } }, idempotencyKey?: string): Promise<InquiryView> {
   return api.post(`${one(inquiryId)}/decline`, { body, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
@@ -226,11 +235,6 @@ export async function readCustomerFacts(api: ApiClient, partyId: string, signal?
 
 // ---- the thread's mail (the decline's message) and the files -------------------------------------------------------------------
 
-/** POST /threads/Inquiry/<id>/emails: the decline's message to the customer, as the person (the thread's own composer route). */
-export function messageCustomer(api: ApiClient, inquiryId: string, input: { to: string; subject: string; body: string }, idempotencyKey?: string): Promise<unknown> {
-  return api.post(`/threads/Inquiry/${enc(inquiryId)}/emails`, { body: { to: [input.to], subject: input.subject, body: input.body, attachments: [] }, ...key(idempotencyKey) })
-}
-
 /** A file's download address (a presigned GET; a same-origin path goes through this app's /api). Always an attachment. */
 export async function fileAddress(api: ApiClient, fileId: string): Promise<string> {
   const { download } = await downloadLink(api, fileId)
@@ -281,6 +285,36 @@ export async function companiesWithoutNumbering(api: ApiClient, companyIds: read
   const numbered = new Set(answer.series.filter((series) => series.kind === 'INQUIRY' && series.status === 'ACTIVE').map((series) => series.companyId))
   return companyIds.filter((id) => !numbered.has(id))
 }
+
+// ---- B-TH-234 (threads plan TH-3; pane-actions-F05/F08, on B-TH-042 and B-TH-051): answer a new customer, hand the customer a task ----
+
+export type CustomerCheck = z.infer<typeof customerCheckView>
+export type CustomerMade = z.infer<typeof makeCustomerAnswer>
+
+/** GET …/customer: the customers the prospect may already be (only those the reader may make a request for), what a new one would be. */
+export function checkCustomer(api: ApiClient, inquiryId: string, signal?: AbortSignal): Promise<CustomerCheck> {
+  return api.get(`${one(inquiryId)}/customer`, { schema: customerCheckView, signal })
+}
+
+/** POST …/customer: ONE command — match an existing customer (its contact, or the prospect added as one) or make one from the prospect. */
+export function makeCustomer(api: ApiClient, inquiryId: string, body: MakeCustomerBody, idempotencyKey?: string): Promise<CustomerMade> {
+  return api.post(`${one(inquiryId)}/customer`, { body, schema: makeCustomerAnswer, ...key(idempotencyKey) })
+}
+
+/** The kinds a task on a request may be (factory-domain portal/tasks REQUEST_TASK_KINDS): a document, an answer, measurements. */
+export const REQUEST_TASK_KINDS = ['UPLOAD_DOCUMENT', 'ANSWER_MESSAGE', 'SEND_MEASUREMENTS'] as const
+export type RequestTaskKind = (typeof REQUEST_TASK_KINDS)[number]
+const taskAnswer = z.object({ task: z.object({ id: z.string(), kind: z.string(), dueAt: z.string().nullable(), status: z.string() }).passthrough(), made: z.boolean() })
+
+/**
+ * POST /partners/:partyId/tasks (B-TH-051): "Ask <customer> for…" a document, an answer or measurements on its own open request, by a
+ * date — a task in the customer's portal. A prospect's or a closed request is refused in words (`refusal/REQUEST_PROSPECT`,
+ * `REQUEST_CLOSED`); another customer's request is "not a record of this partner" (naming nobody).
+ */
+export function askRequestTask(api: ApiClient, partyId: string, body: { kind: RequestTaskKind; recordId: string; dueAt: string | null; companyId: string }, idempotencyKey?: string): Promise<z.infer<typeof taskAnswer>> {
+  return api.post(`/partners/${enc(partyId)}/tasks`, { body: { kind: body.kind, recordType: 'Inquiry', recordId: body.recordId, dueAt: body.dueAt, companyId: body.companyId }, schema: taskAnswer, ...key(idempotencyKey) })
+}
+// ---- end B-TH-234
 
 // ---- B-TH-233 (threads plan TH-3; O-SAL-INQ-LIST.list / .tiles / .band / .pane-actions): Incoming over every door ----------------
 

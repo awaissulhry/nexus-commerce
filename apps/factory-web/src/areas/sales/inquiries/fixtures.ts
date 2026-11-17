@@ -63,7 +63,6 @@ function record(view: InquiryView | null, over: Partial<InquiryRecordModel> = {}
     draft: null,
     saving: false,
     busy: false,
-    customers: view?.prospect ? { items: CUSTOMERS, problem: null } : null,
     contacts: view?.party ? { items: CONTACTS, problem: null } : null,
     styles: { items: STYLE_OPTIONS, problem: null },
     details: { [JACKET_DETAIL.id]: { status: 'ready', value: JACKET_DETAIL }, [PANTS_DETAIL.id]: { status: 'ready', value: PANTS_DETAIL } },

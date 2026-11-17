@@ -242,6 +242,14 @@
       "styles": {
         "manage": "creare modelli"
       }
+    },
+    "partners": {
+      "tasks": {
+        "manage": "chiedere cose ai clienti nel loro portale"
+      }
+    },
+    "parties": {
+      "manage": "creare clienti"
     }
   },
   "refusal": {
@@ -330,7 +338,6 @@
     "assignMe": "{number} ora è tua",
     "decline": "{number} rifiutata ({reason})",
     "messageSent": "Il messaggio è stato inviato a {to} (in Attività)",
-    "messageFailed": "Il messaggio non è stato inviato: riscrivilo in Attività",
     "lost": "{number} segnata come persa",
     "quote": "{quote} creato da {number} come bozza: il cliente non lo sa ancora (legge “Preventivo in preparazione”)",
     "quoteWarnings_one": "{quote} creato da {number}: {count} cosa da controllare sul preventivo",
@@ -346,7 +353,15 @@
     "filesCarried_other": "{count} file della richiesta sono andati con l'ordine",
     "fileNotCarried": "{name} non è stato copiato: {reason}",
     "styleDraft": "Bozza di modello {style} creata da {number}; la richiesta resta aperta",
-    "openStyle": "Apri {style}"
+    "openStyle": "Apri {style}",
+    "messagePortal": "{customer} legge il tuo messaggio nel suo portale",
+    "customerMade": "{customer} ora è un cliente: {number} è suo e le risposte sono possibili",
+    "customerContact": "{number} ora è di {customer} (il potenziale cliente è diventato un suo contatto)",
+    "customerMatched": "{number} ora è di {customer}: le risposte sono possibili",
+    "mailJoined": "L'e-mail da cui è arrivata si è unita alla sua conversazione",
+    "openCustomer": "Apri {customer}",
+    "task": "A {customer} è stato chiesto: {kind} (nel suo portale)",
+    "taskDue": "A {customer} è stato chiesto: {kind}, entro il {due} (nel suo portale)"
   },
   "closed": {
     "quoted": "Preventivata come {quote} il {when}",
@@ -367,10 +382,9 @@
     "createdByOn": "{name}, {when}",
     "erased": "Potenziale cliente cancellato (i dati personali sono stati rimossi)",
     "unknown": "Mittente sconosciuto — abbinalo a un cliente",
-    "unknownBody": "Il preventivo si fa per un cliente: abbina questo potenziale cliente a uno (una sola volta), o crea prima il cliente in Vendite › Clienti.",
+    "unknownBody": "Un'offerta, un ordine o una risposta si fanno per un cliente: abbina questo potenziale cliente a uno, oppure crea il cliente da lui — prima viene il controllo.",
     "match": "Abbina a un cliente",
-    "matchHint": "Una volta abbinato, il cliente resta: la mail entra nella sua conversazione",
-    "matchNone": "Non ancora abbinato",
+    "matchHint": "Il controllo elenca i clienti che potrebbe già essere (solo i tuoi); una volta abbinato il cliente resta e l’e-mail si unisce alla sua conversazione",
     "new": "nuovo",
     "newHint": "Non ancora cliente: un potenziale cliente"
   },
@@ -606,18 +620,29 @@
     "noteHint": "Facoltativo; resta sulla richiesta",
     "noteOther": "Necessario quando il motivo è Altro",
     "messageLabel": "Messaggio al cliente (facoltativo)",
-    "messageTo": "Inviato a {to} tramite la conversazione della richiesta, dopo il rifiuto",
+    "messageTo": "Una e-mail a {to}, nello stesso passo del rifiuto",
     "message": {
-      "many": "Un messaggio va a un cliente alla volta: scrivi dall’Attività di ogni richiesta",
+      "many": "Rifiuta N non invia nulla: un messaggio va a un cliente alla volta, dalla sua richiesta",
       "prospect": "Un potenziale cliente non ha ancora una conversazione: rispondi alla sua mail da Posta da smistare",
-      "noEmail": "La richiesta non indica un contatto con e-mail: scegline uno in Richiesta"
+      "noEmail": "La richiesta non indica un contatto con e-mail: scegline uno in Richiesta",
+      "notAnOrder": "«Non un ordine» non invia nulla: il cliente legge «Chiusa»"
     },
     "preview": "Anteprima — a {to}",
     "final": "Una richiesta chiusa non cambia più (solo la nota).",
     "held": {
       "reason": "Scegli un motivo",
-      "long": "Al massimo {max} caratteri"
-    }
+      "long": "Al massimo {max} caratteri",
+      "message": "Scrivi il messaggio, oppure togli la spunta «Invia»"
+    },
+    "send": "Invia un messaggio al cliente con il rifiuto",
+    "messagePortal": "Il cliente lo legge nel suo portale, con il rifiuto",
+    "messageLanguage": "Scrivilo in {language}: la lingua del cliente",
+    "language": {
+      "it": "italiano",
+      "en": "inglese"
+    },
+    "previewPortal": "Anteprima — quello che il cliente legge nel suo portale",
+    "finalSend": "Il rifiuto e il suo messaggio vanno insieme: se uno è rifiutato, non succede nessuno dei due. Una richiesta chiusa non cambia più (solo la sua nota)."
   },
   "lost": {
     "title": "Segna come persa",
@@ -773,7 +798,11 @@
       "match": "Abbina a un cliente…",
       "matchHint": "Scegli o crea il cliente; poi si può rispondere",
       "order": "Crea ordine",
-      "styleDraft": "Crea bozza di modello"
+      "styleDraft": "Crea bozza di modello",
+      "task": "Chiedi a {customer}…",
+      "taskHint": "Un documento, una risposta o le misure, entro una data: un compito nel suo portale",
+      "notAnOrder": "Non un ordine",
+      "notAnOrderHint": "Spam, un indirizzo sbagliato, l'e-mail di un fornitore: chiusa senza contare come rifiutata; non si invia nulla"
     },
     "held": {
       "prospect": "Crea prima il cliente: per rispondere serve la scheda del cliente"
@@ -1003,5 +1032,86 @@
     "acceptQuoteHint": "Un'offerta in bozza con queste righe ai prezzi di listino di oggi (le taglie non più offerte restano fuori); il cliente la legge quando la invii.",
     "promise": "Data promessa",
     "promiseHint": "Parte dalla data chiesta dal cliente."
+  },
+  "customer": {
+    "title": "Crea o abbina il cliente di {number}",
+    "goMake": "Crea il cliente",
+    "goMatch": "Usa questo cliente",
+    "reading": "Cerco il cliente che potrebbe già essere…",
+    "failed": "Impossibile controllare i clienti",
+    "prospect": {
+      "name": "Nome",
+      "company": "Azienda",
+      "email": "E-mail",
+      "phone": "Telefono",
+      "basis": "Base giuridica"
+    },
+    "pick": "Di chi è la richiesta?",
+    "found_one": "{count} cliente potrebbe essere questo potenziale cliente",
+    "found_other": "{count} clienti potrebbero essere questo potenziale cliente",
+    "noneFound": "Nessun tuo cliente corrisponde a questo potenziale cliente",
+    "ambiguous": "Più clienti hanno questo indirizzo o dominio: scegli quello giusto.",
+    "by": {
+      "CONTACT": "Trovato dall'indirizzo di un suo contatto",
+      "DOMAIN": "Trovato dal dominio e-mail della sua azienda",
+      "NAME": "Trovato dal nome o dal codice"
+    },
+    "contactOf": "contatto {name}",
+    "make": "Un nuovo cliente da questo potenziale cliente",
+    "makeHint": "Il suo contatto riceve nome, indirizzo e telefono del potenziale cliente, con la base giuridica",
+    "makeHeld": "Creare un cliente richiede il permesso di creare clienti",
+    "addContact": "Aggiungi il potenziale cliente come contatto di {customer} (con la sua base giuridica)",
+    "code": "Codice",
+    "codeHint": "Proposto dal nome; puoi cambiarlo (al massimo 24 lettere e cifre)",
+    "legalName": "Ragione sociale",
+    "kind": "Tipo",
+    "kindOf": {
+      "ORGANISATION": "Un'azienda",
+      "PERSON": "Una persona"
+    },
+    "status": "Stato",
+    "statusHint": "Potenziale finché il cliente non è confermato",
+    "statusOf": {
+      "PROSPECT": "Potenziale (non ancora confermato)",
+      "ACTIVE": "Attivo"
+    },
+    "confirmMake_one": "Ho controllato: questo potenziale cliente non è il cliente trovato sopra",
+    "confirmMake_other": "Ho controllato: questo potenziale cliente non è nessuno dei {count} clienti trovati sopra",
+    "confirmMatch": "Ho controllato: {number} è di {customer}",
+    "after": "Poi i campi del potenziale cliente si svuotano (i suoi dati vivono nel contatto), la richiesta riceve il numero del cliente e l'e-mail da cui è arrivata si unisce alla sua conversazione, condivisa solo con questo cliente.",
+    "held": {
+      "pick": "Scegli un cliente, o creane uno nuovo",
+      "code": "Dai un codice (lettere e cifre, al massimo 24)",
+      "name": "Dai la ragione sociale",
+      "confirm": "Spunta di aver controllato prima"
+    }
+  },
+  "task": {
+    "title": "Chiedi a {customer}…",
+    "go": "Chiedi",
+    "kindLabel": "Cosa ti serve?",
+    "kind": {
+      "UPLOAD_DOCUMENT": "un documento",
+      "ANSWER_MESSAGE": "una risposta",
+      "SEND_MEASUREMENTS": "le misure"
+    },
+    "hint": {
+      "UPLOAD_DOCUMENT": "Un file che aggiunge nel suo portale (un logo, una scheda tecnica, una tabella taglie)",
+      "ANSWER_MESSAGE": "Una risposta nella conversazione di questa richiesta",
+      "SEND_MEASUREMENTS": "Le misure dei piloti sul modulo del suo portale"
+    },
+    "due": "Entro",
+    "dueHint": "Facoltativo; i promemoria partono prima e dopo",
+    "after": "{customer} lo vede nella Home del suo portale e nella lista delle cose da fare; è fatto quando risponde.",
+    "held": {
+      "prospect": "Un potenziale cliente non ha ancora un portale: crea prima il cliente",
+      "closed": "Questa richiesta è chiusa: un compito qui resterebbe senza risposta",
+      "kind": "Scegli cosa ti serve",
+      "due": "Scegli un giorno dopo oggi"
+    },
+    "refusal": {
+      "REQUEST_PROSPECT": "Questa richiesta viene da un potenziale cliente: crea prima il cliente, poi assegnagli un compito nel suo portale.",
+      "REQUEST_CLOSED": "Questa richiesta è chiusa (rifiutata, persa o diventata un'offerta): chiedi sull'offerta o sull'ordine."
+    }
   }
 }

@@ -32,6 +32,9 @@ import { INCOMING_KINDS, INCOMING_TILES, stateWords, type IncomingKind, type Inc
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { recordAddress } from '../../../lib/records/record-links'
 import type { IncomingList, IncomingQuery, IncomingRow, InquiryFile, InquiryLine, InquiryRow, InquiryView, WaitingRow } from './api'
+// B-TH-234: answer a new customer, hand the customer a task.
+import type { CustomerCheck, CustomerMade, RequestTaskKind } from './api'
+import type { MakeCustomerBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 
 /**
  * Sales › Inquiries (SCR-105, B-W2b-322 on B-W2b-295's API), pure: who may do what, the page's address (the tiles = the API's
@@ -103,6 +106,10 @@ export interface InquiriesCan {
   ordersView?: boolean
   stylesManage?: boolean
   // ---- end B-TH-228
+  // ---- B-TH-234: "Ask <customer> for…" a task in its portal (partners.tasks.manage); a new customer from the prospect (parties.manage).
+  tasks?: boolean
+  partiesManage?: boolean
+  // ---- end B-TH-234
 }
 
 export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
@@ -125,11 +132,14 @@ export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
     orders: has('orders.manage'),
     ordersView: has('orders.view'),
     stylesManage: has('product.styles.manage'),
+    // B-TH-234
+    tasks: has('partners.tasks.manage'),
+    partiesManage: has('parties.manage'),
   }
 }
 
 /** The rights a held verb may name, each with words (`right.<permission>`). */
-export const KNOWN_RIGHTS = ['sales.inquiries.manage', 'quotes.manage', 'email.send', 'files.upload', 'email.triage', 'orders.manage', 'product.styles.manage'] as const
+export const KNOWN_RIGHTS = ['sales.inquiries.manage', 'quotes.manage', 'email.send', 'files.upload', 'email.triage', 'orders.manage', 'product.styles.manage', /* B-TH-234 */ 'partners.tasks.manage', 'parties.manage'] as const
 
 // ---- the page's address ---------------------------------------------------------------------------------------------------
 
@@ -820,8 +830,6 @@ export interface RequestDraft {
   readonly currency: string
   readonly note: string
   readonly contactId: string | null
-  /** A prospect matched to a customer (once): the party it becomes. */
-  readonly matchPartyId: string | null
   readonly prospect: ProspectDraft
   readonly lines: readonly LineDraft[]
   readonly techPackFileIds: readonly string[]
@@ -836,7 +844,6 @@ export function requestDraftOf(view: InquiryView): RequestDraft {
     currency: view.currency,
     note: view.note ?? '',
     contactId: view.contact?.id ?? null,
-    matchPartyId: null,
     prospect: { name: view.prospectDetails?.name ?? '', company: view.prospectDetails?.company ?? '', email: view.prospectDetails?.email ?? '', phone: view.prospectDetails?.phone ?? '' },
     lines: lineDraftsOf(view.lines),
     techPackFileIds: view.techPack.files.map((file) => file.named.id),
@@ -888,19 +895,14 @@ export function requestChanges(view: InquiryView, draft: RequestDraft, can: Pick
         if (draft.currency !== was.currency) body.currency = draft.currency
       }
     } else if (!can.price && draft.currency !== was.currency) body.currency = draft.currency
-    if (draft.matchPartyId && !view.party) {
-      body.partyId = draft.matchPartyId
-      body.prospect = null
-      if (draft.contactId) body.contactId = draft.contactId
-    } else {
-      if (draft.contactId !== was.contactId && view.party) body.contactId = draft.contactId
-      const wasProspect = prospectBodyOf(was.prospect)
-      const nowProspect = prospectBodyOf(draft.prospect)
-      if (!view.party && !view.prospectDetails?.erased && JSON.stringify(wasProspect) !== JSON.stringify(nowProspect)) {
-        const prospectIssue = prospectProblem(draft.prospect)
-        if (prospectIssue) problem ??= prospectIssue
-        else body.prospect = nowProspect
-      }
+    // B-TH-234: a prospect gets its customer only through "Make or match the customer" (the check first, W23), never by a PATCH here.
+    if (draft.contactId !== was.contactId && view.party) body.contactId = draft.contactId
+    const wasProspect = prospectBodyOf(was.prospect)
+    const nowProspect = prospectBodyOf(draft.prospect)
+    if (!view.party && !view.prospectDetails?.erased && JSON.stringify(wasProspect) !== JSON.stringify(nowProspect)) {
+      const prospectIssue = prospectProblem(draft.prospect)
+      if (prospectIssue) problem ??= prospectIssue
+      else body.prospect = nowProspect
     }
     if (!sameLines(was.lines, draft.lines)) {
       const lines = draft.lines.filter((line) => !isBlankLine(line))
@@ -912,7 +914,7 @@ export function requestChanges(view: InquiryView, draft: RequestDraft, can: Pick
     if (!sameIds(was.techPackFileIds, draft.techPackFileIds)) body.techPackFileIds = [...draft.techPackFileIds]
     if (draft.techPackVersion.trim() !== was.techPackVersion.trim()) body.techPackVersion = blank(draft.techPackVersion) ? null : draft.techPackVersion.trim()
   }
-  const count = Object.keys(body).filter((key) => key !== 'prospect' || !('partyId' in body)).length + (problem ? 1 : 0)
+  const count = Object.keys(body).length + (problem ? 1 : 0)
   if (Object.keys(body).length === 0) return { count: problem ? 1 : 0, body: null, problem }
   return { count, body: { version: view.version, ...body } as UpdateInquiryBody, problem }
 }
@@ -930,28 +932,62 @@ export function toggleTechPack(draft: RequestDraft, fileId: string, on: boolean)
 export interface DeclineDraft {
   readonly reason: DeclineReason | null
   readonly note: string
-  /** The message to the customer (optional), sent through the inquiry's thread after the decline. */
+  /** The message to the customer (optional). B-TH-234 (B-TH-043): it goes in the decline's own command, only when `send` is ticked. */
   readonly message: string
+  /** B-TH-234: "Send to the customer" (off until ticked: nothing goes unless ticked). */
+  readonly send?: boolean
 }
 
-export const emptyDecline: DeclineDraft = { reason: null, note: '', message: '' }
+export const emptyDecline: DeclineDraft = { reason: null, note: '', message: '', send: false }
 
-/** Why Decline is held: a reason; OTHER says it in words (factory-domain OTHER_NEEDS_WORDS). */
+/** Why Decline is held: a reason; OTHER says it in words (factory-domain OTHER_NEEDS_WORDS). B-TH-234: a ticked message needs words; "Not an order" sends nothing. */
 export function declineHeld(draft: DeclineDraft, offline: boolean): Phrase | null {
   if (!draft.reason) return { key: 'decline.held.reason' }
   if (draft.reason === 'OTHER' && blank(draft.note)) return { key: 'refusal.OTHER_NEEDS_WORDS' }
   if (draft.note.trim().length > INQUIRY_LIMITS.closeNote) return { key: 'decline.held.long', params: { max: INQUIRY_LIMITS.closeNote } }
+  // B-TH-234
+  if (draft.send && draft.reason === 'NOT_AN_ORDER') return { key: 'refusal.SENDS_NOTHING' }
+  if (draft.send && blank(draft.message)) return { key: 'decline.held.message' }
   if (offline) return { key: 'held.offline' }
   return null
 }
 
-/** Who the decline's message reaches, or why it cannot be sent (the thread mails the inquiry's customer only). */
-export function messageReach(view: Pick<InquiryView, 'party' | 'contact'> | null, can: Pick<InquiriesCan, 'email' | 'thread'>): { readonly to: string | null; readonly held: Phrase | null } {
-  if (!view) return { to: null, held: { key: 'decline.message.many' } }
-  if (!can.email || !can.thread) return { to: null, held: { key: 'held.right', params: { right: 'right.email.send' } } }
-  if (!view.party) return { to: null, held: { key: 'decline.message.prospect' } }
-  if (!view.contact?.email) return { to: null, held: { key: 'decline.message.noEmail' } }
-  return { to: view.contact.email, held: null }
+/**
+ * Who the decline's message reaches, or why it cannot be sent. B-TH-234 (B-TH-043): the request answers where its message goes
+ * (`messageTo`): PORTAL — the customer reads it in its portal; MAIL — to the request's contact (`to`), in the customer's language;
+ * none with the refusal (a prospect: make the customer first). A mail needs email.send. The message never goes to anyone else.
+ */
+export interface MessageReach {
+  readonly to: string | null
+  readonly via: 'PORTAL' | 'MAIL' | null
+  /** The customer's language (its contact's, else its own): the dialog says to write in it. */
+  readonly language: string | null
+  readonly held: Phrase | null
+}
+
+export function messageReach(view: Pick<InquiryView, 'party' | 'contact' | 'number' | 'messageTo'> | null, can: Pick<InquiriesCan, 'email' | 'thread'>): MessageReach {
+  if (!view) return { to: null, via: null, language: null, held: { key: 'decline.message.many' } }
+  const known = view.messageTo
+  if (known) {
+    if (known.refusal) return { to: null, via: null, language: known.language, held: refusalPhrase(known.refusal.code, view.number) }
+    if (known.via === null) return { to: null, via: null, language: known.language, held: { key: 'decline.message.prospect' } }
+    if (known.via === 'MAIL' && (!can.email || !can.thread)) return { to: null, via: 'MAIL', language: known.language, held: { key: 'held.right', params: { right: 'right.email.send' } } }
+    if (known.via === 'MAIL' && known.to.length === 0) return { to: null, via: 'MAIL', language: known.language, held: { key: 'decline.message.noEmail' } }
+    return { to: known.via === 'MAIL' ? known.to.join(', ') : null, via: known.via, language: known.language, held: null }
+  }
+  // An answer without `messageTo` (typed demo data of before): the request's contact by mail.
+  if (!can.email || !can.thread) return { to: null, via: null, language: null, held: { key: 'held.right', params: { right: 'right.email.send' } } }
+  if (!view.party) return { to: null, via: null, language: null, held: { key: 'decline.message.prospect' } }
+  if (!view.contact?.email) return { to: null, via: null, language: null, held: { key: 'decline.message.noEmail' } }
+  return { to: view.contact.email, via: 'MAIL', language: null, held: null }
+}
+
+/** B-TH-234: the decline's body — the message only when ticked, reachable and not "Not an order" (bulk never sends: its own body). */
+export function declineBodyOf(view: Pick<InquiryView, 'version' | 'party' | 'contact' | 'number' | 'messageTo'>, draft: DeclineDraft, can: Pick<InquiriesCan, 'email' | 'thread'>): { version: number; reason: DeclineReason; note?: string; message?: { body: string } } | null {
+  if (!draft.reason) return null
+  const note = draft.note.trim()
+  const message = draft.send && draft.reason !== 'NOT_AN_ORDER' && !messageReach(view, can).held ? draft.message.trim() : ''
+  return { version: view.version, reason: draft.reason, ...(note ? { note } : {}), ...(message ? { message: { body: message } } : {}) }
 }
 
 export const lostHeld = (note: string, offline: boolean): Phrase | null => (blank(note) ? { key: 'lost.held.note' } : note.trim().length > INQUIRY_LIMITS.closeNote ? { key: 'decline.held.long', params: { max: INQUIRY_LIMITS.closeNote } } : offline ? { key: 'held.offline' } : null)
@@ -1183,3 +1219,84 @@ export function replyWaiting(row: Pick<WaitingRow, 'waiting'>): { readonly time:
 export const REPLY_RECORD_TYPES = ['SalesOrder', 'Quote', 'Invoice', 'PaymentReminder', 'Shipment', 'Ddt', 'ReturnAuthorisation', 'RepairOrder', 'Complaint', 'SampleRound', 'ServiceCase', 'ProductSafetyReport', 'Style', 'Certificate', 'Capa', 'MeasurementProfile', 'Party', 'ChangeRequest', 'ApprovalRequest'] as const
 export const replyTypeKey = (recordType: string): string | null => ((REPLY_RECORD_TYPES as readonly string[]).includes(recordType) ? `recordType.${recordType}` : null)
 // ---- end B-TH-233
+
+// ---- B-TH-234 (threads plan TH-3; pane-actions-F08, on B-TH-042): answer a new customer — match or make it from the prospect ------
+
+/** What the person picked in "Make or match the customer": one of the customers the check found, or a new one from the prospect. */
+export type CustomerChoice =
+  | { readonly mode: 'match'; readonly partyId: string; readonly contactId: string | null; readonly addContact: boolean }
+  | { readonly mode: 'make'; readonly code: string; readonly legalName: string; readonly kind: 'ORGANISATION' | 'PERSON'; readonly status: 'PROSPECT' | 'ACTIVE' }
+
+/**
+ * The dialog starts from the check: ONE customer found by one of its contacts' own address (and no second one) is picked; nobody
+ * found → a new customer from the prospect (the suggestion); anything else waits for the person's pick (W23: never a silent guess).
+ */
+export function customerChoiceOf(check: CustomerCheck): CustomerChoice | null {
+  const byContact = check.candidates.filter((candidate) => candidate.matchedBy === 'CONTACT')
+  if (!check.ambiguous && check.candidates.length === 1 && byContact.length === 1) return { mode: 'match', partyId: byContact[0]!.party.id, contactId: byContact[0]!.contact?.id ?? null, addContact: false }
+  if (check.candidates.length === 0 && check.make.allowed) return { mode: 'make', code: check.suggestion.code, legalName: check.suggestion.legalName, kind: check.suggestion.kind, status: 'PROSPECT' }
+  return null
+}
+
+/** Picking a customer asks first unless it was found by its own contact's address alone; a new customer asks first while any was found. */
+export function customerAsksFirst(check: CustomerCheck, choice: CustomerChoice | null): boolean {
+  if (!choice) return false
+  if (choice.mode === 'make') return check.candidates.length > 0
+  const candidate = check.candidates.find((one) => one.party.id === choice.partyId)
+  return !(candidate?.matchedBy === 'CONTACT' && !check.ambiguous)
+}
+
+const PARTY_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/
+
+/** Why the pick waits, in words: the right, the API's own check (match / make), the code and name, the person's yes, offline. */
+export function customerHeld(check: CustomerCheck, choice: CustomerChoice | null, confirmed: boolean, can: Pick<InquiriesCan, 'manage'>, offline: boolean): Phrase | null {
+  if (!can.manage) return { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } }
+  if (!choice) return { key: 'customer.held.pick' }
+  const gate = choice.mode === 'make' ? check.make : check.match
+  if (!gate.allowed) return gate.refusal ? refusalPhrase(gate.refusal.code) : choice.mode === 'make' ? { key: 'held.needs', params: { right: 'right.parties.manage' } } : { key: 'held.notNow' }
+  if (choice.mode === 'make' && !PARTY_CODE.test(choice.code.trim())) return { key: 'customer.held.code' }
+  if (choice.mode === 'make' && blank(choice.legalName)) return { key: 'customer.held.name' }
+  if (customerAsksFirst(check, choice) && !confirmed) return { key: 'customer.held.confirm' }
+  if (offline) return { key: 'held.offline' }
+  return null
+}
+
+/** The body of POST …/customer: the pick, and `confirmed` only when the check asks first. */
+export function customerBodyOf(view: Pick<InquiryView, 'version'>, check: CustomerCheck, choice: CustomerChoice, confirmed: boolean): MakeCustomerBody {
+  const yes = customerAsksFirst(check, choice) && confirmed ? { confirmed: true } : {}
+  if (choice.mode === 'match') return { version: view.version, match: { partyId: choice.partyId, ...(choice.contactId ? { contactId: choice.contactId } : {}), ...(choice.addContact ? { addContact: true } : {}) }, ...yes }
+  return { version: view.version, make: { code: choice.code.trim().toUpperCase(), legalName: choice.legalName.trim(), kind: choice.kind, status: choice.status }, ...yes }
+}
+
+/** The receipt: what happened (a match, a new contact, a new customer), and whether the mail the request came from joined the thread. */
+export function customerDone(made: Pick<CustomerMade, 'made' | 'party' | 'mailJoined'>, number: string): { readonly phrase: Phrase; readonly lines: Phrase[] } {
+  const params = { customer: made.party.name, number }
+  const phrase: Phrase = { key: made.made === 'CUSTOMER' ? 'done.customerMade' : made.made === 'CONTACT' ? 'done.customerContact' : 'done.customerMatched', params }
+  return { phrase, lines: made.mailJoined ? [{ key: 'done.mailJoined' }] : [] }
+}
+
+// ---- B-TH-234 (B-TH-051): "Ask <customer> for…" a document, an answer or measurements, by a date — a task in its portal ------------
+
+export interface TaskDraft {
+  readonly kind: RequestTaskKind | null
+  /** The due day (YYYY-MM-DD, the site's day), or null: no date. */
+  readonly due: string | null
+}
+
+export const emptyTask: TaskDraft = { kind: null, due: null }
+
+/** Why the task waits, in words: the right, a prospect (no portal yet), a closed request, the kind, a day in the past, offline. */
+export function taskHeld(view: Pick<InquiryView, 'party' | 'status'>, draft: TaskDraft | null, can: Pick<InquiriesCan, 'tasks'>, offline: boolean, today: string): Phrase | null {
+  if (!can.tasks) return { key: 'held.needs', params: { right: 'right.partners.tasks.manage' } }
+  if (!view.party) return { key: 'task.held.prospect' }
+  if (!isOpen(view.status)) return { key: 'task.held.closed' }
+  if (draft && !draft.kind) return { key: 'task.held.kind' }
+  if (draft?.due && draft.due <= today) return { key: 'task.held.due' }
+  if (offline) return { key: 'held.offline' }
+  return null
+}
+
+/** A task refusal the API names (`refusal/REQUEST_PROSPECT`, `REQUEST_CLOSED`) in the page's words, else the general refusal. */
+export const TASK_REFUSALS = ['REQUEST_PROSPECT', 'REQUEST_CLOSED'] as const
+export const taskRefusal = (code: string | null): Phrase | null => (code && (TASK_REFUSALS as readonly string[]).includes(code) ? { key: `task.refusal.${code}` } : null)
+// ---- end B-TH-234

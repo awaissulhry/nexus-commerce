@@ -2,6 +2,8 @@ import type { InquiryView } from '../../../api'
 import { actionHeld, isOpen, quotePreview, type InquiriesCan, type Phrase } from '../../../model'
 // B-TH-228: Make order and Make style draft.
 import { styleDraftHeld } from '../../../model'
+// B-TH-234: "Ask <customer> for…" a task in its portal.
+import { taskHeld } from '../../../model'
 
 /**
  * B-TH-218 (threads plan TH-1b; O-SAL-INQ-LIST.pane-actions, O-SAL-INQ-REC.side): the reading pane's row 2, pure — the actions
@@ -25,8 +27,11 @@ export interface PaneActionsModel {
   readonly held: Readonly<Record<PaneAction, Phrase | null>>
   /** A closed request: what it became, in words (the row shows it instead of buttons). */
   readonly outcome: Phrase | null
-  /** ⋯ — Assign or Take off, Mark lost, Match to a customer (a prospect), each held with its reason. */
-  readonly menu: ReadonlyArray<{ readonly id: 'assign' | 'unassign' | 'lost' | 'match'; readonly held: Phrase | null }>
+  /**
+   * ⋯ — Assign or Take off, Make or match the customer (a prospect: B-TH-234, the check first), "Ask <customer> for…" (a task in its
+   * portal, B-TH-051), Not an order (closed without counting as declined; nothing is sent, B-TH-043), Mark lost — each held with its reason.
+   */
+  readonly menu: ReadonlyArray<{ readonly id: 'assign' | 'unassign' | 'lost' | 'match' | 'task' | 'notAnOrder'; readonly held: Phrase | null }>
 }
 
 const API_ACTION = { quote: 'quote', askInfo: 'askInfo', decline: 'decline', order: 'order' } as const
@@ -77,7 +82,10 @@ export function paneActions(view: InquiryView, can: InquiriesCan, offline: boole
   const menu: PaneActionsModel['menu'] = [
     { id: 'assign', held: verbHeld('assign') },
     ...(view.assigneeId ? [{ id: 'unassign' as const, held: verbHeld('unassign') }] : []),
-    ...(view.prospect && !view.prospectDetails?.erased ? [{ id: 'match' as const, held: can.manage && view.actions.edit.allowed ? null : { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } } }] : []),
+    // B-TH-234: the check decides the rest (who may be matched, whether a new customer may be made).
+    ...(view.prospect && !view.prospectDetails?.erased ? [{ id: 'match' as const, held: can.manage ? (offline ? { key: 'held.offline' } : null) : { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } } }] : []),
+    { id: 'task' as const, held: taskHeld(view, null, can, offline, '') },
+    { id: 'notAnOrder' as const, held: held.decline },
     { id: 'lost', held: verbHeld('lose') },
   ]
   return { main, others, held, outcome: null, menu }

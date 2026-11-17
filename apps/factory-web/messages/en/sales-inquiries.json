@@ -242,6 +242,14 @@
       "styles": {
         "manage": "make styles"
       }
+    },
+    "partners": {
+      "tasks": {
+        "manage": "ask customers for things in their portal"
+      }
+    },
+    "parties": {
+      "manage": "make customers"
     }
   },
   "refusal": {
@@ -330,7 +338,6 @@
     "assignMe": "{number} is now yours",
     "decline": "{number} declined ({reason})",
     "messageSent": "The message was sent to {to} (in Activity)",
-    "messageFailed": "The message was not sent: write it again in Activity",
     "lost": "{number} marked as lost",
     "quote": "{quote} made from {number} as a draft: the customer is not told yet (they read “Quote being prepared”)",
     "quoteWarnings_one": "{quote} made from {number}: {count} thing to check on the quote",
@@ -346,7 +353,15 @@
     "filesCarried_other": "{count} files of the request went with it",
     "fileNotCarried": "{name} did not go with it: {reason}",
     "styleDraft": "Style draft {style} made from {number}; the request stays open",
-    "openStyle": "Open {style}"
+    "openStyle": "Open {style}",
+    "messagePortal": "{customer} reads your message in its portal",
+    "customerMade": "{customer} is now a customer: {number} is theirs and replies are possible",
+    "customerContact": "{number} is now from {customer} (the prospect became one of its contacts)",
+    "customerMatched": "{number} is now from {customer}: replies are possible",
+    "mailJoined": "The mail it came by joined its conversation",
+    "openCustomer": "Open {customer}",
+    "task": "{customer} was asked for: {kind} (in its portal)",
+    "taskDue": "{customer} was asked for: {kind}, by {due} (in its portal)"
   },
   "closed": {
     "quoted": "Quoted as {quote} on {when}",
@@ -367,10 +382,9 @@
     "createdByOn": "{name}, {when}",
     "erased": "Erased prospect (their personal data was removed)",
     "unknown": "Unknown sender — match to a customer",
-    "unknownBody": "A quote is made for a customer: match this prospect to one (once), or make the customer in Sales › Customers first.",
+    "unknownBody": "A quote, an order or a reply is made for a customer: match this prospect to one, or make the customer from it — the check comes first.",
     "match": "Match to a customer",
-    "matchHint": "Once matched, the customer stays: the mail joins its conversation",
-    "matchNone": "Not matched yet",
+    "matchHint": "The check lists the customers it may already be (only yours); once matched the customer stays and the mail joins its conversation",
     "new": "new",
     "newHint": "Not a customer yet: a prospect"
   },
@@ -606,18 +620,29 @@
     "noteHint": "Optional; kept on the request",
     "noteOther": "Needed when the reason is Other",
     "messageLabel": "Message to the customer (optional)",
-    "messageTo": "Sent to {to} through the request’s conversation, after the decline",
+    "messageTo": "A mail to {to}, in the same step as the decline",
     "message": {
-      "many": "A message goes to one customer at a time: write from each request’s Activity",
+      "many": "Decline N sends nothing: a message goes to one customer at a time, from its own request",
       "prospect": "A prospect has no customer conversation yet: answer their mail from Mail to sort",
-      "noEmail": "The request names no contact with an e-mail: pick one on Request first"
+      "noEmail": "The request names no contact with an e-mail: pick one on Request first",
+      "notAnOrder": "\"Not an order\" sends nothing: the customer reads \"Closed\""
     },
     "preview": "Preview — to {to}",
     "final": "A closed request changes no more (only its note).",
     "held": {
       "reason": "Pick a reason",
-      "long": "At most {max} characters"
-    }
+      "long": "At most {max} characters",
+      "message": "Write the message, or untick \"Send\""
+    },
+    "send": "Send a message to the customer with the decline",
+    "messagePortal": "The customer reads it in its portal, with the decline",
+    "messageLanguage": "Write it in {language}: the customer’s language",
+    "language": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "previewPortal": "Preview — what the customer reads in its portal",
+    "finalSend": "The decline and its message go together: if one is refused, neither happens. A closed request changes no more (only its note)."
   },
   "lost": {
     "title": "Mark as lost",
@@ -773,7 +798,11 @@
       "match": "Match to a customer…",
       "matchHint": "Pick or make the customer; then replies are possible",
       "order": "Make order",
-      "styleDraft": "Make style draft"
+      "styleDraft": "Make style draft",
+      "task": "Ask {customer} for…",
+      "taskHint": "A document, an answer or measurements, by a date: a task in their portal",
+      "notAnOrder": "Not an order",
+      "notAnOrderHint": "Spam, a wrong address, a supplier’s mail: closed without counting as declined; nothing is sent"
     },
     "held": {
       "prospect": "Make the customer first: replies need a customer record"
@@ -1003,5 +1032,86 @@
     "acceptQuoteHint": "A draft quote with these lines at today’s list prices (sizes no longer offered are left out); the customer reads it once you send it.",
     "promise": "Promise date",
     "promiseHint": "Starts as the date the customer asked for."
+  },
+  "customer": {
+    "title": "Make or match the customer of {number}",
+    "goMake": "Make the customer",
+    "goMatch": "Use this customer",
+    "reading": "Looking for the customer this may already be…",
+    "failed": "Couldn't check the customers",
+    "prospect": {
+      "name": "Name",
+      "company": "Company",
+      "email": "E-mail",
+      "phone": "Phone",
+      "basis": "Lawful basis"
+    },
+    "pick": "Whose request is it?",
+    "found_one": "{count} customer may be this prospect",
+    "found_other": "{count} customers may be this prospect",
+    "noneFound": "No customer of yours matches this prospect",
+    "ambiguous": "More than one customer has this address or domain: pick the right one.",
+    "by": {
+      "CONTACT": "Found by one of its contacts’ own address",
+      "DOMAIN": "Found by its company e-mail domain",
+      "NAME": "Found by its name or code"
+    },
+    "contactOf": "contact {name}",
+    "make": "A new customer from this prospect",
+    "makeHint": "Its contact gets the prospect’s name, address and phone, with the lawful basis carried",
+    "makeHeld": "Making a customer needs the right to make customers",
+    "addContact": "Add the prospect as a contact of {customer} (its lawful basis carried)",
+    "code": "Code",
+    "codeHint": "Proposed from the name; free to change (at most 24 letters and digits)",
+    "legalName": "Legal name",
+    "kind": "Kind",
+    "kindOf": {
+      "ORGANISATION": "A company",
+      "PERSON": "A person"
+    },
+    "status": "Status",
+    "statusHint": "A prospect until the customer is confirmed",
+    "statusOf": {
+      "PROSPECT": "Prospect (not confirmed yet)",
+      "ACTIVE": "Active"
+    },
+    "confirmMake_one": "I checked: this prospect is not the customer found above",
+    "confirmMake_other": "I checked: this prospect is none of the {count} customers found above",
+    "confirmMatch": "I checked: {number} is from {customer}",
+    "after": "Then the prospect’s own fields are cleared (its data lives in the contact), the request gets the customer’s own number, and the mail it came by joins its conversation, shared with this customer only.",
+    "held": {
+      "pick": "Pick a customer, or make a new one",
+      "code": "Give a code (letters and digits, at most 24)",
+      "name": "Give the legal name",
+      "confirm": "Tick that you checked it first"
+    }
+  },
+  "task": {
+    "title": "Ask {customer} for…",
+    "go": "Ask",
+    "kindLabel": "What do you need?",
+    "kind": {
+      "UPLOAD_DOCUMENT": "a document",
+      "ANSWER_MESSAGE": "an answer",
+      "SEND_MEASUREMENTS": "measurements"
+    },
+    "hint": {
+      "UPLOAD_DOCUMENT": "A file they add in their portal (a logo, a tech pack, a size chart)",
+      "ANSWER_MESSAGE": "An answer in this request’s conversation",
+      "SEND_MEASUREMENTS": "Riders’ measurements on the form in their portal"
+    },
+    "due": "By",
+    "dueHint": "Optional; reminders go before and after it",
+    "after": "{customer} sees it on its portal Home and in its list of things to do; it is done when they answer.",
+    "held": {
+      "prospect": "A prospect has no portal yet: make the customer first",
+      "closed": "This request is closed: a task here would go unanswered",
+      "kind": "Pick what you need",
+      "due": "Pick a day after today"
+    },
+    "refusal": {
+      "REQUEST_PROSPECT": "This request is from a prospect: make the customer first, then hand them a task in their portal.",
+      "REQUEST_CLOSED": "This request is closed (declined, lost or answered with a quote): ask on the quote or the order instead."
+    }
   }
 }
