@@ -221,6 +221,8 @@ import { brandKeeperCron, brandKeeperHandler } from './modules/production/brand/
 import { supervisorFollowsHandler } from './modules/production/supervisor/follows'
 // B-PR-43b: an issue answered (an office issue by its task done, a customer's by our first shared reply in its order's thread).
 import { issueAnsweredHandler } from './modules/production/issues/answered'
+// B-PR-45: an issue nobody answered goes up (1 working day → the backup or the production managers; 2 → the Owner and Admin).
+import { issueEscalationCron } from './modules/production/issues/escalate'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -523,6 +525,9 @@ if (mode === 'worker') {
   // B-PR-17: nightly at 00:35, every kept order's customer stage, health and waiting-on computed again (a promise that passed
   // shows Late, a raise past its 7 days drops, an order confirmed before the keeper gets its row).
   crons.push(brandKeeperCron({ database, log }))
+  // B-PR-45: every 15 minutes, the open issues whose step came (raise + 1 working day → the customer's backup, else the production
+  // managers; + 2 → the Owner and Admin; 08:00 company time), one system command per batch and step, each person checked on the order.
+  crons.push(issueEscalationCron({ database, log }))
   // B-W2b-415: every cron's tick writes its run per tenant; the Run-now poller runs a person's request once, for that tenant.
   const scheduler = startCrons(recordedCrons(crons, { database, redis, prefix, log }), { redis, prefix, log })
   stops.push(() => scheduler.stop())

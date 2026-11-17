@@ -2,9 +2,10 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { attachmentDisposition } from '../../../platform/files/rules'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { listContract, markUrgencyContract, orderContract, undoUrgencyContract, urgentOrderContract } from './contract'
+import { listContract, markUrgencyContract, orderContract, reportProblemContract, undoUrgencyContract, urgentOrderContract } from './contract'
 import { manifest } from './manifest'
 import { productionCsv, productionList, productionOrder } from './read'
+import { reportProblem } from './problems' // B-PR-45
 import { markUrgency, orderUrgent, undoUrgency } from './urgency'
 
 /**
@@ -31,4 +32,7 @@ export default defineRoutes('portal-production', manifest, async (app) => {
   app.put('/portal/production/urgent-order', { schema: urgentOrderContract }, async (request) => orderUrgent(app, request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/portal/production/urgency/undo', { schema: undoUrgencyContract }, async (request) => undoUrgency(app, request, request.body, idempotencyKeyFrom(request)))
+
+  // B-PR-45: "Report a problem" (./problems.ts).
+  app.post('/portal/production/problems', { schema: reportProblemContract }, async (request) => reportProblem(app, request, request.body, idempotencyKeyFrom(request)))
 })

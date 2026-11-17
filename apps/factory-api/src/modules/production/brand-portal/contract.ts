@@ -8,6 +8,8 @@ import { BRAND_URGENCIES, URGENCY_BATCH_MAX, URGENCY_OUTCOMES } from '@nexus/fac
 import { BRAND_SIDES } from '@nexus/factory-domain/production-brand/waiting'
 import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
+import { PROBLEM_ORDERS_MAX } from '@nexus/factory-domain/production-brand/issues' // B-PR-45
+import { MAX_BODY_LENGTH } from '@nexus/factory-domain/threads/rules' // B-PR-45
 
 /**
  * B-PR-18: the customer's own production in its portal (see ./read.ts). Every state comes with its words in Italian and English
@@ -287,3 +289,40 @@ export const undoUrgencyContract = defineContract({
   },
 })
 // ── end B-PR-22a ──
+
+// ── B-PR-45 ──
+/**
+ * B-PR-45: "Report a problem" (./problems.ts) — one message in each named order's thread and our one task for the batch. One
+ * result per OWN order (sent, or why not in words); an id that is not one of its own orders is only counted (`notFound`), never
+ * named. Nothing sent at all: 409 with each order's words at `body/orderIds/<index>`. Names no person (R-41). Takes an
+ * Idempotency-Key (a retry sends no second message and raises no second problem).
+ */
+export const reportProblemContract = defineContract({
+  body: input({
+    orderIds: orderIds(PROBLEM_ORDERS_MAX),
+    /** What is wrong: written as it is into each order's thread. */
+    body: z.string().trim().min(1).max(MAX_BODY_LENGTH),
+  }),
+  response: {
+    200: output({
+      /** The batch the problems of this report share (our answer in one order's thread answers them all). */
+      batchId: id(),
+      results: z.array(
+        output({
+          orderId: id(),
+          number: z.string(),
+          customerRef: z.string().nullable(),
+          done: z.boolean(),
+          /** Why it was not sent (null: sent). */
+          words: words.nullable(),
+          /** Sent: "Waiting on us since …" (then "Answered" once we reply in the order's thread). */
+          problem: output({ state: z.literal('WAITING_ON_US'), since: day, words }).nullable(),
+        }),
+      ),
+      /** Ids named that are not its own orders: counted, never named. */
+      notFound: z.number().int(),
+      replayed: z.boolean(),
+    }),
+  },
+})
+// ── end B-PR-45 ──
