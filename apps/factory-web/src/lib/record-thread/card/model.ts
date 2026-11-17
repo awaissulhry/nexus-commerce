@@ -68,6 +68,10 @@ export interface CardMessage {
   bounceTask?: { href: string } | null
   /** Our message on its way (before the server confirmed it) or not sent (the text is kept). */
   outbox?: { state: 'sending' } | { state: 'failed'; reason: string } | null
+  // ---- B-TH-231: files the reader may not see are counted ("One file you cannot open"); B-TH-083: sheets they may not open.
+  hiddenFiles?: number
+  lockedSheets?: number
+  // ---- end B-TH-231
 }
 
 /** What every card of one thread shares. */
@@ -80,6 +84,8 @@ export interface CardContext {
   canReply: boolean
   /** Make a task from a message (home.view + tasks): offered only when the host has it. */
   canTask?: boolean
+  /** B-TH-231: "Use on another record…" for the message's files (files.upload; the host carries them). */
+  canUseOn?: boolean
   /** The message to show unfolded and focused (`?message=<id>`). */
   anchorId?: string | null
 }
@@ -167,17 +173,23 @@ export interface CardFiles {
   more: number
   /** Files the reader may not open (no right to files): counted, never dropped ("1 file you cannot open"). */
   hidden: number
+  /** B-TH-083 (B-TH-231): measurement sheets the reader may not open: "Measurement sheet — you cannot open it". */
+  sheets: number
 }
 
-export function cardFiles(files: readonly CardFile[], canReadFiles: boolean, all = false): CardFiles {
-  if (!canReadFiles) return { photos: [], others: [], held: [], more: 0, hidden: files.length }
+/** `counted`: B-TH-231 — the message's files the API left out for this reader, and its sheets locked for them. */
+export function cardFiles(files: readonly CardFile[], canReadFiles: boolean, all = false, counted: { readonly hidden?: number; readonly sheets?: number } = {}): CardFiles {
+  const extra = counted.hidden ?? 0
+  const sheets = counted.sheets ?? 0
+  if (!canReadFiles) return { photos: [], others: [], held: [], more: 0, hidden: files.length + extra + sheets, sheets: 0 }
   const shown = all ? [...files] : files.slice(0, FILES_SHOWN)
   return {
     photos: shown.filter((file) => file.status === 'AVAILABLE' && PICTURES.has(file.contentType)),
     others: shown.filter((file) => file.status === 'AVAILABLE' && !PICTURES.has(file.contentType)),
     held: shown.filter((file) => file.status !== 'AVAILABLE'),
     more: all ? 0 : Math.max(0, files.length - FILES_SHOWN),
-    hidden: 0,
+    hidden: extra,
+    sheets,
   }
 }
 
@@ -196,18 +208,20 @@ export const sizeWords = (bytes: number, intlLocale: string): string =>
 
 // ── the card's ⋯ menu (T3-F07, F09, F10) ─────────────────────────────────────────────────────────────────────────────
 
-export type CardAction = 'reply' | 'task' | 'link'
+export type CardAction = 'reply' | 'task' | 'link' | 'useOn'
 
 /**
  * What the ⋯ of a card offers: Reply on the customer's message (when the reader may answer), Make a task (where the host has
  * tasks), Copy link to message (always: it opens the record with this message unfolded and focused). Remind me is the host's own
  * part beside the menu (B-W2b-388). Correct waits for thread-G20 (TH-3); a message on its way offers nothing yet.
  */
-export function cardActions(message: Pick<CardMessage, 'kind' | 'outbox'>, context: Pick<CardContext, 'canReply' | 'canTask'>): CardAction[] {
+export function cardActions(message: Pick<CardMessage, 'kind' | 'outbox'> & { files?: readonly Pick<CardFile, 'status'>[] }, context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn'> & { readonly canReadFiles?: boolean }): CardAction[] {
   if (message.outbox) return []
   const actions: CardAction[] = []
   if (message.kind === 'theirs' && context.canReply) actions.push('reply')
   if (context.canTask) actions.push('task')
+  // B-TH-231: "Use on another record…" when the message has a file the reader opens and may add files elsewhere (files.upload).
+  if (context.canUseOn && context.canReadFiles && (message.files ?? []).some((file) => file.status === 'AVAILABLE')) actions.push('useOn')
   actions.push('link')
   return actions
 }

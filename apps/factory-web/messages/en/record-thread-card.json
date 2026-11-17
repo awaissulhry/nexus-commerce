@@ -44,7 +44,9 @@
     "task": "Make a task",
     "taskHint": "text from this message, due date, person",
     "link": "Copy link to message",
-    "linkHint": "opens the record with this message open"
+    "linkHint": "opens the record with this message open",
+    "useOn": "Use on another record…",
+    "useOnHint": "Copy its files to an order, a quote or a style of the same customer"
   },
   "body": {
     "showAll": "Show all ({count} lines)",
@@ -67,7 +69,9 @@
     "quarantined": "Held for the virus scan: it opens once the scan says it is clean",
     "pending": "Still uploading",
     "cannotOpen_one": "{count} file you cannot open",
-    "cannotOpen_other": "{count} files you cannot open"
+    "cannotOpen_other": "{count} files you cannot open",
+    "sheetLocked_one": "Measurement sheet — you cannot open it",
+    "sheetLocked_other": "{count} measurement sheets — you cannot open them"
   },
   "file": {
     "kind": {

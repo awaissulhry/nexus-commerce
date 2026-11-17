@@ -34,5 +34,53 @@
     "frame711": "Dock at 1920, 711 px",
     "frame375": "Phone, 375 px",
     "frameLabel": "Thread column {width} px wide"
+  },
+  "locked": {
+    "sheet": "Measurement sheet — you cannot open it"
+  },
+  "useOn": {
+    "action": "Use on another record…",
+    "actionFor": "Use {name} on another record",
+    "bulk_one": "Use on another record ({count})",
+    "bulk_other": "Use on another record ({count})",
+    "title_one": "Use “{name}” on another record",
+    "title_other": "Use {count} files on another record",
+    "subtitle": "A copy goes there and says where it came from: records of {party}, or of no customer.",
+    "subtitleNone": "A copy goes there and says where it came from.",
+    "search": "Find a record",
+    "searchHint": "An order, a quote, a request or a style: its number or name (3 characters or more).",
+    "searching": "Looking for records…",
+    "tooShort": "Type 3 characters or more.",
+    "empty": "No record of this customer, or of no customer, matches.",
+    "results": "Records you can add files to",
+    "relation": {
+      "same": "Same customer",
+      "none": "No customer",
+      "customer": "A customer’s record"
+    },
+    "share": "Also share the copy with {party}",
+    "shareHint": "Only with the chosen record’s own customer; otherwise the office only.",
+    "shareNoRight": "Sharing with the customer needs the right to manage files.",
+    "confirm_one": "Copy the file",
+    "confirm_other": "Copy {count} files",
+    "cancel": "Cancel",
+    "choose": "Choose a record first.",
+    "busy": "Copying…",
+    "partial": "{copied} copied; these did not go:",
+    "refused": {
+      "otherParty": "That record belongs to another customer: a file goes only to a record of the same customer, or to one of no customer.",
+      "notFound": "The file or the record is out of your reach, or gone.",
+      "forbidden": "You may not add files to that record, or share them with its customer.",
+      "sameRecord": "The file is on this record already.",
+      "owned": "That record keeps its files on its own screen: add the file there.",
+      "state": "The file is not available any more (held or removed).",
+      "network": "No answer from the server: nothing was copied. Try again.",
+      "failed": "The file could not be copied. Try again."
+    },
+    "source": {
+      "line": "Copied from {type} · {name} (version {n})",
+      "hidden": "A copy: its source is on a record out of your reach.",
+      "locked": "A copy of a measurement sheet."
+    }
   }
 }

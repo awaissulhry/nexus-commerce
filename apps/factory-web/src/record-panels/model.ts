@@ -8,6 +8,8 @@
  */
 
 import type { FileDepthModel } from './files/model'
+// B-TH-084: the design files the API takes (download-only), as factory-domain lists them.
+import { ARTWORK_TYPES, DESIGN_TYPE_BY_EXTENSION, DESIGN_TYPES } from '@nexus/factory-domain/files/design'
 import type { ApprovalsPanelModel } from './approvals/model'
 // B-W2b-307 (PLT-104): the record's approval history in the Approvals tab.
 import type { ApprovalHistoryModel } from '../shell/panels/approvals/model'
@@ -70,9 +72,10 @@ const OFFICE_DOCUMENTS = [
  * What each kind of file may hold and how big (platform/files/rules.ts KIND_RULES): the file picker's `accept` list and
  * the size check before anything is sent. The API checks again; nothing a browser would run is accepted at all.
  */
+// B-TH-084 (B-TH-231's mirror of the API): design files download-only — Illustrator, EPS, Photoshop as a file or a document, a ZIP a document.
 export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: readonly string[]; readonly maxBytes: number }>> = {
-  ATTACHMENT: { contentTypes: [PDF, ...IMAGES, ...OFFICE_DOCUMENTS, 'text/csv', 'text/plain'], maxBytes: 25 * MIB },
-  DOCUMENT: { contentTypes: [PDF, ...OFFICE_DOCUMENTS, 'text/csv'], maxBytes: 25 * MIB },
+  ATTACHMENT: { contentTypes: [PDF, ...IMAGES, ...OFFICE_DOCUMENTS, 'text/csv', 'text/plain', ...ARTWORK_TYPES], maxBytes: 25 * MIB },
+  DOCUMENT: { contentTypes: [PDF, ...OFFICE_DOCUMENTS, 'text/csv', ...DESIGN_TYPES], maxBytes: 25 * MIB },
   PHOTO: { contentTypes: IMAGES, maxBytes: 15 * MIB },
   CERTIFICATE: { contentTypes: [PDF, 'image/jpeg', 'image/png'], maxBytes: 20 * MIB },
   FISCAL_ARCHIVE: { contentTypes: [PDF, 'application/xml', 'text/xml', 'application/pkcs7-mime'], maxBytes: 20 * MIB },
@@ -638,6 +641,8 @@ const BY_EXTENSION: Readonly<Record<string, string>> = {
   csv: 'text/csv',
   txt: 'text/plain',
   xml: 'application/xml',
+  // B-TH-084: design files named but not typed by the browser.
+  ...DESIGN_TYPE_BY_EXTENSION,
   p7m: 'application/pkcs7-mime',
   // B-W2b-96: voice notes.
   webm: 'audio/webm',

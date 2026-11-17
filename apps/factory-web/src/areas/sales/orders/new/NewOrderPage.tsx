@@ -14,6 +14,10 @@ import { abilitiesOf, readProblem, romeToday, writeProblem } from '../model'
 import { COMPOSER_EMPTY } from '../record/record-model'
 import { draftKey, EMPTY_DRAFT, headerFromAddress, manualBody, parseDraft, sentLines, type NewOrderDraft, type NewOrderModel } from './new-model'
 import { NewOrderView } from './view/NewOrderView'
+// B-TH-231: the customer's files, held in the page and attached to the new order right after Confirm.
+import { completeUpload, requestUpload } from '../../../../record-panels/api'
+import { putToStore, sha256Hex } from '../../../../record-panels/store'
+import { holdFiles, toAttach, type HeldFile } from './new-files'
 
 /**
  * `/w/<company>/sales/orders/new?company=&party=&contact=&ref=` (B-W2a-50; the New order dialog opens it): reads the
@@ -68,6 +72,51 @@ function NewOrderContainer() {
   const searchSeq = useRef(0)
   const previewSeq = useRef(0)
   const confirmKey = useRef<string | null>(null)
+  // ---- B-TH-231: the customer's files (the File objects stay here; the page draws the held list)
+  const canUpload = session.permissions.includes('files.upload')
+  const [held, setHeld] = useState<HeldFile[]>([])
+  const heldRef = useRef<HeldFile[]>([])
+  heldRef.current = held
+  const fileBodies = useRef(new Map<string, File>())
+  const [leftOut, setLeftOut] = useState(0)
+  const [made, setMade] = useState<{ id: string; number: string; href: string } | null>(null)
+  const [attachingNow, setAttachingNow] = useState(false)
+  const mark = (key: string, state: HeldFile['state']) => setHeld((now) => now.map((file) => (file.key === key ? { ...file, state } : file)))
+  /** Each held file to the made order (office only; a ticked sheet as MEASUREMENTS); true when every one went. */
+  const attachTo = async (order: { id: string }, companyId: string): Promise<boolean> => {
+    setAttachingNow(true)
+    let failed = 0
+    for (const file of toAttach(heldRef.current)) {
+      const body = fileBodies.current.get(file.key)
+      mark(file.key, 'attaching')
+      try {
+        if (!body) throw new Error('The file is no longer in this page.')
+        const bytes = await body.arrayBuffer()
+        const announced = await requestUpload(api, {
+          companyId,
+          record: { type: 'SalesOrder', id: order.id },
+          kind: file.kind,
+          name: file.name,
+          contentType: file.contentType,
+          sizeBytes: file.sizeBytes,
+          sha256: await sha256Hex(bytes),
+          visibility: ['OFFICE'],
+          floorSiteId: null,
+          partyId: null,
+          ...(file.sheet ? { measurementSheet: true } : {}),
+        })
+        await putToStore(announced.upload, new Blob([bytes], { type: file.contentType }))
+        await completeUpload(api, announced.file.id)
+        mark(file.key, 'attached')
+      } catch {
+        failed += 1
+        mark(file.key, 'failed')
+      }
+    }
+    setAttachingNow(false)
+    return failed === 0
+  }
+  // ---- end B-TH-231
 
   const readStyle = useCallback(
     (styleId: string) =>
@@ -136,7 +185,14 @@ function NewOrderContainer() {
     try {
       const order = await createManualOrder(api, manualBody(header, draft), confirmKey.current)
       store.write(draftKey(header), null)
-      router.push(`${prefix}/sales/orders/${order.id}`)
+      const href = `${prefix}/sales/orders/${order.id}`
+      // B-TH-231: the held files go now; when some do not, the order stays made and the page says so (Retry, Open the order).
+      if (toAttach(heldRef.current).length > 0) {
+        setMade({ id: order.id, number: order.number, href })
+        setBusy(false)
+        if (!(await attachTo(order, header.companyId))) return
+      }
+      router.push(href)
     } catch (error) {
       confirmKey.current = null
       setProblem(writeProblem(error))
@@ -159,7 +215,9 @@ function NewOrderContainer() {
         setDraft((current) => ({ ...current, lines: current.lines.map((entry) => (entry.key === line.key ? { ...entry, options: picks } : entry)) }))
       },
     })
-  const model: NewOrderModel = { prefix, can, today: romeToday(), header, party, number, draft, styles, composer, preview, busy, problem, newLineOptions }
+  // B-TH-231: the fold "Customer files".
+  const files: NewOrderModel['files'] = { held, canUpload, leftOut, made: made ? { number: made.number, href: made.href } : null, busy: attachingNow }
+  const model: NewOrderModel = { prefix, can, today: romeToday(), header, party, number, draft, styles, composer, preview, busy, problem, newLineOptions, files }
 
   return (
     <NewOrderView
@@ -220,6 +278,30 @@ function NewOrderContainer() {
           if (party.status !== 'ready') loadHeader()
           else runPreview()
         },
+        // ---- B-TH-231: the fold's held files; after Confirm, Retry sends only the ones that did not attach.
+        files: {
+          onDrop: (dropped) => {
+            const base = Date.now()
+            const next = holdFiles(heldRef.current, dropped, (index) => `held-${base}-${index}-${dropped[index]!.name}`)
+            for (const file of next.held) {
+              const body = dropped.find((one, index) => `held-${base}-${index}-${one.name}` === file.key)
+              if (body) fileBodies.current.set(file.key, body)
+            }
+            setHeld(next.held)
+            setLeftOut(next.leftOut)
+          },
+          onSheet: (key, sheet) => setHeld((now) => now.map((file) => (file.key === key ? { ...file, sheet } : file))),
+          onRemove: (key) => {
+            fileBodies.current.delete(key)
+            setHeld((now) => now.filter((file) => file.key !== key))
+          },
+          onRetry: () => {
+            if (!made || !header) return
+            void attachTo({ id: made.id }, header.companyId).then((all) => all && router.push(made.href))
+          },
+          onOpenOrder: () => made && router.push(made.href),
+        },
+        // ---- end B-TH-231
       }}
     />
   )

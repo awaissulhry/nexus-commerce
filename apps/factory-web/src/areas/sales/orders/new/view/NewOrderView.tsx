@@ -13,9 +13,11 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { money, percent } from '../../../quotes/model'
 import { issuePhrases, namesOf, piecesOf } from '../../daily-model'
-import { dayInstant } from '../../model'
+import { dayInstant, type Phrase } from '../../model'
 import { LinesEditor } from '../../record/view/LinesEditor'
 import { confirmHeld, dateProblems, previewByKey, sentLines, type NewOrderActions, type NewOrderModel } from '../new-model'
+// B-TH-231: the customer's files, held until Confirm.
+import { CustomerFiles, FilesOutcome } from './CustomerFiles'
 import '../../orders.css'
 
 /**
@@ -39,7 +41,9 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
   const locale = useLocale()
   const listHref = `${model.prefix}/sales/orders`
   const party = model.party.status === 'ready' ? model.party.value : null
-  const held = confirmHeld({ can: model.can, draft: model.draft, preview: model.preview, today: model.today, busy: model.busy })
+  // B-TH-231: once the order is made (its files still attaching or refused) the page never makes it twice.
+  const made = Boolean(model.files?.made)
+  const held: Phrase | null = made ? { key: 'newOrder.held.made' } : confirmHeld({ can: model.can, draft: model.draft, preview: model.preview, today: model.today, busy: model.busy })
   const heldText = held ? t(held.key, held.params) : null
   const dates = dateProblems(model.draft, model.today)
   const { nets, prices } = previewByKey(model.draft, model.preview.value)
@@ -127,7 +131,7 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
           }
           actions={
             <span className="fw-so-actions">
-              <Button size="sm" onClick={() => actions?.onDiscard?.()} heldReason={model.busy ? t('held.busy') : null}>
+              <Button size="sm" onClick={() => actions?.onDiscard?.()} heldReason={made ? t('newOrder.held.made') : model.busy ? t('held.busy') : null}>
                 {t('newOrder.discard')}
               </Button>
               <Button size="sm" variant="primary" heldReason={heldText} onClick={() => actions?.onConfirm?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
@@ -149,7 +153,8 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
       </div>
 
       {model.problem && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
-      <Banner tone="info" title={t('newOrder.nothingSaved')} />
+      {/* B-TH-231: once the order is made its files' outcome replaces "nothing is saved" (the page stays only for them). */}
+      {model.files?.made ? <FilesOutcome model={model.files} actions={actions?.files} /> : <Banner tone="info" title={t('newOrder.nothingSaved')} />}
 
       <RecordLayout
         asideLabel={t('summary.label')}
@@ -173,6 +178,7 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
               model={{ mode: 'new', lines: model.draft.lines, order: null, styles: model.styles, composer: model.composer, price: model.can.price, currency, priceBasis: priced?.priceBasis ?? 'NET', minimums: {}, nets: model.can.price ? nets : undefined, listPrices: prices, busy: model.busy, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
               actions={{ onCells: actions?.onCells, onPrice: actions?.onPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}
             />
+            {model.files && <CustomerFiles model={model.files} actions={actions?.files} />}
           </div>
         }
         aside={

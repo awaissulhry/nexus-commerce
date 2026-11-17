@@ -5,9 +5,13 @@
  * reply it is shared with the record's customer — and only with that customer (B-TH-003, the API). An office-only file in a reply
  * is named: share it with the customer (files.manage) or take it off; the mail carries at most 10 MB together. Pure.
  *
- * Not drawn until the back end has it: the measurement-sheet tick (N11, B-TH-083: picture 4 marks it "needs N11"), design files
- * (AI, EPS, PSD: G12), resumable big uploads and expiring links (later).
+ * Not drawn until the back end has it: the measurement-sheet tick (N11, B-TH-083: picture 4 marks it "needs N11"), resumable big
+ * uploads and expiring links (later). B-TH-084 (G12): design files (Illustrator, EPS, Photoshop; a ZIP as a document) are taken,
+ * download-only; SVG, HTML and scripts never, with the way out named ("send a PDF or PNG").
  */
+
+// B-TH-084: the design files the API takes, as factory-domain lists them.
+import { ARTWORK_TYPES, DESIGN_TYPE_BY_EXTENSION, isPageType, ZIP_TYPES } from '@nexus/factory-domain/files/design'
 
 const MIB = 1_048_576
 
@@ -29,6 +33,9 @@ const ACCEPTED = [
   'application/vnd.oasis.opendocument.spreadsheet',
   'text/csv',
   'text/plain',
+  // B-TH-084: design files, download-only.
+  ...ARTWORK_TYPES,
+  ...ZIP_TYPES,
 ]
 const BY_EXTENSION: Readonly<Record<string, string>> = {
   pdf: 'application/pdf',
@@ -43,8 +50,9 @@ const BY_EXTENSION: Readonly<Record<string, string>> = {
   ods: ACCEPTED[8],
   csv: 'text/csv',
   txt: 'text/plain',
+  // B-TH-084: a design file named but not typed by the browser.
+  ...DESIGN_TYPE_BY_EXTENSION,
 }
-const DESIGN = /\.(ai|eps|psd)$/i
 const SCRIPTS = /\.(svg|svgz|html?|xhtml|js|mjs|exe|sh|bat|cmd|ps1|php)$/i
 
 /** A file's type as the browser says it, else from its name (a phone photo often comes without one). */
@@ -54,8 +62,8 @@ export function contentTypeOf(file: { name: string; type?: string }): string {
   return BY_EXTENSION[extension] ?? 'application/octet-stream'
 }
 
-/** The kind the API files it as: a picture is a PHOTO (15 MB), anything else an ATTACHMENT (25 MB). */
-export const kindOf = (contentType: string): 'PHOTO' | 'ATTACHMENT' => (PHOTOS.includes(contentType) ? 'PHOTO' : 'ATTACHMENT')
+/** The kind the API files it as: a picture is a PHOTO (15 MB), a ZIP a DOCUMENT (B-TH-084), anything else an ATTACHMENT (25 MB). */
+export const kindOf = (contentType: string): 'PHOTO' | 'ATTACHMENT' | 'DOCUMENT' => (PHOTOS.includes(contentType) ? 'PHOTO' : ZIP_TYPES.includes(contentType) ? 'DOCUMENT' : 'ATTACHMENT')
 
 export interface Problem {
   key: string
@@ -64,8 +72,8 @@ export interface Problem {
 
 /** Why a file is not taken (T6-F05: the reason names the limit and the way out), or null. */
 export function refusalOf(file: { name: string; type?: string; size: number }): Problem | null {
-  if (SCRIPTS.test(file.name) || /svg|html|javascript/.test(file.type ?? '')) return { key: 'refused.type' }
-  if (DESIGN.test(file.name)) return { key: 'refused.design' }
+  // B-TH-084: an SVG, HTML or script file is never taken — the words name the way out ("send a PDF or PNG").
+  if (SCRIPTS.test(file.name) || isPageType(file.type ?? '') || /svg|html|javascript/.test(file.type ?? '')) return { key: 'refused.page' }
   const type = contentTypeOf(file)
   if (!ACCEPTED.includes(type)) return { key: 'refused.type' }
   if (file.size === 0) return { key: 'refused.empty' }

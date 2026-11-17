@@ -44,7 +44,9 @@
     "task": "Crea un'attività",
     "taskHint": "testo da questo messaggio, scadenza, persona",
     "link": "Copia il link al messaggio",
-    "linkHint": "apre il record con questo messaggio aperto"
+    "linkHint": "apre il record con questo messaggio aperto",
+    "useOn": "Usa su un altro record…",
+    "useOnHint": "Copia i suoi file su un ordine, un preventivo o un modello dello stesso cliente"
   },
   "body": {
     "showAll": "Mostra tutto ({count} righe)",
@@ -67,7 +69,9 @@
     "quarantined": "Trattenuto per il controllo antivirus: si apre quando il controllo dice che è pulito",
     "pending": "Ancora in caricamento",
     "cannotOpen_one": "{count} file che non puoi aprire",
-    "cannotOpen_other": "{count} file che non puoi aprire"
+    "cannotOpen_other": "{count} file che non puoi aprire",
+    "sheetLocked_one": "Scheda misure — non puoi aprirla",
+    "sheetLocked_other": "{count} schede misure — non puoi aprirle"
   },
   "file": {
     "kind": {
