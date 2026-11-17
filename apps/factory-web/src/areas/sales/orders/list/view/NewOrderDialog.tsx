@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
@@ -12,7 +13,8 @@ import type { NewOrderDialogModel, OrdersListActions } from '../list-model'
  * New order (design pop:orders.new, B-W2a-50; SAL-202 manual entry): the selling company when there are several, the
  * customer (search by name, code, VAT number), the contact and the customer's PO, and the number it will get. "Create
  * draft order" opens the order's Lines on the screen — nothing is written until "Confirm order" there (the API keeps
- * no draft order). ⌘↵ creates; Esc closes.
+ * no draft order). ⌘↵ creates; Esc closes. B-TH-221: one line points a written request (a mail, a letter, a call to answer
+ * first) to Incoming's New request.
  */
 export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel; actions?: OrdersListActions }) {
   const t = useT('orders')
@@ -58,6 +60,12 @@ export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel;
         }}
       >
         <p className="fw-so-hint">{t('newOrder.body')}</p>
+        {/* B-TH-221: a written request is answered in Incoming before it becomes an order. */}
+        {model.incomingHref ? (
+          <p className="fw-so-hint">
+            {t('newOrder.writtenRequest')} <Link href={model.incomingHref}>{t('newOrder.writtenRequestLink')}</Link>
+          </p>
+        ) : null}
         {model.companies.length > 1 && (
           <Field label={t('newOrder.company')}>
             <Select value={model.companyId} onChange={(event) => actions?.onNewCompany?.(event.target.value)}>

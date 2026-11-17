@@ -22,9 +22,9 @@ import {
   type InquiryTile,
   type TypedSource,
 } from '@nexus/factory-domain/sales/inquiries/rules'
-import type { CreateInquiryBody, FromMailBody, LineBody, UpdateInquiryBody } from '@nexus/factory-domain/sales/inquiries/contracts'
+import type { LineBody, UpdateInquiryBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { InquiryLine, InquiryList, InquiryRow, InquiryView, MailDraft } from './api'
+import type { InquiryLine, InquiryList, InquiryRow, InquiryView } from './api'
 
 /**
  * Sales › Inquiries (SCR-105, B-W2b-322 on B-W2b-295's API), pure: who may do what, the page's address (the tiles = the API's
@@ -710,110 +710,7 @@ export function toggleTechPack(draft: RequestDraft, fileId: string, on: boolean)
   return { ...draft, techPackFileIds: on ? [...ids, fileId] : ids }
 }
 
-// ---- New inquiry (typed, or from a mail) ---------------------------------------------------------------------------------------
-
-export type WhoKind = 'customer' | 'prospect'
-
-export interface NewDraft {
-  readonly source: TypedSource
-  readonly who: WhoKind
-  readonly partyId: string | null
-  readonly contactId: string | null
-  readonly prospect: ProspectDraft
-  readonly request: string
-  readonly lines: readonly LineDraft[]
-  readonly targetPrice: string
-  readonly currency: string
-  readonly wantedDate: string | null
-  readonly note: string
-  readonly assignToMe: boolean
-  /** From a mail: the mail's kept attachments named as the brand's tech pack. */
-  readonly techPackFileIds: readonly string[]
-  readonly techPackVersion: string
-}
-
-export const emptyNewDraft = (currency = 'EUR'): NewDraft => ({
-  source: 'PHONE',
-  who: 'customer',
-  partyId: null,
-  contactId: null,
-  prospect: { name: '', company: '', email: '', phone: '' },
-  request: '',
-  lines: [],
-  targetPrice: '',
-  currency,
-  wantedDate: null,
-  note: '',
-  assignToMe: false,
-  techPackFileIds: [],
-  techPackVersion: '',
-})
-
-/** The draft "Make an inquiry" starts from: the mail's sender as the customer (when Nexus knows them) or a prospect, its words. */
-export function draftFromMail(mail: MailDraft, currency = 'EUR'): NewDraft {
-  const base = emptyNewDraft(currency)
-  return {
-    ...base,
-    who: mail.party ? 'customer' : 'prospect',
-    partyId: mail.party?.id ?? null,
-    contactId: mail.contactId,
-    prospect: { name: mail.prospect?.name ?? '', company: mail.prospect?.company ?? '', email: mail.prospect?.email ?? '', phone: mail.prospect?.phone ?? '' },
-    request: mail.request,
-  }
-}
-
-/** Why Create inquiry is held, or null. */
-export function newDraftHeld(draft: NewDraft, can: Pick<InquiriesCan, 'manage' | 'price'>, offline: boolean, fromMail: boolean): Phrase | null {
-  if (!can.manage) return { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } }
-  if (draft.who === 'customer' && !draft.partyId) return { key: 'new.held.customer' }
-  if (draft.who === 'prospect') {
-    const problem = prospectProblem(draft.prospect)
-    if (problem) return problem
-  }
-  if (!fromMail && blank(draft.request)) return { key: 'new.held.request' }
-  if (can.price && !blank(draft.targetPrice) && parsePrice(draft.targetPrice) === null) return { key: 'request.problem.price' }
-  const lines = draft.lines.filter((line) => !isBlankLine(line))
-  const index = lines.findIndex((line) => lineProblem(line) !== null)
-  if (index >= 0) return { key: 'line.problem.at', params: { n: index + 1, problem: lineProblem(lines[index]!)!.key } }
-  if (offline) return { key: 'held.offline' }
-  return null
-}
-
-const optionalLines = (draft: NewDraft) => {
-  const lines = draft.lines.filter((line) => !isBlankLine(line))
-  return lines.length > 0 ? { lines: lines.map(lineBodyOf) } : {}
-}
-const who = (draft: NewDraft) =>
-  draft.who === 'customer' && draft.partyId ? { partyId: draft.partyId, ...(draft.contactId ? { contactId: draft.contactId } : {}) } : { prospect: { ...prospectBodyOf(draft.prospect), lawfulBasis: 'CONTRACT' as const } }
-const asked = (draft: NewDraft, can: Pick<InquiriesCan, 'price'>, me: string | null) => {
-  const price = can.price ? parsePrice(draft.targetPrice) : null
-  return {
-    ...(draft.wantedDate ? { wantedDate: draft.wantedDate } : {}),
-    ...(price !== null ? { targetUnitPrice: price } : {}),
-    currency: draft.currency,
-    ...(blank(draft.note) ? {} : { note: draft.note.trim() }),
-    ...(blank(draft.techPackVersion) ? {} : { techPackVersion: draft.techPackVersion.trim() }),
-    ...optionalLines(draft),
-    ...(draft.assignToMe && me ? { assigneeId: me } : {}),
-  }
-}
-
-/** POST /sales/inquiries: what New inquiry sends. */
-export function newBodyOf(draft: NewDraft, companyId: string, can: Pick<InquiriesCan, 'price'>, me: string | null): CreateInquiryBody {
-  return { companyId, source: draft.source, ...who(draft), request: draft.request.trim(), ...asked(draft, can, me) } as CreateInquiryBody
-}
-
-/** POST /sales/inquiries/from-mail/:id: what "Make an inquiry" sends (the MAIL's version). */
-export function fromMailBodyOf(draft: NewDraft, mail: MailDraft, version: number, can: Pick<InquiriesCan, 'price'>, me: string | null, companyId: string | null): FromMailBody {
-  return {
-    version,
-    ...(mail.companyId === null && companyId ? { companyId } : {}),
-    ...who(draft),
-    ...(blank(draft.request) ? {} : { request: draft.request.trim() }),
-    ...(draft.techPackFileIds.length > 0 ? { techPackFileIds: [...draft.techPackFileIds] } : {}),
-    ...asked(draft, can, me),
-  } as FromMailBody
-}
+// ---- New request (typed, or from a mail): new-request.ts (B-TH-221) ------------------------------------------------------------
 
 // ---- Decline, Lost, Make quote ----------------------------------------------------------------------------------------------
 

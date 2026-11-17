@@ -10,7 +10,7 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { listAddress, recordAddress } from '../../../lib/records/record-links'
 import { permissionCheck } from '../../../lib/session/session'
 import { OFFICE_PAGES, officeNavFor } from '../../../shell/nav/office-nav'
-import { MAIL_DRAFT, PROSPECT_VIEW, QUOTED_VIEW, ROLE_PERMISSIONS, ROWS, VIEW } from './demo/fixtures'
+import { PROSPECT_VIEW, QUOTED_VIEW, ROLE_PERMISSIONS, ROWS, VIEW } from './demo/fixtures'
 import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
@@ -21,13 +21,10 @@ import {
   chipsOf,
   declineHeld,
   DESIGN_TILES,
-  draftFromMail,
   emptyLine,
-  emptyNewDraft,
   exportPhrases,
   fieldLines,
   filesPhrases,
-  fromMailBodyOf,
   HOME_ADDRESS,
   inquiriesCan,
   KNOWN_RIGHTS,
@@ -35,8 +32,6 @@ import {
   lineBodyOf,
   lineProblem,
   messageReach,
-  newBodyOf,
-  newDraftHeld,
   nextAfter,
   noticeKey,
   noticeLink,
@@ -193,26 +188,6 @@ describe('the Request’s Apply sends only what changed', () => {
     expect(match.body).toEqual({ version: PROSPECT_VIEW.version, partyId: 'p1', prospect: null, contactId: 'c1' })
     const closed = requestChanges(QUOTED_VIEW, { ...requestDraftOf(QUOTED_VIEW), request: 'changed', note: 'A note' }, owner)
     expect(closed.body).toEqual({ version: QUOTED_VIEW.version, note: 'A note' })
-  })
-})
-
-describe('New inquiry and Make an inquiry from a mail', () => {
-  it('held until the customer (or a prospect) and the request are said; the body is what the API takes', () => {
-    expect(newDraftHeld(emptyNewDraft(), owner, false, false)?.key).toBe('new.held.customer')
-    expect(newDraftHeld({ ...emptyNewDraft(), who: 'prospect' }, owner, false, false)?.key).toBe('prospect.problem.who')
-    const draft = { ...emptyNewDraft(), partyId: 'p1', contactId: 'c1', request: ' 60 trousers ', targetPrice: '38', assignToMe: true }
-    expect(newDraftHeld(draft, owner, false, false)).toBeNull()
-    expect(newBodyOf(draft, 'co1', owner, 'me')).toEqual({ companyId: 'co1', source: 'PHONE', partyId: 'p1', contactId: 'c1', request: '60 trousers', targetUnitPrice: '38', currency: 'EUR', assigneeId: 'me' })
-    const prospect = { ...emptyNewDraft(), who: 'prospect' as const, prospect: { name: '', company: 'Demo Club', email: '', phone: '' }, request: 'Jackets' }
-    expect(newBodyOf(prospect, 'co1', owner, null)).toMatchObject({ prospect: { company: 'Demo Club', name: null, lawfulBasis: 'CONTRACT' } })
-  })
-
-  it('from a mail: the sender’s customer, the mail’s words, its version, its attachments as the tech pack', () => {
-    const draft = { ...draftFromMail(MAIL_DRAFT), techPackFileIds: [MAIL_DRAFT.attachments[0]!.id] }
-    expect(draft).toMatchObject({ who: 'customer', partyId: MAIL_DRAFT.party!.id, contactId: MAIL_DRAFT.contactId })
-    expect(newDraftHeld({ ...draft, request: '' }, owner, false, true)).toBeNull()
-    expect(fromMailBodyOf(draft, MAIL_DRAFT, 4, owner, null, 'co1')).toMatchObject({ version: 4, partyId: MAIL_DRAFT.party!.id, techPackFileIds: [MAIL_DRAFT.attachments[0]!.id] })
-    expect(fromMailBodyOf(draft, MAIL_DRAFT, 4, owner, null, 'co1')).not.toHaveProperty('companyId')
   })
 })
 

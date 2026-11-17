@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { isApiError } from '../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
@@ -10,60 +9,39 @@ import { useLiveBus } from '../../../shell/live/use-live'
 import {
   assignMany,
   companiesWithoutNumbering,
-  createFromMail,
-  createInquiry,
   declineMany,
-  findStyles,
   LIST_LIMIT,
   listAssignees,
-  listContacts,
   listCustomers,
   listInquiries,
   mailToSortCount,
-  readMailDraft,
   readPicture,
-  readMailVersion,
-  readStyle,
-  uploadFile,
-  uploadRefusal,
-  type ContactOption,
   type InquiryList,
   type InquiryRow,
-  type InquiryView,
-  type MailDraft,
   type PartyOption,
-  type StyleOption,
 } from './api'
 import {
   addressOf,
   addressText,
   DISMISSED_STORE,
-  draftFromMail,
   emptyDecline,
-  emptyNewDraft,
-  fieldLines,
-  fromMailBodyOf,
   HOME_ADDRESS,
   inquiriesCan,
-  newBodyOf,
   nextAfter,
   queryOf,
   readProblem,
   fullPageHref,
   writeProblem,
   type ListAddress,
-  type Loaded,
-  type NewDraft,
   type Notice,
   type NoticeFacts,
   type RowVerb,
 } from './model'
 import type { RecordVerb } from './record-model'
 import { useInquiry } from './use-inquiry'
-import type { StyleRead } from './view/LinesEditor'
+import { useNewRequest } from './use-new-request'
 import type { PictureLoader } from './view/cells'
 import { InquiriesView, type BulkDialog } from './view/InquiriesView'
-import type { NewInquiryModel } from './view/NewInquiryDialog'
 
 const readDismissed = (): string[] => {
   try {
@@ -81,23 +59,13 @@ const keepDismissed = (keys: string[]) => {
   }
 }
 
-interface NewState {
-  draft: NewDraft
-  mail: { id: string; draft: Loaded<MailDraft> } | null
-  contacts: { items: ContactOption[] | null; problem: string | null } | null
-  files: Array<{ key: string; file: File }>
-  busy: boolean
-  notice: Notice | null
-}
-
-let fileSeq = 0
-
 /**
  * `/w/<company>/sales/incoming` (SCR-105; B-TH-216: Sales › Incoming, renamed from Inquiries): the requests in the shared list frame with the API's own filters in the address
  * — `?tile=` (a saved filter; the tiles), `?source=`, `?party=` / `?prospect=1`, `?q=` — the inquiry in its DetailModal
  * (`?open=<id>&tab=`, the record container `use-inquiry.tsx`; J / K walk the rows; after a decision the next one opens), New
- * inquiry (`c`, `?new=1`), "Make an inquiry" from a mail (`?mail=<inbound mail id>`), Assign to… and Decline N over a
- * selection (the API's all-or-none bulk routes). Live `inquiry.*` changes wait behind "N updates · Show".
+ * request (`c`, `?new=1`; B-TH-221: the portal's compose with the customer or the prospect, `use-new-request.ts`), "Make
+ * incoming request" from a mail (`?mail=<inbound mail id>`, the same window), Assign to… and Decline N over a selection (the
+ * API's all-or-none bulk routes). Live `inquiry.*` changes wait behind "N updates · Show".
  */
 export function InquiriesPage() {
   const api = useOfficeApi()
@@ -222,103 +190,34 @@ export function InquiriesPage() {
     [go],
   )
 
-  // ---- New inquiry, and "Make an inquiry" from a mail ---------------------------------------------------------------------------
-  const [created, setCreated] = useState<NewState | null>(null)
-  const newKey = useRef<string | null>(null)
-  const [styles, setStyles] = useState<{ items: StyleOption[] | null; problem: string | null } | null>(null)
-  const [details, setDetails] = useState<Record<string, StyleRead>>({})
-  const detailsRef = useRef(details)
-  detailsRef.current = details
-  const dialogOpen = address.isNew || !!address.mail
-  const mailId = address.mail
-  const defaultCurrency = 'EUR'
-
+  // ---- B-TH-221: New request (typed: a call, a visit, a fair, a letter), and "Make incoming request" from a mail -------------------
+  const [unnumbered, setUnnumbered] = useState(false)
+  const newOpen = address.isNew || !!address.mail
   useEffect(() => {
-    if (!dialogOpen || !can.view) {
-      setCreated(null)
-      return
-    }
-    newKey.current = null
-    setCreated({ draft: emptyNewDraft(defaultCurrency), mail: mailId ? { id: mailId, draft: { status: 'loading' } } : null, contacts: null, files: [], busy: false, notice: null })
-    if (mailId) {
-      readMailDraft(api, mailId)
-        .then((value) => setCreated((now) => (now ? { ...now, mail: { id: mailId, draft: { status: 'ready', value } }, draft: draftFromMail(value, defaultCurrency) } : now)))
-        .catch((error: unknown) => {
-          const kind = isApiError(error) ? error.kind : null
-          setCreated((now) => (now ? { ...now, mail: { id: mailId, draft: kind === 'not_found' ? { status: 'notFound' } : kind === 'forbidden' ? { status: 'forbidden' } : { status: 'error', problem: readProblem(error) } } } : now))
-        })
-    }
-  }, [dialogOpen, mailId, can.view, api])
-
-  useEffect(() => {
-    if (!dialogOpen || !can.styles || styles) return
-    setStyles({ items: null, problem: null })
-    findStyles(api, '')
-      .then((items) => setStyles({ items, problem: null }))
-      .catch((error: unknown) => setStyles({ items: [], problem: readProblem(error) }))
-  }, [dialogOpen, can.styles, styles, api])
-
-  const readDetail = useCallback(
-    (styleId: string) => {
-      if (!can.styles || detailsRef.current[styleId]) return
-      setDetails((now) => ({ ...now, [styleId]: { status: 'loading' } }))
-      readStyle(api, styleId)
-        .then((value) => setDetails((now) => ({ ...now, [styleId]: { status: 'ready', value } })))
-        .catch(() => setDetails((now) => ({ ...now, [styleId]: { status: 'error' } })))
-    },
-    [api, can.styles],
-  )
-
-  const pickedParty = created?.draft.who === 'customer' ? created.draft.partyId : null
-  useEffect(() => {
-    if (!pickedParty || !can.parties) {
-      setCreated((now) => (now && now.contacts ? { ...now, contacts: null } : now))
-      return
-    }
-    setCreated((now) => (now ? { ...now, contacts: { items: null, problem: null } } : now))
-    listContacts(api, pickedParty)
-      .then((items) => setCreated((now) => (now ? { ...now, contacts: { items, problem: null } } : now)))
-      .catch((error: unknown) => setCreated((now) => (now ? { ...now, contacts: { items: null, problem: readProblem(error) } } : now)))
-  }, [pickedParty, can.parties, api])
-
-  const submitNew = useCallback(async () => {
-    const now = created
-    if (!now || now.busy || !companyId) return
-    const mail = now.mail ? (now.mail.draft.status === 'ready' ? now.mail.draft.value : null) : null
-    if (now.mail && !mail) return
-    setCreated({ ...now, busy: true, notice: null })
-    newKey.current ??= newIdempotencyKey()
-    try {
-      let inquiry: InquiryView
-      if (now.mail && mail) {
-        const version = await readMailVersion(api, now.mail.id)
-        inquiry = await createFromMail(api, now.mail.id, fromMailBodyOf(now.draft, mail, version, can, me, companyId), newKey.current)
-      } else {
-        inquiry = await createInquiry(api, newBodyOf(now.draft, companyId, can, me), newKey.current)
-      }
-      newKey.current = null
-      let failed = 0
-      for (const { file } of now.files) {
-        if (uploadRefusal(file)) {
-          failed += 1
-          continue
-        }
-        try {
-          await uploadFile(api, inquiry, file)
-        } catch {
-          failed += 1
-        }
-      }
-      setCreated(null)
+    if (!newOpen || !companyId || !mayNumbering) return
+    const controller = new AbortController()
+    companiesWithoutNumbering(api, [companyId], controller.signal)
+      .then((ids) => setUnnumbered(ids.includes(companyId)))
+      .catch(() => setUnnumbered(false))
+    return () => controller.abort()
+  }, [newOpen, companyId, mayNumbering, api])
+  const newRequest = useNewRequest({
+    open: newOpen,
+    mailId: address.mail,
+    api,
+    companyId,
+    can,
+    me,
+    offline,
+    unnumbered,
+    onDone: (inquiry, failed) => {
       setNotice({ key: failed > 0 ? 'new.doneFiles' : 'new.done', params: { number: inquiry.number, count: failed }, tone: failed > 0 ? 'warning' : 'success' })
       go({ isNew: false, mail: null, open: inquiry.id, tab: failed > 0 ? 'files' : 'request' })
       void load()
-    } catch (error) {
-      const refused = writeProblem(error)
-      if (!refused.stale) newKey.current = null
-      setCreated((open) => (open ? { ...open, busy: false, notice: { key: refused.key, params: refused.params, tone: 'danger', lines: fieldLines(refused.paths) } } : open))
-    }
-  }, [created, companyId, api, can, me, go, load])
+    },
+    onClose: () => go({ isNew: false, mail: null }),
+  })
+  // ---- end B-TH-221 ----
 
   // ---- Assign to… and Decline N over a selection -----------------------------------------------------------------------------
   const [bulk, setBulk] = useState<BulkDialog | null>(null)
@@ -389,20 +288,7 @@ export function InquiriesPage() {
         notice,
         dismissed,
         limit: LIST_LIMIT,
-        newInquiry: created
-          ? ({
-              draft: created.draft,
-              mail: created.mail,
-              customers: can.parties ? { items: customers, problem: null } : null,
-              contacts: created.contacts,
-              styles: can.styles ? styles : null,
-              details,
-              files: created.files.map(({ key, file }) => ({ key, name: file.name, size: file.size, problem: uploadRefusal(file) })),
-              busy: created.busy,
-              notice: created.notice,
-              offline,
-            } satisfies NewInquiryModel)
-          : null,
+        newRequest: newRequest.model, // B-TH-221
         bulk: bulk ? ({ ...bulk, model: { ...bulk.model, offline } } as BulkDialog) : null,
         detail: address.open ? record.model : null,
         // B-TH-217: the pane's facts — handled meanwhile, "Close thread…", the menu's rights.
@@ -445,15 +331,7 @@ export function InquiriesPage() {
           onClose: () => setBulk(null),
         },
         onNew: () => go({ isNew: true, open: null }),
-        newInquiry: {
-          onDraft: (patch) => setCreated((now) => (now ? { ...now, draft: { ...now.draft, ...patch } } : now)),
-          onCustomer: (partyId) => setCreated((now) => (now ? { ...now, draft: { ...now.draft, partyId, contactId: null } } : now)),
-          onStyle: readDetail,
-          onFiles: (files) => setCreated((now) => (now ? { ...now, files: [...now.files, ...files.map((file) => ({ key: `f${++fileSeq}`, file }))] } : now)),
-          onRemoveFile: (key) => setCreated((now) => (now ? { ...now, files: now.files.filter((one) => one.key !== key) } : now)),
-          onSubmit: () => void submitNew(),
-          onClose: () => go({ isNew: false, mail: null }),
-        },
+        newRequest: newRequest.actions, // B-TH-221
         record: record.actions,
         onCopy: (numbers) => {
           void navigator.clipboard
