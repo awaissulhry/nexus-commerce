@@ -3,6 +3,10 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { permissionCheck } from '../../../../lib/session/session'
 import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
 import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
+// B-TH-217: the reading pane's thread in the design cases (RecordThread v1 on made-up messages).
+import { DEMO_NOW, demoThread, OFFICE_PEOPLE } from '../../../../lib/record-thread/demo-data'
+import { RecordThread, type RecordThreadActions, type RecordThreadModel } from '../../../../lib/record-thread/RecordThread'
+import { BRAND_ALPHA } from '../../../../lib/testing/two-brands'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
@@ -358,3 +362,35 @@ export const panelsOf = (view: InquiryView, which: 'conversation' | 'files'): Re
   record: { type: 'Inquiry', id: view.id, companyId: view.companyId, siteId: null },
   title: `${view.number} · ${view.party?.name ?? view.fromWords}`,
 })
+
+// ---- B-TH-217: the reading pane's thread in the design cases (made up; nothing is sent) ----------------------------------------
+
+/** RecordThread v1 on Brand Alpha's made-up messages, the box on Office note (or, asked for info, the reply with the question). */
+export function threadModel(mode: 'note' | 'reply' = 'note', body = '', prospect = false): RecordThreadModel {
+  const brand = BRAND_ALPHA
+  return {
+    title: `${brand.numbers.request} · ${brand.tradeName}`,
+    feed: { state: 'ready', messages: demoThread(brand), events: [], context: { partyName: brand.tradeName, canReadFiles: true, canReply: !prospect }, more: false, older: 'idle', now: DEMO_NOW },
+    composer: {
+      context: { recordType: 'Inquiry', recordLabel: brand.numbers.request, party: prospect ? null : { name: brand.tradeName }, ...(prospect ? { prospect: { name: 'Demo Track Club' } } : {}), can: { post: true, email: true, manage: true }, people: OFFICE_PEOPLE },
+      draft: { mode, body, forFloor: false },
+      notes: [],
+      sending: false,
+      files: [],
+      recordFiles: [],
+      canUpload: true,
+      canShare: true,
+      canPick: true,
+      to: prospect ? [] : [{ address: brand.contact.email, name: brand.contact.name, kind: 'PARTY', organisation: brand.tradeName }],
+      cc: [],
+      subject: `Re: ${brand.numbers.request}`,
+      contacts: [{ name: brand.contact.name, email: brand.contact.email }],
+    },
+  } as RecordThreadModel
+}
+
+const noop = () => undefined
+const NOOP_THREAD = new Proxy({}, { get: () => noop }) as RecordThreadActions
+
+/** The pane's thread element for a design case. */
+export const demoThreadElement = (model: RecordThreadModel = threadModel()) => createElement('div', { className: 'fw-rt-pane-host' }, createElement(RecordThread, { model, actions: NOOP_THREAD }))

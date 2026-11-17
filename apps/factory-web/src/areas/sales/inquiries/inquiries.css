@@ -273,7 +273,7 @@
 }
 
 /* ── B-TH-216 (threads plan TH-1b): Sales › Incoming — the band, the Customer and Subject cells, the Picture cell's kinds ── */
-.fw-inq-band {
+.fw-inq-listband {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -305,3 +305,90 @@
   color: var(--nds-placeholder);
 }
 /* ── end B-TH-216 ── */
+
+/* ── B-TH-217 (threads plan TH-1b, PL2): the list column and the reading pane beside it ── */
+.fw-inq-listcol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+/* The pane stays in view while the list scrolls (the page scrolls under the shell's sticky band, 48 px). */
+.fw-inq-pane {
+  position: sticky;
+  top: calc(48px + var(--nds-space-12));
+  height: calc(100dvh - var(--nds-topbar-h) - 48px - var(--nds-space-24) - var(--nds-space-12));
+  min-height: 560px;
+  min-width: 0;
+}
+
+.fw-inq-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding-left: var(--nds-space-6);
+  border-left: 3px solid transparent;
+}
+
+.fw-inq-compact.is-open {
+  border-left-color: var(--nds-primary);
+}
+
+.fw-inq-compact-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-inq-compact-who > a,
+.fw-inq-compact-what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-inq-late {
+  color: var(--nds-danger-text);
+}
+
+@media (max-width: 1023px) {
+  .fw-inq-pane {
+    position: static;
+    height: calc(100dvh - var(--nds-topbar-h) - 48px - 96px);
+    min-height: 520px;
+  }
+}
+/* ── end B-TH-217 ── */
+
+/* ── B-TH-219 (PL5): the request's full page fills the main area's height; the thread and Details scroll on their own ── */
+.fw-inq-pageband {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-inq-pagebody {
+  height: calc(100dvh - var(--nds-topbar-h) - 48px - var(--nds-space-24) - 64px);
+  min-height: 600px;
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-inq-pagebody {
+    height: auto;
+    min-height: 0;
+  }
+}
+/* ── end B-TH-219 ── */
+
+/* B-TH-217: beside the pane the five tiles are counting chips (one row that wraps). */
+.fw-inq-tilechips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}

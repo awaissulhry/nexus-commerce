@@ -1,13 +1,14 @@
 'use client'
 
-import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isApiError } from '../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale } from '../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+import { setThreadStatus } from '../../../record-panels/api'
+import { readThreadPage } from '../../_shared/record-thread/api'
 import { useLiveBus } from '../../../shell/live/use-live'
 import {
   askInfo,
@@ -49,7 +50,8 @@ import {
 } from './model'
 import type { InquiryRecordActions, InquiryRecordModel, RecordDialog, RecordVerb } from './record-model'
 import type { StyleRead } from './view/LinesEditor'
-import type { RecordSlots } from './view/RecordTabs'
+// B-TH-217 / B-TH-218: the request's thread (RecordThread v1) with Ask for info.
+import { RequestThread, type AskInfo, type AskSend } from './pane/RequestThread'
 
 export interface UseInquiryOptions {
   /** The inquiry to show; null: none open (the hook then reads nothing). */
@@ -75,7 +77,19 @@ const LIVE = 'inquiry.'
  * with its optional message through the thread, Mark as lost), each one command at the version read with one
  * Idempotency-Key per attempt, and follows live `inquiry.*` changes (read again; while a draft is open: "changed since").
  */
-export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordModel; actions: InquiryRecordActions; slots: RecordSlots; asOf: string | null } {
+export interface InquiryRecordExtras {
+  /** The request's thread (RecordThread v1), for the pane's and the full page's main column. */
+  readonly thread: ReactNode
+  /** B-TH-217 (pane-head-F03): someone else changed the request while it was open — when (the pane says so, with Next). */
+  readonly handled: string | null
+  /** "Close thread…" (threads.manage): the confirm is open, and its refusal. */
+  readonly closing: { readonly problem: string | null } | null
+  readonly onCloseThread: () => void
+  readonly onConfirmClose: () => void
+  readonly onCancelClose: () => void
+}
+
+export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordModel; actions: InquiryRecordActions; asOf: string | null } & InquiryRecordExtras {
   const { inquiryId, tab, onTab, onDecided, onChanged, pendingVerb, onPendingDone } = options
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -93,6 +107,9 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
   const [saving, setSaving] = useState(false)
   const [dialog, setDialog] = useState<RecordDialog | null>(null)
   const [pictures, setPictures] = useState(false)
+  // B-TH-217: a live change this page did not make (another person handled the request meanwhile).
+  const [handled, setHandled] = useState<string | null>(null)
+  const ownWrite = useRef(0)
   const view = loaded.status === 'ready' ? loaded.value : null
   const viewRef = useRef<InquiryView | null>(null)
   viewRef.current = view
@@ -129,6 +146,8 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     setNotice(null)
     setPictures(false)
     setStale(null)
+    setHandled(null)
+    setAsk(null)
     keyRef.current = null
     void load()
   }, [load])
@@ -137,6 +156,8 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     {
       onChange: (change) => {
         if (!change.type.startsWith(LIVE) || !inquiryId || change.fields.inquiryId !== inquiryId) return
+        const someoneElse = Date.now() - ownWrite.current > 4000
+        if (someoneElse) setHandled(formatTime(new Date().toISOString(), { locale }))
         if (draftRef.current || saving || busy || dialog?.busy) setStale(formatTime(new Date().toISOString(), { locale }))
         else void load(true)
       },
@@ -216,6 +237,7 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     const changes = requestChanges(now, typed, can)
     if (!changes.body || changes.problem) return
     setSaving(true)
+    ownWrite.current = Date.now()
     keyRef.current ??= newIdempotencyKey()
     try {
       const value = await updateInquiry(api, now.id, changes.body, keyRef.current)
@@ -242,6 +264,7 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
   const verbKey = useRef<string | null>(null)
   const after = useCallback((value: InquiryView, done: Notice, decided: boolean) => {
     verbKey.current = null
+    ownWrite.current = Date.now()
     setLoaded({ status: 'ready', value })
     setAsOf(new Date().toISOString())
     setDialog(null)
@@ -262,15 +285,15 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
   )
 
   const runSimple = useCallback(
-    async (verb: 'askInfo' | 'resume' | 'unassign') => {
+    async (verb: 'resume' | 'unassign') => {
       const now = viewRef.current
       if (!now || busy) return
       setBusy(true)
+      ownWrite.current = Date.now()
       verbKey.current ??= newIdempotencyKey()
       try {
-        const value = verb === 'askInfo' ? await askInfo(api, now.id, now.version, verbKey.current) : verb === 'resume' ? await resumeInquiry(api, now.id, now.version, verbKey.current) : await assignInquiry(api, now.id, { version: now.version, assigneeId: null }, verbKey.current)
+        const value = verb === 'resume' ? await resumeInquiry(api, now.id, now.version, verbKey.current) : await assignInquiry(api, now.id, { version: now.version, assigneeId: null }, verbKey.current)
         after(value, { key: `done.${verb}`, params: { number: value.number }, tone: 'success' }, false)
-        if (verb === 'askInfo') onTab('activity')
       } catch (error) {
         verbKey.current = null
         const problem = refused(error, now.number)
@@ -279,7 +302,37 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
         setBusy(false)
       }
     },
-    [api, busy, after, refused, load, onTab],
+    [api, busy, after, refused, load],
+  )
+
+  // ---- B-TH-218: Ask for info — the thread's box becomes the reply with the question; the send is the request's own ask-info ----
+  const [ask, setAsk] = useState<AskInfo | null>(null)
+  const askKey = useRef<string | null>(null)
+  const sendAsk = useCallback(
+    async (send: AskSend): Promise<boolean> => {
+      const now = viewRef.current
+      if (!now) return false
+      ownWrite.current = Date.now()
+      askKey.current ??= newIdempotencyKey()
+      try {
+        const portal = now.source === 'PORTAL'
+        const message = { body: send.body, ...(send.subject.trim() ? { subject: send.subject.trim() } : {}), ...(!portal && send.to.length > 0 ? { to: [...send.to] } : {}), ...(send.sendOutside ? { sendOutside: true } : {}) }
+        const value = await askInfo(api, now.id, now.version, askKey.current, message)
+        askKey.current = null
+        setAsk(null)
+        after(value, { key: portal ? 'done.askInfoPortal' : 'done.askInfoMail', params: { number: value.number, customer: value.party?.name ?? value.fromWords }, tone: 'success' }, false)
+        return true
+      } catch (error) {
+        const problem = refused(error, now.number)
+        if (!problem.stale) askKey.current = null
+        else {
+          askKey.current = null
+          void load(true)
+        }
+        return false
+      }
+    },
+    [api, after, refused, load],
   )
 
   const onVerb = useCallback(
@@ -292,6 +345,11 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       else if (verb === 'decline') setDialog({ kind: 'decline', draft: emptyDecline, busy: false, notice: null })
       else if (verb === 'lost') setDialog({ kind: 'lost', note: '', busy: false, notice: null })
       else if (verb === 'quote') setDialog({ kind: 'quote', customerRef: '', busy: false, notice: null })
+      else if (verb === 'askInfo') {
+        // B-TH-218: the box switches to the reply with the question; the pane says where it goes.
+        setAsk({ token: Date.now(), question: '', portal: now.source === 'PORTAL' })
+        setNotice({ key: now.source === 'PORTAL' ? 'pane.ask.portal' : 'pane.ask.mail', params: { customer: now.party?.name ?? now.fromWords }, tone: 'info' })
+      }
       else void runSimple(verb)
     },
     [readPeople, runSimple],
@@ -310,6 +368,7 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       if (!now || dialog?.kind !== 'assign' || dialog.busy) return
       const people = dialog.people.status === 'ready' ? dialog.people.value.people : []
       setDialog({ ...dialog, busy: true, notice: null })
+      ownWrite.current = Date.now()
       verbKey.current ??= newIdempotencyKey()
       try {
         const value = await assignInquiry(api, now.id, { version: now.version, assigneeId }, verbKey.current)
@@ -329,6 +388,7 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     const now = viewRef.current
     if (!now || !dialog || dialog.busy || dialog.kind === 'assign') return
     setDialog({ ...dialog, busy: true, notice: null })
+    ownWrite.current = Date.now()
     verbKey.current ??= newIdempotencyKey()
     try {
       if (dialog.kind === 'decline') {
@@ -448,14 +508,51 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
 
   const record = view ? { type: 'Inquiry', id: view.id, companyId: view.companyId, siteId: null } : null
   const title = view ? `${view.number} · ${view.party ? view.party.name : view.fromWords}` : ''
-  const party = view?.party ? { id: view.party.id, name: view.party.name, emails: view.contact?.email ? [view.contact.email] : [] } : null
-  const slots: RecordSlots =
-    record && can.thread
-      ? {
-          activity: tab === 'activity' ? createElement(RecordPanels, { key: `t-${record.id}`, record, title, party }) : undefined,
-          files: tab === 'files' ? createElement(RecordPanels, { key: `f-${record.id}`, record, title, party, tab: 'files' }) : undefined,
-        }
-      : {}
+  const thread: ReactNode =
+    record && view && can.thread
+      ? createElement(RequestThread, {
+          key: `t-${record.id}`,
+          host: {
+            record,
+            title,
+            recordLabel: view.number,
+            party: view.party ? { id: view.party.id, name: view.party.name } : null,
+            prospect: view.party ? null : { name: view.fromWords },
+            recordHref: `${prefix}/sales/incoming/${encodeURIComponent(view.id)}`,
+          },
+          ask,
+          onAsk: sendAsk,
+        })
+      : null
 
-  return { model, actions, slots, asOf }
+  // ---- B-TH-217: "Close thread…" (threads.manage; never the pane: × and Esc close it) ----
+  const [closing, setClosing] = useState<{ problem: string | null } | null>(null)
+  const confirmClose = async () => {
+    if (!record) return
+    try {
+      const page = await readThreadPage(api, { type: record.type, id: record.id }, null)
+      if (!page.thread) throw new Error('no thread')
+      await setThreadStatus(api, { type: record.type, id: record.id }, 'CLOSED', page.thread.version)
+      setClosing(null)
+      setNotice({ key: 'pane.threadClosed', params: { number: view?.number ?? '' }, tone: 'success' })
+    } catch (error) {
+      if (isApiError(error) && error.status === 409) setClosing({ problem: 'close.conflict' })
+      else {
+        setClosing(null)
+        setNotice({ key: readProblem(error), tone: 'danger' })
+      }
+    }
+  }
+
+  return {
+    model,
+    actions,
+    asOf,
+    thread,
+    handled,
+    closing,
+    onCloseThread: () => setClosing({ problem: null }),
+    onConfirmClose: () => void confirmClose(),
+    onCancelClose: () => setClosing(null),
+  }
 }

@@ -2,26 +2,46 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Tabs } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
-import { listHref, recordHref, RECORD_TABS } from '../model'
-import { Freshness, InquiriesMessages, NoticeLine, StatusPill, useWords } from '../parts'
+import { ChevronLeft, FileX, ShieldOff } from 'lucide-react'
+import { Card, EmptyState } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
+import { CloseThreadConfirm } from '../../../../lib/record-thread/popups/view/Confirms'
+import { listHref } from '../model'
+import { Freshness, InquiriesMessages, useWords } from '../parts'
 import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
-import { recordTabs, useRecordKeys } from './InquiryDetail'
-import { fromLine, RecordBody, RecordMeta, RecordVerbs, type RecordSlots } from './RecordTabs'
+import { RequestPane, type PaneNav, type RequestPaneProps } from './pane/RequestPane'
 
 /**
- * The inquiry's full page (design tab:inquiries.full; "Open full page" from the DetailModal, a new tab, for long requests
- * with many files; where a search result or Today opens an inquiry): ‹ Inquiries, "<number> · <who asks>", its source,
- * waiting and assignee, its status; Make quote, Assign, Decline, ⋯; the tabs always in view (Owner L1) as real links; the
- * same tabs and dialogs as the DetailModal.
+ * The request's full page (B-TH-219; O-SAL-INQ-REC.band, .thread, .side, PL5): the band (Back to Incoming with the list's filters
+ * kept, as of), then the reading pane's own parts on a page of their own — row 1 (number and customer, the state with its waiting,
+ * who keeps it, "3 of 41", ⋯), the actions with the ONE main button, the thread about two thirds and Details about one third; on a
+ * phone the details behind "i" (a bottom sheet) and the main action stays on top. One part, not two: the pane and the page draw
+ * the same RequestPane.
  */
-export function InquiryPageView({ model, actions, slots, asOf }: { model: InquiryRecordModel; actions?: InquiryRecordActions; slots?: RecordSlots; asOf?: string | null }) {
+export interface InquiryPageProps {
+  model: InquiryRecordModel
+  actions?: InquiryRecordActions
+  thread?: ReactNode
+  asOf?: string | null
+  handled?: string | null
+  /** Back to Incoming: the list it came from (its filters), with this request open. */
+  backHref?: string
+  /** The list's order when opened from it ("3 of 41", J / K); null for a deep link. */
+  nav?: PaneNav | null
+  closing?: { readonly problem: string | null } | null
+  rights?: RequestPaneProps['rights']
+  onErase?: () => void
+  onCloseThread?: () => void
+  onConfirmClose?: () => void
+  onCancelClose?: () => void
+  /** Design cases: the phone's details sheet open. */
+  sheetOpen?: boolean
+}
+
+export function InquiryPageView(props: InquiryPageProps) {
   return (
     <InquiriesMessages>
-      <Body model={model} actions={actions} slots={slots} asOf={asOf ?? null} />
+      <Body {...props} />
     </InquiriesMessages>
   )
 }
@@ -51,60 +71,33 @@ function Problem({ title, body, back, onRetry, icon }: { title: string; body: st
   )
 }
 
-function Body({ model, actions, slots, asOf }: { model: InquiryRecordModel; actions?: InquiryRecordActions; slots?: RecordSlots; asOf: string | null }) {
+function Body({ model, actions, thread, asOf, handled, backHref, nav, closing, rights, onErase, onCloseThread, onConfirmClose, onCancelClose, sheetOpen }: InquiryPageProps) {
   const { t } = useWords()
-  useRecordKeys(model, actions, false)
-  const list = listHref(model.prefix)
+  const list = backHref ?? listHref(model.prefix)
   const back = (
     <Button size="sm" asChild>
       <Link href={list}>{t('record.backToList')}</Link>
     </Button>
   )
+  // A request outside the reader's scope answers "not found" without a name (W37); a missing right is named.
   if (!model.can.view || model.loaded.status === 'forbidden') return <Problem icon={<ShieldOff size={24} aria-hidden />} title={t('noAccess.title')} body={t('noAccess.body')} back={back} />
-  if (model.loaded.status === 'loading')
-    return (
-      <div className="fw-inq" aria-busy="true">
-        <p className="fw-inq-hint" role="status">
-          <Spinner size={14} /> {t('record.reading')}
-        </p>
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={28} width="60%" />
-        <div className="fw-inq-two">
-          <Skeleton height={220} />
-          <Skeleton height={220} />
-        </div>
-      </div>
-    )
   if (model.loaded.status === 'notFound') return <Problem icon={<FileX size={24} aria-hidden />} title={t('record.notFoundTitle')} body={t('record.notFoundBody')} back={back} />
   if (model.loaded.status === 'error') return <Problem icon={<FileX size={24} aria-hidden />} title={t('record.failedTitle')} body={t(model.loaded.problem)} back={back} onRetry={() => actions?.onRetry?.()} />
-  const view = model.loaded.value
-  const tabs = recordTabs(view, t).map((tab) => ({ ...tab, href: recordHref(model.prefix, view.id, tab.id as (typeof RECORD_TABS)[number]) }))
+  const view = model.loaded.status === 'ready' ? model.loaded.value : null
   return (
-    <div className="fw-inq">
-      <div className="fw-inq-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={list}>{t('record.back')}</Link>}
-          title={
-            <span>
-              {view.number} <span className="fw-inq-title-name">· {fromLine(view, t)}</span>
-            </span>
-          }
-          meta={<RecordMeta view={view} />}
-          status={
-            <span className="fw-inq-row">
-              <StatusPill status={view.status} />
-              <Freshness asOf={asOf} live={model.live} />
-            </span>
-          }
-          actions={<RecordVerbs model={model} view={view} actions={actions} />}
-        />
-        <Tabs ariaLabel={t('record.tabs')} tabs={tabs} active={model.tab} />
+    <div className="fw-inq fw-inq-page">
+      <div className="fw-inq-pageband">
+        <Button size="sm" variant="quiet" asChild>
+          <Link href={list}>
+            <ChevronLeft size={14} aria-hidden /> {t('record.backToList')}
+          </Link>
+        </Button>
+        <Freshness asOf={asOf ?? null} live={model.live} />
       </div>
-      {model.live === 'offline' && <Banner tone="warning" title={t('record.offline')} />}
-      <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      <p className="fw-inq-intro">{view.summary}</p>
-      <RecordBody model={model} view={view} actions={actions} slots={slots} />
+      <div className="fw-inq-pagebody">
+        <RequestPane model={model} actions={actions} slots={{ thread }} handled={handled ?? null} nav={nav ?? null} rights={rights} onErase={onErase} onCloseThread={onCloseThread} onNext={nav && view ? () => nav.ids[nav.ids.indexOf(view.id) + 1] && nav.onGo(nav.ids[nav.ids.indexOf(view.id) + 1]!) : undefined} place="page" sheetOpen={sheetOpen} />
+      </div>
+      {view && closing && <CloseThreadConfirm record={view.number} party={view.party?.name ?? null} problem={closing.problem} onClose={() => onConfirmClose?.()} onCancel={() => onCancelClose?.()} />}
     </div>
   )
 }

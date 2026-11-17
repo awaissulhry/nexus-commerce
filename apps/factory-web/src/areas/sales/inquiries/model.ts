@@ -199,6 +199,24 @@ export function recordHref(prefix: string, inquiryId: string, tab?: RecordTab): 
 
 export const recordTabOf = (params: { get(name: string): string | null }): RecordTab => oneOf(RECORD_TABS, params.get('tab')) ?? 'request'
 
+// ── B-TH-219 (O-SAL-INQ-REC.band-F01): the full page remembers the list it came from (its filters and its order) ──
+
+/** The full page of a request opened from the list: `?back=` keeps the list's filters (never an address of its own: only a query). */
+export function fullPageHref(prefix: string, inquiryId: string, list: ListAddress): string {
+  const query = addressText({ ...list, open: null, isNew: false, mail: null })
+  return `${recordHref(prefix, inquiryId)}?back=${encodeURIComponent(query || '?')}`
+}
+
+/** The list a full page came from: its address (the default list without `?back=`); anything but a query is ignored. */
+export function backAddressOf(params: { get(name: string): string | null }): { readonly address: ListAddress; readonly back: string | null } {
+  const back = params.get('back')
+  if (!back || !back.startsWith('?')) return { address: HOME_ADDRESS, back: null }
+  return { address: addressOf(new URLSearchParams(back.slice(1))), back }
+}
+
+/** "Back to Incoming": the list with its filters and this request open beside it. */
+export const backHref = (prefix: string, list: ListAddress, inquiryId: string): string => listHref(prefix, { ...list, open: inquiryId, isNew: false, mail: null })
+
 /** The list query the API takes for an address. */
 export function queryOf(address: ListAddress) {
   return {

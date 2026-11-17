@@ -67,7 +67,8 @@
     "received": "Received",
     "owner": "Owner",
     "state": "State",
-    "company": "Company"
+    "company": "Company",
+    "request": "Request"
   },
   "row": {
     "menu": "Actions for {number}",
@@ -102,7 +103,8 @@
       "MINE": "Open requests you keep"
     },
     "failed": "Couldn't count",
-    "partial": "Counted on the oldest 1000 open requests"
+    "partial": "Counted on the oldest 1000 open requests",
+    "label": "Saved filters"
   },
   "chip": {
     "label": "Filters",
@@ -125,8 +127,8 @@
     "fewer": "Show one notice",
     "partial": "More than 1000 requests are open: \"Waiting for us over 1 working day\" counts only the oldest 1000.",
     "capped": "The list shows the first {count} requests of these filters: narrow them to see the rest.",
-    "prospects_one": "{count} open request is from a prospect: match it to a customer (Request) before a quote.",
-    "prospects_other": "{count} open requests are from prospects: match each to a customer (Request) before a quote.",
+    "prospects_one": "{count} open request is from a prospect: match it to a customer (Edit the request) before a quote.",
+    "prospects_other": "{count} open requests are from prospects: match each to a customer (Edit the request) before a quote.",
     "mail_one": "{count} mail waits in Mail to sort",
     "mail_other": "{count} mails wait in Mail to sort",
     "mailMore": "More than {count} mails wait in Mail to sort",
@@ -258,17 +260,8 @@
     "companyId": "The company",
     "other": "Another field"
   },
-  "tab": {
-    "request": "Request",
-    "files": "Files & specs",
-    "quote": "Quote",
-    "activity": "Activity"
-  },
   "record": {
-    "tabs": "Parts of the request",
-    "noun": "request",
     "reading": "Reading the request…",
-    "openFull": "Open full page",
     "more": "More actions",
     "copyNumber": "Copy number",
     "copied": "{number} copied",
@@ -279,26 +272,18 @@
     "failedTitle": "Couldn't load the request",
     "offline": "Offline — the request as last read; Apply and every verb wait for the connection",
     "stale": "Someone changed this request at {time}: reload to see it (your typing is kept until then)",
-    "reload": "Reload",
-    "withMe": "With you",
-    "with": "With {name}",
-    "withNobody": "With nobody yet"
+    "reload": "Reload"
   },
   "verb": {
     "quote": "Make quote",
     "quoteKey": "Make quote (Q)",
-    "assign": "Assign",
     "assignKey": "Assign… (A)",
-    "decline": "Decline",
     "declineKey": "Decline… (D)",
     "askInfo": "Ask for more information",
-    "askInfoHint": "It waits for the customer; write to them in Activity",
-    "resume": "The customer answered",
     "unassign": "Take it off (back to nobody)",
     "lost": "Mark as lost…"
   },
   "done": {
-    "askInfo": "{number} waits for the customer: write to them here in Activity",
     "resume": "{number} is back with us",
     "unassign": "{number} is with nobody again",
     "assign": "{number} given to {name}",
@@ -307,10 +292,12 @@
     "messageSent": "The message was sent to {to} (in Activity)",
     "messageFailed": "The message was not sent: write it again in Activity",
     "lost": "{number} marked as lost",
-    "quote": "{quote} made from {number}",
+    "quote": "{quote} made from {number} as a draft: the customer is not told yet (they read “Quote being prepared”)",
     "quoteWarnings_one": "{quote} made from {number}: {count} thing to check on the quote",
     "quoteWarnings_other": "{quote} made from {number}: {count} things to check on the quote",
-    "openQuote": "Open {quote}"
+    "openQuote": "Open {quote}",
+    "askInfoPortal": "Asked {customer} in the portal: {number} waits for their answer (Need info); it resumes when they answer",
+    "askInfoMail": "Asked {customer} by e-mail: {number} waits for their answer (Need info); it resumes when they answer"
   },
   "closed": {
     "quoted": "Quoted as {quote} on {when}",
@@ -328,7 +315,6 @@
     "received": "Received",
     "createdBy": "Recorded by",
     "createdByOn": "{name}, {when}",
-    "prospectTag": "Prospect",
     "erased": "Erased prospect (their personal data was removed)",
     "unknown": "Unknown sender — match to a customer",
     "unknownBody": "A quote is made for a customer: match this prospect to one (once), or make the customer in Sales › Customers first.",
@@ -472,7 +458,6 @@
     "added": "Added here",
     "none": "No files",
     "download": "Download {name}",
-    "noRight": "Your role does not read the request's files and conversation",
     "problem": {
       "type": "This kind of file cannot be added",
       "empty": "The file is empty",
@@ -692,5 +677,84 @@
     "heading": "Export · {view}",
     "note": "The first {count} rows of this view: the export reads no more until the list reads in pages.",
     "notePrice": "The first {count} rows of this view; the target price is left out (it needs the price right)."
+  },
+  "pane": {
+    "label": "The request",
+    "close": "Close the request",
+    "back": "Back to the list",
+    "menu": "More for {number}",
+    "of": "{n} of {total}",
+    "prev": "Previous request (K)",
+    "next": "Next request (J)",
+    "first": {
+      "label": "The request as written",
+      "from": {
+        "MAIL": "{who} wrote by e-mail",
+        "PORTAL": "{who} wrote in the portal"
+      },
+      "typed": "Typed by {name} ({source})",
+      "typedNobody": "Typed in the office ({source})",
+      "locked": "The customer's own words: nobody edits them; changes go to the request's details",
+      "lockedShort": "As written",
+      "original": "Show original e-mail",
+      "hideOriginal": "Hide the original e-mail"
+    },
+    "nothingElse": "Nothing else waits in this view",
+    "openFull": "Open full page",
+    "newTab": "Open in a new tab",
+    "print": "Print",
+    "erase": "Start an erasure request…",
+    "eraseHint": "A privacy request with an identity step and a 30-day clock; the request itself stays",
+    "closeThread": "Close thread…",
+    "threadClosed": "The thread of {number} is closed: the customer can no longer write there.",
+    "details": "Details",
+    "detailsOf": "Details · {facts}",
+    "pieces_one": "{count} pc",
+    "pieces_other": "{count} pcs",
+    "day": "{day}",
+    "handled": "Someone else changed this request at {time}",
+    "pick": "Pick a request",
+    "edit": {
+      "open": "Edit the request",
+      "title": "Edit {number}",
+      "close": "Close"
+    },
+    "facts": {
+      "number": "Number",
+      "received": "Received",
+      "source": "Source",
+      "wanted": "Wanted",
+      "quantity": "Quantity",
+      "po": "Their PO",
+      "shipTo": "Ship to",
+      "shipToWaiting": "Added in the portal: not checked yet",
+      "target": "Target price",
+      "contact": "Contact",
+      "prospect": "Prospect",
+      "lines": "Lines",
+      "packVersion": "Version {version}",
+      "madeFrom": "Made from it",
+      "nothingMade": "Nothing made from it yet"
+    },
+    "action": {
+      "quote": "Make quote",
+      "askInfo": "Ask for info",
+      "decline": "Decline",
+      "match": "Match to a customer…",
+      "matchHint": "Pick or make the customer; then replies are possible"
+    },
+    "held": {
+      "prospect": "Make the customer first: replies need a customer record"
+    },
+    "outcome": {
+      "quotedStatus": "Quoted · {quote} {status}",
+      "quoted": "Quoted · {quote}",
+      "declined": "Declined · {reason}",
+      "lost": "Lost: the customer went away"
+    },
+    "ask": {
+      "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
+      "mail": "Ask {customer}: your question goes by e-mail from the request after the send check. The request then waits for their answer."
+    }
   }
 }

@@ -67,7 +67,8 @@
     "received": "Ricevuta",
     "owner": "Responsabile",
     "state": "Stato",
-    "company": "Azienda"
+    "company": "Azienda",
+    "request": "Richiesta"
   },
   "row": {
     "menu": "Azioni per {number}",
@@ -102,7 +103,8 @@
       "MINE": "Le richieste aperte che tieni tu"
     },
     "failed": "Impossibile contare",
-    "partial": "Contate sulle 1000 richieste aperte più vecchie"
+    "partial": "Contate sulle 1000 richieste aperte più vecchie",
+    "label": "Filtri salvati"
   },
   "chip": {
     "label": "Filtri",
@@ -125,8 +127,8 @@
     "fewer": "Mostra un solo avviso",
     "partial": "Sono aperte più di 1000 richieste: \"Ferme da noi da oltre 1 giorno lavorativo\" conta solo le 1000 più vecchie.",
     "capped": "L'elenco mostra le prime {count} richieste di questi filtri: restringili per vedere le altre.",
-    "prospects_one": "{count} richiesta aperta viene da un potenziale cliente: abbinala a un cliente (Richiesta) prima del preventivo.",
-    "prospects_other": "{count} richieste aperte vengono da potenziali clienti: abbina ognuna a un cliente (Richiesta) prima del preventivo.",
+    "prospects_one": "{count} richiesta aperta viene da un potenziale cliente: abbinala a un cliente (Modifica la richiesta) prima del preventivo.",
+    "prospects_other": "{count} richieste aperte vengono da potenziali clienti: abbina ognuna a un cliente (Modifica la richiesta) prima del preventivo.",
     "mail_one": "{count} e-mail aspetta in Posta da smistare",
     "mail_other": "{count} e-mail aspettano in Posta da smistare",
     "mailMore": "Più di {count} e-mail aspettano in Posta da smistare",
@@ -258,17 +260,8 @@
     "companyId": "La società",
     "other": "Un altro campo"
   },
-  "tab": {
-    "request": "Richiesta",
-    "files": "File e specifiche",
-    "quote": "Preventivo",
-    "activity": "Attività"
-  },
   "record": {
-    "tabs": "Parti della richiesta",
-    "noun": "richiesta",
     "reading": "Lettura della richiesta…",
-    "openFull": "Apri la pagina intera",
     "more": "Altre azioni",
     "copyNumber": "Copia il numero",
     "copied": "{number} copiato",
@@ -279,26 +272,18 @@
     "failedTitle": "Impossibile caricare la richiesta",
     "offline": "Offline — la richiesta come letta l’ultima volta; Applica e ogni azione aspettano la connessione",
     "stale": "Qualcuno ha cambiato questa richiesta alle {time}: ricarica per vederla (quello che hai scritto resta fino ad allora)",
-    "reload": "Ricarica",
-    "withMe": "Ce l’hai tu",
-    "with": "Ce l’ha {name}",
-    "withNobody": "Ancora di nessuno"
+    "reload": "Ricarica"
   },
   "verb": {
     "quote": "Crea preventivo",
     "quoteKey": "Crea preventivo (Q)",
-    "assign": "Assegna",
     "assignKey": "Assegna… (A)",
-    "decline": "Rifiuta",
     "declineKey": "Rifiuta… (D)",
     "askInfo": "Chiedi più informazioni",
-    "askInfoHint": "Aspetta il cliente; scrivigli in Attività",
-    "resume": "Il cliente ha risposto",
     "unassign": "Togli l’assegnazione (torna a nessuno)",
     "lost": "Segna come persa…"
   },
   "done": {
-    "askInfo": "{number} aspetta il cliente: scrivigli qui in Attività",
     "resume": "{number} torna da noi",
     "unassign": "{number} torna a nessuno",
     "assign": "{number} data a {name}",
@@ -307,10 +292,12 @@
     "messageSent": "Il messaggio è stato inviato a {to} (in Attività)",
     "messageFailed": "Il messaggio non è stato inviato: riscrivilo in Attività",
     "lost": "{number} segnata come persa",
-    "quote": "{quote} creato da {number}",
+    "quote": "{quote} creato da {number} come bozza: il cliente non lo sa ancora (legge “Preventivo in preparazione”)",
     "quoteWarnings_one": "{quote} creato da {number}: {count} cosa da controllare sul preventivo",
     "quoteWarnings_other": "{quote} creato da {number}: {count} cose da controllare sul preventivo",
-    "openQuote": "Apri {quote}"
+    "openQuote": "Apri {quote}",
+    "askInfoPortal": "Chiesto a {customer} nel portale: {number} aspetta la risposta (Servono informazioni); riprende quando risponde",
+    "askInfoMail": "Chiesto a {customer} per e-mail: {number} aspetta la risposta (Servono informazioni); riprende quando risponde"
   },
   "closed": {
     "quoted": "Preventivata come {quote} il {when}",
@@ -328,7 +315,6 @@
     "received": "Ricevuta",
     "createdBy": "Registrata da",
     "createdByOn": "{name}, {when}",
-    "prospectTag": "Potenziale cliente",
     "erased": "Potenziale cliente cancellato (i dati personali sono stati rimossi)",
     "unknown": "Mittente sconosciuto — abbinalo a un cliente",
     "unknownBody": "Il preventivo si fa per un cliente: abbina questo potenziale cliente a uno (una sola volta), o crea prima il cliente in Vendite › Clienti.",
@@ -472,7 +458,6 @@
     "added": "Aggiunto qui",
     "none": "Nessun file",
     "download": "Scarica {name}",
-    "noRight": "Il tuo ruolo non legge i file e la conversazione della richiesta",
     "problem": {
       "type": "Questo tipo di file non si può aggiungere",
       "empty": "Il file è vuoto",
@@ -692,5 +677,84 @@
     "heading": "Esporta · {view}",
     "note": "Le prime {count} righe di questa vista: l'esportazione non legge oltre finché l'elenco non legge a pagine.",
     "notePrice": "Le prime {count} righe di questa vista; il prezzo obiettivo resta fuori (serve il permesso sui prezzi)."
+  },
+  "pane": {
+    "label": "La richiesta",
+    "close": "Chiudi la richiesta",
+    "back": "Torna all'elenco",
+    "menu": "Altro per {number}",
+    "of": "{n} di {total}",
+    "prev": "Richiesta precedente (K)",
+    "next": "Richiesta successiva (J)",
+    "first": {
+      "label": "La richiesta come scritta",
+      "from": {
+        "MAIL": "{who} ha scritto per e-mail",
+        "PORTAL": "{who} ha scritto nel portale"
+      },
+      "typed": "Scritta da {name} ({source})",
+      "typedNobody": "Scritta in ufficio ({source})",
+      "locked": "Le parole del cliente: nessuno le modifica; le modifiche vanno nei dettagli della richiesta",
+      "lockedShort": "Come scritta",
+      "original": "Mostra l'e-mail originale",
+      "hideOriginal": "Nascondi l'e-mail originale"
+    },
+    "nothingElse": "In questa vista non aspetta nient'altro",
+    "openFull": "Apri a pagina intera",
+    "newTab": "Apri in una nuova scheda",
+    "print": "Stampa",
+    "erase": "Avvia una richiesta di cancellazione…",
+    "eraseHint": "Una richiesta privacy con verifica di identità e 30 giorni di tempo; la richiesta resta",
+    "closeThread": "Chiudi la conversazione…",
+    "threadClosed": "La conversazione di {number} è chiusa: il cliente non può più scrivere lì.",
+    "details": "Dettagli",
+    "detailsOf": "Dettagli · {facts}",
+    "pieces_one": "{count} pz",
+    "pieces_other": "{count} pz",
+    "day": "{day}",
+    "handled": "Qualcun altro ha cambiato questa richiesta alle {time}",
+    "pick": "Scegli una richiesta",
+    "edit": {
+      "open": "Modifica la richiesta",
+      "title": "Modifica {number}",
+      "close": "Chiudi"
+    },
+    "facts": {
+      "number": "Numero",
+      "received": "Ricevuta",
+      "source": "Provenienza",
+      "wanted": "Richiesta per",
+      "quantity": "Quantità",
+      "po": "Il loro ordine",
+      "shipTo": "Consegna a",
+      "shipToWaiting": "Aggiunto nel portale: non ancora controllato",
+      "target": "Prezzo obiettivo",
+      "contact": "Contatto",
+      "prospect": "Potenziale cliente",
+      "lines": "Righe",
+      "packVersion": "Versione {version}",
+      "madeFrom": "Nato da questa richiesta",
+      "nothingMade": "Ancora niente nato da questa richiesta"
+    },
+    "action": {
+      "quote": "Crea preventivo",
+      "askInfo": "Chiedi informazioni",
+      "decline": "Rifiuta",
+      "match": "Abbina a un cliente…",
+      "matchHint": "Scegli o crea il cliente; poi si può rispondere"
+    },
+    "held": {
+      "prospect": "Crea prima il cliente: per rispondere serve la scheda del cliente"
+    },
+    "outcome": {
+      "quotedStatus": "Preventivata · {quote} {status}",
+      "quoted": "Preventivata · {quote}",
+      "declined": "Rifiutata · {reason}",
+      "lost": "Persa: il cliente non è andato avanti"
+    },
+    "ask": {
+      "portal": "Chiedi a {customer}: la domanda va nel suo portale (riceve l'avviso del portale per e-mail). La richiesta poi aspetta la risposta.",
+      "mail": "Chiedi a {customer}: la domanda parte per e-mail dalla richiesta dopo il controllo di invio. La richiesta poi aspetta la risposta."
+    }
   }
 }

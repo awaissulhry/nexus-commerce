@@ -16,11 +16,13 @@ import type { InquiryList, InquiryRow, PartyOption } from '../api'
 import {
   assigneePhrase,
   bandCount,
+  workingTime,
   bulkReach,
   chipsOf,
   DESIGN_TILES,
   exportPhrases,
   filesPhrases,
+  fullPageHref,
   HOME_ADDRESS,
   INQUIRY_SOURCES,
   isFiltered,
@@ -47,9 +49,11 @@ import { InquiriesMessages, isPageKey, NoAccess, NoticeLine, SourceTag, StatusPi
 import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
 import { joined, PictureCell, PictureViewer, useRequestPicture, type PictureLoader } from './cells'
 import { AssignDialog, DeclineDialog, type AssignModel, type DeclineModel } from './Dialogs'
-import { InquiryDetail } from './InquiryDetail'
 import { NewInquiryDialog, type NewInquiryActions, type NewInquiryModel } from './NewInquiryDialog'
-import type { RecordSlots } from './RecordTabs'
+// B-TH-217: the reading pane beside the list (the 1160 px modal with its four tabs went).
+import { SplitPane } from '../../../../lib/split-pane/SplitPane'
+import { CloseThreadConfirm } from '../../../../lib/record-thread/popups/view/Confirms'
+import { RequestPane, type PaneSlots } from './pane/RequestPane'
 
 /** Assign to… or Decline N over a selection (all or none: the API's bulk routes). */
 export type BulkDialog = { readonly kind: 'assign'; readonly ids: readonly string[]; readonly model: AssignModel } | { readonly kind: 'decline'; readonly ids: readonly string[]; readonly model: DeclineModel }
@@ -82,8 +86,10 @@ export interface InquiriesModel {
   limit: number
   newInquiry: NewInquiryModel | null
   bulk: BulkDialog | null
-  /** The request open in its DetailModal (`?open=`). */
+  /** The request open in the reading pane (`?open=`). */
   detail: InquiryRecordModel | null
+  /** B-TH-217: the open request's pane — someone else handled it meanwhile, "Close thread…" open, the menu's rights. */
+  pane?: { readonly handled: string | null; readonly closing: { readonly problem: string | null } | null; readonly rights: { readonly erase: boolean; readonly closeThread: boolean } } | null
   // ── B-TH-216 ──
   /** The companies the reader works in: the Company column and its funnel only from two on. */
   companies?: ReadonlyArray<{ id: string; name: string }>
@@ -91,6 +97,8 @@ export interface InquiriesModel {
   noticeFacts?: NoticeFacts
   /** Design cases: each row's small preview by row id (no API). */
   demoPictures?: Readonly<Record<string, string>>
+  /** Design cases: the wide columns forced on (1920) or off. */
+  wide?: boolean
   /** Design cases: the rows selected, the keys panel open, every notice listed, the picture of a row open. */
   selected?: readonly string[]
   keysOpen?: boolean
@@ -124,9 +132,11 @@ export interface InquiriesActions {
   onDismissPageNotice?: (key: string) => void
   /** B-TH-216: the Picture cell's small preview (the container reads it; the view fetches nothing). */
   loadPicture?: PictureLoader
+  /** B-TH-217: the pane's own acts — the next request, an erasure request, closing the thread. */
+  pane?: { onNext?: () => void; onErase?: () => void; onCloseThread?: () => void; onConfirmClose?: () => void; onCancelClose?: () => void }
 }
 
-export function InquiriesView({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: RecordSlots }) {
+export function InquiriesView({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: PaneSlots }) {
   return (
     <InquiriesMessages>
       <List model={model} actions={actions} slots={slots} />
@@ -135,6 +145,22 @@ export function InquiriesView({ model, actions, slots }: { model: InquiriesModel
 }
 
 const INTL = { it: 'it-IT', en: 'en-GB' } as const
+
+/** B-TH-216: Quantity, Received, Source and Number show from 1800 px (the 1920 screen); Columns ▾ shows them anywhere. */
+function useWide(forced: boolean | undefined): boolean {
+  const query = '(min-width: 1800px)'
+  const [wide, setWide] = useState(() => forced ?? (typeof window !== 'undefined' && !!window.matchMedia?.(query).matches))
+  useEffect(() => {
+    if (forced !== undefined) return setWide(forced)
+    const media = window.matchMedia?.(query)
+    if (!media) return
+    const follow = () => setWide(media.matches)
+    follow()
+    media.addEventListener('change', follow)
+    return () => media.removeEventListener('change', follow)
+  }, [forced])
+  return wide
+}
 
 /** The phone card (list-F09): picture, customer, subject, waiting, state — the same facts as the row, in its order. */
 const CARD_FIELDS = Object.freeze({
@@ -146,12 +172,13 @@ const CARD_FIELDS = Object.freeze({
   ...Object.fromEntries(['files', 'pieces', 'wantedDate', 'received', 'owner', 'source', 'number', 'company', 'targetPrice'].map((id) => [id, { role: 'hidden' as const }])),
 })
 
-function List({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: RecordSlots }) {
+function List({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: PaneSlots }) {
   const { t, say, locale, day, when } = useWords()
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const [search, setSearch] = useState(model.address.q)
   const [noticesOpen, setNoticesOpen] = useState(model.noticesOpen ?? false)
   const [viewer, setViewer] = useState<string | null>(model.viewer ?? null)
+  const wide = useWide(model.wide)
   useEffect(() => setSearch(model.address.q), [model.address.q])
   const rows = model.list?.rows ?? null
   const rowsKey = rows?.map((row) => row.id).join(',') ?? ''
@@ -160,6 +187,9 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
   const byId = useMemo(() => new Map((rows ?? []).map((row) => [row.id, row])), [rows])
+  // B-TH-217: the open request's small preview for row 1 (the list already read it).
+  const paneRow = model.address.open ? (byId.get(model.address.open) ?? null) : null
+  const paneSrc = useRequestPicture(paneRow ?? { id: '', picture: null }, actions?.loadPicture, paneRow ? model.demoPictures?.[paneRow.id] : undefined)
   const companies = model.companies ?? []
   const manyCompanies = companies.length > 1
   const companyName = (id: string | null) => (id ? (companies.find((entry) => entry.id === id)?.name ?? null) : null)
@@ -259,7 +289,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           {data.sizes && <span className="fw-inq-hint">{data.sizes}</span>}
         </span>
       ) : null
-    const WaitingCell = ({ data }: ICellRendererParams<InquiryRow>) => (data ? <WaitingTag row={data} /> : null)
+    const WaitingCell = ({ data }: ICellRendererParams<InquiryRow>) => (data ? <WaitingTag row={data} short /> : null)
     const StateCell = ({ data }: ICellRendererParams<InquiryRow>) => {
       if (!data) return null
       const quote = data.quote
@@ -338,19 +368,44 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         />
       )
     }
+    // B-TH-217: beside the reading pane the list reads like e-mail — the picture, who and what (one cell), the state.
+    if (m.detail) {
+      const RequestCell = ({ data }: ICellRendererParams<InquiryRow>) =>
+        data ? (
+          <span className={data.id === m.address.open ? 'fw-inq-compact is-open' : 'fw-inq-compact'} aria-current={data.id === m.address.open ? 'true' : undefined}>
+            <span className="fw-inq-compact-who">
+              {openLink(data, customerName(data), true)}
+              {data.prospect && <Tag tone="info">{t('who.new')}</Tag>}
+            </span>
+            <span className="fw-inq-hint fw-inq-compact-what">{data.summary || data.number}</span>
+          </span>
+        ) : null
+      const CompactState = ({ data }: ICellRendererParams<InquiryRow>) =>
+        data ? (
+          <span className="fw-inq-cell">
+            <StatusPill status={data.status} />
+            {data.waiting.for && data.waiting.workingMinutes !== null && <span className={data.waiting.overdue ? 'fw-inq-hint fw-inq-late' : 'fw-inq-hint'}>{say(workingTime(data.waiting.workingMinutes))}</span>}
+          </span>
+        ) : null
+      return [
+        { colId: 'picture', headerName: t('col.picture'), minWidth: 84, maxWidth: 88, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => (params.data?.picture ? params.data.picture.styleCode : ''), cellRenderer: PictureRender },
+        { colId: 'subject', headerName: t('col.request'), minWidth: 180, flex: 1, valueGetter: (params) => (params.data ? `${customerName(params.data)} ${params.data.summary}` : ''), cellRenderer: RequestCell },
+        { colId: 'status', headerName: t('col.state'), minWidth: 136, maxWidth: 170, valueGetter: (params) => (params.data ? t(`status.${params.data.status}`) : ''), cellRenderer: CompactState },
+      ]
+    }
     return [
-      { colId: 'picture', headerName: t('col.picture'), minWidth: 64, maxWidth: 72, sortable: false, valueGetter: (params) => (params.data?.picture ? `${params.data.picture.styleCode}` : ''), cellRenderer: PictureRender },
-      { colId: 'customer', headerName: t('col.customer'), minWidth: 170, flex: 1, valueGetter: (params) => (params.data ? customerName(params.data) : ''), cellRenderer: CustomerCell },
-      { colId: 'subject', headerName: t('col.subject'), minWidth: 220, flex: 1.8, valueGetter: (params) => params.data?.summary ?? '', cellRenderer: SubjectCell },
+      { colId: 'picture', headerName: t('col.picture'), minWidth: 88, maxWidth: 92, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => (params.data?.picture ? `${params.data.picture.styleCode}` : ''), cellRenderer: PictureRender },
+      { colId: 'customer', headerName: t('col.customer'), minWidth: 150, flex: 1, valueGetter: (params) => (params.data ? customerName(params.data) : ''), cellRenderer: CustomerCell },
+      { colId: 'subject', headerName: t('col.subject'), minWidth: 200, flex: 1.8, valueGetter: (params) => params.data?.summary ?? '', cellRenderer: SubjectCell },
       { colId: 'files', headerName: t('col.files'), minWidth: 120, flex: 0.6, valueGetter: (params) => (params.data ? joined(filesPhrases(params.data) ?? [], say) || '—' : ''), cellRenderer: FilesCell },
-      { colId: 'pieces', headerName: t('col.quantity'), minWidth: 100, flex: 0.5, valueGetter: (params) => params.data?.pieces ?? null, cellRenderer: QuantityCell },
+      { colId: 'pieces', headerName: t('col.quantity'), minWidth: 100, flex: 0.5, hide: !wide, valueGetter: (params) => params.data?.pieces ?? null, cellRenderer: QuantityCell },
       { colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 110, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') },
-      { colId: 'received', headerName: t('col.received'), minWidth: 130, flex: 0.6, valueGetter: (params) => (params.data ? when(params.data.receivedAt) : '') },
-      { colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 170, flex: 0.8, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell },
+      { colId: 'received', headerName: t('col.received'), minWidth: 150, flex: 0.6, hide: !wide, valueGetter: (params) => (params.data ? when(params.data.receivedAt) : '') },
+      { colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 150, flex: 0.7, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell },
       { colId: 'owner', headerName: t('col.owner'), minWidth: 130, flex: 0.6, valueGetter: (params) => (params.data ? (say(assigneePhrase(params.data)) ?? '') : '') },
       { colId: 'status', headerName: t('col.state'), minWidth: 170, flex: 0.8, valueGetter: (params) => (params.data ? t(`status.${params.data.status}`) : ''), cellRenderer: StateCell },
-      { colId: 'source', headerName: t('col.source'), minWidth: 110, flex: 0.5, valueGetter: (params) => (params.data ? t(`source.${params.data.source}`) : ''), cellRenderer: SourceCell },
-      { colId: 'number', headerName: t('col.number'), minWidth: 150, flex: 0.7, valueGetter: (params) => params.data?.number ?? '', cellRenderer: NumberCell },
+      { colId: 'source', headerName: t('col.source'), minWidth: 110, flex: 0.5, hide: !wide, valueGetter: (params) => (params.data ? t(`source.${params.data.source}`) : ''), cellRenderer: SourceCell },
+      { colId: 'number', headerName: t('col.number'), minWidth: 140, flex: 0.6, hide: !wide, valueGetter: (params) => params.data?.number ?? '', cellRenderer: NumberCell },
       ...(manyCompanies ? [{ colId: 'company', headerName: t('col.company'), minWidth: 120, flex: 0.5, valueGetter: (params: { data?: InquiryRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell } satisfies ColDef<InquiryRow>] : []),
       ...(m.can.price
         ? [
@@ -371,7 +426,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     ]
     // The cells read the latest model and actions through `latest`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies])
+  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, wide])
 
   if (!model.can.view) return <NoAccess />
 
@@ -473,7 +528,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   return (
     <div className="fw-inq">
       {/* B-TH-216 (band-F01): Incoming · 41 open · as of 10:42 — the count is the Rows ▾ choice's, in words. */}
-      <div className="fw-inq-band">
+      <div className="fw-inq-listband">
         <div className="fw-sheet-band">
           <h2 className="fw-sheet-title">{t('page.title')}</h2>
           <span className="fw-sheet-count">{say(bandCount(model.list, model.address.tile, !!model.problem))}</span>
@@ -489,90 +544,134 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         </span>
       </div>
       <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      {/* One notice at most (notice-F01), the most serious first; the rest behind "N more notices". */}
-      {notices.length > 0 && (
-        <div className="fw-inq-notices" aria-label={t('notice.label')}>
-          {(noticesOpen ? notices : notices.slice(0, 1)).map((notice) => (
-            <NoticeLine key={noticeKey(notice)} notice={{ ...notice, link: noticeLink(notice, model.prefix) }} onDismiss={() => actions?.onDismissPageNotice?.(noticeKey(notice))} />
-          ))}
-          {notices.length > 1 && (
-            <Button size="sm" variant="quiet" aria-expanded={noticesOpen} onClick={() => setNoticesOpen((now) => !now)}>
-              {noticesOpen ? t('notice.fewer') : t('notice.more', { count: notices.length - 1 })}
-            </Button>
+      {/* B-TH-217 (PL2): the list ~35 % and the request ~65 % beside it; nothing but the band sits above the pane. */}
+      <SplitPane
+        labels={{ pane: t('pane.label'), close: t('pane.back') }}
+        onClose={() => actions?.onOpen?.(null)}
+        list={
+          <div className="fw-inq-listcol">
+          {/* One notice at most (notice-F01), the most serious first; the rest behind "N more notices". */}
+          {notices.length > 0 && (
+            <div className="fw-inq-notices" aria-label={t('notice.label')}>
+              {(noticesOpen ? notices : notices.slice(0, 1)).map((notice) => (
+                <NoticeLine key={noticeKey(notice)} notice={{ ...notice, link: noticeLink(notice, model.prefix) }} onDismiss={() => actions?.onDismissPageNotice?.(noticeKey(notice))} />
+              ))}
+              {notices.length > 1 && (
+                <Button size="sm" variant="quiet" aria-expanded={noticesOpen} onClick={() => setNoticesOpen((now) => !now)}>
+                  {noticesOpen ? t('notice.fewer') : t('notice.more', { count: notices.length - 1 })}
+                </Button>
+              )}
+            </div>
           )}
-        </div>
-      )}
-      <MetricStrip metrics={DESIGN_TILES.map(tile)} />
-      {chips.length > 0 && (
-        <div className="fw-inq-chips" aria-label={t('chip.label')}>
-          {chips.map((chip) => (
-            <FilterChip key={chip.id} pressed onClick={() => actions?.onAddress?.(chip.clear)} aria-label={t('chip.clear', { what: say(chip.label) ?? '' })}>
-              {say(chip.label)} <X size={12} aria-hidden />
+          {model.detail ? (
+        // Beside the reading pane the tiles are counting chips (the same saved filters; nothing but the band sits above the pane).
+        <div className="fw-inq-tilechips" role="group" aria-label={t('tile.label')}>
+          {DESIGN_TILES.map((id) => (
+            <FilterChip key={id} pressed={model.address.tile === id} title={t(`tile.hint.${id}`)} onClick={() => actions?.onAddress?.({ tile: model.address.tile === id ? HOME_ADDRESS.tile : id })}>
+              {t(`tile.${id}`)} · {tileValue(model.list, id, !!model.problem)}
             </FilterChip>
           ))}
-          {chips.length > 1 && (
-            <Button size="sm" variant="quiet" onClick={() => actions?.onClearFilters?.()}>
-              {t('chip.clearAll')}
-            </Button>
-          )}
         </div>
+      ) : (
+        <MetricStrip metrics={DESIGN_TILES.map(tile)} />
       )}
-      <ListFrame<InquiryRow>
-        label={t('list.tableLabel')}
-        rows={state ? [] : rows}
-        rowId={(row) => row.id}
-        columns={columns}
-        count={model.list ? (rows !== null && rows.length >= model.limit ? t('list.countCapped', { count: rows.length }) : t('list.count', { count: rows?.length ?? 0 })) : t('list.countReading')}
-        search={
-          <Input
-            size="sm"
-            type="search"
-            className="fw-inq-search"
-            aria-label={t('list.search')}
-            placeholder={t('list.search')}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') actions?.onAddress?.({ q: search })
+          {chips.length > 0 && (
+            <div className="fw-inq-chips" aria-label={t('chip.label')}>
+              {chips.map((chip) => (
+                <FilterChip key={chip.id} pressed onClick={() => actions?.onAddress?.(chip.clear)} aria-label={t('chip.clear', { what: say(chip.label) ?? '' })}>
+                  {say(chip.label)} <X size={12} aria-hidden />
+                </FilterChip>
+              ))}
+              {chips.length > 1 && (
+                <Button size="sm" variant="quiet" onClick={() => actions?.onClearFilters?.()}>
+                  {t('chip.clearAll')}
+                </Button>
+              )}
+            </div>
+          )}
+          <ListFrame<InquiryRow>
+            label={t('list.tableLabel')}
+            rows={state ? [] : rows}
+            rowId={(row) => row.id}
+            columns={columns}
+            count={model.list ? (rows !== null && rows.length >= model.limit ? t('list.countCapped', { count: rows.length }) : t('list.count', { count: rows?.length ?? 0 })) : t('list.countReading')}
+            search={
+              <Input
+                size="sm"
+                type="search"
+                className="fw-inq-search"
+                aria-label={t('list.search')}
+                placeholder={t('list.search')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') actions?.onAddress?.({ q: search })
+                }}
+                onBlur={() => search !== model.address.q && actions?.onAddress?.({ q: search })}
+              />
+            }
+            tools={tools}
+            // PR-11: the list keeps its key after the rename (Export, saved views and Pin to Today keep working).
+            listKey="sales.inquiries"
+            title={t('page.title')}
+            exportAbout={{ heading: say(exportWords.heading) ?? '', note: say(exportWords.note) ?? undefined }}
+            onRowClick={(row, event) => actions?.onOpenRow?.(row.id, event.metaKey || event.ctrlKey)}
+            selection={{
+              selected,
+              onChange: setSelected,
+              exportSelected: true,
+              actions: (
+                <>
+                  <span className="fw-inq-hint">{reach.closed > 0 ? t('bulk.reachClosed', { open: reach.open.length, closed: reach.closed }) : t('bulk.reach', { count: reach.open.length })}</span>
+                  <Button size="sm" heldReason={!model.can.manage ? salesHeld : (say(reach.held) ?? (offline ? t('held.offline') : null))} aria-label={t('bulk.assign', { count: reach.open.length })} onClick={() => actions?.onBulk?.('assign', reach.open.map((row) => row.id))}>
+                    <UserRound size={13} aria-hidden /> <SelectionLabel>{t('bulk.assign', { count: reach.open.length })}</SelectionLabel>
+                  </Button>
+                  <Button size="sm" variant="danger-outline" heldReason={!model.can.manage ? salesHeld : (say(reach.held) ?? (offline ? t('held.offline') : null))} aria-label={t('bulk.decline', { count: reach.open.length })} onClick={() => actions?.onBulk?.('decline', reach.open.map((row) => row.id))}>
+                    <XCircle size={13} aria-hidden /> <SelectionLabel>{t('bulk.decline', { count: reach.open.length })}</SelectionLabel>
+                  </Button>
+                </>
+              ),
             }}
-            onBlur={() => search !== model.address.q && actions?.onAddress?.({ q: search })}
+            updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
+            keys={ownKeys}
+            keysOpen={model.keysOpen}
+            onOpen={(row) => actions?.onOpen?.(row.id)}
+            state={state}
+            withheld={model.can.price ? [] : [{ label: t('col.targetPrice'), reason: t('list.withheldPrice') }]}
+            // On a phone a card opens the request's full page (B-TH-219), the list kept for Back.
+        cards={{ fields: CARD_FIELDS, hrefOf: (row) => fullPageHref(model.prefix, row.id, model.address) }}
           />
+          </div>
         }
-        tools={tools}
-        // PR-11: the list keeps its key after the rename (Export, saved views and Pin to Today keep working).
-        listKey="sales.inquiries"
-        title={t('page.title')}
-        exportAbout={{ heading: say(exportWords.heading) ?? '', note: say(exportWords.note) ?? undefined }}
-        onRowClick={(row, event) => actions?.onOpenRow?.(row.id, event.metaKey || event.ctrlKey)}
-        selection={{
-          selected,
-          onChange: setSelected,
-          exportSelected: true,
-          actions: (
-            <>
-              <span className="fw-inq-hint">{reach.closed > 0 ? t('bulk.reachClosed', { open: reach.open.length, closed: reach.closed }) : t('bulk.reach', { count: reach.open.length })}</span>
-              <Button size="sm" heldReason={!model.can.manage ? salesHeld : (say(reach.held) ?? (offline ? t('held.offline') : null))} aria-label={t('bulk.assign', { count: reach.open.length })} onClick={() => actions?.onBulk?.('assign', reach.open.map((row) => row.id))}>
-                <UserRound size={13} aria-hidden /> <SelectionLabel>{t('bulk.assign', { count: reach.open.length })}</SelectionLabel>
-              </Button>
-              <Button size="sm" variant="danger-outline" heldReason={!model.can.manage ? salesHeld : (say(reach.held) ?? (offline ? t('held.offline') : null))} aria-label={t('bulk.decline', { count: reach.open.length })} onClick={() => actions?.onBulk?.('decline', reach.open.map((row) => row.id))}>
-                <XCircle size={13} aria-hidden /> <SelectionLabel>{t('bulk.decline', { count: reach.open.length })}</SelectionLabel>
-              </Button>
-            </>
-          ),
-        }}
-        updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-        keys={ownKeys}
-        keysOpen={model.keysOpen}
-        onOpen={(row) => actions?.onOpen?.(row.id)}
-        state={state}
-        withheld={model.can.price ? [] : [{ label: t('col.targetPrice'), reason: t('list.withheldPrice') }]}
-        cards={{ fields: CARD_FIELDS, hrefOf: (row) => recordHref(model.prefix, row.id) }}
+        pane={
+          model.detail ? (
+            <div className="fw-inq-pane">
+              <RequestPane
+                model={model.detail}
+                actions={actions?.record}
+                slots={slots}
+                nav={{ ids: (rows ?? []).map((row) => row.id), onGo: (id) => actions?.onOpen?.(id) }}
+                onClose={() => actions?.onOpen?.(null)}
+                picture={paneRow ? (paneSrc ?? null) : null}
+                companyName={manyCompanies && model.detail.loaded.status === 'ready' ? companyName(model.detail.loaded.value.companyId) : null}
+                handled={model.pane?.handled ?? null}
+                onNext={actions?.pane?.onNext}
+                rights={model.pane?.rights}
+                onErase={actions?.pane?.onErase}
+                onCloseThread={actions?.pane?.onCloseThread}
+                fullHref={model.address.open ? fullPageHref(model.prefix, model.address.open, model.address) : undefined}
+              />
+            </div>
+          ) : null
+        }
       />
       {viewerRow && <ViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} />}
       {model.newInquiry && <NewInquiryDialog model={model.newInquiry} me={model.me} can={model.can} prefix={model.prefix} actions={actions?.newInquiry} />}
       {model.bulk?.kind === 'assign' && <AssignDialog model={model.bulk.model} actions={{ onAssign: actions?.bulk?.onAssign, onRetry: actions?.bulk?.onRetryPeople, onClose: actions?.bulk?.onClose }} />}
       {model.bulk?.kind === 'decline' && <DeclineDialog model={model.bulk.model} actions={{ onDraft: actions?.bulk?.onDecline, onSubmit: actions?.bulk?.onSubmit, onClose: actions?.bulk?.onClose }} />}
-      {model.detail && <InquiryDetail model={model.detail} actions={actions?.record} slots={slots} nav={{ ids: (rows ?? []).map((row) => row.id), onGo: (id) => actions?.onOpen?.(id) }} onClose={() => actions?.onOpen?.(null)} />}
+      {model.detail && model.pane?.closing && model.detail.loaded.status === 'ready' && (
+        <CloseThreadConfirm record={model.detail.loaded.value.number} party={model.detail.loaded.value.party?.name ?? null} problem={model.pane.closing.problem} onClose={() => actions?.pane?.onConfirmClose?.()} onCancel={() => actions?.pane?.onCancelClose?.()} />
+      )}
     </div>
   )
 }

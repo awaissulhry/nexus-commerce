@@ -94,8 +94,13 @@ export function assignInquiry(api: ApiClient, inquiryId: string, body: { version
   return api.post(`${one(inquiryId)}/assign`, { body, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
-export function askInfo(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string): Promise<InquiryView> {
-  return api.post(`${one(inquiryId)}/ask-info`, { body: { version }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
+/**
+ * POST …/ask-info (B-TH-013): the request waits for the customer (Need info). B-TH-218: with `message` the question travels with
+ * it — on a request sent from the portal a reply the customer reads there, else a mail to `to` (the recipient rule, B-TH-004:
+ * `sendOutside` ticked for an address of another party); the customer's answer resumes the request by itself.
+ */
+export function askInfo(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string, message?: { body: string; subject?: string; to?: string[]; sendOutside?: boolean }): Promise<InquiryView> {
+  return api.post(`${one(inquiryId)}/ask-info`, { body: { version, ...(message ? { message } : {}) }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
 export function resumeInquiry(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string): Promise<InquiryView> {

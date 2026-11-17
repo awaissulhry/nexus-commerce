@@ -49,7 +49,7 @@ import {
   nextAfter,
   queryOf,
   readProblem,
-  recordHref,
+  fullPageHref,
   writeProblem,
   type ListAddress,
   type Loaded,
@@ -405,10 +405,12 @@ export function InquiriesPage() {
           : null,
         bulk: bulk ? ({ ...bulk, model: { ...bulk.model, offline } } as BulkDialog) : null,
         detail: address.open ? record.model : null,
+        // B-TH-217: the pane's facts — handled meanwhile, "Close thread…", the menu's rights.
+        pane: address.open ? { handled: record.handled, closing: record.closing, rights: { erase: session.permissions.includes('privacy.requests.manage'), closeThread: session.permissions.includes('threads.manage') } } : null,
         companies, // B-TH-216
         noticeFacts, // B-TH-216
       }}
-      slots={record.slots}
+      slots={{ thread: record.thread }}
       actions={{
         onAddress: (patch) => go({ ...patch, open: patch.open ?? null }),
         onClearFilters: () => go({ ...HOME_ADDRESS }),
@@ -416,8 +418,19 @@ export function InquiriesPage() {
         onShowUpdates: () => void load(),
         onOpen: (inquiryId) => go({ open: inquiryId, tab: inquiryId === addressRef.current.open ? addressRef.current.tab : 'request' }),
         // B-TH-216 (grid-F29 as on the Orders sheet): the rest of a row opens the request; ⌘ / Ctrl its full page in a new tab.
-        onOpenRow: (inquiryId, newTab) => (newTab ? window.open(recordHref(prefix, inquiryId), '_blank', 'noopener') : go({ open: inquiryId, tab: 'request' })),
+        onOpenRow: (inquiryId, newTab) => (newTab ? window.open(fullPageHref(prefix, inquiryId, addressRef.current), '_blank', 'noopener') : go({ open: inquiryId, tab: 'request' })),
         loadPicture,
+        // B-TH-217: the pane's own acts.
+        pane: {
+          onNext: () => {
+            const next = nextAfter(idsRef.current, addressRef.current.open ?? '')
+            go({ open: next && next !== addressRef.current.open ? next : null, tab: 'request' })
+          },
+          onErase: () => window.open(`${prefix}/admin/privacy?view=requests&new=1&kind=ERASURE`, '_blank', 'noopener'),
+          onCloseThread: record.onCloseThread,
+          onConfirmClose: record.onConfirmClose,
+          onCancelClose: record.onCancelClose,
+        },
         onRowVerb,
         onBulk: (kind, inquiryIds) => {
           bulkKey.current = null

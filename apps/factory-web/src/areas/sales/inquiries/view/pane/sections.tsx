@@ -2,12 +2,12 @@
 
 import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Download, FilePlus2, ImageIcon, MoreHorizontal, UserRound, XCircle } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Select, Skeleton, Tag } from '@nexus/ui/primitives'
-import { DateField, EditModeBar, FileRow, Textarea } from '../../../../lib/i18n/ds-parts'
-import { mailDocument, remotePictureCount } from '../../../home/mail-to-sort/model'
-import type { InquiryFile, InquiryView } from '../api'
+import { Download, FilePlus2, ImageIcon } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Select, Skeleton } from '@nexus/ui/primitives'
+import { DateField, EditModeBar, FileRow, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
+import { mailDocument, remotePictureCount } from '../../../../home/mail-to-sort/model'
+import type { InquiryFile, InquiryView } from '../../api'
 import {
   actionHeld,
   amountText,
@@ -20,17 +20,11 @@ import {
   requestDraftOf,
   type Phrase,
   type RequestDraft,
-} from '../model'
-import { useWords } from '../parts'
-import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
-import { AssignDialog, DeclineDialog, LostDialog, QuoteDialog } from './Dialogs'
-import { LinesEditor, LinesRead } from './LinesEditor'
-
-/** The record's panels the container mounts (thread, files): the Activity tab and the files part of Files & specs. */
-export interface RecordSlots {
-  readonly activity?: ReactNode
-  readonly files?: ReactNode
-}
+} from '../../model'
+import { useWords } from '../../parts'
+import type { InquiryRecordActions, InquiryRecordModel } from '../../record-model'
+import { AssignDialog, DeclineDialog, LostDialog, QuoteDialog } from '../Dialogs'
+import { LinesEditor, LinesRead } from '../LinesEditor'
 
 const INTL = { it: 'it-IT', en: 'en-GB' } as const
 
@@ -41,95 +35,13 @@ export function fromLine(view: InquiryView, t: (key: string) => string): string 
   return view.fromWords
 }
 
-/** The record's verbs as buttons and the ⋯ menu, each held with its reason (the API's own `actions` for this reader). */
-export function RecordVerbs({ model, view, actions, extra }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions; extra?: MenuItemDef[] }) {
-  const { t, say } = useWords()
-  const offline = model.live === 'offline'
-  const held = (action: keyof InquiryView['actions']) => (model.busy || model.saving ? t('common.working') : say(actionHeld(view, action, model.can, offline)))
-  if (!isOpen(view.status))
-    return (
-      <span className="fw-inq-actions">
-        <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('record.more') }} items={[...(extra ?? []), { id: 'copy', label: t('record.copyNumber'), onSelect: () => actions?.onCopy?.() }]} />
-      </span>
-    )
-  const menu: MenuItemDef[] = [
-    view.status === 'NEED_INFO'
-      ? { id: 'resume', label: t('verb.resume'), disabled: !!held('resume'), description: held('resume') ?? undefined, onSelect: () => actions?.onVerb?.('resume') }
-      : { id: 'askInfo', label: t('verb.askInfo'), disabled: !!held('askInfo'), description: held('askInfo') ?? t('verb.askInfoHint'), onSelect: () => actions?.onVerb?.('askInfo') },
-    ...(view.assigneeId ? [{ id: 'unassign', label: t('verb.unassign'), disabled: !!held('unassign'), description: held('unassign') ?? undefined, onSelect: () => actions?.onVerb?.('unassign') }] : []),
-    { id: 'lost', label: t('verb.lost'), tone: 'danger' as const, disabled: !!held('lose'), description: held('lose') ?? undefined, onSelect: () => actions?.onVerb?.('lost') },
-    ...(extra ?? []),
-    { id: 'copy', label: t('record.copyNumber'), onSelect: () => actions?.onCopy?.() },
-  ]
-  return (
-    <span className="fw-inq-actions">
-      <Button size="sm" variant="danger-outline" heldReason={held('decline')} onClick={() => actions?.onVerb?.('decline')} aria-keyshortcuts="d">
-        <XCircle size={14} aria-hidden /> {t('verb.decline')}
-      </Button>
-      <Button size="sm" heldReason={held('assign')} onClick={() => actions?.onVerb?.('assign')} aria-keyshortcuts="a">
-        <UserRound size={14} aria-hidden /> {t('verb.assign')}
-      </Button>
-      <Button size="sm" variant="primary" heldReason={held('quote')} onClick={() => actions?.onVerb?.('quote')} aria-keyshortcuts="q">
-        <FilePlus2 size={14} aria-hidden /> {t('verb.quote')}
-      </Button>
-      <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('record.more') }} items={menu} />
-    </span>
-  )
-}
+/**
+ * B-TH-217 (threads plan TH-1b): the parts of today's request record — the 1160 px modal with its four tabs went; its parts live
+ * on in the reading pane and the full page: the closed line, the request editor (who asks, what, the lines, the note, the
+ * sender's mail as sent), the tech pack picker (moved from "Files & specs" into Details), what was made from it, the dialogs.
+ */
 
-/** The facts under the title: status, source, waiting, who has it (a name inside the one record), a prospect. */
-export function RecordMeta({ view }: { view: InquiryView }) {
-  const { t, say } = useWords()
-  return (
-    <span className="fw-inq-row">
-      <Tag tone="neutral">{t(`source.${view.source}`)}</Tag>
-      {view.prospect && <Tag tone="warning">{t('who.prospectTag')}</Tag>}
-      {view.waiting.for && <Tag tone={view.waiting.overdue ? 'danger' : view.waiting.for === 'CUSTOMER' ? 'warning' : 'neutral'}>{say({ key: view.waiting.for === 'CUSTOMER' ? 'waiting.customer' : view.waiting.overdue ? 'waiting.usOverdue' : 'waiting.us' })}</Tag>}
-      <span className="fw-inq-hint">{view.assignee ? (view.mine ? t('record.withMe') : t('record.with', { name: view.assignee.name })) : t('record.withNobody')}</span>
-    </span>
-  )
-}
-
-/** The tab the record shows, with its Apply bar and the dialogs. */
-export function RecordBody({ model, view, actions, slots }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions; slots?: RecordSlots }) {
-  const { t, say } = useWords()
-  const draft = model.draft ?? requestDraftOf(view)
-  const changes = requestChanges(view, draft, model.can)
-  const offline = model.live === 'offline'
-  return (
-    <div className="fw-inq-stack">
-      {model.stale && (
-        <Banner
-          tone="warning"
-          title={t('record.stale', { time: model.stale })}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {!isOpen(view.status) && <Closed view={view} />}
-      {model.tab === 'request' && <RequestTab model={model} view={view} draft={draft} actions={actions} />}
-      {model.tab === 'files' && <FilesTab model={model} view={view} draft={draft} actions={actions} slot={slots?.files} />}
-      {model.tab === 'quote' && <QuoteTab model={model} view={view} actions={actions} />}
-      {model.tab === 'activity' && (slots?.activity ?? <p className="fw-inq-hint">{model.can.thread ? t('activity.none') : t('activity.noRight')}</p>)}
-      {(model.tab === 'request' || model.tab === 'files') && changes.count > 0 && model.can.manage && (
-        <EditModeBar
-          count={changes.count}
-          busy={model.saving}
-          applyHeldReason={model.saving ? t('common.working') : (say(changes.problem) ?? (offline ? t('held.offlineKept') : null))}
-          onApply={() => actions?.onSave?.()}
-          onDiscard={() => actions?.onDiscard?.()}
-          saveShortcut
-        />
-      )}
-      <RecordDialogs model={model} view={view} actions={actions} />
-    </div>
-  )
-}
-
-function Closed({ view }: { view: InquiryView }) {
+export function Closed({ view }: { view: InquiryView }) {
   const { t, when } = useWords()
   const by = view.closedBy?.name ?? null
   const reason = view.declineReason ? t(`decline.${view.declineReason}`) : null
@@ -162,7 +74,7 @@ function heldOfEdit(model: InquiryRecordModel, view: InquiryView): Phrase | null
  * sizes), the target price (a price: absent without it), the wanted day, the note (in any state), and the sender's mail as
  * sent (sanitised, in a sandboxed frame). Read-only it is drawn as text with the reason.
  */
-function RequestTab({ model, view, draft, actions }: { model: InquiryRecordModel; view: InquiryView; draft: RequestDraft; actions?: InquiryRecordActions }) {
+export function RequestEditorBody({ model, view, draft, actions }: { model: InquiryRecordModel; view: InquiryView; draft: RequestDraft; actions?: InquiryRecordActions }) {
   const { t, say, day, when, locale } = useWords()
   const held = heldOfEdit(model, view)
   const editable = held === null
@@ -271,7 +183,7 @@ function RequestTab({ model, view, draft, actions }: { model: InquiryRecordModel
   )
 }
 
-function ProspectFields({ model, view, draft, editable, actions }: { model: InquiryRecordModel; view: InquiryView; draft: RequestDraft; editable: boolean; actions?: InquiryRecordActions }) {
+export function ProspectFields({ model, view, draft, editable, actions }: { model: InquiryRecordModel; view: InquiryView; draft: RequestDraft; editable: boolean; actions?: InquiryRecordActions }) {
   const { t } = useWords()
   const set = (patch: Partial<RequestDraft['prospect']>) => actions?.onDraft?.({ prospect: { ...draft.prospect, ...patch } })
   const details = view.prospectDetails
@@ -299,7 +211,8 @@ function ProspectFields({ model, view, draft, editable, actions }: { model: Inqu
       )}
       {!draft.matchPartyId && (
         <div className="fw-inq-form-grid">
-          {(['name', 'company', 'email', 'phone'] as const).map((field) => (
+          {/* B-TH-217 (PR-30, GDPR minimisation): a prospect's e-mail and phone only for who answers requests. */}
+          {(model.can.manage ? (['name', 'company', 'email', 'phone'] as const) : (['name', 'company'] as const)).map((field) => (
             <Field key={field} label={t(`prospect.${field}`)}>
               {editable ? <Input size="sm" value={draft.prospect[field]} maxLength={field === 'email' ? 254 : field === 'phone' ? 40 : 200} onChange={(event) => set({ [field]: event.target.value })} /> : <span className="fw-inq-value">{details?.[field] ?? '—'}</span>}
             </Field>
@@ -314,7 +227,7 @@ function ProspectFields({ model, view, draft, editable, actions }: { model: Inqu
 }
 
 /** The sender's mail as sent: the sanitised HTML in a sandboxed frame (remote pictures only on Show pictures), else its text. */
-function MailCard({ model, view, actions }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions }) {
+export function MailCard({ model, view, actions }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions }) {
   const { t, when } = useWords()
   const mail = view.mail!
   const pictures = remotePictureCount(mail.bodyHtml)
@@ -354,7 +267,7 @@ function MailCard({ model, view, actions }: { model: InquiryRecordModel; view: I
  * kept attachments; the mail's attachments; and the record panels' Files (upload with kind and visibility, PdfViewer, a
  * download is always an attachment).
  */
-function FilesTab({ model, view, draft, actions, slot }: { model: InquiryRecordModel; view: InquiryView; draft: RequestDraft; actions?: InquiryRecordActions; slot?: ReactNode }) {
+export function TechPackPicker({ model, view, draft, actions }: { model: InquiryRecordModel; view: InquiryView; draft: RequestDraft; actions?: InquiryRecordActions }) {
   const { t } = useWords()
   const editable = model.can.manage && view.actions.edit.allowed
   const chosen = new Set(draft.techPackFileIds)
@@ -423,7 +336,6 @@ function FilesTab({ model, view, draft, actions, slot }: { model: InquiryRecordM
           )}
         </Card>
       </div>
-      {slot ?? (model.can.thread ? null : <p className="fw-inq-hint">{t('files.noRight')}</p>)}
     </div>
   )
 }
@@ -431,7 +343,7 @@ function FilesTab({ model, view, draft, actions, slot }: { model: InquiryRecordM
 // ---- Quote -----------------------------------------------------------------------------------------------------------------
 
 /** Quote (design inquiry.quote): the quote this inquiry became (a link, its status, its value: a price), or "Not quoted yet" + Make quote. */
-function QuoteTab({ model, view, actions }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions }) {
+export function MadeFrom({ model, view, actions }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions }) {
   const { t, say, locale } = useWords()
   const offline = model.live === 'offline'
   const held = say(actionHeld(view, 'quote', model.can, offline))
@@ -513,5 +425,41 @@ export function RecordDialogs({ model, view, actions }: { model: InquiryRecordMo
       }}
       actions={{ onRef: actions?.dialog?.onRef, onSubmit: actions?.dialog?.onSubmit, onClose: close }}
     />
+  )
+}
+
+// ---- B-TH-217: Edit the request (a dialog over the pane and the full page) ------------------------------------------------------
+
+/**
+ * "Edit the request": who asks (match a prospect to a customer once, the contact), what they ask in our words and as lines, the
+ * target price (price grain), the wanted day, the note, and the tech pack (which files, the version in force) — saved as ONE
+ * change at the version read with the EditModeBar (⌘S). The customer's own words stay as they came (the first card).
+ */
+export function RequestEditor({ model, view, actions, onClose }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions; onClose: () => void }) {
+  const { t, say } = useWords()
+  const draft = model.draft ?? requestDraftOf(view)
+  const changes = requestChanges(view, draft, model.can)
+  const offline = model.live === 'offline'
+  const footer: ReactNode =
+    changes.count > 0 && model.can.manage ? (
+      <EditModeBar
+        count={changes.count}
+        busy={model.saving}
+        applyHeldReason={model.saving ? t('common.working') : (say(changes.problem) ?? (offline ? t('held.offlineKept') : null))}
+        onApply={() => actions?.onSave?.()}
+        onDiscard={() => actions?.onDiscard?.()}
+        saveShortcut
+      />
+    ) : (
+      <Button onClick={onClose}>{t('pane.edit.close')}</Button>
+    )
+  return (
+    <Modal open onClose={onClose} size="xl" title={t('pane.edit.title', { number: view.number })} subtitle={fromLine(view, t)} footer={footer}>
+      <div className="fw-inq-stack">
+        {model.stale && <Banner tone="warning" title={t('record.stale', { time: model.stale })} />}
+        <RequestEditorBody model={model} view={view} draft={draft} actions={actions} />
+        <TechPackPicker model={model} view={view} draft={draft} actions={actions} />
+      </div>
+    </Modal>
   )
 }

@@ -54,6 +54,7 @@ import {
   writeProblem,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+import { designScreen as paneScreen } from './view/pane/fixtures'
 
 const owner = inquiriesCan(ROLE_PERMISSIONS.owner)
 const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['sales-inquiries']!
@@ -248,7 +249,7 @@ describe('words and navigation', () => {
       for (const basis of LAWFUL_BASES) expect(all[`basis.${basis}`], `${locale} basis.${basis}`).toBeTruthy()
       for (const right of KNOWN_RIGHTS) expect(all[`right.${right}`], `${locale} right.${right}`).toBeTruthy()
       for (const status of ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED']) expect(all[`quoteStatus.${status}`], `${locale} quoteStatus.${status}`).toBeTruthy()
-      for (const verb of ['askInfo', 'resume', 'unassign']) expect(all[`done.${verb}`], `${locale} done.${verb}`).toBeTruthy()
+      for (const verb of ['askInfoPortal', 'askInfoMail', 'resume', 'unassign']) expect(all[`done.${verb}`], `${locale} done.${verb}`).toBeTruthy()
     }
   })
 
@@ -350,7 +351,7 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
 }
 
 describe('every design case draws in both languages with no key left on screen', () => {
-  for (const screen of [listScreen, recordScreen] as DesignScreen<unknown>[]) {
+  for (const screen of [listScreen, recordScreen, paneScreen] as DesignScreen<unknown>[]) {
     for (const locale of LOCALES) {
       it(`${screen.screen} in ${locale}: ${screen.cases.length} cases`, () => {
         for (const item of screen.cases) {

@@ -1,7 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { RecordPanelsView } from '../../../../record-panels/view/RecordPanelsView'
-import { canFor, CONTACTS, CUSTOMERS, DECLINED_VIEW, inShell, JACKET_DETAIL, ME, NOW, PANTS_DETAIL, panelsOf, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, STYLE_OPTIONS, VIEW, type RoleCase } from '../demo/fixtures'
+import { canFor, CONTACTS, CUSTOMERS, DECLINED_VIEW, demoThreadElement, inShell, JACKET_DETAIL, ME, NOW, PANTS_DETAIL, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, ROWS, STYLE_OPTIONS, VIEW, type RoleCase } from '../demo/fixtures'
 import type { InquiryView } from '../api'
 import type { RecordTab } from '../model'
 import type { InquiryRecordModel } from '../record-model'
@@ -16,6 +15,9 @@ import { InquiryPageView } from '../view/InquiryPageView'
 interface RecordCase {
   readonly role: RoleCase
   readonly record: InquiryRecordModel
+  /** B-TH-219: opened from the list ("2 of 3"); the phone's details sheet open. */
+  readonly nav?: boolean
+  readonly sheet?: boolean
 }
 
 function recordCase(view: InquiryView | null, tab: RecordTab = 'request', over: Partial<InquiryRecordModel> = {}, role: RoleCase = 'owner'): RecordCase {
@@ -46,21 +48,28 @@ function recordCase(view: InquiryView | null, tab: RecordTab = 'request', over: 
 
 function RecordDesign({ model }: { model: RecordCase }) {
   const view = model.record.loaded.status === 'ready' ? model.record.loaded.value : null
-  const panels = view && (model.record.tab === 'activity' || model.record.tab === 'files') ? createElement(RecordPanelsView, { model: panelsOf(view, model.record.tab === 'files' ? 'files' : 'conversation') }) : null
-  const page = createElement(InquiryPageView, { model: model.record, asOf: NOW, slots: model.record.tab === 'activity' ? { activity: panels } : model.record.tab === 'files' ? { files: panels } : undefined })
+  // B-TH-219: the request's thread as the main column (made-up messages; nothing is sent).
+  const page = createElement(InquiryPageView, {
+    model: model.record,
+    asOf: NOW,
+    thread: view ? demoThreadElement() : null,
+    backHref: `${PREFIX}/sales/incoming${view ? `?open=${view.id}` : ''}`,
+    nav: model.nav && view ? { ids: [ROWS[0]!.id, view.id, ROWS[3]!.id], onGo: () => undefined } : null,
+    rights: { erase: model.role === 'owner', closeThread: model.role === 'owner' },
+    sheetOpen: model.sheet,
+  })
   return inShell('/sales/incoming', page, model.role)
 }
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-105-full',
-  title: 'Inquiry full page',
+  title: 'Request full page',
   view: RecordDesign,
   holdsPage: true,
   cases: [
-    { id: 'request', label: 'Request: who asks, what, the lines with sizes, the target, the mail as sent', model: recordCase(VIEW), note: 'The same tabs and dialogs as the DetailModal; the tabs are real links.' },
-    { id: 'files', label: 'Files & specs: the tech pack in force, the mail’s attachments, the files panel', model: recordCase(VIEW, 'files') },
-    { id: 'quote', label: 'Quote: not quoted yet', model: recordCase(VIEW, 'quote') },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: recordCase(VIEW, 'activity') },
+    { id: 'request', label: 'TH-1b · The request\'s full page: row 1, the actions, the customer\'s words, the thread about two thirds, Details about one third', model: recordCase(VIEW), note: 'The reading pane\'s parts on a page of their own (a new tab, a deep link, a phone).' },
+    { id: 'th-219-nav', label: 'TH-1b · Opened from the list: "2 of 3" walks the list\'s order; Back to Incoming keeps its filters', model: { ...recordCase(VIEW), nav: true } },
+    { id: 'th-219-sheet', label: 'TH-1b · On a phone: the details behind "i" as a bottom sheet; the main action stays on top', model: { ...recordCase(VIEW), sheet: true }, note: 'Look at it at 375.' },
     { id: 'prospect', label: 'A prospect to match to a customer', model: recordCase(PROSPECT_VIEW) },
     { id: 'quoted', label: 'Quoted: the quote with its value', model: recordCase(QUOTED_VIEW, 'quote') },
     { id: 'declined', label: 'Declined: read-only but for its note', model: recordCase(DECLINED_VIEW) },

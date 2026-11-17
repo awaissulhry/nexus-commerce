@@ -1,6 +1,5 @@
 import { createElement, useEffect, useState } from 'react'
 import { DEMO_COMPANIES } from '../../../shell/design-data'
-import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import {
   ASSIGNEES,
@@ -10,6 +9,7 @@ import {
   CUSTOMERS,
   DECLINED_VIEW,
   DEMO_PICTURES,
+  demoThreadElement,
   inShell,
   JACKET_DETAIL,
   listOf,
@@ -18,7 +18,6 @@ import {
   ME,
   NOW,
   PANTS_DETAIL,
-  panelsOf,
   PREFIX,
   PROSPECT_VIEW,
   QUOTED_VIEW,
@@ -46,8 +45,6 @@ import type { NewInquiryModel } from './view/NewInquiryDialog'
 interface DesignModel {
   readonly role: RoleCase
   readonly model: InquiriesModel
-  /** The record panels the open inquiry's tabs mount (their own made-up cases). */
-  readonly panels?: 'conversation' | 'files'
 }
 
 const at = (over: Partial<ListAddress>): ListAddress => ({ ...HOME_ADDRESS, ...over })
@@ -107,7 +104,6 @@ function page(over: Partial<InquiriesModel> = {}, role: RoleCase = 'owner'): Des
 
 const open = (view: InquiryView, tab: RecordTab = 'request', over: Partial<InquiryRecordModel> = {}, role: RoleCase = 'owner'): DesignModel => ({
   ...page({ address: at({ open: view.id, tab }), detail: record(view, { tab, ...over }, role) }, role),
-  panels: tab === 'activity' ? 'conversation' : tab === 'files' ? 'files' : undefined,
 })
 const dialog = (view: InquiryView, value: RecordDialog, tab: RecordTab = 'request'): DesignModel => open(view, tab, { dialog: value })
 const tile = (id: InquiryTile, rows: typeof ROWS): Partial<InquiriesModel> => ({ address: at({ tile: id }), list: listOf(rows) })
@@ -134,10 +130,10 @@ const BULK_DECLINE: BulkDialog = { kind: 'decline', ids: [ROWS[0]!.id, ROWS[3]!.
 function ListDesign({ model }: { model: DesignModel }) {
   const [state, setState] = useState(model.model)
   useEffect(() => setState(model.model), [model])
-  const panels = model.panels && state.detail?.loaded.status === 'ready' ? createElement(RecordPanelsView, { model: panelsOf(state.detail.loaded.value, model.panels) }) : null
+  // B-TH-217: the open request's thread in the reading pane (made-up messages; nothing is sent).
   const view = createElement(InquiriesView, {
     model: state,
-    slots: model.panels === 'conversation' ? { activity: panels } : model.panels === 'files' ? { files: panels } : undefined,
+    slots: state.detail ? { thread: demoThreadElement() } : undefined,
     actions: {
       onAddress: (patch) => setState((now) => ({ ...now, address: { ...now.address, ...patch } })),
       onClearFilters: () => setState((now) => ({ ...now, address: HOME_ADDRESS })),
@@ -206,13 +202,10 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'selected-closed', label: 'A selection with closed rows: they are left out of Assign and Decline (said before the click)', model: page({ address: at({ tile: 'ALL' }), list: listOf(ROWS), selected: [ROWS[0]!.id, ROWS[4]!.id, ROWS[5]!.id] }) },
     { id: 'notices', label: 'Notices: the count is partial (one shown, "1 more notice")', model: page({ list: listOf(OPEN_ROWS, false) }) },
     { id: 'notices-open', label: 'Every notice listed (partial count, prospects to match), each dismissed by its value', model: page({ list: listOf(OPEN_ROWS, false), noticesOpen: true }) },
-    { id: 'detail', label: 'The inquiry (DetailModal): Request — who asks, what, the lines with sizes, the target, the mail as sent', model: open(VIEW), note: 'Q make quote, A assign, D decline, J / K the next and previous inquiry, Esc closes; Open full page is a new tab.' },
-    { id: 'detail-changed', label: 'Request changed: the date, the target and a new line — the EditModeBar (⌘S applies)', model: open(VIEW, 'request', { draft: CHANGED }) },
-    { id: 'detail-prospect', label: 'A prospect: "Unknown sender — match to a customer"; Make quote held until matched', model: open(PROSPECT_VIEW) },
-    { id: 'detail-files', label: 'Files & specs: the tech pack (a newer version in force), the mail’s attachments, the files panel', model: open(VIEW, 'files') },
-    { id: 'detail-quote-none', label: 'Quote: not quoted yet (what Make quote will copy)', model: open(VIEW, 'quote') },
-    { id: 'detail-quote-made', label: 'Quote: the quote it became (link, status, value)', model: open(QUOTED_VIEW, 'quote') },
-    { id: 'detail-activity', label: 'Activity: the thread (internal notes and mail to the customer), files and history', model: open(VIEW, 'activity') },
+    { id: 'detail', label: 'TH-1b · The reading pane: row 1 (picture · customer — subject · state · owner · 2 of 3 · ⋯ · ×), the actions, the customer\'s words first, the thread, Details', model: open(VIEW), note: 'Q make quote, A assign, D decline, J / K the next and previous request (outside the feed), Esc closes; ⋯ Open full page is a new tab.' },
+    { id: 'detail-changed', label: 'TH-1b · The pane while the request is being edited (Edit the request holds the EditModeBar)', model: open(VIEW, 'request', { draft: CHANGED }) },
+    { id: 'detail-prospect', label: 'TH-1b · A prospect marked new: the prospect block with its lawful basis; replies wait for "Make the customer first"', model: open(PROSPECT_VIEW) },
+    { id: 'detail-quote-made', label: 'TH-1b · Made from it: the quote with its own status and value; the closed line', model: open(QUOTED_VIEW) },
     { id: 'detail-closed', label: 'A declined inquiry: read-only but for its note, the reason and who', model: open(DECLINED_VIEW) },
     { id: 'detail-stale', label: 'Changed by someone while typing: Reload (the typing is kept until then)', model: open(VIEW, 'request', { draft: CHANGED, stale: '10:41' }) },
     { id: 'detail-refused', label: 'Apply refused: our words, the field named', model: open(VIEW, 'request', { draft: CHANGED, notice: { key: 'problem.invalid', tone: 'danger', lines: [{ key: 'field.lineAt', params: { n: 5 } }] } }) },
