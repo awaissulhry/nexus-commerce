@@ -84,6 +84,14 @@ describe('the doors (R-ACT)', () => {
     expect(holds.task).toBeNull()
   })
 
+  it('a record that is never shared holds Ask and Share with that reason, whatever the rights (B-PR-08a)', () => {
+    const holds = doorHolds({ can: ALL, hasParty: true, offline: false, shareable: false })
+    expect(holds.approve).toEqual({ key: 'held.notShareable' })
+    expect(holds.share).toEqual({ key: 'held.notShareable' })
+    expect(holds.task).toBeNull()
+    expect(doorHolds({ can: ALL, hasParty: true, offline: false }).share).toBeNull()
+  })
+
   it('offline holds every door; mute waits for a follow', () => {
     const holds = doorHolds({ can: ALL, hasParty: true, offline: true })
     for (const door of R_ACT_ORDER) expect(holds[door]).toEqual({ key: 'held.offline' })

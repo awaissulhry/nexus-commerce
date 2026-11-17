@@ -75,7 +75,8 @@
     "noRole": "Your role does not allow this here.",
     "noParty": "This record has no customer or supplier.",
     "offline": "You are offline.",
-    "followFirst": "Follow the record first."
+    "followFirst": "Follow the record first.",
+    "notShareable": "This record stays inside the factory: it is never shared with a customer or supplier."
   },
   "portal": {
     "needInfo": "We need something from you",

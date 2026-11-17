@@ -75,7 +75,8 @@
     "noRole": "Il tuo ruolo non lo consente qui.",
     "noParty": "Questo record non ha un cliente o un fornitore.",
     "offline": "Sei offline.",
-    "followFirst": "Prima segui il record."
+    "followFirst": "Prima segui il record.",
+    "notShareable": "Questo record resta interno alla fabbrica: non si condivide mai con un cliente o un fornitore."
   },
   "portal": {
     "needInfo": "Ci serve qualcosa da te",

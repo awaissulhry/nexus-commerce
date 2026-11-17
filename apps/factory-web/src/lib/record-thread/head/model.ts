@@ -113,13 +113,16 @@ export type RightWords = Partial<Record<'task' | 'approve' | 'share' | 'follow' 
 
 /**
  * Why each door is held, or null when it opens. The five tools never hide (R-ACT): no right → held with the right it
- * needs; no party on the record → Ask and Share held "This record has no customer or supplier"; offline → held "You are
- * offline". A closed thread keeps them open (a task or a share does not write in the thread).
+ * needs; no party on the record → Ask and Share held "This record has no customer or supplier"; a record that is never
+ * shared (`shareable: false`: a work order, a quality hold, a nonconformance — the API's NOT_SHAREABLE, B-PR-08a) → Ask and
+ * Share held "This record stays inside the factory"; offline → held "You are offline". A closed thread keeps them open (a task or a share does not write in the thread).
  */
-export function doorHolds(input: { readonly can: HeadAbilities; readonly hasParty: boolean; readonly offline: boolean; readonly rights?: RightWords }): Readonly<Record<HeadDoor, Held | null>> {
+export function doorHolds(input: { readonly can: HeadAbilities; readonly hasParty: boolean; readonly offline: boolean; readonly rights?: RightWords; readonly shareable?: boolean }): Readonly<Record<HeadDoor, Held | null>> {
   const right = (door: keyof RightWords): Held => (input.rights?.[door] ? { key: 'held.noRight', params: { right: input.rights[door]! } } : { key: 'held.noRole' })
   const hold = (door: keyof RightWords, needsParty = false): Held | null => {
     if (input.offline) return { key: 'held.offline' }
+    // B-PR-08a: a work order, a quality hold or a nonconformance is never shared (the API's NOT_SHAREABLE): said, not hidden.
+    if (needsParty && input.shareable === false) return { key: 'held.notShareable' }
     if (!input.can[door]) return right(door)
     if (needsParty && !input.hasParty) return { key: 'held.noParty' }
     return null
