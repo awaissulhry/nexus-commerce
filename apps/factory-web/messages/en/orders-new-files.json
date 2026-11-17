@@ -1,0 +1,34 @@
+{
+  "fold": {
+    "title": "Customer files",
+    "count_one": "{count} file",
+    "count_other": "{count} files",
+    "hint": "Added to the order when you confirm, for the office only. Photos, PDFs, measurement sheets, Illustrator, EPS, Photoshop or ZIP files.",
+    "drop": "Drop the customer’s files here, paste them, or browse",
+    "noRight": "Adding files needs the right to upload files: the order is made without them."
+  },
+  "file": {
+    "sheet": "This is a measurement sheet",
+    "sheetHint": "Body data: only people who may read measurements open it.",
+    "remove": "Take {name} off",
+    "attaching": "Attaching…",
+    "attached": "Attached",
+    "failed": "Did not attach",
+    "leftOut_one": "{count} file was left out: at most 20 files go with an order.",
+    "leftOut_other": "{count} files were left out: at most 20 files go with an order."
+  },
+  "problem": {
+    "page": "an SVG, HTML or script file is never accepted: send a PDF or PNG",
+    "type": "this type is not accepted (PDF, photos, Office documents, CSV, text, or Illustrator, EPS, Photoshop and ZIP files)",
+    "empty": "the file is empty",
+    "size": "too large: at most {max} MB for this kind of file"
+  },
+  "outcome": {
+    "title_one": "Order {number} made; {count} file did not attach",
+    "title_other": "Order {number} made; {count} files did not attach",
+    "body": "The order is saved. Try the files again, or open the order and add them in its Files.",
+    "retry": "Retry",
+    "open": "Open the order",
+    "attaching": "Order {number} made: attaching its files…"
+  }
+}

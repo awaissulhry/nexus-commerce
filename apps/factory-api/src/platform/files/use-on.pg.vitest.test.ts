@@ -19,6 +19,11 @@ import { LOCAL_COOKIE_SECRET } from '../../env'
 import { BRAND_ALPHA, BRAND_BETA } from '../../golden-flow/portal/testing/two-brands'
 import { startHarness, type Harness } from '../auth/sessions/testing/harness'
 import { USE_ON_WORDS } from './use-on'
+// B-TH-231: the picker's targets come from the search index.
+import { callerFor } from '../../core/command'
+import { systemContext } from '../outbox/system'
+import { rebuildIndex } from '../search/indexing'
+import { loadIndexers } from '../search/registry'
 
 /**
  * B-TH-024 (threads plan TH-2, N8; wall test T25 extended; Owner rule 2026-11-16: "One brand must not be able to see anything
@@ -47,6 +52,10 @@ const SESSIONS: Record<string, () => SessionContext> = {
   office: () => office(['files.read', 'files.upload', 'files.manage']),
   alphaOnly: () => office(['files.read', 'files.upload'], [P1]),
   reader: () => office(['files.read']),
+  // ---- B-TH-231: the picker (it finds records as search does: their view permissions), and a person who may not share files.
+  picker: () => office(['files.read', 'files.upload', 'files.manage', 'orders.view', 'quotes.view']),
+  uploaderOnly: () => office(['files.read', 'files.upload']),
+  // ---- end B-TH-231
 }
 
 async function call(session: string, method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown): Promise<{ status: number; body: Json }> {
@@ -84,6 +93,9 @@ beforeAll(async () => {
   await admin(`UPDATE "StoredFile" SET category = 'ARTWORK' WHERE id = $1`, [alphaFile.id])
   betaFile = await uploaded(BRAND_BETA.fileName, { recordType: 'SalesOrder', recordId: second.salesOrderId })
   ourFile = await uploaded('Our care leaflet.pdf', { recordType: 'Company', recordId: companyA })
+  // B-TH-231: the orders and quotes in the search index (the picker finds records as global search does).
+  const routesRoot = fileURLToPath(new URL('../..', import.meta.url))
+  await rebuildIndex(callerFor(h.database, systemContext(T, 'use-on-targets-pg-test')), await loadIndexers(routesRoot), { recordTypes: ['SalesOrder', 'Quote'], key: `use-on-targets-${newId()}` })
 }, 300_000)
 
 afterAll(async () => {
@@ -128,3 +140,33 @@ describe('T25 (extended): carry a file to another record (B-TH-024)', () => {
     expect((await call('reader', 'POST', `/files/${alphaFile.id}/use-on`, { recordType: 'Company', recordId: companyA })).status).toBe(403)
   })
 })
+
+// ---- B-TH-231 (threads plan TH-2, T9-F05; walls W25 / W26): the picker offers only the same customer's records or none ---------
+describe('B-TH-231: "Use on another record…" offers records of the same customer or none', () => {
+  it('brand A’s file: brand A’s quotes, never brand B’s order, never its own record', async () => {
+    const answer = await call('picker', 'GET', `/files/${alphaFile.id}/use-on/targets?q=seed`)
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+    const ids = answer.body.targets.map((target: Json) => target.recordId)
+    expect(ids).toContain(Q1)
+    expect(ids).not.toContain(second.salesOrderId)
+    expect(ids).not.toContain(SO1)
+    for (const target of answer.body.targets) expect([P1, null]).toContain(target.partyId)
+    expect(JSON.stringify(answer.body)).not.toContain('SEED-SO-B001')
+  })
+
+  it('our own file (no customer) may go to either brand’s records; too short a query looks nothing up', async () => {
+    const ids = (await call('picker', 'GET', `/files/${ourFile.id}/use-on/targets?q=seed`)).body.targets.map((target: Json) => target.recordId)
+    expect(ids).toEqual(expect.arrayContaining([second.salesOrderId, SO1, Q1]))
+    expect((await call('picker', 'GET', `/files/${ourFile.id}/use-on/targets?q=s`)).body).toEqual({ tooShort: true, targets: [] })
+  })
+
+  it('brand B’s file is not found for a person limited to brand A', async () => {
+    expect((await call('alphaOnly', 'GET', `/files/${betaFile.id}/use-on/targets?q=seed`)).status).toBe(404)
+  })
+
+  it('sharing the copy with the customer needs files.manage, as at upload', async () => {
+    expect((await call('uploaderOnly', 'POST', `/files/${alphaFile.id}/use-on`, { recordType: 'Quote', recordId: Q1, visibility: ['PARTNER'] })).status).toBe(403)
+    expect((await call('uploaderOnly', 'POST', `/files/${alphaFile.id}/use-on`, { recordType: 'Quote', recordId: Q1 })).status).toBe(201)
+  })
+})
+// ---- end B-TH-231

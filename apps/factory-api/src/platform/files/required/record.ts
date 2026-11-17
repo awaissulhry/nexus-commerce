@@ -4,11 +4,12 @@ import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-do
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { dayOf, daysUntil, expiryDateProblem, expiryStateOf } from '@nexus/factory-domain/files/expiry/rules'
-import { isRequiredRecordType, REQUIRED_RECORD_TYPES, requirementStates, rulesThatApply, type DocumentCategory } from '@nexus/factory-domain/files/required/rules'
+import { isDocumentCategory, isRequiredRecordType, REQUIRED_RECORD_TYPES, requirementStates, rulesThatApply, type DocumentCategory } from '@nexus/factory-domain/files/required/rules'
 import { isCurrentVersion } from '@nexus/factory-domain/files/versions/rules'
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { contextOf, mayWrite, readOffice } from '../files'
+import { contextOf, mayWrite, opensMeasurementSheets, readOfficeReached } from '../files' // B-TH-083: opensMeasurementSheets; B-PR-44: readOfficeReached
+import { isMeasurementSheet } from '@nexus/factory-domain/files/measurements'
 import { assertGenericPath, readsThroughModule } from '../owned'
 import { activeRulesOf, documentsOf, recordFactsOf, type DocumentRow } from './check'
 import type { documentView } from './contract'
@@ -64,7 +65,9 @@ export async function recordDocuments(caller: CommandCaller, query: { readonly r
     if (!can(actor, FILES_READ, { companyId })) throw new NotFoundError('Record not found.')
     const tagged = facts ? await documentsOf(client, query.recordType, query.recordId, facts.partyId) : []
     const party = tagged.filter((row) => !(row.recordType === query.recordType && row.recordId === query.recordId))
-    const documents = [...own.filter((row) => can(actor, FILES_READ, { companyId: row.companyId })).map((row) => documentOf(row, today, false)), ...party.map((row) => documentOf(row, today, true))]
+    // B-TH-083: a file under a module's own tag that is no document category (a measurement sheet, a line's artwork, a repair's
+    // damage photo) is not offered here: its tag is its module's (a sheet's is its lock), and it is no document a rule asks for.
+    const documents = [...own.filter((row) => can(actor, FILES_READ, { companyId: row.companyId }) && (row.category === null || isDocumentCategory(row.category))).map((row) => documentOf(row, today, false)), ...party.filter((row) => row.category !== null && isDocumentCategory(row.category)).map((row) => documentOf(row, today, true))]
     const moves: Array<{ toStatus: string; requirements: ReturnType<typeof requirementStates> }> = []
     if (facts && isRequiredRecordType(query.recordType)) {
       const rules = await activeRulesOf(client, query.recordType, facts.companyId ?? (context.audience === 'office' ? (context.companyId ?? null) : null))
@@ -96,8 +99,10 @@ export async function setDocument(
 ) {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new NotFoundError('File not found.')
-  const file = await readOffice(caller, fileId)
+  const file = await readOfficeReached(caller, fileId) // B-PR-44
   if (!can(actorOf(context), FILES_READ, { companyId: file.companyId })) throw new NotFoundError('File not found.')
+  // B-TH-083: a measurement sheet's tag (and its date) is changed only by someone who may open it: taking the tag off opens it to all.
+  if (isMeasurementSheet(file) && !(await opensMeasurementSheets(caller, file))) throw new NotFoundError('File not found.')
   mayWrite(caller, FILES_UPLOAD, { companyId: file.companyId, floorSiteId: null, partyId: null })
   assertGenericPath(file.recordType, file.kind, {})
   if (body.category === undefined && body.expiresOn === undefined) throw new ValidationError('Say what changes: the kind of document or its expiry date.', [{ path: 'body', message: 'Nothing to change.' }])

@@ -9,7 +9,7 @@ import { isCurrentVersion, seriesRootOf } from '@nexus/factory-domain/files/vers
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import type { FileView } from '../contract'
-import { contextOf, mayWrite, presignedView, readOffice, storeCall, viewOf, type OfficeRow } from '../files'
+import { contextOf, mayWrite, presignedView, readOfficeReached, storeCall, viewOf, type OfficeRow } from '../files' // B-PR-44: readOfficeReached
 import { assertGenericPath } from '../owned'
 import { UPLOAD_URL_SECONDS } from '../rules'
 import type { FilesRuntime } from '../service'
@@ -115,7 +115,7 @@ const NOT_CURRENT = 'Only the current version is marked up: open the newest vers
 export async function createMarkup(runtime: FilesRuntime, caller: CommandCaller, fileId: string, input: MarkupInput, idempotencyKey?: string) {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new NotFoundError('File not found.')
-  const file = await readOffice(caller, fileId)
+  const file = await readOfficeReached(caller, fileId) // B-PR-44
   if (!can(actorOf(context), FILES_READ, { companyId: file.companyId })) throw new NotFoundError('File not found.')
   mayWrite(caller, FILES_UPLOAD, { companyId: file.companyId, floorSiteId: null, partyId: null })
   assertGenericPath(file.recordType, file.kind, {})
@@ -165,7 +165,7 @@ export async function createMarkup(runtime: FilesRuntime, caller: CommandCaller,
 export async function listMarkups(caller: CommandCaller, fileId: string): Promise<MarkupView[]> {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new NotFoundError('File not found.')
-  const file = await readOffice(caller, fileId)
+  const file = await readOfficeReached(caller, fileId) // B-PR-44
   if (!can(actorOf(context), FILES_READ, { companyId: file.companyId })) throw new NotFoundError('File not found.')
   const root = seriesRootOf({ id: file.id, seriesId: file.seriesId ?? null })
   const versions = await caller.withClient((client) => client.storedFile.findMany({ where: { OR: [{ id: root }, { seriesId: root }] }, select: { id: true, versionNo: true } }))

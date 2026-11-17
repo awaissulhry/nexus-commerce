@@ -12,7 +12,7 @@ import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { systemContext } from '../outbox/system'
-import { mayOnThread, resolveRecord } from '../threads/records' // B-TH-003; B-TH-029: mayOnThread
+import { resolveRecord } from '../threads/records' // B-TH-003 (B-TH-029's record read: ./record-scope.ts)
 import type { FileView } from './contract'
 import type { PresignedRequest, StoredObject } from './port'
 import {
@@ -47,6 +47,10 @@ import { keyShownTo } from './thumbs/outside'
 // B-W2b-F56: a file whose bytes are missing from the store (404 in words, never an outage).
 import { MissingFileError } from './missing'
 import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
+// B-PR-44: a file's record read through its own resolver, its parent's, its work order's or its party (fail closed for limited people).
+import { fileRecordScope, reachesFileRecord } from './record-scope'
+// B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
+import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
 
 /**
  * Files on R2 (plan A1 §3.6; features COL-045, COL-050, PLT-011; PLAN §2.8), the flow:
@@ -97,19 +101,22 @@ const COMMON = {
   updatedAt: true,
 } as const satisfies Prisma.StoredFileSelect
 
+/** B-TH-083: what the file is evidence of (MEASUREMENTS keeps it behind sales.measurements.view); every role reads it. */
+const CATEGORY = { category: true } as const satisfies Prisma.StoredFileSelect
+
 /** B-W2b-160: the version and the stripped copy, which every role reads (the floor and partner roles too). */
 const DEPTH = { versionNo: true, supersededAt: true, thumbnailKey: true } as const satisfies Prisma.StoredFileSelect
 
 /** What each audience's role may read (its hidden columns left out: a forgotten one would fail loudly). */
 export const SELECT_FOR = {
-  office: { ...COMMON, ...DEPTH, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true, seriesId: true, sourceFileId: true },
-  floor: { ...COMMON, ...DEPTH, floorSiteId: true },
-  partner: { ...COMMON, ...DEPTH, partyId: true, seriesId: true },
+  office: { ...COMMON, ...DEPTH, ...CATEGORY, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true, seriesId: true, sourceFileId: true },
+  floor: { ...COMMON, ...DEPTH, ...CATEGORY, floorSiteId: true },
+  partner: { ...COMMON, ...DEPTH, ...CATEGORY, partyId: true, seriesId: true },
 } as const satisfies Record<string, Prisma.StoredFileSelect>
 
 export type Row = Prisma.StoredFileGetPayload<{ select: typeof COMMON }> & { floorSiteId?: string | null; partyId?: string | null; legalHold?: boolean; scanEngine?: string | null; scanFinding?: string | null } & DepthColumns
 /** B-W2b-160: the depth columns, read by the selects above (a module's own select may leave them out). */
-type DepthColumns = { versionNo?: number; supersededAt?: Date | null; thumbnailKey?: string | null; seriesId?: string | null; sourceFileId?: string | null }
+type DepthColumns = { versionNo?: number; supersededAt?: Date | null; thumbnailKey?: string | null; seriesId?: string | null; sourceFileId?: string | null; category?: FileCategory | null }
 export type OfficeRow = Prisma.StoredFileGetPayload<{ select: (typeof SELECT_FOR)['office'] }>
 
 const selectFor = (context: RequestContext): Prisma.StoredFileSelect =>
@@ -147,6 +154,8 @@ export function viewOf(row: Row): FileView {
     ...(row.versionNo === undefined ? {} : { versionNo: row.versionNo, supersededAt: iso(row.supersededAt ?? null) }),
     ...('seriesId' in row ? { seriesId: row.seriesId ?? null } : {}),
     ...('sourceFileId' in row ? { sourceFileId: row.sourceFileId ?? null } : {}),
+    // B-TH-083: the file's category (a module's select may leave it out).
+    ...('category' in row ? { category: row.category ?? null } : {}),
   }
 }
 
@@ -227,6 +236,8 @@ export async function readVisible(caller: CommandCaller, fileId: string, path: U
   }
   // B-TH-029: and its record's own scope (the same 404: a file of a record out of reach is as unknown as a wrong id).
   if (office && !throughModule && !(await officeReachesRecord(caller, row))) throw new NotFoundError('File not found.')
+  // B-TH-083: a measurement sheet opens only with sales.measurements.view (the same 404 for everyone else in the office).
+  if (isMeasurementSheet(row) && !(await opensMeasurementSheets(caller, row))) throw new NotFoundError('File not found.')
   return row
 }
 
@@ -236,19 +247,66 @@ export async function readVisible(caller: CommandCaller, fileId: string, path: U
  * person limited to some customers (RoleAssignment.partyIds) or sites opened any record's file by id. Now an office read — the
  * file by id, its download, preview, versions and history, and a record's file list — also asks files.read over the RECORD's
  * own scope (company, site and party from its thread resolver, platform/threads/records.ts) and the record type's thread gate
- * (a person's records: users.view, workers.view …), exactly as threads do (mayOnThread). A record type no resolver knows, or a
- * record gone, keeps the file's company check. A person without a customer or site limit (the default: the factory sees it
- * all) reads what they read before; a site-limited person no longer reads the files of another site's records.
+ * (a person's records: users.view, workers.view …), exactly as threads do (mayOnThread). A person without a customer or site limit
+ * (the default: the factory sees it all) reads what they read before; a site-limited person no longer reads the files of another
+ * site's records.
+ * B-PR-44 (Decision 17: a customer limit covers customer records): a record type the resolver does not know is read through
+ * ./record-scope.ts — a line through its order or quote, a work order's record through its customer, any table naming its
+ * party through that party; a customer-carrying record whose customer cannot be read opens only for every-customer readers.
  */
-async function officeReachesRecord(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string }): Promise<boolean> {
+async function officeReachesRecord(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string; readonly companyId?: string | null }): Promise<boolean> {
   const context = contextOf(caller)
   if (context.audience !== 'office') return true
-  const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
-  return scope === null || mayOnThread(actorOf(context), FILES_READ, record.recordType, scope)
+  const found = await caller.withClient((client) => fileRecordScope(client, context.tenantId, record))
+  return reachesFileRecord(actorOf(context), FILES_READ, found, record.companyId ?? null)
 }
 // ---- end B-TH-029
 
+// ---- B-TH-083 (threads plan TH-7, N11; walls W25 / W26, tests T25 / T26): measurement sheets are body data ----------------------
+/**
+ * A customer's measurement sheet (StoredFile.category MEASUREMENTS, filed by the tick at upload) opens in the office only for
+ * people holding sales.measurements.view over its RECORD's scope (company, site and customer from the thread resolver; a type no
+ * resolver knows keeps the file's company) — the production manager holds it on purpose, finance does not. For everyone else
+ * in the office the file is not found by id (404, as a wrong id), and a record's list shows it LOCKED (`locked: MEASUREMENTS`,
+ * no name, no checksum: "Measurement sheet — you cannot open it"; counted, never dropped). A portal or a link reads only its
+ * own party's sheets (row-level security and the record-party guard), a floor never (the database refuses FLOOR on a sheet);
+ * the system reads them for its own work. Each opening (download, preview) writes one audit row `files.measurementSheetOpened`.
+ */
+export async function opensMeasurementSheets(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string; readonly companyId: string | null }): Promise<boolean> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office') return true
+  // As threads read a record (its gate and its wall party: B-PR-08a part 2); B-PR-44: any other type through ./record-scope.ts.
+  const found = await caller.withClient((client) => fileRecordScope(client, context.tenantId, record))
+  return reachesFileRecord(actorOf(context), MEASUREMENT_SHEET_PERMISSION, found, record.companyId)
+}
+
+/** A locked sheet as an office reader without the permission sees it: what it is and where, never its name or content. */
+export const lockedView = (view: FileView): FileView => ({ ...view, originalName: '', sha256: '', locked: MEASUREMENT_SHEET_CATEGORY })
+
+/** One audit row per opening of a sheet (download or preview), by whoever opened it (office, portal, link). */
+export async function recordSheetOpening(caller: CommandCaller, row: Pick<Row, 'id' | 'companyId' | 'recordType' | 'recordId' | 'category'>, how: 'download' | 'preview'): Promise<void> {
+  if (!isMeasurementSheet(row)) return
+  const context = contextOf(caller)
+  if (context.audience === 'system' || context.audience === 'platform') return
+  await command(caller, { name: 'files.measurementSheetOpened', idempotencyKey: `sheet-open:${randomUUID()}`, input: { fileId: row.id, how } }, async ({ audit }) => {
+    audit({ action: 'files.measurementSheetOpened', recordType: 'StoredFile', recordId: row.id, companyId: row.companyId, after: { recordType: row.recordType, recordId: row.recordId, how } })
+    return null
+  })
+}
+// ---- end B-TH-083
+
 export const readOffice = async (caller: CommandCaller, fileId: string): Promise<OfficeRow> => (await readRow(caller, fileId)) as OfficeRow
+
+/**
+ * B-PR-44: a file an office person CHANGES by id (share, retention, delete, tag, mark up, a new version, a restore) is first one
+ * of a record they reach (./record-scope.ts), the same 404 as a read: a person limited to customer B never touches customer A's
+ * file. The system and modules' own callers are not asked (they checked their record).
+ */
+export async function readOfficeReached(caller: CommandCaller, fileId: string): Promise<OfficeRow> {
+  const row = await readOffice(caller, fileId)
+  if (contextOf(caller).audience === 'office' && !(await officeReachesRecord(caller, row))) throw new NotFoundError('File not found.')
+  return row
+}
 
 /** A store call's failure for the caller: the store is not reachable now (503), a retained object (409). */
 export async function storeCall<T>(work: () => Promise<T>): Promise<T> {
@@ -332,6 +390,8 @@ export interface UploadRequest {
   readonly retainUntil?: string | null | undefined
   /** B-W2b-14: what the file is (StoredFile.category, a tag: DDT_PHOTO, CLAIM_PHOTO …), set by the module that uploads it. */
   readonly category?: FileCategory | null | undefined
+  /** B-TH-083: "This is a measurement sheet" — filed as MEASUREMENTS (body data: opened only with sales.measurements.view). */
+  readonly measurementSheet?: boolean | undefined
 }
 
 // ---- B-TH-003 (threads plan TH-0, WALL-G02; T25): a file is shared only with its record's party ---------------------------
@@ -378,11 +438,15 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
   // B-TH-003: through the generic route a portal or link share reaches the record's own party only.
   const sharing: Sharing = path.generic ? await withRecordParty(caller, input, asked) : asked
   const retention = retentionFor(input.kind, input.retainUntil ? new Date(input.retainUntil) : null, now)
+  // B-TH-083: the tick files it as a measurement sheet (a document, an attachment or a photo of one; never for a floor).
+  const category: FileCategory | null = input.measurementSheet ? MEASUREMENT_SHEET_CATEGORY : (input.category ?? null)
+  const sheetProblem = category === MEASUREMENT_SHEET_CATEGORY ? measurementSheetProblem({ kind: input.kind, visibility: sharing.visibility }) : null
   const problems: Issue[] = [
     ...uploadProblems({ kind: input.kind, contentType, sizeBytes: input.sizeBytes, sha256: input.sha256, clip: path.clip }),
     ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),
     ...sharingProblems(sharing),
     ...retention.problems,
+    ...(sheetProblem ? [{ path: 'body/measurementSheet', message: sheetProblem }] : []),
   ]
   if (problems.length > 0) throw new ValidationError('The upload is not valid.', problems)
   mayWrite(caller, FILES_UPLOAD, sharing)
@@ -414,14 +478,14 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
         floorSiteId: sharing.floorSiteId,
         partyId: sharing.partyId,
         retainUntil: retention.retainUntil,
-        ...(input.category ? { category: input.category } : {}),
+        ...(category ? { category } : {}),
         createdAt: at,
         updatedAt: at,
         createdById: context.audience === 'office' ? context.actorId : null,
       },
       select: SELECT_FOR.office,
     })
-    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(input.category ? { category: input.category } : {}) } })
+    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(category ? { category } : {}) } })
     return { file: viewOf(row), storageKey }
   })
   const upload = await storeCall(() =>
@@ -737,6 +801,8 @@ export async function downloadFile(runtime: FilesRuntime, callers: Callers, file
   const context = contextOf(callers.caller)
   const row = await readVisible(callers.caller, fileId, path)
   if (row.status !== 'AVAILABLE') throw new InvalidStateError(`This file is ${row.status}; only an available file can be downloaded.`)
+  // B-TH-083: a measurement sheet's opening is recorded (who, when, how).
+  await recordSheetOpening(callers.caller, row, 'download')
   const storeCaller = context.audience === 'office' ? callers.caller : callers.system(tenantOf(context))
   // B-W2b-160 (COL-058): a portal or a link gets a picture only as its stripped copy (no EXIF, no position).
   const key = await keyShownTo(runtime, context, storeCaller, row)
@@ -783,7 +849,9 @@ export async function listFiles(caller: CommandCaller, record: { readonly record
   const rows = (await caller.withClient((client) =>
     client.storedFile.findMany({ where, select: selectFor(context), orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 500 }),
   )) as Row[]
-  const views = rows.filter((row) => audienceSees(viewerOf(context), row)).map(viewOf)
+  // B-TH-083: an office reader without sales.measurements.view sees a record's sheets locked (counted, never named).
+  const opens = !rows.some(isMeasurementSheet) || (await opensMeasurementSheets(caller, { ...record, companyId: rows[0]?.companyId ?? null }))
+  const views = rows.filter((row) => audienceSees(viewerOf(context), row)).map((row) => (isMeasurementSheet(row) && !opens ? lockedView(viewOf(row)) : viewOf(row)))
   // B-TH-024: the office sees where a copy came from (the source's record, name and version), when it may open that record.
   return context.audience === 'office' ? withOrigins(caller, views) : views
 }
@@ -792,9 +860,13 @@ export async function listFiles(caller: CommandCaller, record: { readonly record
 async function withOrigins(caller: CommandCaller, views: readonly FileView[]): Promise<FileView[]> {
   const sourceIds = [...new Set(views.flatMap((view) => (view.sourceFileId ? [view.sourceFileId] : [])))]
   if (sourceIds.length === 0) return [...views]
-  const sources = await caller.withClient((client) => client.storedFile.findMany({ where: { id: { in: sourceIds } }, select: { id: true, recordType: true, recordId: true, originalName: true, versionNo: true } }))
+  const sources = await caller.withClient((client) => client.storedFile.findMany({ where: { id: { in: sourceIds } }, select: { id: true, recordType: true, recordId: true, originalName: true, versionNo: true, companyId: true, category: true } }))
   const reachable = new Map<string, (typeof sources)[number]>()
-  for (const source of sources) if (await officeReachesRecord(caller, source)) reachable.set(source.id, source)
+  for (const source of sources) {
+    if (!(await officeReachesRecord(caller, source))) continue
+    // B-TH-083: a sheet's name is not shown to a reader who may not open it.
+    reachable.set(source.id, isMeasurementSheet(source) && !(await opensMeasurementSheets(caller, source)) ? { ...source, originalName: '' } : source)
+  }
   return views.map((view) => {
     if (!view.sourceFileId) return view
     const source = reachable.get(view.sourceFileId)
@@ -804,7 +876,7 @@ async function withOrigins(caller: CommandCaller, views: readonly FileView[]): P
 
 /** files.delete: refused while retained or on legal hold; then the object is removed from the store (best effort). */
 export async function deleteFile(runtime: FilesRuntime, caller: CommandCaller, fileId: string, input: { version?: number | undefined; reason?: string | undefined }, idempotencyKey?: string) {
-  const before = await readOffice(caller, fileId)
+  const before = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_DELETE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   assertTransition(fileMachine, before.status, 'DELETED', { legalHold: before.legalHold, retainUntil: before.retainUntil, now: runtime.clock.now() })
   const { result } = await command(
@@ -861,7 +933,7 @@ export async function setVisibility(
   input: { visibility: readonly FileAudience[]; floorSiteId?: string | null | undefined; partyId?: string | null | undefined; version: number },
   idempotencyKey?: string,
 ): Promise<FileView> {
-  const before = await readOffice(caller, fileId)
+  const before = await readOfficeReached(caller, fileId) // B-PR-44
   // B-TH-003: a portal or link share reaches the file's record's own party only.
   const sharing: Sharing = await withRecordParty(caller, before, {
     visibility: normaliseVisibility(input.visibility),
@@ -909,7 +981,7 @@ export async function setRetention(
   input: { legalHold?: boolean | undefined; retainUntil?: string | undefined; reason: string; version: number },
   idempotencyKey?: string,
 ): Promise<FileView> {
-  const before = await readOffice(caller, fileId)
+  const before = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_MANAGE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   if (before.status === 'DELETED') throw new InvalidStateError('This file is deleted.')
   if (input.legalHold === undefined && input.retainUntil === undefined) {
