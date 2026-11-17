@@ -190,6 +190,17 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   true states, the question with Answer, PortalThread type Inquiry; `RECORD_PAGES.Inquiry`; catalogue `portal-requests`). Orders &
   tracking became Orders & requests (requests first, "Closed requests" chip, Kind/Subject columns, Next shipment from 1600 px); Home's
   Start card (New order / Ask a question / the draft). Portal pages show the customer's own numbers only, never INQ-/SO-/QT-/RQ-.
+  B-TH-282 (TH-7): customers' files — `lib/request-compose/files.ts` (pure: kinds, refusals, the measurement tick on a PDF or photo,
+  design files download-only, states sent / held for the virus scan / failed) + `view/ComposeFiles.tsx`; `requests/use-request-files.ts`
+  uploads (announce → PUT → complete → ONE message carries them): New order holds them and sends them right after Send onto the new
+  request (the receipt says how they went, Retry); the request page's "Add files" beside the thread uses the request's door while
+  undecided, its thread's after (the DS PartnerThread has no upload slot: B-TH-305 waits for the Owner). Closed uploads say the API's
+  sentence (GET /portal/inquiries/open `files`). B-TH-291: "Withdraw this request" while undecided (`version`, one key per question).
+- B-TH-236 / B-TH-237 / B-TH-283 (the office thread): Undo for 10 s on the sender's mail (`email.undoUntil`, POST …/emails/:id/undo,
+  the text back in the box), the amount field on an office note for `money.price` (`lib/record-thread/helpers/amount.ts`), the floor's
+  price check, Reply / Correct links (`DraftLink`; Correct on one's own message the way it went), "In the portal only" (POST …/replies;
+  NO_PORTAL removes the choice), and measurement sheets (the paper clip's "Measurement sheet…", the box's measurement side, the Files
+  view's tick; a sheet the reader opens is marked "each opening is recorded").
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
