@@ -484,3 +484,30 @@ export const recordSummaryContract = defineContract({
   },
 })
 // ---- end B-TH-076
+
+// ---- B-TH-091 (N4, L2-G11; T2-F07, T3-F12, PROJ.thread-F06): pins — a message pinned for everyone on the record (a pointer, never a
+// copy of its words). The office reads every pin and who pinned it; a portal reader only the pins of messages shared with it.
+const pinView = output({
+  messageId: id(),
+  pinnedAt: instant(),
+  /** Office only: who pinned it. */
+  pinnedBy: output({ id: id(), name: z.string().nullable() }).optional(),
+  message: output({
+    authorName: z.string().nullable(),
+    /** One line of its words (empty when it carries files only). */
+    excerpt: z.string(),
+    at: instant(),
+    /** Office only: OFFICE (a note) or PARTNER (shared with the customer or supplier). */
+    audience: z.enum(MESSAGE_AUDIENCES).optional(),
+    attachmentCount: z.number().int(),
+    /** Erased after a privacy request: the line says "removed". */
+    removed: z.boolean(),
+  }),
+})
+const pinsAnswer = output({ pins: z.array(pinView) })
+const pinParams = input({ recordType: z.string().regex(RECORD_TYPE), recordId: id(), messageId: id() })
+export const pinsContract = defineContract({ params: recordParams, response: { 200: pinsAnswer } })
+export const pinContract = defineContract({ params: pinParams, response: { 200: pinsAnswer } })
+export const unpinContract = defineContract({ params: pinParams, response: { 200: pinsAnswer } })
+export const pinRequestNoteContract = defineContract({ params: input({ recordId: id() }), response: { 201: output({ pins: z.array(pinView), /** The office note the request's note became. */ messageId: id() }) } })
+// ---- end B-TH-091

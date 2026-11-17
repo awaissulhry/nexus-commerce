@@ -21,6 +21,9 @@ import { listWaiting } from './waiting-list'
 // B-TH-076: one summary row for any record.
 import { recordSummaryContract } from './contract'
 import { readRecordSummary } from './summary'
+// B-TH-091: pins.
+import { pinContract, pinRequestNoteContract, pinsContract, unpinContract } from './contract'
+import { listPins, pinMessage, pinRequestNote, unpinMessage } from './pins'
 
 /**
  * Record threads and the record timeline (platform part; plan A1 §2.3, §3.7; features COL-001, COL-002, COL-003): read
@@ -41,6 +44,13 @@ export default defineRoutes('threads', manifest, async (app) => {
   // ---- B-TH-076
   app.get('/records/:recordType/:recordId/summary', { schema: recordSummaryContract }, async (request) => readRecordSummary(request, { type: request.params.recordType, id: request.params.recordId }))
   // ---- end B-TH-076
+
+  // ---- B-TH-091
+  app.get('/threads/:recordType/:recordId/pins', { schema: pinsContract }, async (request) => listPins(request, { type: request.params.recordType, id: request.params.recordId }))
+  app.put('/threads/:recordType/:recordId/pins/:messageId', { schema: pinContract }, async (request) => pinMessage(request, { type: request.params.recordType, id: request.params.recordId }, request.params.messageId, idempotencyKeyFrom(request)))
+  app.delete('/threads/:recordType/:recordId/pins/:messageId', { schema: unpinContract }, async (request) => unpinMessage(request, { type: request.params.recordType, id: request.params.recordId }, request.params.messageId, idempotencyKeyFrom(request)))
+  app.post('/threads/Inquiry/:recordId/pins/note', { schema: pinRequestNoteContract }, async (request, reply) => reply.code(201).send(await pinRequestNote(request, { type: 'Inquiry', id: request.params.recordId }, idempotencyKeyFrom(request))))
+  // ---- end B-TH-091
 
   // ---- B-TH-027
   app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId }))))

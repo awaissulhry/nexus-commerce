@@ -34,4 +34,12 @@ export const manifest = defineManifest({
   // record), a portal session through the record type's partner view only.
   'GET /records/:recordType/:recordId/summary': { audiences: ['office', 'partner'], permission: 'threads.read', scope: 'record' },
   // ---- end B-TH-076
+  // ---- B-TH-091: pins — read by the office and a portal reader (its own customer's pins only); pinned and unpinned by whoever may
+  // write on the record (threads.post); a request's note moved into a pinned office note (threads.post, and the handler asks
+  // sales.inquiries.manage over the request).
+  'GET /threads/:recordType/:recordId/pins': { audiences: ['office', 'partner'], permission: 'threads.read', scope: 'record' },
+  'PUT /threads/:recordType/:recordId/pins/:messageId': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'DELETE /threads/:recordType/:recordId/pins/:messageId': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'POST /threads/Inquiry/:recordId/pins/note': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- end B-TH-091
 })
