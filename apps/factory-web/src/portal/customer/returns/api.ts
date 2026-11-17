@@ -218,7 +218,9 @@ export const returnableItemSchema = z.object({
   salesOrderLineId: z.string().nullable(),
   size: z.string().nullable(),
   description: z.string(),
-  order: z.object({ id: z.string(), number: z.string(), lineSeq: z.number() }).nullable(),
+  // ---- follow-up (th9-web-b; plan §0.5): the customer's OWN order — "Your order 7", else its PO — never the office series.
+  order: z.object({ id: z.string(), yourNumber: z.object({ seq: z.number(), words }).nullable(), yourRef: z.string().nullable(), lineSeq: z.number() }).nullable(),
+  // ---- end follow-up
   invoice: z.object({ id: z.string(), number: z.string().nullable(), issueDate: z.string().nullable() }).nullable(),
   style: z.object({ code: z.string(), name: z.string() }).nullable(),
   colourway: z.object({ code: z.string(), name: z.string() }).nullable(),
