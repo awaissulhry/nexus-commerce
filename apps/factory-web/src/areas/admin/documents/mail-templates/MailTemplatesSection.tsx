@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLiveBus } from '../../../../shell/live/use-live'
@@ -14,6 +14,9 @@ import { mailEditorHref } from '../template-editor/view/MailTemplateEditorView'
 import { createEmailTemplate, deleteEmailTemplate, listEmailTemplates, mailEvents, publishEmailTemplate, retireEmailTemplate } from './api'
 import { draftsOf, mailOpenTarget, type MailBulk, type MailRow, type MailTemplatesModel } from './model'
 import { MailTemplatesView } from './view/MailTemplatesView'
+// B-TH-279: the section's second part, Saved replies (`&part=replies`).
+import { mailPartOf, type MailPart } from './replies/model'
+import { SavedRepliesSection } from './replies/SavedRepliesSection'
 
 const OWN_ECHO_MS = 8000
 
@@ -25,6 +28,35 @@ const OWN_ECHO_MS = 8000
  * of this company or of every company → "N updates · Show".
  */
 export function MailTemplatesSection({ companies, askedCompany, onView, onCompany }: { companies: Loaded<CompanyOption>; askedCompany: string | null; onView: (view: PageView) => void; onCompany: (companyId: string) => void }) {
+  // ---- B-TH-279: which part — the mails Nexus sends by itself (templates) or the saved replies people send (`&part=replies`) ----
+  const session = useOfficeSession()
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const part = mailPartOf(params)
+  const choices: CompanyChoice[] = useMemo(
+    () => (companies.items ? companies.items.filter((company) => company.status === 'ACTIVE').map((company) => ({ id: company.id, name: company.legalName })) : session.companies.map((company) => ({ id: company.id, name: company.name }))),
+    [companies.items, session.companies],
+  )
+  const goPart = useCallback(
+    (next: { part?: MailPart; company?: string }) => {
+      const query = new URLSearchParams(params?.toString() ?? '')
+      query.set('view', 'mail')
+      if ((next.part ?? part) === 'replies') query.set('part', 'replies')
+      else query.delete('part')
+      if (next.company) query.set('company', next.company)
+      router.replace(`${pathname}?${query.toString()}`, { scroll: false })
+    },
+    [params, part, pathname, router],
+  )
+  if (part === 'replies')
+    return <SavedRepliesSection companies={choices} companyId={askedCompany ?? session.company?.id ?? choices[0]?.id ?? null} onView={onView} onPart={(next) => goPart({ part: next })} onCompany={(company) => goPart({ company })} />
+  return <MailTemplatesList companies={companies} askedCompany={askedCompany} onView={onView} onCompany={onCompany} onPart={(next) => goPart({ part: next })} />
+}
+
+/** The mails Nexus sends by itself, per event and language (B-W2b-432). */
+function MailTemplatesList({ companies, askedCompany, onView, onCompany, onPart }: { companies: Loaded<CompanyOption>; askedCompany: string | null; onView: (view: PageView) => void; onCompany: (companyId: string) => void; onPart: (part: MailPart) => void }) {
+  // ---- end B-TH-279
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -114,6 +146,7 @@ export function MailTemplatesSection({ companies, askedCompany, onView, onCompan
       actions={{
         onView,
         onCompany,
+        onPart, // B-TH-279
         onSelect: setSelected,
         onRetry: () => {
           setRead({ status: 'loading' })

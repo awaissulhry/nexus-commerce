@@ -22,6 +22,9 @@ import { draftsOf, mailBulkReach, mailOpenTarget, mailRowHeld, mailRowsOf, mailS
 import '../../documents.css'
 import '../../template-editor/templates.css'
 import { useTplWords } from '../../template-editor/view/words'
+// B-TH-279: the section's two parts (the mails Nexus sends · Saved replies).
+import { PartSwitch } from './PartSwitch'
+import type { MailPart } from '../replies/model'
 
 /**
  * SCR-632 — Admin › Documents › E-mail templates (B-W2b-432; design admin.documents sec:mail-templates, PLT-232): the mails
@@ -35,6 +38,8 @@ import { useTplWords } from '../../template-editor/view/words'
 export interface MailTemplatesActions {
   onView?: (view: PageView) => void
   onCompany?: (companyId: string) => void
+  /** B-TH-279: to the Saved replies part. */
+  onPart?: (part: MailPart) => void
   onSelect?: (ids: string[]) => void
   onRetry?: () => void
   onShowUpdates?: () => void
@@ -210,7 +215,13 @@ function MailTemplates({ model, actions }: { model: MailTemplatesModel; actions?
         rowId={(row) => row.id}
         columns={columns}
         count={answer ? t('tpl.mailList.count', { count: rows.length, inUse }) : '—'}
-        tools={<ViewSwitch view="mail" companies={model.companies} companyId={model.companyId} onView={actions?.onView} onCompany={actions?.onCompany} />}
+        tools={
+          <>
+            <ViewSwitch view="mail" companies={model.companies} companyId={model.companyId} onView={actions?.onView} onCompany={actions?.onCompany} />
+            {/* B-TH-279 */}
+            <PartSwitch part="templates" onPart={actions?.onPart} />
+          </>
+        }
         selection={{
           selected,
           onChange,
