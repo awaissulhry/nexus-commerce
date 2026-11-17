@@ -1,4 +1,4 @@
-import { NotFoundError } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
@@ -111,9 +111,9 @@ export async function createProject(caller: CommandCaller, body: CreateProjectBo
   const partyId = body.partyId ?? null
   const scope = { companyId: body.companyId, siteId: null, partyId }
   if (!can(actor, PROJECTS_MANAGE, scope)) {
-    // A person limited to other customers learns nothing of this one: the same words as an unknown company.
+    // A person limited to other customers learns nothing of this one: the same words as a company that is not there.
     if (partyId && can(actor, PROJECTS_MANAGE, { companyId: body.companyId })) badBody('partyId', 'No such customer or supplier for this company.')
-    throw new NotFoundError('Company not found.')
+    throw new ForbiddenError('Your role does not keep projects for this company.')
   }
   const issues = projectProblems({ name: body.name, goal: body.goal ?? null })
   if (issues.length > 0) badBody(issues[0]!.path.slice('body/'.length), issues[0]!.message)

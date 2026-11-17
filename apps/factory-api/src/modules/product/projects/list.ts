@@ -139,7 +139,7 @@ export async function listRowsOf(db: Reader, meId: string, rows: readonly Projec
 }
 
 /** GET /projects */
-export async function listProjects(caller: CommandCaller, query: ProjectListQuery): Promise<{ rows: ProjectListRow[]; total: number; next: string | null; complete: boolean }> {
+export async function listProjects(caller: CommandCaller, query: ProjectListQuery): Promise<{ rows: ProjectListRow[]; count: number; next: string | null; complete: boolean }> {
   const context = officeOf(caller)
   const actor = actorOf(context)
   const now = today()
@@ -169,7 +169,7 @@ export async function listProjects(caller: CommandCaller, query: ProjectListQuer
       rows = await listRowsOf(db, context.actorId, ordered.slice(offset, offset + limit), now)
     }
     const next = offset + limit < ordered.length ? String(offset + limit) : null
-    return { rows, total: ordered.length, next, complete }
+    return { rows, count: ordered.length, next, complete }
   })
 }
 

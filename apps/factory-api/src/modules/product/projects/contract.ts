@@ -175,7 +175,7 @@ export const listProjectsContract = defineContract({
     cursor: z.string().max(8).optional(),
     limit: z.coerce.number().int().min(1).max(200).optional(),
   }),
-  response: { 200: output({ rows: z.array(listRow), total: z.number().int(), next: z.string().nullable(), complete: z.boolean() }) },
+  response: { 200: output({ rows: z.array(listRow), count: z.number().int(), next: z.string().nullable(), complete: z.boolean() }) },
 })
 export const projectPageContract = defineContract({
   params: projectParams,
