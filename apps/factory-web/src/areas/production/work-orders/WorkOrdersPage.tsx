@@ -34,6 +34,12 @@ import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, 
 import { applyRowsOf } from '@nexus/factory-domain/views/bulk/rules'
 import { applyRelease, previewRelease } from './every-shift/api'
 import { SHIFT_NAMESPACE } from './every-shift/model'
+// F-PR-21: Mine, the Supervisor column and "Assign supervisor…" (THE assign dialog, areas/_shared/production-supervisor).
+import { assignHeld, SUPERVISOR_NS, targetsOfRows } from '../../_shared/production-supervisor/model'
+import { useAssignSupervisor } from '../../_shared/production-supervisor/use-assign-supervisor'
+// F-PR-22: "Note to N…" and a row's "Office note…" (THE note dialog, areas/production/_shared/notes).
+import { NOTES_NS, openHeld, targetsOfRows as noteTargetsOfRows } from '../_shared/notes/model'
+import { useNoteDialog } from '../_shared/notes/use-note-dialog'
 
 /**
  * `/w/<company>/production/work-orders` (SCR-069): reads the work orders of the saved view (`?view=`, default open) and
@@ -57,7 +63,7 @@ const MODES: readonly ListMode[] = ['table', 'board', 'calendar', 'cards']
 const romeDay = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 export function WorkOrdersPage() {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', /* F-PR-21 */ SUPERVISOR_NS, /* F-PR-22 */ NOTES_NS]}>
       <WorkOrdersContainer />
     </WithMessages>
   )
@@ -306,6 +312,15 @@ function WorkOrdersContainer() {
       .catch((error: unknown) => setRelease((state) => (state ? { ...state, state: { phase: 'failed', words: writeProblem(error) } } : state)))
   }, [api, release, load])
 
+  // ---- F-PR-21: THE assign dialog over the selection's orders; a Send reads the rows again (their marks, Mine). ----
+  const assign = useAssignSupervisor(api, () => void load())
+  const supervisorCan = { manage: session.permissions.includes('production.brand.manage') }
+  // ---- end F-PR-21
+  // ---- F-PR-22: THE note dialog over the picked work orders (or their sales orders); threads.post, else held in words. ----
+  const noteCan = session.permissions.includes('threads.post')
+  const note = useNoteDialog(api, { can: noteCan })
+  // ---- end F-PR-22
+
   const model: WorkOrdersListModel = {
     prefix,
     can,
@@ -335,6 +350,15 @@ function WorkOrdersContainer() {
     groupCounts,
     collapsed: collapsed ?? [],
     now,
+    // F-PR-21
+    supervisor: terms.supervisor,
+    supervisorCan,
+    assign: assign.model,
+    // F-PR-18
+    customerUrgency: terms.customerUrgency,
+    // F-PR-22
+    noteCan,
+    note: note.model,
   }
 
   return (
@@ -362,6 +386,21 @@ function WorkOrdersContainer() {
             return rest
           }),
         onShownColumns: setShown,
+        // F-PR-21: the selection's orders (each once; a work order of no one customer left out, counted), at most 100.
+        onAssignSupervisor: (ids) => {
+          const picked = (rows.items ?? []).filter((row: WorkOrderRow) => ids.includes(row.id))
+          const targets = targetsOfRows(picked, session.permissions.includes('parties.view'))
+          if (assignHeld(supervisorCan, targets)) return
+          assign.open(targets.targets, { leftOut: targets.leftOut })
+        },
+        supervisor: assign.actions,
+        // F-PR-22: the picked work orders (and their sales orders), at most 100; a customer named only as the reader may see it.
+        onNote: (ids, from) => {
+          const picked = (rows.items ?? []).filter((row: WorkOrderRow) => ids.includes(row.id))
+          if (openHeld(noteCan, picked.length)) return
+          note.open(noteTargetsOfRows(picked, session.permissions.includes('parties.view')), from)
+        },
+        note: note.actions,
         onSaved: saved,
         onReleaseMany: (ids) => {
           const picked = (rows.items ?? []).filter((row: WorkOrderRow) => ids.includes(row.id))

@@ -175,6 +175,8 @@ export interface RuleLine {
   readonly sizes: readonly { readonly size: string; readonly quantity: number }[]
   /** null: nothing of it cut yet. */
   readonly cut: CutStart | null
+  /** B-PR-26: it shipped in full (a PARTLY_SHIPPED order's line: nothing of it is left to cancel); undefined: taken as not. */
+  readonly shippedInFull?: boolean | undefined
 }
 
 export interface RuleOrder {
@@ -235,9 +237,16 @@ function statusCutoffWords(status: SalesOrderStatus, cutoff: CutoffStatus): Word
   return { it: `Non possibile: ${STATUS_NAMES[status].it}`, en: `Not possible: ${STATUS_NAMES[status].en}` }
 }
 
+// B-PR-26: a partly shipped order's cancel (close short of what is still to ship).
+const PARTLY_SHIPPED: SalesOrderStatus = 'PARTLY_SHIPPED'
+const SHIPPED_IN_FULL_WORDS: Words = Object.freeze({ it: 'Non possibile: questa riga è già spedita per intero', en: 'Not possible: this line shipped in full' })
+const NOTHING_LEFT_WORDS: Words = Object.freeze({ it: "Non possibile: dell'ordine è già spedito tutto", en: 'Not possible: everything of the order has shipped' })
+
 /** Whether the order takes a request of this kind at all, before its lines (state, an open request, the status cut-offs). */
 export function orderVerdict(kind: RequestKind, order: RuleOrder, cutoffs: Cutoffs, today: BusinessDate): Verdict {
-  if (!ASKABLE_STATUSES.includes(order.status)) {
+  // B-PR-26 (plan §3 "A partly shipped order may still ask to cancel unshipped lines (close short)"; review fix R-35): a cancel
+  // of what is still to ship is asked of a PARTLY_SHIPPED order too (the company's cut-offs still apply).
+  if (!ASKABLE_STATUSES.includes(order.status) && !(kind === 'CANCEL' && order.status === PARTLY_SHIPPED)) {
     const name = STATUS_NAMES[order.status]
     return verdict('NOT_ASKABLE', { it: `Non possibile: l'ordine è già ${name.it}`, en: `Not possible: the order is already ${name.en}` })
   }
@@ -270,6 +279,8 @@ export function lineVerdict(kind: RequestKind, line: RuleLine, order: RuleOrder,
   const whole = orderVerdict(kind, order, cutoffs, today)
   if (!whole.possible) return whole
   if (line.closedShort) return verdict('CLOSED_SHORT', { it: 'Non possibile: questa riga è chiusa', en: 'Not possible: this line is closed' })
+  // B-PR-26: a line of a partly shipped order that shipped in full has nothing left to cancel.
+  if (order.status === PARTLY_SHIPPED && line.shippedInFull === true) return verdict('NOT_ASKABLE', SHIPPED_IN_FULL_WORDS)
   if (line.cut) return cutVerdict(line.cut)
   // A partial cancel removes its lines through the amendment, which takes no order with a made-to-measure unit.
   if (kind === 'CANCEL' && order.lines.some((entry) => entry.kind === 'MADE_TO_MEASURE')) {
@@ -282,7 +293,10 @@ export function lineVerdict(kind: RequestKind, line: RuleLine, order: RuleOrder,
 export function wholeCancelVerdict(order: RuleOrder, cutoffs: Cutoffs, today: BusinessDate): Verdict {
   const whole = orderVerdict('CANCEL', order, cutoffs, today)
   if (!whole.possible) return whole
-  const cuts = order.lines.flatMap((line) => (line.cut ? [line.cut] : [])).sort((a, b) => a.day.localeCompare(b.day) || Number(b.leather) - Number(a.leather))
+  // B-PR-26: a partly shipped order's "whole order" is what is still to ship (its lines closed short at the answer).
+  const left = order.status === PARTLY_SHIPPED ? order.lines.filter((line) => !line.closedShort && line.shippedInFull !== true) : order.lines
+  if (order.status === PARTLY_SHIPPED && left.length === 0) return verdict('NOT_ASKABLE', NOTHING_LEFT_WORDS)
+  const cuts = left.flatMap((line) => (line.cut ? [line.cut] : [])).sort((a, b) => a.day.localeCompare(b.day) || Number(b.leather) - Number(a.leather))
   return cuts.length > 0 ? cutVerdict(cuts[0]!) : whole
 }
 

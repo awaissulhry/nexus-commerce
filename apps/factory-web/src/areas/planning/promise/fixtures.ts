@@ -402,6 +402,22 @@ function make(over: Partial<PromiseModel> = {}, permissions: readonly string[] =
   }
 }
 
+// ---- F-PR-20: sales accepts asking the customer; the customer's answer on the proposal (made up).
+const ASKED_PROPOSAL: Proposal = {
+  ...PROPOSAL,
+  state: 'ACCEPTED',
+  decision: { decision: 'ACCEPTED', at: '2026-11-16T09:05:00.000Z', by: SALES, reason: null, told: true, outboundId: uid('9999', 1) },
+  task: { ...PROPOSAL.task, status: 'DONE' },
+  customerAnswer: { requestId: uid('8181', 1), state: 'WAITING', at: null, answer: null, typedName: null, followUp: null },
+  may: { accept: false, tell: false, decline: false, withdraw: false },
+}
+const REFUSED_PROPOSAL: Proposal = {
+  ...ASKED_PROPOSAL,
+  customerAnswer: { requestId: uid('8181', 1), state: 'REFUSED', at: '2026-11-17T10:20:00.000Z', answer: 'Il 18 dicembre è troppo tardi per la nostra stagione: possiamo avere almeno metà delle taglie prima? (dati inventati)', typedName: 'Laura Demo', followUp: { taskId: uid('8181', 1), status: 'OPEN' } },
+}
+const ASK_LINK = 'https://factory.example/l/demo-token-shown-once'
+// ---- end F-PR-20
+
 const repromise = (over: Partial<RepromiseDialog> = {}, draft: RepromiseDraft = DRAFT): RepromiseDialog => ({
   lineId: draft.line.id,
   draft: { status: 'ready', value: draft },
@@ -420,7 +436,7 @@ const filled = { style: { status: 'ready' as const, value: STYLE_DETAIL }, form:
 const SALES_OWN = SALES_ROLE.filter((name) => name !== 'planning.view')
 
 /** Exported for the page's test (the calls and the rules read the same made-up answers). */
-export const FIXTURES = { LIST, LINES, HISTORY, DRAFT, WAITING_DRAFT, PROPOSAL, ATP, ANSWER, CALCULATION, QUOTE, STYLE_DETAIL, CALC_FORM, TODAY, PLANNER, SALES }
+export const FIXTURES = { LIST, LINES, HISTORY, DRAFT, WAITING_DRAFT, PROPOSAL, ATP, ANSWER, CALCULATION, QUOTE, STYLE_DETAIL, CALC_FORM, TODAY, PLANNER, SALES, ASKED_PROPOSAL, REFUSED_PROPOSAL, ASK_LINK } // F-PR-20: + the asked proposals
 
 export const designScreen = defineDesignScreen<PromiseCase>({
   screen: 'SCR-109',
@@ -455,6 +471,10 @@ export const designScreen = defineDesignScreen<PromiseCase>({
     { id: 'decide-no-address', label: 'Sales: the customer has no e-mail address (tell held)', model: make({ repromise: repromise({ tell: false }, { ...WAITING_DRAFT, waiting: { ...PROPOSAL, recipients: [], may: { ...PROPOSAL.may, tell: false } } }), controls: { ...BASE_CONTROLS, repromise: WAITING_DRAFT.line.id } }, SALES_OWN, SALES.id) },
     { id: 'decide-stale', label: 'Sales: the promise changed since (propose again)', model: make({ repromise: repromise({ problem: { key: 'refusal.STALE', sizes: [] } }, WAITING_DRAFT), controls: { ...BASE_CONTROLS, repromise: WAITING_DRAFT.line.id } }, SALES_OWN, SALES.id) },
     { id: 'accepted', label: 'Accepted and the customer told', model: make({ repromise: repromise({ done: { kind: 'accepted', proposal: { ...PROPOSAL, state: 'ACCEPTED' }, answer: { told: true, outboundId: uid('9999', 1), lineDate: '2026-12-18', replayed: false, proposal: { ...PROPOSAL, state: 'ACCEPTED' } } } }, WAITING_DRAFT), notice: { tone: 'success', key: 'notice.acceptedTold', params: { order: 'SO-DEMO-1044', line: 10 } }, controls: { ...BASE_CONTROLS, repromise: WAITING_DRAFT.line.id } }, SALES_OWN, SALES.id) },
+    // F-PR-20: "Ask the customer" on sales' word; the link shown once; the customer's answer on the proposal.
+    { id: 'decide-ask', label: 'Sales gives the word asking the customer: Accept, tell and ask the customer', model: make({ repromise: repromise({ askBrand: true }, WAITING_DRAFT), controls: { ...BASE_CONTROLS, tile: 'REPROMISE_WAITING', repromise: WAITING_DRAFT.line.id } }, SALES_OWN, SALES.id), note: 'The date stands either way; a refusal puts a follow-up task on the order for us.' },
+    { id: 'accepted-asked', label: 'Accepted asking the customer: its link shown once (Copy), its answer waits', model: make({ repromise: repromise({ askBrand: true, done: { kind: 'accepted', proposal: ASKED_PROPOSAL, answer: { told: true, outboundId: uid('9999', 1), lineDate: '2026-12-18', replayed: false, proposal: ASKED_PROPOSAL, brandAsk: { requestId: uid('8181', 1), url: ASK_LINK } } } }, WAITING_DRAFT), notice: { tone: 'success', key: 'notice.acceptedTold', params: { order: 'SO-DEMO-1044', line: 10 } }, controls: { ...BASE_CONTROLS, repromise: WAITING_DRAFT.line.id } }, SALES_OWN, SALES.id) },
+    { id: 'opened-refused', label: 'From its task: the last proposal of the line, the customer refused with its words (the date stands; our follow-up open)', model: make({ repromise: repromise({ opened: REFUSED_PROPOSAL }, { ...WAITING_DRAFT, waiting: null }), controls: { ...BASE_CONTROLS, repromise: WAITING_DRAFT.line.id } }, SALES_OWN, SALES.id) },
     { id: 'calc', label: 'Promise calculator: pick a style', model: make({ calculator: calculator(), controls: { ...BASE_CONTROLS, calc: true } }) },
     { id: 'calc-filled', label: 'Promise calculator: style, colour, quantity per size, wanted day', model: make({ calculator: calculator(filled), controls: { ...BASE_CONTROLS, calc: true } }) },
     { id: 'calc-answer', label: 'Promise calculator: the date, its bridge, per size, the certificate', model: make({ calculator: calculator({ ...filled, answer: { status: 'ready', value: CALCULATION } }), controls: { ...BASE_CONTROLS, calc: true } }), note: 'The bridge: base lead time + queue at today’s load + the leather to buy = days → day. Size 56 is not certified: not promised.' },

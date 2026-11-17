@@ -613,6 +613,45 @@
     "ask": "Fai una domanda",
     "health": "Andamento",
     "waitingOn": "Tocca a",
-    "failed": "Impossibile caricare la produzione di questo ordine"
+    "failed": "Impossibile caricare la produzione di questo ordine",
+    "gates": {
+      "title": "Tappe e date",
+      "label": "Tappe di questo ordine",
+      "step": "Tappa",
+      "state": "Stato",
+      "planned": "Prevista",
+      "done": "Fatta il",
+      "review": "Vedete cosa vi aspetta",
+      "none": "Per questo ordine non ci sono ancora tappe né date pianificate.",
+      "states": {
+        "WAITING_YOU": "Tocca a voi",
+        "WAITING_US": "Tocca a noi",
+        "PASSED": "Superata",
+        "STARTED_BEFORE": "Avviata prima dell’approvazione"
+      }
+    },
+    "approvals": {
+      "label": "Le vostre approvazioni dei materiali",
+      "material": "Materiale",
+      "sent": "Inviato",
+      "answered": "Risposta il",
+      "states": {
+        "WAITING_YOU": "Tocca a voi",
+        "APPROVED": "Approvato",
+        "APPROVED_WITH_COMMENTS": "Approvato con commenti",
+        "REFUSED": "Rifiutato"
+      }
+    },
+    "planned": {
+      "label": "I nostri giorni di produzione",
+      "cutStart": "Inizio del taglio",
+      "sewStart": "Inizio della confezione",
+      "finish": "Fine della produzione",
+      "hint": "Dal nostro piano di produzione pubblicato; questi giorni possono ancora cambiare.",
+      "none": "Nel nostro piano non ci sono ancora giorni di produzione."
+    },
+    "pieces": {
+      "oneSize": "Su misura"
+    }
   }
 }

@@ -121,7 +121,8 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
     // B-W2b-307: + change orders asked of me (product.changes.approve), inspection plan versions to approve, the engine's requests.
     expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'SUPPLIER_DOCUMENT', 'CHANGE_ORDER', 'PLAN_VERSION', 'APPROVAL_TASK', 'REMINDER'])
     // B-W2b-307: the production manager also approves SMV changes (product.smv.approve).
-    expect(tileKindsFor(roleActor('production_manager'))).toEqual(['WORK_ORDER_HELD', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK', 'REMINDER'])
+    // B-PR-26: + customers' requests it answers (production.brand.manage: urgent, pause, resume; sales.samples.manage: a sample round).
+    expect(tileKindsFor(roleActor('production_manager'))).toEqual(['WORK_ORDER_HELD', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'ORDER_CHANGE_REQUEST', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK', 'REMINDER'])
     // B-W2b-F13b: + the delivery addresses customers added, to check (orders.manage).
     // B-W2b-385: + inquiries waiting for us over a working day (sales.inquiries.manage).
     expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'DELIVERY_ADDRESS', 'APPROVAL_TASK', 'INQUIRY_WAITING', 'REMINDER'])

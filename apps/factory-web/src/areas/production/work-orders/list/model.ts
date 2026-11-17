@@ -7,6 +7,8 @@ import { BLOCKED_BY, LIST_SORTS, WAITING_ON, WORK_ORDER_RISKS, type BlockedBy, t
 import { listProgress, percentOf, viewFromAddress, viewQuery, type ListView, type Phrase } from '../../_shared/model'
 import { partyOf, PARTY_KEY } from '../../_shared/customer/model'
 import type { ListMode } from '../../../../list-frame/w2b/model'
+// F-PR-18: the Customer urgency column and filter (Urgent 2 / Urgent – asked / Regular / Set to regular by us).
+import { CUSTOMER_URGENCY_STATES, type CustomerUrgencyState } from '../../_shared/api'
 
 /**
  * F-PR-03 — the work orders list by risk, without a screen (production plan §5 "Work orders: sorted by risk; Customer (+ SO link,
@@ -44,6 +46,10 @@ export interface ListTerms {
   /** The one customer (`?party=`), or null for every customer the person may see. */
   readonly party: string | null
   readonly group: ListGroup | null
+  /** F-PR-21: `me` — only the work orders the reader supervises (`?supervisor=me`, the Mine tile); no filter by another person. */
+  readonly supervisor: 'me' | null
+  /** F-PR-18: one Customer urgency state (`?customerUrgency=`, the API's computed filter), or null. */
+  readonly customerUrgency: CustomerUrgencyState | null
 }
 
 const pick = <Value extends string>(values: readonly Value[], value: string | null | undefined): Value | null => ((values as readonly string[]).includes(value ?? '') ? (value as Value) : null)
@@ -63,6 +69,8 @@ export function termsOf(params: Params | null | undefined, modes: readonly ListM
     blockedBy: pick(BLOCKED_BY, params?.get('blockedBy')),
     party: partyOf(params),
     group: params?.get('group') === 'party' ? 'party' : null,
+    supervisor: params?.get('supervisor') === 'me' ? 'me' : null,
+    customerUrgency: pick(CUSTOMER_URGENCY_STATES, params?.get('customerUrgency')), // F-PR-18
   }
 }
 
@@ -83,6 +91,8 @@ export function listAddress(path: string, terms: ListTerms, extra: { readonly ne
   if (terms.blockedBy) query.set('blockedBy', terms.blockedBy)
   if (terms.party) query.set(PARTY_KEY, terms.party)
   if (terms.group) query.set('group', terms.group)
+  if (terms.supervisor) query.set('supervisor', terms.supervisor)
+  if (terms.customerUrgency) query.set('customerUrgency', terms.customerUrgency) // F-PR-18
   if (extra.new) query.set('new', '1')
   const text = query.toString()
   return `${path}${text ? `?${text}` : ''}`
@@ -99,15 +109,17 @@ export function listQueryOf(terms: ListTerms, cursor: string | null = null): Lis
     waitingOn: terms.waitingOn ?? undefined,
     risk: terms.risk ?? undefined,
     blockedBy: terms.blockedBy ?? undefined,
+    supervisor: terms.supervisor ?? undefined,
+    customerUrgency: terms.customerUrgency ?? undefined, // F-PR-18
   }
 }
 
 /** Whether any term narrows the rows (the empty state then offers Clear filters). */
 export const narrowed = (terms: ListTerms): boolean =>
-  terms.q.trim() !== '' || !!terms.due || terms.rush || !!terms.waitingOn || !!terms.risk || !!terms.blockedBy || !!terms.party || (terms.view !== 'all' && terms.view !== 'open')
+  terms.q.trim() !== '' || !!terms.due || terms.rush || !!terms.waitingOn || !!terms.risk || !!terms.blockedBy || !!terms.party || !!terms.supervisor || /* F-PR-18 */ !!terms.customerUrgency || (terms.view !== 'all' && terms.view !== 'open')
 
 /** Every filter off (the sort, the mode and the grouping stay: they narrow nothing). */
-export const cleared = (terms: ListTerms): ListTerms => ({ ...terms, view: 'all', q: '', due: null, rush: false, waitingOn: null, risk: null, blockedBy: null, party: null })
+export const cleared = (terms: ListTerms): ListTerms => ({ ...terms, view: 'all', q: '', due: null, rush: false, waitingOn: null, risk: null, blockedBy: null, party: null, supervisor: null, /* F-PR-18 */ customerUrgency: null })
 
 /**
  * The export's query (a saved view's terms, B-W2a-23): an address that names no sort is shown by risk, so the file is told so too —
@@ -123,7 +135,7 @@ export function withScreenSort(query: string): string {
 // ---- the tiles --------------------------------------------------------------------------------------------------------------------
 
 export interface ListTile {
-  readonly id: 'draft' | 'released' | 'inProgress' | 'late' | 'atRisk' | 'onHold' | 'waitingOnCustomer'
+  readonly id: 'mine' | 'draft' | 'released' | 'inProgress' | 'late' | 'atRisk' | 'onHold' | 'waitingOnCustomer'
   /** The open work orders the tile counts (null: not read, the tile says "—"). */
   readonly count: number | null
   readonly active: boolean
@@ -141,6 +153,8 @@ const viewTile = (id: ListTile['id'], view: ListView, count: number | null, term
 export function listTiles(terms: ListTerms, counts: WorkOrderCounts | null): ListTile[] {
   const of = (value: number | undefined): number | null => (counts && value !== undefined ? value : null)
   return [
+    // F-PR-21: Mine — the open work orders the reader supervises (`?supervisor=me`; the export and a saved view follow it).
+    { id: 'mine', count: of(counts?.mine), active: terms.supervisor === 'me', next: { supervisor: terms.supervisor === 'me' ? null : 'me' } },
     viewTile('draft', 'DRAFT', of(counts?.draft), terms),
     viewTile('released', 'RELEASED', of(counts?.released), terms),
     viewTile('inProgress', 'IN_PROGRESS', of(counts?.inProgress), terms),
@@ -222,6 +236,8 @@ export function boardMarksOf(row: WorkOrderRow, now: number): Array<{ readonly w
     const view = waitingView('office', { who: waiting.who, since: waiting.since }, now)
     if (view && view !== 'unknown') marks.push({ words: [view.words, ...(view.age ? [view.age] : [])], tone: view.tone })
   }
+  // F-PR-21 (17-web-r2 §1.1 phone: "card shows Supervisor: Me"): only the reader's own; never a name, never someone else's.
+  if (row.supervisor === 'ME') marks.push({ words: [{ key: 'production-work-orders:supervisor.cardMe' }], tone: 'info' })
   return marks
 }
 
@@ -271,6 +287,8 @@ export const FILTER_CHOICES = {
   waitingOn: WAITING_ON.map((value) => ({ value, key: `waitingChoice.${value}` })),
   risk: WORK_ORDER_RISKS.map((value) => ({ value, key: `risk.${value}` })),
   blockedBy: BLOCKED_BY.map((value) => ({ value, key: `blocked.${value}` })),
+  // F-PR-18: the words keys of the `production-work-orders` catalogue (the office's, "Urgente" alone is the rush flag in Italian).
+  customerUrgency: CUSTOMER_URGENCY_STATES.map((value) => ({ value, key: `urgency.choice.${value}` })),
 } as const
 
 /** A quick filter's change as terms (an unknown value turns it off). */
@@ -278,7 +296,35 @@ export function filterChange(id: string, value: string | null): Partial<ListTerm
   if (id === 'waitingOn') return { waitingOn: pick(WAITING_ON, value) }
   if (id === 'risk') return { risk: pick(WORK_ORDER_RISKS, value) }
   if (id === 'blockedBy') return { blockedBy: pick(BLOCKED_BY, value) }
+  if (id === 'customerUrgency') return { customerUrgency: pick(CUSTOMER_URGENCY_STATES, value) } // F-PR-18
   if (id === 'rush') return { rush: value === 'true' }
   if (id === 'due') return { due: isRelativeDay(value) ? value : null }
   return null
+}
+
+// ---- F-PR-18: the Customer urgency column ----------------------------------------------------------------------------------------
+
+/**
+ * The Customer urgency cell (production plan §5 "Work orders: … Customer urgency"): Urgent 2 (its place in the customer's OWN Urgent
+ * list, never a place in our plan) · Urgent – asked (an open ask we answer in Approvals) · Regular · Set to regular by us; none for a
+ * work order of no order whose urgency counts (no customer order, no production state yet, the customer's switch off). An older
+ * answer without the state reads its urgency alone. Words keys of `production-work-orders`; the tone of the DS Tag.
+ */
+export interface UrgencyCell {
+  readonly state: CustomerUrgencyState
+  readonly key: string
+  readonly params?: Readonly<Record<string, number>>
+  readonly tone: Tone
+}
+
+export function customerUrgencyCellOf(row: Pick<WorkOrderRow, 'urgencyState' | 'customerUrgency' | 'urgentRank'>): UrgencyCell | null {
+  const state: CustomerUrgencyState | null = row.urgencyState ?? (row.customerUrgency === 'URGENT' ? 'URGENT' : row.customerUrgency === 'REGULAR' ? 'REGULAR' : null)
+  if (state === null) return null
+  if (state === 'URGENT') {
+    const rank = row.urgentRank ?? null
+    return rank !== null && rank > 0 ? { state, key: 'urgency.cell.URGENT', params: { rank }, tone: 'info' } : { state, key: 'urgency.cell.URGENT_SOME', tone: 'info' }
+  }
+  if (state === 'ASKED') return { state, key: 'urgency.cell.ASKED', tone: 'warning' }
+  if (state === 'SET_BACK') return { state, key: 'urgency.cell.SET_BACK', tone: 'neutral' }
+  return { state, key: 'urgency.cell.REGULAR', tone: 'neutral' }
 }

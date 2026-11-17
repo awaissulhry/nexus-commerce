@@ -208,7 +208,8 @@
     "declined": "La nuova data di {order} riga {line} è stata rifiutata: il pianificatore legge il perché.",
     "withdrawn": "La nuova data di {order} riga {line} è stata ritirata.",
     "usedOnQuote": "La data suggerita è sull’offerta {quote}.",
-    "proposalGone": "Quella nuova data non c’è più."
+    "proposalGone": "Quella nuova data non c’è più.",
+    "linkCopied": "Il link del cliente è copiato."
   },
   "proposal": {
     "WAITING": "Attende le vendite",
@@ -298,7 +299,11 @@
     "acceptTell": "Accetta e avvisa il cliente",
     "declineOpen": "Rifiuta…",
     "decline": "Rifiuta",
-    "withdraw": "Ritira"
+    "withdraw": "Ritira",
+    "askBrand": "Chiedi al cliente di accettare la nuova data",
+    "askBrandHint": "La data resta in ogni caso. Il cliente accetta o rifiuta nel suo portale (o con un link); un rifiuto lascia sull'ordine un'attività di seguito per noi.",
+    "acceptAsk": "Accetta e chiedi al cliente",
+    "acceptTellAsk": "Accetta, avvisa e chiedi al cliente"
   },
   "done": {
     "proposed": "Inviata alle vendite per il sì",
@@ -311,7 +316,37 @@
     "notTold": "Il cliente non è stato avvisato qui.",
     "lineDate": "La data della riga d’ordine ora è {day}.",
     "declinedBody": "Non è cambiato nulla; il pianificatore legge il perché.",
-    "withdrawnBody": "Non è cambiato nulla; si può proporre una nuova data."
+    "withdrawnBody": "Non è cambiato nulla; si può proporre una nuova data.",
+    "asked": "Abbiamo chiesto al cliente di accettare la nuova data: la sua risposta compare su questa proposta."
+  },
+  "link": {
+    "title": "Il link del cliente per rispondere",
+    "copy": "Copia il link",
+    "once": "Mostrato una sola volta: dallo a un cliente che risponde senza il portale."
+  },
+  "answer": {
+    "title": "La risposta del cliente",
+    "state": {
+      "WAITING": "In attesa della risposta del cliente",
+      "ACCEPTED": "Il cliente ha accettato la nuova data",
+      "REFUSED": "Il cliente non ha accettato la nuova data: resta valida; il seguito tocca a noi",
+      "WITHDRAWN": "Non più chiesta al cliente",
+      "EXPIRED": "Il cliente non ha risposto in tempo"
+    },
+    "at": "il {time}",
+    "words": "Le sue parole: “{words}”",
+    "signed": "Firmato {name}",
+    "followUp": {
+      "OPEN": "L'attività di seguito sull'ordine è aperta.",
+      "DONE": "L'attività di seguito sull'ordine è completata.",
+      "CANCELLED": "L'attività di seguito sull'ordine è stata annullata."
+    }
+  },
+  "opened": {
+    "title": "{order} riga {line} · ultima proposta: {state}",
+    "decided": "Decisa il {time} da {name}.",
+    "decidedNoName": "Decisa il {time}.",
+    "notAsked": "Al cliente non è stato chiesto di questa data."
   },
   "state": {
     "FROM_STOCK": "Da magazzino",

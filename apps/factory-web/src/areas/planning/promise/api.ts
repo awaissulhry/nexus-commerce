@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { FINISH_SOURCES, PROMISE_TILES, RISK_STATES } from '@nexus/factory-domain/planning/promise-keep/risk'
 import { PROPOSAL_DECISIONS, PROPOSAL_STATES } from '@nexus/factory-domain/planning/promise-keep/repromise'
+import { CUSTOMER_ANSWERS } from '@nexus/factory-domain/planning/promise-keep/brand-answer' // F-PR-20
 import { MATERIAL_SOURCES, SIZE_STATES } from '@nexus/factory-domain/planning/promise/rules'
 import type { ApiClient } from '../../../lib/api/client'
 
@@ -140,6 +141,23 @@ export const promiseHistory = (api: ApiClient, orderLineId: string, signal?: Abo
 const proposalSize = z.object({ size: z.string().nullable(), from: day.nullable(), to: day })
 const message = z.object({ language: z.enum(['it', 'en']), subject: z.string(), body: z.string() })
 
+// ---- F-PR-20 (B-PR-28): the customer's answer to a new date sales asked it about (null: not asked) ----
+export { CUSTOMER_ANSWERS }
+export type CustomerAnswerState = (typeof CUSTOMER_ANSWERS)[number]
+const customerAnswer = z.object({
+  requestId: z.string(),
+  state: z.enum(CUSTOMER_ANSWERS),
+  /** When it answered (null: not yet). */
+  at: z.string().nullable(),
+  /** Its own words (a refusal always has them). */
+  answer: z.string().nullable(),
+  typedName: z.string().nullable(),
+  /** A refusal's follow-up task on the order for us. */
+  followUp: z.object({ taskId: z.string(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']) }).nullable(),
+})
+export type CustomerAnswerRead = z.infer<typeof customerAnswer>
+// ---- end F-PR-20
+
 export const proposalSchema = z.object({
   id: z.string(),
   state: z.enum(PROPOSAL_STATES),
@@ -156,6 +174,8 @@ export const proposalSchema = z.object({
   proposedBy: person.nullable(),
   decision: z.object({ decision: z.enum(PROPOSAL_DECISIONS), at: z.string(), by: person.nullable(), reason: z.string().nullable(), told: z.boolean(), outboundId: z.string().nullable() }).nullable(),
   task: z.object({ id: z.string(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']).nullable(), assignee: person.nullable() }),
+  /** F-PR-20: the customer's answer when sales asked it (null or absent: not asked). The words are the web's (it + en). */
+  customerAnswer: customerAnswer.nullable().optional(),
   may: z.object({ accept: z.boolean(), tell: z.boolean(), decline: z.boolean(), withdraw: z.boolean() }),
 })
 export type Proposal = z.infer<typeof proposalSchema>
@@ -195,11 +215,22 @@ export async function proposeRepromise(api: ApiClient, orderLineId: string, body
 /** GET /planning/promises/re-promises/:id: one proposal (a task on the order opens the page with `?proposal=`). */
 export const getRepromise = (api: ApiClient, proposalId: string, signal?: AbortSignal): Promise<Proposal> => api.get(`/planning/promises/re-promises/${enc(proposalId)}`, { schema: proposalSchema, signal })
 
-const acceptAnswer = z.object({ told: z.boolean(), outboundId: z.string().nullable(), lineDate: day.nullable(), replayed: z.boolean(), proposal: proposalSchema })
+const acceptAnswer = z.object({
+  told: z.boolean(),
+  outboundId: z.string().nullable(),
+  lineDate: day.nullable(),
+  replayed: z.boolean(),
+  proposal: proposalSchema,
+  /** F-PR-20: the customer's question (null or absent: not asked); its link once, for a customer who answers outside its portal. */
+  brandAsk: z.object({ requestId: z.string(), url: z.string().nullable() }).nullable().optional(),
+})
 export type AcceptAnswer = z.infer<typeof acceptAnswer>
 
-/** POST …/re-promises/:id/accept: sales gives the word (never the proposer); `tell` sends the message to the customer now. */
-export const acceptRepromise = (api: ApiClient, proposalId: string, body: { tell: boolean; subject?: string; body?: string }, idempotencyKey: string): Promise<AcceptAnswer> =>
+/**
+ * POST …/re-promises/:id/accept: sales gives the word (never the proposer); `tell` sends the message to the customer now;
+ * F-PR-20 `askBrand` asks the customer to accept or refuse the new date (B-PR-28: the date stands either way).
+ */
+export const acceptRepromise = (api: ApiClient, proposalId: string, body: { tell: boolean; askBrand?: boolean; subject?: string; body?: string }, idempotencyKey: string): Promise<AcceptAnswer> =>
   api.post(`/planning/promises/re-promises/${enc(proposalId)}/accept`, { body, schema: acceptAnswer, idempotencyKey })
 
 /** POST …/re-promises/:id/decline: with the reason the planner reads; nothing is promised. */

@@ -183,8 +183,8 @@ export interface WorldContext {
 export function gateViewOf(
   gate: GateRow,
   order: OrderRow,
-  // B-PR-38: `customerDecides` — the round is a customer's whose portal is on.
-  round: { id: string; number: string; kind: string; decision: string | null; customerDecides?: boolean } | null,
+  // B-PR-38: `customerDecides` — the round is a customer's whose portal is on. B-PR-30a: `cancelled` — it waits for nothing.
+  round: { id: string; number: string; kind: string; decision: string | null; customerDecides?: boolean; cancelled?: boolean } | null,
   names: ReadonlyMap<string, string>,
   facts: OrderFacts,
   world: WorldContext,
@@ -199,7 +199,7 @@ export function gateViewOf(
     overriddenAt: gate.overriddenAt,
     ownerId: gate.ownerId,
     createdById: gate.createdById,
-    round: round ? { number: round.number, decision: round.decision, kind: round.kind, customerDecides: round.customerDecides ?? false } : null,
+    round: round ? { number: round.number, decision: round.decision, kind: round.kind, customerDecides: round.customerDecides ?? false, cancelled: round.cancelled ?? false } : null,
   }
   const ownerId = gate.ownerId ?? gate.createdById
   const person = (id: string | null) => (id && names.has(id) ? { id, name: names.get(id)! } : null)
@@ -278,11 +278,11 @@ export async function readWorld(db: Reader, world: WorldContext, filter: WorldFi
   ])
   const roundIds = [...new Set(gates.flatMap((gate) => (gate.sampleRoundId ? [gate.sampleRoundId] : [])))]
   const [rounds, names] = await Promise.all([
-    roundIds.length ? db.sampleRound.findMany({ where: { id: { in: roundIds } }, select: { id: true, number: true, kind: true, decision: true, partyId: true } }) : Promise.resolve([]),
+    roundIds.length ? db.sampleRound.findMany({ where: { id: { in: roundIds } }, select: { id: true, number: true, kind: true, decision: true, partyId: true, stage: true } }) : Promise.resolve([]), // B-PR-30a: + stage
     namesOf(db, gates.flatMap((gate) => [gate.ownerId, gate.createdById, gate.passedById, gate.overriddenById])),
   ])
   const theirs = await portalOnParties(db, rounds.map((row) => row.partyId)) // B-PR-38
-  const roundOf = new Map(rounds.map((row) => [row.id, { id: row.id, number: row.number, kind: row.kind, decision: row.decision, customerDecides: row.partyId !== null && theirs.has(row.partyId) }]))
+  const roundOf = new Map(rounds.map((row) => [row.id, { id: row.id, number: row.number, kind: row.kind, decision: row.decision, customerDecides: row.partyId !== null && theirs.has(row.partyId), cancelled: row.stage === 'CANCELLED' }]))
   const partyOf = new Map(parties.map((row) => [row.id, row]))
   const views: OrderView[] = orders.map((order) => {
     const own = facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' as const }
@@ -321,11 +321,11 @@ export async function readGateView(db: Reader, world: WorldContext, gateId: stri
   const order = await db.salesOrder.findUniqueOrThrow({ where: { id: gate.salesOrderId }, select: ORDER_COLUMNS })
   const [facts, round, names] = await Promise.all([
     orderFactsOf(db, [order.id]),
-    gate.sampleRoundId ? db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { id: true, number: true, kind: true, decision: true, partyId: true } }) : Promise.resolve(null),
+    gate.sampleRoundId ? db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { id: true, number: true, kind: true, decision: true, partyId: true, stage: true } }) : Promise.resolve(null), // B-PR-30a: + stage
     namesOf(db, [gate.ownerId, gate.createdById, gate.passedById, gate.overriddenById]),
   ])
   const theirs = round?.partyId ? await portalOnParties(db, [round.partyId]) : new Set<string>() // B-PR-38
-  return gateViewOf(gate, order, round ? { id: round.id, number: round.number, kind: round.kind, decision: round.decision, customerDecides: round.partyId !== null && theirs.has(round.partyId) } : null, names, facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' }, world, businessDate(world.now))
+  return gateViewOf(gate, order, round ? { id: round.id, number: round.number, kind: round.kind, decision: round.decision, customerDecides: round.partyId !== null && theirs.has(round.partyId), cancelled: round.stage === 'CANCELLED' } : null, names, facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' }, world, businessDate(world.now))
 }
 
 export { orderFactsOf }

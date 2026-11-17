@@ -56,55 +56,6 @@
   white-space: nowrap;
 }
 
-.fw-wd-flow {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: var(--nds-space-10);
-}
-
-.fw-wd-flow-step {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--nds-space-8);
-  align-items: stretch;
-  padding: var(--nds-space-8);
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface);
-}
-
-.fw-wd-flow-step.is-bottleneck {
-  border-color: var(--nds-warning-border);
-}
-
-.fw-wd-pile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 3.25rem;
-  padding: var(--nds-space-4) var(--nds-space-6);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-sunken);
-}
-
-.fw-wd-pile-n {
-  font-size: var(--nds-font-size-lg);
-  font-weight: var(--nds-font-weight-semibold);
-  color: var(--nds-text-strong);
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-wd-op {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  min-width: 0;
-}
-
 .fw-wd-choices {
   border: 0;
   margin: 0;

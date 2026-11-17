@@ -18,6 +18,8 @@ import { SUPPLIER_DOCUMENT_COUNTS } from '../../../../modules/purchasing/portal-
 import { RETURN_COUNTS } from '../../../../modules/sales/portal-returns/home'
 // B-W2b-184: approvals to give and revised orders to re-confirm.
 import { APPROVAL_COUNTS } from '../../../approvals-out/home'
+// B-PR-20: a customer's own orders in production (waiting on it, at risk, on hold).
+import { PRODUCTION_COUNTS } from './production'
 
 /**
  * Where a partner's Home counts come from (B-W2b-167; plan W2b-3 "Sources": "Home counts through a sources folder like the
@@ -30,6 +32,8 @@ export interface HomeSource {
   readonly name: string
   readonly counts: readonly HomeCountDefinition[]
   read(app: FastifyInstance, request: FastifyRequest, now: Date): Promise<Readonly<Record<string, number | null>>>
+  /** B-PR-20: the partner live events after which these counts are read again (the Home's `live.events`; none: the task list's). */
+  readonly live?: readonly string[]
 }
 
 export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
@@ -54,6 +58,8 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   RETURN_COUNTS,
   // B-W2b-184: approvals to give and revised orders to re-confirm.
   APPROVAL_COUNTS,
+  // B-PR-20: a customer's own orders in production.
+  PRODUCTION_COUNTS,
 ])
 
 const problems = homeCountProblems(HOME_SOURCES.flatMap((source) => source.counts))

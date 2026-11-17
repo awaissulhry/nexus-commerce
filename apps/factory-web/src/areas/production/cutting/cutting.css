@@ -1,6 +1,6 @@
 /*
- * Production › Cutting room › Cutting (SCR-238) and a cut's record: LAYOUT only — the page head, the tiles, the list's
- * cells, the record's band, tabs and cards, the pieces matrix and the dialogs. The controls are the design system's;
+ * Production › Cutting room › Cutting (SCR-238): LAYOUT only — the page head, the tiles, the list's cells, the band, the cards
+ * and the dialogs (F-PR-06: a cut's record merged into the work order's Cutting & bundles tab). The controls are the design system's;
  * semantic tokens only (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the shell's
  * main area; wide screens put the cards side by side.
  */
@@ -116,30 +116,10 @@ p.fw-ct-hint[role='status'] {
   min-width: 0;
 }
 
-.fw-ct-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: var(--nds-space-14);
-  min-width: 0;
-}
-
 .fw-ct-card {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-10);
-  min-width: 0;
-}
-
-.fw-ct-bars {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-  gap: var(--nds-space-12);
-}
-
-.fw-ct-bar-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-6);
   min-width: 0;
 }
 
@@ -159,30 +139,6 @@ p.fw-ct-hint[role='status'] {
   justify-content: space-between;
   gap: var(--nds-space-6) var(--nds-space-12);
   min-width: 0;
-}
-
-/* ---- the pieces matrix (part × size) ---- */
-.fw-ct-matrix {
-  overflow-x: auto;
-  min-width: 0;
-}
-
-.fw-ct-pieces {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--nds-space-4);
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-ct-pieces .is-short {
-  color: var(--nds-warning-text);
-  font-size: var(--nds-font-size-xs);
-}
-
-.fw-ct-pieces .is-recut {
-  color: var(--nds-info-text);
-  font-size: var(--nds-font-size-xs);
 }
 
 /* ---- dialogs ---- */

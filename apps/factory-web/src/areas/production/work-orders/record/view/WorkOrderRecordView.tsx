@@ -10,9 +10,11 @@ import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { WorkOrder } from '../../../_shared/api'
 import { isWideTab, mayCancel, nextStep, openChecks, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../../_shared/model'
-import { BundlesTab } from '../../bundles/view/BundlesTab'
+// ---- F-PR-06: the tabs 7 → 6 — Cutting & bundles (one tab; the Cut record merged in), Operations & WIP (one table) ----
 import { CuttingTab } from '../../cutting/view/CuttingTab'
+import { cuttingTabCount } from '../../cutting/model'
 import { OperationsTab } from '../../progress/view/OperationsTab'
+// ---- end F-PR-06
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { RecordDialogs } from './Dialogs'
 import { DAILY_NAMESPACE, holdHeld, holdReasonWords } from '../../daily/model'
@@ -36,13 +38,18 @@ import { VarianceAtClose } from '../../labour/variance/view/VarianceAtClose'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { hasOrderFiles } from '../order-files/model'
-import { OrderFilesButton, OrderFilesDialog } from '../order-files/view/OrderFiles'
+import { OrderFilesButton, OrderFilesDialog, OrderThreadButton } from '../order-files/view/OrderFiles'
 // ---- end B-TH-265
 // ---- F-PR-05a: the band facts (customer, sales orders and POs, % done, health, waiting on), Report finished as the main step, Preview ----
 import { finishHeld } from '../../daily/model'
 import { previewHeld, reportFirst, customerFactOf } from '../overview/model'
 import { BandFacts } from './BandFacts'
+// F-PR-21: THE assign dialog (the band's Change…).
+import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
 // ---- end F-PR-05a
+// F-PR-22: Ask the supervisor (the band's ⋯ and the supervisor fact's Ask) — THE note dialog.
+import { NOTES_NS, openHeld } from '../../../_shared/notes/model'
+import { NoteDialog } from '../../../_shared/notes/view/NoteDialog'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
@@ -53,16 +60,17 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  * — Release → Start → Complete → Close, held with its reason — beside Put on hold / Release the hold; the thread (⌘J); ⋯ Split, Print
  * traveller, the style revision, Change request, Cancel, Copy number and the Keyboard line), the work order's thread docked beside
  * every tab (its own notes, never shareable with a customer, a note may go to the floor; one of its orders' threads picked beside it;
- * Activity's tools in the thread's "⋯", R-ACT), ONE notice in the body column, and the tabs 9 → 7: Overview (release check or frozen
- * spec, facts, the size run with cut / bundled / sewn / finished per cell), Materials (planned and issued, the pick list), Cutting
- * (SCR-071), Bundles and Operations (SCR-072), Quality (read-only), Labour & cost. Documents went into the band's ⋯ (R-7), Activity
- * into the docked thread; every old ?tab= keeps working (R-8). Totals per work order, operation or line only; no money.
+ * Activity's tools in the thread's "⋯", R-ACT), ONE notice in the body column, and the tabs 9 → 7 → 6 (F-PR-06): Overview (release
+ * check or frozen spec, facts, the size run with cut / bundled / sewn / finished per cell), Materials (planned and issued, the pick
+ * list), Cutting & bundles (SCR-071: Cutting and Bundles as one tab, the Cut record merged in), Operations & WIP (SCR-072, one
+ * table), Quality (the one scrap home), Labour & cost. Documents went into the band's ⋯ (R-7), Activity into the docked thread;
+ * every old ?tab= keeps working (R-8; ?tab=bundles opens Cutting & bundles). Totals per work order, operation or line only; no money.
  */
 // B-TH-265: `thread` is the docked thread (the container's WorkOrderThreads with the office's OfficeRecordThread, or a design case's);
 // `printThread` what the print view shows of it.
 export function WorkOrderRecordView({ model, actions, thread, printThread, fields }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /** B-TH-280: the custom fields (Overview & release only). */ fields?: ReactNode }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS]}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS, /* F-PR-22 */ NOTES_NS]}>
       <WorkOrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} />
     </WithMessages>
   )
@@ -140,7 +148,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign || /* F-PR-22 */ model.note?.dialog) return
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || typing) return
       // F-PR-05a: ⌘↵ takes the band's primary — Report finished while released garments wait, else the next step.
       if (reportPrimary) {
@@ -157,12 +165,11 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   })
 
   const checksOpen = workOrder.status === 'DRAFT' ? openChecks(model.check.value) : 0
-  const liveEntries = model.cutLog.value?.entries.filter((entry) => entry.live && !entry.reversalOfId).length ?? null
-  const activeBundles = model.bundles.value?.bundles.filter((bundle) => bundle.status === 'ACTIVE').length ?? null
   const tabCount = (tab: RecordTab): number | null => {
     if (tab === 'materials') return workOrder.spec.materials.length
-    if (tab === 'cutting') return liveEntries
-    if (tab === 'bundles') return activeBundles
+    // ---- F-PR-06: Cutting & bundles counts the bundles live on the floor (the cut log is a history: no count of its own).
+    if (tab === 'cutting') return cuttingTabCount(model.bundles.value)
+    // ---- end F-PR-06
     if (tab === 'operations') return workOrder.spec.operations.length
     if (tab === 'quality') return model.quality?.value?.inspections.length ?? null
     return null
@@ -217,8 +224,17 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     ? [{ id: 'preview', label: t('band.preview', { name: fact.kind === 'customer' ? (model.partiesView ? fact.name : fact.code) : t('band.theCustomer') }), disabled: previewWait !== null, description: previewWait ? t(previewWait.key, previewWait.params) : t('band.previewHint'), onSelect: () => actions?.onPreview?.() }]
     : []
   // ---- end F-PR-05a
+  // ---- F-PR-22: Ask the supervisor — an office note on this work order (or its sales orders), each one's supervisor asked; held in
+  // words without threads.post. The supervisor fact's "Ask" opens the same dialog.
+  const tn = useT(NOTES_NS)
+  const askWait = model.note ? openHeld(model.note.can, 1) : null
+  const askWaitWords = askWait ? tn(askWait.key, askWait.params) : null
+  const askLine: MenuItemDef[] = model.note ? [{ id: 'askSupervisor', label: tn('open.ask'), disabled: askWaitWords !== null, description: askWaitWords ?? tn('open.askHint'), onSelect: () => actions?.note?.onOpen?.() }] : []
+  const ask = model.note ? { label: tn('open.askFact'), held: askWaitWords, onAsk: () => actions?.note?.onOpen?.() } : undefined
+  // ---- end F-PR-22
   const more: MenuItemDef[] = [
     ...stepLine,
+    ...askLine, // F-PR-22
     { id: 'split', label: ts('split.open'), disabled: splitWait !== null, ...(splitWait ? { description: heldWords(splitWait.key, splitWait.params) } : {}), onSelect: () => actions?.onOpenSplit?.() },
     ...documentDoors(workOrder, model.prefix).map((door) => ({ id: door.id, label: ts(door.label.key, door.label.params), description: ts(door.description.key), href: door.href, target: '_blank' as const })),
     // B-W2b-245 (design pop:wo-change "⋯"): a change to this work order's spec is a change request.
@@ -292,7 +308,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
         meta: (
           <>
             {/* F-PR-05a: customer, its sales orders and POs, % done, health and waiting on lead the band's facts. */}
-            <BandFacts workOrder={workOrder} model={model} />
+            <BandFacts workOrder={workOrder} model={model} onChangeSupervisor={actions?.supervisor?.onOpen} {...(ask ? { ask } : {}) /* F-PR-22 */} />
             {workOrder.rush && (
               <Tag tone="danger">
                 <Zap size={11} aria-hidden /> {ts('rush.word')}
@@ -313,6 +329,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
             <span className="fw-pr-hint">{workOrder.site.code}</span>
             {/* B-TH-265 (agreement T9): the orders' own files, read through the work order's own route. */}
             {model.orderFiles && hasOrderFiles(model.orderFiles.files) && <OrderFilesButton model={model.orderFiles} actions={actions?.orderFiles} />}
+            {/* F-PR-25: "Order thread" — the order's thread in the work order's dock (several orders: a menu, their PO first). */}
+            {model.orderFiles && <OrderThreadButton choices={model.threadChoices ?? []} actions={actions?.orderFiles} />}
           </>
         ),
         primary,
@@ -366,8 +384,9 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
 
         {model.tab === 'overview' && <OverviewTab workOrder={workOrder} model={model} actions={actions} />}
         {model.tab === 'materials' && <MaterialsTab workOrder={workOrder} model={model} actions={actions} />}
+        {/* ---- F-PR-06: Cutting & bundles is ONE tab (an old ?tab=bundles lands here) ---- */}
         {model.tab === 'cutting' && <CuttingTab workOrder={workOrder} model={model} actions={actions} />}
-        {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
+        {/* ---- end F-PR-06 */}
         {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
         {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
         {model.tab === 'labour' && (
@@ -380,6 +399,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
             minutes={minutesOf(workOrder, model.wip.value)}
             labourHref={model.can.labour ? `${model.prefix}/production/labour` : null}
             variance={model.variance ? <VarianceAtClose model={model.variance} onRetry={actions?.onRetryVariance} /> : null}
+            qualityHref={`${recordHref}?tab=quality` /* F-PR-06: the one scrap value line's door to the scrap home */}
           />
         )}
       </div>
@@ -393,6 +413,10 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       {model.close && <CloseParts workOrder={workOrder} model={model.close} actions={actions?.close} />}
       {/* B-TH-265 */}
       {model.orderFiles && <OrderFilesDialog number={workOrder.number} model={model.orderFiles} choices={model.threadChoices ?? []} actions={actions?.orderFiles} />}
+      {/* F-PR-21 */}
+      {model.supervisor?.assign && <AssignSupervisorDialog model={model.supervisor.assign} actions={actions?.supervisor} />}
+      {/* F-PR-22 */}
+      {model.note?.dialog && <NoteDialog model={model.note.dialog} actions={actions?.note} />}
     </RecordFrame>
   )
 }

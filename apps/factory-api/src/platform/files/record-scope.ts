@@ -64,6 +64,55 @@ export const PARENT_RECORDS: Readonly<Record<string, (client: Reader, id: string
 /** The records of one work order: quality's wall names their work order's customer (customersOf). */
 export const WORK_ORDER_RECORDS: readonly string[] = Object.freeze(['Bundle', 'GarmentSerial', 'Inspection', 'OperationScan', 'ReworkOrder', 'InProcessCheck'])
 
+// ── B-PR-08b (production plan §2 "files", PW-05 files) ─────────────────────────────────────────────────────────────────────
+/**
+ * Production records whose files hang on another production record, read through THAT record's own scope (its thread resolver:
+ * a work order's wall party is its customer, a mixed one or one of none reaches only who reaches every customer; a style's is its
+ * brand). Before, these fell through to the database's party mapping or to the file's company: a production hold names its work
+ * order's customer only when the work order has one (a mixed one's hold names none), and a defect or a check result names none at
+ * all, so a person limited to customer B opened customer A's defect photos by id and listed them.
+ *
+ *   WorkOrderHold           a production hold or an accepted pause → its work order
+ *   InspectionDefect        a final inspection's defect (its photos) → the inspection's work order
+ *   InspectionCheckResult   a plan check's result (its photos) → its final inspection's or in-process check's work order; an
+ *                           incoming inspection's (a supplier's lot) or a line check's (no work order) names no customer
+ *   WorkInstruction         a work instruction's media → its style (B-PR-37: walled by the style's brand); one of every style
+ *                           names no customer
+ *
+ * `found` false: the record is gone (a customer-carrying type: only every-customer readers, fail closed); `parent` null: it names
+ * no customer (the file's company decides).
+ */
+export const PRODUCTION_CHILD_RECORDS: Readonly<Record<string, (client: Reader, id: string) => Promise<{ readonly found: boolean; readonly parent: Ref | null }>>> = Object.freeze({
+  WorkOrderHold: async (client, id) => {
+    const row = await client.workOrderHold.findUnique({ where: { id }, select: { workOrderId: true } })
+    return { found: row !== null, parent: ref('WorkOrder', row?.workOrderId) }
+  },
+  InspectionDefect: async (client, id) => {
+    const row = await client.inspectionDefect.findUnique({ where: { id }, select: { workOrderId: true } })
+    return { found: row !== null, parent: ref('WorkOrder', row?.workOrderId) }
+  },
+  InspectionCheckResult: async (client, id) => {
+    const row = await client.inspectionCheckResult.findUnique({ where: { id }, select: { inspectionId: true, inProcessCheckId: true } })
+    if (!row) return { found: false, parent: null }
+    if (row.inspectionId) {
+      const inspection = await client.inspection.findUnique({ where: { id: row.inspectionId }, select: { workOrderId: true } })
+      return { found: inspection !== null, parent: ref('WorkOrder', inspection?.workOrderId) }
+    }
+    if (row.inProcessCheckId) {
+      const check = await client.inProcessCheck.findUnique({ where: { id: row.inProcessCheckId }, select: { workOrderId: true } })
+      return { found: check !== null, parent: ref('WorkOrder', check?.workOrderId) }
+    }
+    return { found: true, parent: null }
+  },
+  WorkInstruction: async (client, id) => {
+    const row = await client.workInstruction.findUnique({ where: { id }, select: { styleId: true, styleRevisionId: true } })
+    if (!row) return { found: false, parent: null }
+    const styleId = row.styleId ?? (row.styleRevisionId ? ((await client.styleRevision.findUnique({ where: { id: row.styleRevisionId }, select: { styleId: true } }))?.styleId ?? null) : null)
+    return { found: true, parent: ref('Style', styleId) }
+  },
+})
+// ── end B-PR-08b ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** The party column the database's `factory_file_record_party` reads for a record type (its CASE, word for word). */
 const PARTY_COLUMN: Readonly<Record<string, string>> = Object.freeze({ Party: 'id', Style: 'brandPartyId', Invoice: 'buyerPartyId', Certificate: 'holderPartyId', Lot: 'supplierId', GoodsReceipt: 'supplierId', Capa: 'customerId' })
 const partyColumnOf = (recordType: string): string => (Object.hasOwn(PARTY_COLUMN, recordType) ? PARTY_COLUMN[recordType]! : 'partyId')
@@ -72,6 +121,15 @@ export async function fileRecordScope(client: Reader, tenantId: string, record: 
   const own = await resolveRecord(client, record.recordType, record.recordId)
   if (own) return { kind: 'record', recordType: record.recordType, scope: own }
   if (!isUuid(record.recordId)) return { kind: 'none' }
+  // B-PR-08b: a production record's file through the record it hangs on (a work order, a style).
+  const productionParentOf = Object.hasOwn(PRODUCTION_CHILD_RECORDS, record.recordType) ? PRODUCTION_CHILD_RECORDS[record.recordType]! : null
+  if (productionParentOf) {
+    const child = await productionParentOf(client, record.recordId)
+    if (!child.found) return { kind: 'unknown' }
+    if (child.parent === null) return { kind: 'none' }
+    const scope = await resolveRecord(client, child.parent.type, child.parent.id)
+    return scope ? { kind: 'record', recordType: child.parent.type, scope } : { kind: 'unknown' }
+  }
   const parentOf = Object.hasOwn(PARENT_RECORDS, record.recordType) ? PARENT_RECORDS[record.recordType]! : null
   if (parentOf) {
     const parent = await parentOf(client, record.recordId)

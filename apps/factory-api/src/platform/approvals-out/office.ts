@@ -2,7 +2,10 @@ import type { FastifyRequest } from 'fastify'
 import { APPROVAL_MAIL_TEMPLATES, requestMail } from '@nexus/factory-domain/approvals-out/mail'
 import { KIND_RULES, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
 import { PARTNERS_APPROVALS_ASK, PARTNERS_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
-import { askProblems, dueAtFor, reasonProblems, withdrawProblem } from '@nexus/factory-domain/approvals-out/rules'
+import { askProblems, decideForRefusal, dueAtFor, reasonProblems, reverseRefusal, withdrawProblem } from '@nexus/factory-domain/approvals-out/rules'
+import { parsePreview } from '@nexus/factory-domain/approvals/rules'
+import { OVERRIDE_TASK_KIND, overrideOrderOf } from '@nexus/factory-domain/production-brand/override'
+import { PRODUCTION_BRAND_OVERRIDE } from '@nexus/factory-domain/production-brand/permissions'
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
@@ -40,6 +43,9 @@ import { filesOf, localeOf, lockRequest, OFFICE_COLUMNS, RECORD, readOfficeRow, 
  *   POST /approvals-out/:requestId/withdraw {version, reason?}   an OPEN request: WITHDRAWN, its live links revoked, its
  *                        task cancelled, in one command.
  *   GET  /approvals-out?recordType&recordId · GET /approvals-out/:requestId   partners.approvals.view + the record's view.
+ *   B-PR-30a/30b: POST /approvals-out/:requestId/decide-for-party and …/reverse (production.brand.override, step-up) are
+ *                        ./override.ts; the views here say who decided for the customer, the reversal, an override waiting
+ *                        for a second person, and whether the reader may do either (`may`).
  */
 
 type Client = FactoryClient | CommandTx
@@ -60,18 +66,38 @@ function needs(actor: Actor, adapter: RecordAdapter, scope: ReturnType<typeof sc
 
 // ---- what the office reads ----------------------------------------------------------------------------------------------
 
+/** The reader of an office view: their rights decide what `may` says (B-PR-30a/30b). */
+export interface OfficeViewer {
+  readonly actor: Actor
+  readonly actorId: string
+}
+
+/** B-PR-30a/30b: the override of this request that waits for a second person (a BRAND_OVERRIDE task), if any. */
+export async function pendingOverrideOf(client: Client, requestId: string): Promise<{ readonly taskId: string; readonly act: 'DECIDE_FOR' | 'REVERSE' } | null> {
+  const task = await client.approvalTask.findFirst({ where: { kind: OVERRIDE_TASK_KIND, recordType: RECORD, recordId: requestId, status: 'PENDING' }, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }], select: { id: true, preview: true } })
+  if (!task) return null
+  const order = overrideOrderOf(parsePreview(task.preview).changes)
+  return { taskId: task.id, act: order?.act ?? 'DECIDE_FOR' }
+}
+
 // B-W2b-F16: codes (kind, status, dueAt) and the record's label in both languages (`words`); the screens say the rest in
 // their own words. No kindName, stateWords or dueWords any more (they were English only).
-async function officeView(client: Client, row: OfficeRow) {
+async function officeView(client: Client, row: OfficeRow, viewer: OfficeViewer | null = null) {
   const kind = row.kind as ApprovalKind
   const adapter = adapterOf(kind, row.recordType)
   const record = adapter ? await adapter.read(client, row.recordId, kind, { partyId: row.partyId, now: new Date() }) : null
   const party = await client.party.findUnique({ where: { id: row.partyId }, select: { legalName: true } })
   const links = await client.oneOffLink.findMany({ where: { purpose: 'APPROVAL', recordType: RECORD, recordId: row.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, email: true, expiresAt: true, uses: true, maxUses: true, revokedAt: true, lastUsedAt: true } })
-  const people = [row.createdById, row.withdrawnById, row.answeredByUserId].filter((id): id is string => id !== null)
+  // B-PR-30a/30b: + who decided for the party and who put its answer back.
+  const people = [row.createdById, row.withdrawnById, row.answeredByUserId, row.decidedForPartyById, row.reversedById].filter((id): id is string => id !== null)
   const names = new Map((await client.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
   const markup = row.markupFileId ? await client.fileMarkup.findFirst({ where: { fileId: row.markupFileId, partyId: row.partyId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { page: true, shapes: true, note: true, createdAt: true } }) : null
   const status = row.status as ApprovalStatus
+  // B-PR-30a/30b: what the reader may do for the party (production.brand.override over its company and customer; never the
+  // person who asked; not while an override waits for a second person). The record's own hold is said by the route, in words.
+  const pending = await pendingOverrideOf(client, row.id)
+  const overrides = viewer !== null && can(viewer.actor, PRODUCTION_BRAND_OVERRIDE, { companyId: row.companyId, partyId: row.partyId }) && pending === null
+  const reversedReason = row.reversedAt ? row.reverseReason : null
   return {
     id: row.id,
     companyId: row.companyId,
@@ -89,33 +115,52 @@ async function officeView(client: Client, row: OfficeRow) {
             at: toUtcIso(row.answeredAt),
             typedName: row.typedName ?? '',
             words: row.answer,
-            via: row.answeredViaLinkId ? ('LINK' as const) : ('PORTAL' as const),
-            personName: row.answeredByUserId ? (names.get(row.answeredByUserId) ?? null) : null,
+            via: row.decidedForPartyById ? ('OFFICE' as const) : row.answeredViaLinkId ? ('LINK' as const) : ('PORTAL' as const),
+            personName: row.decidedForPartyById ? (names.get(row.decidedForPartyById) ?? null) : row.answeredByUserId ? (names.get(row.answeredByUserId) ?? null) : null,
             markup: row.markupFileId ? { fileId: row.markupFileId, page: markup?.page ?? null, shapes: (markup?.shapes ?? []) as unknown[], note: markup?.note ?? null } : null,
           },
     withdrawn: row.withdrawnAt ? { at: toUtcIso(row.withdrawnAt), byName: row.withdrawnById ? (names.get(row.withdrawnById) ?? null) : null, reason: row.withdrawReason } : null,
+    decidedForParty: row.decidedForPartyReason !== null ? { byName: row.decidedForPartyById ? (names.get(row.decidedForPartyById) ?? null) : null, reason: row.decidedForPartyReason } : null,
+    reversed: row.reversedAt && reversedReason !== null ? { at: toUtcIso(row.reversedAt), byName: row.reversedById ? (names.get(row.reversedById) ?? null) : null, reason: reversedReason } : null,
+    override: pending,
     askedBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
     createdAt: toUtcIso(row.createdAt),
     files: (await filesOf(client, row.id)).map((file) => ({ id: file.id, originalName: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes })),
     links: links.map((link) => ({ id: link.id, email: link.email, expiresAt: toUtcIso(link.expiresAt), used: link.uses >= link.maxUses, revoked: link.revokedAt !== null, lastUsedAt: link.lastUsedAt ? toUtcIso(link.lastUsedAt) : null })),
-    may: { withdraw: status === 'OPEN' },
+    may: {
+      withdraw: status === 'OPEN',
+      decideForParty: overrides && decideForRefusal({ kind, status, askedById: row.createdById }, viewer!.actorId) === null,
+      reverse: overrides && reverseRefusal({ kind, status, reversedAt: row.reversedAt }) === null,
+    },
     version: row.version,
   }
 }
 
 /** GET /approvals-out/:requestId. */
 export async function officeRequest(request: FastifyRequest, requestId: string) {
-  const { actor } = officeOf(request)
+  const { context, actor } = officeOf(request)
   const row = isUuid(requestId) ? await request.withClient((client) => readOfficeRow(client, requestId)) : null
   const adapter = row ? adapterOf(row.kind as ApprovalKind, row.recordType) : undefined
   if (!row || !adapter) throw new NotFoundError('Approval request not found.')
   needs(actor, adapter, { companyId: row.companyId, partyId: row.partyId }, 'view')
-  return { request: await request.withClient((client) => officeView(client, row)) }
+  return { request: await request.withClient((client) => officeView(client, row, { actor, actorId: context.actorId })) }
+}
+
+/**
+ * B-PR-30a/30b: the request as the office person who decided it for the customer (or put its answer back, or asked a second
+ * person to) reads it afterwards — their override right over the request's company and customer was checked first
+ * (./override.ts), which is all it takes to read what they did.
+ */
+export async function viewAfterOverride(request: FastifyRequest, requestId: string) {
+  const { context, actor } = officeOf(request)
+  const row = await request.withClient((client) => readOfficeRow(client, requestId))
+  if (!row) throw new NotFoundError('Approval request not found.')
+  return { request: await request.withClient((client) => officeView(client, row, { actor, actorId: context.actorId })) }
 }
 
 /** GET /approvals-out?recordType&recordId: the requests of one record, newest first. */
 export async function recordRequests(request: FastifyRequest, recordType: string, recordId: string) {
-  const { actor } = officeOf(request)
+  const { context, actor } = officeOf(request)
   const adapter = adapterFor(recordType)
   if (!adapter) throw new ValidationError('No approval is asked on this record type.', [{ path: 'query/recordType', message: 'Not a record an approval names.' }])
   const record = isUuid(recordId) ? await request.withClient((client) => adapter.read(client, recordId, adapter.kinds[0]!, { partyId: null, now: new Date() })) : null
@@ -123,7 +168,8 @@ export async function recordRequests(request: FastifyRequest, recordType: string
   needs(actor, adapter, scopeOf(record), 'view')
   const rows = await request.withClient((client) => client.approvalRequest.findMany({ where: { recordType, recordId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100, select: OFFICE_COLUMNS }))
   const views = []
-  for (const row of rows) views.push(await request.withClient((client) => officeView(client, row)))
+  const viewer = { actor, actorId: context.actorId }
+  for (const row of rows) views.push(await request.withClient((client) => officeView(client, row, viewer)))
   return { record: { type: recordType, id: recordId, words: record.label }, kinds: [...adapter.kinds], held: record.held, requests: views }
 }
 
@@ -260,7 +306,7 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
     },
   )
   const row = (await request.withClient((client) => readOfficeRow(client, result.requestId)))!
-  const view = await request.withClient((client) => officeView(client, row))
+  const view = await request.withClient((client) => officeView(client, row, { actor, actorId: context.actorId }))
   if (replayed) return { request: view, url: null, delivery: null }
   const url = auth.link('/l', token.value)
   if (!result.outboundId) return { request: view, url, delivery: null }

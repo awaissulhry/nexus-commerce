@@ -10,16 +10,19 @@ import type { WorkOrder } from '../../../_shared/api'
 import { bandHealthOf, bandWaitingOf } from '../health/model'
 import { customerFactOf, doneFact } from '../overview/model'
 import type { WorkOrderRecordModel } from '../record-model'
+// F-PR-21: the supervisor fact ("Supervisor Bea Esempio · this order", Change…, "You muted this order").
+import { supervisorFactOf } from '../../../../_shared/production-supervisor/model'
+import { SupervisorFact } from '../../../../_shared/production-supervisor/view/SupervisorFact'
 
 /**
  * F-PR-05a — the band's facts (06-tree A.4 O-WO-band; 09-design §2(c) band meta): the customer (a link to it with parties.view, else
  * its code; "Mixed customers (made before the rule)" for an older work order of several), each sales order (a link with
  * orders.view) with its customer PO, % done (finished ÷ pieces; "Not released yet" before the release), and the health the customer
  * reads with who the work waits on (the worst of its orders, B-PR-35). The due date, rush, batch and revision follow as before.
- * The supervisor fact joins here with F-PR-21 (its own read; not drawn before). Health and waiting on are tags in the band (the
+ * F-PR-21: the supervisor fact follows (by name: inside one record only; no customer order: none). Health and waiting on are tags in the band (the
  * band keeps ONE status pill, the record frame's rule); the Overview's Health card draws the shared chip with its why.
  */
-export function BandFacts({ workOrder, model }: { workOrder: WorkOrder; model: WorkOrderRecordModel }) {
+export function BandFacts({ workOrder, model, onChangeSupervisor, ask }: { workOrder: WorkOrder; model: WorkOrderRecordModel; /** F-PR-21 */ onChangeSupervisor?: () => void; /** F-PR-22: the fact's Ask (the note dialog). */ ask?: { readonly label: string; readonly held: string | null; readonly onAsk: () => void } }) {
   const t = useT('production')
   const words = useProductionWords()
   const fact = customerFactOf(workOrder)
@@ -60,7 +63,8 @@ export function BandFacts({ workOrder, model }: { workOrder: WorkOrder; model: W
       ) : null}
       {health && health !== 'loading' ? <HealthTag view={healthView('office', health)} say={words.say} unknown={t('parts.health.unknown')} /> : null}
       {waiting && waiting !== 'loading' ? <WaitingTag view={waitingView('office', waiting, Date.now())} say={words.say} unknown={t('parts.waiting.unknown')} /> : null}
-      {/* F-PR-21: the supervisor fact ("Supervisor · Change…") comes here with its own read. */}
+      {/* F-PR-21: the supervisor fact (the work order's own read, B-PR-42a: by name inside this one record). */}
+      {model.supervisor && <SupervisorFact fact={supervisorFactOf(workOrder)} can={model.supervisor.can} onChange={onChangeSupervisor} {...(ask ? { ask } : {}) /* F-PR-22 */} />}
     </>
   )
 }

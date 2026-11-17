@@ -175,6 +175,31 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'ORDER_CHANGE_REQUEST.CANCEL_LINES_one': '{customer} asks to cancel {count} line of order {number}.',
   'ORDER_CHANGE_REQUEST.CANCEL_LINES_other': '{customer} asks to cancel {count} lines of order {number}.',
   'ORDER_CHANGE_REQUEST.blocks': 'The customer waits for your answer: accept it (the order is amended or cancelled) or refuse it with a reason.',
+  // B-PR-26: every kind a customer asks (the production asks too), one row per batch, and our counter-offer's answer.
+  'ORDER_CHANGE_REQUEST.RUSH': '{customer} asks to make order {number} urgent.',
+  'ORDER_CHANGE_REQUEST.RUSH_BY': '{customer} asks to make order {number} urgent, needed by {needByDate}.',
+  'ORDER_CHANGE_REQUEST.HOLD': '{customer} asks to pause order {number}.',
+  'ORDER_CHANGE_REQUEST.RESUME': '{customer} asks to resume order {number}.',
+  'ORDER_CHANGE_REQUEST.SPLIT_SHIPMENT': '{customer} asks to ship what is ready of order {number} first.',
+  'ORDER_CHANGE_REQUEST.SAMPLE_ROUND': '{customer} asks for another sample round on order {number}.',
+  'ORDER_CHANGE_REQUEST.BATCH_CHANGE_one': '{customer} asks to change {count} order.',
+  'ORDER_CHANGE_REQUEST.BATCH_CHANGE_other': '{customer} asks to change {count} orders.',
+  'ORDER_CHANGE_REQUEST.BATCH_CANCEL_one': '{customer} asks to cancel {count} order.',
+  'ORDER_CHANGE_REQUEST.BATCH_CANCEL_other': '{customer} asks to cancel {count} orders.',
+  'ORDER_CHANGE_REQUEST.BATCH_RUSH_one': '{customer} asks to make {count} order urgent.',
+  'ORDER_CHANGE_REQUEST.BATCH_RUSH_other': '{customer} asks to make {count} orders urgent.',
+  'ORDER_CHANGE_REQUEST.BATCH_HOLD_one': '{customer} asks to pause {count} order.',
+  'ORDER_CHANGE_REQUEST.BATCH_HOLD_other': '{customer} asks to pause {count} orders.',
+  'ORDER_CHANGE_REQUEST.BATCH_RESUME_one': '{customer} asks to resume {count} order.',
+  'ORDER_CHANGE_REQUEST.BATCH_RESUME_other': '{customer} asks to resume {count} orders.',
+  'ORDER_CHANGE_REQUEST.BATCH_SPLIT_SHIPMENT_one': '{customer} asks to ship what is ready of {count} order first.',
+  'ORDER_CHANGE_REQUEST.BATCH_SPLIT_SHIPMENT_other': '{customer} asks to ship what is ready of {count} orders first.',
+  'ORDER_CHANGE_REQUEST.BATCH_SAMPLE_ROUND_one': '{customer} asks for another sample round on {count} order.',
+  'ORDER_CHANGE_REQUEST.BATCH_SAMPLE_ROUND_other': '{customer} asks for another sample round on {count} orders.',
+  'ORDER_CHANGE_REQUEST.AGREED': '{customer} said yes to our counter-offer on order {number}: accept the request to carry it out.',
+  'ORDER_CHANGE_REQUEST.LAPSED': 'Our counter-offer to {customer} on order {number} lapsed: answer the request.',
+  'ORDER_CHANGE_REQUEST.blocks_ask': 'The customer waits for your answer: accept it, suggest something else or refuse it, with words they read.',
+  'ORDER_CHANGE_REQUEST.blocks_agreed': 'Nothing is carried out until you accept: the counter-offer’s date replaces the one asked.',
   // B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check.
   'DELIVERY_ADDRESS.WAITING': '{customer} added a delivery address for our check: {address}.',
   'DELIVERY_ADDRESS.blocks': 'No order or shipment goes there until you approve it; accepting a request of the customer that names it approves it too.',
@@ -219,6 +244,9 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.NCR_DECISION.quality_ncr_approve': "You approve NCR decisions at this site, and someone else decided it.",
   'why.PORTAL_ORDER_REQUEST.orders_manage': "You take this customer's orders.",
   'why.ORDER_CHANGE_REQUEST.orders_manage': "You manage this customer's orders.",
+  // B-PR-26: each kind goes to the people who answer it.
+  'why.ORDER_CHANGE_REQUEST.production_brand_manage': "You answer this customer's production asks.",
+  'why.ORDER_CHANGE_REQUEST.sales_samples_manage': "You run this customer's samples.",
   'why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide': "You check suppliers' changes of their addresses and contacts.",
   'why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review': "You check the certificates, test reports and declarations suppliers send.",
   'why.DELIVERY_ADDRESS.orders_manage': "You take this customer's orders.",
@@ -440,6 +468,38 @@ export function orderChangeRequestWords(facts: { readonly number: string; readon
         : phrase('ORDER_CHANGE_REQUEST.CHANGE', { ...base, count: facts.sizes })
   return { sentence, blocks: phrase('ORDER_CHANGE_REQUEST.blocks') }
 }
+
+// ---- B-PR-26 (production plan §5 "Home › Approvals: the one place brand requests are answered"; lead pick L26: a batch is one
+// group): a customer's request of any kind, a batch of one kind as one row, a countered one that waits on us again ----------
+
+/** The kinds a customer asks (the schema's OrderChangeRequestKind). */
+export type CustomerRequestKind = 'CHANGE' | 'CANCEL' | 'RUSH' | 'HOLD' | 'RESUME' | 'SPLIT_SHIPMENT' | 'SAMPLE_ROUND'
+
+/**
+ * A customer's request waiting for us: `state` ASKED (an OPEN request), AGREED (the customer said yes to our counter-offer: we
+ * accept it to carry it out) or LAPSED (our counter-offer expired or was withdrawn: we answer it); `count` above 1 (or a
+ * batch) says the batch in one row; `needBy` a rush's need-by date.
+ */
+export function customerRequestWords(facts: {
+  readonly number: string
+  readonly customer: string
+  readonly kind: CustomerRequestKind
+  readonly state: 'ASKED' | 'AGREED' | 'LAPSED'
+  readonly sizes: number
+  readonly lines: number
+  readonly count?: number | undefined
+  readonly needBy?: BusinessDate | null | undefined
+}): RowWords {
+  const base = { number: facts.number, customer: facts.customer }
+  if (facts.state === 'AGREED') return { sentence: phrase('ORDER_CHANGE_REQUEST.AGREED', base), blocks: phrase('ORDER_CHANGE_REQUEST.blocks_agreed') }
+  if (facts.state === 'LAPSED') return { sentence: phrase('ORDER_CHANGE_REQUEST.LAPSED', base), blocks: phrase('ORDER_CHANGE_REQUEST.blocks_ask') }
+  const blocks = phrase('ORDER_CHANGE_REQUEST.blocks_ask')
+  if (facts.count !== undefined && facts.count > 1) return { sentence: phrase(`ORDER_CHANGE_REQUEST.BATCH_${facts.kind}`, { customer: facts.customer, count: facts.count }), blocks }
+  if (facts.kind === 'CHANGE' || facts.kind === 'CANCEL') return orderChangeRequestWords({ number: facts.number, customer: facts.customer, kind: facts.kind, sizes: facts.sizes, lines: facts.lines })
+  if (facts.kind === 'RUSH' && facts.needBy) return { sentence: phrase('ORDER_CHANGE_REQUEST.RUSH_BY', { ...base, needByDate: facts.needBy }), blocks }
+  return { sentence: phrase(`ORDER_CHANGE_REQUEST.${facts.kind}`, base), blocks }
+}
+// ---- end B-PR-26
 
 /** B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check (`address`: street and city). */
 export function deliveryAddressWords(facts: { readonly customer: string; readonly address: string }): RowWords {

@@ -87,13 +87,23 @@ export const ORDER_EVENTS = [
   'order_change_request.asked',
   'order_change_request.withdrawn',
   'order_change_request.answered',
+  // B-PR-26: our counter-offer and the customer's answer to it (waiting on the customer, then on us or nobody).
+  'order_change_request.countered',
+  'order_change_request.counter_answered',
   'approval_request.asked',
   'approval_request.answered',
   'approval_request.withdrawn',
   'approval_request.expired',
+  // B-PR-30a/30b: decided for the customer (it no longer waits on them), its answer put back (a refused new date no longer waits on us).
+  'approval_request.decided_for_party',
+  'approval_request.reversed',
   'deposit_request.waived',
   'production_issue.raised',
   'production_issue.answered',
+  // B-PR-28: the follow-up task of a new date the customer did not accept (only such a task names orders: ordersOfEvent).
+  'task.created',
+  'task.completed',
+  'task.changed',
 ] as const
 export const KEEPER_EVENTS: readonly string[] = Object.freeze([...ORDER_EVENTS, ...STAGE_EVENTS, ...HOLD_EVENTS])
 
@@ -388,22 +398,41 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
     case 'order_change_request.asked':
     case 'order_change_request.withdrawn':
     case 'order_change_request.answered':
+    // B-PR-26
+    case 'order_change_request.countered':
+    case 'order_change_request.counter_answered':
     case 'deposit_request.waived':
       return { orderIds: asStrings([text('orderId')]), hold: null }
     case 'order_gate.changed':
       return { orderIds: asStrings([text('salesOrderId')]), hold: null }
     case 'production_issue.answered':
       return { orderIds: asStrings([text('salesOrderId')]), hold: null }
+    // B-PR-28: a task on a sales order counts only as the follow-up of a refused new date (its id is the REPROMISE request's).
+    case 'task.created':
+    case 'task.completed':
+    case 'task.changed': {
+      const taskId = text('taskId')
+      if (text('recordType') !== 'SalesOrder' || !taskId) return { orderIds: [], hold: null }
+      const asked = await db.approvalRequest.findFirst({ where: { id: taskId, kind: 'REPROMISE', recordType: 'SalesOrder' }, select: { recordId: true } })
+      return { orderIds: asked ? [asked.recordId] : [], hold: null }
+    }
     case 'production_issue.raised':
     case 'approval_request.asked':
     case 'approval_request.answered':
     case 'approval_request.withdrawn':
-    case 'approval_request.expired': {
+    case 'approval_request.expired':
+    case 'approval_request.decided_for_party': // B-PR-30a
+    case 'approval_request.reversed': { // B-PR-30b
       const recordType = text('recordType')
       const recordId = text('recordId')
       if (!recordId) return { orderIds: [], hold: null }
       if (recordType === 'SalesOrder') return { orderIds: [recordId], hold: null }
       if (recordType === 'WorkOrder') return { orderIds: await ordersOfWorkOrders(db, [recordId]), hold: null }
+      // B-PR-26: a counter-offer is about a change request of the order (its expiry or withdrawal moves who it waits on).
+      if (recordType === 'OrderChangeRequest') {
+        const asked = await db.orderChangeRequest.findUnique({ where: { id: recordId }, select: { orderId: true } })
+        return { orderIds: asked ? [asked.orderId] : [], hold: null }
+      }
       if (recordType === 'SampleRound') {
         const gates = await db.orderGate.findMany({ where: { sampleRoundId: recordId }, select: { salesOrderId: true } })
         return { orderIds: [...new Set(gates.map((gate) => gate.salesOrderId))].sort(), hold: null }

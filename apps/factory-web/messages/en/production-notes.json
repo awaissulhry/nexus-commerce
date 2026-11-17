@@ -1,0 +1,123 @@
+{
+  "open": {
+    "row": "Office note…",
+    "selection_one": "Note to {count}…",
+    "selection_other": "Note to {count}…",
+    "ask": "Ask the supervisor",
+    "askFact": "Ask",
+    "askHint": "An office note to this work order's production supervisor: never shown to the customer."
+  },
+  "title": {
+    "ask": "Ask the supervisor · {number}",
+    "one": "Office note on {number}",
+    "workOrders_one": "Office note on {count} work order",
+    "workOrders_other": "Office note on {count} work orders",
+    "salesOrders_one": "Office note on {count} sales order",
+    "salesOrders_other": "Office note on {count} sales orders"
+  },
+  "records": {
+    "label": "The records the note is written on",
+    "showAll": "Show all {count}",
+    "showFewer": "Show fewer",
+    "customers_one": "{count} customer",
+    "customers_other": "{count} customers"
+  },
+  "on": {
+    "legend": "Write on",
+    "workOrders_one": "the work order",
+    "workOrders_other": "each work order ({count})",
+    "salesOrders_one": "its sales order ({count})",
+    "salesOrders_other": "their sales orders ({count})",
+    "noOrder": "No sales order: these work orders make none.",
+    "tooMany": "{count} sales orders: at most {max} at once.",
+    "withoutOrder_one": "{count} work order makes no sales order: no note is written for it.",
+    "withoutOrder_other": "{count} work orders make no sales order: no note is written for them."
+  },
+  "box": {
+    "mark": "Office note · never shown to a customer",
+    "label": "Office note",
+    "placeholder": "Write the note · @ mentions a colleague",
+    "supervisor": "Each record's supervisor",
+    "supervisorHint": "Each record's own production supervisor is mentioned on its note."
+  },
+  "needsAnswer": {
+    "label": "Needs an answer",
+    "hint": "A task for each record's supervisor, due in 1 working day at 08:00; overdue, it goes to the backup."
+  },
+  "people": {
+    "failed": "Who you may mention could not be read.",
+    "partial": "Who you may mention was read for some of these records only: a name may be missing from @.",
+    "retry": "Try again"
+  },
+  "check": {
+    "checking": "Checking who can read them…",
+    "failed": "Could not check who can read them.",
+    "retry": "Try again",
+    "cannotRead": "{name} cannot read {count} of {of}: not mentioned there ({records}). The note is still written.",
+    "customers": "These records belong to {count} customers. Office notes never reach a customer.",
+    "notWritable": "You cannot write on {records} (your role): they are left out.",
+    "unknown_one": "{count} of them you cannot see: counted, not written.",
+    "unknown_other": "{count} of them you cannot see: counted, not written.",
+    "noSupervisor": "No production supervisor yet on {records}: nobody is asked there.",
+    "noSupervisorTask": "No production supervisor yet on {records}: their task goes to nobody yet.",
+    "noIssue": "{records}: a work order of several customers or of none raises no question; its note is still written.",
+    "namesOther": "The text names another customer on {records}: a colleague who may read only that record's customer would read it.",
+    "namesOtherNamed": "{record} names {names}",
+    "namesOtherHint": "Change the text, or tick this when the name is no customer here.",
+    "namesOtherTick": "This text names no other customer"
+  },
+  "held": {
+    "noRight": "Your role does not write office notes.",
+    "noRecords": "There is nothing to write on.",
+    "tooMany": "{count} records: at most {max} at once.",
+    "empty": "Write the note first.",
+    "offline": "You are offline: the note waits here until the network is back.",
+    "busy": "Writing the notes…",
+    "checking": "Checking who can read them first…",
+    "checkFailed": "Who can read them could not be checked: try again first.",
+    "noneWritable": "You may write on none of these records.",
+    "namesOther": "The text names another customer: change it, or tick “This text names no other customer”."
+  },
+  "send_one": "Write on {count}",
+  "send_other": "Write on {count}",
+  "cancel": "Cancel",
+  "close": "Close",
+  "problem": {
+    "namesOther": "The text names another customer: nothing was written. Change it, or tick “This text names no other customer”.",
+    "noneFound": "None of these records was found: nothing was written.",
+    "cannotPost": "Your role does not write notes on these records: nothing was written.",
+    "notAPerson": "A person you mentioned is no longer an active office person: nothing was written.",
+    "invalid": "The note could not be written as it is.",
+    "offline": "The network is gone: nothing was written. Your text is kept: try again.",
+    "failed": "The notes could not be written. Your text is kept: try again."
+  },
+  "result": {
+    "title_one": "Written on {count} record",
+    "title_other": "Written on {count} records",
+    "none": "Nothing was written.",
+    "label": "One result per record",
+    "written": "Written",
+    "mentioned_one": "{count} mentioned",
+    "mentioned_other": "{count} mentioned",
+    "supervisorAsked": "supervisor asked",
+    "issue": "question raised",
+    "notWritten": "Not written: {why}",
+    "unknown_one": "{count} more you cannot see: counted, not named.",
+    "unknown_other": "{count} more you cannot see: counted, not named.",
+    "notMentioned": "{name} was not mentioned on {records}: cannot read them.",
+    "taskAssigned_one": "A task on {record} for its supervisor ({count} record).",
+    "taskAssigned_other": "A task on {record} for its supervisor ({count} records).",
+    "taskNobody_one": "A task on {record} ({count} record): nobody may be given it there yet.",
+    "taskNobody_other": "A task on {record} ({count} records): nobody may be given it there yet.",
+    "notRaised": "{record}: no question raised ({why})."
+  },
+  "skip": {
+    "CANNOT_POST": "your role does not write notes on this record",
+    "THREAD_CLOSED": "its thread is closed: reopen it to write a note",
+    "other": "it could not be written"
+  },
+  "issue": {
+    "noCustomer": "a work order of several customers or of none",
+    "other": "none here"
+  }
+}

@@ -22,6 +22,9 @@ export const BOARD_VIEWS = ['resources', 'orders'] as const
 export type BoardViewKind = (typeof BOARD_VIEWS)[number]
 export const WO_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
 export const NOT_READY = new Set(['NOT_ENOUGH', 'DELAYED'])
+/** F-PR-18: the order of the tray and of the orders view — the plan's, or the customer's urgency first (each customer's own places). */
+export const BOARD_SORTS = ['plan', 'urgency'] as const
+export type BoardSort = (typeof BOARD_SORTS)[number]
 
 // ---- the address ---------------------------------------------------------------------------------------------------
 
@@ -46,6 +49,8 @@ export interface BoardControls {
   wo: string | null
   /** B-W2b-337: the planner's private what-if scenario being tried (design sec:whatif); null = what-if off. */
   whatIf: string | null
+  /** F-PR-18: the order of the tray and the orders view (`?sort=urgency`; the plan's by default). Nothing moves by it. */
+  sort: BoardSort
 }
 
 export const DEFAULT_CONTROLS: BoardControls = Object.freeze({
@@ -62,6 +67,7 @@ export const DEFAULT_CONTROLS: BoardControls = Object.freeze({
   materialMark: true,
   wo: null,
   whatIf: null,
+  sort: 'plan', // F-PR-18
 })
 
 const list = (value: string | null | undefined): string[] => (value ? value.split(',').map((part) => part.trim()).filter(Boolean) : [])
@@ -88,6 +94,7 @@ export function controlsOf(params: { get(name: string): string | null } | null |
     materialMark: marks ? marks.has('material') : true,
     wo: get('wo'),
     whatIf: get('whatif'),
+    sort: get('sort') === 'urgency' ? 'urgency' : 'plan', // F-PR-18
   }
 }
 
@@ -106,6 +113,7 @@ export function queryOf(controls: BoardControls): string {
   if (!controls.late || !controls.materialMark) query.set('hl', [controls.late ? 'late' : null, controls.materialMark ? 'material' : null].filter(Boolean).join(','))
   if (controls.wo) query.set('wo', controls.wo)
   if (controls.whatIf) query.set('whatif', controls.whatIf)
+  if (controls.sort !== 'plan') query.set('sort', controls.sort) // F-PR-18
   return query.toString()
 }
 
@@ -283,6 +291,9 @@ function marksOf(workOrder: BoardWorkOrder, slot: BoardSlot | null, controls: Bo
   const { t, locale } = words
   const marks: PlanningMark[] = []
   if (workOrder.rush) marks.push({ label: t('mark.rush'), tone: 'info' })
+  // F-PR-18: the customer's own urgency ("Customer urgency: Urgent 2"): its place in its customer's OWN list, never in our plan.
+  const urgency = customerUrgencyMark(workOrder, words)
+  if (urgency) marks.push(urgency)
   if (controls.materialMark && isMaterialShort(workOrder)) {
     marks.push({ label: workOrder.readiness?.date ? t('mark.materialFrom', { date: dayWords(workOrder.readiness.date, locale, false) }) : t('mark.material'), tone: 'warning' })
   }
@@ -344,7 +355,12 @@ export function drawBoard(board: Board, controls: BoardControls, words: Words, m
   const buckets = bucketsOf(board, words)
   const kept = keptWorkOrders(board, controls)
   const byId = new Map(board.workOrders.map((workOrder) => [workOrder.id, workOrder]))
-  const tray = board.tray.filter((entry) => kept.has(entry.workOrderId) && byId.has(entry.workOrderId)).map((entry) => trayCard(entry, byId.get(entry.workOrderId)!, controls, words))
+  // F-PR-18: Customer urgency first — each customer's urgent work orders take that customer's own places (the brand-slot rule).
+  const order = <T>(items: readonly T[], workOrderOf: (item: T) => BoardWorkOrder): T[] => (controls.sort === 'urgency' ? urgencyFirst(items, workOrderOf) : [...items])
+  const tray = order(
+    board.tray.filter((entry) => kept.has(entry.workOrderId) && byId.has(entry.workOrderId)),
+    (entry) => byId.get(entry.workOrderId)!,
+  ).map((entry) => trayCard(entry, byId.get(entry.workOrderId)!, controls, words))
   const slotCards = (laneOf: (slot: BoardSlot, workOrder: BoardWorkOrder) => string | null) =>
     board.slots.flatMap((slot) => {
       const workOrder = byId.get(slot.workOrderId)
@@ -354,7 +370,10 @@ export function drawBoard(board: Board, controls: BoardControls, words: Words, m
       return place && laneId ? [slotCard(slot, workOrder, place, laneId, controls, words, me)] : []
     })
   if (controls.view === 'orders') {
-    const orders = board.workOrders.filter((workOrder) => kept.has(workOrder.id) && workOrder.schedule.status !== 'DONE')
+    const orders = order(
+      board.workOrders.filter((workOrder) => kept.has(workOrder.id) && workOrder.schedule.status !== 'DONE'),
+      (workOrder) => workOrder,
+    )
     const lanes: PlanningLane[] = orders.map((workOrder) => ({
       id: orderLaneOf(workOrder.id),
       label: workOrder.number,
@@ -366,6 +385,46 @@ export function drawBoard(board: Board, controls: BoardControls, words: Words, m
   const shown = new Set(lanes.map((lane) => lane.id))
   return { lanes, buckets, cards: [...slotCards((slot) => (shown.has(laneKeyOf(slot.lane)) ? laneKeyOf(slot.lane) : null)), ...tray] }
 }
+
+// ---- F-PR-18: the customer's urgency on the board ------------------------------------------------------------------------------
+
+/** The chip of a work order whose customer marked its order Urgent (and whose urgency switch is on); none otherwise. */
+export function customerUrgencyMark(workOrder: Pick<BoardWorkOrder, 'customerUrgency'>, { t }: Pick<Words, 't'>): PlanningMark | null {
+  const urgency = workOrder.customerUrgency
+  if (!urgency) return null
+  const rank = urgency.urgentRank
+  return { label: rank !== null && rank > 0 ? t('mark.customerUrgency', { rank }) : t('mark.customerUrgencySome'), tone: 'info' }
+}
+
+/**
+ * The tray's and the orders view's order with the customer's urgency (production plan §3 "Brand-slot rule"; lead picks L19, R-40), as
+ * the backlog orders it: the plan's order stays the frame; per customer and per office level (our rush and priority: the office's
+ * level always wins), that customer's urgent work orders (by their place in the customer's own list) take the earliest places its
+ * own work orders already hold there, its others follow as they stood. Another customer's places, and a work order of no one
+ * customer, never move. A view only: no bar moves, nothing is saved, the floor sees a new order only after Publish.
+ */
+export function urgencyFirst<T>(items: readonly T[], workOrderOf: (item: T) => Pick<BoardWorkOrder, 'customer' | 'customerUrgency' | 'rush' | 'priority'>): T[] {
+  const groups = new Map<string, number[]>()
+  items.forEach((item, index) => {
+    const workOrder = workOrderOf(item)
+    if (!workOrder.customer) return
+    const key = `${workOrder.rush ? 1 : 0}|${workOrder.priority}|${workOrder.customer.id}`
+    groups.set(key, [...(groups.get(key) ?? []), index])
+  })
+  const out = [...items]
+  const rankOf = (item: T) => workOrderOf(item).customerUrgency?.urgentRank ?? Number.MAX_SAFE_INTEGER
+  for (const places of groups.values()) {
+    const urgent = places.filter((index) => workOrderOf(items[index]!).customerUrgency).sort((a, b) => rankOf(items[a]!) - rankOf(items[b]!) || a - b)
+    if (urgent.length === 0) continue
+    const rest = places.filter((index) => !workOrderOf(items[index]!).customerUrgency)
+    const refilled = [...urgent, ...rest]
+    places.forEach((place, k) => {
+      out[place] = items[refilled[k]!]!
+    })
+  }
+  return out
+}
+// ---- end F-PR-18
 
 const t2 = ({ t, locale }: Words, workOrder: BoardWorkOrder) =>
   t('lane.order', { style: workOrder.style.name, pieces: number(workOrder.garments, locale), status: t(`status.${workOrder.schedule.status}`) })

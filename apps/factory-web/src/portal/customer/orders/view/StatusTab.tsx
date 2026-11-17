@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ArrowUpRight, CheckCircle2, Clock, History, Hourglass } from 'lucide-react'
-import { Banner, Card, ChangeReview, DetailPopover, Disclosure, KeyValue, ProgressBar, type KeyValueItem } from '@nexus/ui/components'
+import { Banner, Card, ChangeReview, DetailPopover, Disclosure, KeyValue, ProgressBar, SummaryTable, type KeyValueItem } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
@@ -20,6 +20,12 @@ import { WaitingOnPill } from '../../../../lib/production/view/WaitingOnPill'
 import type { ProductionOrder } from '../../production/api'
 import { healthInputOf, holdsOf, stageNoteOf, waitingInputOf } from '../../production/model'
 // ---- end F-PR-12a
+// ---- F-PR-12b: + Progress (per line and size, the shared PiecesGrid) and + Gates & dates, by the customer's level
+import { FreshnessLine } from '../../../../lib/production/view/FreshnessLine'
+import { PiecesGrid } from '../../../../lib/production/view/PiecesGrid'
+import type { ProductionGates } from '../../production/api'
+import { APPROVAL_STATE_TONE, GATE_STATE_TONE, gatesEmpty, gatesWaitOnYou, piecesOf, productionOwnsProgress } from '../../production/model'
+// ---- end F-PR-12b
 
 /**
  * Order › Status & progress (design rec "Order" tab status): "Please re-confirm" when a revised version waits (SAL-222), where
@@ -33,6 +39,12 @@ import { healthInputOf, holdsOf, stageNoteOf, waitingInputOf } from '../../produ
  * the plain stage as the note of the "In production" step (+ the count from + Progress), the promise and its moves (as before),
  * the health chip with its reason code and who acts next (You / Us). Its requests keep their true states. A section the
  * customer's level does not share, or an order not in production, is not drawn.
+ *
+ * F-PR-12b, part 2, by level: + Gates & dates — its real gates (PP sample, size set, sample, leather, trims, lab) with their planned
+ * and done days, its swatch answers (colour, leather, fabric, trims) as approvals, not gates, and the cut, sewing and finish days of
+ * its own work from our PUBLISHED plan only; + Progress — the pieces per line and size of its own cells (the shared PiecesGrid:
+ * "Cut and bundled", "—" where a stage is not counted, never 0), read again every `refreshSeconds` and said as such. While the
+ * order's production read draws them, today's progress card (C1) is not drawn a second time.
  */
 export function StatusTab({ model, record, actions }: { model: OrderRecordViewModel; record: OrderRecord; actions?: OrderRecordActions }) {
   const production = model.production?.state === 'ready' ? model.production.read : null // F-PR-12a
@@ -46,7 +58,10 @@ export function StatusTab({ model, record, actions }: { model: OrderRecordViewMo
       <StateLine model={model} record={record} />
       <Tracker model={model} record={record} actions={actions} />
       <Requests model={model} actions={actions} />
-      {record.progressShared && model.progress.state !== 'hidden' ? <Progress model={model} actions={actions} /> : null}
+      {/* F-PR-12b: gates & dates, then the pieces, each only at the level that shares it (null: not drawn). */}
+      {production?.gates ? <ProductionGatesCard gates={production.gates} href={model.waitingHref ?? null} /> : null}
+      {production?.progress ? <ProductionProgress progress={production.progress} offline={model.offlineSince !== null} /> : null}
+      {!productionOwnsProgress(model.production) && record.progressShared && model.progress.state !== 'hidden' ? <Progress model={model} actions={actions} /> : null}
       {record.deposits.length > 0 && record.seesPrices ? <Deposits model={model} deposits={record.deposits} depositRequired={record.order.depositRequired} actions={actions} /> : null}
       <Facts record={record} />
     </div>
@@ -279,6 +294,98 @@ function ProductionFacts({ read }: { read: ProductionOrder }) {
   )
 }
 // ---- end F-PR-12a
+
+// ---- F-PR-12b ------------------------------------------------------------------------------------------------------------------
+/**
+ * + Gates & dates (06-tree B.2 P-ORD-gates): its real gates with their state in our words ("Waiting on you", "Waiting on us",
+ * "Passed", "Started before approval"), the day planned and the day done; its swatch answers as approvals; its own work's days
+ * from our published plan. "See what waits for you" while one of them waits on it. Nothing at all: said in one line.
+ */
+function ProductionGatesCard({ gates, href }: { gates: ProductionGates; href: string | null }) {
+  const { t, locale, day } = useOrderWords()
+  const dayOr = (value: string | null) => (value ? day(value) : '—')
+  const review = href && gatesWaitOnYou(gates) ? href : null
+  const planned = gates.planned
+  const anyPlanned = Boolean(planned.cutStart || planned.sewStart || planned.finish)
+  return (
+    <Card
+      header={t('production.gates.title')}
+      headingLevel={2}
+      headerAction={
+        review ? (
+          <Button asChild size="sm">
+            <a href={review}>{t('production.gates.review')}</a>
+          </Button>
+        ) : null
+      }
+    >
+      {gatesEmpty(gates) ? (
+        <p className="fw-pord-hint">{t('production.gates.none')}</p>
+      ) : (
+        <div className="fw-pord-stack">
+          {gates.gates.length > 0 ? (
+            <SummaryTable
+              label={t('production.gates.label')}
+              columns={[t('production.gates.step'), t('production.gates.state'), t('production.gates.planned'), t('production.gates.done')]}
+              widths={['34%', '30%', undefined, undefined]}
+              stackOnPhone
+              rows={gates.gates.map((gate, index) => ({
+                id: `${gate.kind}-${index}`,
+                cells: [gate.words[locale], <Pill key="state" tone={GATE_STATE_TONE[gate.state]}>{t(`production.gates.states.${gate.state}`)}</Pill>, dayOr(gate.targetDate), dayOr(gate.doneOn)],
+              }))}
+            />
+          ) : null}
+          {gates.approvals.length > 0 ? (
+            <SummaryTable
+              label={t('production.approvals.label')}
+              columns={[t('production.approvals.material'), t('production.gates.state'), t('production.approvals.sent'), t('production.approvals.answered')]}
+              widths={['34%', '30%', undefined, undefined]}
+              stackOnPhone
+              rows={gates.approvals.map((answer, index) => ({
+                id: `${answer.kind}-${index}`,
+                cells: [answer.words[locale], <Pill key="state" tone={APPROVAL_STATE_TONE[answer.state]}>{t(`production.approvals.states.${answer.state}`)}</Pill>, dayOr(answer.sentOn), dayOr(answer.answeredOn)],
+              }))}
+            />
+          ) : null}
+          <section className="fw-pord-stack" aria-label={t('production.planned.label')}>
+            {anyPlanned ? (
+              <>
+                <KeyValue
+                  columns={3}
+                  phoneColumns={1}
+                  labelCase="sentence"
+                  items={[
+                    { label: t('production.planned.cutStart'), value: dayOr(planned.cutStart) },
+                    { label: t('production.planned.sewStart'), value: dayOr(planned.sewStart) },
+                    { label: t('production.planned.finish'), value: dayOr(planned.finish) },
+                  ]}
+                />
+                <p className="fw-pord-hint">{t('production.planned.hint')}</p>
+              </>
+            ) : (
+              <p className="fw-pord-hint">{t('production.planned.none')}</p>
+            )}
+          </section>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * + Progress (06-tree B.2 P-ORD-progress): per line, Cut and bundled · Sewn · Checked · Packed as bars from one figure each, the
+ * sizes under them (the shared PiecesGrid; "—" where the site does not count a stage). The read comes again every
+ * `refreshSeconds` (OrderPage), so the line says "Updated 10:42 · refreshes every minute" — not "live": no scan is pushed (R7).
+ */
+function ProductionProgress({ progress, offline }: { progress: NonNullable<ProductionOrder['progress']>; offline: boolean }) {
+  const { t } = useOrderWords()
+  return (
+    <Card header={t('progress.title')} headingLevel={2} headerAction={<FreshnessLine mode={offline ? 'offline' : 'polling'} asOf={progress.asOf} everySeconds={progress.refreshSeconds} />}>
+      <PiecesGrid colourways={piecesOf(progress, t)} />
+    </Card>
+  )
+}
+// ---- end F-PR-12b
 
 function Requests({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
   const words = useOrderWords()

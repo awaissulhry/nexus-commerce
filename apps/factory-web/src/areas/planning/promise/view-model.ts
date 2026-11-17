@@ -44,6 +44,10 @@ export interface RepromiseDialog {
   readonly problem: { key: string; sizes: readonly number[] } | null
   /** What happened (the modal shows it and offers Close). */
   readonly done: { kind: 'proposed' | 'accepted' | 'declined' | 'withdrawn'; proposal: Proposal; answer?: AcceptAnswer } | null
+  /** F-PR-20: sales' word asks the customer to accept the new date (B-PR-28 `askBrand`; off by default). */
+  readonly askBrand?: boolean
+  /** F-PR-20: the line's proposal its task opened, when it no longer waits — shown with the customer's answer. */
+  readonly opened?: Proposal | null
 }
 
 /** The Promise calculator: the style list, the chosen style, the form, the answer; a quote's suggestion when opened from one. */
@@ -106,6 +110,9 @@ export interface PromiseActions {
   onDate?: (sizeKey: string, date: string) => void
   onPropose?: () => void
   onTell?: (tell: boolean) => void
+  /** F-PR-20: the "Ask the customer" switch, and Copy of the customer's link shown once. */
+  onAskBrand?: (askBrand: boolean) => void
+  onCopyLink?: (url: string) => void
   onAccept?: () => void
   onDeclining?: (declining: boolean) => void
   onDeclineReason?: (reason: string) => void

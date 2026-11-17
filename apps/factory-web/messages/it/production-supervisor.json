@@ -1,0 +1,79 @@
+{
+  "fact": {
+    "label": "Supervisore {name}",
+    "from": {
+      "ORDER": "questo ordine",
+      "BRAND": "predefinito del cliente"
+    },
+    "notSet": "Supervisore: non impostato",
+    "inactive": "non più attivo",
+    "muted": "Hai silenziato questo ordine",
+    "mutedHint": "Un ordine silenziato resta silenziato: i suoi messaggi ti arrivano di nuovo solo quando riattivi le notifiche nella sua conversazione.",
+    "change": "Cambia…"
+  },
+  "mark": {
+    "ME": "Io",
+    "SOMEONE_ELSE": "Un'altra persona",
+    "NOT_SET": "Non impostato"
+  },
+  "dialog": {
+    "titleOne": "Supervisore di produzione di {number}",
+    "titleMany": "Supervisore di produzione per {count} ordini",
+    "orderWithPo": "{number} (ordine cliente {po})",
+    "showAll": "Mostra tutti ({count})",
+    "showFewer": "Mostra meno",
+    "customers_one": "{count} cliente",
+    "customers_other": "{count} clienti",
+    "leftOut_one": "{count} ordine di produzione non ha un solo cliente: il suo supervisore non si imposta qui.",
+    "leftOut_other": "{count} ordini di produzione non hanno un solo cliente: il loro supervisore non si imposta qui.",
+    "now": "Ora: {name} · {from}",
+    "nowNone": "Ora: ogni ordine segue il proprio supervisore o il predefinito del suo cliente.",
+    "me": "Io ({name})",
+    "default": "Predefinito del cliente — toglie quello proprio dell'ordine",
+    "listLabel": "Persone che possono supervisionare questi ordini",
+    "search": "Cerca persone…",
+    "reading": "Lettura di chi può supervisionare…",
+    "nobody": "Nessuno può ancora essere supervisore qui. Un supervisore deve essere attivo, ammesso sul cliente e avere il permesso misure.",
+    "nobodyMany": "Nessuno può essere supervisore di tutti questi ordini. Un supervisore deve essere attivo, ammesso su ogni cliente della selezione e avere il permesso misure.",
+    "partial": "Potrebbe mancare qualcuno: l'elenco contiene le prime 500 persone.",
+    "busy": "Impostazione del supervisore…",
+    "hint": "Il supervisore segue la conversazione dell'ordine e quelle dei suoi ordini di produzione. Al cliente non si dice chi è."
+  },
+  "result": {
+    "label": "Un risultato per ordine",
+    "person": "Ora li supervisiona {name}.",
+    "default": "Seguono di nuovo il predefinito del loro cliente.",
+    "changed": "Fatto",
+    "unchanged": "Già così",
+    "notDone": "Non fatto: {why}",
+    "unknown_one": "{count} altro ordine non è stato cambiato.",
+    "unknown_other": "Altri {count} ordini non sono stati cambiati."
+  },
+  "skip": {
+    "noRight": "il tuo ruolo non imposta il supervisore di produzione di questo ordine.",
+    "notInProduction": "questo ordine non è più in produzione.",
+    "noState": "questo ordine non ha ancora uno stato di produzione: riprova tra poco.",
+    "NOT_OFFICE": "solo una persona dell'ufficio può supervisionare la produzione.",
+    "NOT_ACTIVE": "questa persona non è più attiva.",
+    "NO_REACH": "questa persona non può lavorare sulla produzione di questo cliente.",
+    "NO_MEASUREMENTS": "questa persona non può aprire le schede misure, e un supervisore deve poterlo fare.",
+    "NO_THREAD": "questa persona non può leggere le conversazioni degli ordini di questo cliente, e il supervisore risponde lì.",
+    "other": "non cambiato."
+  },
+  "problem": {
+    "failed": "Impossibile impostare il supervisore: riprova.",
+    "invalid": "Questa persona non può essere il supervisore qui: non è cambiato nulla.",
+    "notFound": "Nessuno di questi ordini è tra quelli che puoi cambiare.",
+    "forbidden": "Non puoi impostare il supervisore di questi ordini.",
+    "offline": "Nessuna connessione: non è stato inviato nulla. Riprova.",
+    "people": "Impossibile leggere chi può supervisionare."
+  },
+  "held": {
+    "noRight": "Impostare un supervisore di produzione richiede il permesso di gestire la produzione dei clienti.",
+    "noCustomerOrder": "Questi ordini di produzione non hanno un solo ordine cliente: non c'è un supervisore da impostare.",
+    "nothing": "Seleziona prima degli ordini di produzione.",
+    "tooMany": "{count} ordini: al massimo {max} alla volta."
+  },
+  "close": "Chiudi",
+  "retry": "Riprova"
+}
