@@ -333,6 +333,7 @@ describe('B-PR-18 My production (GET /portal/production)', { timeout: SLOW_TEST_
   it('reads the keeper’s row (stage, health raised with its reason code, You/Us, marks, the lock in our words) and the order with no row live', async () => {
     const list = await get('beta', '/portal/production')
     const [second, first] = list.items as Json[]
+    if (!first || !second) throw new Error(`B lists both its orders: ${JSON.stringify(list.items).slice(0, 300)}`)
     // No production row yet: the stage read live, no since, no health, waiting on us; Regular.
     expect(second).toMatchObject({ stage: { code: 'PREPARING', since: null }, health: null, waiting: { code: 'US' }, urgency: { code: 'REGULAR', urgentRank: null, locked: false, byUs: false } })
     expect(second.pieces).toBe(6)

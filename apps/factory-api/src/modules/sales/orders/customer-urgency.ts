@@ -1,5 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import type { Reader } from './store'
+// B-PR-22b: the production lane's reader (it imports nothing of the API but types: no cycle back into this module).
+import { customerUrgencySource } from '../../production/brand/urgency-of'
 
 /**
  * B-TH-059 (threads plan TH-4; agreement T10 with the production lane, 00-production-lane-agreements.md): Sales › Orders'
@@ -42,3 +44,9 @@ export async function orderCustomerUrgency(db: Reader, orderIds: readonly string
 export function customerUrgencyWhere(urgency: CustomerUrgency): Prisma.SalesOrderWhereInput {
   return source ? source.where(urgency) : { id: { in: [] } }
 }
+
+// ── B-PR-22b (agreement T10): the production lane registers its reader here, once, when Sales › Orders loads — so every process
+// that reads the orders (the API, the worker's files) has it. It names the urgency that counts (the order in production, its
+// customer's switch on); a test may still put a fake in its place and take it away (`useCustomerUrgency`).
+useCustomerUrgency(customerUrgencySource)
+// ── end B-PR-22b ──
