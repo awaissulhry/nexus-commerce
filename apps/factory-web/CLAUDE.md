@@ -562,6 +562,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (band ⋯ and the supervisor fact's Ask) and Note to N (Work orders: row ⋯, "Note to N…" ≤ 100): the threads MentionInput (people read
   once per customer + company), `POST /production/notes/check` before Send (who cannot read, customers, the other-customer hold until
   the tick), ONE `POST /production/notes`, one result per record (the rest counted); the bell's batch row "mentioned you on N orders".
+- F-PR-05b `src/areas/production/work-orders/record/customer/` (catalogue `production` `customerCard.*`, the level and section words
+  `portal-access`; CSS `fw-pcc-`) — the work order record's Customer card on Overview, one block per customer of the work order (PW-07):
+  its requests (`GET /production/brand-requests?orderId=`, Answer in Approvals = `/home/approvals?open=<id>`), what we asked it to
+  approve (`GET /approvals-out?recordType=SalesOrder`), Customer urgency (`GET /production/brands/:partyId/urgency`; Set to regular… /
+  Lock… / Unlock… = `POST /production/brand-orders/urgency/regular|unlock` behind the page's one step-up, no second person), the
+  supervisor fact, open problems (`GET /production/issues?partyId=`, the work order's and its orders' only; Open thread docks it), limits
+  and what it sees (`GET /partners/:id/production`) and Open as <customer>. `work-orders/daily/`: ONE "Put on hold" dialog for the record
+  and the list's Hold N — the picked reason's list decides a quality hold (`/quality/holds`) or a plain production hold (B-PR-21's
+  `/production/work-orders/…/holds`, workorders.hold, the customer's words); the holds card shows both kinds; Release the hold opens what
+  the work order is held under (`releaseTargetOf`).
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

@@ -202,7 +202,7 @@ describe('the design screens draw in both languages with no key left on screen',
     // The keys built from a value (grid cells draw only in a browser).
     for (const mode of ['FREE', 'WARN', 'STRICT']) for (const rule of ['sequence', 'quantity']) for (const part of ['label', 'body']) keys.add(`fr.checks.${rule}.${mode}.${part}`)
     for (const mode of ['ONE_CODE', 'COUPON_PER_OPERATION']) for (const part of ['title', 'body']) keys.add(`fr.coupons.${mode}.${part}`)
-    for (const list of ['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL']) keys.add(`fr.full.list.${list}`)
+    for (const list of ['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', /* F-PR-05b */ 'PRODUCTION_HOLD', 'CANCEL']) keys.add(`fr.full.list.${list}`)
     for (const kind of ['OFF_STANDARD', 'INDIRECT']) keys.add(`fr.off.kind.${kind}`).add(`fr.off.kindHint.${kind}`)
     for (const rule of ['AVERAGE', 'BASE', 'UNPAID']) keys.add(`fr.off.pay.${rule}`).add(`fr.off.payHint.${rule}`)
     for (const field of ['needsApproval', 'active']) for (const part of ['on', 'off', 'label']) keys.add(`fr.off.${field}.${part}`).add(`fr.off.col.${field}`)

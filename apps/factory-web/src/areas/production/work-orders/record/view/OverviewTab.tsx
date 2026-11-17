@@ -24,6 +24,8 @@ import { GatesCard } from '../gates/view/GatesCard'
 import { HealthCard } from '../health/view/HealthCard'
 import { ProgressTable } from '../overview/view/ProgressTable'
 // ---- end F-PR-05a
+// F-PR-05b: the Customer card (one block per customer of the work order).
+import { CustomerCard } from '../customer/view/CustomerCard'
 
 /**
  * Overview & release (design wo-release, wo-frozen, wo-facts, wo-sizes-mini): a draft's release check (each condition
@@ -33,6 +35,7 @@ import { ProgressTable } from '../overview/view/ProgressTable'
  * the material readiness, a door to Materials) · ONE progress table (the 6-way layer switch went: Ordered · Cut · In bundles · Sewn
  * · Finished · Still to finish per colourway × size) · holds as today · Health (the customer's chip, a person's raise with the
  * office's note, Raise to At risk) · facts (customer, sales order and due moved to the band).
+ * F-PR-05b: the holds card shows quality and production holds (one "Put on hold" dialog); the Customer card sits before the facts.
  */
 export function OverviewTab({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   // F-PR-05a: the readiness line sits in Gates & readiness when that card is drawn (planning.view, an order), else where it was.
@@ -46,6 +49,8 @@ export function OverviewTab({ workOrder, model, actions }: { workOrder: WorkOrde
       {/* B-W2a-46 (wo-side "holds (W2a)"): the work order's holds, Put on hold / Release the hold. */}
       {model.daily && <HoldsCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} />}
       {model.health && <HealthCard model={model.health} daysLate={workOrder.daysLate} actions={actions?.health} />}
+      {/* F-PR-05b (06-tree A.4 O-WO-brand): what the customer asked, what we asked it, its urgency, supervisor, problems, limits. */}
+      {model.customerCard && <CustomerCard workOrder={workOrder} model={model} card={model.customerCard} actions={actions} />}
       <FactsCard workOrder={workOrder} model={model} actions={actions} />
     </div>
   )

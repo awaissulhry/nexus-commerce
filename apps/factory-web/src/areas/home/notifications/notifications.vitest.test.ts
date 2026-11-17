@@ -203,6 +203,13 @@ describe('a notification in the person’s language (PLT-152)', () => {
     }
   })
 
+  // F-PR-05b: a reported problem and an issue going up name the customer ({customer}) and no person.
+  it('a reported problem and an issue going up: the customer by name, the order, no person', () => {
+    const problem = { ...base, messageKey: 'notifications.production.problemReported', params: { customer: 'Brand Alpha', count: 1 }, actor: null }
+    expect(sentenceWords(problem, en, 'en')).toBe('Brand Alpha reported a problem on SO-1: answer in the order’s thread')
+    expect(sentenceWords({ ...problem, messageKey: 'notifications.production.issueEscalatedOwner' }, it_, 'it')).toBe('Senza risposta da 2 giorni lavorativi su SO-1 (Brand Alpha): ora tocca al titolare e all’amministratore')
+  })
+
   it('people by id, a decision in words, an unknown key as "News on"; the system when nobody caused it', () => {
     expect(sentenceWords(base, en, 'en')).toBe('Ada mentioned you on SO-1')
     expect(sentenceWords(base, it_, 'it')).toBe('Ada ti ha menzionato su SO-1')

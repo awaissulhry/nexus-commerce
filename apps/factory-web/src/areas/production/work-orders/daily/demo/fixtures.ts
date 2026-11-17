@@ -2,7 +2,7 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import type { PickerReason } from '../../../../_shared/reasons/api'
 import type { ReleaseCheck, WorkOrder } from '../../../_shared/api'
 import { releaseCheck, workOrder } from '../../../_shared/fixtures'
-import type { Availability, Finished, Hold, HoldRecord, ReadinessRow, ScrapRow, Yield } from '../api'
+import type { Availability, Finished, Hold, HoldRecord, ProductionHolds, ReadinessRow, ScrapRow, WorkOrderHold, Yield } from '../api'
 import { dailyCan, NO_DAILY, type DailyCan, type DailyModel } from '../model'
 
 /**
@@ -32,6 +32,58 @@ export const HOLD_REASONS: PickerReason[] = [
 ]
 
 const WO = workOrder('IN_PROGRESS')
+
+// ---- F-PR-05b: the plain production hold (B-PR-21) beside the quality hold — its reasons, a hold of ours, a customer's pause ------
+
+const productionReason = (n: number, code: string, labelIt: string, labelEn: string, needsDetail = false): PickerReason => ({ id: uid('4848', n), list: 'PRODUCTION_HOLD', code, labelIt, labelEn, labelI18n: {}, icon: null, colour: null, needsDetail, sortOrder: n * 10 })
+export const PRODUCTION_HOLD_REASONS: PickerReason[] = [
+  productionReason(1, 'MATERIAL_MISSING', 'Materiale mancante', 'Material missing'),
+  productionReason(2, 'TECHNICAL_QUESTION', 'Domanda tecnica aperta', 'Open technical question'),
+  productionReason(3, 'OTHER', 'Altro', 'Other', true),
+]
+
+const plainHold = (n: number, over: Partial<WorkOrderHold> = {}): WorkOrderHold => ({
+  id: uid('4949', n),
+  workOrderId: WO.id,
+  kind: 'PRODUCTION',
+  status: 'ACTIVE',
+  reasonCode: 'MATERIAL_MISSING',
+  reason: 'Material missing',
+  note: 'Fodera rossa non arrivata dal fornitore',
+  brandWords: null,
+  customerReads: 'Material missing',
+  requestId: null,
+  placedAt: at(29, 8, 40),
+  placedBy: { id: uid('5151', 8), name: 'Bea Esempio' },
+  liftedAt: null,
+  liftedBy: null,
+  liftReason: null,
+  version: 1,
+  ...over,
+})
+/** Ours: a material missing, with the office's note and the words the customer reads. */
+export const PLAIN_HOLD: WorkOrderHold = plainHold(1, { brandWords: 'A lining is late from our supplier', customerReads: 'A lining is late from our supplier' })
+/** The customer's accepted pause (its HOLD ask). */
+export const CUSTOMER_PAUSE: WorkOrderHold = plainHold(2, { kind: 'BRAND', reasonCode: 'CUSTOMER_PAUSE', reason: 'Paused at your request', note: null, customerReads: 'Paused at your request', requestId: uid('5050', 1), placedAt: at(29, 11) })
+/** One lifted last week. */
+export const LIFTED_HOLD: WorkOrderHold = plainHold(3, { reasonCode: 'TECHNICAL_QUESTION', reason: 'Open technical question', note: null, customerReads: 'Open technical question', status: 'LIFTED', placedAt: at(20, 9), liftedAt: at(21, 16), liftedBy: { id: uid('5151', 8), name: 'Bea Esempio' }, liftReason: 'Pattern question answered by the customer' })
+
+/** The work order's plain holds as GET /production/work-orders/:id/holds answers (its status from the first standing one). */
+export function plainHolds(holds: readonly WorkOrderHold[], qualityHoldsActive = 0): ProductionHolds {
+  const standing = holds.find((hold) => hold.status === 'ACTIVE') ?? null
+  return {
+    workOrder: { id: WO.id, number: WO.number, status: standing ? 'ON_HOLD' : 'IN_PROGRESS', version: 5, hold: standing ? { reason: standing.reason, at: standing.placedAt, fromStatus: 'IN_PROGRESS', recordType: 'WorkOrderHold', recordId: standing.id } : null },
+    holds: [...holds],
+    qualityHoldsActive,
+  }
+}
+
+/** The work order ON_HOLD under a plain hold (ours, or the customer's pause). */
+export function plainHeldWorkOrder(hold: WorkOrderHold = PLAIN_HOLD): WorkOrder {
+  const base = workOrder('IN_PROGRESS')
+  return { ...base, status: 'ON_HOLD', nextActions: [], hold: { reason: hold.reason, at: hold.placedAt, fromStatus: 'IN_PROGRESS', recordType: 'WorkOrderHold', recordId: hold.id } }
+}
+// ---- end F-PR-05b
 
 export const HOLD: Hold = {
   id: uid('4747', 1),
@@ -180,7 +232,9 @@ export function dailyDemo(role: DailyRole, over: Partial<DailyModel> = {}): Dail
     ...NO_DAILY(can),
     holds: can.holdsView ? { value: [], problem: null } : null,
     bundleHolds: can.holdsView ? [] : null,
-    reasons: HOLD_REASONS,
+    // F-PR-05b: the one dialog offers both lists (each kind with its right); the work order's plain holds are read.
+    reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS],
+    productionHolds: { value: plainHolds([]), problem: null },
     readiness: { value: READINESS, problem: null },
     finished: { value: FINISHED, problem: null },
     yield: { value: YIELD, problem: null },

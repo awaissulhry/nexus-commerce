@@ -1,0 +1,17 @@
+/* F-PR-05b — the Customer card on the work order's Overview (semantic tokens only; the rows reuse fw-pr-*). */
+.fw-pcc-rows {
+  gap: var(--nds-space-6);
+}
+
+.fw-pcc-rows > li + li {
+  padding-top: var(--nds-space-6);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pcc-tight {
+  gap: var(--nds-space-4);
+}
+
+.fw-pcc-excerpt {
+  overflow-wrap: anywhere;
+}

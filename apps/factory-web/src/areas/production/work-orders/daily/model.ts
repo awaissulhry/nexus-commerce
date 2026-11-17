@@ -3,7 +3,10 @@ import { wordsIn } from '../../../_shared/reasons/model'
 import type { StepUpState } from '../../../quality/_shared/hooks'
 import type { BundleRow, PickList, ReadinessWord, WorkOrder, WorkOrderBundles, WorkOrderStatus } from '../../_shared/api'
 import type { Phrase } from '../../_shared/model'
-import type { Availability, Finished, Hold, HoldRecord, ReadinessRow, ScrapRow, SplitReason, Yield } from './api'
+import type { Availability, Finished, Hold, HoldRecord, ProductionHolds, ReadinessRow, ScrapRow, SplitReason, Yield, WorkOrderHold } from './api'
+// F-PR-05b: ONE "Put on hold" dialog — the picked reason's list decides the kind (a quality hold or a plain production hold, B-PR-21).
+import { holdKindOfList, type HoldDialogKind } from '@nexus/factory-domain/production/holds/rules'
+import { HOLD_BRAND_WORDS_MAX, HOLD_LIFT_REASON_MAX, HOLD_NOTE_MAX } from '@nexus/factory-domain/production/holds/kinds'
 
 /**
  * The work order every day (B-W2a-46), pure: who may do the W2a parts, why a button waits (held with its reason, in this
@@ -44,6 +47,8 @@ export interface DailyCan {
   readonly bundles: boolean
   /** workorders.view: the list's readiness word, the yield, finished to stock. */
   readonly view: boolean
+  /** F-PR-05b: workorders.hold — place and lift a plain production hold (B-PR-21), and lift a customer's accepted pause. */
+  readonly productionHold: boolean
 }
 
 export function dailyCan(permissions: readonly string[]): DailyCan {
@@ -58,6 +63,7 @@ export function dailyCan(permissions: readonly string[]): DailyCan {
     scrapView: held.has('production.scrap.view'),
     bundles: held.has('production.bundles'),
     view: held.has('workorders.view'),
+    productionHold: held.has('workorders.hold'),
   }
 }
 
@@ -113,9 +119,9 @@ export function readinessView(workOrder: Pick<WorkOrder, 'status' | 'spec'>, che
 
 export const HOLDABLE: readonly WorkOrderStatus[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS'])
 
-/** Why "Put on hold" waits for one work order, or null. */
+/** Why "Put on hold" waits for one work order, or null (F-PR-05b: either kind of hold may be placed with its own right). */
 export function holdHeld(workOrder: Pick<WorkOrder, 'status'>, can: DailyCan, busy = false): Phrase | null {
-  if (!can.holdsPlace) return phrase('held.noHoldPlace')
+  if (!can.holdsPlace && !can.productionHold) return phrase('held.noHoldPlace')
   if (workOrder.status === 'ON_HOLD') return phrase('held.alreadyHeld')
   if (!HOLDABLE.includes(workOrder.status)) return phrase('held.notOpen', { status: `status.${workOrder.status}` })
   if (busy) return phrase('held.busy')
@@ -124,26 +130,120 @@ export function holdHeld(workOrder: Pick<WorkOrder, 'status'>, can: DailyCan, bu
 
 /** "Hold N": the rows the bulk action may take (open, not held) and why it waits. */
 export function bulkHoldHeld(rows: ReadonlyArray<{ status: WorkOrderStatus }>, can: DailyCan): Phrase | null {
-  if (!can.holdsPlace) return phrase('held.noHoldPlace')
+  if (!can.holdsPlace && !can.productionHold) return phrase('held.noHoldPlace')
   const not = rows.filter((row) => !HOLDABLE.includes(row.status)).length
   if (not > 0) return phrase('held.bulkNotOpen', { count: not })
   return null
 }
 
-/** Why "Put on hold" in the dialog waits: a reason, the note a reason asks for, and a short note. */
-export function placeHeld(reasonCode: string, note: string, reasons: readonly PickerReason[] | null, busy: boolean): Phrase | null {
+// ---- F-PR-05b: ONE "Put on hold" dialog (plan §5 "holds (one dialog)"; B-PR-21 "the reason chosen decides the kind") ------------
+
+/** The kind a reason places: its list's (HOLD → a quality hold, PRODUCTION_HOLD → a plain production hold); null: neither. */
+export const holdKindOf = (reason: Pick<PickerReason, 'list'>): HoldDialogKind | null => holdKindOfList(reason.list)
+
+/** The reasons the dialog offers, by kind: a quality reason with quality.holds.place, a production reason with workorders.hold. */
+export function dialogReasons(reasons: readonly PickerReason[] | null, can: Pick<DailyCan, 'holdsPlace' | 'productionHold'>): { readonly QUALITY: PickerReason[]; readonly PRODUCTION: PickerReason[] } | null {
+  if (!reasons) return null
+  const of = (kind: HoldDialogKind) => reasons.filter((reason) => holdKindOf(reason) === kind)
+  return { QUALITY: can.holdsPlace ? of('QUALITY') : [], PRODUCTION: can.productionHold ? of('PRODUCTION') : [] }
+}
+
+/** The limits each kind keeps: a quality hold's note (500), a production hold's office note (2000) and its customer words (one line, 500). */
+export const HOLD_DIALOG_LIMITS = Object.freeze({ qualityNote: 500, productionNote: HOLD_NOTE_MAX, customerWords: HOLD_BRAND_WORDS_MAX, liftReason: HOLD_LIFT_REASON_MAX })
+
+/**
+ * Why "Put on hold" in the dialog waits: a reason, the note a reason asks for, a note within its kind's limit, and — for a
+ * production hold — the words the customer reads on one line (optional: none, the customer reads the reason's words). With `can`
+ * (F-PR-05b), a reason of a kind the person may not place waits too.
+ */
+export function placeHeld(reasonCode: string, note: string, reasons: readonly PickerReason[] | null, busy: boolean, extra: { readonly can?: Pick<DailyCan, 'holdsPlace' | 'productionHold'>; readonly customerWords?: string } = {}): Phrase | null {
   if (busy) return phrase('held.busy')
   if (!reasons) return phrase('hold.held.reasons')
   const reason = reasons.find((entry) => entry.code === reasonCode)
   if (!reason) return phrase('hold.held.reason')
+  const kind = holdKindOf(reason) ?? 'QUALITY'
+  if (extra.can && kind === 'QUALITY' && !extra.can.holdsPlace) return phrase('held.noQualityHold')
+  if (extra.can && kind === 'PRODUCTION' && !extra.can.productionHold) return phrase('held.noProductionHold')
   if (reason.needsDetail && note.trim().length < 3) return phrase('hold.held.note')
-  if (note.length > 500) return phrase('hold.held.noteLong')
+  if (kind === 'QUALITY' && note.length > HOLD_DIALOG_LIMITS.qualityNote) return phrase('hold.held.noteLong')
+  if (kind === 'PRODUCTION' && note.length > HOLD_DIALOG_LIMITS.productionNote) return phrase('hold.held.noteLongProduction', { count: HOLD_DIALOG_LIMITS.productionNote })
+  const words = extra.customerWords ?? ''
+  if (kind === 'PRODUCTION' && words.trim() !== '') {
+    if (/[\r\n]/.test(words)) return phrase('hold.held.customerWordsLine')
+    if (words.trim().length > HOLD_DIALOG_LIMITS.customerWords) return phrase('hold.held.customerWordsLong', { count: HOLD_DIALOG_LIMITS.customerWords })
+  }
   return null
 }
 
+/** What the dialog sends for the reason picked: the kind decides the route (quality: /quality/holds; production: B-PR-21's). */
+export interface PlaceHoldInput {
+  readonly kind: HoldDialogKind
+  readonly workOrderIds: string[]
+  readonly reasonCode: string
+  /** Quality: the hold's note; production: the office's note (never the floor's or the customer's). */
+  readonly reasonNote: string | null
+  /** Production only: the words the customer reads beside "On hold" (null: the reason's words). */
+  readonly customerWords: string | null
+}
+
+/** The work order's plain holds that stand (ours and the customer's accepted pauses), oldest first; the lifted ones, newest first. */
+export function plainHoldsOf(read: ProductionHolds | null): { readonly standing: WorkOrderHold[]; readonly lifted: WorkOrderHold[] } {
+  const holds = read?.holds ?? []
+  return {
+    standing: holds.filter((hold) => hold.status === 'ACTIVE').sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.id < b.id ? -1 : 1)),
+    lifted: holds.filter((hold) => hold.status === 'LIFTED').sort((a, b) => (b.liftedAt ?? '').localeCompare(a.liftedAt ?? '') || (a.id < b.id ? -1 : 1)),
+  }
+}
+
+/** Why "Release the hold" of a plain hold waits: workorders.hold, the hold still standing, why in one line (≤ 500). */
+export function liftHeld(hold: Pick<WorkOrderHold, 'status'> | null, can: Pick<DailyCan, 'productionHold'>, reason: string, busy: boolean): Phrase | null {
+  if (!can.productionHold) return phrase('held.noProductionHold')
+  if (!hold) return phrase('held.loading')
+  if (hold.status !== 'ACTIVE') return phrase('held.holdNotActive')
+  if (reason.trim() === '') return phrase('liftHold.held.reason')
+  if (/[\r\n]/.test(reason)) return phrase('liftHold.held.line')
+  if (reason.trim().length > HOLD_DIALOG_LIMITS.liftReason) return phrase('liftHold.held.long', { count: HOLD_DIALOG_LIMITS.liftReason })
+  if (busy) return phrase('held.busy')
+  return null
+}
+
+/**
+ * The band's "Release the hold" while the work order is ON_HOLD: the hold it is held under (its record) — a quality hold (Quality's
+ * release, with its checks and a fresh code), a plain hold (lifted here with why), or another record (an NCR: that record lifts it).
+ */
+export type ReleaseTarget = { readonly kind: 'quality'; readonly holdId: string } | { readonly kind: 'plain'; readonly holdId: string } | { readonly kind: 'record' } | { readonly kind: 'none' }
+
+export function releaseTargetOf(workOrder: Pick<WorkOrder, 'status' | 'hold'>, qualityHolds: readonly Hold[] | null, plain: ProductionHolds | null): ReleaseTarget {
+  if (workOrder.status !== 'ON_HOLD') return { kind: 'none' }
+  const record = workOrder.hold ?? null
+  if (record?.recordType === 'WorkOrderHold' && record.recordId) return { kind: 'plain', holdId: record.recordId }
+  if (record?.recordType === 'QualityHold' && record.recordId) return { kind: 'quality', holdId: record.recordId }
+  if (record?.recordType) return { kind: 'record' }
+  // No record named (an older answer): the oldest standing hold of either kind.
+  const quality = (qualityHolds ?? []).find((hold) => hold.status === 'ACTIVE')
+  if (quality) return { kind: 'quality', holdId: quality.id }
+  const own = plainHoldsOf(plain).standing[0]
+  return own ? { kind: 'plain', holdId: own.id } : { kind: 'none' }
+}
+
+/** Why the band's "Release the hold" waits for its target, or null. */
+export function releaseTargetHeld(target: ReleaseTarget, can: DailyCan): Phrase | null {
+  if (target.kind === 'quality') return can.holdsRelease ? null : phrase('held.noHoldRelease')
+  if (target.kind === 'plain') return can.productionHold ? null : phrase('held.noProductionHold')
+  return phrase('held.underRecord')
+}
+
+/** A plain hold's words in the person's language: the reason's label of the picker when read, else the API's words. */
+export function plainHoldWords(hold: Pick<WorkOrderHold, 'reasonCode' | 'reason'>, reasons: readonly PickerReason[] | null, locale: string): string {
+  const reason = reasons?.find((entry) => entry.code === hold.reasonCode && holdKindOf(entry) === 'PRODUCTION')
+  return reason ? wordsIn(reason, locale) : hold.reason
+}
+// ---- end F-PR-05b
+
 /** A HOLD reason in the person's language (else its code). */
 export function holdReasonWords(code: string, reasons: readonly PickerReason[] | null, locale: string): string {
-  const reason = reasons?.find((entry) => entry.code === code)
+  // F-PR-05b: the dialog reads two lists; a quality hold's code is a HOLD reason's.
+  const reason = reasons?.find((entry) => entry.code === code && holdKindOf(entry) !== 'PRODUCTION')
   return reason ? wordsIn(reason, locale) : code
 }
 
@@ -354,6 +454,8 @@ export function cuttingRows(workOrder: Pick<WorkOrder, 'cells'>, bundles: WorkOr
 export type DailyDialog =
   | { kind: 'hold'; workOrderIds: string[]; numbers: string[] }
   | { kind: 'releaseHold'; holdId: string }
+  // F-PR-05b: lift a plain hold (ours, or the customer's accepted pause) with why.
+  | { kind: 'liftHold'; holdId: string }
   | { kind: 'finish' }
   | { kind: 'reserve'; itemId: string; itemColourId: string | null }
   | { kind: 'split'; bundleId: string }
@@ -365,8 +467,10 @@ export interface DailyModel {
   holds: Part<Hold[]> | null
   /** ACTIVE holds of bundles at the work order's site (the Bundles tab's column); null without the right. */
   bundleHolds: Hold[] | null
-  /** The HOLD reasons (the dialog's picker and the holds' words). */
+  /** The HOLD and PRODUCTION_HOLD reasons (the one dialog's picker and the holds' words). */
   reasons: PickerReason[] | null
+  /** F-PR-05b: the work order's plain holds (B-PR-21; workorders.view); absent on the list. */
+  productionHolds?: Part<ProductionHolds> | null
   /** The readiness word of a released work order and its materials (a draft reads it in its release check). */
   readiness: Part<ReadinessRow> | null
   finished: Part<Finished> | null
@@ -383,19 +487,22 @@ export interface DailyModel {
   problem: Phrase | null
   stepUp: StepUpState
   /** Design cases: what a dialog holds. */
-  draft?: { reasonCode?: string; note?: string; statement?: boolean; asked?: Record<string, number>; placeId?: string; picked?: string[]; quantity?: number; splitReason?: SplitReason }
+  draft?: { reasonCode?: string; note?: string; /** F-PR-05b */ customerWords?: string; liftReason?: string; statement?: boolean; asked?: Record<string, number>; placeId?: string; picked?: string[]; quantity?: number; splitReason?: SplitReason }
 }
 
 export interface DailyActions {
   onDialog?: (dialog: DailyDialog | null) => void
-  onPlaceHold?: (input: { workOrderIds: string[]; reasonCode: string; reasonNote: string | null }) => void
+  /** F-PR-05b: the kind (the picked reason's list) decides where it goes. */
+  onPlaceHold?: (input: PlaceHoldInput) => void
+  /** F-PR-05b: lift a plain hold (workorders.hold) with why. */
+  onLiftHold?: (input: { holdId: string; version: number; reason: string }) => void
   onReleaseHold?: (input: { holdId: string; version: number; note: string | null; notMakerStatement: boolean }) => void
   onReport?: (input: { cells: Array<{ cellId: string; quantity: number }>; toLocationId: string | null; note: string | null }) => void
   onReserve?: (hideIds: string[]) => void
   onSplit?: (input: { bundleId: string; quantity: number; reason: SplitReason; note: string | null }) => void
   onStepUp?: (code: string) => void
   onCancelStepUp?: () => void
-  onRetry?: (part: 'holds' | 'finished' | 'yield' | 'scrap' | 'readiness' | 'availability' | 'holdRecord') => void
+  onRetry?: (part: 'holds' | 'finished' | 'yield' | 'scrap' | 'readiness' | 'availability' | 'holdRecord' | /* F-PR-05b */ 'productionHolds') => void
 }
 
 export const NO_DAILY = (can: DailyCan): DailyModel => ({
