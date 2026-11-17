@@ -179,7 +179,19 @@ export const portalListContract = defineContract({
   response: {
     200: output({
       state: z.enum(['OPEN', 'DONE']),
-      items: z.array(output({ id: id(), kind, words, question: z.string(), dueAt: instant(), status, decided: z.string().nullable() })),
+      items: z.array(
+        output({
+          id: id(),
+          kind,
+          words,
+          question: z.string(),
+          dueAt: instant(),
+          status,
+          decided: z.string().nullable(),
+          /** B-PR-29: an open production approval its customer's named approver answers, and the reader is not that person: their name ("Waiting for Anna"); else null. */
+          waitingFor: z.string().nullable(),
+        }),
+      ),
     }),
   },
 })

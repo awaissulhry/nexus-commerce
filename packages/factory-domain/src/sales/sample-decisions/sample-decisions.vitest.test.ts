@@ -23,7 +23,14 @@ import {
   swatchSentOnceRefusal,
   swatchSentRefusal,
   testResultRefusal,
+  // B-PR-29
+  materialKindRefusal,
+  SWATCH_MATERIAL_KINDS,
+  swatchAnswerHeldWords,
+  SWATCH_KINDS,
+  SWATCH_WORDS,
 } from './rules'
+import { ITEM_KINDS } from '../../product/materials/rules'
 
 /** Sample decisions (B-W2b-252): the refusals in words, the fit's arithmetic, the brand's answer, the catalogues. */
 
@@ -125,6 +132,42 @@ describe('swatches (SAL-314)', () => {
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'CANCELLED', partyId: 'p' }, 'p')?.code).toBe('SWATCH_ROUND_CANCELLED')
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'SENT', partyId: 'p' }, 'q')?.code).toBe('NOT_THE_ROUNDS_PARTY')
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'SENT', partyId: null }, 'q')).toBeNull()
+  })
+})
+
+// ---- B-PR-29 (production plan §3 "Brand alone: … fabric, trims"; 08-backend §4.4) ----------------------------------------------
+describe('fabric and trim swatches (B-PR-29)', () => {
+  it('a swatch is of a material of its kind, said before the database says it (MATERIAL_KIND, LEATHER_ONLY)', () => {
+    expect(materialKindRefusal('FABRIC', 'SEED-LIN-200', 'LINING')).toBeNull()
+    expect(materialKindRefusal('FABRIC', 'T-TEX', 'TEXTILE')).toBeNull()
+    expect(materialKindRefusal('TRIM', 'T-ZIP', 'HARDWARE')).toBeNull()
+    expect(materialKindRefusal('TRIM', 'T-LBL', 'LABEL')).toBeNull()
+    expect(materialKindRefusal('COLOUR', 'SEED-PRO-300', 'PROTECTOR')).toBeNull()
+    expect(materialKindRefusal('LEATHER', 'SEED-LEA-100', 'LEATHER')).toBeNull()
+    expect(materialKindRefusal('TRIM', 'SEED-PRO-300', 'PROTECTOR')).toEqual({
+      code: 'MATERIAL_KIND',
+      message: 'SEED-PRO-300 is protector: a trim swatch is of a trim, hardware, thread or label (or make it a colour swatch).',
+    })
+    expect(materialKindRefusal('FABRIC', 'SEED-LEA-100', 'LEATHER')?.code).toBe('MATERIAL_KIND')
+    expect(materialKindRefusal('LEATHER', 'SEED-LIN-200', 'LINING')?.code).toBe('LEATHER_ONLY')
+  })
+
+  it('names only material kinds the catalogue has, one word per swatch kind in both languages, the same held words for every kind', () => {
+    for (const kind of SWATCH_KINDS) {
+      for (const material of SWATCH_MATERIAL_KINDS[kind] ?? []) expect(ITEM_KINDS as readonly string[], `${kind} ${material}`).toContain(material)
+      expect(SWATCH_WORDS[kind].it.length > 0 && SWATCH_WORDS[kind].en.length > 0, kind).toBe(true)
+    }
+    // The database's lists (…_brand_asks_guards factory_sample_swatch_guard).
+    expect(SWATCH_MATERIAL_KINDS.FABRIC).toEqual(['TEXTILE', 'LINING', 'MEMBRANE', 'PADDING'])
+    expect(SWATCH_MATERIAL_KINDS.TRIM).toEqual(['TRIM', 'HARDWARE', 'THREAD', 'LABEL'])
+    expect(swatchAnswerHeldWords({ decision: 'APPROVED', approvalRequestId: 'r' }, 'r', 'it')).toBe('Questo campione di materiale è già stato deciso.')
+    expect(swatchAnswerHeldWords({ decision: 'APPROVED', approvalRequestId: 'r' }, 'r', 'en')).toBe('This swatch is decided already.')
+  })
+
+  it('a fabric and a trim are asked on a swatch and on the records with a thread, never on a round', () => {
+    expect(kindsFor('SampleSwatch')).toEqual(expect.arrayContaining(['COLOUR', 'LEATHER', 'FABRIC', 'TRIM']))
+    expect(kindsFor('SampleRound')).toEqual(['SAMPLE'])
+    expect(kindsFor('Style')).toEqual(expect.arrayContaining(['FABRIC', 'TRIM']))
   })
 })
 

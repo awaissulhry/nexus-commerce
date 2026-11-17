@@ -7,7 +7,7 @@ import type { CreateSwatchBody, DecisionBody, SwatchListQuery, SwatchView, Updat
 import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisions/permissions'
 import {
   decisionProblems,
-  leatherOnlyRefusal,
+  materialKindRefusal,
   swatchDecisionRefusal,
   swatchRoundRefusal,
   swatchSentOnceRefusal,
@@ -26,7 +26,8 @@ import { mayOn, officeSwatch, readSwatchRow, refuse, requireOn, SWATCH_COLUMNS, 
  * Leather and colour swatches (B-W2b-252; SAL-314 "leather swatch and colour approval"; design products.samples › the round's
  * Approval tab, "Leather swatch and colour approvals": Swatch, Sent, Decision): a swatch of a material (its colour and/or one
  * of its lots) sent to a brand, for a style or one of its rounds, decided once — in the office, or by the brand answering its
- * approval request (COLOUR or LEATHER: ./approvals.ts).
+ * approval request (COLOUR or LEATHER: ./approvals.ts). B-PR-29: fabric and trim swatches too (FABRIC of a textile, lining,
+ * membrane or padding; TRIM of a trim, hardware, thread or label), asked with FABRIC or TRIM.
  *
  *   GET    /sales/samples/swatches                    sales.samples.view: by style, round or brand (one of them), kind, state
  *   POST   /sales/samples/swatches                    sales.samples.manage: recorded (sent already, or later)
@@ -129,7 +130,9 @@ export async function createSwatch(caller: CommandCaller, body: CreateSwatchBody
     await assertBrand(db, partyId, companyId)
     const item = await db.item.findUnique({ where: { id: body.itemId }, select: { id: true, code: true, kind: true } })
     if (!item) throw new ValidationError('No such material.', [{ path: 'body/itemId', message: 'No such material.' }])
-    if (body.kind === 'LEATHER' && item.kind !== 'LEATHER') refuse(leatherOnlyRefusal(item.code, item.kind))
+    // B-PR-29: a leather swatch of a leather, a fabric swatch of a textile, lining, membrane or padding, a trim swatch of a trim,
+    // hardware, thread or label (the database's rule, said first).
+    refuse(materialKindRefusal(body.kind, item.code, item.kind))
     const { lotSiteId } = await materialOf(db, item.id, body.itemColourId ?? null, body.lotId ?? null)
     return { partyId, companyId, lotSiteId }
   })

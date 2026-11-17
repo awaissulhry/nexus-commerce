@@ -13,7 +13,7 @@ import type { CommandTx } from '../../core/command'
 import { sameWords, words, type ApprovalRecord, type RecordAdapter } from './adapter'
 
 /**
- * Samples, colours, leathers and artworks (B-W2b-184; COL-064 "approval requests to partners (samples)"; design
+ * Samples, colours, leathers, artworks (B-W2b-184) and, B-PR-29, fabrics and trims (COL-064 "approval requests to partners (samples)"; design
  * links.approve "Sample, colour, leather, artwork: photos and spec, comments with photo markup"; products.samples ›
  * Approval): asked on a record that has a thread and a partner — a brand's style, a quote or an order of a customer, a
  * purchase order of a supplier (a lab dip, a leather), a subcontract order of a workshop. The office sends the photos and
@@ -35,7 +35,8 @@ interface Basics {
 function sampleAdapter(recordType: string, view: Permission, ask: Permission, basics: (client: Client, id: string) => Promise<Basics | null>, labelWords: { it: string; en: string }): RecordAdapter {
   return Object.freeze<RecordAdapter>({
     recordType,
-    kinds: ['SAMPLE', 'COLOUR', 'LEATHER', 'ARTWORK'],
+    // B-PR-29 (08-backend §4.4): a fabric or a trim asked on the record's thread too (factory-domain approvals-out KIND_RULES).
+    kinds: ['SAMPLE', 'COLOUR', 'LEATHER', 'ARTWORK', 'FABRIC', 'TRIM'],
     view,
     ask,
     async read(client, recordId): Promise<ApprovalRecord | null> {

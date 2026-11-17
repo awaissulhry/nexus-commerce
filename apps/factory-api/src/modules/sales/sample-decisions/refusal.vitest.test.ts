@@ -19,4 +19,15 @@ describe('sample decisions', () => {
     expect(adapterOf('ARTWORK', 'SampleSwatch')).toBeUndefined()
     expect(adapterOf('SAMPLE', 'SampleSwatch')).toBeUndefined()
   })
+
+  it('B-PR-29: a fabric and a trim swatch are asked with FABRIC and TRIM, on the swatch and on the records with a thread, never on a round', () => {
+    expect(adapterOf('FABRIC', 'SampleSwatch')).toBe(adapterFor('SampleSwatch'))
+    expect(adapterOf('TRIM', 'SampleSwatch')?.ask).toBe('sales.samples.decide')
+    expect(adapterOf('FABRIC', 'SampleRound')).toBeUndefined()
+    expect(adapterOf('TRIM', 'SampleRound')).toBeUndefined()
+    for (const recordType of ['Style', 'Quote', 'SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'Project']) {
+      expect(adapterOf('FABRIC', recordType), recordType).toBe(adapterFor(recordType))
+      expect(adapterOf('TRIM', recordType), recordType).toBe(adapterFor(recordType))
+    }
+  })
 })

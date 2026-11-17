@@ -197,7 +197,9 @@ export const orderClosedRefusal = (facts: Pick<GateFacts, 'number' | 'orderStatu
 /** A new or changed gate's own shape: OTHER says what it is; a round only on a sample gate; PP_SAMPLE a pre-production round. */
 export function shapeRefusal(kind: GateKind, label: string | null, round: GateFacts['round']): GateRefusal | null {
   if (kind === 'OTHER' && (label === null || label.trim() === '')) return refusal('LABEL_NEEDED', 'Say what the gate is: a gate of kind Other needs its words.')
-  if (round !== null && !isSampleGate(kind)) return refusal('ROUND_ONLY_SAMPLE', 'Only a sample gate (sample approved, pre-production sample) names a sample round.')
+  if (round !== null && !isSampleGate(kind)) return refusal('ROUND_ONLY_SAMPLE', 'Only a sample gate (sample approved, pre-production sample, size set) names a sample round.')
+  // B-PR-29 (plan Appendix C "TOP gates nothing; a refusal tells the office"): a top-of-production round holds no gate.
+  if (round !== null && round.kind === 'TOP_OF_PRODUCTION') return refusal('ROUND_KIND', `${round.number} is a top-of-production round: it gates nothing (the customer's answer is told to the office; quality decides what follows).`)
   if (round !== null && kind === 'PP_SAMPLE' && round.kind !== 'PRE_PRODUCTION') return refusal('ROUND_KIND', `A pre-production sample gate waits for a pre-production round; ${round.number} is a ${round.kind.toLowerCase().replace(/_/g, ' ')} round.`)
   // B-PR-23: the size set gate waits for a size set round (the database's rule).
   if (round !== null && kind === 'SIZE_SET' && round.kind !== 'SIZE_SET') return refusal('ROUND_KIND', `A size set gate waits for a size set round; ${round.number} is a ${round.kind.toLowerCase().replace(/_/g, ' ')} round.`)

@@ -77,6 +77,8 @@ export const DECISION_REFUSALS = [
   'LEATHER_ONLY',
   'NOT_THE_ROUNDS_PARTY',
   'NO_COMPANY',
+  // B-PR-29: a fabric swatch of a textile, lining, membrane or padding; a trim swatch of a trim, hardware, thread or label.
+  'MATERIAL_KIND',
 ] as const
 export type DecisionRefusalCode = (typeof DECISION_REFUSALS)[number]
 export interface DecisionRefusal {
@@ -237,6 +239,39 @@ export type SwatchKind = (typeof SWATCH_KINDS)[number]
 /** B-PR-23: the approval kind a swatch is asked with, by its name on the office's button. */
 const SWATCH_ASK_NAMES: Readonly<Record<SwatchKind, string>> = Object.freeze({ COLOUR: 'Colour', LEATHER: 'Leather', FABRIC: 'Fabric', TRIM: 'Trim' })
 
+// ---- B-PR-29 (production plan §3 "Brand alone: … colour, leather, fabric, trims"; 08-backend §4.4): fabric and trim swatches ----
+
+/** What a swatch of each kind is called inside a sentence ("SEED-JKT-01 · fabric SEED-LIN-200 GRY"). */
+export const SWATCH_WORDS: Readonly<Record<SwatchKind, { readonly it: string; readonly en: string }>> = Object.freeze({
+  COLOUR: { it: 'colore', en: 'colour' },
+  LEATHER: { it: 'pellame', en: 'leather' },
+  FABRIC: { it: 'tessuto', en: 'fabric' },
+  TRIM: { it: 'accessorio', en: 'trim' },
+})
+
+/**
+ * The material kinds a swatch of each kind is of (null: any material, a colour of it): the database's rule
+ * (…_brand_asks_guards factory_sample_swatch_guard, B-PR-23), said first.
+ */
+export const SWATCH_MATERIAL_KINDS: Readonly<Record<SwatchKind, readonly string[] | null>> = Object.freeze({
+  COLOUR: null,
+  LEATHER: Object.freeze(['LEATHER']),
+  FABRIC: Object.freeze(['TEXTILE', 'LINING', 'MEMBRANE', 'PADDING']),
+  TRIM: Object.freeze(['TRIM', 'HARDWARE', 'THREAD', 'LABEL']),
+})
+
+const itemKindWords = (itemKind: string): string => itemKind.toLowerCase().replace(/_/g, ' ')
+
+/** Why the material does not fit the swatch's kind (null: it does). */
+export function materialKindRefusal(kind: SwatchKind, itemCode: string, itemKind: string): DecisionRefusal | null {
+  const fits = SWATCH_MATERIAL_KINDS[kind]
+  if (fits === null || fits.includes(itemKind)) return null
+  if (kind === 'LEATHER') return leatherOnlyRefusal(itemCode, itemKind)
+  const what = kind === 'FABRIC' ? 'a textile, lining, membrane or padding' : 'a trim, hardware, thread or label'
+  return refusal('MATERIAL_KIND', `${itemCode} is ${itemKindWords(itemKind)}: a ${SWATCH_WORDS[kind].en} swatch is of ${what} (or make it a colour swatch).`)
+}
+// ---- end B-PR-29
+
 export interface SwatchFacts {
   readonly kind: SwatchKind
   readonly sentAt: Date | null
@@ -272,7 +307,8 @@ export function swatchAskRefusal(swatch: SwatchFacts, asked: string, waiting: Wa
 
 /** The brand's answer is no longer taken on this swatch (null: it is). */
 export function swatchAnswerHeldWords(swatch: { readonly decision: string | null; readonly approvalRequestId: string | null }, requestId: string, locale: 'it' | 'en'): string | null {
-  if (swatch.decision !== null) return locale === 'it' ? 'Questo campione di colore o pellame è già stato deciso.' : 'This swatch is decided already.'
+  // B-PR-29: any material's swatch (colour, leather, fabric, trim).
+  if (swatch.decision !== null) return locale === 'it' ? 'Questo campione di materiale è già stato deciso.' : 'This swatch is decided already.'
   if (swatch.approvalRequestId !== null && swatch.approvalRequestId !== requestId) return locale === 'it' ? 'Vi abbiamo mandato una richiesta più recente per questo campione.' : 'We sent you a newer request for this swatch.'
   return null
 }

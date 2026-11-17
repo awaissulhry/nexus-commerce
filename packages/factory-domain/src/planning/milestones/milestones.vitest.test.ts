@@ -68,6 +68,17 @@ describe('gates', () => {
     expect(shapeRefusal('SIZE_SET', null, { number: 'SR-3', decision: null, kind: 'SIZE_SET' })).toBeNull()
     expect(shapeRefusal('SIZE_SET', null, null)).toBeNull()
     expect(shapeRefusal('PP_SAMPLE', null, { number: 'SR-3', decision: null, kind: 'SIZE_SET' })?.code).toBe('ROUND_KIND')
+    // B-PR-29 (plan Appendix C "TOP gates nothing"): a top-of-production round names no gate, not even "sample approved".
+    expect(shapeRefusal('SAMPLE_APPROVED', null, { number: 'SR-4', decision: 'APPROVED', kind: 'TOP_OF_PRODUCTION' })).toEqual({
+      code: 'ROUND_KIND',
+      message: "SR-4 is a top-of-production round: it gates nothing (the customer's answer is told to the office; quality decides what follows).",
+    })
+    expect(shapeRefusal('SIZE_SET', null, { number: 'SR-4', decision: null, kind: 'TOP_OF_PRODUCTION' })?.code).toBe('ROUND_KIND')
+    expect(shapeRefusal('LAB_PASSED', null, { number: 'SR-4', decision: null, kind: 'TOP_OF_PRODUCTION' })?.code).toBe('ROUND_ONLY_SAMPLE')
+    // B-PR-29: the size set gate is a sample gate (its round's approval passes it, `sample_round.decided`).
+    expect(isSampleGate('SIZE_SET')).toBe(true)
+    expect(passRefusal({ number: 'SO-1', kind: 'SIZE_SET', orderStatus: 'CONFIRMED', passedAt: null, overriddenAt: null, ownerId: null, createdById: null, round: { number: 'SR-3', decision: null, kind: 'SIZE_SET' } }, '2026-11-17', '2026-11-17')?.code).toBe('ROUND_NOT_APPROVED')
+    expect(passRefusal({ number: 'SO-1', kind: 'SIZE_SET', orderStatus: 'CONFIRMED', passedAt: null, overriddenAt: null, ownerId: null, createdById: null, round: { number: 'SR-3', decision: 'APPROVED_WITH_COMMENTS', kind: 'SIZE_SET' } }, '2026-11-17', '2026-11-17')).toBeNull()
     expect(isSampleGate('SIZE_SET')).toBe(true)
     expect(GATE_KINDS).toContain('SIZE_SET')
   })
