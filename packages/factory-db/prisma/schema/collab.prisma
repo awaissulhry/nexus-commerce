@@ -228,9 +228,15 @@ model Task {
   createdAt    DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
   createdById  String?    @db.Uuid
+  /// TH-3 (threads plan, schema wave 5/9, B-TH-038; thread-G19, feature T3-F09 "Make a task" on a message): the message the
+  /// task was made from, so the task links back to it: a message of the thread of the task's own record (a task with a
+  /// message has a record). Set when the task is made, never changed.
+  messageId    String?    @db.Uuid
 
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   assignee User? @relation(fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // TH-3 (B-TH-038): the message it came from (Restrict: see above; messages are never deleted anyway).
+  message  Message? @relation(fields: [tenantId, messageId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // My tasks: a person's open tasks by due date.
   @@index([tenantId, assigneeId, status, dueDate])
@@ -238,6 +244,8 @@ model Task {
   @@index([tenantId, recordType, recordId])
   // Created by me.
   @@index([tenantId, createdById])
+  // TH-3 (B-TH-038): the tasks made from a message (its card says "Task made").
+  @@index([tenantId, messageId])
 }
 
 /// OPEN → DONE | CANCELLED; either back to OPEN (Undo, reopen).
