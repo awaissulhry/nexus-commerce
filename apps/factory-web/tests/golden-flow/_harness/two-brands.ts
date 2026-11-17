@@ -72,9 +72,30 @@ async function portalContext(flow: Flow, name: string): Promise<{ context: Brows
   return { context, page }
 }
 
+// ---- End check (fix-browser-1): ONE portal sign-in per person per run. The server sends one new code a minute per address and
+// answers three sign-in requests per address in ten minutes (the abuse guard), and the first visit comes once per version of the
+// terms — so TH-1b, TH-7, TH-4, TH-5 and TH-6 cannot each sign the same buyer in again in one run. The first stage of the run that
+// needs the person signs in through the screens; a later stage goes on in that browser (the session: 30 minutes idle, 12 hours),
+// and signs in again only when the session ended.
+const signedIn = new WeakMap<Flow, Map<string, PortalDesk>>()
+
 /** The brand's portal person signs in through the portal's screens: e-mail → the mailed link → Continue → the first visit. */
 export async function signInToPortal(flow: Flow, brand: BrandFixture, partyId: string): Promise<PortalDesk> {
-  const { context, page } = await portalContext(flow, `portal-${brand.key}`)
+  const key = `${brand.portalPerson.email}|${partyId}`
+  const known = signedIn.get(flow)?.get(key)
+  if (known) {
+    await known.go('')
+    if (new URL(known.page.url()).pathname.startsWith(`/p/${brand.code}`)) return known
+  }
+  const desk = await signInThroughScreens(flow, brand, partyId, known ? '-again' : '')
+  if (!signedIn.has(flow)) signedIn.set(flow, new Map())
+  signedIn.get(flow)!.set(key, desk)
+  return desk
+}
+// ---- end fix-browser-1
+
+async function signInThroughScreens(flow: Flow, brand: BrandFixture, partyId: string, suffix: string): Promise<PortalDesk> {
+  const { context, page } = await portalContext(flow, `portal-${brand.key}${suffix}`)
   const email = brand.portalPerson.email
   const before = await flow.mailsTo(email)
   await page.goto(`/p/signin?tenant=${TENANT}&company=${COMPANY}&next=${encodeURIComponent(`/p/${brand.code}`)}`)
@@ -85,13 +106,21 @@ export async function signInToPortal(flow: Flow, brand: BrandFixture, partyId: s
   const link = await flow.linkSentTo(email, before)
   await page.goto(link.url.replace(/^https?:\/\/[^/]+/, flow.web))
   await page.getByRole('button', { name: SIGN_IN('link.continue'), exact: true }).click({ timeout: 60_000 })
-  // The first visit: the name (prefilled from the invitation), the summaries, the portal terms ticked.
+  // The first visit: the name (prefilled from the invitation), the summaries, the portal terms ticked. It comes once per version of
+  // the terms: a person who made it already (a run attached to a kept stack, a session that ended) lands in the portal at once.
   const accept = page.getByRole('checkbox', { name: new RegExp(`^${SIGN_IN('first.accept', { company: '__' }).split('__')[0]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) })
-  await accept.waitFor({ state: 'visible', timeout: 60_000 })
-  const name = page.getByLabel(SIGN_IN('first.name'), { exact: true })
-  if ((await name.inputValue()).trim() === '') await name.fill(brand.portalPerson.name)
-  await accept.check()
-  await page.getByRole('button', { name: SIGN_IN('first.submit'), exact: true }).click()
-  await page.waitForURL(new RegExp(`/p/${brand.code}(/|$|\\?)`), { timeout: 120_000 })
+  const home = new RegExp(`/p/${brand.code}(/|$|\\?)`)
+  let due = false
+  await expect(async () => {
+    due = await accept.isVisible()
+    expect(due || home.test(page.url()), 'the first visit or the portal').toBe(true)
+  }).toPass({ timeout: 60_000 })
+  if (due) {
+    const name = page.getByLabel(SIGN_IN('first.name'), { exact: true })
+    if ((await name.inputValue()).trim() === '') await name.fill(brand.portalPerson.name)
+    await accept.check()
+    await page.getByRole('button', { name: SIGN_IN('first.submit'), exact: true }).click()
+  }
+  await page.waitForURL(home, { timeout: 120_000 })
   return { brand, partyId, code: brand.code, context, page, go: async (path) => void (await page.goto(`/p/${brand.code}${path}`)) }
 }
