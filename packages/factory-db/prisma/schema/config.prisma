@@ -21,6 +21,10 @@
 // Office only (ownership/config.json): the API's fields, templates and quote template routes (B-W2b-421, B-W2b-422) write
 // through command(); the portal, the document renderer and the mail worker read in the tenant's system scope. The
 // …_config_templates_w2b_guards triggers hold the rules for every login.
+//
+// TH-4 (threads plan, schema wave 7/9, B-TH-055; surface W17): a custom field may be for ONE customer (CustomField.partyId;
+// null: every customer); its values go only on that customer's records (the …_config_brand_fields_th_guards triggers), so a
+// field of customer B is never a field of customer A.
 
 /// A custom field (PLT-111; design admin.fields "Custom fields", "Add field to …"): a field added to one record type
 /// without code, for one company or every company of the tenant. Its code is unique per record type in the tenant (the
@@ -74,10 +78,17 @@ model CustomField {
   createdAt     DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   createdById   String?             @db.Uuid
+  /// TH-4 (threads plan, schema wave 7/9, B-TH-055; WALL-G08 / SHEET-G06, research §12 decision 12, surface W17): the one
+  /// customer the field is for (a "customer-only column"): an active customer of the tenant, of the field's company or every
+  /// company, on a record type whose records name their customer; its values go only on that customer's records, and the
+  /// API shows it only on that customer's records, sheet and portal (B-TH-056). Null: every customer, as before. Never changes.
+  partyId       String?             @db.Uuid
 
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   company  Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   picklist Picklist?          @relation(fields: [tenantId, picklistId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // TH-4 (B-TH-055): the customer it is for (Restrict: see above).
+  party    Party?             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   values   CustomFieldValue[]
 
   @@unique([tenantId, key])
@@ -85,6 +96,8 @@ model CustomField {
   @@unique([tenantId, id])
   // A record type's fields (the registry reads them on every form, grid, filter, export and import).
   @@index([tenantId, recordType, status])
+  // TH-4 (B-TH-055): a customer's own fields (its sheet, its portal).
+  @@index([tenantId, partyId])
 }
 
 /// A custom field's type (PLT-111) and the shape of its value (CustomFieldValue.value).

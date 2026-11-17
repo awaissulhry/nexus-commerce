@@ -110,6 +110,7 @@ import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { SECOND_BRAND_TABLES, seedSecondBrand, type SecondBrand } from './testing/second-brand' // B-TH-001
+import { seedHeldMail } from './testing/held-mail' // B-TH-038
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -526,8 +527,13 @@ beforeAll(async () => {
   // another party" exist inside the same tenant too and every generated partner case is proven against them by data.
   second = await seedSecondBrand({ db: factory, namespace: 'iso-a' })
   // ---- end B-TH-001
-  // Every seed of both tenants: under a full parallel run this takes more than a minute.
-}, 120_000)
+  // ---- B-TH-038: a mail taken back in its undo window on P1's quote thread: its message stays held, so the partner role's
+  // value filter on Message (held: false) has a row of the other value inside P1's scope to prove itself against.
+  await seedHeldMail({ db: factory, namespace: 'iso-a' })
+  // ---- end B-TH-038
+  // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
+  // short of memory, 2026-11-17).
+}, 300_000)
 
 afterAll(async () => {
   await factory?.close()
