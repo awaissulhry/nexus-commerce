@@ -87,7 +87,10 @@ async function partnerPerson(email: string, partyId: string, roleKeys: string[])
     await client.user.create({ data: { id, email, displayName: email.split('@')[0]!, locale: 'en', status: 'ACTIVE', audience: 'PARTNER', partyId, partnerKind: 'CUSTOMER' }, select: { id: true } })
     for (const key of roleKeys) {
       const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: T, key } }, select: { id: true } })
-      await client.roleAssignment.create({ data: { id: newId(), userId: id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      // th3b fix: started by BOTH clocks — the portal reads roles on the harness clock (which each sign-in moves 61 s on), the
+      // worker's fan-out on the server clock: a person made after the sign-ins (follow-up 5's uploader) must be a reader to both.
+      const started = Math.min(h.clock.now().getTime(), Date.now()) - 60_000
+      await client.roleAssignment.create({ data: { id: newId(), userId: id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(started) }, select: { id: true } })
     }
   })
   return id
