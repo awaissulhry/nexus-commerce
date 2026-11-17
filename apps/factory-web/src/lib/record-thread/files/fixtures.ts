@@ -62,6 +62,9 @@ const c = (over: Partial<FileStripCaseModel> = {}): FileStripCaseModel => ({
   open: false,
   sources: SOURCES,
   frames: [519, 711, 375],
+  record: { type: 'SalesOrder', id: ORDER, label: 'SO-2026-0142' },
+  partyName: BRAND_ALPHA.tradeName,
+  now: Date.UTC(2026, 10, 17, 10, 42),
   ...over,
 })
 
@@ -71,7 +74,7 @@ export const designScreen = defineDesignScreen<FileStripCaseModel>({
   view: FileStripCase,
   cases: [
     { id: 'line', label: 'Files (7) with the three newest', model: c(), note: 'One 36 px line; the count is the documents this reader can see (a photo and its two earlier versions are one). Click the chip for the strip.' },
-    { id: 'strip-open', label: 'The strip open', model: c({ open: true }), note: '64 px tiles, newest first: v3 on the sample photo, two audience marks then "+N", the held photo with its lock; ← / → walk the tiles, Enter opens the one file viewer; "All files" ends the row.' },
+    { id: 'strip-open', label: 'The strip open', model: c({ open: true }), note: '64 px tiles, newest first: v3 on the sample photo, two audience marks then "+N", the held photo with its lock; ← / → walk the tiles, Enter opens the one file viewer; "All files" ends the row and opens the Files view (T9).' },
     { id: 'no-previews', label: 'Before small previews (kind icons)', model: c({ open: true, files: FILES.map((one) => ({ ...one, previewUrl: null })) }), note: 'Until B-TH-063 makes a small preview, a file shows its kind’s icon — never the 15 MB original.' },
     { id: 'supplier', label: 'On a purchase order: “Supplier”', model: c({ open: true, party: { ...PARTY, role: 'supplier' } }), note: 'The party mark follows the record: Supplier.' },
     { id: 'other-party', label: 'A file shared with another party (office flag)', model: c({ open: true, files: [file(20, { name: 'Old share.pdf', visibility: ['OFFICE', 'PARTNER'], partyId: id(99) }), ...FILES.slice(1, 3)] }), note: 'B-TH-003 refuses this now; an older one is flagged "Another party" to the office, never named as this customer’s.' },
