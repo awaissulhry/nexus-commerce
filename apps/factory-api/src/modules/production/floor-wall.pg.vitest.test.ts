@@ -8,6 +8,7 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
 import { seed as seedAndon, type AndonSeed } from '../../../../../packages/factory-db/seed/andon'
+import { seed as seedCutting, type CuttingSeed } from '../../../../../packages/factory-db/seed/cutting'
 import { seed as seedFiles } from '../../../../../packages/factory-db/seed/files'
 import { seed as seedNumbering } from '../../../../../packages/factory-db/seed/numbering'
 import { seed as seedProduction, type ProductionSeed } from '../../../../../packages/factory-db/seed/production'
@@ -17,16 +18,19 @@ import { LOCAL_COOKIE_SECRET } from '../../env'
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from './testing/two-brands'
 
 /**
- * B-PR-04a (production plan §2, the brand wall; 06-tree §0.6 PW-06 "Floor now, Dispatch, Cutting, Bundles, Scrap, Calls …:
- * rep-B sees only B rows and no line/site totals that mix brands"; the step's wall test "PW-06 (bundles, scans, calls)"). Owner
+ * B-PR-04a and B-PR-04b (production plan §2, the brand wall; 06-tree §0.6 PW-06 "Floor now, Dispatch, Cutting, Bundles, Scrap,
+ * Calls …: rep-B sees only B rows and no line/site totals that mix brands"; the steps' wall tests "PW-06 (bundles, scans, calls)"
+ * and "PW-06 (cutting)": a cut order or trolley shows only when every cell is reachable, plan pick problem 2). Owner
  * rule 2026-11-16: "One brand must not be able to see anything related to any other brand. But we, as the production unit,
  * should be able to see it all. And manage it all as well."
  *
  * On the local stack with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login),
- * the core, files, production, numbering and line-signals seeds (brand A = the seeds' P1: its in-progress work order with its
- * cut, bundles, scans, a correction asked and a refused scan of no work order), the production two-brand harness
- * (./testing/two-brands.ts: brand B's work order and a mixed one made before the rule), and, written by the test's admin pool, a
- * refused scan and a help call on A's work order and a help call on B's. Sessions: `office.all` (every customer), `office.p1`
+ * the core, files, production, numbering, line-signals and cutting-room seeds (brand A = the seeds' P1: its in-progress work
+ * order with its cut, bundles, scans, a correction asked and a refused scan of no work order; its cut orders, lays, tickets, a
+ * recut, secondary processes and two trolleys), the production two-brand harness (./testing/two-brands.ts: brand B's work order
+ * and a mixed one made before the rule), and, written by the test's admin pool, a refused scan and a help call on A's work order
+ * and a help call on B's, a cut order of A's and B's cells and one of B's alone, a bundle of B's and a trolley carrying A's and
+ * B's bundles and one carrying B's alone. Sessions: `office.all` (every customer), `office.p1`
  * and `office.p2` (one customer each), the same permissions. Every refusal toward a person limited to B is the one an unknown
  * id gets; every answer B's person got is scanned for A's names, codes, numbers and ids. Every name and number is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/production/floor-wall`.
@@ -45,6 +49,13 @@ const PERMISSIONS: Permission[] = [
   'production.calls.view',
   'production.calls.answer',
   'production.calls.manage',
+  // B-PR-04b.
+  'production.cut',
+  'production.cut.correct',
+  'production.cutting.view',
+  'production.cutorders.manage',
+  'production.trolleys',
+  'production.secondary',
 ]
 const SESSIONS: Record<string, SessionContext> = twoBrandSessions(ids.tenantId, ids.a, ids.b, PERMISSIONS)
 
@@ -54,10 +65,14 @@ let app: FastifyInstance
 let w: ProductionTwoBrands
 let seeded: ProductionSeed
 let andon: AndonSeed
+let cutting: CuttingSeed
 /** What must never reach brand B: A's markers and the mixed work order (it holds a cell of A's). */
 let aMarkers: Marker[]
-/** Rows the test wrote: a refused scan and a help call on A's work order, a help call on B's. */
-const made = { refusalA: newId(), callA: newId(), callB: newId() }
+/**
+ * Rows the test wrote: a refused scan and a help call on A's work order, a help call on B's (B-PR-04a); a cut order of A's and
+ * B's cells, one of B's alone, a bundle of B's, a trolley carrying A's and B's bundles and one carrying B's alone (B-PR-04b).
+ */
+const made = { refusalA: newId(), callA: newId(), callB: newId(), cutOrderMixed: newId(), cutOrderB: newId(), bundleB: newId(), trolleyMixed: newId(), trolleyB: newId() }
 let bundleCodeA: string
 
 type Json = Record<string, any>
@@ -104,6 +119,7 @@ beforeAll(async () => {
   seeded = await seedProduction({ db: database, namespace: ns })
   await seedNumbering({ db: database, namespace: ns })
   andon = await seedAndon({ db: database, namespace: ns })
+  cutting = await seedCutting({ db: database, namespace: ns })
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
@@ -122,6 +138,28 @@ beforeAll(async () => {
      INSERT INTO "HelpCall" SELECT (jsonb_populate_record(NULL::"HelpCall", to_jsonb(c) || jsonb_build_object('id', $6::text, 'workOrderId', $2::text, 'bundleId', $3::text, 'clientEventId', NULL, 'status', 'SENT', 'seenAt', NULL, 'seenById', NULL, 'onTheWayAt', NULL, 'onTheWayById', NULL, 'solvedAt', NULL, 'solvedById', NULL, 'resolutionCode', NULL, 'resolutionNote', NULL))).* FROM "HelpCall" c WHERE c.id = $8;
      INSERT INTO "HelpCall" SELECT (jsonb_populate_record(NULL::"HelpCall", to_jsonb(c) || jsonb_build_object('id', $7::text, 'workOrderId', $9::text, 'bundleId', NULL, 'clientEventId', NULL))).* FROM "HelpCall" c WHERE c.id = $8;
      COMMIT;`.replace(/\$(\d)/g, (_match, n: string) => `'${[made.refusalA, seeded.workOrderId, seeded.bundleIds[0], bundleCodeA, seeded.refusalId, made.callA, made.callB, andon.callIds[0], w.b.workOrderId][Number(n) - 1]}'`),
+  )
+  // B-PR-04b: a cut order of A's and B's cells and one of B's alone (copies of A's planned SEED-CO-0003 and its line), a bundle
+  // of B's (a copy of A's first bundle on B's cell), a trolley carrying A's and B's bundles and one carrying B's alone (copies
+  // of A's loading T-1 and its line). B's cell: its size 50.
+  const [cellB] = await admin<{ id: string }>(`SELECT id FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND size = '50'`, [w.b.workOrderId])
+  const v = { coM: made.cutOrderMixed, coB: made.cutOrderB, co3: cutting.cutOrderIds.planned, line3: cutting.lineIds.planned, b: w.b.workOrderId, cellB: cellB!.id, bundleB: made.bundleB, bundleA: seeded.bundleIds[0], tM: made.trolleyMixed, tB: made.trolleyB, t1: cutting.issueIds.loading, t1line: cutting.issueLineIds.loading }
+  const q = (text: string) => text.replace(/@(\w+)/g, (_match, key: keyof typeof v) => `'${v[key]}'`)
+  await admin(
+    q(`BEGIN;
+     SET LOCAL session_replication_role = replica;
+     INSERT INTO "CutOrder" SELECT (jsonb_populate_record(NULL::"CutOrder", to_jsonb(o) || jsonb_build_object('id', @coM::text, 'number', 'T-PR04-CO-MIX'))).* FROM "CutOrder" o WHERE o.id = @co3;
+     INSERT INTO "CutOrder" SELECT (jsonb_populate_record(NULL::"CutOrder", to_jsonb(o) || jsonb_build_object('id', @coB::text, 'number', 'T-PR04-CO-B'))).* FROM "CutOrder" o WHERE o.id = @co3;
+     INSERT INTO "CutOrderLine" SELECT (jsonb_populate_record(NULL::"CutOrderLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid(), 'cutOrderId', @coM::text))).* FROM "CutOrderLine" l WHERE l.id = @line3;
+     INSERT INTO "CutOrderLine" SELECT (jsonb_populate_record(NULL::"CutOrderLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid(), 'cutOrderId', @coM::text, 'seq', 20, 'workOrderId', @b::text, 'workOrderSizeId', @cellB::text))).* FROM "CutOrderLine" l WHERE l.id = @line3;
+     INSERT INTO "CutOrderLine" SELECT (jsonb_populate_record(NULL::"CutOrderLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid(), 'cutOrderId', @coB::text, 'workOrderId', @b::text, 'workOrderSizeId', @cellB::text))).* FROM "CutOrderLine" l WHERE l.id = @line3;
+     INSERT INTO "Bundle" SELECT (jsonb_populate_record(NULL::"Bundle", to_jsonb(x) || jsonb_build_object('id', @bundleB::text, 'code', 'T-PR04-BDL-B', 'replacedCodes', '{}'::text[], 'workOrderId', @b::text, 'workOrderSizeId', @cellB::text, 'cutLogIds', '{}'::text[], 'parentBundleId', NULL, 'clientEventId', NULL, 'deviceId', NULL))).* FROM "Bundle" x WHERE x.id = @bundleA;
+     INSERT INTO "CutIssue" SELECT (jsonb_populate_record(NULL::"CutIssue", to_jsonb(i) || jsonb_build_object('id', @tM::text, 'trolleyCode', 'T-98'))).* FROM "CutIssue" i WHERE i.id = @t1;
+     INSERT INTO "CutIssue" SELECT (jsonb_populate_record(NULL::"CutIssue", to_jsonb(i) || jsonb_build_object('id', @tB::text, 'trolleyCode', 'T-97'))).* FROM "CutIssue" i WHERE i.id = @t1;
+     INSERT INTO "CutIssueLine" SELECT (jsonb_populate_record(NULL::"CutIssueLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid(), 'cutIssueId', @tM::text))).* FROM "CutIssueLine" l WHERE l.id = @t1line;
+     INSERT INTO "CutIssueLine" SELECT (jsonb_populate_record(NULL::"CutIssueLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid(), 'cutIssueId', @tM::text, 'workOrderId', @b::text, 'bundleId', @bundleB::text))).* FROM "CutIssueLine" l WHERE l.id = @t1line;
+     INSERT INTO "CutIssueLine" SELECT (jsonb_populate_record(NULL::"CutIssueLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid(), 'cutIssueId', @tB::text, 'workOrderId', @b::text, 'bundleId', @bundleB::text))).* FROM "CutIssueLine" l WHERE l.id = @t1line;
+     COMMIT;`),
   )
   aMarkers = [...(await markersOf(db, w.a.partyId)), { label: 'mixed work order', text: w.mixed.number }, { label: 'mixed work order', text: w.mixed.workOrderId }]
 }, 300_000)
@@ -252,6 +290,101 @@ describe('help calls behind the wall (PW-06 calls)', { timeout: 60_000 }, () => 
     const used = async (session: string) => ((await ok(session, 'GET', `/production/calls/types?siteId=${w.siteId}`)).types as Json[]).reduce((sum, type) => sum + (type.usedCount as number), 0)
     expect((await used('office.all')) - (await used('office.p2'))).toBe(1)
     expect((await admin(`SELECT "seenAt", status FROM "HelpCall" WHERE id = $1`, [made.callA]))[0]).toEqual({ seenAt: null, status: 'SENT' })
+  })
+})
+
+describe('cutting behind the wall (PW-06 cutting)', { timeout: 60_000 }, () => {
+  it('cut orders: one of A’s cells only for who reaches A; one of A’s and B’s cells only for the production unit; B’s for B', async () => {
+    const list = async (session: string, query = '') => idsOf((await ok(session, 'GET', `/production/cut-orders?view=all&limit=200${query}`)).rows)
+    const ofA = Object.values(cutting.cutOrderIds)
+    expect(await list('office.all')).toEqual(expect.arrayContaining([...ofA, made.cutOrderMixed, made.cutOrderB]))
+    const p1 = await list('office.p1')
+    expect(p1).toEqual(expect.arrayContaining(ofA))
+    expect(p1).not.toContain(made.cutOrderMixed)
+    expect(p1).not.toContain(made.cutOrderB)
+    expect(await list('office.p2')).toEqual([made.cutOrderB])
+    expect((await list('office.all', `&partyId=${ids.b}`)).sort()).toEqual([made.cutOrderMixed, made.cutOrderB].sort())
+    expect(await list('office.p2', `&partyId=${ids.a}`)).toEqual([])
+    // The tiles count the same rows: B's person counts B's cut order alone.
+    const tiles = (await ok('office.p2', 'GET', '/production/cut-orders?view=all')).tiles as Json
+    expect(Object.values(tiles).reduce((sum: number, n) => sum + (n as number), 0)).toBe(1)
+    // The record, its rolls and reconciliation: not found for a person who does not reach every cell, as an unknown one.
+    await ok('office.all', 'GET', `/production/cut-orders/${made.cutOrderMixed}`)
+    for (const session of ['office.p1', 'office.p2']) expect((await call(session, 'GET', `/production/cut-orders/${made.cutOrderMixed}`)).status).toBe(404)
+    await ok('office.p2', 'GET', `/production/cut-orders/${made.cutOrderB}`)
+    for (const cutOrderId of [cutting.cutOrderIds.fabric, made.cutOrderMixed]) {
+      for (const path of ['', '/rolls', '/reconciliation']) await asUnknown('GET', `/production/cut-orders/${cutOrderId}${path}`, cutOrderId)
+      await asUnknown('POST', `/production/cut-orders/${cutOrderId}/cancel`, cutOrderId, { version: 1, reason: 'B was here' })
+    }
+    expect((await admin(`SELECT status FROM "CutOrder" WHERE id = $1`, [made.cutOrderMixed]))[0]).toEqual({ status: 'PLANNED' })
+    // What waits for a cut order: the cells of the work orders reached.
+    const waiting = (await ok('office.p2', 'GET', '/production/cut-orders/waiting')).groups as Json[]
+    expect(waiting.flatMap((group) => (group.cells as Json[]).map((cell) => cell.workOrder.id))).not.toContain(seeded.workOrderId)
+  })
+
+  it('lays, tickets, ply runs and the recut ticket of A’s cut order: not found for B’s person, as unknown ones', async () => {
+    await ok('office.p1', 'GET', `/production/lays/${cutting.layIds.cut}`)
+    for (const layId of Object.values(cutting.layIds)) await asUnknown('GET', `/production/lays/${layId}`, layId)
+    await asUnknown('GET', `/production/ply-runs/${cutting.plyRunId}/stickers`, cutting.plyRunId)
+    await asUnknown('POST', `/production/cut-tickets/${cutting.ticketIds.layPlanned}/void`, cutting.ticketIds.layPlanned, { version: 1, reason: 'B was here' })
+    const codes = await admin<{ id: string; scanCode: string }>(`SELECT id, "scanCode" FROM "CutTicket" WHERE id = ANY($1::uuid[])`, [[cutting.ticketIds.layPlanned, cutting.ticketIds.leather, cutting.ticketIds.recut]])
+    expect(codes).toHaveLength(3)
+    for (const { scanCode } of codes) await asUnknown('GET', `/production/cut-tickets/scan?code=${scanCode}`, scanCode, undefined, 'T-NO-SUCH-TICKET')
+    const waiting = async (session: string) => idsOf((await ok(session, 'GET', '/production/cut-tickets/waiting')).tickets)
+    const ofA = Object.values(cutting.ticketIds)
+    expect((await waiting('office.p2')).filter((id) => ofA.includes(id))).toEqual([])
+    expect(await waiting('office.p1')).toEqual(await waiting('office.all'))
+  })
+
+  it('trolleys: one of A’s bundles only for who reaches A; one carrying A’s and B’s bundles only for the production unit', async () => {
+    const list = async (session: string, query = '') => idsOf((await ok(session, 'GET', `/production/trolleys?view=all&limit=50${query}`)).rows)
+    const ofA = Object.values(cutting.issueIds)
+    expect(await list('office.all')).toEqual(expect.arrayContaining([...ofA, made.trolleyMixed, made.trolleyB]))
+    const p1 = await list('office.p1')
+    expect(p1).toEqual(expect.arrayContaining(ofA))
+    expect(p1).not.toContain(made.trolleyMixed)
+    expect(await list('office.p2')).toEqual([made.trolleyB])
+    expect(await list('office.p2', `&partyId=${ids.a}`)).toEqual([])
+    const open = async (session: string) => idsOf((await ok(session, 'GET', `/production/trolleys/open?siteId=${w.siteId}`)).rows)
+    expect(await open('office.all')).toEqual(expect.arrayContaining([cutting.issueIds.loading, made.trolleyMixed, made.trolleyB]))
+    expect(await open('office.p2')).toEqual([made.trolleyB])
+    for (const issueId of [cutting.issueIds.loading, made.trolleyMixed]) {
+      await asUnknown('GET', `/production/trolleys/${issueId}`, issueId)
+      await asUnknown('POST', `/production/trolleys/${issueId}/cancel`, issueId, { version: 1, reason: 'B was here' })
+    }
+    expect((await call('office.p1', 'GET', `/production/trolleys/${made.trolleyMixed}`)).status).toBe(404)
+    expect((await ok('office.p2', 'GET', `/production/trolleys/${made.trolleyB}`)).trolley.id).toBe(made.trolleyB)
+    expect((await admin(`SELECT status FROM "CutIssue" WHERE id = ANY($1::uuid[])`, [[cutting.issueIds.loading, made.trolleyMixed]])).map((row) => row.status)).toEqual(['LOADING', 'LOADING'])
+    // Scanning A's open trolley's label at the site, or loading B's bundle onto it: not found for B's person (the trolley of B's
+    // alone is found); nothing is loaded.
+    const [{ trolleyCode }] = (await admin<{ trolleyCode: string }>(`SELECT "trolleyCode" FROM "CutIssue" WHERE id = $1`, [cutting.issueIds.loading])) as [{ trolleyCode: string }]
+    const scanned = await call('office.p2', 'GET', `/production/trolleys/scan?code=${trolleyCode}&siteId=${w.siteId}`)
+    expect([scanned.status, scanned.body.error?.message]).toEqual([404, 'Trolley not found.'])
+    const loaded = await call('office.p2', 'POST', '/production/trolleys/load', { trolley: trolleyCode, bundle: 'T-PR04-BDL-B' })
+    expect([loaded.status, loaded.body.error?.message]).toEqual([404, 'Trolley not found.'])
+    expect((await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "CutIssueLine" WHERE "cutIssueId" = $1`, [cutting.issueIds.loading]))[0]!.n).toBe(1)
+    expect((await ok('office.p2', 'GET', `/production/trolleys/scan?code=T-97&siteId=${w.siteId}`)).trolley.id).toBe(made.trolleyB)
+  })
+
+  it('secondary processes, the cutting work orders, their cut logs and the cutting office: no row of A for B’s person', async () => {
+    const processes = async (session: string, query = '') => idsOf((await ok(session, 'GET', `/production/secondary-processes?view=all${query}`)).rows)
+    expect(await processes('office.all')).toEqual(expect.arrayContaining(Object.values(cutting.processIds)))
+    expect(await processes('office.p1')).toEqual(expect.arrayContaining(Object.values(cutting.processIds)))
+    expect(await processes('office.p2')).toEqual([])
+    expect(await processes('office.p2', `&partyId=${ids.a}`)).toEqual([])
+    const [bundle2] = await admin<{ code: string }>(`SELECT code FROM "Bundle" WHERE id = $1`, [seeded.bundleIds[1]])
+    await asUnknown('GET', `/production/secondary-processes/bundle?code=${bundle2!.code}`, bundle2!.code, undefined, 'T-NO-SUCH-TICKET')
+    // The cutting table's work orders and the cutting office's cuts: only the work orders reached.
+    const table = async (session: string) => idsOf((await ok(session, 'GET', `/production/cutting/work-orders?number=SEED-WO-0001`)).workOrders)
+    expect(await table('office.p1')).toEqual(await table('office.all'))
+    expect(await table('office.p2')).toEqual([])
+    const cuts = async (session: string, query = '') => ((await ok(session, 'GET', `/production/cutting/cuts?view=all${query}`)).cuts as Json[]).map((row) => row.workOrder.id as string)
+    expect(await cuts('office.p1')).toEqual(await cuts('office.all', `&partyId=${ids.a}`))
+    expect(await cuts('office.p2')).not.toContain(seeded.workOrderId)
+    expect(await cuts('office.p2', `&partyId=${ids.a}`)).toEqual([])
+    for (const path of ['', '/cut-log']) await asUnknown('GET', `/production/cutting/work-orders/${seeded.workOrderId}${path}`, seeded.workOrderId)
+    await asUnknown('POST', `/production/cutting/cuts/${seeded.cutLogId}/correct`, seeded.cutLogId, { reason: 'B was here' })
+    expect((await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "CutLog" WHERE "reversalOfId" = $1`, [seeded.cutLogId]))[0]!.n).toBe(0)
   })
 })
 

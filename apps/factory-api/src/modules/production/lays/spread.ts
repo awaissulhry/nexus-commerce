@@ -9,7 +9,7 @@ import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import type { FloorContext, OfficeContext } from '../../../core/context'
 import { activeHoldsOf } from '../../quality/holds/checks'
-import { invalid, may, notFound, workerOf } from '../cutorders/access'
+import { invalid, may, notFound, partiesOf, workerOf } from '../cutorders/access' // B-PR-04b: partiesOf
 import { rejectedRolls, type LayRollRow } from '../cutorders/store'
 import { assertFloorReady, refuse } from './access'
 import { emitLay } from './emit'
@@ -51,7 +51,7 @@ export interface TableSpec {
 export async function tableCommand<T>(caller: CommandCaller, layId: string, spec: TableSpec, idempotencyKey: string | undefined, work: (tools: CommandTools, state: LayState, context: OfficeContext | FloorContext) => Promise<T>) {
   const context = workerOf(caller)
   const found = await caller.withClient((db) => readLayState(db, layId))
-  if (!found || !may(context, PRODUCTION_CUT, found.order)) return notFound('Lay')
+  if (!found || !may(context, PRODUCTION_CUT, found.order, partiesOf(found.order))) return notFound('Lay')
   if (context.audience === 'floor') await assertFloorReady(caller, context, found!.order.siteId)
   const { result, replayed } = await command(
     caller,

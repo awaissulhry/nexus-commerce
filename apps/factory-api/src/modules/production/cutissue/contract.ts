@@ -54,6 +54,8 @@ export const listProcessesContract = defineContract({
     workCentreId: id().optional(),
     kind: z.enum(SECONDARY_KINDS).optional(),
     place: z.enum(SECONDARY_PLACES).optional(),
+    /** B-PR-04b: one customer's processes (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: listLimit(SECONDARY_LIMITS.rows),
   }),
@@ -130,7 +132,8 @@ export const trolleyView = output({
 })
 
 export const listTrolleysContract = defineContract({
-  querystring: input({ view: z.enum(TROLLEY_VIEWS).optional(), siteId: id().optional(), lineId: id().optional(), q: z.string().trim().max(60).optional(), cursor: id().optional(), limit: listLimit(TROLLEY_LIMITS.rows) }),
+  // B-PR-04b: partyId = the trolleys carrying a bundle of this customer (inside the caller's reach).
+  querystring: input({ view: z.enum(TROLLEY_VIEWS).optional(), siteId: id().optional(), lineId: id().optional(), q: z.string().trim().max(60).optional(), partyId: id().optional(), cursor: id().optional(), limit: listLimit(TROLLEY_LIMITS.rows) }),
   response: { 200: output({ rows: z.array(trolleyView), nextCursor: id().nullable(), tiles: output({ loading: count, sent: count, received: count, cancelled: count }) }) },
 })
 

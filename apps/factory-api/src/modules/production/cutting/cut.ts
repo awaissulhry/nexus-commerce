@@ -1,7 +1,7 @@
 import type { Uom } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { HideState } from '@nexus/factory-domain/inventory/issue/rules'
 import { quantityText, reversalOf } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -31,6 +31,7 @@ import { systemContext } from '../../../platform/outbox/system'
 import { floorReadinessFor } from '../../../platform/privacy/read'
 import { issueInCommand, type IssueResult } from '../../inventory/issue/issue'
 import { lockHideCuts, lockWorkOrderIssues } from '../../inventory/issue/store'
+import { reachesWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-04b
 import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledger/post-moves'
 import { workerGateFor } from '../../people/privacy/worker-gate'
 import { stationBlock } from '../../plant/checks'
@@ -159,10 +160,14 @@ export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeC
   return context
 }
 
-/** May the caller work on this work order with the permission? (A floor device: only at its own site.) */
-export function mayCut(context: FloorContext | OfficeContext, permission: Permission, workOrder: { readonly companyId: string; readonly siteId: string }): boolean {
+/**
+ * May the caller work on this work order with the permission? (A floor device: only at its own site.) B-PR-04b (the brand
+ * wall, ../work-orders/scope): and over its one customer: another customer's work order, or one of no customer for a person
+ * limited to some customers, is not reached (every caller answers it as an unknown one).
+ */
+export function mayCut(context: FloorContext | OfficeContext, permission: Permission, workOrder: WorkOrderReach): boolean {
   if (context.audience === 'floor' && context.siteId !== workOrder.siteId) return false
-  return can(actorOf(context), permission, { companyId: workOrder.companyId, siteId: workOrder.siteId })
+  return reachesWorkOrder(actorOf(context), permission, workOrder)
 }
 
 /** The work order the caller cuts for or reads: one it may reach with the permission (else not found). */
@@ -804,7 +809,10 @@ const UNDO_NOTE = 'Undone by the cutter before the next cut (logged by mistake).
 async function namedEntry(caller: CommandCaller, cutLogId: string, permission: Permission): Promise<EntryRow> {
   const entry = await caller.withClient((client) => readEntry(client, cutLogId))
   if (!entry) throw new NotFoundError('Cut log entry not found.')
-  await cuttingWorkOrder(caller, entry.workOrderId, permission)
+  // B-PR-04b (the brand wall): an entry of a work order the caller does not reach answers as an unknown entry.
+  await cuttingWorkOrder(caller, entry.workOrderId, permission).catch((error: unknown) => {
+    throw error instanceof NotFoundError ? new NotFoundError('Cut log entry not found.') : error
+  })
   return entry
 }
 

@@ -8,7 +8,7 @@ import type { FloorContext, OfficeContext } from '../../../core/context'
 import { issueInCommand } from '../../inventory/issue/issue'
 import { lockLotRolls, refuseRoll, rollFactsOf, ROLL_SELECT } from '../../inventory/rolls/facts'
 import { emitChange } from '../../inventory/rolls/write'
-import { may, notFound, workerOf } from '../cutorders/access'
+import { may, notFound, partiesOf, workerOf } from '../cutorders/access' // B-PR-04b: partiesOf
 import { refuse } from './access'
 import { emitConsumption } from './emit'
 // B-W2b-221 (PRD-105): the company's consumption tolerance at the confirmation.
@@ -44,7 +44,7 @@ export async function readLay(caller: CommandCaller, layId: string) {
   const context = workerOf(caller)
   return caller.withClient(async (db) => {
     const state = await readLayState(db, layId)
-    if (!state || !may(context, PRODUCTION_CUT, state.order)) return notFound('Lay')
+    if (!state || !may(context, PRODUCTION_CUT, state.order, partiesOf(state.order))) return notFound('Lay')
     return { ...layView(state!), warnings: [] }
   })
 }

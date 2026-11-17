@@ -42,6 +42,8 @@ export const CUT_ORDER_COLUMNS = {
   item: { select: { id: true, code: true, name: true, tracking: true, baseUom: true } },
   itemColour: { select: { id: true, code: true, name: true } },
   station: { select: { id: true, code: true, name: true, labelPrinterId: true } },
+  // B-PR-04b: each line's cell's customer, for the brand wall (access.ts may + partiesOf); never in an answer.
+  lines: { select: { workOrderSize: { select: { workOrder: { select: { partyId: true } } } } } },
 } as const satisfies Prisma.CutOrderSelect
 export type CutOrderRow = Prisma.CutOrderGetPayload<{ select: typeof CUT_ORDER_COLUMNS }>
 
@@ -219,7 +221,8 @@ export async function readCells(db: Reader, cellIds: readonly string[], material
       size: true,
       quantity: true,
       colourway: { select: { code: true, name: true } },
-      workOrder: { select: { id: true, companyId: true, siteId: true, number: true, status: true, holdReason: true } },
+      // B-PR-04b: partyId, the cell's customer (the brand wall: a plan names only cells the planner reaches).
+      workOrder: { select: { id: true, companyId: true, siteId: true, number: true, status: true, holdReason: true, partyId: true } },
       materials: { where: { itemId: material.itemId, ...(material.itemColourId ? { itemColourId: material.itemColourId } : {}) }, select: { id: true }, take: 1 },
     },
   })

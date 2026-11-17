@@ -8,7 +8,8 @@ import type { CommandCaller } from '../../../core/command'
 import { SYSTEM_ACTOR_ID, type SystemContext } from '../../../core/context'
 import { completeUpload, requestUpload } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
-import { floorOf, mayCut } from './cut'
+import { floorOf } from './cut'
+import { maySite } from '../scans/access' // B-PR-04b
 import { readHideById } from './store'
 
 /**
@@ -43,7 +44,8 @@ async function hideOf(request: FastifyRequest, hideId: string): Promise<{ id: st
     const site = await client.site.findUnique({ where: { id: hide.siteId }, select: { id: true, companyId: true } })
     return site ? { id: hide.id, siteId: site.id, companyId: site.companyId } : null
   })
-  if (!found || !mayCut(context, PRODUCTION_CUT, found)) throw new NotFoundError("Not a hide of this site: scan the hide's tag.")
+  // A hide names no customer: its site (B-PR-04b).
+  if (!found || !maySite(context, PRODUCTION_CUT, found)) throw new NotFoundError("Not a hide of this site: scan the hide's tag.")
   return found
 }
 

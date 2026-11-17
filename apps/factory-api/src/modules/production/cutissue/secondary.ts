@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_CUTTING_VIEW } from '@nexus/factory-domain/production/cutting/permissions'
 import { PRODUCTION_SECONDARY } from '@nexus/factory-domain/production/cutissue/permissions'
@@ -21,7 +21,8 @@ import {
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext } from '../../../core/context'
 import { assertFloorReady } from '../bundles/bundles'
-import { officeOf, refuse, seen, workerOf } from './access'
+import { officeOf, ofWorkOrder, refuse, seen, workerOf } from './access'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04b
 import { emitProcess } from './emit'
 import { deviceStation, findBundle, liveOf, PROCESS_COLUMNS, readBundles, readCells, readOrder, readOrders, readProcesses, readWorkCentres, trolleyOfBundles, type ProcessRow, type Reader } from './store'
 
@@ -103,6 +104,8 @@ export interface ProcessListQuery {
   readonly workCentreId?: string | undefined
   readonly kind?: SecondaryKind | undefined
   readonly place?: SecondaryPlace | undefined
+  /** B-PR-04b: one customer's processes (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit?: number | undefined
 }
@@ -110,8 +113,9 @@ export interface ProcessListQuery {
 /** GET /production/secondary-processes: the office's list, newest first, with a tile per status. */
 export async function listProcesses(caller: CommandCaller, query: ProcessListQuery) {
   const context = officeOf(caller)
-  // A process has no company column: the caller's scope reaches it through its bundle's work order.
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+  // A process has no company column: the caller's scope reaches it through its bundle's work order. B-PR-04b (the brand wall): and
+  // its customer.
+  const scope: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actorOf(context), PRODUCTION_CUTTING_VIEW), query.partyId ? { partyId: query.partyId } : {}] }
   const limit = Math.min(query.limit ?? 50, SECONDARY_LIMITS.rows)
   const base: Prisma.SecondaryProcessWhereInput[] = [
     { bundle: { is: { workOrder: { is: scope } } } },
@@ -146,7 +150,7 @@ export async function bundleProcesses(caller: CommandCaller, query: { readonly c
   if (!query.code && !query.bundleId) throw new ValidationError('Scan the bundle, or name it.', [{ path: 'querystring/code', message: 'Scan the bundle’s ticket.' }])
   return caller.withClient(async (db) => {
     const bundle = await findBundle(db, query)
-    const order = seen(context, PRODUCTION_SECONDARY, bundle ? await readOrder(db, bundle.workOrderId) : null, 'Bundle')
+    const order = seen(context, PRODUCTION_SECONDARY, bundle ? await readOrder(db, bundle.workOrderId) : null, 'Bundle', ofWorkOrder)
     const [rows, live, cells, station, trolleys] = await Promise.all([
       readProcesses(db, [bundle!.id]),
       liveOf(db, [bundle!]),
@@ -197,7 +201,7 @@ export async function addProcesses(caller: CommandCaller, body: AddBody, idempot
     for (const [index, by] of body.bundles.entries()) {
       const bundle = await findBundle(db, by)
       if (!bundle) throw new NotFoundError(`Bundle ${by.code ?? by.bundleId ?? ''} not found (line ${index + 1}).`)
-      seen(context, PRODUCTION_SECONDARY, await readOrder(db, bundle.workOrderId), 'Bundle')
+      seen(context, PRODUCTION_SECONDARY, await readOrder(db, bundle.workOrderId), 'Bundle', ofWorkOrder)
       rows.push(bundle)
     }
     return rows
@@ -268,7 +272,7 @@ export async function moveProcess(caller: CommandCaller, processId: string, move
   if (move === 'cancel' && !body.reason?.trim()) throw new ValidationError('Say why the process is cancelled.', [{ path: 'body/reason', message: 'Required.' }])
   const known = await caller.withClient((db) => readProcess(db, processId))
   const order = known ? await caller.withClient((db) => readOrder(db, known.workOrderId)) : null
-  seen(context, PRODUCTION_SECONDARY, order, 'Secondary process')
+  seen(context, PRODUCTION_SECONDARY, order, 'Secondary process', ofWorkOrder)
   if (context.audience === 'floor') await assertFloorReady(caller, context as FloorContext, context.siteId)
   const record = { type: 'SecondaryProcess' as const, id: processId, ...(body.version !== undefined ? { expectedVersion: body.version } : {}) }
   const { result, replayed } = await command(caller, { name: NAME[move], idempotencyKey, input: { processId, move, ...body }, record }, async (tools) => {
