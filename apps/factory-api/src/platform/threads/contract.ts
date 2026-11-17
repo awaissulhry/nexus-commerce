@@ -74,6 +74,25 @@ export const messageView = output({
 })
 export type MessageView = z.infer<typeof messageView>
 
+// ---- B-TH-027 (threads plan G10): the reader's own read mark ------------------------------------------------------------
+/** The reader's own reading of a thread: their mark, what is new to them after it, the first new message. Never anyone else's. */
+export const readingView = output({
+  lastReadMessageId: id().nullable(),
+  newCount: z.number().int(),
+  /** "New since your last visit" sits above this message; null: nothing new. */
+  firstNewMessageId: id().nullable(),
+})
+// ---- end B-TH-027
+
+// ---- B-TH-028: who answers the conversation (null: the record's own, by the chain) ------------------------------------------
+export const ownerView = output({ id: id(), name: z.string(), active: z.boolean(), source: z.enum(['SET', 'ASSIGNEE', 'SUPERVISOR', 'MAKER']) })
+export const setOwnerContract = defineContract({
+  params: recordParams,
+  body: input({ /** An active office person who may read the conversation; null: the record's own (its assignee, supervisor or maker). */ ownerId: id().nullable() }),
+  response: { 200: output({ owner: ownerView.nullable() }) },
+})
+// ---- end B-TH-028
+
 export const readThreadContract = defineContract({
   params: recordParams,
   querystring: input(page),
@@ -83,9 +102,43 @@ export const readThreadContract = defineContract({
       thread: threadView.nullable(),
       messages: z.array(messageView),
       nextCursor: z.string().nullable(),
+      /** B-TH-027: the reader's own reading (office and portal people; null for a link or before the first message). */
+      reading: readingView.nullable().optional(),
+      // ---- B-TH-028: who answers and what waits (the office only: a portal or link reader is never told either)
+      head: output({
+        owner: output({ id: id(), name: z.string(), active: z.boolean(), source: z.enum(['SET', 'ASSIGNEE', 'SUPERVISOR', 'MAKER']) }).nullable(),
+        waiting: output({
+          on: z.enum(['US', 'CUSTOMER']),
+          since: instant(),
+          /** Working minutes since, on the record's company calendar (clock minutes without a calendar: `calendar` false). */
+          workingMinutes: z.number().int(),
+          calendar: z.boolean(),
+          /** Over the rule's threshold: a request after 1 working day, any other record after 3. */
+          amber: z.boolean(),
+          thresholdDays: z.number().int(),
+        }).nullable(),
+      }).optional(),
+      // ---- end B-TH-028
     }),
   },
 })
+
+// ---- B-TH-027: mark read, mark unread, the counts of a page of records -----------------------------------------------------
+export const markReadContract = defineContract({
+  params: recordParams,
+  body: input({ /** Read up to this message (default: the newest the reader may read); the mark only moves forward. */ messageId: id().optional() }),
+  response: { 200: output({ reading: readingView }) },
+})
+export const markUnreadContract = defineContract({
+  params: recordParams,
+  body: input({ /** New again from this message on. */ messageId: id() }),
+  response: { 200: output({ reading: readingView }) },
+})
+export const unreadContract = defineContract({
+  body: input({ records: z.array(input({ recordType: z.string().regex(RECORD_TYPE), recordId: id() })).min(1).max(200) }),
+  response: { 200: output({ counts: z.array(output({ recordType: z.string(), recordId: id(), newCount: z.number().int(), lastAt: instant().nullable() })) }) },
+})
+// ---- end B-TH-027
 
 export const postNoteContract = defineContract({
   params: recordParams,

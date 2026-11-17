@@ -260,7 +260,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-377: a supplier's bank change request opens the supplier's Bank details tab (the request's parent: its party).
   SupplierBank: '/purchasing/suppliers/[id]?tab=bank',
   // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
-  Inquiry: '/sales/inquiries/[id]',
+  // B-TH-216: Sales › Incoming (renamed; the old address redirects).
+  Inquiry: '/sales/incoming/[id]',
   // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.
   DeliveryTolerance: '/purchasing/settings?tolerance=[id]',
 })
@@ -430,8 +431,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
-  // B-W2b-322: the inquiries (SCR-105) read `?tile=`, `?source=`, `?party=`, `?prospect=1`, `?q=`.
-  '/sales/inquiries': '/sales/inquiries',
+  // B-W2b-322: the inquiries (SCR-105) read `?tile=`, `?source=`, `?party=`, `?prospect=1`, `?q=`; B-TH-216: on Sales › Incoming
+  // (the API's list keeps its address), which also reads `?status=` and `?company=`.
+  '/sales/inquiries': '/sales/incoming',
   // B-W2b-353: the service cases (SCR-217) read `?view=`, `?kind=`, `?cover=`, `?serial=`, `?q=`.
   '/sales/service/cases': '/sales/service',
   // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.

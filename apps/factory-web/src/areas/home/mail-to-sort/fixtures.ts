@@ -180,6 +180,11 @@ export const designScreen = defineDesignScreen<MailToSortViewModel>({
     },
     { id: 'conflict', label: 'Sorted meanwhile', model: { ...base, notice: { key: 'mailToSort.notice.conflict', tone: 'warning' } }, note: 'COL-078: the version moved; the mail was read again.' },
     { id: 'assigned', label: 'Assigned', model: { ...base, mails: { items: MAILS.slice(2), more: true }, notice: { key: 'mailToSort.notice.assigned', tone: 'success' } } },
+    // ── B-TH-224 (threads plan TH-1b): Mail to sort points at Incoming ──
+    { id: 'th-224-make', label: 'TH-1b · Make incoming request: a waiting mail becomes a request in Incoming', model: { ...base, prefix: '/w/DEMO', canInquiry: true, open: { id: TRIAGE_DETAIL.id, detail: { ...TRIAGE_DETAIL, inquiry: null } } }, note: 'A real link to Incoming\'s "Make a request" dialog for this mail (⌘-click: a new tab).' },
+    { id: 'th-224-open', label: 'TH-1b · The mail became a request: "Open INQ-… in Incoming" (answered there, never here)', model: { ...base, prefix: '/w/DEMO', canInquiry: true, open: { id: TRIAGE_DETAIL.id, detail: { ...TRIAGE_DETAIL, inquiry: { id: '0190f0e2-5401-7000-8000-000000000003', number: 'INQ-DEMO-0003' } } } } },
+    { id: 'th-224-held', label: 'TH-1b · Make incoming request held: the person does not answer requests (the right named)', model: { ...base, prefix: '/w/DEMO', canInquiry: false, open: { id: TRIAGE_DETAIL.id, detail: TRIAGE_DETAIL } } },
+    // ── end B-TH-224 ──
     { id: 'loading', label: 'Loading', model: { ...base, mails: { items: null, more: false } } },
     { id: 'error', label: 'Could not be read', model: { ...base, mails: { items: null, more: false, problem: 'mailToSort.problem.unavailable' } } },
   ],

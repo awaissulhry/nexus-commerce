@@ -8,7 +8,9 @@ import { kept, NONE, ROWS, section, type PersonFacts, type PersonSource, type Pl
  *
  *   CONTACT   an open complaint, return or service case of the contact keeps it (DISPUTE); else name '', no e-mail, no phone,
  *             ARCHIVED, erasedAt/ById (party.contact_erased). A person party (a rider) keeps its customer record (CUSTOMER).
- *   PROSPECT  the four prospect columns and the lawful basis blank for good, prospectErasedAt/ById.
+ *   PROSPECT  the four prospect columns blank for good, prospectErasedAt/ById. The lawful basis stays (threads plan follow-up,
+ *             TH-2 notes Open 3): it names no one, the retention sweep keeps it too, and a CLOSED request (declined, lost) is frozen
+ *             by the database but for its note and this erasure — blanking the basis there was refused and the erasure failed.
  *   REPORTER  a report still being assessed keeps the reporter's details (SAFETY_REPORT); a closed one blanks them
  *             (safety_report.erased REPORTER); the report itself stays.
  *   USER      a deactivated account: the name becomes a mark, the e-mail an address that never delivers.
@@ -28,7 +30,8 @@ const monthsAfter = (date: Date, months: number): Date => {
  */
 export const PERSONAL_COLUMNS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   PartyContact: ['name', 'email', 'phone'],
-  Inquiry: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone', 'prospectLawfulBasis'],
+  // Threads plan follow-up (TH-2 notes, Open 3): the lawful basis is no personal data and stays (see PROSPECT above).
+  Inquiry: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone'],
   ProductSafetyReport: ['reporterName', 'reporterEmail', 'reporterPhone'],
   User: ['displayName', 'email'],
   Employee: ['firstName', 'lastName', 'displayName'],
@@ -153,7 +156,8 @@ export const ownRecords: PersonSource = {
             keptFields: [],
             why: null,
             async apply({ tx, now: at, actorId }) {
-              await tx.inquiry.update({ where: { id: inquiryId }, data: { prospectName: null, prospectCompany: null, prospectEmail: null, prospectPhone: null, prospectLawfulBasis: null, prospectErasedAt: at, prospectErasedById: actorId, version: { increment: 1 }, updatedAt: at }, select: { id: true } })
+              // The lawful basis stays (threads plan follow-up): a closed request takes only the erasure of its prospect.
+              await tx.inquiry.update({ where: { id: inquiryId }, data: { prospectName: null, prospectCompany: null, prospectEmail: null, prospectPhone: null, prospectErasedAt: at, prospectErasedById: actorId, version: { increment: 1 }, updatedAt: at }, select: { id: true } })
             },
           },
         ]

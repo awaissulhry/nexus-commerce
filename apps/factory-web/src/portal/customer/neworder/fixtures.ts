@@ -7,6 +7,15 @@ import { ADDRESSES, at, catalogueRead, DRAFTS, draftRecord, LINE_TROUSERS, lineO
 import { headerDraftOf, sendHeld } from './model'
 import type { NewOrderViewModel } from './view/NewOrderView'
 import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'
+// B-TH-220: New order as an e-mail, read by Brand Beta (brand B), the made-up reader of every wall scan.
+import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
+import { COMPOSE_NS, EMPTY_COMPOSE, problemsOf, sendHeld as composeHeld, type ComposeDraft } from '../../../lib/request-compose/model'
+import type { RequestComposeModel } from '../../../lib/request-compose/view/RequestCompose'
+import { BRAND_BETA } from '../../../lib/testing/two-brands'
+import { at as requestAt, betaShellOf, PREFIX as BETA, REQUESTS, requestView } from '../requests/design-data'
+import { requestBandOf } from './band'
+import { goesToOf, openItems } from './request-model'
+import type { RequestPageModel } from './view/RequestPageView'
 
 /**
  * SCR-185 › New order & reorder (design portal.customer.neworder: sec:start, sec:order-head, sec:lines, sec:reorder,
@@ -131,11 +140,103 @@ const pickerModel = (over: Partial<NonNullable<NewOrderViewModel['dialogs']['pic
 
 const STYLE = '0194f0e2-1940-7000-8000-000000000001'
 
+// ── B-TH-220: New order as an e-mail ─────────────────────────────────────────────────────────────────────────────────
+const composeWords = (locale: Locale) => createTranslator(locale, CATALOGUE[locale][COMPOSE_NS] ?? {})
+const time = (locale: Locale, hours: number) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }).format(new Date(requestAt(hours)))
+const TYPED: ComposeDraft = { ...EMPTY_COMPOSE, subject: 'Rain jackets like last spring, 40 pieces', message: `Hello,\n${BRAND_BETA.message}\nWe would like 40 rain jackets like last spring: same colours, sizes S to XXL.\nThank you,\n${BRAND_BETA.portalPerson.name}` }
+const CHOICES = [
+  { id: 'b2b2b2b2-0000-4000-8000-000000000981', label: `Lager, ${BRAND_BETA.address.line1}, ${BRAND_BETA.address.postalCode} ${BRAND_BETA.address.city}`, waiting: false, isDefault: true },
+  { id: 'b2b2b2b2-0000-4000-8000-000000000982', label: 'Shop, Betaweg 5, 10117 Berlin', waiting: true, isDefault: false },
+]
+
+type ComposeOver = Partial<RequestComposeModel> & { facts?: { preview?: boolean; offline?: boolean; sending?: boolean; closed?: boolean }; showAll?: boolean }
+
+function composeOf(locale: Locale, over: ComposeOver = {}): RequestComposeModel {
+  const t = orderingWords(locale).t
+  const tc = composeWords(locale)
+  const { facts, showAll, ...rest } = over
+  const draft = rest.draft ?? EMPTY_COMPOSE
+  const held = composeHeld(draft, TODAY, { preview: false, offline: false, sending: false, closed: false, ...facts })
+  return {
+    goesTo: goesToOf('Pelletteria Esempio', t),
+    draft,
+    today: TODAY,
+    problems: showAll ? problemsOf(draft, TODAY) : {},
+    shipTo: { state: 'ready', choices: CHOICES },
+    detailsOpen: false,
+    kept: { state: 'none' },
+    offline: false,
+    readOnly: false,
+    sending: false,
+    sendHeld: held ? tc(held) : null,
+    failed: null,
+    same: null,
+    filesHeld: tc('files.closed'),
+    notice: null,
+    ...rest,
+  }
+}
+
+function requestPage(phase: RequestPageModel['phase'], build: (locale: Locale) => Omit<Partial<RequestPageModel>, 'compose'> & { compose?: ComposeOver } = () => ({})): OrderingCaseBuilder {
+  return (locale) => {
+    const words = orderingWords(locale)
+    const { compose, ...over } = build(locale)
+    const view: RequestPageModel = {
+      phase,
+      prefix: BETA,
+      closedWords: null,
+      admins: [BRAND_BETA.portalPerson.name],
+      openCheckFailed: false,
+      compose: phase === 'compose' ? composeOf(locale, compose) : null,
+      aside: { open: { state: 'ready', items: openItems(REQUESTS, BETA, locale, (iso) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }).format(new Date(iso))) }, allHref: `${BETA}/orders?chip=REQUESTED`, returnsHref: `${BETA}/returns` },
+      receipt: null,
+      discardOpen: false,
+      ...over,
+    }
+    const sent = view.receipt ? requestView('SENT') : null
+    const band = requestBandOf({ words, phase: view.phase, state: sent ? { label: sent.state.words[locale], code: sent.state.code } : null, customerRef: view.receipt?.customerRef ?? null })
+    return { shell: betaShellOf(locale, band, '/orders/new'), body: { kind: 'request', model: view } }
+  }
+}
+
+const RECEIPT = (locale: Locale): NonNullable<RequestPageModel['receipt']> => ({
+  seq: 7,
+  subject: TYPED.subject,
+  message: TYPED.message,
+  customerRef: BRAND_BETA.customerRef,
+  wantedDate: dayOf(40),
+  shipTo: CHOICES[0]!.label,
+  at: new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Rome' }).format(new Date(requestAt(0))),
+  requestHref: `${BETA}/orders/requests/b2b2b2b2-0000-4000-8000-000000000901`,
+})
+const dayOf = (days: number) => requestAt(days * 24).slice(0, 10)
+
+/** SCR-185's New order as an e-mail (B-TH-220): every state of picture 18 and the receipt of picture 19. */
+export const REQUEST_CASES = [
+  { id: 'th-220-compose', label: 'New order as an e-mail — empty', model: requestPage('compose'), note: 'One fixed line “Goes to: Sales at Pelletteria Esempio” (no To field: the session is one company). Subject optional, the message in their own words, files held with the API’s own sentence, “Add details (optional)” folded, Send at the foot. From 1280 px: Your open requests (true states, own numbers) and the pointer to returns.' },
+  { id: 'th-220-typed', label: 'Typed: the draft kept on this device', model: requestPage('compose', (locale) => ({ compose: { draft: { ...TYPED, customerRef: BRAND_BETA.customerRef, wantedDate: dayOf(40), shipToAddressId: CHOICES[0]!.id }, kept: { state: 'kept', at: time(locale, 0) } } })), note: '“Draft kept on this device · 10:42”; the folded details say what is in them.' },
+  { id: 'th-220-details', label: 'Add details open: a new address waits for our check', model: requestPage('compose', (locale) => ({ compose: { draft: { ...TYPED, customerRef: BRAND_BETA.customerRef, wantedDate: dayOf(40), shipToAddressId: CHOICES[1]!.id }, detailsOpen: true, kept: { state: 'kept', at: time(locale, 0) } } })), note: 'Nothing in the fold is needed to send. Their PO, the day wanted (today or later), one of their own delivery addresses.' },
+  { id: 'th-220-problems', label: 'Send held: nothing written, a day in the past', model: requestPage('compose', () => ({ compose: { draft: { ...EMPTY_COMPOSE, wantedDate: '2020-01-10' }, detailsOpen: true, showAll: true } })), note: 'Held before Send with the reason; the field says what is wrong.' },
+  { id: 'th-220-long', label: 'A long message: the counter near the end', model: requestPage('compose', () => ({ compose: { draft: { ...TYPED, message: `${TYPED.message}\n${'Detail of the order. '.repeat(880)}` } } })), note: 'The counter shows from 90 % of 20 000 characters; over it Send holds.' },
+  { id: 'th-220-carried', label: 'A style from the catalogue carried into the message', model: requestPage('compose', (locale) => ({ compose: { draft: { ...EMPTY_COMPOSE, subject: 'BX-200 Rain jacket Beta', message: '- BX-200 · Rain jacket Beta: ' }, notice: orderingWords(locale).t('request.styleNotice', { count: 1 }) } })), note: 'While the catalogue door is closed (B-TH-304), “Add to order” starts a request about the style; nothing is ordered until Send.' },
+  { id: 'th-220-same', label: 'The same words sent ten minutes ago', model: requestPage('compose', (locale) => ({ compose: { draft: TYPED, same: { at: time(locale, -0.1), yours: locale === 'it' ? 'La vostra richiesta 7' : 'Your request 7' } } })), note: 'Asked first, never sent twice by accident (and one Idempotency-Key per content: a double click is one request).' },
+  { id: 'th-220-failed', label: 'Not sent: no connection', model: requestPage('compose', (locale) => ({ compose: { draft: TYPED, failed: orderingWords(locale).t('request.failed.unavailable') } })) },
+  { id: 'th-220-offline', label: 'Offline', model: requestPage('compose', () => ({ compose: { draft: TYPED, offline: true, facts: { offline: true } } })), note: 'Send holds “You are offline: your text stays here”; the text stays on this device.' },
+  { id: 'th-220-preview', label: 'An office preview (read only)', model: requestPage('compose', () => ({ compose: { draft: TYPED, readOnly: true, facts: { preview: true } } })) },
+  { id: 'th-220-closed', label: 'Held before typing: no request numbering for the company', model: requestPage('closed', () => ({ closedWords: 'Orders by portal are not open yet for Pelletteria Esempio — please write to your contact.' })), note: 'The API’s own words (B-TH-012); the admins get the alert REQUEST_NUMBERING_MISSING.' },
+  { id: 'th-220-no-right', label: 'A colleague who may not order', model: requestPage('noRight'), note: 'Who can give the right; no dead button.' },
+  { id: 'th-220-no-right-alone', label: 'Nobody to ask in the company', model: requestPage('noRight', () => ({ admins: [] })), note: '“Ask us to add a buyer” with Ask a question.' },
+  { id: 'th-220-check-failed', label: 'Could not check whether orders are open', model: requestPage('compose', () => ({ openCheckFailed: true })) },
+  { id: 'th-220-receipt', label: 'The receipt: “Received — your request 7.”', model: requestPage('sent', (locale) => ({ receipt: RECEIPT(locale) })), note: 'The customer’s own number (never INQ-…), what was sent, Open the request, New order; no answer-time promise; a copy by e-mail is not claimed as delivered.' },
+  { id: 'th-220-loading', label: 'Loading', model: requestPage('loading') },
+] as const
+
 export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
   screen: 'SCR-185',
-  title: 'New order & reorder (portal.customer.neworder)',
+  title: 'New order as an e-mail (B-TH-220); below, the catalogue door’s New order & reorder (closed until B-TH-304)',
   view: OrderingCase,
   cases: [
+    ...REQUEST_CASES,
     { id: 'start', label: 'How do you want to order? (no drafts)', model: start(), note: 'Three ways in, one draft. A way makes the draft on the server; the address keeps it (?draft=).' },
     { id: 'start-drafts', label: 'Drafts to continue', model: start(() => ({ drafts: DRAFTS })), note: '“Continue your draft from … · 3 lines” (PressableRow).' },
     { id: 'start-loading', label: 'The drafts loading', model: start(() => ({ state: 'loading' })) },
@@ -185,8 +286,8 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     {
       id: 'sent',
       label: 'sec:sent — Request sent',
-      model: page(() => ({ sent: { number: 'RQ-2026-0087', customerRef: 'BA-PO-4521', confirmBy: TODAY, lines: 2, pieces: 26, net: '9500.00', currency: 'EUR', seesPrices: true } }), 'sent'),
-      note: '“Order request sent — your PO …, our request RQ-… We confirm by …” · Open the order (status Requested) · New order.',
+      model: page(() => ({ sent: { number: 'RQ-2026-0087', customerRef: 'BA-PO-4521', lines: 2, pieces: 26, net: '9500.00', currency: 'EUR', seesPrices: true } }), 'sent'),
+      note: '“Order request sent — your PO …, our request RQ-…” (no answer-time promise, B-TH-041) · Open the order (status Requested) · New order.',
     },
     { id: 'closed', label: 'A request no longer a draft', model: page(() => ({ record: draftRecord({ request: { status: 'SENT', number: 'RQ-2026-0081' } }), closed: { status: 'SENT', number: 'RQ-2026-0081', salesOrder: null } }), 'closed') },
     { id: 'missing', label: 'A draft that no longer exists', model: page(() => ({ state: 'missing', record: null })) },

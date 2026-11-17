@@ -89,6 +89,31 @@ describe('a raw mail', () => {
     ])
   })
 
+  it('B-TH-088: keeps a pasted picture as a file; a small one, a repeated one and a pasted file that is no picture stay out as inline', async () => {
+    const photo = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40_000, 7), Buffer.from([0xff, 0xd9])])
+    const banner = Buffer.concat([PNG, Buffer.alloc(30_000, 3)])
+    const raw = rawMail({
+      from: 'a@b.example',
+      to: ['c@d.example'],
+      subject: 'Il campione',
+      text: 'Ecco la foto del campione.',
+      html: '<p>Ecco la foto</p><img src="cid:p1"><img src="cid:logo"><img src="cid:b1"><img src="cid:b2">',
+      attachments: [
+        { filename: '', contentType: 'image/jpeg', content: photo, contentId: 'p1' },
+        { filename: 'logo.png', contentType: 'image/png', content: PNG, contentId: 'logo' },
+        { filename: 'banner.png', contentType: 'image/png', content: banner, contentId: 'b1' },
+        { filename: 'banner.png', contentType: 'image/png', content: banner, contentId: 'b2' },
+      ],
+    })
+    const mail = await parseRawMail(Buffer.from(raw))
+    expect(mail.parts.map((entry) => [entry.part.name, entry.kept, entry.kept ? entry.part.contentType : entry.part.reason])).toEqual([
+      ['picture-1.jpg', true, 'image/jpeg'],
+      ['logo.png', false, 'inline'],
+      ['banner.png', false, 'inline'],
+      ['banner.png', false, 'inline'],
+    ])
+  })
+
   it('takes the text of an HTML-only mail', async () => {
     const mail = await parseRawMail(Buffer.from(rawMail({ from: 'a@b.example', to: ['c@d.example'], subject: 'S', html: '<p>Riga uno</p><p>Riga&nbsp;due</p>' })))
     expect(mail.text).toBe('Riga uno\nRiga due')

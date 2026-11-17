@@ -1,12 +1,12 @@
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
-import type { OrderBoard, OrderRow } from '../api'
+import type { OrderBoard, OrderRow, OrderSort } from '../api'
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
 // ---- B-W2b-323 (orders in depth on screen) ----
-import type { WizardActions } from '../../../admin/import/view/ImportWizard'
 import type { ListDepthActions, ListDepthModel } from '../list-depth/use-list-depth'
 import type { OrdersImportModel } from '../import/view/OrdersImportView'
+import type { OrdersImportActions } from '../import/use-orders-import' // B-TH-293
 import type { WeekModel } from '../week/use-promise-week'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import type { PictureLoader } from './sheet/parts'
@@ -29,6 +29,8 @@ export interface NewOrderDialogModel {
   customerRef: string
   /** The number it will get: undefined while read, null when the company has no single active series. */
   number: string | null | undefined
+  /** B-TH-221: the one pointer — a written request goes to Incoming's New request (null: the person makes no request). */
+  incomingHref?: string | null
 }
 export interface OrdersListModel {
   /** `/w/<company>`. */
@@ -71,6 +73,11 @@ export interface OrdersListModel {
   brand?: { value: string; name: string | null } | null
   /** The company the address narrows the sheet to (`?company=`): its id and name. */
   company?: { id: string; name: string } | null
+  // ---- B-TH-057 (TH-4: the server sort and the custom field filter) ----
+  /** The server sort of the address (null: newest first): the header of the column it sorts by shows it. */
+  sort?: OrderSort | null
+  /** The custom field filter of the address (`?cf=`), shown as a chip (never a hidden filter); null: none. */
+  cf?: string | null
   /** The companies the reader sees: the Company column and its funnel only from two on. */
   companies?: ReadonlyArray<{ id: string; name: string }>
   /** The Customer switcher: the reader's customers, their counts, a limited reader (null: not drawn). */
@@ -101,6 +108,9 @@ export interface OrdersListActions {
   /** B-TH-225: the funnels (Brand, Status, Company) and their chips' ✕; null clears. */
   onBrand?: (brand: string | null) => void
   onCompany?: (company: string | null) => void
+  /** B-TH-057: a header click or the Sort menu (null: newest first again); the custom field chip's ✕. */
+  onSort?: (sort: OrderSort | null) => void
+  onClearCf?: () => void
   /** B-TH-225: the small preview of a row's picture (null: the placeholder). */
   loadPicture?: PictureLoader
   /** B-TH-225: the rest of a row opens the order (⌘ / Ctrl: a new tab). */
@@ -120,7 +130,7 @@ export interface OrdersListActions {
   // ---- B-W2b-323 (orders in depth on screen) ----
   depth?: ListDepthActions
   onImport?: () => void
-  importActions?: WizardActions
+  importActions?: OrdersImportActions // B-TH-293: + Use them (a customer's remembered columns)
   onWeekSite?: (siteId: string) => void
   onWeekRetry?: () => void
 }

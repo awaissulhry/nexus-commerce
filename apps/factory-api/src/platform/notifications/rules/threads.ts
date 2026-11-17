@@ -28,7 +28,7 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
     name: 'threads.mentioned',
     events: ['thread.user_mentioned'],
     async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
-      const payload = payloadOf('thread.user_mentioned').parse(raw) as unknown as { threadId: string; messageId: string; userId: string; authorId: string | null }
+      const payload = payloadOf('thread.user_mentioned').parse(raw) as unknown as { threadId: string; messageId: string; userId: string; authorId: string | null; batchId?: string }
       const thread = await threadOf(context, payload.threadId)
       const reader = thread ? await context.reader(payload.userId) : null
       if (!thread || !reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scopeOfThread(thread))) return []
@@ -44,6 +44,8 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
           messageKey: 'notifications.mentioned',
           params: { actorId: payload.authorId, messageId: payload.messageId },
           actorId: payload.authorId,
+          // B-TH-045: "mentioned you on 12 orders" is one bell item.
+          batchId: payload.batchId ?? null,
         },
       ]
     },
@@ -52,7 +54,7 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
     name: 'threads.following',
     events: ['thread.message_posted'],
     async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
-      const payload = payloadOf('thread.message_posted').parse(raw) as unknown as { threadId: string; messageId: string; recordType: string; recordId: string; direction: string }
+      const payload = payloadOf('thread.message_posted').parse(raw) as unknown as { threadId: string; messageId: string; recordType: string; recordId: string; direction: string; batchId?: string }
       const thread = await threadOf(context, payload.threadId)
       if (!thread) return []
       const followers = await followersOf(context.tx, { type: thread.recordType, id: thread.recordId })
@@ -76,6 +78,8 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
           messageKey: FOLLOWING_KEYS[payload.direction] ?? 'notifications.following.note',
           params: { actorId: authorId, messageId: payload.messageId, direction: payload.direction },
           actorId: authorId,
+          // B-TH-045
+          batchId: payload.batchId ?? null,
         })
       }
       return drafts

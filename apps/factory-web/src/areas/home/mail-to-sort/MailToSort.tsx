@@ -7,6 +7,8 @@ import { downloadLink } from '../../../record-panels/api'
 import { useLiveChanges } from '../../../record-panels/live'
 import { storeUrl } from '../../../record-panels/store'
 import { answerProblem, assignMail, findRecords, getMail, listMail, readProblem, rejectMail, releaseMail } from './api'
+// B-TH-224: whether the open mail became a request ("Open in Incoming").
+import { requestMadeOf } from '../mail/create-inquiry/api'
 import { isMailChange, type MailDetail, type MailFilter, type MailSummary, type MailToSortViewModel, type RecordCandidate } from './model'
 import { MailToSortView } from './view/MailToSortView'
 // B-W2b-397: the team inboxes, the capture address and Create an inquiry.
@@ -59,16 +61,22 @@ export function MailToSort() {
     },
     [api],
   )
+  // B-TH-224: the request each opened mail became (null: none; absent: not read), for "Open in Incoming".
+  const [made, setMade] = useState<Readonly<Record<string, { id: string; number: string } | null>>>({})
   const loadDetail = useCallback(
     async (id: string) => {
       try {
         const detail = await getMail(api, id)
         if (openRef.current?.id === id) setOpen({ id, detail, problem: null })
+        if (canInquiry && detail.thread?.recordType !== 'Inquiry')
+          requestMadeOf(api, id)
+            .then((request) => setMade((now) => ({ ...now, [id]: request })))
+            .catch(() => undefined)
       } catch (error) {
         if (openRef.current?.id === id) setOpen({ id, detail: null, problem: readProblem(error) })
       }
     },
-    [api],
+    [api, canInquiry],
   )
 
   useEffect(() => {
@@ -137,7 +145,7 @@ export function MailToSort() {
   const model: MailToSortViewModel = {
     filter,
     mails: { items: mails.items, more: mails.cursor !== null, problem: mails.problem },
-    open,
+    open: open?.detail ? { ...open, detail: { ...open.detail, inquiry: made[open.id] ?? null } } : open,
     canWrite: held.has('threads.post'),
     canReadFiles: held.has('files.read'),
     assign: { candidates, problem: candidatesProblem },

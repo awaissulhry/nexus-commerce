@@ -1,0 +1,344 @@
+/*
+ * B-TH-217 / B-TH-219 (threads plan TH-1b, PL2 / PL5): one request read like e-mail — row 1 (identity), row 2 (actions, Details ▾),
+ * the thread as the main column with the customer's words as its first card, and Details: folded under row 2 while the pane is
+ * narrower than 1100 px, its own 320 px column from 1100 px (a container query on the pane, never the window). The pane fills the
+ * height its host gives it; the thread and Details scroll on their own. DS tokens only; no max-width (no dead space at 1920).
+ */
+.fw-rp {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* ---- row 1: identity (48 px) ---- */
+.fw-rp-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: 48px;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+  min-width: 0;
+}
+
+.fw-rp-pic {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--nds-radius-md);
+  border: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-placeholder);
+  overflow: hidden;
+}
+
+.fw-rp-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-rp-title {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+  white-space: nowrap;
+}
+
+.fw-rp-who {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-rp-sep {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+
+.fw-rp-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--nds-font-weight-normal);
+  color: var(--nds-text-2);
+}
+
+.fw-rp-state,
+.fw-rp-nav {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-wait,
+.fw-rp-owner,
+.fw-rp-of {
+  flex: none;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+}
+
+.fw-rp-wait.is-late {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rp-owner {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- row 2: actions + Details ▾ (44 px) ---- */
+.fw-rp-row2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-height: 36px;
+  min-width: 0;
+}
+
+.fw-rp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* ---- the body: the thread, and Details ---- */
+.fw-rp-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-rp-body .fw-rp-details {
+  order: -1;
+  max-height: 45%;
+  overflow: auto;
+}
+
+.fw-rp-body.is-folded .fw-rp-details {
+  display: none;
+}
+
+.fw-rp-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-thread {
+  flex: 1 1 auto;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+@container (min-width: 1100px) {
+  .fw-rp-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: stretch;
+  }
+
+  .fw-rp-body .fw-rp-details,
+  .fw-rp-body.is-folded .fw-rp-details {
+    display: block;
+    order: 0;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .fw-rp-fold {
+    display: none;
+  }
+}
+
+/* The full page (PL5): the thread about two thirds, Details and actions about one third, from 1280 px. */
+.fw-rp.is-page .fw-rp-thread {
+  min-height: 480px;
+}
+
+@container (min-width: 1100px) {
+  .fw-rp.is-page .fw-rp-body {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  }
+}
+
+/* ---- the customer's own words (the first card) ---- */
+.fw-rp-first {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  background: var(--nds-info-soft);
+  border-left: 3px solid var(--nds-info);
+  border-radius: var(--nds-radius-lg);
+}
+
+.fw-rp-first-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-10);
+}
+
+.fw-rp-first-who {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-rp-first-at,
+.fw-rp-first-lock {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rp-first-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-first-text {
+  margin: 0;
+  max-width: 72ch;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  color: var(--nds-text);
+}
+
+/* ---- Details ---- */
+.fw-rp-details {
+  min-width: 0;
+  padding: var(--nds-space-12);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+}
+
+.fw-rp-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-rp-sec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rp-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+@media (max-width: 719px) {
+  .fw-rp-owner,
+  .fw-rp-of,
+  .fw-rp-subject,
+  .fw-rp-sep {
+    display: none;
+  }
+
+  /* Row 1 on a phone: who asks on its own line, then the state and the buttons. */
+  .fw-rp-head {
+    flex-wrap: wrap;
+    row-gap: var(--nds-space-4);
+  }
+
+  .fw-rp-title {
+    flex: 1 1 calc(100% - 44px);
+  }
+
+  .fw-rp-who {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .fw-rp-state {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+@media print {
+  .fw-rp-head button,
+  .fw-rp-row2,
+  .fw-rp-nav {
+    display: none;
+  }
+}
+
+/* The thread fills the main column below the first card. */
+.fw-rp-thread > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* B-TH-218: a closed request says what it became in place of its actions. */
+.fw-rp-outcome {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* B-TH-219 (PL5): "i" opens the details as a bottom sheet on a phone; above 720 px Details folds or takes its column. */
+.fw-rp-info {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .fw-rp.is-page .fw-rp-info {
+    display: inline-flex;
+  }
+
+  .fw-rp.is-page .fw-rp-fold,
+  .fw-rp.is-page .fw-rp-details {
+    display: none;
+  }
+}

@@ -100,6 +100,9 @@ export const INQUIRY_COLUMNS = {
   assigneeId: true,
   assignedAt: true,
   quoteId: true,
+  // TH-2 (B-TH-025, B-TH-026): the order made straight from it, the style drafts made from it.
+  salesOrderId: true,
+  styleIds: true,
   declineReason: true,
   closedAt: true,
   closedById: true,

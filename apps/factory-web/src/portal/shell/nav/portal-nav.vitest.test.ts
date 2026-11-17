@@ -131,7 +131,10 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
     // B-W2b-191: a customer's sales order opens its own page; B-W2b-197: a return and a complaint too; B-W2b-195: an invoice opens Documents on it.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'RepairOrder', 'PartyAddress', 'Invoice'])
+    // B-TH-222: a customer's request opens its own page (its true state and its thread).
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'Inquiry', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'RepairOrder', 'PartyAddress', 'Invoice'])
+    expect(recordPageOf(['CUSTOMER'], 'Inquiry', 'q1')).toBe('/orders/requests/q1')
+    expect(recordPageOf(['SUPPLIER'], 'Inquiry', 'q1')).toBeNull()
     // B-W2b-342: a repair opens its own page.
     expect(recordPageOf(['CUSTOMER'], 'RepairOrder', 'p1')).toBe('/returns/repairs/p1')
     expect(recordPageOf(['CUSTOMER'], 'ReturnAuthorisation', 'r1')).toBe('/returns/r1')
@@ -174,8 +177,8 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
   }
   // B-W2b-262: a role with the samples page has Quotes & samples with its badge (approvals are answered there); Finance keeps the Catalogue.
   const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
-  const customerRead = ['home:nav.home#home', 'orders:nav.ordersTracking#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
-  const customerFinance = ['home:nav.home#home', 'orders:nav.ordersTracking#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const customerRead = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const customerFinance = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
   const supplierOrders = ['home:nav.home#home', 'work:nav.purchaseOrders#orders', 'deliveries:nav.deliveries#deliveries', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const supplierPapers = ['home:nav.home#home', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const workshop = ['home:nav.home#home', 'work:nav.jobs#orders', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']

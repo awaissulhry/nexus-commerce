@@ -25,6 +25,10 @@ export type Words = z.infer<typeof words>
 const live = z.object({ events: z.array(z.string()) })
 const pieces = z.object({ ordered: z.number(), shipped: z.number(), open: z.number() })
 const named = z.object({ code: z.string(), name: z.string() })
+// B-TH-303: the customer's own number of an order ("Your order 12"; null: none yet). The API always sends it; an older answer
+// without it reads as none.
+const yourNumber = z.object({ seq: z.number(), words }).nullable().optional()
+export type OrderYourNumber = z.infer<typeof yourNumber>
 /** A price: absent for a reader without the price grain. */
 const price = z.number().nullable().optional()
 
@@ -35,6 +39,8 @@ export const orderRowSchema = z.object({
   id: z.string(),
   customerRef: z.string().nullable(),
   number: z.string().nullable(),
+  // B-TH-303
+  yourNumber,
   orderedOn: z.string().nullable(),
   status: z.enum(CUSTOMER_ORDER_STATUSES),
   words,
@@ -143,6 +149,8 @@ export const orderRecordSchema = z.object({
     id: z.string(),
     customerRef: z.string().nullable(),
     number: z.string(),
+    // B-TH-303 (read for New order's "Reorder this line"; the order page shows it with B-TH-275)
+    yourNumber,
     status: z.enum(CUSTOMER_ORDER_STATUSES),
     words,
     orderDate: z.string(),

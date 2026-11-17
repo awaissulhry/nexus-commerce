@@ -8,6 +8,10 @@ import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-
 // B-TH-017: None / Part / All (rule C8).
 import { INVOICED_STATES } from '@nexus/factory-domain/sales/orders/invoiced'
 import { MAX_TEXT, SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
+import { ORDER_SORTS } from './sort' // B-TH-057
+// B-TH-058 / B-TH-059: the office's priority levels, the customer's own urgency (read-only).
+import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
+import { CUSTOMER_URGENCIES } from './customer-urgency'
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -192,21 +196,46 @@ const filterFields = {
   /** The label on the garment: orders with a line of a style of this brand party, or `own` (our own collection). */
   brand: z.union([id(), z.literal('own')]).optional(),
   // ── end B-TH-225 ──
+  // ── B-TH-057 (threads plan TH-4, SHEET-G05: screen = file) ──
+  /** The custom fields' filter (`code:A,B;code>=X`, platform/fields filters): the list, its counts and its file keep the same rows. */
+  cf: z.string().trim().min(1).max(2000).optional(),
+  // ── end B-TH-057 ──
+  // ── B-TH-058 / B-TH-059 (threads plan TH-4: every total of the overall view opens exactly its rows) ──
+  /** None / Part / All by pieces on issued invoices less issued credit notes (the row's Invoiced, rule C8). */
+  invoiced: z.enum(INVOICED_STATES).optional(),
+  /** The ORDER_LATE_RISK rule calls it at risk now: still being made, promised within the rule's days for its company. */
+  atRisk: flag.optional(),
+  /** The customer's own mark (Urgent / Regular), read-only; none until the production lane's reader is registered. */
+  customerUrgency: z.enum(CUSTOMER_URGENCIES).optional(),
+  /** The order's currency (ISO 4217): a money total per currency opens its own rows. */
+  currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  // ── end B-TH-058 / B-TH-059 ──
+}
+
+/** B-TH-058: the list's every row term (the overall view's totals take the same, so each total opens exactly its rows). */
+const viewTermFields = {
+  status: status.optional(),
+  /** Only orders not shipped yet. */
+  open: flag.optional(),
+  /** The promise passed and the order is not shipped yet. */
+  late: flag.optional(),
+  /** The order needs a deposit and a request of it is still OPEN. */
+  deposit: z.enum(['OPEN']).optional(),
+  /** B-W2b-323: a change waits for the customer to accept it (reapprovalNeededAt set), the order not closed or cancelled. */
+  reaccept: flag.optional(),
+  ...filterFields,
 }
 
 export const listOrdersContract = defineContract({
   querystring: input({
-    status: status.optional(),
-    /** Only orders not shipped yet. */
-    open: flag.optional(),
-    /** The promise passed and the order is not shipped yet. */
-    late: flag.optional(),
-    /** The order needs a deposit and a request of it is still OPEN. */
-    deposit: z.enum(['OPEN']).optional(),
-    /** B-W2b-323: a change waits for the customer to accept it (reapprovalNeededAt set), the order not closed or cancelled. */
-    reaccept: flag.optional(),
-    ...filterFields,
-    cursor: id().optional(),
+    ...viewTermFields, // B-TH-058: the same terms as before, named once
+    // ── B-TH-057 (SHEET-G15): the server sort; with it the cursor is the page before's sort key and id (opaque) ──
+    /** customer, brand, promise, daysLate, ordered; `-` in front: the other way round. None: newest first. */
+    sort: z.enum(ORDER_SORTS).optional(),
+    cursor: z.string().trim().min(1).max(600).optional(),
+    // ── end B-TH-057 ──
+    /** B-TH-059: count each row's production progress (the Progress column is shown): it reads the floor's records of the page's work orders. */
+    progress: flag.optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
@@ -258,9 +287,34 @@ export const listOrdersContract = defineContract({
             invoices: output({ count: z.number().int(), only: output({ id: id(), number: z.string().nullable(), docType: z.string() }).nullable() }).nullable(),
           }),
           // ── end B-TH-017 ──────────────────────────────────────────────────────────────────────────────────────────────
+          // ── B-TH-059 (threads plan TH-4; N23, ORD-G08): the later columns ─────────────────────────────────────────────
+          /** Pieces it still owes: an open order's pieces less those closed short and those that left (0 once shipped, closed or cancelled). */
+          openUnits: z.number().int(),
+          /**
+           * Only with `progress=true`: its lines' cells in work orders past DRAFT (not REPAIR, not cancelled), summed over every
+           * work order and site — `inWork` their pieces, `cut` from the cutting log, `sewn` and `finished` from the floor's scans
+           * (the work order record's counts; a step no cell counts: null). null: no work order past DRAFT yet. Totals only.
+           */
+          progress: output({ inWork: z.number().int(), cut: z.number().int().nullable(), sewn: z.number().int().nullable(), finished: z.number().int().nullable() }).nullable().optional(),
+          /** Received for the order: its deposit requests' payments and its share of its invoices' payments, less refunds (price grain). */
+          paid: money.price(z.number().int()),
+          /** Still to pay: its gross less what will never be billed, its credit notes and what is paid; never below 0 (price grain). */
+          balance: money.price(z.number().int()),
+          /** The sites that make it (its lines' sites and its work orders'), each once. */
+          sites: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+          /** The order note: the office's own, the customer never sees it. */
+          internalNote: z.string().nullable(),
+          /** The office's own priority: its level (with its words), number within the level and urgent reason. */
+          priority: output({ level: z.enum(SALES_ORDER_PRIORITY_LEVELS), words: output({ en: z.string(), it: z.string() }), number: z.number().int(), urgentReason: z.string().nullable() }),
+          /** The ORDER_LATE_RISK rule calls it at risk: days left to the promise and the rule's threshold; null: not at risk or no rule. */
+          atRisk: output({ daysLeft: z.number().int(), daysBeforePromise: z.number().int() }).nullable(),
+          /** The customer's own mark, read-only (Sales › Orders' Priority stays the office's); null: none known. */
+          customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable(),
+          // ── end B-TH-059 ──────────────────────────────────────────────────────────────────────────────────────────────
         }),
       ),
-      nextCursor: id().nullable(),
+      /** B-TH-057: the next page's cursor (an id newest first; an opaque sort key and id in a server sort). */
+      nextCursor: z.string().nullable(),
     }),
   },
 })
@@ -360,3 +414,45 @@ export const customersContract = defineContract({
   },
 })
 // ── end B-TH-019 ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── B-TH-058 (threads plan TH-4; SHEET-G08; features SHEET.overall-F02, -F03, -F08, -F11; wall W30 / T30): the overall view ──
+/** A number that opens its rows: the list's terms (GET /sales/orders) that read exactly what it counts; null: none (it counts nothing). */
+const door = output({ count: z.number().int(), filter: z.record(z.string(), z.string()).nullable() })
+
+/** The figures of a view or of one customer of it, each a door; `net` per currency only with the price grain (never summed across). */
+const figuresView = output({
+  /** The orders. */
+  orders: door,
+  /** Pieces ordered and shipped (the rows' `units` and `shippedUnits` sum to them) and still owed (open orders: `openUnits`). */
+  pieces: output({ ordered: door, shipped: door, open: door }),
+  /** The promise passed, not shipped yet (the list's one definition of late). */
+  late: door,
+  /** The ORDER_LATE_RISK rule calls them at risk (the row's `atRisk`). */
+  atRisk: door,
+  /** Invoiced None / Part / All (rule C8). */
+  invoiced: output({ NONE: door, PART: door, ALL: door }),
+  /** The net per currency, one entry each (price grain: absent without it). */
+  net: money.price(z.array(output({ currency: z.string(), amount: money.price(z.number().int()), filter: z.record(z.string(), z.string()).nullable() }))),
+})
+
+export const summaryContract = defineContract({
+  querystring: input({
+    ...viewTermFields,
+    /** `party`: the figures per customer too (one header per customer), beside those of the whole view. */
+    group: z.enum(['party']).optional(),
+  }),
+  response: {
+    200: output({
+      /** The whole view (the pinned grand total): every order the terms keep that the reader may see, never only the loaded rows. */
+      all: figuresView,
+      /** With group=party: one entry per customer of the view (by name), its sheet's name and code and its invoicing rhythm; else null. */
+      groups: z
+        .array(output({ partyId: id(), code: z.string(), name: z.string(), invoiceTiming: z.enum(['PER_SHIPMENT', 'MONTHLY']), figures: figuresView }))
+        .nullable(),
+      /** The reader's orders.view names its customers: the figures are of "Your customers" (nothing is said of the others). */
+      limited: z.boolean(),
+      asOf: instant(),
+    }),
+  },
+})
+// ── end B-TH-058 ──────────────────────────────────────────────────────────────────────────────────────────────────────

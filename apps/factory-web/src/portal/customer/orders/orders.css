@@ -455,3 +455,16 @@
     display: none;
   }
 }
+
+/* B-TH-223: a request's subject — two lines at most, wrapping in a phone card, never wider than its cell. */
+.fw-pord-subject {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

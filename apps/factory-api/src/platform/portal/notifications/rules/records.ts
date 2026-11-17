@@ -8,9 +8,13 @@ import { events as salesEvents } from '@nexus/factory-domain/sales/events'
 import { events as shippingEvents } from '@nexus/factory-domain/shipping/events'
 import { events as threadEvents } from '@nexus/factory-domain/threads/events'
 import { recordLabelOf } from '../../../threads/labels'
+// B-TH-045: a company-less thread is news only for a record the customer opens in its portal.
+import { partnerViewOf } from '../../../search/partner/views'
 import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
 import type { PartnerDraft, PartnerRule } from './types'
+// th2-backend step 7 (§0.5): a customer's order, quote or request by its own number, never the office's series.
+import { customerRefOf, type CustomerNumberKind } from '@nexus/factory-domain/sales/customer-numbers'
 
 /**
  * News of a partner's records from the W1/W2a modules' own events (B-W2b-167, PLT-148; design portal.frame Notifications,
@@ -26,11 +30,15 @@ import type { PartnerDraft, PartnerRule } from './types'
  *   invoice.issued              INVOICES  "Invoice FT-… was issued"            only to people whose role sees prices
  *   supplier_claim.sent         CLAIMS    "New claim SC-…"                     to the supplier's people
  *   thread.message_posted       MESSAGES  "New message from <Company> on …"   our OUTBOUND message to the partner, to the
- *                                         people who read the record's shared thread (threads.read)
+ *                                         people who read the record's shared thread (threads.read); B-TH-045: also on a
+ *                                         thread with no company (the account conversation), and a batch is one bell item
  * Each to the record's party's readers (portal ON, active, roles reaching the record's company) who hold portal.home.view.
  * The portal pages of these records come later (B-W2b-174…): a step that adds a page may narrow its record's rule to the
  * roles that open it.
  */
+
+/** B-TH-045: the most companies of a tenant a company-less thread's news is drafted for (a tenant has a handful). */
+const MAX_COMPANIES = 50
 
 const payload = <T>(list: readonly { type: string; payload: { parse(raw: unknown): unknown } }[], type: string, raw: unknown): T => list.find((event) => event.type === type)!.payload.parse(raw) as T
 
@@ -53,6 +61,29 @@ async function madeWaiting(tx: CommandTx, order: { readonly id: string; readonly
 }
 // ── end B-TH-006 ──
 
+// ── th2-backend step 7 (threads plan §0.5): what a customer's notice names — its own number ("#12" on the chip, "your order 12" in
+// the sentence through params.yourKind / yourSeq), never SO-…, QT-… or INQ-…. A supplier's or another record keeps its label.
+const CUSTOMER_KINDS: Readonly<Record<string, CustomerNumberKind>> = Object.freeze({ SalesOrder: 'ORDER', Quote: 'QUOTE', Inquiry: 'REQUEST' })
+
+/** The customer's own number of an order (the chip and the sentence's params). */
+export function orderNamed(order: { readonly id: string; readonly customerSeq: number | null }) {
+  return { record: { type: 'SalesOrder', id: order.id, label: customerRefOf('ORDER', order.customerSeq) ?? '—' }, params: { yourKind: 'ORDER', yourSeq: order.customerSeq } }
+}
+
+/** A record of a customer by its own number (SalesOrder, Quote, Inquiry), read in the fan-out's scope; null: not one of those. */
+async function customerNamed(tx: CommandTx, recordType: string, recordId: string): Promise<{ label: string; params: Record<string, string | number | null> } | null> {
+  const kind = CUSTOMER_KINDS[recordType]
+  if (!kind) return null
+  const row =
+    recordType === 'SalesOrder'
+      ? await tx.salesOrder.findUnique({ where: { id: recordId }, select: { customerSeq: true } })
+      : recordType === 'Quote'
+        ? await tx.quote.findUnique({ where: { id: recordId }, select: { customerSeq: true } })
+        : await tx.inquiry.findUnique({ where: { id: recordId }, select: { customerSeq: true } })
+  return { label: customerRefOf(kind, row?.customerSeq ?? null) ?? '—', params: { yourKind: kind, yourSeq: row?.customerSeq ?? null } }
+}
+// ── end th2-backend step 7 ──
+
 function draft(input: Omit<PartnerDraft, 'forReader'>, forReader: (draft: { companyId: string; partyId: string }) => (reader: PartnerReader) => boolean = home): PartnerDraft {
   return { ...input, forReader: forReader(input) }
 }
@@ -73,17 +104,17 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     events: ['sales_order.created'],
     async drafts(context, raw) {
       const event = payload<{ orderId: string }>(salesEvents, 'sales_order.created', raw)
-      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, status: true } })
+      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, status: true, customerSeq: true } })
       if (!order) return []
       // ── B-TH-006 (L2-G06): "confirmed" only for an order made confirmed. One made waiting for our yes is received; its
       // confirmed news follows the yes (the rule below). Decided by how the order was MADE, not by its state when the worker
       // reads it: a yes given before this event is handled sends the confirmed news once, from its own event.
       if (await madeWaiting(context.tx, order)) {
         if (order.status === 'CANCELLED') return []
-        return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.received', params: {}, anchor: null })]
+        return [draft({ partyId: order.partyId, companyId: order.companyId, ...orderNamed(order), messageKey: 'portal.order.received', anchor: null })]
       }
       // ── end B-TH-006 ──
-      return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.confirmed', params: {}, anchor: null })]
+      return [draft({ partyId: order.partyId, companyId: order.companyId, ...orderNamed(order), messageKey: 'portal.order.confirmed', anchor: null })]
     },
   },
   // ── B-TH-006 (L2-G06): the yes on a waiting order (credit, a SALES_ORDER rule, measures checked) is the confirmed news. ──
@@ -94,9 +125,9 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
       const event = payload<{ orderId: string; from: string; to: string }>(salesEvents, 'sales_order.status_changed', raw)
       if (event.from !== 'PENDING_APPROVAL' || event.to !== 'CONFIRMED') return []
       // The party from the record, never from the event (W06).
-      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true } })
+      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, customerSeq: true } })
       if (!order) return []
-      return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.confirmed', params: {}, anchor: null })]
+      return [draft({ partyId: order.partyId, companyId: order.companyId, ...orderNamed(order), messageKey: 'portal.order.confirmed', anchor: null })]
     },
   },
   // ── end B-TH-006 ──
@@ -105,10 +136,11 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     events: ['sales_order.promise_changed'],
     async drafts(context, raw) {
       const event = payload<{ orderId: string; promiseDate: string }>(salesEvents, 'sales_order.promise_changed', raw)
-      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true } })
+      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, customerSeq: true } })
       if (!order) return []
       // The new date at noon Rome time: the sentence's "(by 12 Dec)" is a day.
-      return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.dates_changed', params: { dueAt: `${event.promiseDate}T11:00:00.000Z` }, anchor: null })]
+      const named = orderNamed(order)
+      return [draft({ partyId: order.partyId, companyId: order.companyId, record: named.record, messageKey: 'portal.order.dates_changed', params: { ...named.params, dueAt: `${event.promiseDate}T11:00:00.000Z` }, anchor: null })]
     },
   },
   {
@@ -146,23 +178,34 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     name: 'portalNews.messagePosted',
     events: ['thread.message_posted'],
     async drafts(context, raw) {
-      const event = payload<{ threadId: string; messageId: string; recordType: string; recordId: string; direction: string; audience: string }>(threadEvents, 'thread.message_posted', raw)
+      const event = payload<{ threadId: string; messageId: string; recordType: string; recordId: string; direction: string; audience: string; batchId?: string }>(threadEvents, 'thread.message_posted', raw)
       if (event.direction !== 'OUTBOUND' || event.audience !== 'PARTNER') return []
       const thread = await context.tx.thread.findUnique({ where: { id: event.threadId }, select: { companyId: true, partyId: true, recordType: true, recordId: true } })
-      if (!thread?.partyId || !thread.companyId) return []
-      const label = (await recordLabelOf(context.tx, thread.recordType, thread.recordId)) ?? thread.recordType
-      const place = { companyId: thread.companyId, partyId: thread.partyId }
-      return [
-        {
-          partyId: thread.partyId,
-          companyId: thread.companyId,
-          record: { type: thread.recordType, id: thread.recordId, label },
-          messageKey: 'portal.message.posted',
-          params: {},
-          anchor: `message:${event.messageId}`,
-          forReader: (reader) => home(place)(reader) && can(reader.actor, THREADS_READ, place),
-        },
-      ]
+      if (!thread?.partyId) return []
+      const partyId = thread.partyId
+      // th2-backend step 7: a customer's order, quote or request by its own number; any other record by its label.
+      const named = await customerNamed(context.tx, thread.recordType, thread.recordId)
+      const label = named?.label ?? (await recordLabelOf(context.tx, thread.recordType, thread.recordId)) ?? thread.recordType
+      // ── B-TH-045 (threads plan TH-3, thread-G04): a thread with no company — the account conversation of a customer every company
+      // serves (its Party record is tenant-wide) — tells the party's people too: one draft per company whose portal they may use (the
+      // fan-out tells each person once, under the first). The party is the thread's, never the event's (W06).
+      // Only a record the customer opens in its portal (its partner view: the account itself): a company-less thread of a record with
+      // no portal page (a rider's measurements) stays news for the office alone.
+      if (!thread.companyId && !partnerViewOf(thread.recordType)) return []
+      const companies = thread.companyId ? [thread.companyId] : (await context.tx.company.findMany({ orderBy: { id: 'asc' }, take: MAX_COMPANIES, select: { id: true } })).map((row) => row.id)
+      const threadScope = { companyId: thread.companyId, partyId }
+      return companies.map((companyId) => ({
+        partyId,
+        companyId,
+        record: { type: thread.recordType, id: thread.recordId, label },
+        messageKey: 'portal.message.posted' as const,
+        params: named?.params ?? {},
+        anchor: `message:${event.messageId}`,
+        // A batch of ours (one answer to several records of the customer) is one bell item.
+        batchId: event.batchId ?? null,
+        forReader: (reader: PartnerReader) => home({ companyId, partyId })(reader) && can(reader.actor, THREADS_READ, threadScope),
+      }))
+      // ── end B-TH-045
     },
   },
 ])

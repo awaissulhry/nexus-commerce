@@ -199,6 +199,14 @@ export async function viaBrandLink(w: World, brand: BrandInWorld, token: string,
 
 let network = 60
 
+// ---- B-TH-021 / B-TH-037: a brand's portal person may be its buyer (who sends requests: portal.orderRequests.manage) and may
+// write in its threads (the comment capability); default as before: the customer's admin.
+export interface BrandAccess {
+  readonly roleKey?: 'customer-admin' | 'customer-buyer'
+  readonly capabilities?: readonly ('comment' | 'upload' | 'approve')[]
+}
+// ---- end B-TH-021 / B-TH-037
+
 /**
  * The office makes a seeded customer into a brand of the fixture, through the routes: its names, code and the customer and brand
  * roles (PATCH /parties), the
@@ -206,7 +214,7 @@ let network = 60
  * invited as its admin, signed in by the mailed code and through the first visit's terms. `office` holds parties.manage and
  * partners.* (the sales office).
  */
-export async function setUpBrand(w: World, office: Person, brand: BrandFixture, partyId: string, companyId: string): Promise<BrandInWorld> {
+export async function setUpBrand(w: World, office: Person, brand: BrandFixture, partyId: string, companyId: string, access: BrandAccess = {}): Promise<BrandInWorld> {
   const party = (await ok(office, 'GET', `/parties/${partyId}`)).party
   await ok(office, 'PATCH', `/parties/${partyId}`, { version: party.version, legalName: brand.legalName, tradeName: brand.tradeName, code: brand.code, roles: ['CUSTOMER', 'BRAND'] })
   await ok(office, 'POST', `/parties/${partyId}/contacts`, { name: brand.contact.name, email: brand.contact.email, roles: ['ORDERS', 'INVOICES'] }, 201)
@@ -219,7 +227,7 @@ export async function setUpBrand(w: World, office: Person, brand: BrandFixture, 
     allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-admin'],
   })
   await stepped(w, office)
-  await ok(office, 'POST', `/partners/${partyId}/people`, { email: brand.portalPerson.email, displayName: brand.portalPerson.name, locale: 'en', roleKey: 'customer-admin', companyId })
+  await ok(office, 'POST', `/partners/${partyId}/people`, { email: brand.portalPerson.email, displayName: brand.portalPerson.name, locale: 'en', roleKey: access.roleKey ?? 'customer-admin', ...(access.capabilities ? { capabilities: access.capabilities } : {}), companyId })
   const made: BrandInWorld = { fixture: brand, partyId, browser: await portalBrowser(w.h, `203.0.113.${++network}`) }
   expect((await call(made.browser, 'POST', '/portal/signin/start', { tenant: w.tenant.slug, company: 'SCA', email: brand.portalPerson.email })).status).toBe(200)
   await w.h.auth.settled()

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { DECISION_REFUSALS } from '@nexus/factory-domain/sales/sample-decisions/rules'
 import { BOARD_LANES as DOMAIN_LANES, ROUND_TILES, SAMPLE_DECISIONS, SAMPLE_KINDS, SAMPLE_REFUSALS, SAMPLE_STAGES } from '@nexus/factory-domain/sales/samples/rules'
 import { ApiError } from '../../../lib/api/errors'
+import { scanText } from '../../../lib/testing/brand-scan' // B-TH-232
+import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands' // B-TH-232
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
@@ -37,6 +39,9 @@ import {
   newBodyOf,
   newDraftHeld,
   parseCharge,
+  privateStyleNote, // B-TH-232
+  refusalCode, // B-TH-232
+  refusalPhrase, // B-TH-232
   requestChanges,
   requestDraftOf,
   samplesCan,
@@ -248,3 +253,35 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 })
+
+// ── B-TH-232 (threads plan TH-2: the office side of the wall in words; B-TH-034, WALL-G15, W12) ──
+describe('B-TH-232 a sample round on another customer’s private-label style is refused, said in words', () => {
+  it('the API’s refusal/PRIVATE_STYLE is said in our words (its sentence, which may name the brand, is never shown)', () => {
+    const error = new ApiError('conflict', 409, 'invalid_state', `SEED-JKT-01 is ${BRAND_ALPHA.legalName}'s private-label style`, null, [{ path: 'refusal/PRIVATE_STYLE', message: 'x' }])
+    expect(refusalCode(error)).toBe('PRIVATE_STYLE')
+    expect(refusalPhrase(refusalCode(error))).toEqual({ key: 'refusal.PRIVATE_STYLE' })
+    expect(KNOWN_REFUSALS).toContain('PRIVATE_STYLE')
+  })
+
+  it('the refusal’s words exist in it and en and name no customer (W12: scanText finds nothing of either brand)', () => {
+    for (const locale of LOCALES) {
+      const words = (CATALOGUE[locale]['products-samples'] as Record<string, string>)['refusal.PRIVATE_STYLE']
+      expect(words, locale).toBeTruthy()
+      expect(scanText(words!, BRAND_ALPHA)).toEqual([])
+      expect(scanText(words!, BRAND_BETA)).toEqual([])
+    }
+  })
+
+  it('the customer field says beforehand that a round for another customer than the label’s own is refused (a note, never a hold)', () => {
+    const brand = JACKET_DETAIL.brand!
+    expect(privateStyleNote({ partyId: brand.id }, JACKET_DETAIL)).toBeNull()
+    expect(privateStyleNote({ partyId: null }, JACKET_DETAIL)).toBeNull()
+    expect(privateStyleNote({ partyId: 'f1f1f1f1-0000-4000-8000-000000000001' }, { brand: null })).toBeNull()
+    expect(privateStyleNote({ partyId: 'f1f1f1f1-0000-4000-8000-000000000001' }, JACKET_DETAIL)).toEqual({ key: 'new.privateStyle', params: { brand: brand.name } })
+    // A rider of the brand's team counts as the brand (the API decides): the round stays possible to send.
+    const ready = { ...emptyNewDraft(JACKET_DETAIL.id), kind: 'FIT' as const, partyId: 'f1f1f1f1-0000-4000-8000-000000000001', grid: { [JACKET_DETAIL.colourways[0]!.id]: { '52': 2 } } }
+    expect(newDraftHeld(ready, JACKET_DETAIL, owner, false)).toBeNull()
+    for (const locale of LOCALES) expect((CATALOGUE[locale]['products-samples'] as Record<string, string>)['new.privateStyle'], locale).toContain('{brand}')
+  })
+})
+// ── end B-TH-232 ──

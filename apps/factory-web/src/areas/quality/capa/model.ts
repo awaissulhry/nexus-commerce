@@ -254,6 +254,8 @@ export function keepReportHeld(record: Pick<CapaRecord, 'may'>, can: Pick<CapaCa
 export function shareHeld(source: CapaSource, record: Pick<CapaRecord, 'capa' | 'documents'>, can: CapaCan, offline: boolean): Say | null {
   if (!source.record) return { key: 'held.cannotSee' }
   if (record.capa.type !== 'EIGHT_D') return { key: 'held.shareOnly8D' }
+  // B-TH-232 (B-TH-031's wall, in words before the click): an 8D goes only to its own customer, with that customer's complaints only.
+  if (source.record.shareHeld) return { key: refusedKey(source.record.shareHeld) }
   if (record.documents.length === 0) return { key: 'held.NO_REPORT' }
   if (!can.complaintsManage || !can.filesManage) return { key: 'held.noShare' }
   if (offline) return { key: 'held.offline' }

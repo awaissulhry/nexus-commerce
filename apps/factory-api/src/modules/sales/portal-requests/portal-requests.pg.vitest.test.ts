@@ -93,6 +93,8 @@ async function fanOutPartner(subject: string, since: Date): Promise<void> {
 const newsOf = (partyId: string, recordId: string) => admin<{ messageKey: string; params: Json }>(`SELECT "messageKey", params FROM "Notification" WHERE "partyId" = $1 AND "recordId" = $2 ORDER BY "createdAt", id`, [partyId, recordId])
 
 let sent: Json
+/** The office's own number of P1's request (INQ-…): the office reads it; the customer never does (th2-backend step 7). */
+let officeNumber = ''
 let otherSent: Json
 
 beforeAll(async () => {
@@ -142,8 +144,12 @@ describe('the customer sends a request (B-TH-010, B-TH-012)', { timeout: SLOW_TE
   it("makes an Inquiry of the session's company and party, numbered INQ-…, its words the thread's first message, a receipt with its own number", async () => {
     const address = await one<{ id: string }>(`SELECT id FROM "PartyAddress" WHERE "partyId" = $1 AND 'SHIP_TO' = ANY(kinds) ORDER BY id LIMIT 1`, [P1])
     sent = await ok(browsers.buyer, 'POST', '/portal/inquiries', { subject: 'Team jackets for the spring', message: 'Made-up: 30 black jackets with our logo, sizes 50 to 54.\nSee you soon.', customerRef: 'BA-PO-4521', shipToAddressId: address.id }, 201)
-    expect(sent.receipt).toMatchObject({ number: expect.stringMatching(/^INQ-\d{4}-\d{4}$/), subject: 'Team jackets for the spring', yourNumber: { seq: 2, words: { en: 'Your request 2', it: 'La vostra richiesta 2' } } })
-    expect(sent.receipt.words.en).toBe(`Received — number ${sent.receipt.number} (Your request 2).`)
+    // th2-backend step 7 (§0.5, counts do not leak): the customer reads its own number only, never the office's INQ-… series.
+    expect(sent.receipt).toMatchObject({ number: '#2', subject: 'Team jackets for the spring', yourNumber: { seq: 2, words: { en: 'Your request 2', it: 'La vostra richiesta 2' } } })
+    expect(sent.receipt.words).toEqual({ en: 'Received — Your request 2.', it: 'Ricevuta — La vostra richiesta 2.' })
+    expect(JSON.stringify(sent)).not.toMatch(/INQ-\d{4}-\d{4}/)
+    officeNumber = (await one<{ number: string }>('SELECT number FROM "Inquiry" WHERE id = $1', [sent.request.id])).number
+    expect(officeNumber).toMatch(/^INQ-\d{4}-\d{4}$/)
     expect(sent.request).toMatchObject({ number: sent.receipt.number, customerRef: 'BA-PO-4521', subject: 'Team jackets for the spring', source: 'PORTAL', state: { code: 'SENT', open: true, needsYou: false }, shipTo: { id: address.id, waiting: false }, lines: [], made: { quote: null, order: null } })
     const row = await one(`SELECT "companyId", "partyId", source::text AS source, status::text AS status, request, "createdById", "customerSeq" FROM "Inquiry" WHERE id = $1`, [sent.request.id])
     expect(row).toEqual({ companyId: companyA, partyId: P1, source: 'PORTAL', status: 'NEW', request: 'Team jackets for the spring\n\nMade-up: 30 black jackets with our logo, sizes 50 to 54.\nSee you soon.', createdById: null, customerSeq: 2 })
@@ -200,11 +206,14 @@ describe('the customer sends a request (B-TH-010, B-TH-012)', { timeout: SLOW_TE
 describe("the customer's requests in the portal (B-TH-103, B-TH-105) and the brand wall", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('lists its own requests, the office ones too, partner-first, with its own numbers and the tiles', async () => {
     const list = await ok(browsers.buyer, 'GET', '/portal/inquiries?state=ALL')
-    const numbers = list.rows.map((row: Json) => row.number)
-    expect(numbers).toContain(sent.request.number)
-    expect(numbers).toContain('SEED-INQ-0004')
-    expect(numbers).not.toContain(otherSent.request.number)
-    expect(list.rows.find((row: Json) => row.number === 'SEED-INQ-0004')).toMatchObject({ yourNumber: { seq: 1 }, customerRef: 'SEED-BA-PO-12' })
+    const ids = list.rows.map((row: Json) => row.id)
+    const seeded = (await one<{ id: string }>(`SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND number = 'SEED-INQ-0004'`, [T])).id
+    expect(ids).toContain(sent.request.id)
+    expect(ids).toContain(seeded)
+    expect(ids).not.toContain(otherSent.request.id)
+    // th2-backend step 7: its own numbers only ("#1" for the office's SEED-INQ-0004), never the office's series.
+    expect(list.rows.find((row: Json) => row.id === seeded)).toMatchObject({ number: '#1', yourNumber: { seq: 1 }, customerRef: 'SEED-BA-PO-12' })
+    expect(JSON.stringify(list)).not.toMatch(/INQ-\d{4}-\d{4}|SEED-INQ/)
     expect(list.counts.open).toBeGreaterThanOrEqual(2)
     // Never an office column.
     expect(JSON.stringify(list)).not.toMatch(/assignee|closeNote|targetUnitPrice|prospect/)
@@ -216,11 +225,14 @@ describe("the customer's requests in the portal (B-TH-103, B-TH-105) and the bra
     expect((await call(browsers.other, 'GET', '/portal/inquiries/not-a-uuid')).status).toBe(400)
     expect((await call(browsers.other, 'GET', `/portal/threads/Inquiry/${sent.request.id}`)).status).toBe(404)
     expect((await call(browsers.other, 'POST', `/portal/threads/Inquiry/${sent.request.id}/messages`, { body: 'Made-up: hello' })).status).toBe(404)
-    const search = await call(browsers.other, 'GET', `/portal/search?q=${encodeURIComponent(sent.request.number)}`)
+    const search = await call(browsers.other, 'GET', `/portal/search?q=${encodeURIComponent(officeNumber)}`)
     expect(JSON.stringify(search.body)).not.toContain(sent.request.id)
-    expect(JSON.stringify(search.body)).not.toContain(sent.request.number)
-    // P1 finds its own by its number.
-    expect(JSON.stringify((await call(browsers.buyer, 'GET', `/portal/search?q=${encodeURIComponent(sent.request.number)}`)).body)).toContain(sent.request.id)
+    expect(JSON.stringify({ ...search.body, query: null, words: null })).not.toContain(officeNumber)
+    // P1 finds its own by its PO; the hit names its own number ("#2"), never the office's (th2-backend step 7).
+    const own = (await call(browsers.buyer, 'GET', `/portal/search?q=${encodeURIComponent('BA-PO-4521')}`)).body
+    expect(JSON.stringify(own)).toContain(sent.request.id)
+    expect(JSON.stringify(own)).toContain('"ourRef":"#2"')
+    expect(JSON.stringify(own)).not.toMatch(/INQ-\d{4}-\d{4}/)
   })
 })
 

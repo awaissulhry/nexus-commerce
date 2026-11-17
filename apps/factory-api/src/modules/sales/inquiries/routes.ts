@@ -9,9 +9,12 @@ import {
   createInquiryContract,
   declineInquiryContract,
   fromMailContract,
+  inquiryPictureContract,
   listInquiriesContract,
   loseInquiryContract,
   mailDraftContract,
+  orderInquiryContract,
+  styleDraftContract,
   quoteInquiryContract,
   readInquiryContract,
   resumeContract,
@@ -35,8 +38,15 @@ import {
 import { createFromMail, mailDraft } from './mail'
 import { manifest } from './manifest'
 import { inquirySource, quoteInquiry } from './quote'
+// B-TH-025 / B-TH-026: Make order, Make style draft.
+import { orderInquiry } from './order'
+import { styleDraftOf } from './style-draft'
+// B-TH-216 (Sales › Incoming): the Picture cell's small preview.
+import { inquiryPicture } from './row-extras'
 // B-W2b-394 (ML1:02): the addresses whose mail makes an inquiry by itself.
 import { inquiryAddresses, inquiryAddressesContract, saveInquiryAddresses, saveInquiryAddressesContract } from './from-mail'
+// B-TH-221: New request's customer picker (wall W23).
+import { inquiryCustomers, inquiryCustomersContract } from './customers'
 
 /**
  * Inquiries and requests for quotation (B-W2b-295): ./inquiries.ts (the list, the record, new, change, assign, ask for more
@@ -53,6 +63,7 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   app.post('/sales/inquiries/assign', { schema: bulkAssignContract }, async (request) => assignInquiries(request, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/decline', { schema: bulkDeclineContract }, async (request) => declineInquiries(request, request.body, idempotencyKeyFrom(request)))
   app.get('/sales/inquiries/:inquiryId', { schema: readInquiryContract }, async (request) => ({ inquiry: await readInquiry(request, request.params.inquiryId) }))
+  app.get('/sales/inquiries/:inquiryId/picture', { schema: inquiryPictureContract }, async (request) => inquiryPicture(request, request.params.inquiryId)) // B-TH-216
   app.post('/sales/inquiries', { schema: createInquiryContract }, async (request, reply) => reply.code(201).send(await createInquiry(request, request.body, idempotencyKeyFrom(request))))
   app.patch('/sales/inquiries/:inquiryId', { schema: updateInquiryContract }, async (request) => updateInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/assign', { schema: assignInquiryContract }, async (request) => assignInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
@@ -61,7 +72,12 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   app.post('/sales/inquiries/:inquiryId/decline', { schema: declineInquiryContract }, async (request) => declineInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/lost', { schema: loseInquiryContract }, async (request) => loseInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/quote', { schema: quoteInquiryContract }, async (request, reply) => reply.code(201).send(await quoteInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request))))
+  // B-TH-025 / B-TH-026
+  app.post('/sales/inquiries/:inquiryId/order', { schema: orderInquiryContract }, async (request, reply) => reply.code(201).send(await orderInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request))))
+  app.post('/sales/inquiries/:inquiryId/style-draft', { schema: styleDraftContract }, async (request, reply) => reply.code(201).send(await styleDraftOf(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request))))
   // B-W2b-394 (ML1:02)
   app.get('/sales/inquiries/addresses', { schema: inquiryAddressesContract }, async (request) => inquiryAddresses(request, request.query))
   app.put('/sales/inquiries/addresses', { schema: saveInquiryAddressesContract }, async (request) => saveInquiryAddresses(request, request.body, idempotencyKeyFrom(request)))
+  // B-TH-221
+  app.get('/sales/inquiries/customers', { schema: inquiryCustomersContract }, async (request) => inquiryCustomers(request, request.query))
 })

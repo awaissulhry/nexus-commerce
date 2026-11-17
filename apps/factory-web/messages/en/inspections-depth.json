@@ -262,7 +262,8 @@
       "NO_SUCH_VERSION": "That version does not exist any more: read the versions again.",
       "NO_SHIPMENT": "The shipment was not found.",
       "SHARED_PRODUCTION": "This work order also makes garments for another customer: its report goes to no single customer. Share this shipment's certificate of conformity instead."
-    }
+    },
+    "sharedProduction": "{status}: this work order also makes another customer’s garments — its certificate of conformity goes instead"
   },
   "checks": {
     "heading": "Checks of {code} v{number}",
@@ -789,6 +790,18 @@
         "reading": "The plans are being read.",
         "failed": "The plans could not be read."
       }
+    }
+  },
+  "certificate": {
+    "go": "Share the certificate of conformity of {shipment}",
+    "done": "Certificate of conformity version {version} shared on {shipment}.",
+    "refused": "The certificate of conformity was not shared.",
+    "held": {
+      "noRight": "Keeping and sharing a certificate of conformity needs the rights to make and share quality documents.",
+      "NOT_CERTIFIABLE": "This shipment cannot have a certificate of conformity now: the reasons are below.",
+      "NO_VERSION": "No certificate version is kept yet: keep one first.",
+      "NO_SUCH_VERSION": "That certificate version does not exist any more: try again.",
+      "NO_SHIPMENT": "The shipment was not found."
     }
   }
 }

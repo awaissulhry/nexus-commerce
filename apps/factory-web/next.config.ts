@@ -3,6 +3,7 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { readFactoryApiUrl } from './src/lib/api-url'
 import { readWebTrustedProxies } from './src/lib/api/forwarded'
 import { pageExtensionsFor } from './src/lib/design/route'
+import { officeRedirects } from './src/shell/nav/renamed'
 
 /**
  * `next dev`, `next build` and `next start` call this function: without FACTORY_API_URL none of them starts. The one
@@ -31,6 +32,9 @@ export default function factoryWebConfig(phase: string): NextConfig {
     // B-W2b-F6 (floor/moves.ts): a floor tablet keeps the pages it prefetched whole for a day, and a move with the network gone
     // waits instead of falling back to a full page load, which ends on the browser's error page.
     experimental: { staleTimes: { static: 86_400 }, useOffline: true },
+    // B-TH-216 (threads plan TH-1b): an Office page that changed its address opens from its old one, its query and record id
+    // kept (Sales › Inquiries → Sales › Incoming; src/shell/nav/renamed.ts).
+    redirects: async () => officeRedirects(),
     // B-W2b-F57: the browser talks to the factory API through this app's route `src/app/api/[...path]/route.ts`
     // (`/api/<route>` → `<FACTORY_API_URL>/<route>`, the session cookie first-party), no longer a rewrite: a rewrite cannot
     // tell the API whose call it is (lib/api/forwarded.ts). The API's routes carry no `/api` prefix of their own.

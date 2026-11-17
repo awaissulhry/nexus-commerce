@@ -7,7 +7,7 @@ import { Button, Input, Kbd, Select, Skeleton } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import type { PartyOption, StyleDetail, StyleOption } from '../api'
-import { ANY_COLOUR, latestRevision, newDraftHeld, piecesOfGrid, SAMPLE_KINDS, type NewDraft, type Notice, type Phrase, type SamplesCan, type SampleKind } from '../model'
+import { ANY_COLOUR, latestRevision, newDraftHeld, piecesOfGrid, privateStyleNote, SAMPLE_KINDS, type NewDraft, type Notice, type Phrase, type SamplesCan, type SampleKind } from '../model'
 import { NoticeLine, useWords } from '../parts'
 import { useGridCopy } from './grid-copy'
 
@@ -42,6 +42,7 @@ export function NewRoundDialog({ model, can, actions }: { model: NewRoundModel; 
   const style = model.style.item
   const draft = model.draft
   const held = newDraftHeld(draft, style, can, model.offline)
+  const privateNote = privateStyleNote(draft, style) // B-TH-232
   const heldText = model.busy ? t('common.working') : say(held)
   const latest = latestRevision(style)
 
@@ -151,7 +152,7 @@ export function NewRoundDialog({ model, can, actions }: { model: NewRoundModel; 
           <Field label={t('new.roundNo')} hint={t('new.roundNoHint')}>
             <Input size="sm" inputMode="numeric" value={draft.roundNo} placeholder={t('new.roundNoNext')} onChange={(event) => actions?.onDraft?.({ roundNo: event.target.value })} />
           </Field>
-          <Field label={t('new.customer')} hint={model.customers ? t('new.customerHint') : t('new.customerNoRight')}>
+          <Field label={t('new.customer')} hint={privateNote ? t(privateNote.key, privateNote.params) /* B-TH-232 */ : model.customers ? t('new.customerHint') : t('new.customerNoRight')}>
             <Select size="sm" value={draft.partyId ?? ''} disabled={!model.customers} onChange={(event) => actions?.onDraft?.({ partyId: event.target.value || null })}>
               <option value="">{t('new.internal')}</option>
               {customerOptions.map((party) => (

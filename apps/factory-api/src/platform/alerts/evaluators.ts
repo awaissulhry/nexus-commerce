@@ -5,6 +5,7 @@ import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time
 import { notInvoiced } from '@nexus/factory-domain/invoicing/from-shipment/shipped'
 import { HOLD_SUBJECT_TYPES, type HoldSubjectType } from '@nexus/factory-domain/quality/holds/rules'
 import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
+import { AT_RISK_STATUSES } from '@nexus/factory-domain/sales/orders/later-columns' // B-TH-059
 import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 import type { CommandTx } from '../../core/command'
 import { ddtDeadlines } from '../../modules/invoicing/from-shipment/deadlines'
@@ -84,7 +85,8 @@ const orderLateRisk: Find = async (tx, rule, now, only) => {
     const daysLeft = daysBetween(today, promiseDate)
     const late = daysLeft < 0
     // At risk only while still being made (W1's rule): a READY or PARTLY_SHIPPED order is late or nothing.
-    if (!late && row.status !== 'CONFIRMED' && row.status !== 'IN_PRODUCTION') continue
+    // B-TH-059: the one list of those states, which Sales › Orders' "At risk" reads too (factory-domain later-columns).
+    if (!late && !AT_RISK_STATUSES.includes(row.status)) continue
     findings.push({ recordType: 'SalesOrder', recordId: row.id, label: row.number, scope: { companyId: row.companyId, siteId: null, partyId: row.partyId }, facts: { promiseDate, daysLeft, late, status: row.status, daysBeforePromise } })
   }
   return findings

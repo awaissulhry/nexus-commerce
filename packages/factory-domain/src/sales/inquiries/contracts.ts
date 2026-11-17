@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import { businessDate, currency, id, input, instant, output, unitPrice } from '../../core/contracts'
-import { money } from '../../money/marked'
-import { DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, SIZE_CODE, TYPED_SOURCES } from './rules'
+import { money, notMoney } from '../../money/marked'
+import { DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, SIZE_CODE, STYLE_DRAFTS_MAX, TYPED_SOURCES } from './rules'
+// B-TH-026: a style draft's fields are the style library's.
+import { PPE_CATEGORIES, PRODUCT_TYPES } from '../../product/styles/rules'
+import { styleCode } from '../../product/styles/contracts'
+import { sizeCode } from '../../product/sizes/contracts'
 
 /**
  * Inquiries' contracts (B-W2b-295): what apps/factory-api's modules/sales/inquiries accepts and answers. A refusal is a 409 whose
@@ -75,6 +79,16 @@ const asked = {
   assigneeId: id().optional(),
 }
 
+// ---- B-TH-221 (threads plan O-SAL-INQ-LIST.band-F02): the office's New request carries the customer's PO and its delivery
+// address as the portal's New order does (B-TH-010, the columns of B-TH-009); the address is one of THAT customer's own (W23).
+const officeDetails = {
+  /** The customer's own order number, if they gave one. */
+  customerRef: line(INQUIRY_LIMITS.customerRef).optional(),
+  /** One of the customer's active delivery addresses (never with a prospect). */
+  shipToAddressId: id().optional(),
+}
+// ---- end B-TH-221
+
 /** "New inquiry (phone or visit)" (SCR-105 inquiries.new): the customer (and contact) or a prospect, what is asked. */
 export const createInquiryBody = input({
   companyId: id(),
@@ -85,6 +99,7 @@ export const createInquiryBody = input({
   contactId: id().optional(),
   prospect: prospectBody.optional(),
   ...asked,
+  ...officeDetails, // B-TH-221
 })
 export type CreateInquiryBody = z.output<typeof createInquiryBody>
 
@@ -109,6 +124,7 @@ export const fromMailBody = input({
   note: text(INQUIRY_LIMITS.note).optional(),
   lines: z.array(lineBody).max(INQUIRY_LIMITS.lines).optional(),
   assigneeId: id().optional(),
+  ...officeDetails, // B-TH-221
 })
 export type FromMailBody = z.output<typeof fromMailBody>
 
@@ -180,6 +196,53 @@ export const quoteBody = input({
 })
 export type QuoteBody = z.output<typeof quoteBody>
 
+// ---- B-TH-025 (threads plan G3): Make order -----------------------------------------------------------------------------
+
+/**
+ * "Make order": the order made straight from the request with the normal order checks (the customer on hold or blocked, its PO
+ * number where its terms want one, the minimum quantities, the credit limit and an approval rule: CONFIRMED, or PENDING_APPROVAL
+ * and said so). Every line of the request becomes a line of the order (a style, its colourway, pieces by size); its price is the
+ * one typed here (by the line's seq, on the order's basis), else the customer's list price. The promise date defaults to the
+ * wanted date while it is ahead; the PO to the request's.
+ */
+export const orderBody = input({
+  version: version(),
+  /** A unit price typed for a line of the request (by its seq; on the order's basis); a line not named takes the list price. */
+  lines: z
+    .array(input({ seq: z.number().int().min(1), unitPrice: money.price(unitPrice()) }))
+    .max(INQUIRY_LIMITS.lines)
+    .optional(),
+  promiseDate: businessDate().nullish(),
+  customerRef: line(INQUIRY_LIMITS.customerRef).optional(),
+  /** Carry the request's files to the order (Use on…; default true): a copy each, shared as the original was. */
+  carryFiles: z.boolean().optional(),
+})
+export type OrderBody = z.output<typeof orderBody>
+
+// ---- B-TH-026 (threads plan L2-G18): Make style draft ---------------------------------------------------------------------
+
+/**
+ * "Make style draft": a DRAFT style of the request's company for the request's customer's own label (never another brand), its
+ * name the request's subject unless typed, its range from the size scale (or the product type that gives one); the request's
+ * files picked here are carried to it (Use on…). The request stays open and names the draft.
+ */
+export const styleDraftBody = input({
+  version: version(),
+  code: styleCode(),
+  name: line(200).optional(),
+  productType: z.enum(PRODUCT_TYPES),
+  productTypeProfileId: id().nullish(),
+  sizeScaleId: id().optional(),
+  sizes: z.array(sizeCode()).max(60).optional(),
+  baseSize: sizeCode().nullish(),
+  season: line(20).nullish(),
+  ppeCategory: z.enum(PPE_CATEGORIES).optional(),
+  /** Files of the request (or of its mail) to carry to the style. */
+  fileIds: z.array(id()).max(STYLE_DRAFTS_MAX).optional(),
+})
+export type StyleDraftBody = z.output<typeof styleDraftBody>
+// ---- end B-TH-025 / B-TH-026
+
 export const inquiryListQuery = input({
   tile: z.enum(INQUIRY_TILES).optional(),
   status: z.enum(INQUIRY_STATUSES).optional(),
@@ -242,9 +305,31 @@ export const inquiryRow = output({
   assignee: output({ id: id(), name: z.string() }).nullable().optional(),
   mine: z.boolean(),
   quote: numbered.nullable(),
+  /** B-TH-025: the order made straight from it, with ITS own status (never the request's). Always sent; optional for the web's typed demo data. */
+  order: output({ id: id(), number: z.string(), status: z.string() }).nullable().optional(),
   declineReason: z.enum(DECLINE_REASONS).nullable(),
   closedAt: instant().nullable(),
   version: z.number().int(),
+  // ── B-TH-216 (threads plan TH-1b, Sales › Incoming: the Picture and Files cells). Always sent; optional only so typed demo
+  //    data elsewhere stays as it is. ──
+  /** The first line's style that names one, and its main picture (fileId null: the placeholder; `small`: its ~320 px preview
+   *  exists, GET /sales/inquiries/:inquiryId/picture serves it; the list never loads the original). Null: no style named. */
+  picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable().optional(),
+  /** The distinct styles its lines name ("+2" beside the picture). */
+  styleCount: z.number().int().optional(),
+  /** The request's files and its mail's kept attachments, counted by kind (null: no files.read over its company). */
+  fileCounts: output({ photos: z.number().int(), documents: z.number().int() }).nullable().optional(),
+  // ── end B-TH-216 ──
+})
+
+/** B-TH-216: GET /sales/inquiries/:inquiryId/picture — a presigned GET of the small preview (60 s); null until it exists. */
+export const inquiryPictureView = output({
+  picture: output({
+    fileId: id(),
+    styleId: id(),
+    contentType: z.string(),
+    small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
+  }),
 })
 
 export const inquiryList = output({
@@ -322,6 +407,8 @@ export const inquiryView = inquiryRow.extend({
   mailFiles: z.array(fileView),
   /** The quote it became, its status and its value (net, minor units of its currency; price grain). */
   quoteDetail: output({ id: id(), number: z.string(), status: z.string(), revision: z.number().int(), netAmount: money.price(z.number().int()), currency: z.string() }).nullable(),
+  /** B-TH-026: the style drafts made from it, each with its own state (oldest first). Always sent; optional for the web's typed demo data. */
+  styleDrafts: z.array(output({ id: id(), code: z.string(), name: z.string(), status: z.string() })).optional(),
   closedBy: output({ id: id(), name: z.string() }).nullable(),
   createdBy: output({ id: id(), name: z.string() }).nullable(),
   createdAt: instant(),
@@ -334,6 +421,9 @@ export const inquiryView = inquiryRow.extend({
     decline: action,
     lose: action,
     quote: action,
+    // B-TH-025 / B-TH-026: Make order, Make style draft (always sent; optional for the web's typed demo data).
+    order: action.optional(),
+    styleDraft: action.optional(),
   }),
 })
 
@@ -347,6 +437,30 @@ export const quoteAnswer = output({
   leftOut: z.array(output({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })),
   warnings: z.array(z.string()),
 })
+
+// ---- B-TH-025 / B-TH-026 answers --------------------------------------------------------------------------------------------
+
+/** The request's files carried to what was made from it: each copy, and each file that could not be carried with why. */
+export const carriedFiles = output({
+  carried: z.array(output({ sourceFileId: id(), fileId: id(), name: z.string() })),
+  notCarried: z.array(output({ sourceFileId: id(), name: z.string(), reason: z.string() })),
+})
+
+/** "Make order": the request ORDERED, its order as made (CONFIRMED, or PENDING_APPROVAL and why), said in words; the files carried. */
+export const orderAnswer = output({
+  inquiry: inquiryView,
+  order: output({ id: id(), number: z.string(), status: z.enum(['CONFIRMED', 'PENDING_APPROVAL']), waitsFor: z.enum(['CREDIT', 'APPROVAL']).nullable() }),
+  said: output({ it: z.string(), en: z.string() }),
+  files: carriedFiles,
+})
+
+/** "Make style draft": the request (still open) naming the draft, the draft style, the files carried. */
+export const styleDraftAnswer = output({
+  inquiry: inquiryView,
+  style: output({ id: id(), code: z.string(), name: z.string(), status: z.string() }),
+  files: carriedFiles,
+})
+// ---- end B-TH-025 / B-TH-026
 
 /** "Make an inquiry": what the form starts from (the mail's sender as a customer or a prospect, its words, its attachments). */
 export const mailDraftView = output({
@@ -366,6 +480,26 @@ export const mailDraftView = output({
 
 /** People an inquiry may be given to (the Assign popover): ACTIVE office people who keep inquiries there; by name, nobody counted. */
 export const assigneesView = output({ people: z.array(output({ id: id(), name: z.string(), me: z.boolean() })), complete: z.boolean() })
+
+// ---- B-TH-221 (wall W23): New request's customer picker ------------------------------------------------------------------
+/**
+ * The customers and brands a person may make a request for at a company: active, and reached by BOTH their
+ * sales.inquiries.manage and their parties.view (a person limited to customer A never reads customer B's name here). `q`
+ * finds by code or name; `total` says how many match beyond `limit`; `limited` says no grant reaches every customer.
+ */
+export const inquiryCustomersQuery = input({
+  companyId: id(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(200),
+})
+export type InquiryCustomersQuery = z.output<typeof inquiryCustomersQuery>
+export const inquiryCustomersView = output({
+  customers: z.array(output({ id: id(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable() })),
+  /** How many customers match (a count, not money). */
+  total: notMoney(z.number().int()),
+  limited: z.boolean(),
+})
+// ---- end B-TH-221
 
 /** The inquiry a quote or order came from, with its tech pack in force (null: none). */
 export const sourceView = output({

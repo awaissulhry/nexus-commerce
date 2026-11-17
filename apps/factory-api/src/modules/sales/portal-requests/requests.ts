@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { DomainError, ForbiddenError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
+import { customerNumberOf, customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 import type { SendRequestBody } from '@nexus/factory-domain/sales/portal-requests/contracts'
 import { PORTAL_REQUESTS_CLOSED, requestProblems, requestTextOf, subjectOf } from '@nexus/factory-domain/sales/portal-requests/rules'
 import { portalOf } from '../../../platform/auth/portal/service'
@@ -28,7 +28,8 @@ import { partnerRequest, requestViewOf } from './views'
  *      portal news, B-TH-011);
  *   4. the words as the FIRST message of the request's thread, through platform/threads/partner (W08): INBOUND, PORTAL, by the
  *      person's name, in the partner's own scope — the office reads them as written and cannot edit them;
- *   5. the answer: the request as the customer now reads it, and its receipt ("Received — number INQ-…", "Your request 7").
+ *   5. the answer: the request as the customer now reads it, and its receipt ("Received — Your request 7"; th2-backend step 7:
+ *      never the office's INQ-… series).
  *
  * The same Idempotency-Key sends once (a double click is one request); a retry after step 3 finds the request and posts its words
  * once (the post's own key).
@@ -85,12 +86,13 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
   return {
     request: view,
     receipt: {
-      number: row.number,
+      // th2-backend step 7 (threads plan §0.5, counts do not leak): the customer's own reference, never the office's series.
+      number: customerRefOf('REQUEST', row.customerSeq) ?? '—',
       yourNumber,
       subject,
       words: {
-        en: `Received — number ${row.number}${yourNumber ? ` (${yourNumber.words.en})` : ''}.`,
-        it: `Ricevuta — numero ${row.number}${yourNumber ? ` (${yourNumber.words.it})` : ''}.`,
+        en: yourNumber ? `Received — ${yourNumber.words.en}.` : 'Received.',
+        it: yourNumber ? `Ricevuta — ${yourNumber.words.it}.` : 'Ricevuta.',
       },
     },
   }

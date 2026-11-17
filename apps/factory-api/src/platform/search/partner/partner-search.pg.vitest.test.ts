@@ -4,6 +4,14 @@ import { useAbuseGuard } from '../../abuse/guard'
 import { usePortalOptions } from '../../auth/portal/service'
 import { freshGuard } from '../../auth/portal/testing/portal'
 import { startHarness, type Browser, type Harness } from '../../auth/sessions/testing/harness'
+// B-TH-097: the office's message entries never reach a portal search.
+import { newId } from '@nexus/factory-domain/core/ids'
+import { callerFor, command } from '../../../core/command'
+import { systemContext } from '../../outbox/system'
+import { ensureThread, writeMessage } from '../../threads/threads'
+import { indexEvent } from '../indexing'
+import { loadIndexers } from '../registry'
+import { fileURLToPath } from 'node:url'
 import { partnerWorld, signIn, type PartnerWorld } from './testing/world'
 
 /**
@@ -58,16 +66,19 @@ describe('SAL-084: a customer finds its records by its references and ours', { t
   it('their PO number typed whole finds their order first, as theirs', async () => {
     const answer = await search(buyer, q('SEED-PO-77'))
     expect(answer.groups[0].group).toBe('orders')
-    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', theirRef: 'SEED-PO-77', ourRef: 'SEED-SO-0001', group: 'orders', match: 'theirs', status: expect.any(String) })
+    // th2-backend step 7 (threads plan §0.5): "ours" is the customer's own order number ("#1"), never the office's SO-… series.
+    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', theirRef: 'SEED-PO-77', ourRef: expect.stringMatching(/^#\d+$/), group: 'orders', match: 'theirs', status: expect.any(String) })
     // Part of it finds it too (every word inside the partner's fields).
-    expect(all(await search(buyer, q('po-77'))).find((result) => result.ourRef === 'SEED-SO-0001')).toMatchObject({ match: 'words' })
+    expect(all(await search(buyer, q('po-77'))).find((result) => result.theirRef === 'SEED-PO-77')).toMatchObject({ match: 'words' })
   })
 
-  it('our number finds it as ours; Enter opens the one reference typed whole', async () => {
+  it('our office number (printed on the confirmation it holds) still finds it, shown by its own number; Enter opens the one reference typed whole', async () => {
     const answer = await search(buyer, q('seed-so-0001'))
-    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', ourRef: 'SEED-SO-0001', match: 'ours' })
+    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', ourRef: expect.stringMatching(/^#\d+$/), match: 'words' })
+    // th2-backend step 7: the order's hit never names the office's series (a delivery note — a legal document — keeps its own).
+    expect(JSON.stringify(answer.groups.find((group: { group: string }) => group.group === 'orders'))).not.toMatch(/SEED-SO-/)
     const quote = await search(buyer, q('SEED-RFQ-12'))
-    expect(quote.single).toMatchObject({ recordType: 'Quote', ourRef: 'SEED-Q-0001', theirRef: 'SEED-RFQ-12', match: 'theirs' })
+    expect(quote.single).toMatchObject({ recordType: 'Quote', ourRef: expect.stringMatching(/^#\d+$/), theirRef: 'SEED-RFQ-12', match: 'theirs' })
   })
 
   it('finds a delivery once shipped and its documents, grouped as the portal shows them', async () => {
@@ -125,3 +136,30 @@ describe('SAL-084: a supplier and a workshop find what their portal shows', { ti
     expect((await search(workshop, q('SEED-PO-0001'))).found).toBe(0)
   })
 })
+
+// ---- B-TH-097 (threads plan TH-9, G11; wall test T28): message text is in the office's search index; a portal session never
+// searches messages — not another customer's, not its own, never an office note.
+describe('B-TH-097: the portal search never reaches a message', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a word only in messages finds nothing in any portal, though the office index holds it', async () => {
+    const [order] = await admin<{ id: string }>('SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2', [world.tenantId, 'SEED-SO-0001'])
+    const system = () => callerFor(h.database, systemContext(world.tenantId, `ps097-${newId()}`))
+    await command(system(), { name: 'test.messages', input: { order: order!.id } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: order!.id }, world.officeId)
+      await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'EMAIL', author: { kind: 'USER', id: world.officeId, name: 'Seed Owner' }, bodyText: 'Made-up: the qwyxblorf lining arrives on Friday.' })
+      await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: world.officeId, name: 'Seed Owner' }, bodyText: 'Made-up office note: qwyxblorf is late at the supplier.' })
+      return null
+    })
+    const indexers = await loadIndexers(fileURLToPath(new URL('../../..', import.meta.url)))
+    for (const row of await admin(`SELECT * FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'thread.message_posted' AND subject = $2`, [world.tenantId, order!.id])) {
+      await indexEvent(system(), indexers, { eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload })
+    }
+    const entries = await admin<{ partyId: string | null }>(`SELECT "partyId" FROM "SearchEntry" WHERE "tenantId" = $1 AND "recordType" = 'Message' AND "searchText" LIKE '%qwyxblorf%'`, [world.tenantId])
+    expect(entries.length).toBe(2)
+    for (const browser of [buyer, viewer, orders, workshop]) {
+      const answer = await search(browser, q('qwyxblorf'))
+      expect(answer.found).toBe(0)
+      expect(JSON.stringify(answer.groups)).not.toMatch(/Message|qwyxblorf/)
+    }
+  })
+})
+// ---- end B-TH-097

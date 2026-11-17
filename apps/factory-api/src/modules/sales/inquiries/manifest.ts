@@ -18,6 +18,8 @@ export const manifest = defineManifest({
   'POST /sales/inquiries/assign': manage,
   'POST /sales/inquiries/decline': manage,
   'GET /sales/inquiries/:inquiryId': view,
+  // B-TH-216 (Sales › Incoming): the Picture cell's small preview (the file also needs files.read over its company).
+  'GET /sales/inquiries/:inquiryId/picture': view,
   'POST /sales/inquiries': manage,
   'PATCH /sales/inquiries/:inquiryId': manage,
   'POST /sales/inquiries/:inquiryId/assign': manage,
@@ -26,8 +28,15 @@ export const manifest = defineManifest({
   'POST /sales/inquiries/:inquiryId/decline': manage,
   'POST /sales/inquiries/:inquiryId/lost': manage,
   'POST /sales/inquiries/:inquiryId/quote': manage,
+  // B-TH-025: Make order — also orders.manage over the request's company and customer (checked in the handler).
+  'POST /sales/inquiries/:inquiryId/order': manage,
+  // B-TH-026: Make style draft — whoever makes styles (product.styles.manage over the company) and reads the request
+  // (sales.inquiries.view, checked in the handler): the production manager too.
+  'POST /sales/inquiries/:inquiryId/style-draft': { audiences: ['office'], permission: 'product.styles.manage', scope: 'record' },
   // B-W2b-394 (ML1:02): the inquiry addresses — read with the inquiries, changed as sales settings (sales.settings.manage, a
   // company's own or, over every company, the tenant's).
   'GET /sales/inquiries/addresses': view,
   'PUT /sales/inquiries/addresses': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
+  // B-TH-221 (wall W23): New request's customer picker — the customers this person may make a request for (also parties.view).
+  'GET /sales/inquiries/customers': manage,
 })

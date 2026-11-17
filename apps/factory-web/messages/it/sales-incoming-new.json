@@ -1,0 +1,110 @@
+{
+  "title": "Nuova richiesta",
+  "subtitle": "Una telefonata, una visita, una fiera o una lettera: scrivila come l’hanno chiesta. Arriva in In arrivo come una richiesta dal portale.",
+  "fromMailTitle": "Crea una richiesta da questa mail",
+  "fromMailSubtitle": "Da {from}, {when}",
+  "go": "Crea la richiesta",
+  "working": "Creazione…",
+  "toMe": "Assegnala a me",
+  "from": {
+    "label": "Da",
+    "source": "Come è arrivata",
+    "who": "Chi chiede",
+    "customer": "Un cliente",
+    "customerHint": "Uno dei clienti per cui fai richieste",
+    "prospect": "Un nuovo potenziale cliente",
+    "prospectHint": "Non ancora cliente: diventa cliente prima del preventivo",
+    "pick": "Cliente",
+    "pickPlaceholder": "Cerca tra i tuoi clienti per nome o codice",
+    "pickReading": "Lettura dei tuoi clienti…",
+    "pickFailed": "Non è stato possibile leggere i tuoi clienti",
+    "pickRetry": "Riprova",
+    "pickNone": "Non fai richieste per nessun cliente di questa azienda: registra un potenziale cliente",
+    "pickLimited_one": "Fai richieste per {count} cliente",
+    "pickLimited_other": "Fai richieste per {count} clienti",
+    "pickMore": "I primi {shown} di {count}: scrivi per trovare gli altri",
+    "contact": "Contatto",
+    "contactHint": "La persona che ha chiesto, se è un contatto del cliente",
+    "noContact": "Nessun contatto indicato",
+    "contactsFailed": "Non è stato possibile leggere i contatti del cliente",
+    "basis": "Base giuridica",
+    "basisChoose": "Scegli la base giuridica",
+    "basisWhy": "Perché possiamo conservare i loro dati (GDPR art. 6). Una richiesta di preventivo è una misura chiesta da loro, quindi “Misure su loro richiesta” va bene per la maggior parte delle richieste.",
+    "match": "{name} è già uno dei tuoi clienti.",
+    "matchBody": "Usa il cliente: una seconda anagrafica della stessa azienda dividerebbe le sue richieste e la sua posta.",
+    "matchUse": "Usa {name}"
+  },
+  "voice": {
+    "compose": {
+      "label": "La richiesta"
+    },
+    "subject": {
+      "hint": "Vuoto: si usa la prima riga del messaggio.",
+      "used": "Vuoto: si usa “{subject}”."
+    },
+    "message": {
+      "label": "Cosa hanno chiesto",
+      "hint": "Le loro parole come le hanno dette o scritte: gli appunti della telefonata, il testo della lettera. La prima scheda della richiesta la mostra così com’è scritta."
+    },
+    "problem": {
+      "tooLong": "Oggetto e messaggio insieme hanno al massimo 20 000 caratteri.",
+      "refLong": "Il loro numero d’ordine ha al massimo {max} caratteri.",
+      "datePast": "Il giorno desiderato è oggi o più avanti.",
+      "shipTo": "Non è uno degli indirizzi di consegna di questo cliente: scegline un altro."
+    },
+    "details": {
+      "none": "Niente qui serve per creare la richiesta.",
+      "ref": "Il loro numero d’ordine",
+      "refHint": "Il numero d’ordine del cliente, se l’ha dato.",
+      "dateHint": "Il giorno in cui vorrebbero la merce. Nella risposta diciamo cosa possiamo fare.",
+      "shipToHint": "Uno degli indirizzi di consegna del cliente.",
+      "shipToWaiting": "Un indirizzo aggiunto dal cliente nel suo portale: si verifica prima della prima consegna.",
+      "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna del cliente.",
+      "sumRef": "Loro numero {ref}"
+    },
+    "kept": {
+      "offline": "Offline: ciò che hai scritto resta in questa finestra."
+    }
+  },
+  "office": {
+    "title": "Per l’ufficio",
+    "linesHint": "Facoltativo: trasforma ciò che hanno chiesto in righe (un modello, la sua variante colore, i pezzi per taglia). Si offrono solo la collezione aperta e le etichette proprie di questo cliente."
+  },
+  "files": {
+    "title": "File",
+    "hint": "Tech pack, schizzi, foto: aggiunti alla richiesta solo per l’ufficio; condividili poi dai suoi file.",
+    "noRight": "Il tuo ruolo non aggiunge file.",
+    "later": "Aggiunto dopo aver creato la richiesta",
+    "fromMail": "Gli allegati della mail",
+    "fromMailHint": "Spunta quelli che sono il tech pack del cliente.",
+    "inPack": "Tech pack",
+    "packVersion": "Versione del tech pack (come la chiamano loro)",
+    "packVersionHint": "Es. \"SS27 v3\"",
+    "mailStays": "La mail e i suoi allegati restano con la richiesta."
+  },
+  "mail": {
+    "contact": "Il mittente è un contatto di {name}",
+    "domain": "Il mittente scrive dal dominio di {name}",
+    "prospect": "Nexus non conosce il mittente: un potenziale cliente, dal campo Da della mail",
+    "subject": "Oggetto",
+    "from": "Da",
+    "failed": "Impossibile leggere la mail",
+    "gone": "Questa mail non c’è più, o il tuo ruolo non smista la posta",
+    "openMade": "Apri {number}"
+  },
+  "held": {
+    "busy": "Creazione della richiesta…",
+    "unnumbered": "Le richieste non sono ancora numerate in questa azienda: Admin › Numerazione",
+    "customer": "Scegli il cliente, o registra un potenziale cliente",
+    "basis": "Scegli la base giuridica per i dati del potenziale cliente",
+    "message": "Scrivi prima cosa hanno chiesto",
+    "problems": "Correggi prima ciò che è segnato",
+    "mail": "Lettura della mail…"
+  },
+  "leave": {
+    "title": "Scartare questa richiesta?",
+    "body": "Ciò che hai scritto non viene tenuto.",
+    "discard": "Scarta",
+    "keep": "Continua a scrivere"
+  }
+}

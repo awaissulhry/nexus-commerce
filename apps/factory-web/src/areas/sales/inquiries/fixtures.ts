@@ -1,5 +1,5 @@
 import { createElement, useEffect, useState } from 'react'
-import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
+import { DEMO_COMPANIES } from '../../../shell/design-data'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import {
   ASSIGNEES,
@@ -8,15 +8,14 @@ import {
   CONTACTS,
   CUSTOMERS,
   DECLINED_VIEW,
+  DEMO_PICTURES,
+  demoThreadElement,
   inShell,
   JACKET_DETAIL,
   listOf,
-  MAIL_DRAFT,
-  MAIL_TAKEN,
   ME,
   NOW,
   PANTS_DETAIL,
-  panelsOf,
   PREFIX,
   PROSPECT_VIEW,
   QUOTED_VIEW,
@@ -25,18 +24,16 @@ import {
   VIEW,
   type RoleCase,
 } from './demo/fixtures'
-import { draftFromMail, emptyDecline, emptyLine, emptyNewDraft, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
+import { emptyDecline, emptyLine, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
 import type { InquiryView } from './api'
 import type { InquiryRecordModel, RecordDialog } from './record-model'
 import { InquiriesView, type BulkDialog, type InquiriesModel } from './view/InquiriesView'
-import type { NewInquiryModel } from './view/NewInquiryDialog'
 
 /**
  * SCR-105 — Sales › Inquiries (design sales.inquiries, an inbox), made-up data only: the tiles (each a saved filter), the notices
  * (one at a time, the rest behind "N more notices"), the list in the shared frame (rows selected: Assign to… and Decline N with
  * the closed ones left out), the inquiry in its DetailModal (Request — editable, changed with the EditModeBar, a prospect to
- * match —, Files & specs with the tech pack in force, Quote not yet / made, Activity), New inquiry (typed, a prospect, held,
- * refused, from a mail, a mail already made into one), Assign, Decline (Other without words held; a selection), Mark as lost,
+ * match —, Files & specs with the tech pack in force, Quote not yet / made, Activity), Assign, Decline (Other without words held; a selection), Mark as lost,
  * Make quote (what goes over, what is left out; a prospect held), the receipts, empty, filtered, loading, failed, offline, the
  * keys, and the role cases (sales, a reader without changes or prices, the warehouse without access).
  */
@@ -44,8 +41,6 @@ import type { NewInquiryModel } from './view/NewInquiryDialog'
 interface DesignModel {
   readonly role: RoleCase
   readonly model: InquiriesModel
-  /** The record panels the open inquiry's tabs mount (their own made-up cases). */
-  readonly panels?: 'conversation' | 'files'
 }
 
 const at = (over: Partial<ListAddress>): ListAddress => ({ ...HOME_ADDRESS, ...over })
@@ -91,9 +86,13 @@ function page(over: Partial<InquiriesModel> = {}, role: RoleCase = 'owner'): Des
       notice: null,
       dismissed: [],
       limit: 200,
-      newInquiry: null,
+      newRequest: null,
       bulk: null,
       detail: null,
+      // B-TH-216: one company (no Company column), the rows' small previews.
+      companies: DEMO_COMPANIES.slice(0, 1).map((entry) => ({ id: entry.id, name: entry.name })),
+      noticeFacts: {},
+      demoPictures: DEMO_PICTURES,
       ...over,
     },
   }
@@ -101,25 +100,9 @@ function page(over: Partial<InquiriesModel> = {}, role: RoleCase = 'owner'): Des
 
 const open = (view: InquiryView, tab: RecordTab = 'request', over: Partial<InquiryRecordModel> = {}, role: RoleCase = 'owner'): DesignModel => ({
   ...page({ address: at({ open: view.id, tab }), detail: record(view, { tab, ...over }, role) }, role),
-  panels: tab === 'activity' ? 'conversation' : tab === 'files' ? 'files' : undefined,
 })
 const dialog = (view: InquiryView, value: RecordDialog, tab: RecordTab = 'request'): DesignModel => open(view, tab, { dialog: value })
 const tile = (id: InquiryTile, rows: typeof ROWS): Partial<InquiriesModel> => ({ address: at({ tile: id }), list: listOf(rows) })
-
-const NEW: NewInquiryModel = {
-  draft: { ...emptyNewDraft(), source: 'PHONE', partyId: CUSTOMERS[1]!.id, request: 'Called: 60 rain trousers for the spring, S to XL, about 38 EUR.', targetPrice: '38', wantedDate: '2027-02-15', lines: [{ ...emptyLine('demo-1'), styleId: STYLE_OPTIONS[1]!.id, styleLabel: `${STYLE_OPTIONS[1]!.code} · ${STYLE_OPTIONS[1]!.name}`, sizes: { S: 10, M: 20, L: 20, XL: 10 } }], assignToMe: true },
-  mail: null,
-  customers: { items: CUSTOMERS, problem: null },
-  contacts: { items: CONTACTS, problem: null },
-  styles: { items: STYLE_OPTIONS, problem: null },
-  details: { [PANTS_DETAIL.id]: { status: 'ready', value: PANTS_DETAIL } },
-  files: [{ key: 'f1', name: 'rain-trousers-photo.jpg', size: 412_000, problem: null }],
-  busy: false,
-  notice: null,
-  offline: false,
-}
-const NEW_PROSPECT: NewInquiryModel = { ...NEW, draft: { ...emptyNewDraft(), source: 'FAIR', who: 'prospect', prospect: { name: 'Gianni Esempio', company: 'Demo Moto Club', email: 'president@motoclub-demo.example.com', phone: '' }, request: 'Club jackets with an embroidered logo, about 40.', lines: [{ ...emptyLine('demo-2'), description: 'Club jacket with a logo on the back', quantity: '40' }] }, files: [] }
-const FROM_MAIL: NewInquiryModel = { ...NEW, draft: { ...draftFromMail(MAIL_DRAFT), techPackFileIds: [MAIL_DRAFT.attachments[0]!.id] }, mail: { id: MAIL_DRAFT.mail.id, draft: { status: 'ready', value: MAIL_DRAFT } }, files: [] }
 
 const assignDialog = (people: Extract<RecordDialog, { kind: 'assign' }>['people'] = { status: 'ready', value: ASSIGNEES }): RecordDialog => ({ kind: 'assign', people, busy: false, notice: null })
 const BULK_ASSIGN: BulkDialog = { kind: 'assign', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, current: null, people: { status: 'ready', value: ASSIGNEES }, busy: false, notice: null, offline: false } }
@@ -128,21 +111,15 @@ const BULK_DECLINE: BulkDialog = { kind: 'decline', ids: [ROWS[0]!.id, ROWS[3]!.
 function ListDesign({ model }: { model: DesignModel }) {
   const [state, setState] = useState(model.model)
   useEffect(() => setState(model.model), [model])
-  const panels = model.panels && state.detail?.loaded.status === 'ready' ? createElement(RecordPanelsView, { model: panelsOf(state.detail.loaded.value, model.panels) }) : null
+  // B-TH-217: the open request's thread in the reading pane (made-up messages; nothing is sent).
   const view = createElement(InquiriesView, {
     model: state,
-    slots: model.panels === 'conversation' ? { activity: panels } : model.panels === 'files' ? { files: panels } : undefined,
+    slots: state.detail ? { thread: demoThreadElement() } : undefined,
     actions: {
       onAddress: (patch) => setState((now) => ({ ...now, address: { ...now.address, ...patch } })),
       onClearFilters: () => setState((now) => ({ ...now, address: HOME_ADDRESS })),
       onOpen: (id) => setState((now) => ({ ...now, address: { ...now.address, open: id }, detail: id === null ? null : record([VIEW, PROSPECT_VIEW, QUOTED_VIEW, DECLINED_VIEW].find((one) => one.id === id) ?? { ...VIEW, ...ROWS.find((one) => one.id === id)! }) })),
-      onNew: () => setState((now) => ({ ...now, newInquiry: { ...NEW, draft: emptyNewDraft(), files: [] } })),
-      newInquiry: {
-        onDraft: (patch) => setState((now) => (now.newInquiry ? { ...now, newInquiry: { ...now.newInquiry, draft: { ...now.newInquiry.draft, ...patch } } } : now)),
-        onCustomer: (partyId) => setState((now) => (now.newInquiry ? { ...now, newInquiry: { ...now.newInquiry, draft: { ...now.newInquiry.draft, partyId } } } : now)),
-        onClose: () => setState((now) => ({ ...now, newInquiry: null })),
-        onSubmit: () => setState((now) => ({ ...now, newInquiry: null, notice: { key: 'new.done', params: { number: 'INQ-DEMO-0007' }, tone: 'success' } })),
-      },
+      // B-TH-221: New request has its own design screen, SCR-105-new.
       onBulk: (kind) => setState((now) => ({ ...now, bulk: kind === 'assign' ? BULK_ASSIGN : BULK_DECLINE })),
       bulk: { onClose: () => setState((now) => ({ ...now, bulk: null })), onSubmit: () => setState((now) => ({ ...now, bulk: null })), onAssign: () => setState((now) => ({ ...now, bulk: null })) },
       record: {
@@ -167,7 +144,7 @@ function ListDesign({ model }: { model: DesignModel }) {
       onDismissPageNotice: (key) => setState((now) => ({ ...now, dismissed: [...now.dismissed, key] })),
     },
   })
-  return inShell('/sales/inquiries', view, model.role)
+  return inShell('/sales/incoming', view, model.role)
 }
 
 const OPEN_ROWS = ROWS.filter((one) => ['NEW', 'ASSIGNED', 'NEED_INFO'].includes(one.status))
@@ -175,10 +152,20 @@ const CHANGED = { ...requestDraftOf(VIEW), wantedDate: '2027-01-27', targetPrice
 
 export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-105',
-  title: 'Inquiries',
+  title: 'Incoming',
   view: ListDesign,
   holdsPage: true,
   cases: [
+    // ── B-TH-216 (threads plan TH-1b): Sales › Incoming — every request of every customer on one page, every cell a door ──
+    { id: 'th-216-incoming', label: 'TH-1b · Incoming: the band (Incoming · 3 open · as of), five tiles, Picture, Customer (a prospect marked new), Subject, Files, Quantity, Wanted, Received, Waiting, Owner by name, State, Source, Number', model: page(), note: 'Every cell is a door: Customer → the customer (peek on rest), Subject / Number → the request, Picture → the picture large, Files → its files, State / Source narrow the list. The rest of a row opens the request (⌘: a new tab). Keys only in the footer icon.' },
+    { id: 'th-216-all', label: 'TH-1b · Rows ▾ All: closed requests with their quote (a door) or the decline reason', model: page({ address: at({ tile: 'ALL' }), list: listOf(ROWS) }) },
+    { id: 'th-216-state', label: 'TH-1b · The State cell narrowed the list to "In progress" (its chip)', model: page({ address: at({ tile: 'ALL', status: 'ASSIGNED' }), list: listOf(ROWS.filter((one) => one.status === 'ASSIGNED')) }) },
+    { id: 'th-216-picture', label: 'TH-1b · The picture large (the small preview, Open style, the request names 2 styles)', model: page({ viewer: ROWS[1]!.id }) },
+    { id: 'th-216-numbering', label: 'TH-1b · One notice: requests by portal and mail are off for a company (no request numbering), 2 more behind', model: page({ list: listOf(OPEN_ROWS, false), noticeFacts: { numberingMissing: [DEMO_COMPANIES[0].name], mailToSort: { count: 4, more: false } } }) },
+    { id: 'th-216-mail', label: 'TH-1b · One notice: 4 mails wait in Mail to sort (Open)', model: page({ noticeFacts: { mailToSort: { count: 4, more: false } } }) },
+    { id: 'th-216-companies', label: 'TH-1b · Two companies: the Company column (a funnel) and its chip', model: page({ companies: DEMO_COMPANIES.map((entry) => ({ id: entry.id, name: entry.name })), address: at({ company: DEMO_COMPANIES[0].id }) }) },
+    { id: 'th-216-production', label: 'TH-1b · The production manager: reads every request, no target price, every sales action held "Needs the sales permission"', model: page({ selected: [ROWS[0]!.id] }, 'production') },
+    // ── end B-TH-216 ──
     { id: 'inbox', label: 'The queue: open inquiries, the oldest waiting first; tiles, waiting in working time, "You" / "A colleague"', model: page(), note: 'Enter opens the inquiry in its DetailModal; x / Space select; ⋯ and right-click the verbs. Keys only in the footer icon.' },
     { id: 'tile-new', label: 'Tile: New (its chip in the filter row)', model: page(tile('NEW', OPEN_ROWS.filter((one) => one.status === 'NEW'))) },
     { id: 'tile-waiting-us', label: 'Tile: Waiting for us over 1 working day', model: page(tile('WAITING_US', OPEN_ROWS.filter((one) => one.waiting.overdue))) },
@@ -190,13 +177,10 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'selected-closed', label: 'A selection with closed rows: they are left out of Assign and Decline (said before the click)', model: page({ address: at({ tile: 'ALL' }), list: listOf(ROWS), selected: [ROWS[0]!.id, ROWS[4]!.id, ROWS[5]!.id] }) },
     { id: 'notices', label: 'Notices: the count is partial (one shown, "1 more notice")', model: page({ list: listOf(OPEN_ROWS, false) }) },
     { id: 'notices-open', label: 'Every notice listed (partial count, prospects to match), each dismissed by its value', model: page({ list: listOf(OPEN_ROWS, false), noticesOpen: true }) },
-    { id: 'detail', label: 'The inquiry (DetailModal): Request — who asks, what, the lines with sizes, the target, the mail as sent', model: open(VIEW), note: 'Q make quote, A assign, D decline, J / K the next and previous inquiry, Esc closes; Open full page is a new tab.' },
-    { id: 'detail-changed', label: 'Request changed: the date, the target and a new line — the EditModeBar (⌘S applies)', model: open(VIEW, 'request', { draft: CHANGED }) },
-    { id: 'detail-prospect', label: 'A prospect: "Unknown sender — match to a customer"; Make quote held until matched', model: open(PROSPECT_VIEW) },
-    { id: 'detail-files', label: 'Files & specs: the tech pack (a newer version in force), the mail’s attachments, the files panel', model: open(VIEW, 'files') },
-    { id: 'detail-quote-none', label: 'Quote: not quoted yet (what Make quote will copy)', model: open(VIEW, 'quote') },
-    { id: 'detail-quote-made', label: 'Quote: the quote it became (link, status, value)', model: open(QUOTED_VIEW, 'quote') },
-    { id: 'detail-activity', label: 'Activity: the thread (internal notes and mail to the customer), files and history', model: open(VIEW, 'activity') },
+    { id: 'detail', label: 'TH-1b · The reading pane: row 1 (picture · customer — subject · state · owner · 2 of 3 · ⋯ · ×), the actions, the customer\'s words first, the thread, Details', model: open(VIEW), note: 'Q make quote, A assign, D decline, J / K the next and previous request (outside the feed), Esc closes; ⋯ Open full page is a new tab.' },
+    { id: 'detail-changed', label: 'TH-1b · The pane while the request is being edited (Edit the request holds the EditModeBar)', model: open(VIEW, 'request', { draft: CHANGED }) },
+    { id: 'detail-prospect', label: 'TH-1b · A prospect marked new: the prospect block with its lawful basis; replies wait for "Make the customer first"', model: open(PROSPECT_VIEW) },
+    { id: 'detail-quote-made', label: 'TH-1b · Made from it: the quote with its own status and value; the closed line', model: open(QUOTED_VIEW) },
     { id: 'detail-closed', label: 'A declined inquiry: read-only but for its note, the reason and who', model: open(DECLINED_VIEW) },
     { id: 'detail-stale', label: 'Changed by someone while typing: Reload (the typing is kept until then)', model: open(VIEW, 'request', { draft: CHANGED, stale: '10:41' }) },
     { id: 'detail-refused', label: 'Apply refused: our words, the field named', model: open(VIEW, 'request', { draft: CHANGED, notice: { key: 'problem.invalid', tone: 'danger', lines: [{ key: 'field.lineAt', params: { n: 5 } }] } }) },
@@ -213,12 +197,6 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'quote', label: 'Make quote: customer, contact, promise date, the lines that go over and the ones left out', model: dialog(VIEW, { kind: 'quote', customerRef: 'SS27-RFQ-14', busy: false, notice: null }, 'quote') },
     { id: 'quote-prospect', label: 'Make quote held: a prospect (match it first)', model: dialog(PROSPECT_VIEW, { kind: 'quote', customerRef: '', busy: false, notice: null }, 'quote') },
     { id: 'quoted', label: 'The receipt after Make quote: Open QT-…, what was left out', model: page({ notice: { key: 'done.quote', params: { quote: 'QT-DEMO-00013', number: VIEW.number }, tone: 'warning', link: { href: '#', label: { key: 'done.openQuote', params: { quote: 'QT-DEMO-00013' } } }, lines: [{ key: 'leftOut.noStyle', params: { n: 4 } }] } }) },
-    { id: 'new', label: 'New inquiry: a phone call from a customer, a style with its sizes, a target, a file, give it to me', model: page({ newInquiry: NEW }) },
-    { id: 'new-prospect', label: 'New inquiry: a new prospect from a fair, a product in words', model: page({ newInquiry: NEW_PROSPECT }) },
-    { id: 'new-held', label: 'New inquiry held: no customer and no request yet', model: page({ newInquiry: { ...NEW, draft: emptyNewDraft(), files: [] } }) },
-    { id: 'new-refused', label: 'New inquiry refused: our words, the field named', model: page({ newInquiry: { ...NEW, notice: { key: 'problem.invalid', tone: 'danger', lines: [{ key: 'field.prospect' }] } } }) },
-    { id: 'new-from-mail', label: 'Make an inquiry from a mail: the sender is a contact of the brand, its attachment as the tech pack', model: page({ newInquiry: FROM_MAIL }) },
-    { id: 'new-mail-taken', label: 'A mail already made into an inquiry (Open it)', model: page({ newInquiry: { ...FROM_MAIL, mail: { id: MAIL_TAKEN.mail.id, draft: { status: 'ready', value: MAIL_TAKEN } } } }) },
     { id: 'updates', label: '3 changes waiting (Show)', model: page({ updates: 3 }) },
     { id: 'capped', label: 'The first 200 rows only (narrow the filters)', model: page({ limit: 3, list: listOf(OPEN_ROWS) }) },
     { id: 'filtered-empty', label: 'No rows match these filters (Clear filters)', model: page({ address: at({ source: 'FAIR', q: 'zzz' }), list: listOf([]) }) },

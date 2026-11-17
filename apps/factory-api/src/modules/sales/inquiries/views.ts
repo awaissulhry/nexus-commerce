@@ -2,18 +2,23 @@ import type { Prisma } from '@nexus/factory-db'
 import { daysFrom, plusDays } from '@nexus/factory-domain/calendars/dates'
 import { workingMinutesBetween } from '@nexus/factory-domain/calendars/working-time'
 import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { can } from '@nexus/factory-domain/core/permissions'
+import { can, holds } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { SALES_INQUIRIES_MANAGE } from '@nexus/factory-domain/sales/inquiries/permissions'
+// B-TH-025 / B-TH-026: the order made from it (orders.view), Make order (orders.manage), Make style draft (product.styles.manage).
+import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { PRODUCT_STYLES_MANAGE, PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import {
   askInfoRefusal,
   currentOf,
   declineRefusal,
   editRefusal,
   loseRefusal,
+  orderRefusal,
+  styleDraftRefusal,
   overdue,
   piecesOfSizes,
   quoteRefusal,
@@ -34,6 +39,8 @@ import {
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { dayOrNull, factsOf, LINE_COLUMNS, may, type InquiryData, type LineData, type Reader } from './store'
+// B-TH-216 (Sales › Incoming): the Picture and Files cells.
+import { inquiryRowExtras, type InquiryRowExtras } from './row-extras'
 
 /**
  * How inquiry rows become the contracts' views (B-W2b-295): the list's rows (their customer or prospect, what is asked in
@@ -92,9 +99,16 @@ export interface RowView {
   readonly assignee: { readonly id: string; readonly name: string } | null
   readonly mine: boolean
   readonly quote: { readonly id: string; readonly number: string } | null
+  /** B-TH-025: the order made straight from it, with its own status (only for a reader who sees orders there). */
+  readonly order: { readonly id: string; readonly number: string; readonly status: string } | null
   readonly declineReason: DeclineReason | null
   readonly closedAt: string | null
   readonly version: number
+  // ── B-TH-216 (Sales › Incoming): the Picture and Files cells ──
+  readonly picture: InquiryRowExtras['picture']
+  readonly styleCount: number
+  readonly fileCounts: InquiryRowExtras['files']
+  // ── end B-TH-216 ──
 }
 
 /**
@@ -112,10 +126,12 @@ function fromWordsOf(row: InquiryData, party: { readonly legalName: string; read
 export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly InquiryData[], now: Date, waiting?: Map<string, number>): Promise<RowView[]> {
   if (rows.length === 0) return []
   const inquiryIds = rows.map((row) => row.id)
-  const [parties, lines, quotes, mails, minutes] = await Promise.all([
+  const [parties, lines, quotes, orders, mails, minutes] = await Promise.all([
     db.party.findMany({ where: { id: { in: ids(rows.map((row) => row.partyId)) } }, select: { id: true, code: true, legalName: true, tradeName: true } }),
     db.inquiryLine.findMany({ where: { inquiryId: { in: inquiryIds } }, select: LINE_COLUMNS, orderBy: [{ inquiryId: 'asc' }, { seq: 'asc' }] }),
     db.quote.findMany({ where: { id: { in: ids(rows.map((row) => row.quoteId)) } }, select: { id: true, number: true } }),
+    // B-TH-025: the orders made straight from them.
+    db.salesOrder.findMany({ where: { id: { in: ids(rows.map((row) => row.salesOrderId)) } }, select: { id: true, number: true, status: true, companyId: true, partyId: true } }),
     db.inboundEmail.findMany({ where: { id: { in: ids(rows.map((row) => row.sourceEmailId)) } }, select: { id: true, fromAddress: true } }),
     waiting ? Promise.resolve(waiting) : waitingMinutesOf(db, rows, now),
   ])
@@ -127,10 +143,13 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
   const keeperOf = byId(keepers)
   const partyOf = byId(parties)
   const quoteOf = byId(quotes)
+  const orderOf = byId(orders)
+  const actor = actorOf(context)
   const mailOf = byId(mails)
   const styleOf = byId(styles)
   const linesOf = new Map<string, LineData[]>()
   for (const line of lines) linesOf.set(line.inquiryId, [...(linesOf.get(line.inquiryId) ?? []), line])
+  const extras = await inquiryRowExtras(db, context, rows, linesOf) // B-TH-216
   return rows.map((row) => {
     const status = row.status as InquiryStatus
     const own = linesOf.get(row.id) ?? []
@@ -139,6 +158,8 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
     for (const line of own) for (const [code, pieces] of Object.entries(sizesOf(line.sizes))) sizes[code] = (sizes[code] ?? 0) + pieces
     const workingMinutes = minutes.get(row.id) ?? null
     const quote = row.quoteId ? quoteOf.get(row.quoteId) : undefined
+    // B-TH-025: the order only for a reader who may see orders of its company and customer.
+    const orderRow = (order: (typeof orders)[number] | undefined) => (order && can(actor, ORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId }) ? { id: order.id, number: order.number, status: order.status } : null)
     return {
       id: row.id,
       number: row.number,
@@ -161,9 +182,14 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
       assignee: row.assigneeId && keeperOf.get(row.assigneeId) ? { id: row.assigneeId, name: keeperOf.get(row.assigneeId)!.displayName } : null,
       mine: row.assigneeId !== null && row.assigneeId === context.actorId,
       quote: quote ? { id: quote.id, number: quote.number } : null,
+      order: orderRow(row.salesOrderId ? orderOf.get(row.salesOrderId) : undefined),
       declineReason: (row.declineReason as DeclineReason | null) ?? null,
       closedAt: at(row.closedAt),
       version: row.version,
+      // B-TH-216: the Picture and Files cells.
+      picture: extras.get(row.id)?.picture ?? null,
+      styleCount: extras.get(row.id)?.styleCount ?? 0,
+      fileCounts: extras.get(row.id)?.files ?? null,
     }
   })
 }
@@ -216,6 +242,8 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
     // B-TH-009 (L2-G01): the delivery address the customer asked (a WAITING one is decided with the order).
     row.shipToAddressId ? db.partyAddress.findUnique({ where: { id: row.shipToAddressId }, select: { id: true, name: true, line1: true, postalCode: true, city: true, country: true, approvalStatus: true } }) : Promise.resolve(null),
   ])
+  // B-TH-026: the style drafts made from it (only for a reader who sees styles).
+  const drafts = row.styleIds.length > 0 && holds(actor, PRODUCT_STYLES_VIEW) ? await db.style.findMany({ where: { id: { in: row.styleIds } }, select: { id: true, code: true, name: true, status: true, companyId: true } }) : []
   const [styles, colourways, version, techPack] = await Promise.all([
     db.style.findMany({ where: { id: { in: ids(lines.map((line) => line.styleId)) } }, select: { id: true, code: true, name: true } }),
     db.colourway.findMany({ where: { id: { in: ids(lines.map((line) => line.colourwayId)) } }, select: { id: true, code: true, name: true } }),
@@ -272,6 +300,11 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
       quote && can(actor, QUOTES_VIEW, { companyId: quote.companyId, partyId: quote.partyId })
         ? { id: quote.id, number: quote.number, status: quote.status, revision: quote.currentRevision, netAmount: asMoney('price', version?.netAmount ?? 0), currency: version?.currency ?? row.currency }
         : null,
+    // B-TH-026: in the order they were made.
+    styleDrafts: row.styleIds.flatMap((styleId) => {
+      const draft = drafts.find((entry) => entry.id === styleId)
+      return draft && can(actor, PRODUCT_STYLES_VIEW, { companyId: draft.companyId }) ? [{ id: draft.id, code: draft.code, name: draft.name, status: draft.status }] : []
+    }),
     closedBy: person(row.closedById),
     createdBy: person(row.createdById),
     createdAt: toUtcIso(row.createdAt as Date),
@@ -284,6 +317,10 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
       decline: action(manage, declineRefusal(facts, 'PRICE', null), !manage),
       lose: action(manage, loseRefusal(facts), !manage),
       quote: action(manage && can(actor, QUOTES_MANAGE, { companyId: row.companyId, ...(row.partyId ? { partyId: row.partyId } : {}) }), quoteRefusal(facts), !manage),
+      // B-TH-025: Make order — sales who keep the request and make orders there; every line must be ready (else said).
+      order: action(manage && can(actor, ORDERS_MANAGE, { companyId: row.companyId, ...(row.partyId ? { partyId: row.partyId } : {}) }), orderRefusal(facts, lines.map((line) => ({ seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, description: line.description, note: line.note, sizes: sizesOf(line.sizes) }))), !manage),
+      // B-TH-026: Make style draft — whoever makes styles there (the production manager too: not READ_ONLY for this one).
+      styleDraft: action(can(actor, PRODUCT_STYLES_MANAGE, { companyId: row.companyId }), styleDraftRefusal(facts, row.styleIds.length)),
     },
   }
 }

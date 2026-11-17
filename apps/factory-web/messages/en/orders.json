@@ -114,7 +114,7 @@
   },
   "list": {
     "tableLabel": "Sales orders",
-    "search": "Search number or customer PO",
+    "search": "Search number, PO, customer, style or brand",
     "rowsLabel": "Rows",
     "layoutLabel": "Show orders as",
     "keyView": "List or board",
@@ -1091,6 +1091,8 @@
   "newOrder": {
     "title": "New order",
     "body": "Typed by the office (for example an order by phone or e-mail). Its lines are typed next; nothing is saved until Confirm order.",
+    "writtenRequest": "Not a firm order yet, but a request to answer first (an e-mail, a letter, a call)? Write it in Incoming: it is answered there and becomes the quote or the order.",
+    "writtenRequestLink": "New request in Incoming",
     "company": "Selling company",
     "customer": "Customer",
     "customerHint": "Name, code, VAT number or tax code.",

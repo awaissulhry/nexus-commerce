@@ -3,6 +3,8 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CAPA_STATUSES, CAPA_VIEWS, MAX_REMINDERS, STAGES } from '@nexus/factory-domain/quality/capa/rules'
 import { ApiError } from '../../../lib/api/errors'
+import { scanText } from '../../../lib/testing/brand-scan' // B-TH-232
+import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands' // B-TH-232
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
@@ -229,3 +231,46 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 })
+
+// ── B-TH-232 (threads plan TH-2: the office side of the wall in words; B-TH-031, WALL-G06, W15) ──
+describe('B-TH-232 an 8D goes to a customer only with that customer’s complaints — held before the click, said in words', () => {
+  const eightD = { ...RECORD, capa: { ...RECORD.capa, type: 'EIGHT_D' as const }, documents: [{ id: 'd1d1d1d1-0000-4000-8000-000000000001', version: 1, language: 'it', number: null, fileId: 'd1d1d1d1-0000-4000-8000-000000000002', createdAt: '2026-11-10T09:00:00.000Z', createdById: null }] }
+  const complaint = (shareHeld: 'OTHER_CUSTOMER' | 'OTHER_CUSTOMERS_COMPLAINTS' | null) => ({
+    id: 'e1e1e1e1-0000-4000-8000-000000000001',
+    recordType: 'Complaint' as const,
+    recordId: 'e1e1e1e1-0000-4000-8000-000000000002',
+    note: null,
+    createdAt: '2026-11-10T09:00:00.000Z',
+    createdById: null,
+    record: { number: 'RC-2026-0042', title: null, state: 'INVESTIGATING', severity: null, category: null, siteId: null, namesThisCapa: true, shareHeld },
+  })
+  const FILES = capaCan(['quality.capa.view', 'quality.capa.manage', 'quality.complaints.manage', 'files.manage'])
+
+  it('the CAPA written for another customer, or answering another customer’s complaint: Share is held with the reason', () => {
+    expect(shareHeld(complaint(null), eightD, FILES, false)).toBeNull()
+    expect(shareHeld(complaint('OTHER_CUSTOMER'), eightD, FILES, false)).toEqual({ key: 'refused.OTHER_CUSTOMER' })
+    expect(shareHeld(complaint('OTHER_CUSTOMERS_COMPLAINTS'), eightD, FILES, false)).toEqual({ key: 'refused.OTHER_CUSTOMERS_COMPLAINTS' })
+    // An answer from before the field (no shareHeld): the API's own check still refuses at the click.
+    expect(shareHeld({ ...complaint(null), record: { ...complaint(null).record, shareHeld: undefined } }, eightD, FILES, false)).toBeNull()
+  })
+
+  it('the share’s refusal at the click is said in our words, one line per code, never the API’s sentence', () => {
+    const named = `CAPA-2026-0007 is written for ${BRAND_ALPHA.legalName}: an 8D goes only to its own customer.`
+    for (const code of ['OTHER_CUSTOMER', 'OTHER_CUSTOMERS_COMPLAINTS', 'REPORT_OUTDATED']) {
+      const refusal = refusalOf(new ApiError('conflict', 409, 'invalid_state', named, null, [{ path: `held/${code}`, message: named }]))
+      expect(refusal.lines).toEqual([{ key: `refused.${code}` }])
+    }
+  })
+
+  it('the words exist in it and en and name no customer (W15: scanText finds nothing of Brand Alpha or Brand Beta)', () => {
+    for (const catalogue of [en, it_]) {
+      for (const code of ['OTHER_CUSTOMER', 'OTHER_CUSTOMERS_COMPLAINTS', 'REPORT_OUTDATED']) {
+        const words = catalogue[`refused.${code}`]
+        expect(words, code).toBeTruthy()
+        expect(scanText(words!, BRAND_ALPHA)).toEqual([])
+        expect(scanText(words!, BRAND_BETA)).toEqual([])
+      }
+    }
+  })
+})
+// ── end B-TH-232 ──

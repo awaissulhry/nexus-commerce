@@ -72,6 +72,8 @@ export interface WizardProps {
   actions?: WizardActions
   /** B-W2b-427: the check's and the result's possible duplicates (the page's container reads them). */
   duplicates?: ReactNode
+  /** B-TH-293: one line above the check's columns (Import orders: a customer's remembered columns). */
+  memory?: ReactNode
 }
 
 interface WizardParts {
@@ -116,7 +118,7 @@ export function ImportWizardInline(props: WizardProps) {
   )
 }
 
-function useWizardParts({ model, importers, companies, can, actions, duplicates }: WizardProps): WizardParts | null {
+function useWizardParts({ model, importers, companies, can, actions, duplicates, memory /* B-TH-293 */ }: WizardProps): WizardParts | null {
   const t = useT('admin-import')
   const ta = useT('admin')
   const words = useImporterWords()
@@ -224,7 +226,7 @@ function useWizardParts({ model, importers, companies, can, actions, duplicates 
         ) : phase === 'planFailed' ? (
           <PlanFailed job={job} />
         ) : phase === 'planned' ? (
-          <Checked job={job} model={model} duplicates={duplicates} />
+          <Checked job={job} model={model} duplicates={duplicates} memory={memory /* B-TH-293 */} />
         ) : phase === 'applying' ? (
           <>
             <JobProgress
@@ -416,7 +418,7 @@ function RowsState({ rows, children }: { rows: WizardModel['refused']; children:
 }
 
 /** The dry run: counts, the columns read, the refused rows with their reasons, the changes. Nothing written yet. */
-function Checked({ job, model, duplicates }: { job: ImportJob; model: WizardModel; duplicates?: ReactNode }) {
+function Checked({ job, model, duplicates, memory }: { job: ImportJob; model: WizardModel; duplicates?: ReactNode; memory?: ReactNode /* B-TH-293 */ }) {
   const t = useT('admin-import')
   const layout = layoutOf(job)
   const refused = model.refused.items ?? []
@@ -425,6 +427,7 @@ function Checked({ job, model, duplicates }: { job: ImportJob; model: WizardMode
     <div className="fw-adm-modal-body">
       <Counts job={job} />
       <p className="fw-adm-intro">{phaseOf(job) === 'planned' ? t('imp.checked.nothingYet') : t('imp.checked.again')}</p>
+      {memory /* B-TH-293 */}
       {layout && (
         <section className="fw-adm-imp-section" aria-label={t('imp.checked.columns')}>
           <h3 className="fw-adm-imp-h3">{t('imp.checked.columns')}</h3>

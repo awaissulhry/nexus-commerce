@@ -19,7 +19,7 @@ export function InquiriesMessages({ children }: { children?: ReactNode }) {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 /** Parameters that are themselves keys of the catalogue (said in words first). */
-const KEY_PARAM = /^(tile|source|status|decline|right|field|line\.problem|time|leftOut|refusal|prospect\.problem|request\.problem)\./
+const KEY_PARAM = /^(tile|source|status|quoteStatus|decline|right|field|line\.problem|time|leftOut|refusal|prospect\.problem|request\.problem)\./
 
 /**
  * `t` for a key, `say` for a phrase: a parameter that is itself a key of the catalogue (`tile.NEW`, `source.PHONE`,
@@ -56,13 +56,19 @@ export function SourceTag({ source }: { source: InquirySource }) {
   return <Tag tone="neutral">{t(`source.${source}`)}</Tag>
 }
 
-/** Waiting in working time, overdue in the danger tone; nothing once closed. */
-export function WaitingTag({ row }: { row: Pick<InquiryRow, 'waiting'> }) {
+/** Waiting in working time, overdue in the danger tone; nothing once closed. `short` (the list, B-TH-216): "Waiting on us · 1 d", the full words on hover. */
+export function WaitingTag({ row, short }: { row: Pick<InquiryRow, 'waiting'>; short?: boolean }) {
   const { say } = useWords()
   const waiting = waitingOf(row)
   if (!waiting) return <span className="fw-inq-hint">—</span>
   const words = waiting.time ? `${say(waiting.phrase)} · ${say(waiting.time)}` : say(waiting.phrase)
-  return <Tag tone={waiting.tone}>{words}</Tag>
+  if (!short) return <Tag tone={waiting.tone}>{words}</Tag>
+  const brief = { key: row.waiting.for === 'CUSTOMER' ? 'waiting.customer' : 'waiting.us' }
+  return (
+    <span title={words ?? undefined}>
+      <Tag tone={waiting.tone}>{waiting.time ? `${say(brief)} · ${say(waiting.time)}` : say(brief)}</Tag>
+    </span>
+  )
 }
 
 /** One notice (a receipt or a refusal) with its link and the lines under it. */

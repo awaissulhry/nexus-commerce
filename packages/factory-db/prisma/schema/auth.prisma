@@ -144,6 +144,10 @@ model User {
   requestedAddresses      PartyAddress[]         @relation("PartyAddressRequestedBy")
   supplierDocumentUploads SupplierDocumentUpload[]
   partyChangeRequests     PartyChangeRequest[]
+  // TH-2 threads.prisma (threads schema wave 4/9, B-TH-023): the conversations they answer (an office person), and how far
+  // they have read each conversation (their own read marks, office or portal; never the floor).
+  ownedThreads            Thread[]               @relation("ThreadOwner")
+  threadReads             ThreadRead[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

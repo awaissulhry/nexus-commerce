@@ -98,11 +98,30 @@ export type InboundAttachment =
 
 /**
  * Why an attachment was not kept: a type files do not take (nothing a browser would run: HTML, SVG, scripts, archives
- * and executables), larger than a file may be, empty, an inline picture of the HTML (a signature logo), or past the
- * most a message attaches.
+ * and executables), larger than a file may be, empty, an inline part of the HTML that is no pasted picture (a signature logo,
+ * a repeated picture: B-TH-088 below), or past the most a message attaches.
  */
 export const SKIP_REASONS = ['type_not_allowed', 'too_large', 'empty', 'inline', 'too_many'] as const
 export type SkipReason = (typeof SKIP_REASONS)[number]
+
+// ---- B-TH-088 (threads plan TH-8, G13): a picture PASTED in a mail (an inline part of its HTML, multipart/related: a photo of a
+// sample, a sketch, a screenshot) is kept as a file of the mail like an attachment — unless it is small or repeated: a signature logo
+// or a social icon (under INLINE_PICTURE_MIN_BYTES), or the same picture more than once in the mail (a logo in every quoted reply).
+// Those, and an inline part that is no picture, stay out as 'inline': the one reason a screen leaves unlisted (a signature's logo is
+// nothing to ask the customer to send again). A kept picture then passes the attachments' own checks (type, size, how many).
+export const INLINE_PICTURE_MIN_BYTES = 16 * 1024
+
+/** Whether an inline part of a mail is kept as a file: a picture, not small, once in the mail. */
+export function keepsInlinePart(part: { readonly contentType: string; readonly sizeBytes: number; readonly copies: number }): boolean {
+  return part.contentType.startsWith('image/') && part.sizeBytes >= INLINE_PICTURE_MIN_BYTES && part.copies === 1
+}
+
+/** A pasted picture's file name when the mail gives none (`picture-2.jpg`), by its type. */
+export function inlinePictureName(contentType: string, position: number): string {
+  const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/gif': 'gif' } as Readonly<Record<string, string>>)[contentType] ?? 'img'
+  return `picture-${position}.${extension}`
+}
+// ---- end B-TH-088
 
 /** A Message-ID as stored: `<…>`, one line, no space; null when it is not one. */
 export function cleanMessageId(value: string | null | undefined): string | null {

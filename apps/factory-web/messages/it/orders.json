@@ -114,7 +114,7 @@
   },
   "list": {
     "tableLabel": "Ordini di vendita",
-    "search": "Cerca numero o ordine del cliente",
+    "search": "Cerca numero, ordine del cliente, cliente, modello o marchio",
     "rowsLabel": "Righe",
     "layoutLabel": "Mostra gli ordini come",
     "keyView": "Elenco o bacheca",
@@ -1091,6 +1091,8 @@
   "newOrder": {
     "title": "Nuovo ordine",
     "body": "Inserito dall'ufficio (per esempio un ordine per telefono o per e-mail). Le righe si scrivono dopo; nulla viene salvato fino a Conferma ordine.",
+    "writtenRequest": "Non è ancora un ordine fermo, ma una richiesta a cui rispondere (una mail, una lettera, una telefonata)? Scrivila in In arrivo: lì si risponde e diventa il preventivo o l’ordine.",
+    "writtenRequestLink": "Nuova richiesta in In arrivo",
     "company": "Azienda che vende",
     "customer": "Cliente",
     "customerHint": "Nome, codice, partita IVA o codice fiscale.",

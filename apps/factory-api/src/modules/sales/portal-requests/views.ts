@@ -4,7 +4,7 @@ import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
-import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
+import { customerNumberOf, customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 import type { RequestListQuery } from '@nexus/factory-domain/sales/portal-requests/contracts'
 import { subjectOf } from '@nexus/factory-domain/sales/portal-requests/rules'
 import { isOpenRequest, REQUEST_STATE_WORDS, requestStateOf, type PortalRequestState } from '@nexus/factory-domain/sales/portal-requests/state'
@@ -44,6 +44,8 @@ const PARTNER_INQUIRY = {
   receivedAt: true,
   wantedDate: true,
   quoteId: true,
+  // B-TH-025: the order made straight from it (partner-readable since the TH-2 schema wave).
+  salesOrderId: true,
   closedAt: true,
   updatedAt: true,
 } as const satisfies Prisma.InquirySelect
@@ -69,15 +71,25 @@ async function partnerInquiries(client: FactoryClient, companyId: string, where:
 /** What became of each inquiry (tenant scope as the person; ids from the party's own inquiries; the party checked again). */
 async function madeOf(reader: PortalReader, rows: readonly InquiryRow[]): Promise<Map<string, Made>> {
   const quoteIds = ids(rows.map((row) => row.quoteId))
+  // B-TH-025: the orders made straight from requests (no quote between): the customer reads the order's own state.
+  const orderIds = ids(rows.map((row) => row.salesOrderId))
   const made = new Map<string, Made>()
-  if (quoteIds.length === 0) return made
+  if (quoteIds.length === 0 && orderIds.length === 0) return made
   const partyId = reader.session.partyId
-  const { quotes, orders } = await reader.inTenant(async (client) => {
-    const quotes = await client.quote.findMany({ where: { id: { in: quoteIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, versions: { where: { sentAt: { not: null } }, select: { id: true }, take: 1 } } })
-    const orders = await client.salesOrder.findMany({ where: { partyId, quoteVersion: { quoteId: { in: quoteIds } } }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, createdAt: true, quoteVersion: { select: { quoteId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
-    return { quotes, orders }
+  const { quotes, orders, direct } = await reader.inTenant(async (client) => {
+    const quotes = quoteIds.length === 0 ? [] : await client.quote.findMany({ where: { id: { in: quoteIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, versions: { where: { sentAt: { not: null } }, select: { id: true }, take: 1 } } })
+    const orders = quoteIds.length === 0 ? [] : await client.salesOrder.findMany({ where: { partyId, quoteVersion: { quoteId: { in: quoteIds } } }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, createdAt: true, quoteVersion: { select: { quoteId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    const direct = orderIds.length === 0 ? [] : await client.salesOrder.findMany({ where: { id: { in: orderIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true } })
+    return { quotes, orders, direct }
   })
   for (const row of rows) {
+    // ---- B-TH-025: ORDERED, the order named on the request (the party checked again in the tenant read).
+    const straight = row.salesOrderId ? direct.find((entry) => entry.id === row.salesOrderId) : undefined
+    if (straight) {
+      made.set(row.id, { quote: null, order: { id: straight.id, number: straight.number, status: straight.status, customerSeq: straight.customerSeq, updatedAt: straight.updatedAt } })
+      continue
+    }
+    // ---- end B-TH-025
     if (!row.quoteId) continue
     const quote = quotes.find((entry) => entry.id === row.quoteId)
     if (!quote) continue
@@ -100,7 +112,8 @@ function rowOf(row: InquiryRow, lines: readonly LineRow[], made: Made | undefine
   const own = lines.filter((line) => line.inquiryId === row.id)
   return {
     id: row.id,
-    number: row.number,
+    // th2-backend step 7 (threads plan §0.5, counts do not leak): the customer's own reference ("#7"); the office keeps INQ-….
+    number: customerRefOf('REQUEST', row.customerSeq) ?? '—',
     yourNumber: customerNumberOf('REQUEST', row.customerSeq),
     customerRef: row.customerRef,
     subject: subjectOf(null, row.request),
@@ -174,8 +187,9 @@ export async function requestViewOf(reader: PortalReader, request: FastifyReques
     made: {
       // A quote is the customer's to open once a version of it was sent (the portal's quote view); before, the state says
       // "Quote being prepared" and names no number.
-      quote: made?.quote?.sent ? { id: made.quote.id, number: made.quote.number, yourNumber: customerNumberOf('QUOTE', made.quote.customerSeq), sent: true } : null,
-      order: made?.order ? { id: made.order.id, number: made.order.number, yourNumber: customerNumberOf('ORDER', made.order.customerSeq) } : null,
+      // th2-backend step 7: the quote's and the order's own references of the customer ("#3", "#12"), never QT-… or SO-….
+      quote: made?.quote?.sent ? { id: made.quote.id, number: customerRefOf('QUOTE', made.quote.customerSeq) ?? '—', yourNumber: customerNumberOf('QUOTE', made.quote.customerSeq), sent: true } : null,
+      order: made?.order ? { id: made.order.id, number: customerRefOf('ORDER', made.order.customerSeq) ?? '—', yourNumber: customerNumberOf('ORDER', made.order.customerSeq) } : null,
     },
     closedAt: row.closedAt ? toUtcIso(row.closedAt) : null,
   }

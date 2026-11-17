@@ -16,6 +16,9 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { money } from '../../../quotes/model'
 import { ORDER_STATUSES, type OrderRow, type OrderStatus } from '../../api'
 import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, viewCount, type Layout, type RowView } from '../../model'
+// ---- B-TH-057 (TH-4: the server sort, the custom field filter) ----
+import { columnSort, SORT_CHOICES, SORT_COLUMNS, sortOfColumn } from '../../model'
+import type { OrderSort } from '../../api'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
 import { marginColumn } from '../margin/MarginColumn'
@@ -40,6 +43,8 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  * in words, the promise with its days late, what left. B-W2a-50: New order (c; the dialog: customer, contact, customer PO,
  * the number it will get → the typed order's lines), the board in a new tab (left open on a second screen, it follows
  * live). Money only with the price grain: the columns are absent, never zero.
+ * B-TH-057 (TH-4): the search reads the number, the PO, the customer, a style code and a label on the server; Sort ▾ and the
+ * headers of Customer, Brand, Promised and Ordered sort every page on the server (`?sort=`); a custom field filter (`?cf=`) is a chip.
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
@@ -146,13 +151,26 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     </Select>
   )
 
+  // ── B-TH-057 (SHEET-G15, feature SHEET.overall-F05): Sort ▾ — every choice sorts every page on the server (the address keeps it);
+  // the headers of Customer, Brand, Promised and Ordered do the same. No header sorts only the loaded rows. ──
+  const sortSelect = (
+    <Select size="sm" aria-label={s('sort.label')} value={model.sort ?? ''} onChange={(event) => actions?.onSort?.((event.target.value || null) as OrderSort | null)}>
+      {SORT_CHOICES.map((choice) => (
+        <option key={choice.word} value={choice.value}>
+          {s(`sort.${choice.word}`)}
+        </option>
+      ))}
+    </Select>
+  )
+  // ── end B-TH-057 ──
+
   const columns = useMemo<ColDef<OrderRow>[]>(
     () => sheetColumns({ t, s, d, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth],
+    [t, s, d, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */],
   )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company // B-TH-201, B-TH-225
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf // B-TH-201, B-TH-225, B-TH-057
   const clearFilters = () => {
     setQuery('')
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -164,6 +182,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
     ...(statusView ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
+    // B-TH-057 (SHEET-G05): a custom field filter of the address is a chip too (the list, its counts and its file apply it).
+    ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
   ]
   const unavailable = model.customer?.name === null
   const count = viewCount(model.board, model.rows)
@@ -326,8 +346,11 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             <>
               {switcher /* B-TH-226 */}
               {rowsSelect}
+              {sortSelect /* B-TH-057 */}
             </>
           }
+          // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
+          onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
           title={customerName ? s('export.title', { customer: customerName }) : undefined /* B-TH-225: the export job names the customer */}
           exportAbout={about}
           onRowClick={(row, event) => actions?.onOpenRow?.(row.id, event.metaKey || event.ctrlKey)}
@@ -637,7 +660,7 @@ function sheetColumns({ t, s, d, locale, model, wide, latest, onViewer }: Column
       />
     ) : null
   const also = (key: string, label: string) => ({ exportWith: [{ key, label }] })
-  return [
+  return serverSorted(model.sort ?? null, [
     { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn },
     { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 128, flex: 1, cellRenderer: NumberCell, context: also('customerRef', s('col.customerRef')) },
     { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell },
@@ -662,6 +685,21 @@ function sheetColumns({ t, s, d, locale, model, wide, latest, onViewer }: Column
     { colId: 'quote', headerName: t('col.quote'), minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: QuoteCell },
     ...(companies.length > 1 ? [{ colId: 'company', headerName: s('col.company'), minWidth: 88, flex: 0.8, sortable: false, cellRenderer: CompanyCell }] : []),
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
-  ]
+  ] as ColDef<OrderRow>[])
 }
 // ── end B-TH-225 ──
+
+// ── B-TH-057 (SHEET-G15; guard of SHEET.overall-F05 "No header sort that only reorders the loaded 50 rows") ──
+/**
+ * Only the columns the server sorts by keep a header sort (Customer, Brand, Promised, Ordered): the arrow shows the address's
+ * sort and the grid never reorders the rows itself (the API sent them in that order); a click reaches the page through the
+ * list frame's onSortChanged. Every other column's header sorts nothing.
+ */
+function serverSorted(sort: OrderSort | null, columns: ColDef<OrderRow>[]): ColDef<OrderRow>[] {
+  return columns.map((column) => {
+    const colId = column.colId ?? ''
+    if (!Object.hasOwn(SORT_COLUMNS, colId)) return { ...column, sortable: false }
+    return { ...column, sortable: true, sort: columnSort(sort, colId), comparator: () => 0, sortingOrder: ['asc', 'desc', null] }
+  })
+}
+// ── end B-TH-057 ──

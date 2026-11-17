@@ -1,7 +1,7 @@
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { PortalBand, PortalBandAction } from '../../shell/frame'
-import type { OrderChip, OrderRecord } from './api'
-import { listQuery, recordHref, statusTone, type RecordTab } from './model'
+import type { OrderRecord } from './api'
+import { listQuery, recordHref, statusTone, type ListChip, type RecordTab } from './model'
 import type { OrderWords } from './words'
 
 /**
@@ -11,7 +11,7 @@ import type { OrderWords } from './words'
  */
 
 // B-W2b-194: `newOrder` = the New order page's address for a person who may order (else null: no button).
-export function listBandOf(input: { words: OrderWords; asOf: string | null; rows: number; chip: OrderChip | null; q: string; prefix: string; onExport?: () => void; newOrder?: string | null }): PortalBand {
+export function listBandOf(input: { words: OrderWords; asOf: string | null; rows: number; chip: ListChip | null; q: string; prefix: string; onExport?: () => void; newOrder?: string | null }): PortalBand {
   const { t, time } = input.words
   return {
     title: t('list.title'),

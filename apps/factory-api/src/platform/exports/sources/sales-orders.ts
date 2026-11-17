@@ -10,7 +10,11 @@ import type { Prisma } from '@nexus/factory-db'
 import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../../../modules/sales/orders/access'
 import { listOrders, type ListFilters, type ListQuery } from '../../../modules/sales/orders/orders'
+import { isOrderSort } from '../../../modules/sales/orders/sort' // B-TH-057
 import { ordersDepth } from '../../../modules/sales/orders-depth/depth' // B-TH-018
+// B-TH-058 / B-TH-059: the overall view's door terms and the later columns.
+import { INVOICED_STATES, type InvoicedState } from '@nexus/factory-domain/sales/orders/invoiced'
+import { CUSTOMER_URGENCIES, type CustomerUrgency } from '../../../modules/sales/orders/customer-urgency'
 import { defineExportSource } from '../source'
 
 /**
@@ -32,11 +36,21 @@ import { defineExportSource } from '../source'
  * as it narrows the screen (malformed: refused). Priority, season and the company's name are read per page beside the list
  * (the list's own W2b read, GET /sales/orders/depth's ordersDepth; one query of the companies). The Margin % column stays out
  * of the file: its read (costing/margins) computes every order in scope, not a page.
+ *
+ * B-TH-057 (SHEET-G05, SHEET-G15, ORD-G07; threads plan TH-4): the file keeps the screen's order and rows — `?sort=` (customer,
+ * brand, promise, daysLate, ordered; `-` the other way round) and `?cf=` (the custom field filter) are the list's own terms,
+ * read by listOrders as the screen reads them (a sort it does not know is refused), and `?q=` searches what the screen searches.
+ *
+ * B-TH-058 / B-TH-059 (threads plan TH-4; N23, ORD-G08, SHEET-G08): the overall view's door terms narrow the file as they
+ * narrow the screen — `?invoiced=NONE|PART|ALL`, `?atRisk=true`, `?customerUrgency=URGENT|REGULAR`, `?currency=EUR` (malformed:
+ * refused) — and the file writes the later columns by the web's ids: `openUnits`, `progress` ("Cut 12 · Sewn 8 · Finished 4 of
+ * 40": the list counts it for the file), `paid` and `balance` (price grain), `site`, `note` (the office's order note),
+ * `priority` (now the row's own, the office's level), `atRisk` and `customerUrgency` (read-only, the customer's own mark).
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
 type ListRow = Awaited<ReturnType<typeof listOrders>>['orders'][number]
-type Row = ListRow & { readonly beside: { readonly priority: string | null; readonly season: string | null; readonly company: string | null } }
+type Row = ListRow & { readonly beside: { readonly season: string | null; readonly company: string | null } } // B-TH-059: priority is the row's own
 type Query = Omit<ListQuery, 'cursor' | 'limit'>
 
 const isStatus = (value: string | null): value is SalesOrderStatus => value !== null && (SALES_ORDER_STATUSES as readonly string[]).includes(value)
@@ -90,7 +104,7 @@ async function besides(caller: Parameters<typeof listOrders>[0], rows: readonly 
   const companies = new Map((await caller.withClient((client) => client.company.findMany({ where: { id: { in: companyIds } }, select: { id: true, legalName: true, tradeName: true } }))).map((company) => [company.id, company.tradeName ?? company.legalName]))
   return rows.map((row) => {
     const found = depth.get(row.id)
-    return { ...row, beside: { priority: found?.priority.level ?? null, season: found?.season?.code || null, company: companies.get(row.companyId) ?? null } }
+    return { ...row, beside: { season: found?.season?.code || null, company: companies.get(row.companyId) ?? null } }
   })
 }
 
@@ -116,13 +130,51 @@ const NAMES: Readonly<Record<ExportLocale, { orders: string; rows: (count: numbe
 }
 // ── end B-TH-008 ──
 
+// ── B-TH-057 (SHEET-G05, SHEET-G15: screen = file) ──
+/** The address's server sort and custom field filter, as the list reads them; a sort the list does not know is refused. */
+function orderTerms(address: URLSearchParams): Pick<ListQuery, 'sort' | 'cf'> {
+  const sort = address.get('sort')?.trim() || undefined
+  if (sort !== undefined && !isOrderSort(sort)) throw new ValidationError('Not a sort of the orders: the file would not follow the screen.', [{ path: 'query/sort', message: 'customer, brand, promise, daysLate or ordered (- in front: the other way round).' }])
+  const cf = address.get('cf')?.trim() || undefined
+  return { ...(sort ? { sort } : {}), ...(cf ? { cf } : {}) }
+}
+// ── end B-TH-057 ──
+
+// ── B-TH-058 / B-TH-059 ──
+/** One of a term's values, or undefined; another value is refused (the file would not hold the screen's rows). */
+function oneOf<T extends string>(address: URLSearchParams, name: string, values: readonly T[]): T | undefined {
+  const value = address.get(name)?.trim()
+  if (!value) return undefined
+  if (!(values as readonly string[]).includes(value)) throw new ValidationError(`Not a value of ${name}: the file would not follow the screen.`, [{ path: `query/${name}`, message: values.join(', ') }])
+  return value as T
+}
+
+/** The overall view's door terms of the address, as the list reads them. */
+function doorTerms(address: URLSearchParams): Pick<ListFilters, 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency'> {
+  const invoiced = oneOf<InvoicedState>(address, 'invoiced', INVOICED_STATES)
+  const atRisk = oneOf(address, 'atRisk', ['true', 'false'] as const)
+  const customerUrgency = oneOf<CustomerUrgency>(address, 'customerUrgency', CUSTOMER_URGENCIES)
+  const currency = address.get('currency')?.trim() || undefined
+  if (currency !== undefined && !/^[A-Z]{3}$/.test(currency)) throw new ValidationError('Not a currency: the file would not follow the screen.', [{ path: 'query/currency', message: 'Three capital letters (ISO 4217).' }])
+  return { ...(invoiced ? { invoiced } : {}), ...(atRisk ? { atRisk } : {}), ...(customerUrgency ? { customerUrgency } : {}), ...(currency ? { currency } : {}) }
+}
+
+/** The Progress cell: cut, sewn and finished of the pieces in work orders ("—" for a step nothing counts); none yet: empty. */
+function progressText(row: Row, words: (code: string) => string): string | null {
+  const progress = row.progress
+  if (!progress) return null
+  const figure = (value: number | null) => (value === null ? '—' : String(value))
+  return words('progress.text').replace('{cut}', figure(progress.cut)).replace('{sewn}', figure(progress.sewn)).replace('{finished}', figure(progress.finished)).replace('{inWork}', String(progress.inWork))
+}
+// ── end B-TH-058 / B-TH-059 ──
+
 export const salesOrders = defineExportSource<Query, Row>({
   listKey: 'sales.orders',
   permission: ORDERS_VIEW,
   query(address) {
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
-    const kept = narrowing(address) // B-TH-008
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
@@ -131,7 +183,8 @@ export const salesOrders = defineExportSource<Query, Row>({
     return { ...kept, open: 'true', q }
   },
   async read(caller, query, cursor, limit) {
-    const page = await listOrders(caller, { ...query, cursor: cursor ?? undefined, limit })
+    // B-TH-059: the file counts the progress (its Progress column).
+    const page = await listOrders(caller, { ...query, cursor: cursor ?? undefined, limit, progress: 'true' })
     return { rows: await besides(caller, page.orders) /* B-TH-018 */, next: page.nextCursor }
   },
   // ── B-TH-008: the saved view's name, else "Orders - <customer>" for a customer's sheet; the rows it holds. ──
@@ -168,9 +221,19 @@ export const salesOrders = defineExportSource<Query, Row>({
     requested: { value: (row) => (row.requestedDate ? { day: row.requestedDate } : null) },
     gross: { grain: 'price', value: (row) => ({ minor: Number(row.grossAmount), currency: row.currency }) },
     daysLate: { value: (row) => (row.daysLate !== null && row.daysLate > 0 ? row.daysLate : null) },
-    priority: { value: (row, words) => (row.beside.priority ? words(`priority.${row.beside.priority}`) : null) },
+    priority: { value: (row, words) => words(`priority.${row.priority.level}`) }, // B-TH-059: the row's own
     season: { value: (row) => row.beside.season },
     // ── end B-TH-018 ──
+    // ── B-TH-059: the later columns ──
+    openUnits: { value: (row) => row.openUnits },
+    progress: { value: (row, words) => progressText(row, words) },
+    paid: { grain: 'price', value: (row) => ({ minor: Number(row.paid), currency: row.currency }) },
+    balance: { grain: 'price', value: (row) => ({ minor: Number(row.balance), currency: row.currency }) },
+    site: { value: (row) => (row.sites.length > 0 ? row.sites.map((site) => site.name).join(', ') : null) },
+    note: { value: (row) => row.internalNote },
+    atRisk: { value: (row, words) => (row.atRisk ? words('atRisk.text').replace('{days}', String(row.atRisk.daysLeft)) : null) },
+    customerUrgency: { value: (row, words) => (row.customerUrgency ? words(`urgency.${row.customerUrgency}`) : null) },
+    // ── end B-TH-059 ──
   },
   words: {
     it: {
@@ -195,6 +258,11 @@ export const salesOrders = defineExportSource<Query, Row>({
       'brand.own': 'Collezione propria',
       'brand.hidden': 'Etichetta non visibile',
       ...priorityWords('it'),
+      // ── B-TH-059 ──
+      'progress.text': 'Tagliati {cut} · Cuciti {sewn} · Finiti {finished} su {inWork}',
+      'atRisk.text': 'A rischio (mancano {days} giorni)',
+      'urgency.URGENT': 'Urgente',
+      'urgency.REGULAR': 'Regolare',
     },
     en: {
       'status.PENDING_APPROVAL': 'Waiting for approval', // B-TH-008
@@ -218,6 +286,11 @@ export const salesOrders = defineExportSource<Query, Row>({
       'brand.own': 'Own collection',
       'brand.hidden': 'Label not shown',
       ...priorityWords('en'),
+      // ── B-TH-059 ──
+      'progress.text': 'Cut {cut} · Sewn {sewn} · Finished {finished} of {inWork}',
+      'atRisk.text': 'At risk ({days} days left)',
+      'urgency.URGENT': 'Urgent',
+      'urgency.REGULAR': 'Regular',
     },
   },
 })

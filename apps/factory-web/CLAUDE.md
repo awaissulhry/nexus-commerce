@@ -180,6 +180,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `/orders/new?styles=…`: the newest draft takes them, else a new one), `/p/<party>/catalogue/<style>/sheet` (tab:style-sheet).
   Problems, reorder differences and sheet reasons are said from codes and figures (`model.ts`); the address pop-up uses
   `portal-account`'s field words. The Orders band, its empty state, a line's ⋯ "Reorder this line" and Home's band link here.
+- B-TH-220/222/223/303 (threads TH-1b, portal): `/orders/new` is New order as an e-mail (`neworder/ComposePage.tsx` over the shared
+  compose `src/lib/request-compose/` — fixed "Goes to: Sales at <company>", subject, message, files held with the API's sentence,
+  "Add details (optional)", draft kept on this device, same-words guard, one Idempotency-Key per content; catalogue `request-compose`;
+  the receipt says "your request N"). The catalogue door above is CLOSED (`request-model.ts CATALOGUE_DOOR_OPEN`, B-TH-304 reopens it).
+  `src/portal/customer/requests/` — POST/GET /portal/inquiries (`api.ts`), the request page `/orders/requests/<id>` (SCR-185-request:
+  true states, the question with Answer, PortalThread type Inquiry; `RECORD_PAGES.Inquiry`; catalogue `portal-requests`). Orders &
+  tracking became Orders & requests (requests first, "Closed requests" chip, Kind/Subject columns, Next shipment from 1600 px); Home's
+  Start card (New order / Ask a question / the draft). Portal pages show the customer's own numbers only, never INQ-/SO-/QT-/RQ-.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -337,7 +345,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   after a decision the next one opens) and its full page on ONE container (`use-inquiry.tsx`: Request with the EditModeBar — the lines on the DS
   SizeGridEditor, a prospect matched once —, Files & specs with the brand's tech pack in force and the record panels' files, Quote, Activity =
   the record panels; Make quote, Assign, Ask for more information, Decline with an optional message through the thread, Mark as lost), New
-  inquiry (`c`) and "Make an inquiry" from a mail (`?mail=`: Mail to sort can link there). Row verbs are held before the click with
+  request (`c`, `?new=1`) and "Make incoming request" from a mail (`?mail=`: Mail to sort can link there) — B-TH-221: ONE window
+  (`view/NewRequestDialog.tsx`, container `use-new-request.ts`, rules `new-request.ts`, catalogue `sales-incoming-new`, SCR-105-new)
+  over the portal's compose (`lib/request-compose`, `slots.plain`, the office's voice) with the customer picked among GET
+  /sales/inquiries/customers (only the customers this person may make a request for) OR a prospect with its lawful basis. Row verbs are held before the click with
   factory-domain's own refusals (model.ts). `RECORD_PAGES.Inquiry` opens the full page; search type `Inquiry`.
 - `src/areas/sales/quotes/record/configurator/` — the configurator on a quote or order line (B-W2b-340 on its own API, modules/sales/configurator;
   SCR-425; catalogue `sales-configurator`, CSS prefix `fw-cfg-`): ONE container `use-configurator.ts` (reads, the person's draft, every change

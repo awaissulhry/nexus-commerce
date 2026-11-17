@@ -221,3 +221,35 @@ describe('safe rendering of incoming mail (COL-026)', () => {
     expect(page).toContain('<meta name="referrer" content="no-referrer">')
   })
 })
+
+// ── B-TH-224 (threads plan TH-1b): Mail to sort points at Incoming ──
+describe('Make incoming request / Open in Incoming (B-TH-224)', () => {
+  it('a waiting mail offers "Make incoming request" (Incoming\'s dialog for this mail); a mail that became a request offers "Open in Incoming"', async () => {
+    const { inquiryHeld, inquiryHref, incomingHref, requestOfMail } = await import('../mail/create-inquiry/model')
+    expect(inquiryHref('/w/DEMO', 'm 1')).toBe('/w/DEMO/sales/incoming?mail=m%201')
+    expect(incomingHref('/w/DEMO', 'r1')).toBe('/w/DEMO/sales/incoming?open=r1')
+    // Waiting, read by someone who answers requests: offered.
+    expect(requestOfMail({ inquiry: null, thread: null })).toBeNull()
+    expect(inquiryHeld({ status: 'TRIAGE', inquiry: null }, true)).toBeNull()
+    // Without the right: held with words, never hidden.
+    expect(inquiryHeld({ status: 'TRIAGE', inquiry: null }, false)).toBe('inquiry.held.noRight')
+    // Made already: the request by the read, or by the request thread a customer's mail joined.
+    expect(requestOfMail({ inquiry: { id: 'r1', number: 'INQ-2026-0007' }, thread: null })).toEqual({ id: 'r1', number: 'INQ-2026-0007' })
+    expect(requestOfMail({ inquiry: null, thread: { recordType: 'Inquiry', recordId: 'r2' } })).toEqual({ id: 'r2', number: null })
+    expect(requestOfMail({ inquiry: null, thread: { recordType: 'SalesOrder', recordId: 'so1' } })).toBeNull()
+    // A thrown-away mail cannot become one.
+    expect(inquiryHeld({ status: 'REJECTED', inquiry: null }, true)).toBe('inquiry.held.notWaiting')
+  })
+
+  it('the words say "request" and "Incoming" in both languages (one word per thing)', async () => {
+    const { CATALOGUE } = await import('../../../lib/i18n/messages')
+    const en = CATALOGUE.en['mail-depth']!
+    const it_ = CATALOGUE.it['mail-depth']!
+    expect(en['verb.createInquiry']).toBe('Make incoming request')
+    expect(en['verb.openInIncoming']).toBe('Open in Incoming')
+    expect(en['verb.openInquiry']).toBe('Open {number} in Incoming')
+    expect(it_['verb.createInquiry']).toBe('Crea richiesta in arrivo')
+    for (const words of [en, it_]) expect(Object.values(words).filter((value) => /\binquir/i.test(value.replace(/sales\.inquiries\.\w+/g, '')))).toEqual([])
+  })
+})
+// ── end B-TH-224 ──

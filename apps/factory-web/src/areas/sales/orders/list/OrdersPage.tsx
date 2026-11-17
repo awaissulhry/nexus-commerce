@@ -8,7 +8,8 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { findCustomers, getParty } from '../../quotes/api'
 import { getBoard, getOrderPicture, listOrderCustomers, listOrders, nextOrderNumber, type OrderBoard, type OrderCustomer } from '../api'
 import { useCoalesced, useLive } from '../hooks'
-import { abilitiesOf, boardLanes, brandFromAddress, companyFromAddress, laneQuery, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
+import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
+import type { OrderSort } from '../api' // B-TH-057
 import { newOrderAddress } from '../new/new-model'
 import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
@@ -56,7 +57,10 @@ function OrdersContainer() {
   // B-TH-225: the label on the garment and the company narrow every read too (the address keeps them).
   const brand = brandFromAddress(params)
   const company = companyFromAddress(params)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company }), [brand, company])
+  // B-TH-057 (TH-4): the server sort and the custom field filter are address terms too (a saved view and the file keep them).
+  const sort = sortFromAddress(params)
+  const cf = cfFromAddress(params)
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort }), [brand, company, cf, sort])
 
   const [list, setList] = useState<OrdersListModel['list']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -68,11 +72,11 @@ function OrdersContainer() {
   const [weekTick, setWeekTick] = useState(0) // B-W2b-323
   const readId = useRef(0)
   const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
-  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
+  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions)) : null)
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null }) =>
       router.replace(
         listAddress(pathname, {
           rows: next.rows ?? rows,
@@ -81,9 +85,11 @@ function OrdersContainer() {
           party: next.party === undefined ? party : next.party,
           brand: next.brand === undefined ? brand : next.brand, // B-TH-225
           company: next.company === undefined ? company : next.company, // B-TH-225
+          sort: next.sort === undefined ? sort : next.sort, // B-TH-057
+          cf: next.cf === undefined ? cf : next.cf, // B-TH-057
         }),
       ),
-    [router, pathname, rows, q, layout, party, brand, company],
+    [router, pathname, rows, q, layout, party, brand, company, sort, cf],
   )
 
   const readBoard = useCallback(
@@ -263,7 +269,8 @@ function OrdersContainer() {
     setList((current) => ({ ...current, items: current.items?.map((row) => { const change = changes.find((entry) => entry.id === row.id); return change?.version ? { ...row, version: change.version } : row }) ?? null })),
   )
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
-  const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load())
+  // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
+  const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
 
   const model: OrdersListModel = {
     prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins,
@@ -271,11 +278,13 @@ function OrdersContainer() {
     // ---- B-TH-225 / B-TH-226 ----
     brand: brandNamed,
     company: companyNamed,
+    sort, // B-TH-057
+    cf, // B-TH-057
     companies: session.companies.map((entry) => ({ id: entry.id, name: entry.name })),
     switcher: { ...customers, query: customerQuery, searching: customerQuery.trim() !== searched || (searched !== '' && customers.customers === null) },
     depth: listDepth.model,
     week: { state: week.state, sites: week.sites, siteId: week.siteId },
-    importer: { held: importer.held, sheet: importer.model },
+    importer: { held: importer.held, sheet: importer.model, memory: importer.memory /* B-TH-293 */ },
   }
 
   return (
@@ -295,7 +304,9 @@ function OrdersContainer() {
         onCustomerRetry: () => setCustomersTick((tick) => tick + 1),
         onBrand: (next) => go({ brand: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
         onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-        onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null }),
+        onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */ }),
+        onSort: (next) => go({ sort: next }), // B-TH-057
+        onClearCf: () => go({ cf: null }), // B-TH-057
         loadPicture,
         onOpenRow: (id, newTab) => {
           const href = `${prefix}/sales/orders/${id}`
@@ -307,7 +318,7 @@ function OrdersContainer() {
         onShowUpdates: () => void load(),
         onOpen: (id) => router.push(`${prefix}/sales/orders/${id}`),
         onDismissNotice: () => setNotice(null),
-        onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId) : null),
+        onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions)) : null),
         onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current)),
         onNewSearch: (query) => newOrder && searchCustomers(query, newOrder.companyId),
         onNewPick: (partyId) => {
@@ -342,6 +353,9 @@ function OrdersContainer() {
   )
 }
 
-function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string): NewOrderDialogModel {
-  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined }
+function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string, incomingHref: string | null): NewOrderDialogModel {
+  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined, incomingHref }
 }
+
+/** B-TH-221: New order's one pointer — a written request goes to Incoming's New request, for who may make one there. */
+const incomingOf = (prefix: string, permissions: readonly string[]): string | null => (permissions.includes('sales.inquiries.manage') ? `${prefix}/sales/incoming?new=1` : null)

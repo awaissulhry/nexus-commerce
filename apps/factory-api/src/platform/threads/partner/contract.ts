@@ -67,7 +67,17 @@ export const partnerThreadView = output({
   messages: z.array(partnerMessageView),
   nextCursor: z.string().nullable(),
   composer: composerView,
+  /** B-TH-027: the person's own reading ("New since your last visit"); null: no message yet. Always sent; optional for the web's typed demo data. */
+  reading: output({ lastReadMessageId: id().nullable(), newCount: z.number().int(), firstNewMessageId: id().nullable() }).nullable().optional(),
 })
+
+// ---- B-TH-027: the person read the conversation up to a message (default the newest shared with them) ---------------------
+export const markPartnerReadContract = defineContract({
+  params: recordParams,
+  body: input({ messageId: id().optional() }),
+  response: { 200: output({ reading: output({ lastReadMessageId: id().nullable(), newCount: z.number().int(), firstNewMessageId: id().nullable() }) }) },
+})
+// ---- end B-TH-027
 
 export const readPartnerThreadContract = defineContract({
   params: recordParams,
@@ -113,6 +123,8 @@ export const listPartnerThreadsContract = defineContract({
             attachmentCount: z.number().int(),
             at: instant(),
           }),
+          /** B-TH-027: messages new to the person (after their own mark). Always sent; optional for the web's typed demo data. */
+          newCount: z.number().int().optional(),
         }),
       ),
     }),

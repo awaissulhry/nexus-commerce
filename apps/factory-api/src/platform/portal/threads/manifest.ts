@@ -10,4 +10,6 @@ export const manifest = defineManifest({
   'GET /portal/threads': { audiences: ['partner'], permission: 'threads.read', scope: 'party' },
   'GET /portal/threads/:recordType/:recordId': { audiences: ['partner'], permission: 'threads.read', scope: 'party' },
   'POST /portal/threads/:recordType/:recordId/messages': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
+  // B-TH-027: the person's own read mark (whoever reads the conversation).
+  'POST /portal/threads/:recordType/:recordId/read': { audiences: ['partner'], permission: 'threads.read', scope: 'party' },
 })

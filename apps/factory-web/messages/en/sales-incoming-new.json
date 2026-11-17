@@ -1,0 +1,110 @@
+{
+  "title": "New request",
+  "subtitle": "A call, a visit, a fair or a letter: write it down as they asked. It lands in Incoming like a portal request.",
+  "fromMailTitle": "Make a request from this mail",
+  "fromMailSubtitle": "From {from}, {when}",
+  "go": "Create request",
+  "working": "Creating…",
+  "toMe": "Give it to me",
+  "from": {
+    "label": "From",
+    "source": "How it came",
+    "who": "Who asks",
+    "customer": "A customer",
+    "customerHint": "One of the customers you make requests for",
+    "prospect": "A new prospect",
+    "prospectHint": "Not a customer yet: made one before the quote",
+    "pick": "Customer",
+    "pickPlaceholder": "Search your customers by name or code",
+    "pickReading": "Reading your customers…",
+    "pickFailed": "Your customers could not be read",
+    "pickRetry": "Try again",
+    "pickNone": "You make requests for no customer at this company: record a prospect",
+    "pickLimited_one": "You make requests for {count} customer",
+    "pickLimited_other": "You make requests for {count} customers",
+    "pickMore": "The first {shown} of {count}: type to find the others",
+    "contact": "Contact",
+    "contactHint": "The person who asked, if they are a contact of the customer",
+    "noContact": "No contact named",
+    "contactsFailed": "The customer's contacts could not be read",
+    "basis": "Lawful basis",
+    "basisChoose": "Choose the lawful basis",
+    "basisWhy": "Why we may keep their details (GDPR art. 6). A request for a quote is a step they asked for, so “Steps at their request” fits most requests.",
+    "match": "{name} is already one of your customers.",
+    "matchBody": "Use the customer: a second record of the same company would split its requests and mail.",
+    "matchUse": "Use {name}"
+  },
+  "voice": {
+    "compose": {
+      "label": "The request"
+    },
+    "subject": {
+      "hint": "Empty: the first line of the message is used.",
+      "used": "Empty: “{subject}” is used."
+    },
+    "message": {
+      "label": "What they asked",
+      "hint": "Their words as they said or wrote them: the call's notes, the letter's text. The request's first card shows it as written."
+    },
+    "problem": {
+      "tooLong": "The subject and the message are 20 000 characters at most together.",
+      "refLong": "Their PO is {max} characters at most.",
+      "datePast": "The day wanted is today or later.",
+      "shipTo": "That is not one of this customer's delivery addresses: choose another one."
+    },
+    "details": {
+      "none": "Nothing here is needed to create the request.",
+      "ref": "Their PO",
+      "refHint": "The customer's own order number, if they gave one.",
+      "dateHint": "The day they would like the goods. Our answer says what we can do.",
+      "shipToHint": "One of the customer's delivery addresses.",
+      "shipToWaiting": "An address the customer added in its portal: it is checked before the first delivery.",
+      "shipToFailed": "The customer's delivery addresses could not be read.",
+      "sumRef": "Their PO {ref}"
+    },
+    "kept": {
+      "offline": "Offline: what you typed stays in this window."
+    }
+  },
+  "office": {
+    "title": "For the office",
+    "linesHint": "Optional: turn what they asked into lines (a style, its colourway, pieces by size). Only the open range and this customer's own labels are offered."
+  },
+  "files": {
+    "title": "Files",
+    "hint": "Tech packs, sketches, photos: added to the request for the office only; share them later from its files.",
+    "noRight": "Your role does not add files.",
+    "later": "Added once the request is made",
+    "fromMail": "The mail's attachments",
+    "fromMailHint": "Tick the ones that are the customer's tech pack.",
+    "inPack": "Tech pack",
+    "packVersion": "Tech pack version (as they name it)",
+    "packVersionHint": "E.g. \"SS27 v3\"",
+    "mailStays": "The mail and its attachments stay with the request."
+  },
+  "mail": {
+    "contact": "The sender is a contact of {name}",
+    "domain": "The sender writes from the domain of {name}",
+    "prospect": "Nexus does not know the sender: a prospect, from the mail's From",
+    "subject": "Subject",
+    "from": "From",
+    "failed": "Couldn't read the mail",
+    "gone": "This mail is not there any more, or your role does not sort the mail",
+    "openMade": "Open {number}"
+  },
+  "held": {
+    "busy": "Creating the request…",
+    "unnumbered": "Requests are not numbered at this company yet: Admin › Numbering",
+    "customer": "Pick the customer, or record a prospect",
+    "basis": "Choose the lawful basis for the prospect's details",
+    "message": "Write what they asked first",
+    "problems": "Fix what is marked first",
+    "mail": "Reading the mail…"
+  },
+  "leave": {
+    "title": "Discard this request?",
+    "body": "What you typed is not kept.",
+    "discard": "Discard",
+    "keep": "Keep writing"
+  }
+}

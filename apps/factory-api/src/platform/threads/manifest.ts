@@ -17,4 +17,12 @@ export const manifest = defineManifest({
   'GET /threads/:recordType/:recordId/followers': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
   'PUT /threads/:recordType/:recordId/followers/me': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
   'POST /threads/:recordType/:recordId/followers': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- B-TH-027 (G10): each person's own read mark. The counts of a page of records for office and portal people (a read in a
+  // POST: up to 200 records in the body); marking read or unread the office's here (the portal's: POST /portal/threads/…/read).
+  'POST /threads/unread': { audiences: ['office', 'partner'], permission: 'threads.read', scope: 'record' },
+  'POST /threads/:recordType/:recordId/read': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  'POST /threads/:recordType/:recordId/unread': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  // ---- end B-TH-027
+  // ---- B-TH-028: who answers the conversation — whoever may write on it (threads.post over the record).
+  'PUT /threads/:recordType/:recordId/owner': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
 })
