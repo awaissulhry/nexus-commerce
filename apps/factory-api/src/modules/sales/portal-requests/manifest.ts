@@ -19,4 +19,6 @@ export const manifest = defineManifest({
   'POST /portal/inquiries/:inquiryId/files': send,
   'POST /portal/inquiries/:inquiryId/files/:fileId/complete': send,
   'POST /portal/inquiries/:inquiryId/files/attach': send,
+  // ---- B-TH-095: who sends requests withdraws them (the request's own party only: the handler, else 404).
+  'POST /portal/inquiries/:inquiryId/withdraw': send,
 })

@@ -20,7 +20,8 @@
     "ORDER_WAITING": "L'ordine attende la nostra approvazione. Non è ancora confermato.",
     "ORDER_CONFIRMED": "Il vostro ordine è confermato. Seguitelo in Ordini e richieste.",
     "DECLINED": "Non possiamo accettare questa richiesta. Il nostro messaggio, se l'abbiamo scritto, è qui sotto.",
-    "CLOSED": "Questa richiesta è chiusa. Scrivete qui sotto se vi serve ancora qualcosa."
+    "CLOSED": "Questa richiesta è chiusa. Scrivete qui sotto se vi serve ancora qualcosa.",
+    "WITHDRAWN": "Avete ritirato questa richiesta. Scrivete qui sotto se vi serve ancora qualcosa."
   },
   "question": {
     "title": "Ci serve qualcosa da voi",

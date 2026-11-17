@@ -399,6 +399,7 @@
       "ordered": "Ordered",
       "declined": "Declined",
       "lost": "Lost",
+      "withdrawn": "Withdrawn",
       "notAnOrder": "Not an order",
       "open": "Still open"
     },
@@ -408,6 +409,7 @@
       "ordered": "An order was made",
       "declined": "Declined by us",
       "lost": "The customer went elsewhere",
+      "withdrawn": "The customer withdrew it before we decided",
       "notAnOrder": "Counted apart: not in the rates",
       "open": "Waiting on us or on the customer"
     },

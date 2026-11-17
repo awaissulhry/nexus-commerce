@@ -97,7 +97,14 @@ export const portalRequestView = portalRequestRow.extend({
   lines: z.array(lineView),
   made,
   closedAt: instant().nullable(),
+  // ---- B-TH-095 (N20): the version a withdrawal names, and whether Withdraw is offered (before the office decided, to who sends
+  // requests) or why not, in the person's words. Optional for the web's typed demo data.
+  version: z.number().int().optional(),
+  withdraw: output({ allowed: z.boolean(), words: z.string().nullable() }).optional(),
 })
+
+/** B-TH-095: POST /portal/inquiries/:inquiryId/withdraw — the request's version as read. */
+export const withdrawRequestBody = input({ version: z.number().int().min(1) })
 
 export const portalRequestList = output({
   rows: z.array(portalRequestRow),

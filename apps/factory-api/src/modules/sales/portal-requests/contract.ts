@@ -1,5 +1,6 @@
 import { defineContract } from '@nexus/factory-domain/core/contracts'
 import { inquiryParams, portalRequestList, portalRequestView, requestListQuery, requestsOpenAnswer, sendRequestAnswer, sendRequestBody } from '@nexus/factory-domain/sales/portal-requests/contracts'
+import { withdrawRequestBody } from '@nexus/factory-domain/sales/portal-requests/contracts' // B-TH-095
 import { output } from '@nexus/factory-domain/core/contracts'
 // B-TH-085: the request takes files after Send (the composer's upload bodies).
 import { z } from 'zod'
@@ -28,3 +29,7 @@ export const attachRequestFilesContract = defineContract({
   response: { 201: output({ thread: output({ id: id(), status: z.enum(THREAD_STATUSES) }), message: partnerMessageView }) },
 })
 // ---- end B-TH-085
+
+// ---- B-TH-095: the customer withdraws its own request before the office decided.
+export const withdrawContract = defineContract({ params: inquiryParams, body: withdrawRequestBody, response: { 200: output({ request: portalRequestView }) } })
+// ---- end B-TH-095

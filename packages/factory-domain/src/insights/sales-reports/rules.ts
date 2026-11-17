@@ -510,7 +510,7 @@ export interface RequestEntry {
   readonly partyId: string | null
   /** The day it came (Europe/Rome). */
   readonly receivedOn: BusinessDate
-  /** Its own state now (NEW, ASSIGNED, NEED_INFO, QUOTED, ORDERED, DECLINED, LOST). */
+  /** Its own state now (NEW, ASSIGNED, NEED_INFO, QUOTED, ORDERED, DECLINED, LOST, WITHDRAWN). */
   readonly status: string
   /** DECLINED: why (NOT_AN_ORDER is counted apart). */
   readonly declineReason: string | null
@@ -527,6 +527,8 @@ export interface RequestFigures {
   readonly ordered: number
   readonly declined: number
   readonly lost: number
+  /** B-TH-095: withdrawn by its customer from the portal before the office decided (in the rates' whole, as a lost one). */
+  readonly withdrawn: number
   /** Declined as "Not an order": left out of the rates' whole. */
   readonly notAnOrder: number
   /** quoted ÷ (received − not an order), one decimal; null without a whole. */
@@ -562,6 +564,7 @@ export function requestFiguresOf(entries: readonly RequestEntry[]): RequestFigur
     ordered,
     declined: entries.filter((entry) => entry.status === 'DECLINED' && entry.declineReason !== 'NOT_AN_ORDER').length,
     lost: entries.filter((entry) => entry.status === 'LOST').length,
+    withdrawn: entries.filter((entry) => entry.status === 'WITHDRAWN').length, // B-TH-095
     notAnOrder,
     quotedPct: pctOf(quoted, whole),
     orderedPct: pctOf(ordered, whole),
