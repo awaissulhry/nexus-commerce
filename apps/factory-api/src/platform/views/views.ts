@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { holds } from '@nexus/factory-domain/core/permissions'
+import { holds, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { VIEWS_EXPORT, VIEWS_MANAGE, VIEWS_SAVE } from '@nexus/factory-domain/views/permissions'
 import { changeRefusal, menuOrder, roleDefaultFor, sharingProblems, viewSeenBy, type ViewAudience, type ViewReader, type ViewSharing } from '@nexus/factory-domain/views/rules'
@@ -57,6 +57,8 @@ export function officeOf(caller: CommandCaller): OfficeContext {
 export interface Reader extends ViewReader {
   readonly roles: readonly { readonly id: string; readonly name: string }[]
   readonly export: boolean
+  /** B-TH-020: the person's grants, for the parties a view's terms name. */
+  readonly actor: Actor
 }
 
 /** The person as the view rules see them: their live office roles (in the order they were given) and their rights. */
@@ -72,8 +74,47 @@ export async function readerOf(client: Client, context: OfficeContext): Promise<
     save: holds(actor, VIEWS_SAVE),
     manage: holds(actor, VIEWS_MANAGE),
     export: holds(actor, VIEWS_EXPORT),
+    actor, // B-TH-020
   }
 }
+
+// ── B-TH-020 (threads plan TH-1a; WALL-G09 = SHEET-G07; wall test T18) ─────────────────────────────────────────────────
+/**
+ * Address terms that name a party: the list frames' `party` (Sales › Orders' Customer switcher, samples, inquiries,
+ * receivables), `customer` (made to measure), the API's own `partyId`, and the other names a list may use for a customer,
+ * a supplier or a brand. A value may list several ids, comma-separated.
+ */
+export const PARTY_TERMS: readonly string[] = Object.freeze(['party', 'partyId', 'customer', 'customerId', 'supplier', 'supplierId', 'brand', 'brandId', 'brandPartyId', 'buyerPartyId'])
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The party ids a view's address terms name. */
+export function partiesNamed(query: string): string[] {
+  const ids = new Set<string>()
+  for (const [name, value] of new URLSearchParams(query)) {
+    if (!PARTY_TERMS.includes(name)) continue
+    for (const part of value.split(',')) if (UUID.test(part.trim())) ids.add(part.trim().toLowerCase())
+  }
+  return [...ids]
+}
+
+/** One of the person's grants reaches the party (and its company, when the party belongs to one company). */
+export const reachesParty = (actor: Actor, party: { readonly id: string; readonly companyId: string | null }): boolean =>
+  actor.grants.some((grant) => (grant.parties === 'all' || grant.parties.includes(party.id)) && (party.companyId === null || grant.companies === 'all' || grant.companies.includes(party.companyId)))
+
+/**
+ * The views whose terms name a party the person cannot reach (an account manager limited to Brand Alpha never reads
+ * "Brand Beta — tracking", not even its name; a view naming several parties shows only when every one is reachable). An
+ * id that names no party hides nothing (there is no name to tell). Read again on every call: a widened scope shows it.
+ */
+async function hiddenByParty(client: Client, actor: Actor, rows: readonly Pick<ViewRow, 'id' | 'state'>[]): Promise<Set<string>> {
+  const named = new Map(rows.map((row) => [row.id, partiesNamed(stateOf(row.state).query)]))
+  const ids = [...new Set([...named.values()].flat())]
+  if (ids.length === 0) return new Set()
+  const parties = await client.party.findMany({ where: { id: { in: ids } }, select: { id: true, companyId: true } })
+  const unreachable = new Set(parties.filter((party) => !reachesParty(actor, party)).map((party) => party.id))
+  return new Set(rows.filter((row) => named.get(row.id)!.some((id) => unreachable.has(id))).map((row) => row.id))
+}
+// ── end B-TH-020 ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const stateOf = (value: Prisma.JsonValue): ViewState => {
   const parsed = viewStateSchema.safeParse(value)
@@ -118,7 +159,10 @@ export async function listViews(caller: CommandCaller, listKey: string) {
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
     const reader = await readerOf(client, context)
-    const rows = await client.savedView.findMany({ where: visibleWhere(listKey, reader, context.companyId), select: VIEW, take: 500 })
+    const found = await client.savedView.findMany({ where: visibleWhere(listKey, reader, context.companyId), select: VIEW, take: 500 })
+    // B-TH-020: a view naming a party the reader cannot reach is left out (its name, and its default mark, with it).
+    const hidden = await hiddenByParty(client, reader.actor, found)
+    const rows = found.filter((row) => !hidden.has(row.id))
     const facts = rows.map((row) => ({ ...row, audience: row.audience as ViewAudience }))
     const ordered = menuOrder(facts, reader)
     const allRoles = reader.manage ? await client.role.findMany({ where: { audience: 'OFFICE' }, select: { id: true, name: true }, orderBy: [{ name: 'asc' }], take: 200 }) : []
@@ -135,10 +179,11 @@ export async function listViews(caller: CommandCaller, listKey: string) {
   })
 }
 
-/** A view the reader sees (else one 404, whoever's it is). */
-export async function readVisible(client: Client, viewId: string, reader: ViewReader): Promise<ViewRow> {
+/** A view the reader sees (else one 404, whoever's it is). B-TH-020: nor one naming a party the reader cannot reach. */
+export async function readVisible(client: Client, viewId: string, reader: ViewReader & { readonly actor?: Actor }): Promise<ViewRow> {
   const row = await client.savedView.findUnique({ where: { id: viewId }, select: VIEW })
   if (!row || !viewSeenBy({ ownerId: row.ownerId, audience: row.audience as ViewAudience, roleId: row.roleId, roleDefault: row.roleDefault }, reader)) throw new NotFoundError('View not found.')
+  if (reader.actor && (await hiddenByParty(client, reader.actor, [row])).has(row.id)) throw new NotFoundError('View not found.')
   return row
 }
 

@@ -13,7 +13,7 @@ import { formatDate, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { WorkOrderRow } from '../../_shared/api'
-import { LIST_VIEWS, percentOf, progressPhrase, STATUS_TONE, TILES, type ListView } from '../../_shared/model'
+import { LIST_VIEWS, listProgress, STATUS_TONE, TILES, type ListView } from '../../_shared/model'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import type { ListEdit, ListQuick } from '../../../../list-frame/w2b/model'
 import type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
@@ -129,14 +129,15 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           <span className="fw-pr-cell-sub">{data.orders.map((order) => order.number).join(' · ')}</span>
         </span>
       ) : null
+    // F-PR-01: the bar and its words are ONE figure (the furthest step counted), never finished 0 % beside "Sewn 80 of 100".
     const ProgressCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
       if (!data) return null
-      const words = progressPhrase(data)
-      const finished = data.progress ? percentOf(data.progress.finished ?? 0, data.pieces) : null
+      const figure = listProgress(data)
+      const words = t(figure.words.key, figure.words.params)
       return (
         <span className="fw-pr-progress">
-          <ProgressBar value={data.status === 'DRAFT' ? null : finished} ariaLabel={t('list.progressLabel', { number: data.number })} height={6} />
-          <span className="fw-pr-cell-sub">{t(words.key, words.params)}</span>
+          <ProgressBar value={figure.percent} ariaLabel={t('list.progressLabel', { number: data.number, figure: words })} height={6} />
+          <span className="fw-pr-cell-sub">{words}</span>
         </span>
       )
     }

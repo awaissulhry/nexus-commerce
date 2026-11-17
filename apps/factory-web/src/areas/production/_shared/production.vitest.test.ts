@@ -24,6 +24,7 @@ import {
   correctHold,
   hideBar,
   nextStep,
+  listProgress,
   percentOf,
   progressPhrase,
   releaseRefusalCodes,
@@ -126,6 +127,20 @@ describe('the size run, a layer at a time', () => {
     expect(progressPhrase(LIST_ROWS.find((row) => row.number === 'WO-00012')!)).toEqual({ key: 'progress.notFrozen' })
     expect(percentOf(6, 26)).toBe(23)
     expect(percentOf(null, 26)).toBeNull()
+  })
+  // F-PR-01 (rule R5): the list's bar showed finished % beside the furthest step's words ("0 %" beside "Cut 12 of 12").
+  it('the list bar shows the figure its words name: one step, one number', () => {
+    const cut = listProgress(LIST_ROWS.find((row) => row.number === 'WO-00007')!)
+    expect(cut).toMatchObject({ step: 'cut', done: 12, total: 12, percent: 100, words: { key: 'progress.cut', params: { done: 12, total: 12 } } })
+    const sewn = listProgress({ status: 'IN_PROGRESS', pieces: 100, progress: { cut: 100, bundled: 100, sewn: 80, finished: 0 } })
+    expect(sewn).toMatchObject({ step: 'sewn', percent: 80, words: { key: 'progress.sewn', params: { done: 80, total: 100 } } })
+    expect(listProgress(LIST_ROWS.find((row) => row.number === 'WO-00009')!)).toMatchObject({ step: 'finished', percent: 23 })
+    // Not released: no bar; released with nothing reached: an empty cut bar, and none when nothing is counted at all.
+    expect(listProgress(LIST_ROWS.find((row) => row.number === 'WO-00012')!)).toMatchObject({ step: null, percent: null, words: { key: 'progress.notFrozen' } })
+    expect(listProgress({ status: 'RELEASED', pieces: 40, progress: { cut: 0, bundled: 0, sewn: null, finished: 0 } })).toMatchObject({ step: 'cut', percent: 0, words: { key: 'progress.none' } })
+    expect(listProgress({ status: 'RELEASED', pieces: 40, progress: { cut: null, bundled: null, sewn: null, finished: null } })).toMatchObject({ step: null, percent: null })
+    // Sewing not scanned (null) is skipped, never read as 0: the furthest counted step speaks.
+    expect(listProgress({ status: 'IN_PROGRESS', pieces: 50, progress: { cut: 50, bundled: 40, sewn: null, finished: 0 } })).toMatchObject({ step: 'bundled', percent: 80 })
   })
 })
 

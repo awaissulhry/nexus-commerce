@@ -5,6 +5,8 @@ import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { DAILY_ORDER_ACTIONS } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
+// B-TH-017: None / Part / All (rule C8).
+import { INVOICED_STATES } from '@nexus/factory-domain/sales/orders/invoiced'
 import { MAX_TEXT, SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 
 /**
@@ -229,6 +231,29 @@ export const listOrdersContract = defineContract({
           quote: output({ id: id(), number: z.string(), versionId: id(), revision: z.number().int() }).nullable(),
           version: z.number().int(),
           updatedAt: instant(),
+          // ── B-TH-017 (threads plan TH-1a, pictures 23 + 24): the sheet's columns and the ids its doors open ─────────────
+          /**
+           * The main picture of the first line's style: its file only with files.read (null: the placeholder); `small`: its
+           * ~320 px preview exists (GET /sales/orders/:orderId/picture serves it; the sheet never loads the original).
+           */
+          picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
+          /** The order's distinct styles ("+2" beside the picture). */
+          styleCount: z.number().int(),
+          /**
+           * The label on the garment (the style's brand), one entry per label across the lines: `own` = our own collection;
+           * a label of a party the reader may not see has neither id nor name.
+           */
+          brands: z.array(output({ partyId: id().nullable(), name: z.string().nullable(), own: z.boolean() })),
+          /** None / Part / All by pieces on issued invoices less issued credit notes (drafts and deposit invoices left out). */
+          invoiced: output({ state: z.enum(INVOICED_STATES), pieces: z.string(), toInvoice: z.number().int(), amount: money.price(z.number().int()) }),
+          /** The ids each cell opens, only those the reader may open (null: no right; the row's own words stay). */
+          doors: output({
+            quote: output({ id: id(), versionId: id() }).nullable(),
+            depositInvoice: output({ id: id(), number: z.string().nullable() }).nullable(),
+            deliveryNotes: output({ count: z.number().int(), only: output({ id: id(), number: z.string() }).nullable(), shipmentId: id().nullable() }).nullable(),
+            invoices: output({ count: z.number().int(), only: output({ id: id(), number: z.string().nullable(), docType: z.string() }).nullable() }).nullable(),
+          }),
+          // ── end B-TH-017 ──────────────────────────────────────────────────────────────────────────────────────────────
         }),
       ),
       nextCursor: id().nullable(),
@@ -280,3 +305,52 @@ export const closeContract = defineContract({
   body: input({ version, reason: z.string().trim().max(MAX_REASON).nullish() }),
   response: { 200: one },
 })
+
+// ── B-TH-017 / B-TH-063: the Picture cell's small preview ─────────────────────────────────────────────────────────────
+export const orderPictureContract = defineContract({
+  params: orderParams,
+  response: {
+    200: output({
+      picture: output({
+        fileId: id(),
+        styleId: id(),
+        contentType: z.string(),
+        /** A presigned GET of the ~320 px preview (60 seconds); null until it exists (the cell's placeholder). */
+        small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
+      }),
+    }),
+  },
+})
+// ── end B-TH-017 / B-TH-063 ───────────────────────────────────────────────────────────────────────────────────────────
+
+// ── B-TH-019: the Customer switcher's numbers ─────────────────────────────────────────────────────────────────────────
+export const customersContract = defineContract({
+  querystring: input({
+    /** A customer's name or code, case-insensitive. */
+    q: z.string().trim().min(1).max(100).optional(),
+    companyId: id().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  }),
+  response: {
+    200: output({
+      /** The customers with orders the reader may see, most recent order first. */
+      customers: z.array(
+        output({
+          id: id(),
+          code: z.string(),
+          name: z.string(),
+          archived: z.boolean(),
+          /** Orders in all, open (not shipped yet) and late (the promise passed, not shipped yet). */
+          orders: z.number().int(),
+          open: z.number().int(),
+          late: z.number().int(),
+          lastOrderDate: z.string().nullable(),
+        }),
+      ),
+      /** How many customers match (the picker says "type to find" beyond the first `limit`): a count, not money. */
+      total: notMoney(z.number().int()),
+      asOf: instant(),
+    }),
+  },
+})
+// ── end B-TH-019 ──────────────────────────────────────────────────────────────────────────────────────────────────────
