@@ -222,8 +222,10 @@ export function changedAtWords(time: string): Words {
   return { it: `Cambiato alle ${time}: rileggi l'elenco.`, en: `Changed at ${time}: read the list again.` }
 }
 
-/** We changed its Urgent list after it read it (never who: R-41). */
-export const CHANGED_BY_US_SINCE_WORDS: Words = Object.freeze({ it: "Modificato da noi: rileggi l'elenco.", en: 'Changed by us: read the list again.' })
+/** We changed its Urgent list after it read it, at this time of day (hh:mm, company time; never who: R-41; F-PR-11). */
+export function changedByUsAtWords(time: string): Words {
+  return { it: `Modificato da noi alle ${time}: rileggi l'elenco.`, en: `Changed by us at ${time}: read the list again.` }
+}
 
 /** The Urgent list sent is the one it has. */
 export const URGENT_ORDER_UNCHANGED_WORDS: Words = Object.freeze({
