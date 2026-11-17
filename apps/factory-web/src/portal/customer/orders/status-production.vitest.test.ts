@@ -315,7 +315,8 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
       const html = draw(ready(atGates()), locale)
       expect(scanText(html, BRAND_ALPHA), locale).toEqual([])
       expect(html.match(/\bSO-\d{4}-\d+/)?.[0] ?? null, locale).toBeNull()
-      expect(textOf(html), locale).not.toMatch(/\b(capacity|capacità|load|carico|lane|corsia|workshop|terzista|production line|linea di produzione)\b/i)
+      // No line load, lane, workshop or production line (a curated promise reason may say "capacity": the customer's own words).
+      expect(textOf(html), locale).not.toMatch(/\b(line load|carico di linea|lane|corsia|workshop|terzista|production line|linea di produzione)\b/i)
     }
   })
 
