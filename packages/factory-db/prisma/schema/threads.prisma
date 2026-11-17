@@ -15,6 +15,15 @@
 // per record type in the API), never sent by the caller. Messages are append-only (a correction is a new message);
 // rows of either table are never deleted. The guard triggers of the hand-written …_threads_guards migration hold the
 // rules for every login.
+//
+// TH-2 (threads plan, schema wave 4/9, B-TH-023; gaps G10, N2, X-G05): a thread names who answers it (ownerId: one office
+// person; none, the record's own: a request's assignee, else its maker, B-TH-028), hidden from the record's party; and
+// ThreadRead keeps how far each person has read each thread (the last message they read), so the thread shows "New since your
+// last visit" and the lists count new messages (B-TH-027). Office people and the party's portal people have one; the floor
+// never (no read record of a floor worker: Statuto dei Lavoratori art. 4, L. 300/1970, no remote watch of a worker), and no
+// "seen by" list exists: each person reads only their own (the API), a portal session only its own party's people's (the
+// policy), the floor nothing. A read mark is the person's own data: named in the privacy notice, removed with the person's
+// erasure (the …_threads_reads_th_guards trigger on ErasureRecord).
 
 /// The one conversation of one record (COL-001), made when its first message is written.
 model Thread {
@@ -45,8 +54,15 @@ model Thread {
   updatedAt     DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   /// Who wrote the first message (a user), or null (the system, an inbound mail).
   createdById   String?      @db.Uuid
+  /// TH-2 (schema wave 4/9, B-TH-023; N2, X-G05): who answers this conversation, when someone is named for it: an office
+  /// person of the tenant (active when named); null: the record's own owner (a request's assignee, else the record's maker:
+  /// B-TH-028). Changed by whoever may post on the thread. Hidden from the partner role (the portal shows no owner).
+  ownerId       String?      @db.Uuid
 
   company        Company?  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // TH-2 (B-TH-023): who answers it (Restrict, not Prisma's SetNull default for an optional relation: that would also clear
+  // tenantId).
+  owner          User?     @relation("ThreadOwner", fields: [tenantId, ownerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // A site-bound record belongs to a company, and the site is one of its sites.
   site           Site?     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   messages       Message[] @relation("ThreadMessages")
@@ -57,6 +73,9 @@ model Thread {
   inboundEmails  InboundEmail[]
   // collab.prisma: the @mentions in its notes.
   mentions       MessageMention[]
+  // TH-2 (B-TH-023): how far each person has read it, and the portal people's marks (they name its party).
+  reads          ThreadRead[] @relation("ThreadReads")
+  sharedReads    ThreadRead[] @relation("ThreadSharedReads")
 
   @@unique([tenantId, recordType, recordId])
   @@unique([replyToken])
@@ -64,6 +83,8 @@ model Thread {
   @@unique([tenantId, id])
   @@unique([tenantId, id, partyId])
   @@index([tenantId, partyId])
+  // TH-2 (B-TH-023): the conversations a person answers.
+  @@index([tenantId, ownerId])
 }
 
 /// OPEN → CLOSED → OPEN (threads.manage).
@@ -125,6 +146,8 @@ model Message {
   mentions     MessageMention[]
   // W2b notify-depth.prisma (wave 47/57): the reminders about it.
   reminders    Reminder[]
+  // TH-2 (B-TH-023): the read marks that stop at it.
+  readMarks    ThreadRead[]
 
   @@unique([tenantId, emailMessageId])
   // The target of the mentions' tenant-safe reference.
@@ -166,4 +189,42 @@ enum MessageAuthorKind {
   WORKER
   PARTY
   SYSTEM
+}
+
+/// TH-2 (threads plan, schema wave 4/9, B-TH-023; G10): how far one person has read one thread: the last message they read
+/// there and when. One row per thread and person, made when they first open it, moved as they read (or back: "Mark unread"),
+/// removed by "Mark unread" on a whole thread and with the person's erasure (GDPR art. 17). An office person, or a portal
+/// person of the thread's party (whose row names that party: the partner policy's key); never a floor worker (Statuto dei
+/// Lavoratori art. 4: no read record of the floor). Nobody reads another person's marks: no "seen by" list (the API keeps
+/// each person to their own; a portal session sees only its own party's people's rows, the floor none).
+model ThreadRead {
+  id                String   @id @db.Uuid
+  tenantId          String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  threadId          String   @db.Uuid
+  /// The person: an office user, or a portal user of the thread's party. Never changes.
+  userId            String   @db.Uuid
+  /// `read:<threadId>:<userId>`: one mark per thread and person (the unique key, as a person's dashboard layout's). Never
+  /// changes.
+  key               String
+  /// A portal person's party, the thread's own, set exactly when the person is a portal user (and then theirs); null for an
+  /// office person. Never changes.
+  partyId           String?  @db.Uuid
+  /// The newest message the person has read: a message of this thread; a portal person's, one shared with their party.
+  lastReadMessageId String   @db.Uuid
+  /// When they read it (server time; not in the future).
+  readAt            DateTime @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  thread          Thread  @relation("ThreadReads", fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A portal person's mark names its thread's own party: the reference is checked whenever partyId is set.
+  sharedThread    Thread? @relation("ThreadSharedReads", fields: [tenantId, threadId, partyId], references: [tenantId, id, partyId], onDelete: Restrict, onUpdate: Restrict)
+  user            User    @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lastReadMessage Message @relation(fields: [tenantId, lastReadMessageId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One mark per thread and person (the key).
+  @@unique([tenantId, key])
+  // A person's marks (the lists' new-message counts, the erasure).
+  @@index([tenantId, userId])
+  @@index([tenantId, partyId])
 }

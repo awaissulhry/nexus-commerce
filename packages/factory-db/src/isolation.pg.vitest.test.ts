@@ -99,6 +99,7 @@ import { seed as seedSupply } from '../seed/supply'
 import { seed as seedTax } from '../seed/tax'
 import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
+import { seed as seedThreadReads } from '../seed/thread-reads' // B-TH-023
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
 import { seed as seedConfig } from '../seed/w2b6-config'
@@ -318,6 +319,11 @@ beforeAll(async () => {
   // The portal identity schema of W2b (wave 17/22): partner users, their sessions and codes, portal settings, branding, terms.
   await seedPortalAuth({ db: factory, namespace: 'iso-a' })
   await seedPortalAuth({ db: factory, namespace: 'iso-b' })
+  // ---- B-TH-023 (threads schema wave 4/9): the read marks (an office person's and P1's portal buyer's, on the threads seed's
+  // threads): the plain ones a copy may repeat (the key takes the copy's suffix).
+  await seedThreadReads({ db: factory, namespace: 'iso-a' })
+  await seedThreadReads({ db: factory, namespace: 'iso-b' })
+  // ---- end B-TH-023
   // The files in depth schema of W2b (wave 18/22).
   await seedFilesDepth({ db: factory, namespace: 'iso-a' })
   await seedFilesDepth({ db: factory, namespace: 'iso-b' })
@@ -1057,6 +1063,7 @@ it('covers every classified table and every runtime role', () => {
     'StockValuation',
     'StoredFile',
     'Style',
+    'StyleCuttingLoss',
     'StyleImage',
     'StyleOptionGroup',
     'StyleRevision',
@@ -1102,6 +1109,7 @@ it('covers every classified table and every runtime role', () => {
     'Tenant',
     'TestPlanRule',
     'Thread',
+    'ThreadRead',
     'TimesheetApproval',
     'TodayLayout',
     'TrackingEvent',
@@ -1158,6 +1166,7 @@ describe('T01 a second brand in the same factory', () => {
       SalesOrder: [second.salesOrderId],
       StoredFile: [second.fileId],
       Notification: [second.notificationId],
+      ThreadRead: [second.threadReadId],
     })[table]!
 
   it.each([...SECOND_BRAND_TABLES])('%s: the second brand’s rows sit in tenant A; P1’s portal reads none of them', async (table) => {
