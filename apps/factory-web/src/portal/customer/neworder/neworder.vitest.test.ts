@@ -446,7 +446,7 @@ describe('B-TH-304 — the catalogue door is open again: New order offers it, wi
       }
     }
     expect(renderCase('en', 'th-304-draft')).toContain(`from your order 12 (your PO ${BRAND_BETA.customerRef})`)
-    expect(renderCase('it', 'th-304-draft')).toContain(`dal vostro ordine 12 (tuo numero ${BRAND_BETA.customerRef})`)
+    expect(renderCase('it', 'th-304-draft')).toContain(`dal vostro ordine 12 (vostro numero ${BRAND_BETA.customerRef})`)
     expect(renderCase('en', 'th-304-reorder-order')).toContain('Lines of your order 12')
     const reorder = renderCase('en', 'th-304-reorder')
     expect(reorder).toContain('id="reorder"')

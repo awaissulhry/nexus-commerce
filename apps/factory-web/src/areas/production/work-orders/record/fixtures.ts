@@ -16,6 +16,9 @@ import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { filesReady, leftOut, orderFilesOf, orderGroup, twoGroupsOf, twoOrdersOf } from './order-files/fixtures'
 // F-PR-21
 import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
+// F-PR-22: Ask the supervisor (THE note dialog, made-up).
+import { targetsOfRecord as noteTargetsOfRecord } from '../../_shared/notes/model'
+import { NOTE_CHECK, noteModel } from '../../_shared/notes/fixtures'
 import { threadChoices, type ThreadPick } from './order-files/model'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
@@ -169,6 +172,8 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       partiesView: (ROLES[role] as readonly string[]).includes('parties.view'),
       // F-PR-21: the supervisor fact (drawn when the work order carries one); Change… only with production.brand.manage.
       supervisor: { can: role === 'owner' || role === 'manager', assign: null },
+      // F-PR-22: Ask the supervisor in the band's ⋯ and beside the supervisor fact (threads.post).
+      note: { can: (ROLES[role] as readonly string[]).includes('threads.post'), dialog: null },
       ...over,
     },
   }
@@ -291,6 +296,25 @@ export const designScreen = defineDesignScreen<RecordCase>({
       }),
     },
     // ---- end F-PR-21
+    // ---- F-PR-22: Ask the supervisor (the band's ⋯, and Ask beside the supervisor fact) ----
+    { id: 'note-ask-band', label: 'F-PR-22 · The band: "Supervisor Bea Esempio · this order" with Change… and Ask; ⋯ Ask the supervisor', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'ORDER', me: false }, youMuted: null }) } }) },
+    { id: 'note-ask-held', label: 'F-PR-22 · Without threads.post: Ask and Ask the supervisor held in words', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'ORDER', me: false }, youMuted: null }) }, note: { can: false, dialog: null } }) },
+    {
+      id: 'note-ask',
+      label: 'F-PR-22 · Ask the supervisor: an office note on this work order (or its sales order), its supervisor asked',
+      model: recordCase('manager', 'IN_PROGRESS', {
+        workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'ORDER', me: false }, youMuted: null }) },
+        note: {
+          can: true,
+          dialog: (() => {
+            const targets = noteTargetsOfRecord(workOrder('IN_PROGRESS'), true)
+            const record = targets.workOrders[0]!
+            return noteModel({ from: 'band', targets, draft: { body: 'Can the size 52 hides wait until Thursday?' }, answer: { ...NOTE_CHECK, records: [{ type: record.type, id: record.id, label: record.label, customer: record.partyId ? { id: record.partyId, name: record.partyName ?? '' } : null, canWrite: true, why: null, supervisor: 'SOMEONE_ELSE' }], customers: 1, people: [], noSupervisor: [] } })
+          })(),
+        },
+      }),
+    },
+    // ---- end F-PR-22
     { id: 'changed', label: 'Someone changed it while the page holds an edit: Reload', model: recordCase('manager', 'IN_PROGRESS', { changed: { at: '2026-10-29T09:42:00.000Z' }, draft: { editing: true } }) },
     { id: 'notice', label: 'After a write: a notice', model: recordCase('manager', 'RELEASED', { notice: { tone: 'success', words: { key: 'notice.released', params: { batch: 'BA-00049' } } } }) },
     { id: 'owner', label: 'Owner: everything', model: recordCase('owner', 'IN_PROGRESS') },

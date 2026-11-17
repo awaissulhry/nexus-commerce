@@ -122,7 +122,7 @@ export function paymentInstructions(input: {
   if (input.language === 'it') {
     const what = input.kind === 'CAPARRA' ? 'una caparra confirmatoria' : 'un acconto'
     const to = bank ? ` sul conto intestato a ${bank.accountHolder}, IBAN ${bank.iban}${bank.bic ? `, BIC ${bank.bic}` : ''}${bank.bankName ? ` (${bank.bankName})` : ''}` : ''
-    text = `Le chiediamo ${what} di ${amount} entro il ${due}, con bonifico bancario${to}, causale «${reference}».${bank ? '' : ' Le coordinate bancarie le saranno comunicate a parte.'}`
+    text = `Vi chiediamo ${what} di ${amount} entro il ${due}, con bonifico bancario${to}, causale «${reference}».${bank ? '' : ' Le coordinate bancarie vi saranno comunicate a parte.'}`
   } else {
     const what = input.kind === 'CAPARRA' ? 'a confirmatory deposit (caparra confirmatoria)' : 'an advance payment'
     const to = bank ? ` to the account of ${bank.accountHolder}, IBAN ${bank.iban}${bank.bic ? `, BIC ${bank.bic}` : ''}${bank.bankName ? ` (${bank.bankName})` : ''}` : ''

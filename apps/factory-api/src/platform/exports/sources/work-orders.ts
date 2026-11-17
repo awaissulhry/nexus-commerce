@@ -13,8 +13,8 @@ import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from '../../../modules/produ
 import { SUPERVISOR_FILTERS } from '../../../modules/production/work-orders/work-orders'
 import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
 import { SUPERVISOR_MARK_WORDS } from '@nexus/factory-domain/production-brand/words'
-// B-PR-22b: the customer's urgency cell.
-import { CUSTOMER_URGENCY_WORDS, URGENCY_WORDS } from '@nexus/factory-domain/production-brand/words'
+// B-PR-22b: the customer's urgency cell; F-PR-18: its four states (the words of urgency-state) and the list's filter of the same name.
+import { CUSTOMER_URGENCY_STATES, customerUrgencyStateWords } from '@nexus/factory-domain/production-brand/urgency-state'
 
 /**
  * Production › Work orders (SCR-069, `/production/work-orders`): the export of the list as the screen shows it. The
@@ -85,6 +85,9 @@ const wordsOf = (locale: 'it' | 'en'): Record<string, string> => ({
 })
 // ── end B-PR-34 ──
 
+/** F-PR-18: each Customer urgency state's words (an Urgent row adds its place in the customer's own Urgent list: "… 2"). */
+const urgencyWordsOf = (locale: 'it' | 'en'): Record<string, string> => Object.fromEntries(CUSTOMER_URGENCY_STATES.map((state) => [`urgency.${state}`, customerUrgencyStateWords({ state, urgentRank: null })[locale]]))
+
 export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>, Row>({
   listKey: 'production.work-orders',
   permission: WORKORDERS_VIEW,
@@ -98,7 +101,17 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     const rush = rushWord === 'true' ? true : rushWord === 'false' ? false : undefined
     const partyId = partyTerm(address) // B-PR-03
     // B-PR-34: the list's sort and computed filters.
-    const ranked = { sort: termOf(address, 'sort', LIST_SORTS), waitingOn: termOf(address, 'waitingOn', WAITING_ON), risk: termOf(address, 'risk', WORK_ORDER_RISKS), blockedBy: termOf(address, 'blockedBy', BLOCKED_BY), /* B-PR-42a */ supervisor: termOf(address, 'supervisor', SUPERVISOR_FILTERS) }
+    const ranked = {
+      sort: termOf(address, 'sort', LIST_SORTS),
+      waitingOn: termOf(address, 'waitingOn', WAITING_ON),
+      risk: termOf(address, 'risk', WORK_ORDER_RISKS),
+      blockedBy: termOf(address, 'blockedBy', BLOCKED_BY),
+      /* B-PR-42a */ supervisor: termOf(address, 'supervisor', SUPERVISOR_FILTERS),
+      /* F-PR-18 */ customerUrgency: termOf(address, 'customerUrgency', CUSTOMER_URGENCY_STATES),
+      // B-PR-33: the Overview's "blocked by a gate" and "made before the rule" (the file follows the screen).
+      gate: address.get('gate') === 'true' ? true : undefined,
+      mixed: address.get('mixed') === 'true' ? true : undefined,
+    }
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
     if (view === 'late') return { late: true, q, due, rush, partyId, ...ranked }
     if (view === 'all') return { q, due, rush, partyId, ...ranked }
@@ -128,13 +141,13 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     // B-PR-42a: the production supervisor for the person who asked for the file (Me / Someone else / Not set).
     supervisor: { value: (row, words) => (row.supervisor ? words(`supervisor.${row.supervisor}`) : null) },
     // B-PR-22b: its customer's urgency that counts ("Urgent (customer) 2" / "Regular"; empty: none, or the switch off).
-    customerUrgency: { value: (row, words) => (row.customerUrgency === 'URGENT' ? `${words('customerUrgent')}${row.urgentRank !== null ? ` ${row.urgentRank}` : ''}` : row.customerUrgency === 'REGULAR' ? words('customerRegular') : null) },
+    // F-PR-18: as the list's column says it — Urgent (customer) 2 · Urgent – asked · Regular · Set to Regular by us.
+    customerUrgency: { value: (row, words) => (row.urgencyState ? `${words(`urgency.${row.urgencyState}`)}${row.urgencyState === 'URGENT' && row.urgentRank !== null ? ` ${row.urgentRank}` : ''}` : null) },
   },
   words: {
     it: {
       ...wordsOf('it'), // B-PR-34
-      customerUrgent: CUSTOMER_URGENCY_WORDS.chip.it, // B-PR-22b
-      customerRegular: URGENCY_WORDS.REGULAR.it, // B-PR-22b
+      ...urgencyWordsOf('it'), // F-PR-18
       'status.DRAFT': 'Bozza',
       'status.RELEASED': 'Rilasciato',
       'status.IN_PROGRESS': 'In lavorazione',
@@ -146,8 +159,7 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     },
     en: {
       ...wordsOf('en'), // B-PR-34
-      customerUrgent: CUSTOMER_URGENCY_WORDS.chip.en, // B-PR-22b
-      customerRegular: URGENCY_WORDS.REGULAR.en, // B-PR-22b
+      ...urgencyWordsOf('en'), // F-PR-18
       'status.DRAFT': 'Draft',
       'status.RELEASED': 'Released',
       'status.IN_PROGRESS': 'In progress',

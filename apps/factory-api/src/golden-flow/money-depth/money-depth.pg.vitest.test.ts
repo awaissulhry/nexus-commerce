@@ -405,7 +405,30 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     const report = pdf('Cr VI test report TL-GF6-M1')
     const announced = await ok(P.inspector, 'POST', `${base}/results/report`, announce('cr6-gf6.pdf', report), 201)
     await putBytes(w, announced, report)
-    record = (await ok(P.inspector, 'POST', `${base}/results`, { version: record.version, test: 'CR_VI', method: 'EN ISO 17075-1', valueMgKg: '1.1', lab: 'Test Lab One (made up)', reportNumber: 'TL-GF6-M1', testedOn: today(), evidence: 'LOT_REPORT', fileId: announced.file.id }, 201)).lot
+    const recorded = await ok(P.inspector, 'POST', `${base}/results`, { version: record.version, test: 'CR_VI', method: 'EN ISO 17075-1', valueMgKg: '1.1', lab: 'Test Lab One (made up)', reportNumber: 'TL-GF6-M1', testedOn: today(), evidence: 'LOT_REPORT', fileId: announced.file.id }, 201)
+    // ---- B-W2b-GF5 (G369, #1519; END CHECK fix wave 3c): quality releases only what passed — the seeded rule (every lot of the
+    // leather) opened the lot's incoming inspection at the receipt, so the release waits for its decision (as the daily and quality
+    // flows have done since #1519): the sample's hides accepted, the plan's checks passed, decided with a fresh code.
+    expect(recorded).toMatchObject({ result: { verdict: 'PASS' }, checklist: { ready: false, open: [expect.objectContaining({ code: 'INCOMING', state: 'OPEN' })] } })
+    const opened = (await ok(P.inspector, 'GET', `/quality/incoming?lotId=${lot.id}&status=OPEN`)).items as Json[]
+    expect(opened).toHaveLength(1)
+    const iin = `/quality/incoming/${opened[0]!.id}`
+    let incoming = await ok(P.inspector, 'GET', iin)
+    for (const hide of (G.hides as Json[]).slice(0, incoming.inspection.sampleSize)) incoming = await ok(P.inspector, 'PUT', `${iin}/hides/${hide.id}`, { version: incoming.inspection.version, decision: 'ACCEPTED' })
+    const checkOf = (code: string) => (incoming.checks as Json[]).find((entry) => entry.code === code)!
+    incoming = await ok(P.inspector, 'PUT', `${iin}/results`, {
+      version: incoming.inspection.version,
+      results: [
+        { planCheckId: checkOf('SHADE').id ?? checkOf('SHADE').planCheckId, outcome: 'PASS', value: '1' },
+        { planCheckId: checkOf('THICKNESS').id ?? checkOf('THICKNESS').planCheckId, outcome: 'PASS', value: '1.2' },
+      ],
+    })
+    await stepped(w, P.inspector)
+    incoming = await ok(P.inspector, 'POST', `${iin}/decide`, { version: incoming.inspection.version, accepted: String((G.hides as Json[]).length), rejected: '0', toSort: '0' })
+    expect(incoming.inspection).toMatchObject({ status: 'DECIDED', computedResult: 'PASS' })
+    expect(incoming.next).toMatchObject({ step: 'RELEASE', holdPrefill: null })
+    record = (await ok(P.inspector, 'GET', base)).lot
+    // ---- end B-W2b-GF5
     const released = (await ok(P.inspector, 'POST', `${base}/release`, { version: record.version, confirmCode: record.code })).lot
     expect(released.qualityStatus).toBe('RELEASED')
     // The protectors' lot: its PPE certificate on file, then released (a serial-numbered garment traces it at sewing).

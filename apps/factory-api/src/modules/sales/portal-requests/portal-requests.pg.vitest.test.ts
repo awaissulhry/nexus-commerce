@@ -322,7 +322,7 @@ describe('th-backend-g step 2: the receipt mail goes to the person who sent the 
     // Never to anyone else: every receipt went to the one person who sent its request.
     expect(new Set(receipts.flatMap((row) => row.to))).toEqual(new Set([people.buyer, people.other]))
     const first = receipts.find((row) => row.recordId === sent.request.id)!
-    expect(first.subject).toMatch(/^(We received your request 2|Abbiamo ricevuto la sua richiesta 2)$/)
+    expect(first.subject).toMatch(/^(We received your request 2|Abbiamo ricevuto la vostra richiesta 2)$/)
     const mail = h.ses.mails.find((one) => one.outboundId === first.id)!
     expect(mail.to).toEqual([people.buyer])
     const text = textOf(mail.raw)

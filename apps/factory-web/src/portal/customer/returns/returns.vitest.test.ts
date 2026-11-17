@@ -401,7 +401,7 @@ describe('the order an item came on, in the customer’s own number', () => {
   it('says “your order 12, line 1” from the customer’s own number, in both languages, and never an office number', () => {
     const own = withOrder({ id: 'o', yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } }, yourRef: 'BA-PO-771', lineSeq: 1 })
     expect(orderFact(own.order, t)).toBe('your order 12, line 1')
-    expect(orderFact(own.order, createTranslator('it', CATALOGUE.it[NS] ?? {}))).toBe('tuo ordine 12, riga 1')
+    expect(orderFact(own.order, createTranslator('it', CATALOGUE.it[NS] ?? {}))).toBe('vostro ordine 12, riga 1')
     expect(itemFacts(own, t)[0]).toBe('your order 12, line 1')
     expect(itemFacts(own, t).join(' · ')).not.toMatch(/SO-/)
   })

@@ -12,7 +12,7 @@ import type { PartnerEmailTopic } from './topics'
  */
 
 export const PARTNER_MESSAGE_TEMPLATES = {
-  'portal.task.opened': { topic: null, category: 'ASSIGNMENT', en: '{company} asks you: {what}', it: '{company} ti chiede: {what}' },
+  'portal.task.opened': { topic: null, category: 'ASSIGNMENT', en: '{company} asks you: {what}', it: '{company} vi chiede: {what}' },
   'portal.task.reminded': { topic: 'REMINDERS', category: 'ASSIGNMENT', en: 'Reminder: {what}{due}', it: 'Promemoria: {what}{due}' },
   // th2-backend step 7 (§0.5): {yours} is the customer's own words of its request, quote or order ("your order 12", in the
   // reader's language) when the notice names one, else the record's label (a supplier's PO keeps its number).
@@ -62,14 +62,14 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.invoice.issued': { topic: 'INVOICES', category: 'FOLLOWING', en: 'Invoice {label} was issued', it: 'È stata emessa la fattura {label}' },
   'portal.claim.sent': { topic: 'CLAIMS', category: 'FOLLOWING', en: 'New claim {label}', it: 'Nuovo reclamo {label}' },
   // B-W2b-183: the office's answer to a change or cancel request from the portal (the words are on the order's page).
-  'portal.order.change_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {yours} was accepted', it: 'La tua richiesta di modifica per {yours} è stata accettata' },
-  'portal.order.change_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {yours} was not accepted', it: 'La tua richiesta di modifica per {yours} non è stata accettata' },
-  'portal.order.cancel_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {yours} was accepted', it: 'La tua richiesta di annullamento per {yours} è stata accettata' },
-  'portal.order.cancel_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {yours} was not accepted', it: 'La tua richiesta di annullamento per {yours} non è stata accettata' },
+  'portal.order.change_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {yours} was accepted', it: 'La vostra richiesta di modifica per {yours} è stata accettata' },
+  'portal.order.change_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {yours} was not accepted', it: 'La vostra richiesta di modifica per {yours} non è stata accettata' },
+  'portal.order.cancel_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {yours} was accepted', it: 'La vostra richiesta di annullamento per {yours} è stata accettata' },
+  'portal.order.cancel_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {yours} was not accepted', it: 'La vostra richiesta di annullamento per {yours} non è stata accettata' },
   // B-W2b-F15: our check of a delivery address the person added ({label}: the address in short; {reason}: the office's
   // reason of a refusal, which the customer also reads on its address list). Orders need it: a transactional topic.
-  'portal.address.approved': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was checked: your orders can use it', it: 'Il tuo indirizzo di consegna {label} è stato verificato: i tuoi ordini possono usarlo' },
-  'portal.address.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was not accepted{reason}', it: 'Il tuo indirizzo di consegna {label} non è stato accettato{reason}' },
+  'portal.address.approved': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was checked: your orders can use it', it: 'Il vostro indirizzo di consegna {label} è stato verificato: i vostri ordini possono usarlo' },
+  'portal.address.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was not accepted{reason}', it: 'Il vostro indirizzo di consegna {label} non è stato accettato{reason}' },
   // B-TH-011 (threads plan N24, L2-G05, L2-G19): a request's news; th2-backend step 7 (§0.5): the customer's own number only
   // ({yours}: "your request 7", from params.yourKind / yourSeq), never the office's series. Received is the copy of what the
   // person sent (P-CUS-NEW.receipt-F02); a question from us and our no follow; a catalogue order we did not accept (its words are
@@ -80,7 +80,7 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.order_request.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your order request {label} was not accepted', it: "La vostra richiesta d'ordine {label} non è stata accettata" },
   // B-TH-068 (threads plan TH-5, PROJ.members-F04): the factory added the person to a project of their organisation ({label}: its
   // number and name, which the portal shows); told to that person only.
-  'portal.project.added': { topic: 'MESSAGES', category: 'FOLLOWING', en: '{company} added you to the project {label}', it: '{company} ti ha aggiunto al progetto {label}' },
+  'portal.project.added': { topic: 'MESSAGES', category: 'FOLLOWING', en: '{company} added you to the project {label}', it: '{company} vi ha aggiunto al progetto {label}' },
 } as const satisfies Record<string, { readonly topic: PartnerEmailTopic | null; readonly category: 'ASSIGNMENT' | 'FOLLOWING' | 'SYSTEM'; readonly en: string; readonly it: string }>
 
 export type PartnerMessageKey = keyof typeof PARTNER_MESSAGE_TEMPLATES

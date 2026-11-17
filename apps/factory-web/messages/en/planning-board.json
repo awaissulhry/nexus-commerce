@@ -47,7 +47,12 @@
     "later": "Later",
     "date": "First day shown",
     "search": "Search an order number",
-    "searchPlaceholder": "Order number (/)"
+    "searchPlaceholder": "Order number (/)",
+    "sort": "Order of Not on the board and of the orders",
+    "sorts": {
+      "plan": "Plan order",
+      "urgency": "Customer urgency first"
+    }
   },
   "filters": {
     "label": "Filters",
@@ -76,7 +81,8 @@
     "hint": "Drag a bar in time or to another line; the load above each line shows the standard minutes booked against what the line has. Nothing reaches the floor until you publish.",
     "hintOrders": "One lane per work order with its operations; drag an operation in time. To move it to another line, use the Resources view.",
     "empty": "No work orders on this site in this window. Place work orders from the tray.",
-    "trayEmpty": "Every work order has a slot"
+    "trayEmpty": "Every work order has a slot",
+    "urgencyHint": "Customer urgency first: each customer's urgent work orders take places that customer's own work orders already hold; our rush and priority still come first, and no other customer's place changes. A view only: no bar moves, and the floor sees a new order only after you publish."
   },
   "bucket": {
     "week": "Week {week}",
@@ -121,7 +127,9 @@
     "materialFrom": "Material {date}",
     "draft": "Draft · books no capacity",
     "onHold": "On hold · books no capacity",
-    "keptOver": "Kept over capacity"
+    "keptOver": "Kept over capacity",
+    "customerUrgency": "Customer urgency: Urgent {rank}",
+    "customerUrgencySome": "Customer urgency: Urgent"
   },
   "chip": {
     "PAST_LATEST_SAFE_START": "Past its latest safe start",

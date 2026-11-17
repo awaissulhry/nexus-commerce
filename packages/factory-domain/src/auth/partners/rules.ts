@@ -130,7 +130,7 @@ const KIND_WORDS: Readonly<Record<PartnerKind, string>> = { CUSTOMER: 'customer'
 const CAPABILITY_WORDS: Readonly<Record<Capability, string>> = { comment: 'write messages', upload: 'send files', approve: 'approve or sign' }
 
 // ---- B-TH-007: the portal's one neutral invite refusal in both languages (code `refusal/NOT_INVITABLE`).
-export const NOT_INVITABLE = Object.freeze({ code: 'NOT_INVITABLE', it: 'Non abbiamo potuto invitare questo indirizzo. Chiedi a noi.', en: 'We could not invite this address. Ask us.' })
+export const NOT_INVITABLE = Object.freeze({ code: 'NOT_INVITABLE', it: 'Non abbiamo potuto invitare questo indirizzo. Chiedete a noi.', en: 'We could not invite this address. Ask us.' })
 // ---- end B-TH-007
 
 /** The refusals in words, said by the office and the portal alike (but notInvitable: the portal's alone). */

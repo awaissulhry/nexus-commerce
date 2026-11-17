@@ -103,7 +103,7 @@ describe('COL-059: the record thread as the partner sees it', { timeout: SLOW_TE
     expect(answer.body.thread.lastMessageAt).toBeUndefined()
     expect(answer.body.composer).toMatchObject({ canPost: true, reason: null, replyByEmail: true })
     // The seeded buyer reads Italian.
-    expect(answer.body.composer.hint).toBe('Puoi anche rispondere alle nostre e-mail: la risposta arriva qui.')
+    expect(answer.body.composer.hint).toBe('Potete anche rispondere alle nostre e-mail: la risposta arriva qui.')
   })
 
   it('a view-only person reads but is told in their language why they cannot write; a post is refused', async () => {

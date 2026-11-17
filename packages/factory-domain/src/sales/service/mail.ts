@@ -20,17 +20,17 @@ export const mailLanguageOf = (...candidates: readonly (string | null | undefine
 }
 
 const STATUS: Readonly<Record<MailLanguage, Readonly<Record<CaseStatus, string>>>> = Object.freeze({
-  it: { NEW: 'ricevuta', OPEN: 'in lavorazione', WAITING_CUSTOMER: 'in attesa di un suo riscontro', WAITING_PART: 'in attesa di un ricambio', RESOLVED: 'risolta', CLOSED: 'chiusa' },
+  it: { NEW: 'ricevuta', OPEN: 'in lavorazione', WAITING_CUSTOMER: 'in attesa di un vostro riscontro', WAITING_PART: 'in attesa di un ricambio', RESOLVED: 'risolta', CLOSED: 'chiusa' },
   en: { NEW: 'received', OPEN: 'in progress', WAITING_CUSTOMER: 'waiting for you', WAITING_PART: 'waiting for a part', RESOLVED: 'resolved', CLOSED: 'closed' },
 })
 
 const SENTENCE: Readonly<Record<MailLanguage, Readonly<Record<MoveTarget | 'REOPENED', string>>>> = Object.freeze({
   it: {
-    OPEN: 'Abbiamo preso in carico la sua richiesta e la stiamo esaminando.',
-    REOPENED: 'La sua pratica è stata riaperta: la stiamo esaminando di nuovo.',
-    WAITING_CUSTOMER: 'Per proseguire ci serve un suo riscontro: trova qui sotto cosa ci occorre, oppure le scriveremo a breve.',
-    WAITING_PART: 'Stiamo aspettando un ricambio per completare il lavoro: le scriveremo appena arriva.',
-    RESOLVED: 'La sua richiesta è stata risolta.',
+    OPEN: 'Abbiamo preso in carico la vostra richiesta e la stiamo esaminando.',
+    REOPENED: 'La vostra pratica è stata riaperta: la stiamo esaminando di nuovo.',
+    WAITING_CUSTOMER: 'Per proseguire ci serve un vostro riscontro: trovate qui sotto cosa ci occorre, oppure vi scriveremo a breve.',
+    WAITING_PART: 'Stiamo aspettando un ricambio per completare il lavoro: vi scriveremo appena arriva.',
+    RESOLVED: 'La vostra richiesta è stata risolta.',
     CLOSED: 'La pratica è chiusa.',
   },
   en: {
@@ -44,7 +44,7 @@ const SENTENCE: Readonly<Record<MailLanguage, Readonly<Record<MoveTarget | 'REOP
 })
 
 const WORDS: Readonly<Record<MailLanguage, { subject: string; dear: string; customer: string; is: string; reply: string }>> = Object.freeze({
-  it: { subject: 'Pratica di assistenza {number}: {status}', dear: 'Gentile {name},', customer: 'Cliente', is: 'la sua pratica di assistenza {number} è {status}.', reply: 'Per qualsiasi domanda può rispondere a questa e-mail.' },
+  it: { subject: 'Pratica di assistenza {number}: {status}', dear: 'Gentile {name},', customer: 'Cliente', is: 'la vostra pratica di assistenza {number} è {status}.', reply: 'Per qualsiasi domanda potete rispondere a questa e-mail.' },
   en: { subject: 'Service case {number}: {status}', dear: 'Dear {name},', customer: 'customer', is: 'your service case {number} is {status}.', reply: 'If you have any question, just reply to this e-mail.' },
 })
 

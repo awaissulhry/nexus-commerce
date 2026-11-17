@@ -498,8 +498,8 @@ describe('delivery addresses (SAL-079) and our check of them (B-W2b-F13b, wave 2
     // Mailed at once (orders: transactional), in the asker's language, to the asker only.
     const mails = h.ses.mails.slice(before).filter((mail) => mail.templateKey === 'portal.notification')
     expect(mails.map((mail) => mail.to[0])).toEqual([people.admin, people.admin, people.admin])
-    expect(textOf(mails[2]!.raw)).toContain('Il tuo indirizzo di consegna Seed garage, Via Esempio 99, 40100 Bologna non è stato accettato: We do not deliver to private garages.')
-    expect(textOf(mails[0]!.raw)).toContain('è stato verificato: i tuoi ordini possono usarlo')
+    expect(textOf(mails[2]!.raw)).toContain('Il vostro indirizzo di consegna Seed garage, Via Esempio 99, 40100 Bologna non è stato accettato: We do not deliver to private garages.')
+    expect(textOf(mails[0]!.raw)).toContain('è stato verificato: i vostri ordini possono usarlo')
     // The bell says it in both languages; a replayed event makes nothing more.
     const bell = await ok(browsers.admin, 'GET', '/portal/notifications')
     expect(bell.items.find((item: Json) => item.messageKey === 'portal.address.refused').sentence.en).toBe('Your delivery address Seed garage, Via Esempio 99, 40100 Bologna was not accepted: We do not deliver to private garages.')

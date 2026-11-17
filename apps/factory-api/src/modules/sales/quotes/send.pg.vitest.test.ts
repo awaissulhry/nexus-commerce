@@ -191,7 +191,7 @@ describe('send: the version frozen, its PDF, the accept link, the mail (SAL-157,
     // The mail: the thread keeps it without the link; it left (in this process) with the link and the PDF.
     const mail = await one('SELECT o.status, o.to, o.subject, m."bodyText", m."attachmentFileIds" FROM "EmailOutbound" o JOIN "Message" m ON m.id = o."messageId" WHERE o.id = $1', [answer.sent.emailId])
     expect(mail).toMatchObject({ status: 'SENT', to: [BUYER], subject: `Offerta ${first.number} v1`, attachmentFileIds: [answer.sent.documentFileId] })
-    expect(mail.bodyText).toContain("usi il link personale contenuto nell'e-mail inviata")
+    expect(mail.bodyText).toContain("usate il link personale contenuto nell'e-mail inviata")
     expect(mail.bodyText).not.toContain('#token=')
     const sent = h.ses.mails.find((entry) => entry.outboundId === answer.sent.emailId)!
     expect(textOf(sent.raw)).toContain(`Gentile cliente, ecco la nostra offerta come concordato.`)

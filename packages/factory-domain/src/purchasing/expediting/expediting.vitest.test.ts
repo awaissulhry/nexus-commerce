@@ -78,10 +78,10 @@ describe('the chase', () => {
     expect(it.body).toBe(
       [
         'Gentile Mario Rossi,',
-        'le scriviamo per le righe del nostro ordine di acquisto SEED-PO-0007 qui sotto:',
+        'vi scriviamo per le righe del nostro ordine di acquisto SEED-PO-0007 qui sotto:',
         '- Line 10 · ART-100 Leather black: in ritardo: attesa per il 09/11/2026; confermata per il 09/11/2026, richiesta per il 05/11/2026\n- Line 20 · Lining grey: non ancora confermata',
         'Grazie.',
-        "Ci può dire quando arriveranno? Se le date confermate non sono più valide, risponda a questa e-mail con le nuove date. Per l'ordine non ancora confermato, usi il link personale dell'e-mail con cui le abbiamo inviato l'ordine.",
+        "Potete dirci quando arriveranno? Se le date confermate non sono più valide, rispondete a questa e-mail con le nuove date. Per l'ordine non ancora confermato, usate il link personale dell'e-mail con cui vi abbiamo inviato l'ordine.",
       ].join('\n\n'),
     )
     const en = chaseMail({ language: 'en', number: 'SEED-PO-0007', recipientName: null, lines: [lines[0]!], message: null })

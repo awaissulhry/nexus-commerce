@@ -113,8 +113,8 @@ const MAIL = {
   it: {
     subject: (number: string) => `Promemoria: conferma dell'ordine di acquisto ${number}`,
     hello: (name: string | null) => (name ? `Gentile ${name},` : 'Buongiorno,'),
-    body: (number: string, sent: string, by: string) => `le ricordiamo il nostro ordine di acquisto ${number}, inviato il ${sent}: le avevamo chiesto di confermarlo entro ${by}. Il documento è di nuovo in allegato.`,
-    link: "Per confermarlo, proporre altre quantità o date, o rifiutarlo, usi il link personale dell'e-mail con cui le abbiamo inviato l'ordine. Se non lo trova più, risponda a questa e-mail: gliene invieremo uno nuovo.",
+    body: (number: string, sent: string, by: string) => `vi ricordiamo il nostro ordine di acquisto ${number}, inviato il ${sent}: vi avevamo chiesto di confermarlo entro ${by}. Il documento è di nuovo in allegato.`,
+    link: "Per confermarlo, proporre altre quantità o date, o rifiutarlo, usate il link personale dell'e-mail con cui vi abbiamo inviato l'ordine. Se non lo trovate più, rispondete a questa e-mail: ve ne invieremo uno nuovo.",
   },
   en: {
     subject: (number: string) => `Reminder: please confirm purchase order ${number}`,

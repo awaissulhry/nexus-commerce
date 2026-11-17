@@ -55,7 +55,7 @@ describe('the mail', () => {
     expect(mail.text).toContain('Tracking number: FK0002\n')
     expect(mail.text).toContain('- GP1 Jacket · Black: 50 × 1, 52 × 2 (3 pieces)')
     expect(mail.html).not.toContain('http://insecure.example')
-    expect(noticeMail({ locale: 'it', companyName: 'Demo', shipmentNumber: 'SH-1', orderNumber: null, customerRef: null, carrierName: null, manualTrackingNumber: 'MAN-1', expectedDeliveryAt: null, parcels: [] }).subject).toBe('Il Suo ordine SH-1 è in viaggio - Demo')
+    expect(noticeMail({ locale: 'it', companyName: 'Demo', shipmentNumber: 'SH-1', orderNumber: null, customerRef: null, carrierName: null, manualTrackingNumber: 'MAN-1', expectedDeliveryAt: null, parcels: [] }).subject).toBe('Il vostro ordine SH-1 è in viaggio - Demo')
   })
 
   it('speaks the contact language, else the customer one, else the order one, else Italian', () => {

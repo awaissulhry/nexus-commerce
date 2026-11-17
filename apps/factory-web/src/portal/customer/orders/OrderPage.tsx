@@ -84,6 +84,10 @@ import { waitingHrefOf } from '../production/model'
 import { productionOwnsProgress } from '../production/model' // F-PR-12b
 import { orderNameOf } from './model'
 // ---- end F-PR-12a
+// ---- F-PR-12c: + Quality & photos (B-PR-19): the order's quality read, its inspection report PDF, its shared photos
+import { fetchProductionQuality, fetchQualityReport, qualityPhotoBytes, type QualityPhoto } from '../production/api'
+import { qualityShared } from '../production/model'
+// ---- end F-PR-12c
 import { useOrderWords } from './words'
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
@@ -119,7 +123,10 @@ type CancelState = { kind: 'cancel'; draft: CancelDraft; busy: boolean; problem:
 type ReconfirmState = { kind: 'reconfirm'; state: 'loading' | 'error' | 'ready'; page: ApprovalPage | null; decision: ReconfirmDecision | null; comment: string; busy: boolean; problem: string | null; done: { decision: ReconfirmDecision; name: string; at: string } | null }
 type PayState = { kind: 'pay'; depositId: string; method: 'CARD' | 'SEPA_DEBIT' | null; phase: 'idle' | 'starting' | 'ready' | 'paying'; secret: string | null; intent: PaymentIntent | null; problem: string | null }
 type PreviewState = { kind: 'preview'; fileId: string; title: string; state: 'loading' | 'error' | 'ready'; bytes: Uint8Array | null }
-type DialogState = ChangeState | CancelState | ReconfirmState | PayState | PreviewState | null
+// F-PR-12c: a final inspection's report PDF (read once for the viewer) and a shared photo full size (an object URL of its bytes).
+type ReportState = { kind: 'report'; inspectionId: string; title: string; fileName: string; state: 'loading' | 'error' | 'ready'; bytes: Uint8Array | null; problem: string | null }
+type PhotoState = { kind: 'photo'; photos: readonly QualityPhoto[]; index: number; state: 'loading' | 'error' | 'ready'; src: string | null; problem: string | null }
+type DialogState = ChangeState | CancelState | ReconfirmState | PayState | PreviewState | ReportState | PhotoState | null
 
 type Part<T> = { state: 'loading' | 'error' | 'ready'; read: T | null }
 const loading = <T,>(): Part<T> => ({ state: 'loading', read: null })
@@ -222,6 +229,29 @@ function OrderContainer({ id }: { id: string }) {
     return () => clearInterval(timer)
   }, [productionRefresh, loadProduction])
   // ---- end F-PR-12b
+  // ---- F-PR-12c: + Quality & photos, asked only at the level that shares it (a lower level costs no call). It is read again with
+  // every read of the order's production (its timer, its live events, a reconnect), so both say the same moment. 404 / 403 (not
+  // in production, no longer shared, not its order): no section; another failure keeps what was read and says so.
+  const [quality, setQuality] = useState<NonNullable<OrderRecordViewModel['quality']>>({ state: 'hidden', read: null })
+  const sharesQuality = production.state === 'ready' && qualityShared(production.read)
+  const productionAsOf = production.state === 'ready' ? (production.read?.asOf ?? null) : null
+  const loadQuality = useCallback(async () => {
+    try {
+      setQuality({ state: 'ready', read: await fetchProductionQuality(api, id) })
+    } catch (error) {
+      setQuality((current) => (isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden') ? { state: 'hidden', read: null } : { state: 'error', read: current.read }))
+    }
+  }, [api, id])
+  useEffect(() => {
+    if (!sharesQuality) {
+      // A failed production read keeps the last quality read (as the production read keeps its own); a lower level drops it.
+      if (production.state === 'ready' || production.state === 'hidden') setQuality((current) => (current.state === 'hidden' && !current.read ? current : { state: 'hidden', read: null }))
+      return
+    }
+    setQuality((current) => (current.read ? current : { state: 'loading', read: null }))
+    void loadQuality()
+  }, [sharesQuality, productionAsOf, production.state, loadQuality])
+  // ---- end F-PR-12c
 
   const loadRequests = useCallback(async () => {
     try {
@@ -335,7 +365,7 @@ function OrderContainer({ id }: { id: string }) {
   // A hint on the live channel (the bell's news of an order confirmed, a promise moved, a shipment shipped, an answer): read again.
   usePortalLive({
     onChange: (change) => {
-      const productionEvent = production.read?.live.events.includes(change.type) ?? false // F-PR-12a
+      const productionEvent = (production.read?.live.events.includes(change.type) ?? false) || (quality.read?.live.events.includes(change.type) ?? false) // F-PR-12a, F-PR-12c
       if (!productionEvent && !record?.live.events.includes(change.type) && change.type !== 'partner_notification.created' && change.type !== 'partner_task.changed') return
       void loadProduction() // F-PR-12a
       void load()
@@ -583,6 +613,43 @@ function OrderContainer({ id }: { id: string }) {
       .catch(() => setDialog((current) => (current?.kind === 'preview' && current.fileId === file.fileId ? { ...current, state: 'error' } : current)))
   }
 
+  // ---- F-PR-12c: "Open the report" — the inspection's PDF read once from its own route, in the viewer; a download saves those bytes
+  // under our own name (the server's names our series). Not issued, or no longer one of its own: said in words, no Try again.
+  const openReport = (report: { inspectionId: string; title: string; fileName: string }) => {
+    setDialog({ kind: 'report', ...report, state: 'loading', bytes: null, problem: null })
+    fetchQualityReport(api, id, report.inspectionId)
+      .then((bytes) => setDialog((current) => (current?.kind === 'report' && current.inspectionId === report.inspectionId ? { ...current, state: 'ready', bytes } : current)))
+      .catch((error: unknown) => {
+        const problem = isApiError(error) && error.kind === 'not_found' ? 'production.quality.finals.reportMissing' : null
+        setDialog((current) => (current?.kind === 'report' && current.inspectionId === report.inspectionId ? { ...current, state: 'error', problem } : current))
+      })
+  }
+
+  // A shared photo full size: its bytes read once through the files route, shown as an object URL (forgotten on close and on leaving).
+  const photoUrls = useRef<string[]>([])
+  const forgetPhotos = () => {
+    for (const url of photoUrls.current) URL.revokeObjectURL(url)
+    photoUrls.current = []
+  }
+  useEffect(() => forgetPhotos, [])
+  const showPhoto = (photos: readonly QualityPhoto[], index: number) => {
+    const photo = photos[index]
+    if (!photo) return
+    setDialog({ kind: 'photo', photos, index, state: 'loading', src: null, problem: null })
+    qualityPhotoBytes(api, photo.id)
+      .then((bytes) => {
+        const src = URL.createObjectURL(new Blob([bytes as BlobPart], { type: photo.contentType }))
+        photoUrls.current.push(src)
+        setDialog((current) => (current?.kind === 'photo' && current.photos[current.index]?.id === photo.id ? { ...current, state: 'ready', src } : current))
+      })
+      .catch((error: unknown) => {
+        // No longer shared with it (or never its own): said, no Try again.
+        const problem = isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden') ? 'production.quality.photos.gone' : null
+        setDialog((current) => (current?.kind === 'photo' && current.photos[current.index]?.id === photo.id ? { ...current, state: 'error', problem } : current))
+      })
+  }
+  // ---- end F-PR-12c
+
   const openConfirmation = async () => {
     const tab = openLater()
     const read = documents.read ?? (await loadDocuments())
@@ -708,7 +775,11 @@ function OrderContainer({ id }: { id: string }) {
                   },
                 }
               })()
-            : { kind: 'preview', model: { title: dialog.title, state: dialog.state, bytes: dialog.bytes } }
+            : dialog.kind === 'report' // F-PR-12c
+              ? { kind: 'preview', model: { title: dialog.title, state: dialog.state, bytes: dialog.bytes, problem: dialog.problem } }
+              : dialog.kind === 'photo' // F-PR-12c
+                ? { kind: 'photo', model: { photos: dialog.photos, index: dialog.index, state: dialog.state, src: dialog.src, problem: dialog.problem } }
+                : { kind: 'preview', model: { title: dialog.title, state: dialog.state, bytes: dialog.bytes } }
 
   return (
     <OrderRecordView
@@ -744,6 +815,8 @@ function OrderContainer({ id }: { id: string }) {
         // F-PR-12a: the order's production (hidden: no section) and where "See what waits for you" leads.
         production: seesProduction ? production : { state: 'hidden', read: null },
         waitingHref: waitingHrefOf(frame.prefix),
+        // F-PR-12c: + Quality & photos (hidden: not drawn).
+        quality: seesProduction ? quality : { state: 'hidden', read: null },
       }}
       actions={{
         onRetry: () => {
@@ -781,6 +854,14 @@ function OrderContainer({ id }: { id: string }) {
         // The hold banner's "Ask a question": the order's own conversation, its box focused.
         onAsk: () => (record ? frame.ask({ type: 'SalesOrder', id: record.order.id, label: orderNameOf(record.order, locale, t) }) : undefined),
         // ---- end F-PR-12a
+        // ---- F-PR-12c
+        onRetryQuality: () => {
+          setQuality((current) => ({ state: 'loading', read: current.read }))
+          void loadQuality()
+        },
+        onReport: openReport,
+        onPhoto: showPhoto,
+        // ---- end F-PR-12c
         dialog: {
           change: {
             onCells: (lineId, sizes) => setDialog((current) => (current?.kind === 'change' ? { ...current, problem: null, draft: { ...current.draft, cells: { ...current.draft.cells, [lineId]: sizes } } } : current)),
@@ -823,9 +904,20 @@ function OrderContainer({ id }: { id: string }) {
           },
           preview: {
             onClose: () => setDialog(null),
-            onRetry: () => (dialog?.kind === 'preview' ? previewFile({ fileId: dialog.fileId, title: dialog.title }) : undefined),
-            onDownload: () => (dialog?.kind === 'preview' ? download({ fileId: dialog.fileId, name: `${dialog.title}.pdf` }) : undefined),
+            // F-PR-12c: the inspection report shares the PDF viewer: read again from its route, saved from the bytes read.
+            onRetry: () => (dialog?.kind === 'preview' ? previewFile({ fileId: dialog.fileId, title: dialog.title }) : dialog?.kind === 'report' ? openReport({ inspectionId: dialog.inspectionId, title: dialog.title, fileName: dialog.fileName }) : undefined),
+            onDownload: () => (dialog?.kind === 'preview' ? download({ fileId: dialog.fileId, name: `${dialog.title}.pdf` }) : dialog?.kind === 'report' && dialog.bytes ? saveBytes(dialog.fileName, dialog.bytes, 'application/pdf') : undefined),
           },
+          // ---- F-PR-12c
+          photo: {
+            onIndex: (index) => (dialog?.kind === 'photo' ? showPhoto(dialog.photos, index) : undefined),
+            onClose: () => {
+              setDialog(null)
+              forgetPhotos()
+            },
+            onRetry: () => (dialog?.kind === 'photo' ? showPhoto(dialog.photos, dialog.index) : undefined),
+          },
+          // ---- end F-PR-12c
         },
       }}
     >

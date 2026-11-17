@@ -125,6 +125,8 @@ export async function siteWip(caller: CommandCaller, query: { readonly siteId?: 
     // too (with their reason), and the answer says how many there are in all, so the page writes "100 of 143 · Show more".
     const where: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actorOf(context), WORKORDERS_VIEW), { status: { in: [...OPEN, 'ON_HOLD' as const] } }, query.siteId ? { siteId: query.siteId } : {}, query.partyId ? { partyId: query.partyId } : {}] }
     const total = await db.workOrder.count({ where })
+    // B-PR-33 (production plan §5 "held work orders in WIP"): how many of them are on hold, counted in full like the total.
+    const held = await db.workOrder.count({ where: { AND: [where, { status: 'ON_HOLD' }] } })
     const workOrders = await db.workOrder.findMany({
       where,
       select: { ...SCAN_HEADER, dueDate: true, priority: true, holdReason: true, site: { select: { code: true } }, style: { select: { code: true, name: true } }, sizes: { select: { quantity: true } } },
@@ -172,6 +174,6 @@ export async function siteWip(caller: CommandCaller, query: { readonly siteId?: 
         allFinished: wip.allFinished,
       })
     }
-    return { workOrders: rows, total }
+    return { workOrders: rows, total, held }
   })
 }

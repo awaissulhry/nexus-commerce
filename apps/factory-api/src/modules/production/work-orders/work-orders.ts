@@ -57,9 +57,13 @@ import type { WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { decodeCursor, pageOf, passes, riskFactsOf, riskRank, type BlockedBy, type ListSort, type RiskRow, type RowFacts, type SortKey, type WorkOrderRisk } from './risk'
 // B-PR-22b (production plan §5 "Customer urgency" column; the risk sort's tie): the customer's urgency per row.
 import { workOrderCustomerUrgency, type WorkOrderUrgency } from '../brand/urgency-of'
+// F-PR-18: the Customer urgency column's state and its filter (Urgent n / Urgent – asked / Regular / Set to regular by us).
+import type { CustomerUrgencyState } from '@nexus/factory-domain/production-brand/urgency-state'
 // B-PR-42a (production plan §3 "Supervisor"): the supervisor per row (Me / Someone else / Not set), "Mine", and by name on the record.
 import { supervisorMarkOf, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
 import { recordSupervisorOf, workOrderSupervisorsOf, type Reader as SupervisorReader, type RecordSupervisor, type WorkOrderOrders } from '../supervisor/resolver'
+// B-PR-33 (Production › Overview, "blocked by a gate"): planning's gate hold of a work order not started.
+import { gateHoldsOf } from '../../planning/schedule/gates'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-007, MES-305; A2 SCR-069, SCR-070): the list, the record,
@@ -120,6 +124,14 @@ export interface ListQuery {
   // ── end B-PR-34 ──
   /** B-PR-42a: `me` — the work orders whose production supervisor is the caller ("Mine"; never another person's). */
   readonly supervisor?: SupervisorFilter | undefined
+  /** F-PR-18: the work orders of one customer urgency state (its customer's urgency that counts; a computed filter). */
+  readonly customerUrgency?: CustomerUrgencyState | undefined
+  // ── B-PR-33 (Production › Overview: every number opens this list with its filters) ──
+  /** Production work orders not started whose open order waits on a gate (planning's gate hold: the board does not place them). */
+  readonly gate?: boolean | undefined
+  /** Made before the one-customer rule with cells of several customers ("Mixed customers (made before the rule)": a split is needed). */
+  readonly mixed?: boolean | undefined
+  // ── end B-PR-33 ──
   /** `newest`: the last row's id; a computed sort: its position token (./risk decodeCursor). */
   readonly cursor?: string | undefined
   readonly limit: number
@@ -147,6 +159,8 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
       query.late ? { status: { in: [...OPEN_STATUSES] }, dueDate: { lt: asDay(today) } } : {},
       query.due ? dueWhere(relativeRange(query.due, today)) : {},
       query.rush !== undefined ? { rush: query.rush } : {},
+      // B-PR-33: made before the one-customer rule — no customer, and cells of a customer (a sample for no customer has none).
+      query.mixed ? { partyId: null, sizes: { some: { partyId: { not: null } } } } : {},
       q
         ? {
             OR: [
@@ -204,7 +218,7 @@ const riskRowOf = (row: { id: string; status: string; dueDate: Date | null; site
 
 /** The list's computed filters (they need the stored risk facts). */
 const computedFilter = (query: ListQuery) => ({ waitingOn: query.waitingOn, risk: query.risk, blockedBy: query.blockedBy })
-const hasComputedFilter = (query: ListQuery): boolean => query.waitingOn !== undefined || query.risk !== undefined || query.blockedBy !== undefined
+const hasComputedFilter = (query: ListQuery): boolean => query.waitingOn !== undefined || query.risk !== undefined || query.blockedBy !== undefined || /* F-PR-18 */ query.customerUrgency !== undefined
 // ── end B-PR-34 ──
 
 // ── B-PR-42a ──
@@ -248,7 +262,7 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   // ── B-PR-34 ──
   const sort = query.sort ?? 'newest'
   const after = decodeCursor(sort, query.cursor)
-  if (sort !== 'newest' || hasComputedFilter(query) || /* B-PR-42a */ query.supervisor !== undefined) return listComputed(caller, context, query, sort, after, today)
+  if (sort !== 'newest' || hasComputedFilter(query) || /* B-PR-42a */ query.supervisor !== undefined || /* B-PR-33 */ query.gate === true) return listComputed(caller, context, query, sort, after, today)
   // ── end B-PR-34 ──
   const where: Prisma.WorkOrderWhereInput = { AND: [listWhere(context, query, today), after ? { id: { lt: after.id } } : {}] }
   const rows = await caller.withClient((client) => client.workOrder.findMany({ where, orderBy: { id: 'desc' }, take: query.limit + 1, select: LIST_SELECT }))
@@ -274,9 +288,13 @@ async function listComputed(caller: CommandCaller, context: ReturnType<typeof of
     const facts = await riskFactsOf(client, light.map(riskRowOf), today)
     // B-PR-42a: "Mine" — only the work orders whose supervisor (its order's own, else the customer's default) is the caller.
     const mine = query.supervisor === 'me' ? await mineOf(client, where, context.actorId) : null
-    const kept = light.filter((row) => passes(facts.get(row.id), computedFilter(query)) && (mine === null || mine.has(row.id)))
+    // B-PR-33: "Blocked by a gate" — the production work orders not started whose open order waits on a gate.
+    const gated = query.gate === true ? await gateHoldsOf(client, light.map((row) => row.id)) : null
+    const passing = light.filter((row) => passes(facts.get(row.id), computedFilter(query)) && (mine === null || mine.has(row.id)) && (gated === null || gated.has(row.id)))
     // B-PR-22b: the risk sort's tie — the customer's urgency of each row (its place in the customer's own Urgent list).
-    const urgency = sort === 'risk' ? await workOrderCustomerUrgency(client, kept.map((row) => row.id)) : null
+    // F-PR-18: read too for the Customer urgency filter, which keeps the rows of that state only (none: a row of no urgency).
+    const urgency = sort === 'risk' || query.customerUrgency !== undefined ? await workOrderCustomerUrgency(client, passing.map((row) => row.id)) : null
+    const kept = query.customerUrgency === undefined ? passing : passing.filter((row) => urgency?.get(row.id)?.state === query.customerUrgency)
     const keyed = kept.map((row) => {
       const urgent = urgency?.get(row.id)
       const key = { rank: riskRank(facts.get(row.id)?.risk ?? null), due: dayOrNull(row.dueDate), id: row.id }
@@ -353,6 +371,8 @@ async function listRowsOf(
       // B-PR-22b: its customer's urgency that counts (its orders' best: Urgent n, else Regular; null: none, or the switch off).
       customerUrgency: urgency.get(row.id)?.urgency ?? null,
       urgentRank: urgency.get(row.id)?.urgentRank ?? null,
+      // F-PR-18: the Customer urgency column's state (Urgent n / Urgent – asked / Regular / Set to regular by us; null: none).
+      urgencyState: urgency.get(row.id)?.state ?? null,
     }
   })
 }

@@ -47,7 +47,12 @@
     "later": "Dopo",
     "date": "Primo giorno mostrato",
     "search": "Cerca un numero d'ordine",
-    "searchPlaceholder": "Numero d'ordine (/)"
+    "searchPlaceholder": "Numero d'ordine (/)",
+    "sort": "Ordine dei non pianificati e degli ordini",
+    "sorts": {
+      "plan": "Ordine del piano",
+      "urgency": "Prima l'urgenza cliente"
+    }
   },
   "filters": {
     "label": "Filtri",
@@ -76,7 +81,8 @@
     "hint": "Trascina una barra nel tempo o su un'altra linea; il carico sopra ogni linea mostra i minuti standard prenotati rispetto a quelli che la linea ha. Al reparto non arriva nulla finché non pubblichi.",
     "hintOrders": "Una corsia per ordine di lavoro con le sue fasi; trascina una fase nel tempo. Per spostarla su un'altra linea usa la vista Risorse.",
     "empty": "Nessun ordine di lavoro su questo stabilimento in questo periodo. Pianificali dalla lista da pianificare.",
-    "trayEmpty": "Ogni ordine di lavoro ha il suo posto"
+    "trayEmpty": "Ogni ordine di lavoro ha il suo posto",
+    "urgencyHint": "Prima l'urgenza cliente: gli ordini di lavoro urgenti di ogni cliente prendono posti che gli ordini di lavoro di quel cliente hanno già; la nostra urgenza e la priorità vengono sempre prima e il posto di un altro cliente non cambia. Solo una vista: nessuna barra si sposta e il reparto vede un nuovo ordine solo dopo che pubblichi."
   },
   "bucket": {
     "week": "Settimana {week}",
@@ -121,7 +127,9 @@
     "materialFrom": "Materiale {date}",
     "draft": "Bozza · non prenota capacità",
     "onHold": "Sospeso · non prenota capacità",
-    "keptOver": "Tenuto oltre la capacità"
+    "keptOver": "Tenuto oltre la capacità",
+    "customerUrgency": "Urgente (cliente) {rank}",
+    "customerUrgencySome": "Urgente (cliente)"
   },
   "chip": {
     "PAST_LATEST_SAFE_START": "Oltre l'ultimo inizio utile",

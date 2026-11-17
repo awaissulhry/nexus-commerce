@@ -16,6 +16,7 @@ import { registerLinkLiveCheck } from '../links/records'
 import { afterCursor, cursorOf, type RecordRef } from '../threads/threads'
 import { resolveRecord } from '../threads/records'
 import { shareRecordOf } from './records'
+import { walledForOutside } from '../files/content-wall' // fix-wall-1
 
 /**
  * What an invited partner reads (B-W2b-200; COL-061, COL-062; design links.invite, SCR-270: why you are here, the record,
@@ -159,6 +160,8 @@ export async function messagesPage(request: FastifyRequest, cursor: string | und
     return { thread, rows, shown, attachments: await linkAttachments(client, request, shown.flatMap((row) => row.attachmentFileIds)) }
   })
   const mine = await minePosts(request, link, read.shown)
+  // fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) is left out of its message.
+  for (const fileId of await walledForOutside(request, read.attachments.keys())) read.attachments.delete(fileId)
   const last = read.shown.at(-1)
   return {
     thread: read.thread,

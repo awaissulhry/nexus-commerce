@@ -1,7 +1,7 @@
 {
   "nav": {
     "home": "Home",
-    "waiting": "Cosa ti aspetta",
+    "waiting": "Cosa vi aspetta",
     "orders": "Ordini",
     "ordersRequests": "Ordini e richieste",
     "newOrder": "Nuovo ordine",
@@ -30,15 +30,15 @@
   },
   "search": {
     "label": "Cerca ordini, documenti e altro",
-    "placeholder": "Cerca ordini, documenti… (va bene il tuo numero d'ordine)",
+    "placeholder": "Cerca ordini, documenti… (va bene il vostro numero d'ordine)",
     "title": "Cerca",
-    "tooShort": "Scrivi ancora qualche carattere per cercare.",
+    "tooShort": "Scrivete ancora qualche carattere per cercare.",
     "searching": "Ricerca in corso…",
     "found_one": "{count} trovato",
     "found_other": "{count} trovati",
-    "none": "Nessun risultato per «{query}». Prova con il tuo riferimento o con il nostro.",
-    "failed": "La ricerca non risponde. Riprova.",
-    "capped": "Corrispondono molti documenti: scrivi una parte più lunga del riferimento per restringere.",
+    "none": "Nessun risultato per «{query}». Provate con il vostro riferimento o con il nostro.",
+    "failed": "La ricerca non risponde. Riprovate.",
+    "capped": "Corrispondono molti documenti: scrivete una parte più lunga del riferimento per restringere.",
     "group": {
       "orders": "Ordini",
       "documents": "Documenti",
@@ -51,7 +51,7 @@
   },
   "bell": {
     "label": "Notifiche",
-    "open": "Apri le tue notifiche",
+    "open": "Apri le vostre notifiche",
     "unread_one": "Notifiche: {count} da leggere",
     "unread_other": "Notifiche: {count} da leggere",
     "unreadMore_one": "Notifiche: più di {count} da leggere",
@@ -62,7 +62,7 @@
     "marking": "Le segno come lette…",
     "failed": "Non è stato possibile leggere le notifiche.",
     "emptyTitle": "Nulla di nuovo",
-    "empty": "Qui ti avvisiamo quando cambia qualcosa nei tuoi ordini e documenti.",
+    "empty": "Qui vi avvisiamo quando cambia qualcosa nei vostri ordini e documenti.",
     "unreadMark": "Nuova:",
     "alsoMore_one": "e {count} altra simile",
     "alsoMore_other": "e altre {count} simili"
@@ -93,15 +93,15 @@
     },
     "offline": {
       "title": "Nessuna connessione",
-      "body": "Vedi quanto caricato alle {time}. Ciò che invii aspetta il ritorno della connessione; ciò che hai scritto resta."
+      "body": "Vedete quanto caricato alle {time}. Ciò che inviate aspetta il ritorno della connessione; ciò che avete scritto resta."
     },
     "accessEnds": {
-      "title": "Il tuo accesso scade presto",
-      "body": "Il tuo accesso a questo portale termina il {date}. Se ti serve più a lungo, chiedi al tuo amministratore."
+      "title": "Il vostro accesso scade presto",
+      "body": "Il vostro accesso a questo portale termina il {date}. Se vi serve più a lungo, chiedete al vostro amministratore."
     },
     "readOnly": {
       "title": "Sola lettura",
-      "body": "Questo documento è chiuso: puoi leggerlo, non modificarlo."
+      "body": "Questo documento è chiuso: potete leggerlo, non modificarlo."
     }
   },
   "foot": {
@@ -113,8 +113,8 @@
   "bottomBar": {
     "navigation": "Aree del portale",
     "more": "Altro",
-    "count_one": "{count} in attesa per te",
-    "count_other": "{count} in attesa per te",
+    "count_one": "{count} in attesa per voi",
+    "count_other": "{count} in attesa per voi",
     "currentInside": "qui c'è la pagina attuale"
   },
   "state": {
@@ -125,9 +125,9 @@
     "held": "Questa è un'anteprima: è in sola lettura."
   },
   "tasks": {
-    "title": "Cosa ti aspetta",
-    "failed": "Non è stato possibile leggere cosa ti aspetta.",
-    "empty": "Non ti aspetta nulla. Ti scriviamo quando serve.",
+    "title": "Cosa vi aspetta",
+    "failed": "Non è stato possibile leggere cosa vi aspetta.",
+    "empty": "Non vi aspetta nulla. Vi scriviamo quando serve.",
     "askedBy": "Richiesto da {name}",
     "askedBySystem": "Richiesto dal sistema",
     "done": "Fatto. Ne siamo informati.",
@@ -148,25 +148,25 @@
   },
   "thread": {
     "title": "Messaggi",
-    "accountTitle": "Facci una domanda",
-    "accountHeading": "Sul tuo account",
-    "empty": "Ancora nessun messaggio. Chiedici pure qualsiasi cosa su questo documento.",
-    "emptyAccount": "Ancora nessun messaggio. Chiedici pure qualsiasi cosa.",
-    "hint": "Puoi anche rispondere alle nostre e-mail: la risposta arriva qui.",
-    "whoCan": "Il tuo accesso ti permette di leggere questa conversazione. Chiedi al tuo amministratore ({names}) di poterci scrivere.",
-    "whoCanNoAdmin": "Il tuo accesso ti permette di leggere questa conversazione. Chiedici di poterci scrivere.",
+    "accountTitle": "Fateci una domanda",
+    "accountHeading": "Sul vostro account",
+    "empty": "Ancora nessun messaggio. Chiedeteci pure qualsiasi cosa su questo documento.",
+    "emptyAccount": "Ancora nessun messaggio. Chiedeteci pure qualsiasi cosa.",
+    "hint": "Potete anche rispondere alle nostre e-mail: la risposta arriva qui.",
+    "whoCan": "Il vostro accesso vi permette di leggere questa conversazione. Chiedete al vostro amministratore ({names}) di poterci scrivere.",
+    "whoCanNoAdmin": "Il vostro accesso vi permette di leggere questa conversazione. Chiedeteci di poterci scrivere.",
     "held": {
       "PREVIEW": "Questa è un'anteprima: da qui non si invia nulla.",
-      "NO_COMMENT": "Il tuo accesso ti permette di leggere questa conversazione, non di scriverci.",
-      "CLOSED": "Abbiamo chiuso questa conversazione. Se qualcosa è ancora aperto, scrivici sul documento.",
-      "other": "Qui non puoi scrivere."
+      "NO_COMMENT": "Il vostro accesso vi permette di leggere questa conversazione, non di scriverci.",
+      "CLOSED": "Abbiamo chiuso questa conversazione. Se qualcosa è ancora aperto, scriveteci sul documento.",
+      "other": "Qui non potete scrivere."
     },
     "failed": {
       "conflict": "Nel frattempo abbiamo chiuso questa conversazione: il messaggio non è stato inviato. Il testo è ancora qui.",
-      "forbidden": "Il tuo accesso non ti permette di scrivere qui. Il testo è ancora qui.",
-      "invalid": "Il messaggio non può essere inviato così. Controllalo e invialo di nuovo.",
-      "unavailable": "Nessuna connessione: il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
-      "other": "Il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
+      "forbidden": "Il vostro accesso non vi permette di scrivere qui. Il testo è ancora qui.",
+      "invalid": "Il messaggio non può essere inviato così. Controllatelo e inviatelo di nuovo.",
+      "unavailable": "Nessuna connessione: il messaggio non è stato inviato. Il testo è ancora qui; inviatelo di nuovo.",
+      "other": "Il messaggio non è stato inviato. Il testo è ancora qui; inviatelo di nuovo.",
       "more": "Non è stato possibile leggere i messaggi precedenti."
     },
     "erased": "Messaggio rimosso dopo una richiesta per la privacy",
@@ -182,7 +182,7 @@
     "tabs": "Sezioni del documento",
     "messages": "Messaggi",
     "missingTitle": "Documento non trovato",
-    "missing": "Questo documento non è tra i tuoi, oppure non esiste più.",
+    "missing": "Questo documento non è tra i vostri, oppure non esiste più.",
     "toHome": "Vai alla Home",
     "type": {
       "SalesOrder": "Ordine",
@@ -226,7 +226,7 @@
   },
   "terms": {
     "title": "Condizioni del portale",
-    "failed": "Non è stato possibile leggere le condizioni del portale. Riprova.",
+    "failed": "Non è stato possibile leggere le condizioni del portale. Riprovate.",
     "noneTitle": "Nessuna condizione del portale",
     "none": "L'azienda non ha ancora pubblicato le condizioni del portale.",
     "version": "Versione {label}",
@@ -237,7 +237,7 @@
   },
   "email": {
     "title": "Impostazioni e-mail",
-    "subtitle": "Come ti scriviamo per ogni argomento. Qualunque scelta, tutto resta nelle notifiche del portale.",
+    "subtitle": "Come vi scriviamo per ogni argomento. Qualunque scelta, tutto resta nelle notifiche del portale.",
     "frequency": {
       "INSTANT": "Subito",
       "DAILY": "Riepilogo giornaliero",
@@ -246,24 +246,24 @@
     },
     "frequencyOf": "E-mail su {topic}",
     "allOff": "Nessuna e-mail non essenziale",
-    "allOffHint": "Spegne ogni argomento che puoi spegnere. Le e-mail su ordini, consegne e fatture continuano ad arrivare.",
+    "allOffHint": "Spegne ogni argomento che potete spegnere. Le e-mail su ordini, consegne e fatture continuano ad arrivare.",
     "save": "Salva",
     "saving": "Salvataggio…",
     "failed": "Non è stato possibile leggere le impostazioni e-mail.",
     "refused": "Impossibile salvare: le e-mail su ordini, consegne e fatture arrivano sempre subito.",
-    "saveFailed": "Le impostazioni non sono state salvate. Riprova.",
+    "saveFailed": "Le impostazioni non sono state salvate. Riprovate.",
     "defaultInstant": "Subito, di norma: un nostro messaggio spesso aspetta la vostra risposta."
   },
   "still": {
-    "title": "Ci sei ancora?",
-    "body": "Per la tua sicurezza ti disconnettiamo dopo 30 minuti senza attività.",
-    "left": "Verrai disconnesso tra {left}.",
-    "ended": "Sei stato disconnesso.",
+    "title": "Ci siete ancora?",
+    "body": "Per la vostra sicurezza vi disconnettiamo dopo 30 minuti senza attività.",
+    "left": "Verrete disconnessi tra {left}.",
+    "ended": "Siete stati disconnessi.",
     "stay": "Resta connesso",
-    "staying": "Ti teniamo connesso…",
-    "cannotStay": "La sessione ha raggiunto le 12 ore: accedi di nuovo per continuare.",
+    "staying": "Vi teniamo connessi…",
+    "cannotStay": "La sessione ha raggiunto le 12 ore: accedete di nuovo per continuare.",
     "signOut": "Esci ora",
-    "failed": "Non siamo riusciti a tenerti connesso. Riprova."
+    "failed": "Non siamo riusciti a tenervi connessi. Riprovate."
   },
   "keys": {
     "title": "Scorciatoie da tastiera",
@@ -278,7 +278,7 @@
   },
   "unsaved": {
     "title": "Uscire senza inviare?",
-    "message": "Il tuo messaggio per noi non è ancora stato inviato.",
+    "message": "Il vostro messaggio per noi non è ancora stato inviato.",
     "email_one": "{count} modifica alle impostazioni e-mail non è salvata.",
     "email_other": "{count} modifiche alle impostazioni e-mail non sono salvate.",
     "save": "Invia ed esci",
@@ -289,64 +289,64 @@
   "access": {
     "title": "Il mio accesso",
     "close": "Chiudi",
-    "failed": "Non è stato possibile leggere il tuo accesso.",
-    "role": "Il tuo ruolo",
+    "failed": "Non è stato possibile leggere il vostro accesso.",
+    "role": "Il vostro ruolo",
     "preview": "Anteprima dall'ufficio (sola lettura)",
     "noRole": "Ancora nessun ruolo",
     "prices": "Prezzi",
     "pricesYes": "Visibili",
     "pricesNo": "Non visibili",
-    "capabilities": "Puoi anche",
+    "capabilities": "Potete anche",
     "readOnly": "Solo lettura",
     "until": "Accesso fino al",
     "noEnd": "Nessuna scadenza",
-    "allowsTitle": "Cosa ti permette il tuo accesso",
-    "allowsNone": "Ancora nulla: accetta prima le condizioni del portale.",
-    "admins": "Il tuo amministratore: {names}. Chiedi a lui di cambiare il tuo accesso.",
-    "noAdmin": "La tua organizzazione non ha un amministratore nel portale: chiedi a noi di cambiare il tuo accesso.",
+    "allowsTitle": "Cosa vi permette il vostro accesso",
+    "allowsNone": "Ancora nulla: accettate prima le condizioni del portale.",
+    "admins": "Il vostro amministratore: {names}. Chiedete a lui di cambiare il vostro accesso.",
+    "noAdmin": "La vostra organizzazione non ha un amministratore nel portale: chiedete a noi di cambiare il vostro accesso.",
     "capability": {
       "comment": "commentare",
       "upload": "inviare file",
       "approve": "approvare"
     },
     "permission": {
-      "files_read": "Aprire i file che condividiamo con te",
-      "threads_read": "Leggere le conversazioni sui tuoi documenti",
-      "portal_colleagues_view": "Vedere gli utenti del portale della tua organizzazione e i loro ruoli",
+      "files_read": "Aprire i file che condividiamo con voi",
+      "threads_read": "Leggere le conversazioni sui vostri documenti",
+      "portal_colleagues_view": "Vedere gli utenti del portale della vostra organizzazione e i loro ruoli",
       "portal_colleagues_manage": "Invitare colleghi, cambiarne il ruolo, disattivarli",
-      "portal_comment": "Scrivere messaggi sui tuoi documenti",
-      "portal_upload": "Inviare file sui tuoi documenti",
-      "portal_approve": "Approvare, accettare o firmare sui tuoi documenti",
-      "portal_home_view": "Vedere la tua Home: cosa ti aspetta e le notifiche",
-      "portal_salesOrders_view": "Vedere i tuoi ordini, le date, le spedizioni e il tracciamento",
+      "portal_comment": "Scrivere messaggi sui vostri documenti",
+      "portal_upload": "Inviare file sui vostri documenti",
+      "portal_approve": "Approvare, accettare o firmare sui vostri documenti",
+      "portal_home_view": "Vedere la vostra Home: cosa vi aspetta e le notifiche",
+      "portal_salesOrders_view": "Vedere i vostri ordini, le date, le spedizioni e il tracciamento",
       "portal_salesOrders_ask": "Chiederci di modificare o annullare un ordine",
       "portal_purchaseOrders_view": "Vedere i nostri ordini d'acquisto e rispondere",
-      "portal_customerDocuments_view": "Vedere i tuoi documenti: documenti di consegna, conferme, preventivi",
+      "portal_customerDocuments_view": "Vedere i vostri documenti: documenti di consegna, conferme, preventivi",
       "portal_customerDocuments_conformity": "Vedere i documenti di conformità e i certificati",
       "portal_customerDocuments_finance": "Vedere fatture, note di credito ed estratti conto",
-      "portal_catalogue_view": "Vedere i modelli che puoi acquistare",
+      "portal_catalogue_view": "Vedere i modelli che potete acquistare",
       "portal_orderRequests_manage": "Fare richieste d'ordine e riordinare",
-      "portal_addresses_view": "Vedere i tuoi indirizzi di consegna",
+      "portal_addresses_view": "Vedere i vostri indirizzi di consegna",
       "portal_addresses_manage": "Aggiungere, archiviare e scegliere gli indirizzi di consegna",
-      "portal_search": "Cercare i tuoi documenti con i tuoi riferimenti e i nostri",
-      "portal_payments_view": "Vedere cosa deve pagare la tua organizzazione",
+      "portal_search": "Cercare i vostri documenti con i vostri riferimenti e i nostri",
+      "portal_payments_view": "Vedere cosa deve pagare la vostra organizzazione",
       "portal_payments_pay": "Pagare online fatture e acconti aperti",
       "portal_accounting_view": "Vedere i periodi consegnati dall'amministrazione: esportazioni, fatture elettroniche e registri (solo file)",
-      "portal_jobs_view": "Vedere le nostre lavorazioni per il tuo laboratorio",
-      "portal_shipNotices_view": "Vedere e annunciare le tue consegne",
+      "portal_jobs_view": "Vedere le nostre lavorazioni per il vostro laboratorio",
+      "portal_shipNotices_view": "Vedere e annunciare le vostre consegne",
       "portal_supplierDocuments_view": "Vedere i documenti che chiediamo e inviarli",
       "portal_supplierProfile_view": "Vedere i dati aziendali, gli indirizzi e i contatti",
       "portal_supplierProfile_change": "Inviare modifiche di indirizzi e contatti",
       "portal_supplierBank_view": "Vedere le vostre coordinate bancarie (mascherate)",
       "portal_supplierBank_propose": "Proporre nuove coordinate bancarie (le verifichiamo prima di ogni pagamento)",
-      "portal_returns_view": "Vedere i tuoi resi e reclami",
+      "portal_returns_view": "Vedere i vostri resi e reclami",
       "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità",
-      "portal_complaints_view": "Seguire i tuoi reclami di qualità",
-      "portal_approvals_view": "Vedere cosa ti chiediamo di approvare",
-      "portal_samples_view": "Vedere i tuoi campioni, i tuoi modelli in sviluppo e le loro schede tecniche",
-      "portal_production_view": "Vedere i tuoi ordini in produzione: fase, data prevista, stato e a chi tocca",
-      "portal_production_urgency": "Segnare urgenti o normali i tuoi ordini in produzione, entro le urgenze concesse",
-      "portal_projects_view": "Vedere i progetti della tua organizzazione a cui ti abbiamo aggiunto, con i tuoi record collegati e i messaggi condivisi con te"
+      "portal_complaints_view": "Seguire i vostri reclami di qualità",
+      "portal_approvals_view": "Vedere cosa vi chiediamo di approvare",
+      "portal_samples_view": "Vedere i vostri campioni, i vostri modelli in sviluppo e le loro schede tecniche",
+      "portal_production_view": "Vedere i vostri ordini in produzione: fase, data prevista, stato e a chi tocca",
+      "portal_production_urgency": "Segnare urgenti o normali i vostri ordini in produzione, entro le urgenze concesse",
+      "portal_projects_view": "Vedere i progetti della vostra organizzazione a cui vi abbiamo aggiunti, con i vostri record collegati e i messaggi condivisi con voi"
     }
   },
   "display": {
@@ -356,7 +356,7 @@
     "languageHint": "La usano il portale e le nostre e-mail.",
     "previewLanguage": "Un'anteprima usa la tua lingua dell'ufficio.",
     "saving": "Salvataggio…",
-    "failed": "La lingua non è stata salvata. Riprova.",
+    "failed": "La lingua non è stata salvata. Riprovate.",
     "theme": "Tema",
     "themes": {
       "light": "Chiaro",
@@ -368,11 +368,11 @@
   "gate": {
     "signIn": "Accedi al portale",
     "otherTitle": "Questo indirizzo è di un'altra organizzazione",
-    "other": "Hai effettuato l'accesso per un'organizzazione diversa da quella indicata in questo indirizzo.",
+    "other": "Avete effettuato l'accesso per un'organizzazione diversa da quella indicata in questo indirizzo.",
     "ownHome": "Vai al mio portale",
     "switch": "Accedi con un altro utente",
     "apiTitle": "Il portale non si apre in questo momento",
-    "api": "Il portale non ha risposto. Riprova tra poco. (Codice {code})"
+    "api": "Il portale non ha risposto. Riprovate tra poco. (Codice {code})"
   },
   "role": {
     "customer-buyer": "Acquisti",

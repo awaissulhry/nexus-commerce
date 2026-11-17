@@ -47,6 +47,9 @@ import { BandFacts } from './BandFacts'
 // F-PR-21: THE assign dialog (the band's Change…).
 import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
 // ---- end F-PR-05a
+// F-PR-22: Ask the supervisor (the band's ⋯ and the supervisor fact's Ask) — THE note dialog.
+import { NOTES_NS, openHeld } from '../../../_shared/notes/model'
+import { NoteDialog } from '../../../_shared/notes/view/NoteDialog'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
@@ -67,7 +70,7 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
 // `printThread` what the print view shows of it.
 export function WorkOrderRecordView({ model, actions, thread, printThread, fields }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /** B-TH-280: the custom fields (Overview & release only). */ fields?: ReactNode }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS]}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS, /* F-PR-22 */ NOTES_NS]}>
       <WorkOrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} />
     </WithMessages>
   )
@@ -145,7 +148,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign || /* F-PR-22 */ model.note?.dialog) return
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || typing) return
       // F-PR-05a: ⌘↵ takes the band's primary — Report finished while released garments wait, else the next step.
       if (reportPrimary) {
@@ -221,8 +224,17 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     ? [{ id: 'preview', label: t('band.preview', { name: fact.kind === 'customer' ? (model.partiesView ? fact.name : fact.code) : t('band.theCustomer') }), disabled: previewWait !== null, description: previewWait ? t(previewWait.key, previewWait.params) : t('band.previewHint'), onSelect: () => actions?.onPreview?.() }]
     : []
   // ---- end F-PR-05a
+  // ---- F-PR-22: Ask the supervisor — an office note on this work order (or its sales orders), each one's supervisor asked; held in
+  // words without threads.post. The supervisor fact's "Ask" opens the same dialog.
+  const tn = useT(NOTES_NS)
+  const askWait = model.note ? openHeld(model.note.can, 1) : null
+  const askWaitWords = askWait ? tn(askWait.key, askWait.params) : null
+  const askLine: MenuItemDef[] = model.note ? [{ id: 'askSupervisor', label: tn('open.ask'), disabled: askWaitWords !== null, description: askWaitWords ?? tn('open.askHint'), onSelect: () => actions?.note?.onOpen?.() }] : []
+  const ask = model.note ? { label: tn('open.askFact'), held: askWaitWords, onAsk: () => actions?.note?.onOpen?.() } : undefined
+  // ---- end F-PR-22
   const more: MenuItemDef[] = [
     ...stepLine,
+    ...askLine, // F-PR-22
     { id: 'split', label: ts('split.open'), disabled: splitWait !== null, ...(splitWait ? { description: heldWords(splitWait.key, splitWait.params) } : {}), onSelect: () => actions?.onOpenSplit?.() },
     ...documentDoors(workOrder, model.prefix).map((door) => ({ id: door.id, label: ts(door.label.key, door.label.params), description: ts(door.description.key), href: door.href, target: '_blank' as const })),
     // B-W2b-245 (design pop:wo-change "⋯"): a change to this work order's spec is a change request.
@@ -296,7 +308,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
         meta: (
           <>
             {/* F-PR-05a: customer, its sales orders and POs, % done, health and waiting on lead the band's facts. */}
-            <BandFacts workOrder={workOrder} model={model} onChangeSupervisor={actions?.supervisor?.onOpen} />
+            <BandFacts workOrder={workOrder} model={model} onChangeSupervisor={actions?.supervisor?.onOpen} {...(ask ? { ask } : {}) /* F-PR-22 */} />
             {workOrder.rush && (
               <Tag tone="danger">
                 <Zap size={11} aria-hidden /> {ts('rush.word')}
@@ -403,6 +415,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       {model.orderFiles && <OrderFilesDialog number={workOrder.number} model={model.orderFiles} choices={model.threadChoices ?? []} actions={actions?.orderFiles} />}
       {/* F-PR-21 */}
       {model.supervisor?.assign && <AssignSupervisorDialog model={model.supervisor.assign} actions={actions?.supervisor} />}
+      {/* F-PR-22 */}
+      {model.note?.dialog && <NoteDialog model={model.note.dialog} actions={actions?.note} />}
     </RecordFrame>
   )
 }
