@@ -10,13 +10,13 @@ import type { Order } from '../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
 // ---- B-W2b-323 (orders in depth on screen) ----
-import { ConfirmationCard, TechPackCard } from '../../confirmation/view/ConfirmationCard'
+import { ConfirmationCard } from '../../confirmation/view/ConfirmationCard'
 
 /**
- * Documents (design `order.docs.acceptance` + `order.docs.files`): the accepted quote version and its acceptance
- * evidence (who signed, when, whether the signed PDF matches the one sent, the terms version), carried from the quote,
- * with a way to the quote's own documents; the order's files are in Activity › Files (the record panels). The order
- * confirmation PDF is W2b.
+ * The confirmation half of "Confirmation & changes" (B-TH-214; design `order.docs.acceptance`; tree O-SAL-ORD-REC.body-F09): the
+ * order confirmation (B-W2b-323) and the accepted quote version with its acceptance evidence (who signed, when, whether the signed
+ * PDF matches the one sent, the terms version), carried from the quote, with a way to the quote's own documents. The order's files
+ * are the docked thread's Files view (one place per thing); the brand tech pack in force is on Production & dates.
  */
 export function DocumentsTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
@@ -67,17 +67,6 @@ export function DocumentsTab({ order, model, actions }: { order: Order; model: O
           />
         )}
       </Card>
-      <Card padded>
-        <h2 className="fw-so-h2">{t('docs.filesTitle')}</h2>
-        <p className="fw-so-hint">{t('docs.filesBody')}</p>
-        <div>
-          <Button size="sm" asChild>
-            <Link href={`${model.prefix}/sales/orders/${order.id}?tab=activity`}>{t('docs.openFiles')}</Link>
-          </Button>
-        </div>
-      </Card>
-      {/* B-W2b-323: Brand tech pack in force (order.docs.files). */}
-      <TechPackCard model={model.depth} actions={actions?.depth} />
     </div>
   )
 }

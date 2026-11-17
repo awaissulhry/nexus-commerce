@@ -282,12 +282,31 @@ export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): n
 
 // ---- the record ---------------------------------------------------------------------------------------------------------
 
-/** The record's tabs; `changes` (B-W2a-50, SCR-107) lists the amendments since confirmation. */
-// B-W2a-72: 'margin' = the Margin tab (design order.margin), between Documents and Activity.
-export const RECORD_TABS = ['lines', 'dates', 'production', 'shipments', 'money', 'changes', 'documents', 'margin', 'activity'] as const
+// ---- B-TH-214: the order's tabs 9 → 5 (O-SAL-ORD-REC.body; tree G.2, P10: no tabs inside tabs, one place per thing) ----
+/**
+ * The record's five tabs: Lines · Production & dates (Dates & promise + Production, and the brand tech pack in force) · Shipments &
+ * invoices (Shipments + Invoices & payments) · Confirmation & changes (Documents' confirmation and acceptance evidence + Changes) ·
+ * Margin (only with the margin grain). Activity left: the thread is docked beside every tab and its tools are in the thread's "⋯"
+ * (R-ACT); the files are the thread's Files view.
+ */
+export const RECORD_TABS = ['lines', 'production', 'shipments', 'changes', 'margin'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
-export const tabOf = (asked: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(asked ?? '') ? (asked as RecordTab) : 'lines')
+/** Every old `?tab=` keeps working (R-8): the tab it merged into; Activity opens the thread beside Lines (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { dates: 'production', money: 'shipments', documents: 'changes', activity: 'lines' }
+
+/** The tab an address asks for: one of the five, an old one's new home, else Lines (Margin without the margin grain: Lines). */
+export function tabOf(asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): RecordTab {
+  const value = asked ?? ''
+  const tab = (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'lines')
+  return tab === 'margin' && can && !can.margin ? 'lines' : tab
+}
+
+/** The tabs a person sees: Margin only with the margin grain (never an empty tab with zeros). */
+export const recordTabs = (can: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS.filter((tab) => tab !== 'margin' || can.margin)
+
+/** A tab whose body is a wide grid (the size grids of Lines): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'lines'
 
 const FINAL: readonly OrderStatus[] = ['CLOSED', 'CANCELLED']
 export const isFinal = (order: Pick<Order, 'status'>): boolean => FINAL.includes(order.status)

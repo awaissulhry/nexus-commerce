@@ -92,3 +92,15 @@ export async function shareWithParty(api: ApiClient, file: { id: string; version
   const visibility = [...new Set(['OFFICE', ...file.visibility, 'PARTNER'])]
   await api.request('PUT', `/files/${enc(file.id)}/visibility`, { body: { visibility, partyId, version: file.version }, schema: fileAnswer, idempotencyKey: globalThis.crypto.randomUUID() })
 }
+
+// ---- B-TH-300: the Files view's bulk work (the API checks each file's record and right again) ----
+
+/** PUT /files/<id>/visibility to the office only ("Make office only", files.manage): no customer, floor or link sees it any more. */
+export async function officeOnly(api: ApiClient, file: { id: string; version: number }): Promise<void> {
+  await api.request('PUT', `/files/${enc(file.id)}/visibility`, { body: { visibility: ['OFFICE'], partyId: null, version: file.version }, schema: fileAnswer, idempotencyKey: globalThis.crypto.randomUUID() })
+}
+
+/** DELETE /files/<id> ("Delete", files.delete): a legal hold refuses it in the API too. */
+export async function removeFile(api: ApiClient, file: { id: string; version: number }): Promise<void> {
+  await api.request('DELETE', `/files/${enc(file.id)}`, { query: { version: file.version }, schema: fileAnswer })
+}
