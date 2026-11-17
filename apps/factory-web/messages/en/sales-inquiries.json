@@ -630,8 +630,8 @@
     "customer": "Open the customer {name}",
     "files": "Open the files of {number}",
     "quote": "Open quote {number}",
-    "parties": "Needs the customers right (parties.view)",
-    "quotes": "Needs the quotes right (quotes.view)"
+    "parties": "Needs the customers right",
+    "quotes": "Needs the quotes right"
   },
   "funnel": {
     "state": "Show only: {status}",

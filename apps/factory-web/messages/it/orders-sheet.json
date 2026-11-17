@@ -30,9 +30,9 @@
     "quote": "Apri l'offerta {number}"
   },
   "held": {
-    "invoices": "Serve il permesso delle fatture (invoices.view)",
-    "shipping": "Serve il permesso delle spedizioni (shipping.view)",
-    "quotes": "Serve il permesso delle offerte (quotes.view)"
+    "invoices": "Serve il permesso delle fatture",
+    "shipping": "Serve il permesso delle spedizioni",
+    "quotes": "Serve il permesso delle offerte"
   },
   "invoiced": {
     "NONE": "Nessuno",

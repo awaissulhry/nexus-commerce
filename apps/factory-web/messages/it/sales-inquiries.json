@@ -630,8 +630,8 @@
     "customer": "Apri il cliente {name}",
     "files": "Apri i file di {number}",
     "quote": "Apri il preventivo {number}",
-    "parties": "Serve il permesso sui clienti (parties.view)",
-    "quotes": "Serve il permesso sui preventivi (quotes.view)"
+    "parties": "Serve il permesso sui clienti",
+    "quotes": "Serve il permesso sui preventivi"
   },
   "funnel": {
     "state": "Mostra solo: {status}",
