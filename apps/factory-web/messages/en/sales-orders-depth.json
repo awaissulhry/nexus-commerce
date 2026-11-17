@@ -478,7 +478,8 @@
     "TRIMS_IN": "Trims in",
     "PP_SAMPLE": "Pre-production sample",
     "LAB_PASSED": "Lab test passed",
-    "OTHER": "Gate"
+    "OTHER": "Gate",
+    "SIZE_SET": "Size set"
   },
   "list": {
     "col": {

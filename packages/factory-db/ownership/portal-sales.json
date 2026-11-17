@@ -33,7 +33,7 @@
       }
     },
     "OrderChangeRequest": {
-      "about": "A customer asks for a change or a cancel of its own CONFIRMED, IN_PRODUCTION or READY order (insert, OPEN) and withdraws an OPEN ask (the only partner update the guard lets through); it reads its own requests and the office's answer, never who answered. The office answers: ACCEPTED (naming the amendment it made) or REFUSED in words. The cut-off rules are checked by the API (SalesSettings has no party key, so the partner role cannot read them).",
+      "about": "A customer asks for a change or a cancel of its own CONFIRMED, IN_PRODUCTION or READY order (insert, OPEN) and withdraws an OPEN ask (the only partner update the guard lets through); it reads its own requests and the office's answer, never who answered. The office answers: ACCEPTED (naming the amendment it made) or REFUSED in words. The cut-off rules are checked by the API (SalesSettings has no party key, so the partner role cannot read them). B-PR-23 (production plan, schema wave 4/5): the production asks (RUSH, HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND; a PARTLY_SHIPPED order only CANCEL, RUSH, HOLD, RESUME), the impact shown at Send (never an amount), the batch of a bulk ask, and the office's counter-offer (COUNTERED: its COUNTER_OFFER approval, date, fee as a price, words), which the customer reads, never who countered (counteredById hidden); the customer may also withdraw a COUNTERED ask.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
@@ -41,12 +41,12 @@
         "factory_partner_runtime": {
           "privileges": ["select", "insert", "update"],
           "scopedBy": ["party"],
-          "hiddenColumns": ["answeredById"]
+          "hiddenColumns": ["answeredById", "counteredById"]
         }
       }
     },
     "OrderChangeRequestLine": {
-      "about": "The customer writes the cells it asks for with its OPEN request (a line of the request's order, the pieces before and asked); nobody changes or removes one. The office reads them to answer.",
+      "about": "The customer writes the cells it asks for with its OPEN request (a line of the request's order, the pieces before and asked; B-PR-23: a change's new colourway of the line's style); nobody changes or removes one. The office reads them to answer.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {

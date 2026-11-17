@@ -62,7 +62,11 @@
     "SALESMAN": "Campionario vendita",
     "PRE_PRODUCTION": "Pre-produzione",
     "CERTIFICATION": "Campione per prova CE",
-    "BRAND": "Campione del brand"
+    "BRAND": "Campione del brand",
+    "FABRIC": "Tessuto",
+    "TRIM": "Accessorio",
+    "SIZE_SET": "Set di taglie",
+    "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)"
   },
   "round": {
     "label": "{kind} · giro {n}"
@@ -75,7 +79,9 @@
     "PRE_PRODUCTION": "Pre-produzione",
     "CERTIFICATION": "Prova CE",
     "BRAND": "Campione del brand",
-    "APPROVED": "Approvato per la produzione"
+    "APPROVED": "Approvato per la produzione",
+    "SIZE_SET": "Set di taglie",
+    "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)"
   },
   "status": {
     "BEING_MADE": "In lavorazione",

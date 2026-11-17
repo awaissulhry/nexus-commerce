@@ -552,7 +552,8 @@
           "PURCHASE_REQUEST": "purchase request",
           "PURCHASE_ORDER_COMPLIANCE": "send without a valid document",
           "RECEIPT_OVER_TOLERANCE": "receipt beyond its tolerance",
-          "COST_SHEET": "cost sheet"
+          "COST_SHEET": "cost sheet",
+          "BRAND_OVERRIDE": "decision for a customer"
         }
       },
       "TASK_DUE.TODAY": "Your task \"{title}\" is due today.",

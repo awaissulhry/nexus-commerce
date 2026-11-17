@@ -3,6 +3,7 @@ import { APPROVAL_KINDS } from '@nexus/factory-domain/approvals-out/kinds'
 import { SCAN_STATES } from '@nexus/factory-domain/product/techpack/scan'
 import { BRAND_ROUND_STATUSES, STYLE_STAGES, WAITING_RECORD_TYPES } from '@nexus/factory-domain/sales/portal-samples/rules'
 import { SAMPLE_DECISIONS, SAMPLE_KINDS, SAMPLE_STAGES } from '@nexus/factory-domain/sales/samples/rules'
+import { SWATCH_KINDS } from '@nexus/factory-domain/sales/sample-decisions/rules' // B-PR-23
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { readFromStore } from '../../../record-panels/store'
 
@@ -38,7 +39,8 @@ export const waitingSchema = z.object({
   label: words,
   style: style.nullable(),
   round: roundRef.nullable(),
-  swatch: z.object({ id: z.string(), kind: z.enum(['COLOUR', 'LEATHER']) }).nullable(),
+  // B-PR-23: fabric and trim swatches too.
+  swatch: z.object({ id: z.string(), kind: z.enum(SWATCH_KINDS) }).nullable(),
   question: z.string(),
   askedAt: z.string(),
   dueAt: z.string(),

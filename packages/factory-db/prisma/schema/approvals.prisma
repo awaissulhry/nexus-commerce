@@ -70,6 +70,10 @@ enum ApprovalTaskKind {
   /// W2b-6 (schema wave 55/57, B-W2b-378; FIN-015, B-W2b-420): a cost sheet before prices are released from it, of a
   /// CostSheet (CostSheet.approvalTaskId).
   COST_SHEET
+  /// B-PR-23 (production plan, schema wave 4/5; review fix R-36): a decision taken for a customer or its undo
+  /// (production.brand.override) that needs a second person while the customer's switch is on (B-PR-38 adds its kind file),
+  /// of an ApprovalRequest.
+  BRAND_OVERRIDE
 }
 
 /// What a signature means (PLT-105; 21 CFR 11.50 style): the yes is signed with it, and shown with it in the history.

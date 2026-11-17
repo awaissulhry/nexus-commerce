@@ -21,9 +21,14 @@ import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages' // 
 import { BRAND_URGENCIES, URGENCY_ACTORS } from '@nexus/factory-domain/production-brand/urgency' // B-PR-15
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting' // B-PR-15
 import { MONITORING_BASES, SCAN_SUBJECTS } from '@nexus/factory-domain/production/settings/monitoring'
-import { REQUEST_KINDS } from '@nexus/factory-domain/sales/change-requests/rules'
+import { REQUEST_KINDS, REQUEST_STATUSES } from '@nexus/factory-domain/sales/change-requests/rules'
+import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B-PR-23
+import { GATE_KINDS } from '@nexus/factory-domain/planning/milestones/rules' // B-PR-23
+import { SWATCH_KINDS } from '@nexus/factory-domain/sales/sample-decisions/rules' // B-PR-23
+import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules' // B-PR-23
 import { DOCUMENT_TEMPLATE_KINDS } from '@nexus/factory-domain/templates/documents'
 import {
+  ApprovalTaskKind,
   BrandHealth,
   BrandStage,
   BrandUrgency,
@@ -34,6 +39,7 @@ import {
   DocumentTemplateKind,
   ErasureMethod,
   FloorRuleMode,
+  GateKind,
   HealthReason,
   IntegrationMode,
   IntegrationProvider,
@@ -45,6 +51,7 @@ import {
   MasterStatus,
   MonitoringBasis,
   OrderChangeRequestKind,
+  OrderChangeRequestStatus,
   PartyRole,
   PeoplePurpose,
   PrivacyDpiaStatus,
@@ -55,10 +62,12 @@ import {
   RetentionAction,
   RetentionSweepMode,
   RetentionSweepStatus,
+  SampleKind,
   ScanSubject,
   ShadeRule,
   SkillKind,
   SkillLevel,
+  SwatchKind,
   Tannage,
   Uom,
   UrgencyActor,
@@ -154,4 +163,12 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   mirror('IssueStatus', IssueStatus, 'production-brand/issues ISSUE_STATUSES', ISSUE_STATUSES, true),
   mirror('WorkOrderHoldKind', WorkOrderHoldKind, 'production/holds/kinds WORK_ORDER_HOLD_KINDS', WORK_ORDER_HOLD_KINDS, true),
   mirror('WorkOrderHoldStatus', WorkOrderHoldStatus, 'production/holds/kinds WORK_ORDER_HOLD_STATUSES', WORK_ORDER_HOLD_STATUSES, true),
+  // B-PR-23 (production plan, schema wave 4/5): the counter-offer's state, the new sample, swatch and gate kinds, and the
+  // override's approval kind. ApprovalKind (+ FABRIC, TRIM, REPROMISE, COUNTER_OFFER) is not paired yet: its domain list is
+  // approvals-out/kinds APPROVAL_KINDS with a rule per kind, which B-PR-24 writes (its step); pair it there.
+  mirror('OrderChangeRequestStatus', OrderChangeRequestStatus, 'sales/change-requests/rules REQUEST_STATUSES', REQUEST_STATUSES, true),
+  mirror('SampleKind', SampleKind, 'sales/samples/rules SAMPLE_KINDS', SAMPLE_KINDS, true),
+  mirror('SwatchKind', SwatchKind, 'sales/sample-decisions/rules SWATCH_KINDS', SWATCH_KINDS, true),
+  mirror('GateKind', GateKind, 'planning/milestones/rules GATE_KINDS', GATE_KINDS, true),
+  mirror('ApprovalTaskKind', ApprovalTaskKind, 'approvals/rules APPROVAL_TASK_KINDS', APPROVAL_TASK_KINDS, true),
 ])

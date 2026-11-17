@@ -552,7 +552,8 @@
           "PURCHASE_REQUEST": "richiesta d'acquisto",
           "PURCHASE_ORDER_COMPLIANCE": "invio senza un documento valido",
           "RECEIPT_OVER_TOLERANCE": "ricevimento oltre la tolleranza",
-          "COST_SHEET": "scheda costo"
+          "COST_SHEET": "scheda costo",
+          "BRAND_OVERRIDE": "decisione per conto di un cliente"
         }
       },
       "TASK_DUE.TODAY": "La tua attività \"{title}\" scade oggi.",

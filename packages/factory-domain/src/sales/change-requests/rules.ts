@@ -3,6 +3,7 @@ import type { BusinessDate } from '../../core/time'
 import type { AmendLineInput } from '../amendments/amendments'
 import { LINE_CHANGE_STATUSES, type SalesOrderStatus } from '../orders/orders'
 import { addDays, MAX_SIZE_QUANTITY, type SalesLineKind } from '../quotes/quotes'
+import { PRODUCTION_REQUEST_KINDS } from '../../production-brand/kinds' // B-PR-23
 
 /**
  * Change and cancel requests from the portal (B-W2b-183; SAL-077 "change request from the portal", SAL-078 "cancel request
@@ -37,7 +38,8 @@ export interface Words {
 export const REQUEST_KINDS = ['CHANGE', 'CANCEL'] as const
 export type RequestKind = (typeof REQUEST_KINDS)[number]
 
-export const REQUEST_STATUSES = ['OPEN', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const
+// B-PR-23 (production plan, schema wave 4/5): COUNTERED, the office's counter-offer waiting for the customer's answer.
+export const REQUEST_STATUSES = ['OPEN', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'COUNTERED'] as const
 export type RequestStatus = (typeof REQUEST_STATUSES)[number]
 
 export const KIND_WORDS: Readonly<Record<RequestKind, Words>> = Object.freeze({
@@ -51,7 +53,41 @@ export const REQUEST_STATUS_WORDS: Readonly<Record<RequestStatus, Words>> = Obje
   ACCEPTED: { it: 'Accettata', en: 'Accepted' },
   REFUSED: { it: 'Non accettata', en: 'Not accepted' },
   WITHDRAWN: { it: 'Ritirata', en: 'Withdrawn' },
+  // B-PR-23
+  COUNTERED: { it: 'Controproposta: in attesa della tua risposta', en: 'Our counter-offer: waiting for your answer' },
 })
+
+// ---- B-PR-23 (production plan, schema wave 4/5; review fixes R-14, R-50): every kind a request may be ------------------------
+
+/**
+ * Every kind of request on an order (the schema's OrderChangeRequestKind): the portal's CHANGE and CANCEL and the production
+ * asks (production-brand/kinds). Sales answers CHANGE and CANCEL (orders.manage, /sales/change-requests); the production asks
+ * are answered in Home › Approvals (B-PR-26, B-PR-27a/b) — every read of an order's requests says each kind in words.
+ */
+export const ORDER_REQUEST_KINDS = [...REQUEST_KINDS, ...PRODUCTION_REQUEST_KINDS] as const
+export type OrderRequestKind = (typeof ORDER_REQUEST_KINDS)[number]
+
+/** A kind Sales answers (and the portal's own ask route takes, until B-PR-25): CHANGE or CANCEL. */
+export const isSalesRequestKind = (kind: string): kind is RequestKind => (REQUEST_KINDS as readonly string[]).includes(kind)
+
+/** Every request in words, as an order's list of requests names it (the customer's and the office's). */
+export const ORDER_REQUEST_KIND_WORDS: Readonly<Record<OrderRequestKind, Words>> = Object.freeze({
+  ...KIND_WORDS,
+  RUSH: { it: 'Urgente – richiesto', en: 'Urgent – asked' },
+  HOLD: { it: 'Richiesta di pausa', en: 'Pause request' },
+  RESUME: { it: 'Richiesta di ripresa', en: 'Resume request' },
+  SPLIT_SHIPMENT: { it: 'Richiesta di spedire ciò che è pronto', en: 'Request to ship what is ready' },
+  SAMPLE_ROUND: { it: 'Richiesta di un altro campione', en: 'Request for another sample' },
+})
+
+/**
+ * The states that wait for an answer: OPEN (ours) and COUNTERED (the customer's, to our counter-offer). One request that waits
+ * per order and kind (review fix R-14); the portal's CHANGE and CANCEL keep one that waits between them (today's rule), and a
+ * production ask never blocks them. The API serialises it per order (a partial unique cannot stand beside the generated
+ * isolation tests).
+ */
+export const WAITING_REQUEST_STATUSES = ['OPEN', 'COUNTERED'] as const satisfies readonly RequestStatus[]
+export const isWaitingRequest = (status: string): boolean => (WAITING_REQUEST_STATUSES as readonly string[]).includes(status)
 
 /** SAL-304: what the cancel pop-up says of a made-to-measure order for a consumer (Codice del Consumo art. 59). */
 export const NO_WITHDRAWAL_WORDS: Words = Object.freeze({
@@ -447,7 +483,8 @@ export function amendmentLinesOf(cells: readonly AskedCell[], lines: readonly Pi
 }
 
 /** What a request asks, counted (Today's sentence and the office list). */
-export function askedSummary(kind: RequestKind, cells: readonly AskedCell[], header: { readonly requestedDate: BusinessDate | null; readonly shipToAddressId: string | null }) {
+// B-PR-23: any kind of request (a production ask says no sizes and is never a whole-order cancel).
+export function askedSummary(kind: OrderRequestKind, cells: readonly AskedCell[], header: { readonly requestedDate: BusinessDate | null; readonly shipToAddressId: string | null }) {
   return {
     sizes: kind === 'CHANGE' ? cells.filter((cell) => cell.size !== null).length : 0,
     lines: new Set(cells.map((cell) => cell.orderLineId)).size,

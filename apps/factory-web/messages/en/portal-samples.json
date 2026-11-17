@@ -62,7 +62,11 @@
     "SALESMAN": "Salesman",
     "PRE_PRODUCTION": "Pre-production",
     "CERTIFICATION": "CE test sample",
-    "BRAND": "Brand sample"
+    "BRAND": "Brand sample",
+    "FABRIC": "Fabric",
+    "TRIM": "Trim",
+    "SIZE_SET": "Size set",
+    "TOP_OF_PRODUCTION": "Top of production"
   },
   "round": {
     "label": "{kind} · round {n}"
@@ -75,7 +79,9 @@
     "PRE_PRODUCTION": "Pre-production",
     "CERTIFICATION": "CE test",
     "BRAND": "Brand sample",
-    "APPROVED": "Approved for production"
+    "APPROVED": "Approved for production",
+    "SIZE_SET": "Size set",
+    "TOP_OF_PRODUCTION": "Top of production"
   },
   "status": {
     "BEING_MADE": "Being made",

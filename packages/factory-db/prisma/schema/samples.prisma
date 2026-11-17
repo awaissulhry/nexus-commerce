@@ -91,6 +91,8 @@ model SampleRound {
   changeRequests  ChangeRequest[]
   // W2b-5 supply.prisma (wave 40/44): the sample purchase orders bought for it.
   purchaseOrders  PurchaseOrder[]  @relation("PurchaseOrderSampleRound")
+  // B-PR-23 portal-sales.prisma: the customer's SAMPLE_ROUND ask it answers.
+  orderChangeRequests OrderChangeRequest[] @relation("OrderChangeRequestSampleRound")
 
   @@unique([tenantId, companyId, number])
   // The target of its parts' and the gates' references.
@@ -117,6 +119,11 @@ enum SampleKind {
   CERTIFICATION
   /// A sample the brand asked for itself.
   BRAND
+  // B-PR-23 (production plan, schema wave 4/5; 08-backend §4.4): asked of the brand as a SAMPLE approval.
+  /// The size set: one piece of each size before the order starts (a gate, GateKind SIZE_SET).
+  SIZE_SET
+  /// The top of production: the first pieces off the line; it gates nothing (a refusal tells the office).
+  TOP_OF_PRODUCTION
 }
 
 /// Where a round is on the board (SCR-110 lanes); the first four move by hand in any order.
@@ -236,7 +243,8 @@ model SampleSwatch {
   roundId           String?            @db.Uuid
   /// The brand it is sent to (the partner wall's key); never changes.
   partyId           String             @db.Uuid
-  /// COLOUR or LEATHER (a LEATHER swatch is of a leather material); never changes.
+  /// COLOUR or LEATHER (a LEATHER swatch is of a leather material); B-PR-23: FABRIC or TRIM (of a material of that kind);
+  /// never changes.
   kind              SwatchKind
   /// The material; never changes. Its colour and/or one of its lots (at least one; the lot with its site, both or
   /// neither); they change until it is sent.
@@ -280,6 +288,10 @@ model SampleSwatch {
 enum SwatchKind {
   COLOUR
   LEATHER
+  // B-PR-23 (production plan, schema wave 4/5): a FABRIC swatch is of a textile, lining, membrane or padding; a TRIM swatch
+  // of a trim, hardware, thread or label (the material's item kind).
+  FABRIC
+  TRIM
 }
 
 /// A sample shipment (SAL-316): a round's samples sent to a party (the brand, a notified body, an agent) or coming back
@@ -345,6 +357,7 @@ model OrderGate {
   label          String?
   targetDate     DateTime? @db.Date
   /// SAMPLE_APPROVED or PP_SAMPLE: the round whose approval passes it (PP_SAMPLE: a PRE_PRODUCTION round); null: none named.
+  /// B-PR-23: SIZE_SET too (a SIZE_SET round).
   sampleRoundId  String?   @db.Uuid
   /// The planner who owns the gate; null: its maker.
   ownerId        String?   @db.Uuid
@@ -383,4 +396,7 @@ enum GateKind {
   LAB_PASSED
   /// Something else, in words (label).
   OTHER
+  /// B-PR-23 (production plan, schema wave 4/5): the size set approved (a SIZE_SET round, passed by it as PP_SAMPLE by its
+  /// PRE_PRODUCTION round).
+  SIZE_SET
 }
