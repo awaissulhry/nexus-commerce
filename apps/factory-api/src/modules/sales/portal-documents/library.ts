@@ -35,6 +35,7 @@ import {
   readGenerated,
   readInvoices,
   readIssuedDocumentsOfStyles,
+  readOrderLines, // B-PR-44
   readOrders,
   readOrdersOfVersions,
   readQuotes,
@@ -48,6 +49,7 @@ import {
   type GeneratedRow,
   type InvoiceRow,
   type OrderRow,
+  type Reader, // B-PR-44
   type SharedFileRow,
 } from './store'
 
@@ -171,13 +173,16 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
     const versions = await readQuoteVersions(client, quotes.map((quote) => quote.id))
     const accepted = versions.filter((version) => version.status === 'ACCEPTED').map((version) => version.id)
     const ordersOfQuotes = await readOrdersOfVersions(client, accepted)
+    // B-PR-44: an order line's files (its artwork shown to the customer) and its quote line's artwork are the order's.
+    const lineOrders = await readLineOrders(client, files)
     const orderIds = uniq([
       ...files.filter((file) => file.recordType === 'SalesOrder').map((file) => file.recordId),
       ...shipments.map((shipment) => shipment.salesOrderId),
       ...invoices.map((invoice) => invoice.salesOrderId),
+      ...lineOrders.values(), // B-PR-44
     ])
     const orders = [...(await readOrders(client, orderIds)), ...ordersOfQuotes]
-    return { files, invoices, shipments, quotes, versions, orders }
+    return { files, invoices, shipments, quotes, versions, orders, lineOrders }
   })
 
   // 2. The tenant's, for exactly those.
@@ -240,7 +245,7 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
     if (kind === null) continue
     const styleId = compliance?.styleId ?? styleByCode.get(text(created?.details.styleCode) ?? '') ?? (file.recordType === 'Style' ? file.recordId : null)
     const style = styleId ? (styleOf.get(styleId) ?? null) : null
-    const forRecord = forOf(file, { shipmentOf, orderRef, quote, orderOfQuote: version ? (orderOfVersion.get(version.id) ?? null) : null, style })
+    const forRecord = forOf(file, { shipmentOf, orderRef, quote, orderOfQuote: version ? (orderOfVersion.get(version.id) ?? null) : null, style, /* B-PR-44 */ lineOrder: own.lineOrders.get(file.id) ?? null })
     const revision = compliance?.revision ?? int(created?.details.revision)
     const inSeries = file.seriesId !== null || file.supersededAt !== null || seriesRoots.has(file.id)
     const versionNo = inSeries ? file.versionNo : (compliance?.revision ?? generated?.version ?? version?.revision ?? int(created?.details.version) ?? file.versionNo)
@@ -300,6 +305,48 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
   return { reader, access, entries, lastVisitAt: tenant.lastVisitAt }
 }
 
+// ---- B-PR-44 ------------------------------------------------------------------------------------------------------------
+/**
+ * The order each shared file of an order line belongs to, read in the party's scope (row-level security: its own lines, quote
+ * lines and orders only; the database keeps a file shared with a party a file of that party's own record): a SalesOrderLine's
+ * file → the line's order; a QuoteLine's artwork → the order of the line made from that quote line or from the same line (seq
+ * and style) on another version of its quote — the artwork travels without a copy (modules/sales/configurator `artworkOf`).
+ */
+async function readLineOrders(client: Reader, files: readonly SharedFileRow[]): Promise<Map<string, string>> {
+  const byFile = new Map<string, string>()
+  const lineFiles = files.filter((file) => file.recordType === 'SalesOrderLine')
+  if (lineFiles.length > 0) {
+    const orderOfLine = new Map((await readOrderLines(client, uniq(lineFiles.map((file) => file.recordId)))).map((line) => [line.id, line.orderId]))
+    for (const file of lineFiles) {
+      const orderId = orderOfLine.get(file.recordId)
+      if (orderId) byFile.set(file.id, orderId)
+    }
+  }
+  const quoteFiles = files.filter((file) => file.recordType === 'QuoteLine')
+  if (quoteFiles.length === 0) return byFile
+  const asked = await client.quoteLine.findMany({ where: { id: { in: uniq(quoteFiles.map((file) => file.recordId)) } }, select: { id: true, versionId: true, seq: true, styleId: true } })
+  const askedVersions = asked.length === 0 ? [] : await client.quoteVersion.findMany({ where: { id: { in: uniq(asked.map((line) => line.versionId)) } }, select: { quoteId: true } })
+  const versions = askedVersions.length === 0 ? [] : await client.quoteVersion.findMany({ where: { quoteId: { in: uniq(askedVersions.map((version) => version.quoteId)) } }, select: { id: true, quoteId: true } })
+  const quoteOf = new Map(versions.map((version) => [version.id, version.quoteId]))
+  const keyOf = (line: { readonly versionId: string; readonly seq: number; readonly styleId: string }): string => `${quoteOf.get(line.versionId) ?? ''}|${line.seq}|${line.styleId}`
+  const siblings = versions.length === 0 ? [] : await client.quoteLine.findMany({ where: { versionId: { in: versions.map((version) => version.id) } }, select: { id: true, versionId: true, seq: true, styleId: true } })
+  const made = siblings.length === 0 ? [] : await client.salesOrderLine.findMany({ where: { quoteLineId: { in: siblings.map((line) => line.id) } }, select: { quoteLineId: true, orderId: true }, orderBy: [{ orderId: 'asc' }] })
+  const keyOfSibling = new Map(siblings.map((line) => [line.id, keyOf(line)]))
+  const orderOfKey = new Map<string, string>()
+  for (const line of made) {
+    const key = line.quoteLineId ? keyOfSibling.get(line.quoteLineId) : undefined
+    if (key && !orderOfKey.has(key)) orderOfKey.set(key, line.orderId)
+  }
+  const askedById = new Map(asked.map((line) => [line.id, line]))
+  for (const file of quoteFiles) {
+    const line = askedById.get(file.recordId)
+    const orderId = line ? orderOfKey.get(keyOf(line)) : undefined
+    if (orderId) byFile.set(file.id, orderId)
+  }
+  return byFile
+}
+// ---- end B-PR-44
+
 /** What the document is for: its record, labelled, and the order it belongs to. */
 function forOf(
   file: SharedFileRow,
@@ -309,10 +356,20 @@ function forOf(
     readonly quote: { readonly id: string; readonly number: string } | null
     readonly orderOfQuote: OrderRow | null
     readonly style: { readonly code: string } | null
+    /** B-PR-44: the order a file of an order line (or of the quote line it was made from) belongs to. */
+    readonly lineOrder: string | null
   },
 ): ForRecord {
   const base = { type: file.recordType, id: file.recordId }
   switch (file.recordType) {
+    // ---- B-PR-44 (production plan L16: the order tab shows the files shared on the order AND its lines): a line's artwork, or the
+    // artwork of the quote line it was made from, is listed under the line's order (labelled with the order's number).
+    case 'SalesOrderLine':
+    case 'QuoteLine': {
+      const order = facts.orderRef(facts.lineOrder)
+      return { ...base, label: order?.number ?? null, order }
+    }
+    // ---- end B-PR-44
     case 'Shipment': {
       const shipment = facts.shipmentOf.get(file.recordId)
       return { ...base, label: shipment?.number ?? null, order: facts.orderRef(shipment?.salesOrderId) }
