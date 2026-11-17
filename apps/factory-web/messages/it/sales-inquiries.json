@@ -829,8 +829,8 @@
     "atFirst": "È la prima riga di questa vista",
     "pinNote": {
       "action": "Sposta nella conversazione come nota fissata",
-      "hint": "Un solo posto per le note interne: diventa una nota interna fissata per prima nella conversazione e questo campo si svuota.",
-      "done": "La nota della richiesta ora è la prima nota interna fissata della conversazione.",
+      "hint": "Un solo posto per le note d'ufficio: diventa una nota d'ufficio fissata per prima nella conversazione e questo campo si svuota.",
+      "done": "La nota della richiesta ora è la prima nota d'ufficio fissata della conversazione.",
       "none": "Questa richiesta non ha più una nota da spostare.",
       "offline": "Sei offline."
     }
@@ -1176,7 +1176,7 @@
       "notLive_other": "Porta della posta non ancora aperta · {count} indirizzi in attesa",
       "notLiveBody": "La posta agli indirizzi per le richieste diventa una richiesta quando la posta si riceve dal vivo (la ricezione del fornitore di posta, un passo del go-live). Fino ad allora le richieste arrivano da portale, telefono e Posta da smistare.",
       "noDomain": "Configura prima il dominio di posta",
-      "setUp": "Admin › Connessioni"
+      "setUp": "Sistema › Connessioni e API"
     }
   },
   "project": {
@@ -1234,7 +1234,7 @@
     "lateWeeks_other": "{count} settimane dopo la data voluta",
     "title": "Produzione",
     "none": "La produzione non ha ancora risposto.",
-    "whoTypes": "La scrive qui la pianificazione o il responsabile di produzione; chiedilo con una nota interna.",
+    "whoTypes": "La scrive qui la pianificazione o il responsabile di produzione; chiedilo con una nota d'ufficio.",
     "by": "Risposta di {name}, {when}",
     "byNobody": "Risposta del {when}",
     "officeOnly": "Solo per l'ufficio: il cliente non la vede mai.",

@@ -42,8 +42,8 @@ import { readOrderFacts, type Reader } from '../../sales/orders/store'
  *            order or a sample round of its gates; an open portal task on the order; its unpaid deposit while nothing is
  *            released; its accepted pause = an ACTIVE BRAND hold), a SUPPLIER (a trims gate waiting; a work order the plan moves
  *            later for its material), a WORKSHOP (an operation out at a subcontractor), US (its request or reported problem
- *            waiting for our answer, a gate we own, a quality hold, our own production hold). Customer-supplied material has no
- *            record yet (left out).
+ *            waiting for our answer, a gate we own, a quality hold, our own production hold; B-PR-28: a new date it did not
+ *            accept while the follow-up task is open). Customer-supplied material has no record yet (left out).
  *   held     a live work order of the order's lines is ON_HOLD (the customer's "On hold" mark; brand_production.hold_changed).
  */
 
@@ -278,6 +278,13 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
   for (const row of requests) blockers.push({ kind: 'BRAND_REQUEST', since: row.createdAt })
   const reported = await db.productionIssue.findMany({ where: { salesOrderId: order.id, status: 'OPEN', source: 'BRAND' }, select: { raisedAt: true } })
   for (const row of reported) blockers.push({ kind: 'BRAND_REQUEST', since: row.raisedAt })
+  // B-PR-28: a new date the customer did not accept waits for us while its follow-up task is open (the task's id is the
+  // request's; the date stands: planning/promise-keep/brand-answer).
+  const refusedDates = await db.approvalRequest.findMany({ where: { partyId: order.partyId, kind: 'REPROMISE', recordType: 'SalesOrder', recordId: order.id, status: 'REFUSED', reversedAt: null }, select: { id: true, answeredAt: true } })
+  if (refusedDates.length > 0) {
+    const followUps = new Set((await db.task.findMany({ where: { id: { in: refusedDates.map((row) => row.id) }, status: 'OPEN' }, select: { id: true } })).map((task) => task.id))
+    for (const row of refusedDates) if (followUps.has(row.id)) blockers.push({ kind: 'BRAND_REQUEST', since: row.answeredAt })
+  }
 
   return {
     order: { id: order.id, companyId: order.companyId, partyId: order.partyId, number: order.number, status: order.status },

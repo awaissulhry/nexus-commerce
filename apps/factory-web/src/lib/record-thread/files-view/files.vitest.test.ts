@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LOCALES } from '../../i18n/locales'
 import { createTranslator, messagesFor } from '../../i18n/messages'
 import { I18nProvider } from '../../i18n/provider'
@@ -10,6 +10,14 @@ import type { ThreadFile } from '../files/model'
 import { designScreen } from './fixtures'
 import { bulkReach, filesGroups, keepLines, rangeOf, START_AUDIENCE } from './model'
 import { uploadAskHeld } from './model' // B-TH-283
+
+// The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the Files view's rows are read.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * B-TH-299 — the Files view (T9): groups (by kind until the origin is known, then by origin), versions as one document, the
@@ -142,7 +150,9 @@ describe('B-TH-283: measurement sheets are body data in the Files view', () => {
   it('who may not open a sheet reads the lock and why, never its name; who may, that each opening is recorded (W25, W26)', () => {
     const html = draw('en', 'sheets')
     expect(html).toContain('Measurement sheet — you cannot open it')
-    expect(html).toContain('It opens with the right to read measurements (sales.measurements.view); each opening is recorded.')
+    // B-W2b-F51: the right in words, never its code.
+    expect(html).toContain('It opens with the right to read measurements; each opening is recorded.')
+    expect(html).not.toContain('sales.measurements.view')
     expect(html).toContain('Measurement sheet: body data — each opening is recorded.')
     expect(draw('it', 'sheets')).toContain('ogni apertura viene registrata')
     expect(scanText(html, BRAND_BETA)).toEqual([])

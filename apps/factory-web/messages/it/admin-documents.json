@@ -260,7 +260,8 @@
       "PROFORMA": "Fattura proforma",
       "SELF_INVOICE": "Autofattura (TD16-TD19)",
       "PAYROLL_EXPORT": "Esportazione paghe",
-      "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
+      "PORTAL_REQUEST": "Richiesta d'ordine dal portale",
+      "PROJECT": "Progetto"
     },
     "record": {
       "Invoice": "Fattura",

@@ -604,5 +604,15 @@
     "madeFromRequestNone": "Nato dalla vostra richiesta",
     "madeFromQuote": "Nato dal vostro preventivo {label}",
     "madeFromQuoteNone": "Nato dal vostro preventivo"
+  },
+  "production": {
+    "label": "Produzione di questo ordine",
+    "waitingTitle": "Su questo ordine aspettiamo una tua risposta",
+    "waitingSince": "Dal {date}",
+    "waitingLink": "Vedi cosa ti aspetta",
+    "ask": "Fai una domanda",
+    "health": "Andamento",
+    "waitingOn": "Tocca a",
+    "failed": "Impossibile caricare la produzione di questo ordine"
   }
 }

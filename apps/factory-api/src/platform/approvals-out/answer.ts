@@ -20,6 +20,8 @@ import { linkSessionOf, linkUnavailable } from '../links/authenticator'
 import { linkCommand, useLink } from '../links/use'
 import { commandOn } from '../portal/tasks/clock'
 import { closeTasksInCommand } from '../portal/tasks/store'
+// B-PR-29: the customer's named approver answers its production approvals.
+import { approverVerdict } from './approver'
 import { partnerPage } from './page'
 import { adapterOf } from './records'
 import { settleRequest } from './settle'
@@ -47,6 +49,11 @@ import { clientAddressOf } from '../../core/client-address'
  * portal person, evidence: the request id, the address hash, the user agent), the record's own answer (a concession,
  * recordedById null), the partner's task done, the audit row and approval_request.answered. Then the office's side in the
  * system scope (./settle.ts): the consequence, the thread, the receipt mail. The page comes back with the decided words.
+ *
+ * B-PR-29 (production plan §3, §C S-LIM-approver; review fix R-25): a customer's production approvals (PP, size set and
+ * top-of-production rounds, fabric, trims) wait for its named approver when one is set (./approver.ts): anyone else of the
+ * customer reads them ("Waiting for <name>", 403 on an answer), a link is held (409); the top of production is also answered
+ * by the customer's Quality people. The portal list says who it waits for (`waitingFor`).
  */
 
 export interface AnswerBody {
@@ -78,6 +85,11 @@ async function prepare(app: FastifyInstance, request: FastifyRequest, who: Answe
   const adapter = adapterOf(kind, row.recordType)
   const held = answerHeld({ status: row.status as ApprovalStatus, dueAt: row.dueAt, answeredAt: row.answeredAt, withdrawnAt: row.withdrawnAt }, now, who.locale) ?? (adapter?.answerHeld ? await system.withClient((client) => adapter.answerHeld!(client, refOf(row), who.locale)) : null)
   if (held) throw new InvalidStateError(held)
+  // B-PR-29: a production approval of a customer with a named approver is that person's (the top of production also its
+  // Quality people's); a link answers for nobody. Read as the system (the settings are office-only); the words name only the
+  // customer's own colleague.
+  const named = await system.withClient((client) => approverVerdict(client, row, who, who.locale, now))
+  if (named && !named.may) throw who.via === 'LINK' ? new InvalidStateError(named.held!) : new ForbiddenError(named.held!)
   const problems = answerProblems({ kind, decision: body.decision, answer: body.answer, typedName: body.typedName })
   let markupFile: { id: string; companyId: string | null; recordType: string; recordId: string } | null = null
   if (body.markup) {
@@ -180,8 +192,13 @@ export async function linkApproval(app: FastifyInstance, request: FastifyRequest
   const row = await request.withClient((client) => readPartner(client, link.record.id))
   if (!row) throw linkUnavailable()
   const locale = await linkLocale(request, link.tenantId, row, language)
-  const page = await partnerPage(systemCallerOf(request)(link.tenantId), row, locale, clockOf(app).now())
-  return { ...page, link: { expiresAt: toUtcIso(link.expiresAt), usesLeft: Math.max(0, link.maxUses - link.uses) } }
+  const system = systemCallerOf(request)(link.tenantId)
+  const now = clockOf(app).now()
+  const page = await partnerPage(system, row, locale, now)
+  // B-PR-29: a request of the customer's named approver is answered in the portal, by that person.
+  const named = await system.withClient((client) => approverVerdict(client, row, { via: 'LINK', userId: null }, locale, now))
+  const may = named && !named.may ? { answer: false, withChanges: false, held: page.may.held ?? named.held } : page.may
+  return { ...page, may, link: { expiresAt: toUtcIso(link.expiresAt), usesLeft: Math.max(0, link.maxUses - link.uses) } }
 }
 
 /** POST /link/approval/approve and /link/approval/refuse. */
@@ -229,7 +246,9 @@ export async function portalApprovals(app: FastifyInstance, request: FastifyRequ
     const row = (await request.withClient((client) => readPartner(client, id)))!
     if (!sees(request, row)) continue
     const page = await partnerPage(system, row, who.locale, now)
-    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided })
+    // B-PR-29: an open production approval another colleague answers reads "Waiting for <name>" (F-PR-14).
+    const named = row.status === 'OPEN' ? await system.withClient((client) => approverVerdict(client, row, who, who.locale, now)) : null
+    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided, waitingFor: named && !named.may ? named.name : null })
   }
   return { state, items }
 }
@@ -245,9 +264,22 @@ async function portalRow(request: FastifyRequest, requestId: string): Promise<Pa
 export async function portalApproval(app: FastifyInstance, request: FastifyRequest, requestId: string) {
   const who = portalWho(request)
   const row = await portalRow(request, requestId)
-  const page = await partnerPage(systemCallerOf(request)(who.tenantId), row, who.locale, clockOf(app).now())
+  const system = systemCallerOf(request)(who.tenantId)
+  const now = clockOf(app).now()
+  const page = await partnerPage(system, row, who.locale, now)
   const mayApprove = !who.preview && can(actorOf(requireContext(request)), PORTAL_APPROVE, { companyId: row.companyId, partyId: row.partyId })
-  return { ...page, may: { ...page.may, answer: page.may.answer && mayApprove, withChanges: page.may.withChanges && mayApprove, held: page.may.held ?? (mayApprove ? null : 'Your access lets you read this request, not answer it: ask your admin for the right to approve.') } }
+  // B-PR-29: with a named approver, the customer's other people read its production approvals ("Waiting for <name>").
+  const named = row.status === 'OPEN' ? await system.withClient((client) => approverVerdict(client, row, who, who.locale, now)) : null
+  const mine = mayApprove && (named === null || named.may)
+  return {
+    ...page,
+    may: {
+      ...page.may,
+      answer: page.may.answer && mine,
+      withChanges: page.may.withChanges && mine,
+      held: page.may.held ?? (!mayApprove ? 'Your access lets you read this request, not answer it: ask your admin for the right to approve.' : (named?.held ?? null)),
+    },
+  }
 }
 
 /** POST /portal/approvals/:requestId/answer. */

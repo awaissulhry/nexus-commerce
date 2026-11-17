@@ -7,7 +7,6 @@ import {
   cancelProblems,
   changeCellsOf,
   changeProblems,
-  isSalesRequestKind,
   NO_WITHDRAWAL_WORDS,
   REQUEST_KINDS,
   rulesOf,
@@ -20,6 +19,30 @@ import {
 import { cancelFeeFor } from '@nexus/factory-domain/sales/change-requests/fee'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTools } from '../../../core/command'
+// B-PR-25: the production asks from the portal and the impact before Send.
+import type { Prisma } from '@nexus/factory-db'
+import { isAskOpen, PRODUCTION_REQUEST_KINDS, type AskLimits, type ProductionRequestKind } from '@nexus/factory-domain/production-brand/kinds'
+import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgency'
+import { blockedProblems, impactKeepable, type Impact } from '@nexus/factory-domain/sales/change-requests/impact'
+import {
+  ASK_RULES,
+  ASK_SAMPLE_KINDS,
+  ASK_VERDICT_CODES,
+  askedSummary,
+  askLineVerdict,
+  askVerdict,
+  ORDER_REQUEST_KIND_WORDS,
+  productionAskProblems,
+  productionCellsOf,
+  productionColumnsOf,
+  type AskFacts as ProductionVerdictFacts,
+  type AskSampleKind,
+  type AskUrgency,
+  type OrderRequestKind,
+} from '@nexus/factory-domain/sales/change-requests/rules'
+import { readWork, workOf } from '../../production/brand-portal/access'
+import { earliestAskOf, earliestOf, freezeOf, impactAskOf, impactFrom, impactLinesOf, readImpactFacts } from './impact'
+import { feeView, impactOut } from './store'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { partnerOrder, portalReader, type PortalReader } from '../portal-orders/access'
 import { readLines, type PortalLine, type PortalOrderRow } from '../portal-orders/store'
@@ -69,6 +92,18 @@ import {
  * The cut-off settings, the cuts, the reasons and the catalogue are read in the tenant's scope as the person, after the
  * partner read found the order (none of them is partner-readable). An office preview never writes (its grants hold no
  * write permission; refused here too).
+ *
+ * B-PR-25 (production plan §3 "Brand asks, we decide", "Money"; lead picks L4, L18; review fixes R-09, R-14, R-50; wall test
+ * PW-P06): the production asks too — "Urgent – asked" (RUSH) exactly while the customer's urgency switch is on, a pause, a
+ * resume, ship what is ready, another sample round while its limits list them (PortalSettings, read in the tenant's scope)
+ * — with factory-domain's rules (askVerdict, productionAskProblems) before the click (the rules read: `asks`, per line
+ * `split` and `samples`, the freeze of each size and of the date and address) and at it; one request that waits per order and
+ * kind (a change and a cancel keep one between them, as before; a production ask never blocks them). The impact before Send
+ * (POST …/change-requests/impact, the same checks as Send): what is frozen by the customer's own freeze rules, priced or not,
+ * the earliest date as a date only (./impact) — and it is kept on the request at Send, as shown (never an amount: the
+ * database checks it); a part asked that cannot change any more is refused at Send in words. Money only for a reader with the
+ * price grain: a cancel's fee (amounts AND percent) is left out of the rules, the impact and the requests for the others (the
+ * Production role), who read "A price may apply" in the impact. A production ask is withdrawn here too while it waits.
  */
 
 /** Everything the rules need, read for one order of the customer. */
@@ -84,7 +119,25 @@ interface AskFacts {
   readonly addresses: AddressRow[]
   readonly openRequestId: string | null
   readonly today: BusinessDate
+  /** B-PR-25: what the production asks are read against. */
+  readonly production: ProductionFacts
 }
+
+/** B-PR-25: the facts of the production asks of one order (factory-domain sales/change-requests/rules AskFacts). */
+interface ProductionFacts {
+  /** What the factory opened to the customer (PortalSettings.productionUrgencyOn, productionAskKinds). */
+  readonly limits: AskLimits
+  /** The request of each production kind that waits (OPEN or COUNTERED) and the day it was asked. */
+  readonly waiting: ReadonlyMap<string, { readonly id: string; readonly day: BusinessDate }>
+  /** Everything still open of the order is ready to ship (READY; a partly shipped order whose rest reads Ready to ship). */
+  readonly ready: boolean
+  /** A pause it asked holds: an ACCEPTED HOLD and a BRAND hold still active on its work. */
+  readonly pauseOn: boolean
+  readonly urgency: AskUrgency | null
+  readonly shipComplete: boolean
+}
+
+const NO_LIMITS: AskLimits = Object.freeze({ productionUrgencyOn: false, productionAskKinds: [] })
 
 async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: string, now: Date): Promise<AskFacts> {
   const order = await partnerOrder(request, reader, orderId)
@@ -92,11 +145,22 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
   // B-PR-23: the change or cancel that waits (OPEN, or COUNTERED for the customer's answer); a production ask never holds them.
   const open = await request.withClient((client) => client.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: [...REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }))
   const addresses = await request.withClient((client) => readShipTos(client, order.partyId))
+  // B-PR-25: the production asks' own facts in the customer's scope: the one of each kind that waits, an accepted pause, the
+  // order's urgency and stage (BrandOrderProduction's partner columns), whether it ships complete.
+  const own = await request.withClient(async (client) => ({
+    waiting: await client.orderChangeRequest.findMany({ where: { orderId: order.id, kind: { in: [...PRODUCTION_REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, kind: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    pausesAccepted: await client.orderChangeRequest.count({ where: { orderId: order.id, kind: 'HOLD', status: 'ACCEPTED' } }),
+    production: await client.brandOrderProduction.findFirst({ where: { salesOrderId: order.id }, select: { stage: true, urgency: true, urgencyLocked: true, urgencyLockReason: true } }),
+    shipping: await client.salesOrder.findUnique({ where: { id: order.id }, select: { shipComplete: true } }),
+  }))
   const tenant = await reader.inTenant(async (client) => ({
     settings: await readCutoffs(client, reader.session.tenantId, order.companyId),
     cuts: await readCuts(client, lines.map((line) => line.id)),
     catalogue: await readCatalogue(client, lines),
     reasons: await readCancelReasons(client),
+    // B-PR-25: the customer's limits (office-only settings, its own row) and whether a pause holds its work.
+    limits: await client.portalSettings.findUnique({ where: { id: order.partyId }, select: { partyId: true, productionUrgencyOn: true, productionAskKinds: true } }),
+    work: await readWork(client, order.partyId, lines, { words: false }),
   }))
   const rule: RuleOrder = {
     status: order.status,
@@ -104,13 +168,41 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
     lines: ruleLinesOf(lines, tenant.cuts),
     openRequestDay: open ? businessDate(open.createdAt) : null,
   }
-  return { order, lines, rule, cutoffs: tenant.settings.cutoffs, cancelFeePct: tenant.settings.cancelFeePct, catalogue: tenant.catalogue, reasons: tenant.reasons, addresses, openRequestId: open?.id ?? null, today: businessDate(now) }
+  // B-PR-25
+  const waiting = new Map<string, { id: string; day: BusinessDate }>()
+  for (const row of own.waiting) if (!waiting.has(row.kind)) waiting.set(row.kind, { id: row.id, day: businessDate(row.createdAt) })
+  const limits = tenant.limits && tenant.limits.partyId === order.partyId ? { productionUrgencyOn: tenant.limits.productionUrgencyOn, productionAskKinds: [...tenant.limits.productionAskKinds] } : NO_LIMITS
+  const production: ProductionFacts = {
+    limits,
+    waiting,
+    ready: order.status === 'READY' || (order.status === 'PARTLY_SHIPPED' && own.production?.stage === 'READY'),
+    pauseOn: own.pausesAccepted > 0 && workOf(tenant.work, order.id).paused,
+    urgency: own.production ? { urgency: own.production.urgency as BrandUrgency, locked: own.production.urgencyLocked, lockReason: own.production.urgencyLockReason } : null,
+    shipComplete: own.shipping?.shipComplete ?? false,
+  }
+  return { order, lines, rule, cutoffs: tenant.settings.cutoffs, cancelFeePct: tenant.settings.cancelFeePct, catalogue: tenant.catalogue, reasons: tenant.reasons, addresses, openRequestId: open?.id ?? null, today: businessDate(now), production }
 }
+
+/** B-PR-25: a production kind's facts as the domain's rules read them. */
+const verdictFactsOf = (facts: AskFacts, kind: ProductionRequestKind): ProductionVerdictFacts => ({
+  order: facts.rule,
+  limits: facts.production.limits,
+  waitingDay: facts.production.waiting.get(kind)?.day ?? null,
+  ready: facts.production.ready,
+  pauseOn: facts.production.pauseOn,
+  urgency: facts.production.urgency,
+  shipComplete: facts.production.shipComplete,
+})
+
+const isProductionKind = (kind: string): kind is ProductionRequestKind => (PRODUCTION_REQUEST_KINDS as readonly string[]).includes(kind)
 
 export async function portalRules(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
   const reader = portalReader(app, request)
   const facts = await askFacts(request, reader, orderId, now)
   const rules = rulesOf(facts.rule, facts.cutoffs, facts.today)
+  // B-PR-25: the customer's freeze rules against the stages of its own order's cells (the tenant's scope, as the person).
+  const freeze = await reader.inTenant((client) => readImpactFacts(client, facts.order, facts.lines.map((line) => line.id)))
+  const ruleLines = new Map(facts.rule.lines.map((line) => [line.id, line]))
   const verdicts = new Map(rules.lines.map((entry) => [entry.lineId, entry]))
   // B-W2b-F14: the fee of cancelling each line, and the whole order (the lines not closed short), before the click.
   const feeLines = feeLinesOf(facts.lines)
@@ -139,28 +231,53 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
         .filter((size) => ordered.has(size) || (catalogue?.offered.has(size) ?? false))
         .map((size) => ({ size, quantity: ordered.get(size) ?? 0, offered: ordered.has(size) || (catalogue?.offered.has(size) ?? false) }))
       const verdict = verdicts.get(line.id)!
-      return { lineId: line.id, seq: line.seq, kind: line.kind, style: catalogue?.style ?? null, colourway: catalogue?.colourway ?? null, sizes, change: verdict.change, cancel: verdict.cancel, cancelFee: asMoney('price', fees.get(line.id) ?? 0) }
+      // B-PR-25: each size's freeze, the line's ship-first and sample-round verdicts.
+      const ruleLine = ruleLines.get(line.id)!
+      const sizeStage = (size: string) => freeze.stages.lines.get(line.id)?.sizes.get(size)?.stage ?? null
+      return {
+        lineId: line.id,
+        seq: line.seq,
+        kind: line.kind,
+        style: catalogue?.style ?? null,
+        colourway: catalogue?.colourway ?? null,
+        sizes,
+        change: verdict.change,
+        cancel: verdict.cancel,
+        cancelFee: asMoney('price', fees.get(line.id) ?? 0),
+        frozen: line.sizes.map((size) => ({ size: size.size, freeze: freezeOf(freeze.rules, 'SIZE_QUANTITY', sizeStage(size.size)) })),
+        split: askLineVerdict('SPLIT_SHIPMENT', ruleLine, verdictFactsOf(facts, 'SPLIT_SHIPMENT')),
+        samples: ASK_SAMPLE_KINDS.map((sampleKind) => ({ sampleKind, verdict: askLineVerdict('SAMPLE_ROUND', ruleLine, verdictFactsOf(facts, 'SAMPLE_ROUND'), sampleKind) })),
+      }
     }),
-    cancelFee: { pct: whole.pct, words: whole.words, currency: whole.currency, wholeOrderFee: asMoney('price', whole.totalFee) },
+    // B-PR-25: no fee at all for a reader without prices (the Production role): neither the amounts nor the percent.
+    ...(reader.seesPrices ? { cancelFee: { pct: whole.pct, words: whole.words, currency: whole.currency, wholeOrderFee: asMoney('price', whole.totalFee) } } : {}),
     reasons: facts.reasons,
     addresses: facts.addresses.map((row) => ({ id: row.id, label: addressLabel(row) })),
     noWithdrawal: facts.order.noWithdrawal ? NO_WITHDRAWAL_WORDS : null,
     openRequestId: facts.openRequestId,
+    // B-PR-25: the production asks the customer's limits open (a closed one is listed, not open: the screen does not draw it).
+    asks: PRODUCTION_REQUEST_KINDS.map((kind) => ({ kind, words: ORDER_REQUEST_KIND_WORDS[kind], open: isAskOpen(kind, facts.production.limits), verdict: askVerdict(kind, verdictFactsOf(facts, kind)), waitingRequestId: facts.production.waiting.get(kind)?.id ?? null })),
+    frozen: { deliveryDate: freezeOf(freeze.rules, 'DELIVERY_DATE', freeze.stages.order.stage), shipTo: freezeOf(freeze.rules, 'SHIP_TO', freeze.stages.order.stage) },
     live: { events: [...LIVE_EVENTS] },
   }
 }
 
 export interface AskBody {
-  readonly kind: RequestKind
+  // B-PR-25: every kind (the production asks beside change and cancel).
+  readonly kind: OrderRequestKind
   readonly cells?: readonly { readonly lineId: string; readonly size: string; readonly quantity: number }[] | undefined
   readonly requestedDate?: BusinessDate | null | undefined
   readonly shipToAddressId?: string | null | undefined
   readonly lineIds?: readonly string[] | undefined
   readonly reasonCode?: string | undefined
   readonly note?: string | null | undefined
+  /** B-PR-25: a sample round's line and kind. */
+  readonly lineId?: string | null | undefined
+  readonly sampleKind?: AskSampleKind | null | undefined
 }
 
-const VERDICT_PATH = new RegExp(`/(${VERDICT_CODES.filter((code) => code !== 'FREE').join('|')})$`)
+// B-PR-25: a production ask's refusal by the order's state names its code too (body/NOT_OPEN, body/WAITING, …).
+const VERDICT_PATH = new RegExp(`/(${[...new Set([...VERDICT_CODES, ...ASK_VERDICT_CODES])].filter((code) => code !== 'FREE').join('|')})$`)
 
 /** A refusal by the cut-off rules is a 409 (the order's state says no); anything else a 400. */
 function refused(issues: Issue[]): DomainError {
@@ -174,6 +291,14 @@ const blankToNull = (value: string | null | undefined): string | null => (typeof
 /** The fields of the other kind are refused in words (one body for both pop-ups). */
 function shapeProblems(body: AskBody): Issue[] {
   const issues: Issue[] = []
+  // B-PR-25: a production ask names no lines to cancel and no address (its own fields are its rules': productionAskProblems).
+  if (isProductionKind(body.kind)) {
+    if (body.lineIds !== undefined) issues.push({ path: 'body/lineIds', message: 'Only a cancel names lines to cancel.' })
+    if ((body.shipToAddressId ?? null) !== null) issues.push({ path: 'body/shipToAddressId', message: 'Only a change asks another delivery address.' })
+    return issues
+  }
+  if ((body.lineId ?? null) !== null) issues.push({ path: 'body/lineId', message: 'Only a sample round names one line.' })
+  if ((body.sampleKind ?? null) !== null) issues.push({ path: 'body/sampleKind', message: 'Only a sample round names the kind of sample.' })
   if (body.kind === 'CHANGE') {
     if (body.lineIds !== undefined) issues.push({ path: 'body/lineIds', message: 'A change names sizes (cells), not lines.' })
     if (body.reasonCode !== undefined) issues.push({ path: 'body/reasonCode', message: 'A change has no cancel reason.' })
@@ -185,8 +310,55 @@ function shapeProblems(body: AskBody): Issue[] {
   return issues
 }
 
+/** B-PR-25: what an ask writes: its cells and its own columns (each only on its kind; the database refuses the rest). */
+interface PreparedAsk {
+  readonly cells: AskedCell[]
+  readonly requestedDate: BusinessDate | null
+  readonly shipToAddressId: string | null
+  readonly reasonCode: string | null
+  readonly reason: string | null
+  readonly sampleKind: AskSampleKind | null
+}
+
+/** B-PR-25: the ask checked by its kind's rules (else refused in words) and what it writes. */
+function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
+  if (isProductionKind(body.kind)) {
+    const ask = { kind: body.kind, requestedDate: body.requestedDate ?? null, reasonCode: body.reasonCode ?? null, note: body.note, cells: body.cells, lineId: body.lineId ?? null, sampleKind: body.sampleKind ?? null }
+    // No pause reason list is offered yet: a pause says why in its words.
+    const problems = productionAskProblems(ask, { ...verdictFactsOf(facts, body.kind), today: facts.today })
+    if (problems.length > 0) throw refused(problems)
+    const columns = productionColumnsOf(ask)
+    return { cells: productionCellsOf(ask, facts.rule), requestedDate: columns.requestedDate, shipToAddressId: null, reasonCode: columns.reasonCode, reason: columns.reason, sampleKind: columns.sampleKind }
+  }
+  const cells = askedCells(body as AskBody & { readonly kind: RequestKind }, facts)
+  return {
+    cells,
+    requestedDate: body.kind === 'CHANGE' ? (body.requestedDate ?? null) : null,
+    shipToAddressId: body.kind === 'CHANGE' ? (body.shipToAddressId ?? null) : null,
+    reasonCode: body.kind === 'CANCEL' ? body.reasonCode! : null,
+    reason: blankToNull(body.note),
+    sampleKind: null,
+  }
+}
+
+/**
+ * B-PR-25: the impact of the ask on the customer's own order (factory-domain impactOf): the freeze rules against its cells'
+ * stages and planning's date only, read in the tenant's scope as the person after the partner read found the order.
+ */
+async function impactOfAsk(reader: PortalReader, facts: AskFacts, kind: OrderRequestKind, prepared: PreparedAsk, now: Date, requestId: string): Promise<Impact> {
+  const goods = facts.lines.filter((line) => line.kind !== 'FEE')
+  const open = goods.filter((line) => line.closedShortQuantity === null).map((line) => line.id)
+  const ask = impactAskOf(kind, prepared.cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId })
+  const planning = earliestAskOf(kind, prepared.cells, prepared.requestedDate, open)
+  return reader.inTenant(async (client) => {
+    const reads = await readImpactFacts(client, facts.order, goods.map((line) => line.id))
+    const earliest = planning ? await earliestOf(client, { tenantId: reader.session.tenantId, requestId, order: facts.order, lines: reads.lines, ask: planning, now }) : null
+    return impactFrom(ask, impactLinesOf(goods, reads.stages), reads, facts.cancelFeePct, earliest)
+  })
+}
+
 /** The cells asked, once the cut-off rules let them through (else the refusal in words). */
-function askedCells(body: AskBody, facts: AskFacts): AskedCell[] {
+function askedCells(body: AskBody & { readonly kind: RequestKind }, facts: AskFacts): AskedCell[] {
   if (body.kind === 'CHANGE') {
     const ask = { cells: body.cells ?? [], requestedDate: body.requestedDate ?? null, shipToAddressId: body.shipToAddressId ?? null, note: body.note }
     const offered = new Map([...facts.catalogue.entries()].map(([lineId, entry]) => [lineId, entry.offered]))
@@ -213,23 +385,39 @@ export async function askRequest(app: FastifyInstance, request: FastifyRequest, 
   // before any of it runs (the request it made would otherwise be "another one waiting").
   const { result } = await commandOn(app, request, { name: 'portal.askOrderChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
     const facts = await askFacts(request, reader, orderId, tools.now)
-    await askInCommand(tools, { requestId, order: facts.order, body, cells: askedCells(body, facts), partnerUserId: session.userId })
+    // B-PR-25: the ask by its kind's rules, its impact as the customer saw it before Send; a part that cannot change any more
+    // is refused in words (409, the field in the path).
+    const prepared = preparedAsk(body, facts)
+    const impact = await impactOfAsk(reader, facts, body.kind, prepared, tools.now, tools.context.requestId)
+    const blocked = blockedProblems(impact)
+    if (blocked.length > 0) throw new DomainError('invalid_state', blocked[0]!.message, blocked)
+    await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId })
     return { requestId }
   })
   const order = await partnerOrder(request, reader, orderId)
   return { request: await partnerRequestView(request, reader, order, result.requestId) }
 }
 
-/** The request written (the customer's scope): serialised per order, one OPEN at a time, the order still askable. */
-async function askInCommand(tools: CommandTools, input: { readonly requestId: string; readonly order: PortalOrderRow; readonly body: AskBody; readonly cells: readonly AskedCell[]; readonly partnerUserId: string }) {
+/**
+ * The request written (the customer's scope): serialised per order, one that waits at a time (B-PR-25: per kind; a change and a
+ * cancel keep one between them), the order still askable for its kind.
+ */
+async function askInCommand(tools: CommandTools, input: { readonly requestId: string; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly impact: Impact; readonly partnerUserId: string }) {
   const { tx, now } = tools
-  const { order, body, cells } = input
+  const { order, body, prepared } = input
+  const cells = prepared.cells
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`factory.order-change-request|${order.id}`}::text))`
   // B-PR-23: one change or cancel that waits per order (OPEN, or COUNTERED); a production ask of the order never blocks it.
-  const open = await tx.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: [...REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true } })
-  if (open) throw new DomainError('invalid_state', 'A request on this order waits for our answer: withdraw it first, or wait for the answer.', [{ path: 'body/OPEN_REQUEST', message: 'A request waits.' }])
+  // B-PR-25 (R-14): one production ask that waits per order and kind.
+  const production = isProductionKind(body.kind)
+  const kinds: OrderRequestKind[] = production ? [body.kind] : [...REQUEST_KINDS]
+  const open = await tx.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: kinds }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true } })
+  if (open) throw new DomainError('invalid_state', production ? 'This ask waits for our answer already: withdraw it first, or wait for the answer.' : 'A request on this order waits for our answer: withdraw it first, or wait for the answer.', [{ path: production ? 'body/WAITING' : 'body/OPEN_REQUEST', message: 'A request waits.' }])
   const current = await tx.salesOrder.findUnique({ where: { id: order.id }, select: { status: true } })
-  if (!current || !['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(current.status)) throw new DomainError('invalid_state', 'The order can no longer be changed or cancelled from the portal.', [{ path: 'body/NOT_ASKABLE', message: 'The order moved on.' }])
+  const statuses: readonly string[] = production ? ASK_RULES[body.kind].statuses : ['CONFIRMED', 'IN_PRODUCTION', 'READY']
+  if (!current || !statuses.includes(current.status)) throw new DomainError('invalid_state', production ? 'The order can no longer take this ask from the portal.' : 'The order can no longer be changed or cancelled from the portal.', [{ path: 'body/NOT_ASKABLE', message: 'The order moved on.' }])
+  // B-PR-25: the impact kept as shown (the database checks it holds no number: never an amount).
+  const kept = impactKeepable(input.impact) ? (input.impact as unknown as Prisma.InputJsonObject) : undefined
   await tx.orderChangeRequest.create({
     data: {
       id: input.requestId,
@@ -237,10 +425,13 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
       partyId: order.partyId,
       orderId: order.id,
       kind: body.kind,
-      reasonCode: body.kind === 'CANCEL' ? body.reasonCode! : null,
-      reason: blankToNull(body.note),
-      requestedDate: body.kind === 'CHANGE' && body.requestedDate ? asDay(body.requestedDate) : null,
-      shipToAddressId: body.kind === 'CHANGE' ? (body.shipToAddressId ?? null) : null,
+      reasonCode: prepared.reasonCode,
+      reason: prepared.reason,
+      requestedDate: prepared.requestedDate ? asDay(prepared.requestedDate) : null,
+      shipToAddressId: prepared.shipToAddressId,
+      // B-PR-25
+      sampleKind: prepared.sampleKind,
+      ...(kept ? { impact: kept } : {}),
       createdAt: now,
       updatedAt: now,
       createdById: input.partnerUserId,
@@ -252,12 +443,43 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
       data: cells.map((cell) => ({ id: newId(), partyId: order.partyId, requestId: input.requestId, orderLineId: cell.orderLineId, size: cell.size, quantityBefore: cell.quantityBefore, quantity: cell.quantity, createdAt: now, createdById: input.partnerUserId })),
     })
   }
-  const whole = body.kind === 'CANCEL' && cells.length === 0
-  const asked = { kind: body.kind, cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: cell.size, before: cell.quantityBefore, asked: cell.quantity })), wholeOrder: whole, requestedDate: body.kind === 'CHANGE' ? (body.requestedDate ?? null) : null, shipToAddressId: body.kind === 'CHANGE' ? (body.shipToAddressId ?? null) : null, reasonCode: body.kind === 'CANCEL' ? body.reasonCode! : null }
+  const whole = askedSummary(body.kind, cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId }).wholeOrder
+  const asked = {
+    kind: body.kind,
+    cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: cell.size, before: cell.quantityBefore, asked: cell.quantity })),
+    wholeOrder: whole,
+    requestedDate: prepared.requestedDate,
+    shipToAddressId: prepared.shipToAddressId,
+    reasonCode: prepared.reasonCode,
+    // B-PR-25
+    ...(production ? { sampleKind: prepared.sampleKind } : {}),
+    impactKept: kept !== undefined,
+  }
   tools.audit({ action: 'portal.askOrderChange', recordType: 'OrderChangeRequest', recordId: input.requestId, companyId: order.companyId, after: { orderId: order.id, status: 'OPEN', ...asked } })
   // The order's timeline (its Activity) shows what the customer asked.
   tools.audit({ action: 'orders.changeRequestAsked', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId: input.requestId, ...asked } })
   tools.emit({ type: 'order_change_request.asked', subject: input.requestId, companyId: order.companyId, payload: { requestId: input.requestId, orderId: order.id, partyId: order.partyId, kind: body.kind, lines: new Set(cells.map((cell) => cell.orderLineId)).size, wholeOrder: whole } })
+}
+
+/**
+ * B-PR-25: POST /portal/sales-orders/:orderId/change-requests/impact — the impact of an ask before Send: the same checks as
+ * Send (refused the same way), nothing written. A cancel's fee only for a reader with the price grain (the amounts AND the
+ * percent); every reader reads the impact's "A price may apply" when it is priced.
+ */
+export async function askImpact(app: FastifyInstance, request: FastifyRequest, orderId: string, body: AskBody, now: Date) {
+  const reader = portalReader(app, request)
+  const shape = shapeProblems(body)
+  if (shape.length > 0) throw refused(shape)
+  const facts = await askFacts(request, reader, orderId, now)
+  const prepared = preparedAsk(body, facts)
+  const impact = await impactOfAsk(reader, facts, body.kind, prepared, now, newId())
+  const fee = body.kind === 'CANCEL' && reader.seesPrices ? feeView(cancelFeeFor(feeLinesOf(facts.lines), prepared.cells.map((cell) => cell.orderLineId), facts.cancelFeePct, facts.order.currency)) : null
+  return {
+    asOf: toUtcIso(now),
+    order: { id: facts.order.id, number: facts.order.number, customerRef: facts.order.customerRef },
+    impact: impactOut(impact),
+    ...(fee ? { cancelFee: fee } : {}),
+  }
 }
 
 /** The facts every view of the order's requests needs (the names in the tenant's scope). */
@@ -268,8 +490,8 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   const tenant = await reader.inTenant(async (client) => ({
     catalogue: await readCatalogue(client, lines),
     reasons: await reasonWordsOf(client, rows.flatMap((row) => (row.reasonCode ? [row.reasonCode] : []))),
-    // B-W2b-F14: the cancel fee in force (a waiting cancel shows it).
-    cancelFeePct: rows.some((row) => row.kind === 'CANCEL' && row.status === 'OPEN') ? (await readCutoffs(client, reader.session.tenantId, order.companyId)).cancelFeePct : null,
+    // B-W2b-F14: the cancel fee in force (a waiting cancel shows it). B-PR-25: only to a reader with prices.
+    cancelFeePct: reader.seesPrices && rows.some((row) => row.kind === 'CANCEL' && row.status === 'OPEN') ? (await readCutoffs(client, reader.session.tenantId, order.companyId)).cancelFeePct : null,
   }))
   const styles = new Map<string, { code: string; name: string }>()
   const colourways = new Map<string, { code: string; name: string }>()
@@ -287,7 +509,8 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
       names: { styles, colourways },
       addresses,
       reasons: tenant.reasons,
-      fee: { pct: tenant.cancelFeePct, currency: order.currency, lines: feeLinesOf(lines) },
+      // B-PR-25: a reader without prices (the Production role) reads no fee at all (neither the amounts nor the percent).
+      fee: reader.seesPrices ? { pct: tenant.cancelFeePct, currency: order.currency, lines: feeLinesOf(lines) } : null,
     },
   }
 }
@@ -320,8 +543,7 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
     await lockRequest(tx, requestId)
     const row = await tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS })
     if (!row || row.orderId !== order.id) throw new NotFoundError('Request not found.')
-    // B-PR-23: a production ask is withdrawn where it was asked (B-PR-25, B-PR-46a); until then, in the order's thread.
-    if (!isSalesRequestKind(row.kind)) throw new InvalidStateError("This request cannot be withdrawn here: write to us in the order's thread.")
+    // B-PR-25: a production ask is withdrawn here too while it waits (B-PR-23 sent it to the order's thread until then).
     if (row.status !== 'OPEN') throw new InvalidStateError(row.status === 'WITHDRAWN' ? 'This request was already withdrawn.' : 'We already answered this request: it can no longer be withdrawn.')
     if (row.version !== version) throw new ConflictError(`This request changed since you read it (now version ${row.version}). Read it again.`)
     await tx.orderChangeRequest.update({ where: { id: requestId }, data: { status: 'WITHDRAWN', withdrawnAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })

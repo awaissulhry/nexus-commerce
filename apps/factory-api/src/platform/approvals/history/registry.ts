@@ -17,9 +17,10 @@ function kindSources(): HistorySource[] {
     recordType: kind.recordType,
     async place(db: Reader, recordId: string) {
       const subject = await kind.read(db, recordId)
-      return subject ? { companyId: subject.companyId, siteId: subject.siteId } : null
+      // B-PR-38 (the brand wall): a subject of one customer names it.
+      return subject ? { companyId: subject.companyId, siteId: subject.siteId, partyId: subject.partyId ?? null } : null
     },
-    may: (actor, place) => can(actor, kind.view, { companyId: place.companyId, siteId: place.siteId }),
+    may: (actor, place) => can(actor, kind.view, { companyId: place.companyId, siteId: place.siteId, ...(place.partyId ? { partyId: place.partyId } : {}) }),
   }))
 }
 

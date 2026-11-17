@@ -310,6 +310,12 @@
       "mail": {
         "assigned": "{actor} ti ha affidato una mail di {title}: {record}",
         "followUpDue": "Ancora nessuna risposta a {record} ({title}): è di nuovo nella tua coda"
+      },
+      "production": {
+        "supervisorOfOrder": "Sei il supervisore di produzione dell’ordine {record}",
+        "supervisorOfOrders": "Sei il supervisore di produzione di {count} ordini di {record}",
+        "supervisorOfCustomer": "Sei il supervisore di produzione di {record}",
+        "backupOfCustomer": "Sei il sostituto del supervisore di produzione di {record}"
       }
     },
     "fallback": "Novità su {record}",

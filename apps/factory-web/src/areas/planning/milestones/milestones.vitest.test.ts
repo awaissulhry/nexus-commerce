@@ -66,7 +66,10 @@ describe('held in our words', () => {
     expect(draftHeld(emptyDraft('OTHER'), t)).toBe('refusal.LABEL_NEEDED')
     expect(draftHeld({ ...emptyDraft('LAB_PASSED'), sampleRoundId: 'x' }, t)).toBe('refusal.ROUND_ONLY_SAMPLE')
     expect(bodyOf({ ...emptyDraft('LAB_PASSED'), sampleRoundId: 'x', label: '  ' })).toEqual({ kind: 'LAB_PASSED', label: null, targetDate: null, sampleRoundId: null, ownerId: null })
-    expect(kindsLeft(FIXTURES.ORDERS[1]!)).toEqual(['SAMPLE_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'OTHER'])
+    // B-PR-23 (#1590, production lane): GateKind SIZE_SET joined GATE_KINDS (after OTHER, in the domain's order); it is a sample gate.
+    expect(kindsLeft(FIXTURES.ORDERS[1]!)).toEqual(['SAMPLE_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'OTHER', 'SIZE_SET'])
+    expect(draftHeld({ ...emptyDraft('SIZE_SET'), sampleRoundId: 'x' }, t)).toBeNull()
+    // end B-PR-23
   })
   it('a refused write becomes a key of our catalogue; the board knows a held drop by its code', () => {
     expect(refusalOf(conflict(['refusal/GATE_EXISTS']))).toBe('refusal.GATE_EXISTS')

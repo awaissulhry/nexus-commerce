@@ -1,0 +1,132 @@
+/*
+ * F-PR-11 — the customer's My production: layout only, semantic tokens only. The page fills the portal's main area (no page
+ * max-width: Owner rule 2026-10-29), the list uses the width on a wide screen and turns to cards on a phone (the list frame).
+ */
+
+.fw-pprod,
+.fw-pprod-stack,
+.fw-pprod-dialog {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pprod {
+  gap: var(--nds-space-16);
+}
+
+.fw-pprod-stack {
+  gap: var(--nds-space-4);
+}
+
+.fw-pprod-dialog {
+  gap: var(--nds-space-12);
+}
+
+/* "2 of 3 urgent used" and what urgent means, one line that wraps on a phone. */
+.fw-pprod-use {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-pprod-chiprow {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* One chip row; on a phone it scrolls inside itself, never the page. */
+.fw-pprod-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-pprod-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--nds-space-4);
+  }
+  .fw-pprod-chiprow {
+    align-items: flex-start;
+  }
+}
+
+.fw-pprod-chip-count {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pprod-sub,
+.fw-pprod-hint {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pprod-hint {
+  margin: 0;
+}
+
+.fw-pprod-moved {
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pprod-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pprod-rowlink {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-pprod-rowlink:hover,
+.fw-pprod-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+/* The marks under the stage ("Change pending", "Partly shipped"): one wrapping row. */
+.fw-pprod-marks,
+.fw-pprod-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* The Urgent order dialog: a row is the rank, the order and its "Move to top". */
+.fw-pprod-item {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-pprod-item-rank {
+  min-width: var(--nds-space-24);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pprod-item-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}

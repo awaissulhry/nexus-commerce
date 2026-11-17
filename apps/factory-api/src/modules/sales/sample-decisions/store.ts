@@ -21,6 +21,8 @@ import type { SampleDecision } from '@nexus/factory-domain/sales/samples/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeOf, type Reader } from '../samples/store'
+// B-PR-38: a swatch of a customer whose portal is on is the customer's to decide.
+import { portalOnParties } from './owner'
 
 /**
  * Sample decisions' rows (B-W2b-252; factory-db samples.prisma, B-W2b-212): the refusal every command throws in words, the
@@ -141,6 +143,7 @@ export async function swatchViewsOf(db: Reader, context: OfficeContext, rows: re
     db.approvalRequest.findMany({ where: { recordType: 'SampleSwatch', recordId: { in: swatchIds }, status: 'OPEN' }, select: { id: true, recordId: true, dueAt: true } }),
   ])
   const names = await namesOf(db, rows.map((row) => row.decidedById))
+  const theirs = await portalOnParties(db, rows.map((row) => row.partyId)) // B-PR-38
   const style = byId(styles)
   const round = byId(rounds)
   const partyOf = byId(parties)
@@ -187,7 +190,7 @@ export async function swatchViewsOf(db: Reader, context: OfficeContext, rows: re
         edit: action(manage, swatchSentRefusal(facts, 'change')),
         send: action(manage, row.sentAt ? swatchSentOnceRefusal(facts, new Date(0)) : null),
         remove: action(manage, swatchSentRefusal(facts, 'remove')),
-        decide: action(lacking(context, [SALES_SAMPLES_DECIDE], scope), swatchDecisionRefusal(facts, open)),
+        decide: action(lacking(context, [SALES_SAMPLES_DECIDE], scope), swatchDecisionRefusal(facts, open, theirs.has(row.partyId))), // B-PR-38
         ask: action(lacking(context, [SALES_SAMPLES_DECIDE, PARTNERS_APPROVALS_ASK], scope), companyId === null ? noCompanyRefusal(styleRow?.code ?? '') : swatchAskRefusal(facts, row.kind, open)),
       },
       createdAt: toUtcIso(row.createdAt),

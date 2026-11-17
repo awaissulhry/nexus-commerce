@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { SAMPLE_ROUND_RECORD, SAMPLE_SWATCH_RECORD, type ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisions/permissions'
-import { answerHeldWords, askRefusal, decisionOfAnswer, noCompanyRefusal, swatchAnswerHeldWords, swatchAskRefusal, type SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules'
+import { answerHeldWords, askRefusal, decisionOfAnswer, noCompanyRefusal, swatchAnswerHeldWords, swatchAskRefusal, SWATCH_WORDS, type SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules'
 import { SALES_SAMPLES_VIEW } from '@nexus/factory-domain/sales/samples/permissions'
 import { cellsOf, isOpenStage, roundLabel, type SampleKind, type SampleStage } from '@nexus/factory-domain/sales/samples/rules'
 import type { CommandTools } from '../../../core/command'
@@ -14,11 +14,13 @@ import { readSwatchRow, swatchCompanyOf, swatchFacts, waitingRequest } from './s
  * The brand decides a sample round or a swatch through the approvals engine (B-W2b-184; B-W2b-252 SAL-312, SAL-314; design
  * products.samples › Approval "Ask the customer (Links › Approve)"; links.approve "Sample, colour, leather: photos and spec,
  * comments with photo markup"): the office asks with POST /approvals-out {kind SAMPLE, recordType SampleRound} or {kind
- * COLOUR | LEATHER (the swatch's own), recordType SampleSwatch}, sales.samples.decide + partners.approvals.ask over the
+ * COLOUR | LEATHER | FABRIC | TRIM (the swatch's own), recordType SampleSwatch}, sales.samples.decide + partners.approvals.ask over the
  * round's company and brand; the brand answers by its link or in its portal, once.
  *
  *   read       the round (its company, its brand, "SR-2026-0003 · Fit · round 2"), held while it may not be asked (internal,
  *              only requested, decided, cancelled, asked already) — a swatch: once sent, not decided, its own kind
+ *              (B-PR-29: COLOUR, LEATHER, FABRIC or TRIM; a size set or a top-of-production round is asked as a SAMPLE as
+ *              every round is, and its brand's named approver answers it: platform/approvals-out/approver.ts)
  *   onAsked    in the office's ask command: the round or swatch names its request (approvalRequestId), sample_round.asked /
  *              sample_swatch.changed ASKED
  *   answerHeld the round or swatch was decided or cancelled meanwhile, or a newer request was sent: the brand's answer is not
@@ -142,13 +144,15 @@ async function swatchBasics(client: Reader, swatchId: string) {
   ])
   const what = `${item?.code ?? ''}${colour ? ` ${colour.code}` : ''}${lot ? ` · lot ${lot.code}` : ''}`
   const kind = swatch.kind as SwatchKind
-  const label = { it: `${style?.code ?? ''} · ${kind === 'LEATHER' ? 'pellame' : 'colore'} ${what}`, en: `${style?.code ?? ''} · ${kind === 'LEATHER' ? 'leather' : 'colour'} ${what}` }
+  // B-PR-29: each kind its own word (colour, leather, fabric, trim).
+  const label = { it: `${style?.code ?? ''} · ${SWATCH_WORDS[kind].it} ${what}`, en: `${style?.code ?? ''} · ${SWATCH_WORDS[kind].en} ${what}` }
   return { swatch, companyId, style, item, colour, lot, label }
 }
 
 export const SAMPLE_SWATCH_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
   recordType: SAMPLE_SWATCH_RECORD,
-  kinds: ['COLOUR', 'LEATHER'],
+  // B-PR-29: a fabric or trim swatch is asked with FABRIC or TRIM (its own kind, as COLOUR and LEATHER).
+  kinds: ['COLOUR', 'LEATHER', 'FABRIC', 'TRIM'],
   view: SALES_SAMPLES_VIEW,
   ask: SALES_SAMPLES_DECIDE,
   async read(client, recordId, kind): Promise<ApprovalRecord | null> {

@@ -65,6 +65,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     expect(ids('CUSTOMER', false)).toEqual([
       ['home', 'nav.home', '/'],
       ['orders', 'nav.orders', '/orders'],
+      // F-PR-11: My production.
+      ['production', 'nav.production', '/production'],
       // B-W2b-262: Samples & tech packs joins the Catalogue (two pages: the area keeps its name; Quotes & requests is not built, so
       // the area opens its first page).
       ['quotes', 'nav.quotesSamples', '/samples'],
@@ -184,8 +186,9 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
     }
   }
   // B-W2b-262: a role with the samples page has Quotes & samples with its badge (approvals are answered there); Finance keeps the Catalogue.
-  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
-  const customerRead = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  // F-PR-11: the roles that see production (Buyer, Admin, Quality, Viewer, Production) have My production after Orders, no badge.
+  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'production:nav.production', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const customerRead = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'production:nav.production', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
   const customerFinance = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
   const supplierOrders = ['home:nav.home#home', 'work:nav.purchaseOrders#orders', 'deliveries:nav.deliveries#deliveries', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const supplierPapers = ['home:nav.home#home', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
@@ -200,8 +203,8 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       // The Designer: the catalogue, the samples (B-W2b-262) and its colleagues only.
       'customer-designer': ['home:nav.home#home', 'quotes:nav.quotesSamples#quotes', 'account:nav.account#account'],
       // B-PR-13: the Production role — its orders, the samples (no catalogue), the shared files; its Production area (F-PR-10
-      // declares it) shows once F-PR-11 builds it.
-      'customer-production': ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.samples#quotes', 'documents:nav.documents#documents', 'account:nav.account#account'],
+      // declared it, F-PR-11 built My production).
+      'customer-production': ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'production:nav.production', 'quotes:nav.samples#quotes', 'documents:nav.documents#documents', 'account:nav.account#account'],
       'customer-viewer': customerRead,
       'customer-admin': customerFull,
       'supplier-orders': supplierOrders,
@@ -237,7 +240,9 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
   })
 
   it('the phone: four tabs and More for a customer; a supplier\'s one More row (Profile) is its fifth tab (the DS bar), a workshop four tabs', () => {
-    expect(asSigned('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
+    // F-PR-11: My production is a tab after Orders for the buyer, so Returns goes under More.
+    expect(asSigned('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
+    expect(asSigned('customer-finance')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
     expect(asSigned('customer-designer')).toMatchObject({ tabs: ['home'], more: ['quotes', 'account'] })
     // Design portal.frame bottom-bar: "Supplier: Home · Orders (or Jobs) · Deliveries · Documents + More (Profile)"; the DS bar turns a
     // More of one row into a fifth tab (bottomBarModel: a sheet with one row is a wasted tap); Sign out is in the person menu.
@@ -248,7 +253,9 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
   })
 
   it('keys: g h, g o and g d where the person has those areas', () => {
-    expect(asSigned('customer-buyer').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
+    // F-PR-11: g p opens My production.
+    expect(asSigned('customer-buyer').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
+    expect(asSigned('customer-finance').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
     expect(asSigned('customer-designer').keys).toEqual({ h: '/' })
     expect(asSigned('supplier-invoices').keys).toEqual({ h: '/', d: '/documents' })
     expect(asSigned('subcontractor-jobs').keys).toEqual({ h: '/', o: '/jobs', d: '/documents' })
@@ -257,7 +264,8 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
 
   it('every built area, page and record page has its route in the portal (app/(portal)/p/[party])', () => {
     const route = (href: string) => {
-      const path = href.split(/[?#]/)[0]!.replace(/\/$/, '')
+      // B-TH-253: a page may encode its id (Project does), so `[id]` arrives as %5Bid%5D: the route's folder is the decoded path.
+      const path = decodeURIComponent(href.split(/[?#]/)[0]!).replace(/\/$/, '')
       return existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]', path, 'page.tsx'))
     }
     const hrefs = PORTAL_AREAS.flatMap((area) => [...(area.pages ?? []).filter((page) => page.built).map((page) => page.href), ...(area.built ? [area.href] : [])])
@@ -300,13 +308,19 @@ describe('the Production area and Waiting for you (F-PR-10)', () => {
     expect(PORTAL_AREAS.map((area) => area.id).indexOf('production')).toBe(PORTAL_AREAS.map((area) => area.id).indexOf('orders') + 1)
   })
 
-  it('draws no door before its page exists: Production and Waiting for you stay hidden until F-PR-11 and F-PR-14 build them', () => {
-    expect(PORTAL_AREAS.find((area) => area.id === 'production')!.built).toBe(false)
+  it('draws a door only to a page that exists: My production is built (F-PR-11); Waiting for you stays hidden until F-PR-14 builds it', () => {
+    expect(PORTAL_AREAS.find((area) => area.id === 'production')!.built).toBe(true)
     expect(PORTAL_AREAS.find((area) => area.id === 'home')!.pages!.find((page) => page.id === 'home.waiting')!.built).toBe(false)
     for (const key of ['customer-production', 'customer-buyer', 'customer-admin', 'customer-quality', 'customer-viewer']) {
       const today = signedAs(key, PORTAL_AREAS)
-      expect(today.areas, key).not.toContain('production')
+      expect(today.areas, key).toContain('production')
       expect(today.homePages, key).toEqual([])
+      expect(today.keys.p, key).toBe('/production')
+    }
+    // Finance and the Designer do not see production: no door, no key.
+    for (const key of ['customer-finance', 'customer-designer']) {
+      const today = signedAs(key, PORTAL_AREAS)
+      expect(today.areas, key).not.toContain('production')
       expect(today.keys.p, key).toBeUndefined()
     }
     // Home keeps its name and address when it has one page.

@@ -110,7 +110,8 @@ const CHIP_WORDS: Readonly<Record<ProductionChip, Words>> = Object.freeze({
   READY: { it: 'Pronti per la spedizione', en: 'Ready to ship' },
 })
 
-const NOT_IN_PRODUCTION = 'This order is not in production.'
+/** B-PR-19: also the quality read's (./quality.ts). */
+export const NOT_IN_PRODUCTION = 'This order is not in production.'
 
 export interface ListQuery {
   readonly chip: ProductionChip
@@ -380,6 +381,31 @@ export async function productionList(app: FastifyInstance, request: FastifyReque
   const { chips, items } = await listRows(read, query, now)
   return { asOf: toUtcIso(now), ...levelOf(read), chip: query.chip, chips, count: items.length, items, live: LIVE }
 }
+
+// ── B-PR-20 ──
+/**
+ * B-PR-20 (production plan §5 Portal › Home "Home shows 5 waiting", §4 marks; PW-P07): the customer's Home counts of its OWN orders
+ * in production — waiting on it, at risk, on hold (its own pause included) — the same rules as My production's chips
+ * (WAITING_ON_YOU, AT_RISK, ON_HOLD), from the same read (the partner's own rows first, then the office's facts of exactly those
+ * orders), so a tile and the list it opens agree. Nothing of another customer is read or counted.
+ */
+export async function productionCounts(app: FastifyInstance, request: FastifyRequest, now: Date): Promise<{ readonly waitingOnYou: number; readonly atRisk: number; readonly onHold: number }> {
+  const read = await readProduction(app, request, now)
+  let waitingOnYou = 0
+  let atRisk = 0
+  let onHold = 0
+  for (const order of read.orders) {
+    if (waitingOf(read, order.id).code === 'YOU') waitingOnYou++
+    if (healthOf(read.rows.get(order.id), read.today)?.code === 'AT_RISK') atRisk++
+    const marks = marksOf(read, order)
+    if (marks.onHold || marks.paused) onHold++
+  }
+  return { waitingOnYou, atRisk, onHold }
+}
+
+/** The events after which the Home's production counts read again (the partner live channel: its own orders only). */
+export const PRODUCTION_HOME_LIVE: readonly string[] = Object.freeze([...LIVE.events])
+// ── end B-PR-20 ──
 
 // ---- the list's file ("Export") ---------------------------------------------------------------------------------------------
 

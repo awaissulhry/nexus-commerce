@@ -37,7 +37,7 @@
   },
   "locked": {
     "sheet": "Scheda misure — non puoi aprirla",
-    "sheetWhy": "Si apre con il permesso di leggere le misure (sales.measurements.view); ogni apertura viene registrata."
+    "sheetWhy": "Si apre con il permesso di leggere le misure; ogni apertura viene registrata."
   },
   "useOn": {
     "action": "Usa su un altro record…",
@@ -96,7 +96,7 @@
     "title_one": "{count} messaggio fissato",
     "title_other": "{count} messaggi fissati",
     "someone": "Qualcuno",
-    "office": "Nota interna",
+    "office": "Nota d'ufficio",
     "go": "Vai al messaggio di {who}: {words}",
     "by": "Fissato da {name}, {date}",
     "unpin": "Togli",

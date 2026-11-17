@@ -56,6 +56,7 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
 import { REQUESTS, requestRow } from '../requests/design-data'
 import type { OrdersListViewModel } from './view/OrdersListView'
+import type { CustomerCaseBuilder } from './view/CustomerCase'
 // B-TH-238: the tiles (their chips, the customer's own reads).
 import type { ApiClient } from '../../../lib/api/client'
 import { fetchRequests } from '../requests/api'
@@ -451,8 +452,17 @@ describe('B-TH-238 — the tiles of Orders & requests', () => {
     expect(list).not.toContain('nds-metric btn active')
     const needs = render('en', 'th-238-needs-you')
     expect(needs).toContain('nds-metric btn active')
-    expect(needs).toContain('Rain jackets like last spring, 40 pieces')
-    expect(needs).not.toContain('Winter gloves for the shop, sizes S to XL')
+    // The list is a grid: its rows draw in the browser only. A pressed tile hands the grid its own rows (listRows on the case's reads).
+    const tileRows = (id: string) => {
+      const built = (screen.cases.find((item) => item.id === id)!.model as CustomerCaseBuilder)('en')
+      if (built.body.kind !== 'list') return []
+      const model = built.body.model
+      return listRows(model.chip ?? model.read!.chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, 'en')
+    }
+    const subjects = tileRows('th-238-needs-you').map((row) => (row.kind === 'request' ? row.request.subject : null))
+    expect(subjects).toContain('Rain jackets like last spring, 40 pieces')
+    expect(subjects).not.toContain('Winter gloves for the shop, sizes S to XL')
+    expect(tileRows('th-238-needs-you').every((row) => row.kind === 'request' && row.request.state.needsYou)).toBe(true)
     for (const id of ['th-238-needs-you', 'th-238-open-requests', 'th-238-open-orders']) {
       for (const locale of ['it', 'en'] as const) {
         const html = render(locale, id)

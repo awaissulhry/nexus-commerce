@@ -1,0 +1,140 @@
+{
+  "list": {
+    "title": "My production",
+    "label": "Your orders in production",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "search": "Search your orders in production",
+    "searchHint": "Your PO, your order number or a style",
+    "failed": "Could not load your orders in production",
+    "failedBody": "The list could not be read. Try again in a moment.",
+    "empty": "No orders in production right now.",
+    "emptyBody": "When we start making one of your orders, it shows here with its stage and the date we expect it ready.",
+    "allOrders": "See all orders",
+    "noMatch": "No order matches",
+    "noMatchSearch": "No order in production matches “{q}”.",
+    "noMatchChip": "No order in production is in this group right now.",
+    "clear": "Show all",
+    "fileName": "My production"
+  },
+  "state": {
+    "retry": "Try again"
+  },
+  "offline": {
+    "title": "No connection — showing what was loaded at {time}"
+  },
+  "band": {
+    "updated": "Updated {time}",
+    "urgentOrder": "Urgent order",
+    "orderFew": "Mark two orders urgent to put them in order.",
+    "export": "Export",
+    "exporting": "Exporting…",
+    "exportHint": "Every order of this view, as a CSV file",
+    "exportNone": "No order to export"
+  },
+  "keys": {
+    "search": "Search",
+    "open": "Open the order"
+  },
+  "use": {
+    "hint": "Urgent orders go first among your orders when we next plan."
+  },
+  "chips": {
+    "label": "Show",
+    "chip": "{name}: {count}",
+    "clear": "Show all"
+  },
+  "col": {
+    "urgency": "Urgency",
+    "order": "Your order",
+    "sent": "Sent",
+    "styles": "Styles",
+    "stage": "Stage",
+    "waiting": "Waiting on",
+    "expected": "Expected",
+    "actions": "Actions"
+  },
+  "ref": {
+    "yours": "Your PO"
+  },
+  "cell": {
+    "styleMore": "{style} +{count}",
+    "pieces": "{count} pcs",
+    "stagesOf": "Stages of {name}",
+    "next": "Next: {what}",
+    "nextOn": "Next: {what} · {date}",
+    "moved": "Moved · first {date}",
+    "noDate": "No date yet",
+    "seeWhat": "See what we need"
+  },
+  "row": {
+    "menu": "Actions for {name}",
+    "open": "Open the order",
+    "markUrgent": "Mark urgent",
+    "markRegular": "Mark regular",
+    "noName": "your order"
+  },
+  "group": {
+    "URGENT": "Urgent",
+    "REGULAR": "Regular",
+    "regularHint": "By the day you sent the order, oldest first"
+  },
+  "held": {
+    "preview": "A preview reads only.",
+    "offline": "No connection: try again when you are back online.",
+    "busy": "Saving…",
+    "locked": "We set this order to Regular.",
+    "asked": "You asked us to make it urgent: we answer you soon.",
+    "cut": "Cutting has started on this order.",
+    "quota": "{used} of {max} urgent used. Set one back to Regular first.",
+    "quotaNone": "Urgent marks on your orders are asked of us."
+  },
+  "notice": {
+    "urgent": "{name} is urgent now: Urgent {rank}.",
+    "urgentNoRank": "{name} is urgent now.",
+    "regular": "{name} is regular now.",
+    "ordered": "Your urgent orders are saved in the new order.",
+    "undo": "Undo",
+    "undone": "Put back as it was.",
+    "undoneSkipped_one": "Put back; {count} order had changed since and is left as it is.",
+    "undoneSkipped_other": "Put back; {count} orders had changed since and are left as they are.",
+    "hide": "Hide",
+    "exportFailed": "The file could not be made."
+  },
+  "refused": {
+    "ASK_CUT": "Cutting has started on this order.",
+    "ASK_OVER_QUOTA": "Your urgent marks are all used. Set one back to Regular first.",
+    "URGENCY_OFF": "Urgent marks are not open for your orders.",
+    "NOT_OPEN": "This order is no longer in production.",
+    "LOCKED": "We set this order to Regular: it stays Regular for now.",
+    "UNCHANGED": "Nothing to change: the order is that already.",
+    "NOT_KEPT": "This order has just gone into production: try again in a moment.",
+    "NO_RIGHT": "Your role can read production; marking orders needs the Production or Buyer role.",
+    "notFound": "This order is not one of your orders in production.",
+    "forbidden": "Your role can read production; marking orders needs the Production or Buyer role.",
+    "failed": "Could not save. Try again in a moment.",
+    "undoNotFound": "This change is not found: nothing to undo.",
+    "undoNothing": "Nothing was undone: every order changed since."
+  },
+  "dialog": {
+    "title": "Urgent order",
+    "how": "Drag, or use ↑ ↓ on the grip.",
+    "list": "Your urgent orders, the first at the top",
+    "top": "Move to top",
+    "topLabel": "Move {name} to the top",
+    "promise": "Your urgent orders go first among your orders when we next plan. Dates change only when we tell you.",
+    "save": "Save order",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "unmoved": "Move an order first.",
+    "changedByUsAt": "Changed by us at {time}.",
+    "changedByUs": "Changed by us.",
+    "changedAt": "Changed at {time}.",
+    "changed": "Changed since you opened it.",
+    "reread": "Your urgent orders changed: read the list again.",
+    "unchanged": "Nothing to change: your urgent orders are in this order already.",
+    "loadTheirs": "Use the new list",
+    "keepMine": "Keep my order",
+    "failed": "Could not save the order. Try again in a moment."
+  }
+}

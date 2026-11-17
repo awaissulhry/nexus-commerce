@@ -5,6 +5,7 @@ import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { COMMON_REPLY_PLACEHOLDERS } from '@nexus/factory-domain/templates/replies'
 import type { DesignScreen } from '../../lib/design/design-screen'
 import { LOCALES } from '../../lib/i18n/locales'
 import { CATALOGUE, messagesFor, placeholdersOf } from '../../lib/i18n/messages'
@@ -40,8 +41,11 @@ const sources = (dir: string): string[] =>
   })
 
 const PREFIXES = ['common', 'problem', 'stepUp', 'list', 'record', 'noAccess', 'grains', 'scope', 'reveal', 'matrix', 'form', 'held', 'right', 'nav', 'status', 'overview', 'org', 'company', 'site', 'users', 'user', 'worker', 'roles', 'role', 'devices', 'device', 'printers', 'area']
-/** Strings shaped like keys that are not: the permissions the code names. */
-const NOT_KEYS: ReadonlySet<string> = new Set<string>(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name))
+/**
+ * Strings shaped like keys that are not: the permissions the code names; B-TH-279: the placeholders of the mail templates and saved
+ * replies (`company.legalName`, the preview's made-up values), which the domain names and fills — never a word of the admin catalogue.
+ */
+const NOT_KEYS: ReadonlySet<string> = new Set<string>([...FACTORY_PERMISSIONS.assignable.map((definition) => definition.name), ...COMMON_REPLY_PLACEHOLDERS])
 
 function literalKeys(): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')

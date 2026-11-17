@@ -238,7 +238,9 @@ export const postReplyContract = defineContract({
  */
 export const mentionablePeopleContract = defineContract({
   params: recordParams,
-  response: { 200: output({ people: z.array(output({ id: id(), name: z.string() })) }) },
+  // T7 (production lane agreement): `tag`, a small label a module gives (the record's production supervisor), in the reader's
+  // language; absent: none. Tagged people come first.
+  response: { 200: output({ people: z.array(output({ id: id(), name: z.string(), /* T7 */ tag: z.string().optional() })) }) },
 })
 
 export const setStatusContract = defineContract({

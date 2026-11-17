@@ -7,6 +7,8 @@ import { WORKORDERS_HOLD } from '../production/work-orders/permissions'
 import { PORTAL_CUSTOMER_DOCUMENTS_VIEW } from '../sales/portal-documents/permissions'
 import { PORTAL_SALES_ORDERS_VIEW } from '../sales/portal-orders/permissions'
 import { PORTAL_SAMPLES_VIEW } from '../sales/portal-samples/permissions'
+// B-PR-25: the Production role asks for changes and production asks (the portal hides a cancel fee from roles without prices).
+import { PORTAL_SALES_ORDERS_ASK } from '../sales/change-requests/permissions'
 
 /**
  * B-PR-13 (production plan §3 "Who may do what", §5 Roles; lead picks L10, L18, L21; review fixes R-05, R-45, R-52): the
@@ -97,9 +99,11 @@ export const CUSTOMER_PRODUCTION_ROLE = 'customer-production'
  * their production, marks them urgent, reads what we ask it to approve (answering takes portal.approve, a default capability)
  * and its samples, opens the order's shared files (portal.customerDocuments.view — never conformity or finance; order
  * confirmations and quotes need the price grain, which this role never has: sales/portal-documents/library GROUP_RULES) and
- * writes in its orders' threads (portal.comment: "Report a problem"). It asks for changes from B-PR-25 on (which hides a
- * cancel fee from roles without prices first). The Buyer also marks orders urgent; Quality and Viewer read production. The
- * customer Admin follows by itself; Designer and Finance do not see production.
+ * writes in its orders' threads (portal.comment: "Report a problem"). B-PR-25: it asks (portal.salesOrders.ask) every kind its
+ * customer's limits open — a change or a cancel within the cut-offs, Urgent – asked while the urgency switch is on, a pause, a
+ * resume, ship what is ready, another sample round while the list names them — and reads no cancel fee (no amount, no
+ * percent: it holds no price grain). The Buyer also marks orders urgent; Quality and Viewer read production. The customer
+ * Admin follows by itself; Designer and Finance do not see production.
  */
 export const PRODUCTION_PARTNER_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   [CUSTOMER_PRODUCTION_ROLE]: [
@@ -111,6 +115,8 @@ export const PRODUCTION_PARTNER_ADDS: Readonly<Record<string, readonly Permissio
     PORTAL_COMMENT,
     PORTAL_PRODUCTION_VIEW,
     PORTAL_PRODUCTION_URGENCY,
+    // B-PR-25
+    PORTAL_SALES_ORDERS_ASK,
   ],
   'customer-buyer': [PORTAL_PRODUCTION_VIEW, PORTAL_PRODUCTION_URGENCY],
   'customer-quality': [PORTAL_PRODUCTION_VIEW],
