@@ -1,0 +1,88 @@
+{
+  "to": "To",
+  "cc": "Cc",
+  "subject": "Subject",
+  "subjectLabel": "Subject:",
+  "subjectChange": "Change the subject: {subject}",
+  "lineLabel": "{line}: add a person or an address",
+  "placeholder": "A contact of {party} or an address",
+  "suggestions": "Contacts of {party}",
+  "useAddress": "Use “{address}”",
+  "remove": "Take {name} off",
+  "chip": {
+    "org": "{org}",
+    "other": "{org} — another customer",
+    "unknown": "not a contact",
+    "ours": "our colleague",
+    "checking": "checking…"
+  },
+  "held": {
+    "noRecipient": "Add a recipient",
+    "tooMany": "Send to at most {max} addresses",
+    "subject": "Keep the subject under {max} characters"
+  },
+  "who": {
+    "person": "{name} ({org})",
+    "files_one": "{count} file",
+    "files_other": "{count} files",
+    "from": "From you, with this record's reply address, so the answer lands back here."
+  },
+  "check": {
+    "send": "Send to {party}",
+    "retry": "Try again",
+    "checking": "Checking the recipients and the text…",
+    "failed": "Could not check",
+    "refused": "This message cannot be checked",
+    "held": {
+      "sending": "Sending…",
+      "checking": "Checking…",
+      "refused": "Go back: this message cannot go from here",
+      "officeFile": "Share or take off the office-only file first",
+      "outside": "Tick “Send outside this customer”, or take the address off"
+    }
+  },
+  "problem": {
+    "forbidden": "You may not send mail for this record.",
+    "notFound": "This record is no longer there.",
+    "unavailable": "Nexus cannot be reached right now. You can still send: the factory refuses another customer's address on its own.",
+    "failed": "The check did not run. You can still send: the factory refuses another customer's address on its own."
+  },
+  "outside": {
+    "title": "{addresses}: another customer’s address.",
+    "body": "This mail is about {party}’s record. It is refused unless you tick below; the tick is recorded with your name.",
+    "tick": "Send outside this customer"
+  },
+  "warning": {
+    "OTHER_ORGANISATION": {
+      "title": "Another organisation gets it: {items}.",
+      "body": "Check that it may read {party}’s mail."
+    },
+    "UNKNOWN_RECIPIENT": {
+      "title": "Not a contact of {party}: {items}.",
+      "body": "Check the address before it goes."
+    },
+    "MENTIONS_COST": {
+      "title": "The text names money: {items}.",
+      "body": "Check that {party} may read it."
+    },
+    "NAMES_OTHER_CUSTOMER": {
+      "title": "The text names another customer: {items}.",
+      "body": "{party} would read that name."
+    },
+    "INTERNAL_MENTION": {
+      "title": "The text mentions a colleague: {items}.",
+      "body": "Mentions stay in office notes; {party} would read it as plain text."
+    },
+    "OFFICE_FILE": {
+      "title": "Office only: {items}.",
+      "body": "Share it with {party} or take it off before it goes."
+    }
+  },
+  "notice": {
+    "sent": "Sent to {party}: the delivery word shows on the message.",
+    "failed": "Not sent: {reason}. Your text is still in the box.",
+    "outside": "An address belongs to another customer: the mail did not go. Take it off, or tick “Send outside this customer” in the check.",
+    "hidden": "A blind copy goes only to our colleagues or to this customer's contacts: the mail did not go.",
+    "badRecipient": "Not sent: an address was refused (not valid, or it bounced or complained before). Fix the address and send again."
+  }
+}

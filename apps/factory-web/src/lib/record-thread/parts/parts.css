@@ -1,0 +1,57 @@
+/*
+ * The record thread's small shared parts (B-TH-298): the Avatar. Semantic tokens only (design kit §1); one look in light and
+ * dark because every value is a DS token.
+ */
+.fw-rt-av {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--nds-pill-neutral-bg);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-micro);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  user-select: none;
+}
+
+.fw-rt-av.is-org {
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+}
+
+.fw-rt-av.is-sm {
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
+}
+
+/* Words only a screen reader reads (a live line, a field's name). */
+.fw-rt-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* SCR-006-feed, -composer, -attach, -send (design review): a column as tall as the docked thread's feed at 1440 × 900. */
+.fw-rt-case {
+  display: flex;
+  flex-direction: column;
+  height: 640px;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  overflow: hidden;
+}

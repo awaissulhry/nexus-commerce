@@ -33,7 +33,7 @@ export default defineIndexer({
         kind: true,
         roundNo: true,
         stage: true,
-        style: { select: { code: true, name: true } },
+        style: { select: { code: true, name: true, brandPartyId: true } },
         party: { select: { code: true, legalName: true, tradeName: true } },
       },
     })
@@ -41,7 +41,8 @@ export default defineIndexer({
       recordId: row.id,
       companyId: row.companyId,
       siteId: null,
-      partyId: row.partyId,
+      // B-TH-030 (WALL-G12): an internal round (no customer) on a private-label style is the style's brand's.
+      partyId: row.partyId ?? row.style.brandPartyId,
       number: row.number,
       title: `${row.style.code} · ${KIND_WORDS[row.kind] ?? row.kind} · round ${row.roundNo}`,
       subtitle: row.party ? partyName(row.party) : row.style.name,

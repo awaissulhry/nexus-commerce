@@ -6,6 +6,8 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase, type Prisma }
 import { migratedDatabase, type MigratedDatabase, seedAt, seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { ONE_CUSTOMER_WORDS } from '@nexus/factory-domain/production/work-orders/cells'
+import { ONE_CUSTOMER_SPLIT_WORDS } from '@nexus/factory-domain/production/work-orders/split'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed/calendar'
@@ -40,6 +42,8 @@ const A = {
   site: idOf('site:A1'),
   line: idOf('site:A1:line:L1'),
   brand: idOf('party:P1'),
+  // B-PR-01: a second customer (the seeds' P3), for one customer per work order.
+  other: idOf('party:P3'),
   style: idOf('production:style:JKT-02'),
   blk: idOf('production:colourway:JKT-02:BLK'),
   leather: idOf('product:item:leather'),
@@ -63,7 +67,7 @@ const SESSIONS: Record<string, SessionContext> = {
 }
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST' | 'PATCH'
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT'
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
 const run = randomBytes(4).toString('hex')
 const call = (session: string, method: Method, url: string, payload?: unknown) => app.inject({ method, url, headers: { 'x-test-session': session }, ...(payload === undefined ? {} : { payload: payload as object }) })
@@ -81,22 +85,22 @@ const asOffice = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => data
 const events = (type: string, subject: string) => admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2 ORDER BY "occurredAt", id`, [type, subject])
 const wo = (number: string) => admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = $2`, [A.tenant, number]).then((rows) => rows[0]!.id)
 
-/** A CONFIRMED sales order of company A for SEED-JKT-02 (black) to the brand P1: one line with these sizes. */
+/** A CONFIRMED sales order of company A for SEED-JKT-02 (black) to the brand P1 (or another customer): one line with these sizes. */
 let orders = 0
-async function salesOrder(sizes: Record<string, number>, promiseDate = seedDay('2026-12-10')): Promise<{ orderId: string; lineId: string }> {
+async function salesOrder(sizes: Record<string, number>, promiseDate = seedDay('2026-12-10'), partyId: string = A.brand): Promise<{ orderId: string; lineId: string }> {
   const orderId = newId()
   const lineId = newId()
   const pieces = Object.values(sizes).reduce((sum, quantity) => sum + quantity, 0)
   await asOffice(async (tx) => {
     await tx.salesOrder.create({
-      data: { id: orderId, companyId: A.company, partyId: A.brand, number: `T-${run}-SO-${++orders}`, status: 'CONFIRMED', orderDate: new Date('2026-10-20T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date(`${promiseDate}T00:00:00.000Z`) },
+      data: { id: orderId, companyId: A.company, partyId, number: `T-${run}-SO-${++orders}`, status: 'CONFIRMED', orderDate: new Date('2026-10-20T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date(`${promiseDate}T00:00:00.000Z`) },
       select: { id: true },
     })
     await tx.salesOrderLine.create({
-      data: { id: lineId, companyId: A.company, orderId, partyId: A.brand, seq: 10, kind: 'SIZE_GRID', styleId: A.style, colourwayId: A.blk, quantity: pieces, unitPrice: '100.000000', netAmount: pieces * 10_000, vatRatePct: '22.00', vatAmount: pieces * 2_200 },
+      data: { id: lineId, companyId: A.company, orderId, partyId, seq: 10, kind: 'SIZE_GRID', styleId: A.style, colourwayId: A.blk, quantity: pieces, unitPrice: '100.000000', netAmount: pieces * 10_000, vatRatePct: '22.00', vatAmount: pieces * 2_200 },
       select: { id: true },
     })
-    await tx.salesOrderLineSize.createMany({ data: Object.entries(sizes).map(([size, quantity]) => ({ id: newId(), lineId, partyId: A.brand, size, quantity })) })
+    await tx.salesOrderLineSize.createMany({ data: Object.entries(sizes).map(([size, quantity]) => ({ id: newId(), lineId, partyId, size, quantity })) })
   })
   return { orderId, lineId }
 }
@@ -314,6 +318,65 @@ describe('split a work order (MES-010)', () => {
     expect(await admin(`SELECT count(*)::int AS n FROM "WorkOrder" WHERE "splitFromId" = $1`, [parent.id])).toEqual([{ n: 0 }])
   })
 })
+
+// ── B-PR-01 (production plan): one customer per work order ──────────────────────────────────────────────────────────────
+describe('one customer per work order (B-PR-01)', () => {
+  const partyOf = async (workOrderId: string) => (await admin<{ party: string | null }>(`SELECT "partyId"::text AS party FROM "WorkOrder" WHERE id = $1`, [workOrderId]))[0]!.party
+
+  it("is made with its lines' customer, refuses lines of two customers in words that name neither, and a split keeps it", async () => {
+    const mine = await salesOrder({ '50': 2, '52': 2 })
+    // Another size, so the only problem is the customer (two lines never make one colourway and size twice).
+    const theirs = await salesOrder({ '54': 1 }, seedDay('2026-12-10'), A.other)
+    const both = await refused('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: mine.lineId }, { salesOrderLineId: theirs.lineId }], siteId: A.site }, 400)
+    expect(both.message).toBe(ONE_CUSTOMER_WORDS.en)
+    expect(both.issues).toEqual([{ path: 'body/lines/1', message: ONE_CUSTOMER_WORDS.en }])
+    expect(JSON.stringify(both)).not.toMatch(new RegExp(`${A.brand}|${A.other}|SEED-C`))
+    expect(await admin(`SELECT count(*)::int AS n FROM "WorkOrderSize" WHERE "salesOrderLineId" = $1`, [theirs.lineId])).toEqual([{ n: 0 }])
+    const made = (await ok('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: mine.lineId }], siteId: A.site }, 201)).workOrder
+    expect(await partyOf(made.id)).toBe(A.brand)
+    // Another customer's line never joins its draft.
+    const join = await refused('manager', 'PUT', `/production/work-orders/${made.id}/cells`, { version: made.version, cells: [{ salesOrderLineId: theirs.lineId, size: '54', quantity: 1 }] }, 400)
+    expect(join.message).toBe(ONE_CUSTOMER_WORDS.en)
+    const [c50] = made.cells as Json[]
+    const { workOrder: child } = await ok('manager', 'POST', `/production/work-orders/${made.id}/split`, { cells: [{ cellId: c50!.id, quantity: 1 }] }, 201)
+    expect(await partyOf(child.id)).toBe(A.brand)
+  })
+
+  it('splits a mixed draft made before the rule one customer at a time, and the draft then takes the customer left', async () => {
+    const parent = await draft({ '50': 2, '52': 2 })
+    const theirs = await salesOrder({ '54': 3 }, seedDay('2026-12-10'), A.other)
+    // Made before the rule (planted with the triggers off): a cell of the other customer on it, and no customer.
+    const theirCell = newId()
+    await admin('BEGIN')
+    try {
+      await admin("SET LOCAL session_replication_role = 'replica'")
+      await admin(
+        `INSERT INTO "WorkOrderSize" SELECT * FROM jsonb_populate_record(NULL::"WorkOrderSize", (SELECT to_jsonb(c) || $2::jsonb FROM "WorkOrderSize" c WHERE c.id = $1))`,
+        [(parent.cells as Json[])[0]!.id, JSON.stringify({ id: theirCell, size: '54', quantity: 3, salesOrderLineId: theirs.lineId, partyId: A.other })],
+      )
+      await admin(`UPDATE "WorkOrder" SET "partyId" = NULL WHERE id = $1`, [parent.id])
+      await admin('COMMIT')
+    } catch (error) {
+      await admin('ROLLBACK')
+      throw error
+    }
+    const record = (await ok('viewer', 'GET', `/production/work-orders/${parent.id}`)).workOrder
+    const [c50] = record.cells as Json[]
+    // Both customers' sizes in one move: refused in words that name neither.
+    const preview = await ok('manager', 'POST', `/production/work-orders/${parent.id}/split/preview`, { cells: [{ cellId: c50!.id, quantity: 1 }, { cellId: theirCell, quantity: 3 }] })
+    expect(preview).toMatchObject({ parent: null, child: null, problems: [{ path: 'body/cells', message: ONE_CUSTOMER_SPLIT_WORDS.en }] })
+    expect((await refused('manager', 'POST', `/production/work-orders/${parent.id}/split`, { cells: [{ cellId: c50!.id, quantity: 1 }, { cellId: theirCell, quantity: 3 }] }, 400)).message).toBe(ONE_CUSTOMER_SPLIT_WORDS.en)
+    // The other customer's sizes leave it into a work order of that customer; what stays is one customer's.
+    const answer = await ok('manager', 'POST', `/production/work-orders/${parent.id}/split`, { cells: [{ cellId: theirCell, quantity: 3 }] }, 201)
+    expect(await partyOf(answer.workOrder.id)).toBe(A.other)
+    expect(answer.workOrder.cells.map((cell: Json) => [cell.size, cell.quantity, cell.salesOrderLineId])).toEqual([['54', 3, theirs.lineId]])
+    expect(await partyOf(parent.id)).toBe(A.brand)
+    expect(answer.parent.cells.map((cell: Json) => cell.size)).toEqual(['50', '52'])
+    const audits = await admin<{ before: Json; after: Json }>(`SELECT before, after FROM "AuditLog" WHERE action = 'workorders.split' AND "recordId" = $1 AND after ? 'partyId'`, [parent.id])
+    expect(audits).toEqual([{ before: { partyId: null }, after: { partyId: A.brand } }])
+  })
+})
+// ── end B-PR-01 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 describe('the traveller with its QR code (MES-014)', () => {
   it('prints one work order, and several in one PDF, inline and stored nowhere', async () => {

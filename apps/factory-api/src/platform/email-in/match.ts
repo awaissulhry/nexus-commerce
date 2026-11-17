@@ -70,6 +70,21 @@ async function namedThread(tx: CommandTx, row: MailFacts): Promise<SortFacts['th
 }
 
 /**
+ * B-TH-033 (WALL-G14, W22): the addresses at the sender's company domain that belong to ANOTHER party — its contacts (any
+ * state: a domain once shared stays shared) and its portal people. One is enough: the domain is not the thread's party's
+ * alone, so it makes nobody known (`knownSender`).
+ */
+async function elsewhereAtDomain(tx: CommandTx, sender: string, partyId: string): Promise<string[]> {
+  const domain = companyDomainOf(sender)
+  if (domain === null) return []
+  const at = { endsWith: `@${domain}`, mode: 'insensitive' as const }
+  const contact = await tx.partyContact.findFirst({ where: { email: at, partyId: { not: partyId } }, select: { email: true } })
+  if (contact?.email) return [contact.email]
+  const person = await tx.user.findFirst({ where: { email: at, audience: 'PARTNER', partyId: { not: partyId } }, select: { email: true } })
+  return person ? [person.email] : []
+}
+
+/**
  * The facts of one mail, and the suggestion for a person. B-W2b-17: `record` is the record whose thread a known sender's
  * mail joins when that is not the party's own (a complaint its subject names, ./matchers/complaint.ts); null: the party's.
  */
@@ -91,7 +106,7 @@ export async function sortFactsOf(tx: CommandTx, row: MailFacts & { readonly sub
       // B-W2b-168 (COL-060: one thread whichever way the partner answers): the party's portal people answer our mail too.
       contacts.push(...(await tx.user.findMany({ where: { audience: 'PARTNER', partyId: thread.partyId, status: 'ACTIVE' }, select: { email: true } })).map((person) => person.email))
       const recipient = await tx.emailOutbound.findFirst({ where: { threadId: thread.id, OR: [{ to: { has: sender } }, { cc: { has: sender } }] }, select: { id: true } })
-      senderKnown = knownSender(sender, { contacts, participants: recipient ? [sender] : [] })
+      senderKnown = knownSender(sender, { contacts, participants: recipient ? [sender] : [], elsewhere: await elsewhereAtDomain(tx, sender, thread.partyId) })
     }
   } else {
     const parties = [...new Set(senderContacts.map((entry) => entry.partyId))]

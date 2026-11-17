@@ -264,7 +264,7 @@
     "reason": "Motivo",
     "reasonHint": "Il cliente lo legge con le sue parole.",
     "reasonPick": "Scegli un motivo",
-    "note": "Nota interna",
+    "note": "Nota d'ufficio",
     "noteHint": "Per le vendite e lo storico; mai inviata al cliente.",
     "message": "Messaggio al cliente (in {language})",
     "recipients": "A {to}",

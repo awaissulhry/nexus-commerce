@@ -485,7 +485,7 @@
     "needDateHint": "Empty: each line its old day if still ahead of the supplier’s lead time, else the earliest arrival.",
     "copies": "The same supplier, site, contact, currency, Incoterms, payment terms and note for the supplier.",
     "prices": "Prices from the supplier’s approved source today when there is one, else the old line’s.",
-    "notCopied": "Not copied: the internal note, delivery schedules, rolls, certificates and variants, a sample order’s style.",
+    "notCopied": "Not copied: the office note, delivery schedules, rolls, certificates and variants, a sample order’s style.",
     "confirm_one": "Create the draft with {count} line",
     "confirm_other": "Create the draft with {count} lines",
     "held": {

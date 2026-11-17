@@ -1,0 +1,86 @@
+{
+  "feed": {
+    "label": "Messaggi della conversazione, dal più vecchio"
+  },
+  "state": {
+    "loading": "Lettura della conversazione…",
+    "error": "Non è stato possibile caricare la conversazione",
+    "errorBody": "Quello che hai scritto nel riquadro sotto resta.",
+    "tryAgain": "Riprova",
+    "forbidden": "Non puoi leggere questa conversazione",
+    "forbiddenBody": "Per leggerla serve il permesso “{right}”. Un amministratore può darlo al tuo ruolo.",
+    "empty": "Ancora nessun messaggio",
+    "emptyBody": "Scrivi il primo qui sotto.",
+    "offline": "Offline · aggiornato alle {time}",
+    "offlineBody": "Questi sono i messaggi fino ad allora. I nuovi compaiono quando torni online; quello che scrivi resta su questo dispositivo."
+  },
+  "older": {
+    "show": "Mostra i {count} precedenti",
+    "loading": "Lettura dei messaggi precedenti…",
+    "failed": "Non è stato possibile caricare i messaggi precedenti",
+    "retry": "Riprova"
+  },
+  "day": {
+    "today": "Oggi",
+    "yesterday": "Ieri",
+    "zone": "Giorni e orari nel fuso orario dell'azienda (Europa/Roma), uguali per tutti"
+  },
+  "fold": {
+    "count_one": "{count} messaggio precedente",
+    "count_other": "{count} messaggi precedenti",
+    "range": "{from} – {to}",
+    "show": "Mostra",
+    "label_one": "Mostra {count} messaggio precedente",
+    "label_other": "Mostra {count} messaggi precedenti"
+  },
+  "folded": {
+    "label": "Apri il messaggio di {author} delle {time}"
+  },
+  "step": {
+    "text": "{who} {verb}",
+    "status": "{from} → {to}"
+  },
+  "changes": {
+    "text_one": "{count} modifica di {who}",
+    "text_other": "{count} modifiche di {who}",
+    "show": "Mostra",
+    "hide": "Nascondi",
+    "fields": "Modificati: {fields}"
+  },
+  "who": {
+    "floorPerson": "Una persona in reparto",
+    "OFFICE": "Qualcuno in ufficio",
+    "FLOOR": "Una persona in reparto",
+    "PARTNER": "Il cliente",
+    "LINK": "Qualcuno con un link",
+    "SYSTEM": "Nexus Factory"
+  },
+  "verb": {
+    "created": "ha creato il record",
+    "updated": "ha modificato il record",
+    "deleted": "ha eliminato il record",
+    "issued": "lo ha emesso",
+    "suspended": "lo ha sospeso",
+    "reinstated": "lo ha ripristinato",
+    "withdrawn": "lo ha ritirato",
+    "archived": "lo ha archiviato",
+    "statusChanged": "ha cambiato lo stato",
+    "sent": "lo ha inviato",
+    "uploaded": "ha aggiunto un file",
+    "shared": "ha cambiato chi vede un file",
+    "retentionChanged": "ha cambiato quanto si conserva un file",
+    "assigned": "lo ha assegnato",
+    "released": "lo ha rilasciato",
+    "rejected": "lo ha rifiutato",
+    "approved": "lo ha approvato",
+    "confirmed": "lo ha confermato",
+    "cancelled": "lo ha annullato",
+    "changed": "ha modificato il record"
+  },
+  "live": {
+    "bar_one": "{count} nuovo messaggio",
+    "bar_other": "{count} nuovi messaggi",
+    "arrived_one": "{count} nuovo messaggio nella conversazione",
+    "arrived_other": "{count} nuovi messaggi nella conversazione"
+  }
+}

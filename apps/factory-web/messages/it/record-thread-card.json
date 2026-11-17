@@ -1,0 +1,104 @@
+{
+  "label": "{author}, {audience}, {time}",
+  "side": {
+    "theParty": "il cliente",
+    "ours": "Noi"
+  },
+  "author": {
+    "floorPerson": "Una persona in reparto",
+    "someone": "qualcuno",
+    "USER": "Qualcuno in ufficio",
+    "WORKER": "Una persona in reparto",
+    "PARTY": "Il cliente",
+    "SYSTEM": "Nexus Factory"
+  },
+  "audience": {
+    "theirs": "messaggio da {party}",
+    "ours": "messaggio a {party}, {party} lo legge",
+    "note": "Nota d'ufficio, solo ufficio",
+    "noteFloor": "Nota d'ufficio, anche in reparto",
+    "floor": "dal reparto, solo ufficio"
+  },
+  "mark": {
+    "note": "Nota d'ufficio · Solo ufficio",
+    "alsoFloor": "Anche in reparto",
+    "fromFloor": "Dal reparto",
+    "email": "Email",
+    "portal": "Portale",
+    "toEmail": "Email a {party}",
+    "toPortal": "Nel portale · {party}"
+  },
+  "delivery": {
+    "QUEUED": "In attesa di invio",
+    "SENDING": "In invio",
+    "SENT": "Inviata",
+    "DELIVERED": "Consegnata",
+    "BOUNCED": "Respinta",
+    "COMPLAINED": "Segnalata come spam",
+    "FAILED": "Non inviata"
+  },
+  "menu": {
+    "label": "Altro per il messaggio di {author} delle {time}",
+    "reply": "Rispondi",
+    "replyHint": "A viene compilato da questa email",
+    "task": "Crea un'attività",
+    "taskHint": "testo da questo messaggio, scadenza, persona",
+    "link": "Copia il link al messaggio",
+    "linkHint": "apre il record con questo messaggio aperto"
+  },
+  "body": {
+    "showAll": "Mostra tutto ({count} righe)",
+    "showQuoted": "Mostra il testo citato e la firma",
+    "hideQuoted": "Nascondi il testo citato e la firma"
+  },
+  "mentioned": {
+    "list": "Menzionati: {names}",
+    "more": "Menzionati: {names} +{count}"
+  },
+  "files": {
+    "label": "Foto",
+    "open": "Apri {name}",
+    "openShort": "Apri",
+    "moreLabel_one": "Mostra {count} altro file",
+    "moreLabel_other": "Mostra altri {count} file",
+    "more_one": "{count} altro",
+    "more_other": "altri {count}",
+    "removed": "File rimosso",
+    "quarantined": "Trattenuto per il controllo antivirus: si apre quando il controllo dice che è pulito",
+    "pending": "Ancora in caricamento",
+    "cannotOpen_one": "{count} file che non puoi aprire",
+    "cannotOpen_other": "{count} file che non puoi aprire"
+  },
+  "file": {
+    "kind": {
+      "photo": "Foto",
+      "pdf": "PDF",
+      "audio": "Nota vocale",
+      "document": "Documento",
+      "file": "File"
+    }
+  },
+  "details": {
+    "email": "A {to} · Oggetto: {subject}"
+  },
+  "bounce": {
+    "text": "{to} non ha potuto ricevere questa email: lo ha detto il servizio di posta.",
+    "task": "Attività creata per te · Apri",
+    "complained": "Il destinatario ha segnalato questa email come spam: all'indirizzo non va più posta finché un amministratore non lo sblocca.",
+    "failed": "Il servizio di posta non ha preso questa email dopo i suoi tentativi. Scrivila di nuovo per inviarla."
+  },
+  "outbox": {
+    "sending": "Invio in corso…",
+    "failed": "Non inviato · {reason}. Il tuo testo resta.",
+    "retry": "Riprova"
+  },
+  "reason": {
+    "network": "la connessione è caduta",
+    "refused": "la fabbrica lo ha rifiutato così com'è",
+    "forbidden": "non puoi scrivere qui",
+    "conflict": "la conversazione è cambiata nel frattempo",
+    "unavailable": "Nexus non è raggiungibile",
+    "outside": "un indirizzo è di un altro cliente",
+    "failed": "qualcosa non è andato"
+  }
+}

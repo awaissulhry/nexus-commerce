@@ -10,6 +10,7 @@ import {
   cellsWithoutLine,
   daysLate,
   lineRefusal,
+  privateStyleRefusal,
   nextRoundNo,
   roundEditRefusal,
   roundLabel,
@@ -124,5 +125,18 @@ describe('sample rounds (B-W2b-246)', () => {
     expect(cellsWithoutLine(cells, { ...style, colourwayIds: [BLK] }, null, 'body').cells[0]).toEqual({ colourwayId: BLK, size: '52', quantity: 3 })
     expect(cellsWithoutLine(cells, style, 'x', 'body').problems[0]?.path).toBe('body/colourwayId')
     expect(cellsWithoutLine([], style, null, 'body').problems).toHaveLength(1)
+  })
+})
+
+// B-TH-034 (WALL-G15, W12): a round for a customer never uses another customer's private-label style.
+describe("another customer's private-label style", () => {
+  const style = { code: 'AX-100', brandPartyId: 'alpha' }
+  it("refuses a round for brand B on brand A's style; its brand, its team's rider, an internal round and our range pass", () => {
+    expect(privateStyleRefusal(style, { id: 'beta', teamPartyId: null }, 'Brand Alpha')).toEqual({ code: 'PRIVATE_STYLE', message: "AX-100 is Brand Alpha's private-label style: its samples are made for that customer only." })
+    expect(privateStyleRefusal(style, { id: 'beta', teamPartyId: null })?.message).toContain("another customer's private-label style")
+    expect(privateStyleRefusal(style, { id: 'alpha', teamPartyId: null })).toBeNull()
+    expect(privateStyleRefusal(style, { id: 'rider', teamPartyId: 'alpha' })).toBeNull()
+    expect(privateStyleRefusal(style, null)).toBeNull()
+    expect(privateStyleRefusal({ code: 'OPEN-1', brandPartyId: null }, { id: 'beta', teamPartyId: null })).toBeNull()
   })
 })

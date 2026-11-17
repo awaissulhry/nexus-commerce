@@ -131,9 +131,28 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
   return items
 }
 
+// ── B-TH-225 (threads plan TH-1a, picture 23: the Export menu says what the file holds) ──
+/**
+ * What a list's Export ▾ says the file holds, in the list's own words (opt-in, `ListFrame.exportAbout`): a heading (whose rows,
+ * which view), a format's words with the rows it writes ("Excel (.xlsx) — all 42 orders in this view") and a note under the
+ * formats ("the file = the screen …"). A list without it keeps the frame's words.
+ */
+export interface ExportAbout {
+  readonly heading: string
+  readonly formats?: Partial<Readonly<Record<ExportFormat, string>>>
+  readonly note?: string
+}
+// ── end B-TH-225 ──
+
 /** Export ▾: the formats the list exports to, then the person's recent exports (pure, for the tests). */
-export function exportMenuItems(t: Translate, formats: readonly ExportFormat[], jobs: readonly ExportJob[], time: (iso: string) => string, act: { start: (format: ExportFormat) => void; open: (job: ExportJob) => void }, number: (value: number) => string = String): MenuItemDef[] {
-  const items: MenuItemDef[] = formats.map((format) => ({ id: `f-${format}`, label: t(`tools.exportAs.${format}`), onSelect: () => act.start(format) }))
+export function exportMenuItems(t: Translate, formats: readonly ExportFormat[], jobs: readonly ExportJob[], time: (iso: string) => string, act: { start: (format: ExportFormat) => void; open: (job: ExportJob) => void }, number: (value: number) => string = String, about?: ExportAbout | null): MenuItemDef[] {
+  const items: MenuItemDef[] = formats.map((format) => ({ id: `f-${format}`, label: about?.formats?.[format] ?? t(`tools.exportAs.${format}`), onSelect: () => act.start(format) }))
+  // B-TH-225: the heading above the formats, the note under the last one.
+  if (about) {
+    const last = items[items.length - 1]
+    if (last && about.note) items[items.length - 1] = { ...last, description: about.note }
+    items.unshift({ id: 'h-about', heading: true, label: about.heading })
+  }
   const recent = recentJobs(jobs)
   if (recent.length > 0) {
     items.push({ id: 's-recent', separator: true }, { id: 'h-recent', heading: true, label: t('tools.recent') })
@@ -167,7 +186,7 @@ function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   return (message, tone = 'success') => api?.toast(message, tone)
 }
 
-export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[] }) {
+export function ListToolsBar<T>({ state, withheld, about }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[]; about?: ExportAbout | null /* B-TH-225 */ }) {
   const t = useT('lists')
   const locale = useLocale()
   const receipt = useReceipt()
@@ -374,7 +393,7 @@ export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>;
               <Download size={13} aria-hidden /> {t('tools.export')}
             </>
           }
-          items={exportMenuItems(t, state.answer!.exports!.formats, jobs, (iso) => formatTime(iso, { locale }), { start: startExport, open: (job) => setDialog({ kind: 'job', job }) }, (value) => formatNumber(value, locale))}
+          items={exportMenuItems(t, state.answer!.exports!.formats, jobs, (iso) => formatTime(iso, { locale }), { start: startExport, open: (job) => setDialog({ kind: 'job', job }) }, (value) => formatNumber(value, locale), about /* B-TH-225 */)}
           triggerProps={{ className: 'nds-btn sm', 'aria-label': t('tools.exportLabel') }}
         />
       )}

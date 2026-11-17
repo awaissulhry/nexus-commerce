@@ -322,7 +322,7 @@
     "photosNoRight": "Your role cannot upload files.",
     "photosPicked_one": "{count} photo will be sent.",
     "photosPicked_other": "{count} photos will be sent.",
-    "note": "Internal note (optional)",
+    "note": "Office note (optional)",
     "noteHint": "For the office only: never shown to the customer.",
     "problem": {
       "customer": "Choose the customer (or scan the serial).",
@@ -349,7 +349,7 @@
     "wordsSub": "{channel} · {time}",
     "edit": "Edit",
     "about": "What it is about",
-    "internalNote": "Internal note:",
+    "internalNote": "Office note:",
     "valueNoGrain": "Your role does not see prices",
     "orderValue": "Order value {value} (net)",
     "triage": "Triage",

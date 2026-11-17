@@ -16,12 +16,12 @@
     "audienceLong": {
       "INTERNAL": "Interna (completa)",
       "SUBCONTRACTOR": "Terzista (senza costi né nomi dei fornitori)",
-      "BRAND": "Cliente (senza note interne)"
+      "BRAND": "Cliente (senza note d'ufficio)"
     },
     "audienceHint": {
       "INTERNAL": "Tutto ciò che l'ufficio può vedere. Il PDF non riporta mai un costo: la carta viaggia.",
       "SUBCONTRACTOR": "Nessun costo, margine o compenso, nessun minuto standard, nessun nome di fornitore o laboratorio, nessuna alternativa, stato di approvazione o nome di persona. Si segna cosa arriva con il kit.",
-      "BRAND": "Come la copia per il terzista, e senza note interne né segno del kit. La copia di un modello a marchio privato va solo al suo marchio."
+      "BRAND": "Come la copia per il terzista, e senza note d'ufficio né segno del kit. La copia di un modello a marchio privato va solo al suo marchio."
     },
     "language": {
       "it": "Italiano",
@@ -34,7 +34,7 @@
       "ALTERNATES": "materiali alternativi",
       "APPROVALS": "stati di approvazione dei materiali",
       "CUSTOMERS": "quale cliente fornisce un materiale",
-      "INTERNAL_NOTES": "note interne",
+      "INTERNAL_NOTES": "note d'ufficio",
       "PEOPLE": "nomi delle persone"
     },
     "section": {

@@ -619,10 +619,10 @@ describe('crews, device modes, work orders and the floor checks', () => {
 
   it('a work order: the rush flag changes after release; a split names another work order of the same style, for good', async () => {
     expect(await run(office(), `UPDATE "WorkOrder" SET rush = true, priority = 5 WHERE id = $1::uuid`, p().workOrderId)).toBe(1)
-    const draft = (await admin('SELECT "companyId", "styleId", kind::text AS kind FROM "WorkOrder" WHERE id = $1', [p().workOrderId]))[0]!
+    const draft = (await admin('SELECT "companyId", "styleId", kind::text AS kind, "partyId" FROM "WorkOrder" WHERE id = $1', [p().workOrderId]))[0]!
     const child = randomUUID()
     const order = (id: string, extra: Record<string, unknown>) =>
-      insert(office(), 'WorkOrder', { id, companyId: draft.companyId, siteId: A.site, number: `WO-T-${tag()}`, kind: draft.kind, styleId: draft.styleId, splitFromId: p().workOrderId, ...extra })
+      insert(office(), 'WorkOrder', { id, companyId: draft.companyId, siteId: A.site, number: `WO-T-${tag()}`, kind: draft.kind, styleId: draft.styleId, splitFromId: p().workOrderId, partyId: draft.partyId /* B-PR-01 */, ...extra })
     expect(await order(child, {})).toBe(1)
     const other = (await admin('SELECT id FROM "Style" WHERE "tenantId" = $1 AND id <> $2 LIMIT 1', [a.tenantId, draft.styleId]))[0]!.id
     await expect(order(randomUUID(), { styleId: other })).rejects.toThrow(/split from another work order of the same style and kind/)

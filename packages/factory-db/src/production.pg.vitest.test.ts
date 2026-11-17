@@ -115,7 +115,7 @@ async function draftWorkOrder(options: { withCell?: boolean; withRouting?: boole
   await as(office(), (client) =>
     client.$transaction(async (tx) => {
       const exec = (table: string, row: Record<string, unknown>) => tx.$executeRawUnsafe(...insertSql(table, row))
-      await exec('WorkOrder', { id: ids.workOrderId, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: seeded.styleId, styleRevisionId: seeded.revisionId })
+      await exec('WorkOrder', { id: ids.workOrderId, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: seeded.styleId, styleRevisionId: seeded.revisionId, partyId: A.P1 /* B-PR-01 */ })
       if (withCell) {
         await exec('WorkOrderSize', {
           id: ids.cellId,
@@ -297,15 +297,15 @@ describe('a work order', () => {
   it('is released only with a RELEASED revision of its style, its label template, a batch number of its own, its cells and its routing', async () => {
     // The product seed's jacket: its revision is a DRAFT.
     const onDraftRevision = randomUUID()
-    await insert(office(), 'WorkOrder', { id: onDraftRevision, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: A.styleJkt01, styleRevisionId: A.revisionJkt01 })
+    await insert(office(), 'WorkOrder', { id: onDraftRevision, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: A.styleJkt01, styleRevisionId: A.revisionJkt01, partyId: A.P1 /* B-PR-01 */ })
     await expect(release(onDraftRevision, { labelTemplateId: null })).rejects.toThrow(/revision .* is DRAFT; work order .* is released only with a RELEASED revision of its style/)
     // Another style's revision: the reference refuses it.
     await expect(
-      insert(office(), 'WorkOrder', { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: A.styleJkt01, styleRevisionId: seeded.revisionId }),
+      insert(office(), 'WorkOrder', { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: A.styleJkt01, styleRevisionId: seeded.revisionId, partyId: A.P1 /* B-PR-01 */ }),
     ).rejects.toThrow(/foreign key/)
     // A work order starts as DRAFT.
     await expect(
-      insert(office(), 'WorkOrder', { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: seeded.styleId, status: 'RELEASED' }),
+      insert(office(), 'WorkOrder', { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: seeded.styleId, status: 'RELEASED', partyId: A.P1 /* B-PR-01 */ }),
     ).rejects.toThrow(/starts as DRAFT/)
 
     const empty = await draftWorkOrder({ withCell: false })

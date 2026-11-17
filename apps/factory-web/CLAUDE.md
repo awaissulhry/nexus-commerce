@@ -382,6 +382,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `new/` the typed New order `/sales/orders/new?company=&party=&contact=&ref=` (no draft row: the page holds the lines,
   session storage keeps them over a reload; Confirm = POST /sales/orders/manual); the list's New order dialog (`c`,
   `?new=1`) and "Board in a new tab" (the board re-reads its lanes on live changes).
+  B-TH-225 / B-TH-226 (threads plan TH-1a, pictures 23 + 24; catalogue `orders-sheet`): the list is THE SHEET — `list/sheet/model.ts`
+  (pure: each cell's door — Number → order, Customer → customer, Pieces / Promised → `?tab=lines`, Deposit → its TD02, Shipped →
+  one DDT's shipment documents or the order's Shipments tab, Invoiced → one invoice or `?tab=money`, From quote → the quote; a
+  door the reader may not open = words + the reason; Brand words; Invoiced word vs amount by grain; the switcher's face and
+  lines; Export ▾'s words), `list/sheet/parts.tsx` (DoorCell, FunnelButton for Brand / Status / Company, PeekLink + PeekCard,
+  PictureThumb + PictureViewer on the small preview `GET /sales/orders/:id/picture`, SheetChips, CustomerSwitcher = DS
+  DetailPopover + AsyncListboxPanel over `GET /sales/orders/customers`). Address: `?party=` `?brand=<party>|own` `?company=`
+  (every read, the tiles and the export follow). Wide columns (Ordered, Margin %, Priority, Season, From quote) from 1800 px.
+  Keys `o` / ⌘↵ / Space live in the footer icon. Export N = the frame's `selection.exportSelected` (the export job with ids).
+  List frame opt-ins added here: `exportAbout`, `onRowClick`, `ColDef.context.exportWith` (a cell's second fact in the file).
 - `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,

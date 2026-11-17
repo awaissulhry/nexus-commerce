@@ -14,7 +14,8 @@ import { systemCallerOf } from '../../../platform/files/files'
 import { TAX_COLUMNS, taxFieldsOf } from '../../parties/store'
 import { dayOf, decimal, quantityText, type Reader } from '../store'
 import { siteAddressOf } from '../views'
-import { heldLines, heldOrder, localeOf } from './read'
+import { shipToPrintOf } from '../po-depth/store'
+import { heldLines, heldOrder, localeOf, shipToOfOrder } from './read'
 
 /**
  * The price-free copy of a purchase order (B-W2b-174; Owner answer C2 "a price-free PO copy, price talk only in the PO's
@@ -75,7 +76,9 @@ export async function portalOrderCopy(request: FastifyRequest, orderId: string, 
     const items = new Map((await tenant.item.findMany({ where: { id: { in: [...new Set(itemIds)] } }, select: { id: true, code: true, name: true, kind: true, baseUom: true } })).map((item) => [item.id, item]))
     const colours = new Map((colourIds.length === 0 ? [] : await tenant.itemColour.findMany({ where: { id: { in: [...new Set(colourIds)] } }, select: { id: true, name: true } })).map((colour) => [colour.id, colour.name]))
     const site = await tenant.site.findUnique({ where: { id: order.siteId }, select: { name: true, address: true } })
-    return { items, colours, site, supplier: await supplierBlock(tenant, order.partyId, head.contactId, today) }
+    // B-TH-036 (WALL-G18): a third party's address, under our name for a customer's or a brand's.
+    const shipTo = await shipToOfOrder(tenant, order.id)
+    return { items, colours, site, shipTo, supplier: await supplierBlock(tenant, order.partyId, head.contactId, today) }
   })
   const liveById = new Map(lines.map((line) => [line.id, line]))
   const printed: SupplierLine[] = held
@@ -142,7 +145,7 @@ export async function portalOrderCopy(request: FastifyRequest, orderId: string, 
     date: today,
     currency: head.currency,
     supplier: facts.supplier,
-    deliverTo: facts.site ? siteAddressOf(facts.site) : null,
+    deliverTo: shipToPrintOf({ shipTo: facts.shipTo }, company.legalName) ?? (facts.site ? siteAddressOf(facts.site) : null),
     requestedDate: held ? held.requestedDate : dayOf(order.requestedDate),
     incoterms: held ? held.incoterms : order.incoterms,
     paymentTerms: held ? held.paymentTerms : order.paymentTerms,

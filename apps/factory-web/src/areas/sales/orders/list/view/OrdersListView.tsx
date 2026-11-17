@@ -1,20 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Download, ExternalLink, MoreHorizontal, Plus, Search, X } from 'lucide-react'
+import { ExternalLink, Filter, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, ProgressBar } from '@nexus/ui/components'
-import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
+import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
+import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
+import type { Locale } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { money } from '../../../quotes/model'
-import type { OrderRow } from '../../api'
-import { customerChip, dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, type Layout, type RowView } from '../../model'
+import { ORDER_STATUSES, type OrderRow, type OrderStatus } from '../../api'
+import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, viewCount, type Layout, type RowView } from '../../model'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
 import { marginColumn } from '../margin/MarginColumn'
@@ -25,6 +26,9 @@ import { WeekBoard } from '../../week/view/WeekBoard'
 import { OrdersImportView } from '../../import/view/OrdersImportView'
 import { NAMESPACE as DEPTH } from '../../depth/model'
 import '../../orders.css'
+// ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
+import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
+import { CustomerSwitcher, DoorCell, FunnelButton, PeekCard, PeekLink, PictureThumb, PictureViewer, SheetChips, useSmallPicture, type SheetChip } from '../sheet/parts'
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -39,7 +43,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -49,7 +53,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const t = useT('orders')
   const lists = useT('lists')
   const d = useT(DEPTH) // B-W2b-323
+  const s = useT(SHEET) // B-TH-225
   const locale = useLocale()
+  const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
+  const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
   const [query, setQuery] = useState(model.q)
   useEffect(() => setQuery(model.q), [model.q])
   const typed = useRef(false)
@@ -72,6 +79,25 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
+      // B-TH-225 (grid-F28, F29): o opens the focused cell's door; ⌘ / Ctrl + Enter opens it (or the row's order) in a new tab.
+      const cell = target?.closest('.ag-cell')
+      if (cell && !help && !model.newOrder && !target?.closest('input, textarea, select')) {
+        const door = cell.querySelector<HTMLElement>('a[data-door], button.fw-sheet-funnel, button.fw-sheet-thumb')
+        if (event.key === 'o' && !event.metaKey && !event.ctrlKey && !event.altKey && door) {
+          event.preventDefault()
+          door.click()
+          return
+        }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          const row = cell.closest('[row-id]')?.getAttribute('row-id')
+          const href = door instanceof HTMLAnchorElement ? door.href : row ? orderHref(model.prefix, { id: row }) : null
+          if (href) {
+            event.preventDefault()
+            window.open(href, '_blank', 'noopener')
+          }
+          return
+        }
+      }
       if (event.metaKey || event.ctrlKey || event.altKey || help || model.newOrder) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (event.key === 'v') {
@@ -91,6 +117,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const ownKeys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
     ...(model.can.manage ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
+    // B-TH-225: the doors' keys (the footer's information icon holds every key; none above the table).
+    { keys: ['o'], does: s('keys.door') },
+    { keys: ['⌘', 'Enter'], does: s('keys.doorTab') },
+    { keys: ['Space'], does: s('keys.peek') },
   ]
   const searchField = (
     <Input
@@ -116,126 +146,46 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     </Select>
   )
 
-  const columns = useMemo<ColDef<OrderRow>[]>(() => {
-    const href = (row: OrderRow) => `${model.prefix}/sales/orders/${row.id}`
-    const NumberCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <span className="fw-so-cell">
-          <Link className="fw-so-link" href={href(data)}>
-            {data.number}
-          </Link>
-          <span className="fw-so-cell-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
-        </span>
-      ) : null
-    const CustomerCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span className="fw-so-ellipsis">{data.partyName || '—'}</span> : null)
-    const StatusCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill> : null)
-    const DepositCell = ({ data }: ICellRendererParams<OrderRow>) => {
-      if (!data) return null
-      const { state, dueDate } = data.deposit
-      const overdue = state === 'OPEN' && dueDate !== null && dueDate < model.today
-      return (
-        <span className="fw-so-cell">
-          <Pill tone={depositTone(state, dueDate, model.today)}>{t(`deposit.${state}`)}</Pill>
-          {state === 'OPEN' && dueDate && <span className="fw-so-cell-sub">{t(overdue ? 'list.depositOverdue' : 'list.depositDue', { date: formatDate(dayInstant(dueDate), { locale }) })}</span>}
-        </span>
-      )
-    }
-    const UnitsCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <span className="fw-so-cell">
-          <span>{t('list.units', { count: data.units })}</span>
-          <span className="fw-so-cell-sub">{t('list.lines', { count: data.lineCount })}</span>
-        </span>
-      ) : null
-    const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
-    const OrderedCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <span className="fw-so-cell">
-          <span>{day(data.orderDate)}</span>
-          <span className="fw-so-cell-sub">{data.requestedDate ? t('list.requested', { date: day(data.requestedDate) }) : t('list.noRequested')}</span>
-        </span>
-      ) : null
-    const PromiseCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        data.promiseDate ? (
-          <span className="fw-so-inline">
-            {day(data.promiseDate)}
-            {data.daysLate !== null && data.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: data.daysLate })}</Tag>}
-          </span>
-        ) : (
-          <span>{t('list.noPromise')}</span>
-        )
-      ) : null
-    const ShippedCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <span className="fw-so-progress">
-          <ProgressBar value={shippedPercent(data)} ariaLabel={t('list.shippedLabel', { number: data.number })} height={6} />
-          <span className="fw-so-cell-sub">{t('list.shipped', { shipped: data.shippedUnits, units: data.units })}</span>
-        </span>
-      ) : null
-    const NetCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span>{money(data.netAmount, data.currency, locale)}</span> : null)
-    const QuoteCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        data.quote ? (
-          <Link className="fw-so-link" href={`${model.prefix}/sales/quotes/${data.quote.id}`}>
-            {t('list.quoteRef', { number: data.quote.number, revision: data.quote.revision })}
-          </Link>
-        ) : (
-          <span>—</span>
-        )
-      ) : null
-    const MoreCell = ({ data }: ICellRendererParams<OrderRow>) =>
-      data ? (
-        <Menu
-          label={<MoreHorizontal size={16} aria-hidden />}
-          align="right"
-          triggerProps={{ 'aria-label': t('list.rowMenu', { number: data.number }) }}
-          items={[
-            { id: 'open', label: t('list.open'), href: href(data) },
-            { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
-            { id: 'deposit', label: t('tab.money'), href: `${href(data)}?tab=money` },
-            ...(data.status === 'CONFIRMED' && model.can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
-            // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
-            ...(model.depth ? [printVerb(data, model.prefix, d)] : []),
-          ]}
-        />
-      ) : null
-    return [
-      { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell },
-      { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 150, flex: 1.4, cellRenderer: CustomerCell },
-      { colId: 'status', headerName: t('col.status'), field: 'status', minWidth: 116, flex: 0.8, cellRenderer: StatusCell },
-      { colId: 'deposit', headerName: t('col.deposit'), minWidth: 136, flex: 0.9, cellRenderer: DepositCell },
-      { colId: 'units', headerName: t('col.units'), field: 'units', minWidth: 90, flex: 0.6, cellRenderer: UnitsCell },
-      { colId: 'orderDate', headerName: t('col.orderDate'), field: 'orderDate', minWidth: 124, flex: 0.8, cellRenderer: OrderedCell },
-      { colId: 'promised', headerName: t('col.promised'), field: 'promiseDate', minWidth: 128, flex: 0.9, cellRenderer: PromiseCell },
-      { colId: 'shipped', headerName: t('col.shipped'), minWidth: 124, flex: 0.9, cellRenderer: ShippedCell },
-      ...(model.can.price ? [{ colId: 'net', headerName: t('col.net'), field: 'netAmount' as const, minWidth: 106, flex: 0.7, type: 'rightAligned', cellRenderer: NetCell }] : []),
-      // B-W2a-72: Margin % as estimated now (costing.view + the margin grain; Owner answer S2).
-      ...(model.margins ? [marginColumn(model.margins, t('col.margin'), t('col.marginHint'), locale)] : []),
-      // B-W2b-323: Priority (inline, CellSaveMark) and Season.
-      ...(model.depth ? depthColumns(model.depth, actions?.depth, d) : []),
-      { colId: 'quote', headerName: t('col.quote'), minWidth: 112, flex: 0.7, cellRenderer: QuoteCell },
-      { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
-    ]
-  }, [t, d, locale, model.prefix, model.today, model.can.price, model.can.makeWorkOrders, model.margins, model.depth, actions?.depth])
+  const columns = useMemo<ColDef<OrderRow>[]>(
+    () => sheetColumns({ t, s, d, locale, model, wide, latest, onViewer: setViewer }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
+    [t, s, d, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth],
+  )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer // B-TH-201
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company // B-TH-201, B-TH-225
   const clearFilters = () => {
     setQuery('')
-    actions?.onSearch?.('')
-    actions?.onRows?.('all')
-    if (model.customer) actions?.onClearCustomer?.() // B-TH-201
+    actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
   }
-  // ── B-TH-201: "Customer: <name> ✕" above the rows while the address names one customer (Sales › Reports' drill). ──
-  const chip = model.customer ? customerChip(model.customer) : null
-  const customerFilter = chip ? (
-    <div className="fw-so-inline" aria-label={t('list.activeFilters')}>
-      <FilterChip pressed onClick={() => actions?.onClearCustomer?.()} aria-label={t('list.removeCustomer', { name: t(chip.key, { name: chip.name }) })}>
-        {t(chip.key, { name: chip.name })} <X size={12} aria-hidden />
-      </FilterChip>
-    </div>
+  // ── B-TH-225 / B-TH-226: every narrowing is a chip (grid-F25); the switcher names the customer ──
+  const statusView = (ORDER_STATUSES as readonly string[]).includes(model.rows) ? (model.rows as OrderStatus) : null
+  const chips: SheetChip[] = [
+    ...(model.customer ? [{ id: 'party', label: model.customer.name === null ? s('switcher.unknown') : s('chips.customer', { name: model.customer.name ?? '…' }), onClear: () => actions?.onCustomer?.(null) }] : []),
+    ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
+    ...(statusView ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
+    ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
+  ]
+  const unavailable = model.customer?.name === null
+  const count = viewCount(model.board, model.rows)
+  const customerName = model.customer?.name ?? null
+  const title = customerName ? s('titleOf', { name: customerName }) : s('title')
+  const switcher = model.switcher ? (
+    <CustomerSwitcher
+      state={model.switcher}
+      party={model.customer?.id ?? null}
+      partyName={model.customer ? model.customer.name : undefined}
+      t={s}
+      query={model.switcher.query}
+      searching={model.switcher.searching}
+      onQuery={actions?.onCustomerSearch}
+      onPick={(party) => actions?.onCustomer?.(party)}
+      onRetry={actions?.onCustomerRetry}
+      open={model.switcherOpen}
+    />
   ) : null
-  // ── end B-TH-201 ──
+  const about = exportAbout(s, { customer: customerName, view: t(`rows.${model.rows}`), count, price: model.can.price, formats: ['XLSX', 'CSV'], margin: !!model.margins && wide })
+  const viewerRow = viewer ? (items ?? []).find((row) => row.id === viewer) ?? null : null
+  // ── end B-TH-225 / B-TH-226 ──
   const state = model.list.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.list.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
@@ -270,11 +220,16 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   return (
     <div className="fw-so">
       <div className="fw-so-head">
-        <span className="fw-so-status" role="status">
-          {model.asOf ? t('list.updated', { time: formatTime(model.asOf, { locale }) }) : t('list.notYet')}
-          {' · '}
-          {t(`live.${model.live}`)}
-        </span>
+        {/* B-TH-225 (band-F01, F10): the title follows the customer; the honest count of the view; as of. */}
+        <div className="fw-sheet-band">
+          <h2 className="fw-sheet-title">{title}</h2>
+          {count !== null && <span className="fw-sheet-count">{s('count', { count })}</span>}
+          <span className="fw-so-status" role="status">
+            {model.asOf ? t('list.updated', { time: formatTime(model.asOf, { locale }) }) : t('list.notYet')}
+            {' · '}
+            {t(`live.${model.live}`)}
+          </span>
+        </div>
         <span className="fw-so-actions">
           <SegmentedControl
             size="sm"
@@ -289,14 +244,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             ]}
           />
           <Button size="sm" variant="quiet" asChild>
-            <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
+            <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}${model.brand ? `&brand=${encodeURIComponent(model.brand.value)}` : ''}${model.company ? `&company=${encodeURIComponent(model.company.id)}` : '' /* B-TH-225 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
               <ExternalLink size={14} aria-hidden /> <span>{t('board.newTab')}</span>
             </a>
           </Button>
           <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)} aria-keyshortcuts="c">
             <Plus size={14} aria-hidden /> {t('list.new')}
           </Button>
-          {/* B-W2b-323: the band's ⋯ — Import orders (dry run first), Keyboard shortcuts. */}
+          {/* B-W2b-323: the band's ⋯ — Import orders (dry run first). */}
           {model.importer !== undefined && (
             <Menu
               label={<MoreHorizontal size={16} aria-hidden />}
@@ -304,7 +259,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
               triggerProps={{ 'aria-label': d('list.more') }}
               items={[
                 { id: 'import', label: d('import.action'), disabled: !!model.importer?.held, description: model.importer?.held ? d(model.importer.held) : d('import.hint'), onSelect: () => actions?.onImport?.() },
-                { id: 'keys', label: d('list.keys'), onSelect: () => setHelp(true) },
+                // B-TH-225 (band-F08, Owner rule 2026-10-29): the keys live in the table footer's information icon only.
               ]}
             />
           )}
@@ -329,7 +284,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         metrics={TILES.map((tile) => {
           const count = tileCount(model.board, tile.key)
           return {
-            label: t(`tile.${tile.key}`),
+            label: customerName ? s('tile', { label: t(`tile.${tile.key}`), name: customerName }) : t(`tile.${tile.key}`), // B-TH-226: the tiles count that customer
             value: count === null ? '—' : String(count),
             hint: count === null && model.board === null && model.asOf !== null ? t('tile.unknown') : undefined,
             onClick: () => actions?.onRows?.(model.rows === tile.rows ? 'open' : tile.rows),
@@ -338,7 +293,21 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         })}
       />
 
-      {customerFilter /* B-TH-201 */}
+      {/* B-TH-225 / B-TH-226: a link to a customer the reader may not open (W27: the words name no one) */}
+      {unavailable && (
+        <Banner
+          tone="warning"
+          title={s('switcher.unavailable')}
+          action={
+            <Button size="sm" onClick={() => actions?.onCustomer?.(null)}>
+              {s('switcher.showAll')}
+            </Button>
+          }
+        >
+          {s('switcher.unavailableBody')}
+        </Banner>
+      )}
+      <SheetChips chips={chips} t={s} onClearAll={clearFilters} />
 
       {model.layout === 'week' && model.week ? (
         // B-W2b-323: By promise week (the search narrows it; the rows view does not apply: every open line).
@@ -351,19 +320,27 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           rows={state ? [] : items}
           rowId={(row) => row.id}
           columns={columns}
-          count={items ? t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length }) : '—'}
+          count={items ? (count !== null && items.length < count ? s('loadedOf', { loaded: items.length, total: count }) : t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length })) : '—'}
           search={searchField}
-          tools={rowsSelect}
+          tools={
+            <>
+              {switcher /* B-TH-226 */}
+              {rowsSelect}
+            </>
+          }
+          title={customerName ? s('export.title', { customer: customerName }) : undefined /* B-TH-225: the export job names the customer */}
+          exportAbout={about}
+          onRowClick={(row, event) => actions?.onOpenRow?.(row.id, event.metaKey || event.ctrlKey)}
+          cards={{ fields: CARD_FIELDS, hrefOf: (row) => orderHref(model.prefix, row) }}
           selection={{
             selected,
             onChange: setSelected,
+            // B-TH-225 (ORD-G02): Export N goes through the export job with the picked ids (the same writer as the full list).
+            exportSelected: true,
             actions: (
               <>
                 {/* B-W2b-323: Set priority for N (one command over the selection). */}
                 {model.depth && <SetPriorityButton count={picked.length} model={model.depth} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
-                <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-                  <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
-                </Button>
               </>
             ),
           }}
@@ -378,6 +355,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       )}
       {model.rows !== 'open' && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
 
+      {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} t={s} onClose={() => setViewer(null)} /> /* B-TH-225 */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {/* B-W2b-323: Set priority, Import orders. */}
       {model.depth && <SetPriorityDialog model={model.depth} actions={actions?.depth} />}
@@ -397,3 +375,293 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     </div>
   )
 }
+
+// ── B-TH-225 (threads plan TH-1a, picture 23; Owner rule 2026-11-16 "every cell is a door"; features grid-F01…F30) ──────────
+
+type Translate = (key: string, params?: Record<string, string | number>) => string
+
+/** The wide columns (Ordered, Margin %, Priority, Season, From quote) show from 1800 px (the 1920 screen); a design case says so. */
+function useWide(forced: boolean | undefined): boolean {
+  const query = '(min-width: 1800px)'
+  const [wide, setWide] = useState(() => forced ?? (typeof window !== 'undefined' && !!window.matchMedia?.(query).matches))
+  useEffect(() => {
+    if (forced !== undefined) return setWide(forced)
+    const media = window.matchMedia?.(query)
+    if (!media) return
+    const follow = () => setWide(media.matches)
+    follow()
+    media.addEventListener('change', follow)
+    return () => media.removeEventListener('change', follow)
+  }, [forced])
+  return wide
+}
+
+/** The phone card (grid-F22): the picture, the number, the customer, the brand, the status and the promise; the row's ⋯. */
+const CARD_FIELDS = Object.freeze({
+  number: { role: 'title' as const },
+  customer: { role: 'subtitle' as const },
+  picture: { role: 'aside' as const },
+  brand: { role: 'field' as const },
+  status: { role: 'field' as const },
+  promised: { role: 'field' as const },
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company'].map((id) => [id, { role: 'hidden' as const }])),
+})
+
+interface ColumnsInput {
+  t: Translate
+  s: Translate
+  d: Translate
+  locale: Locale
+  model: OrdersListModel
+  wide: boolean
+  latest: { current: { model: OrdersListModel; actions?: OrdersListActions } }
+  onViewer: (id: string) => void
+}
+
+/** The Picture cell: its small preview read lazily (only the rows AG draws), cached per row until the address expires. */
+function PictureCell({ row, input }: { row: OrderRow; input: ColumnsInput }) {
+  const src = useSmallPicture(row, input.latest.current.actions?.loadPicture, input.model.demoPictures?.[row.id])
+  return <PictureThumb row={row} src={src} t={input.s} onOpen={() => input.onViewer(row.id)} />
+}
+
+function PictureViewerFor({ row, model, actions, t, onClose }: { row: OrderRow; model: OrdersListModel; actions?: OrdersListActions; t: Translate; onClose: () => void }) {
+  const src = useSmallPicture(row, actions?.loadPicture, model.demoPictures?.[row.id])
+  return <PictureViewer row={row} src={src} prefix={model.prefix} t={t} onClose={onClose} />
+}
+
+/**
+ * The sheet's columns in the picture's order. Every value that names a thing is its door (a real link: ⌘-click opens a new
+ * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
+ * rest of the row opens the order. Money columns are absent without their grain, never zero.
+ */
+function sheetColumns({ t, s, d, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, locale, model, wide, latest, onViewer }
+  const { prefix, can } = model
+  const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
+  const act = () => latest.current.actions
+  const door = (value: Door, children: ReactNode, strong?: boolean) => (
+    <DoorCell door={value} t={s} strong={strong}>
+      {children}
+    </DoorCell>
+  )
+
+  const PictureColumn = ({ data }: ICellRendererParams<OrderRow>) => (data ? <PictureCell row={data} input={input} /> : null)
+  const NumberCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const opened = orderDoor(prefix, data) as { href: string }
+    return (
+      <span className="fw-sheet-cell">
+        <PeekLink
+          href={opened.href}
+          className="fw-sheet-door strong"
+          label={s('peek.order')}
+          card={() => (
+            <PeekCard
+              title={
+                <>
+                  {data.number} <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
+                </>
+              }
+              rows={[
+                [s('peek.who'), data.partyName || '—'],
+                [s('peek.promised'), data.promiseDate ? `${day(data.promiseDate)}${data.daysLate ? ` · ${t('list.daysLate', { count: data.daysLate })}` : ''}` : s('peek.noPromise')],
+                [s('peek.pieces'), String(data.units)],
+              ]}
+              open={{ href: opened.href, label: s('peek.openOrder') }}
+            />
+          )}
+        >
+          {data.number}
+        </PeekLink>
+        <span className="fw-sheet-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
+      </span>
+    )
+  }
+  const CustomerCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const opened = customerDoor(prefix, data) as { href: string }
+    return (
+      <PeekLink
+        href={opened.href}
+        className="fw-sheet-door"
+        label={s('peek.customer')}
+        card={() => {
+          const known = latest.current.model.switcher?.customers?.find((customer) => customer.id === data.partyId)
+          return (
+            <PeekCard
+              title={data.partyName}
+              rows={[
+                [s('peek.openOrders'), known ? String(known.open) : s('peek.notCounted')],
+                [s('peek.late'), known ? String(known.late) : s('peek.notCounted')],
+                [s('peek.lastOrder'), known?.lastOrderDate ? day(known.lastOrderDate) : s('peek.notCounted')],
+              ]}
+              open={{ href: opened.href, label: s('peek.openCustomer') }}
+            />
+          )
+        }}
+      >
+        {data.partyName || '—'}
+      </PeekLink>
+    )
+  }
+  const BrandCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const cell = brandCell(data)
+    if (cell.kind === 'none') return <span className="fw-sheet-plain">—</span>
+    if (cell.kind === 'hidden')
+      return (
+        <span className="fw-sheet-held" tabIndex={0} title={s('brand.hiddenWhy')}>
+          {s('brand.hidden')}
+        </span>
+      )
+    if (cell.kind === 'several') {
+      const names = cell.labels.map((label) => (label.own ? s('brand.own') : (label.name ?? s('brand.hidden')))).join(' · ')
+      return (
+        <Menu
+          label={
+            <>
+              <span className="fw-sheet-funnel-value">{s('brand.several', { count: cell.labels.length })}</span>
+              <Filter size={12} aria-hidden />
+            </>
+          }
+          triggerProps={{ className: 'fw-sheet-funnel', title: s('brand.pick', { names }), 'aria-label': s('brand.pick', { names }) }}
+          items={[
+            { id: 'h', heading: true, label: s('brand.pickTitle', { count: cell.labels.length, number: data.number }) },
+            ...cell.labels.map((label, index) =>
+              label.value === null
+                ? { id: `b-${index}`, label: s('brand.hidden'), disabled: true, description: s('brand.hiddenWhy') }
+                : { id: `b-${index}`, label: label.own ? s('brand.own') : (label.name ?? s('brand.unknown')), onSelect: () => act()?.onBrand?.(label.value) },
+            ),
+          ]}
+        />
+      )
+    }
+    const name = cell.own ? s('brand.own') : (cell.name ?? s('brand.unknown'))
+    return (
+      <FunnelButton tip={s('brand.filter', { name })} onClick={() => act()?.onBrand?.(cell.value)}>
+        {cell.own ? <span className="fw-sheet-own">{name}</span> : name}
+      </FunnelButton>
+    )
+  }
+  const StatusCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? (
+      <FunnelButton tip={s('status.filter', { status: t(`status.${data.status}`) })} onClick={() => act()?.onRows?.(data.status)}>
+        <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
+      </FunnelButton>
+    ) : null
+  const DepositCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const { state, dueDate } = data.deposit
+    const overdue = state === 'OPEN' && dueDate !== null && dueDate < model.today
+    return (
+      <span className="fw-sheet-cell">
+        {door(depositDoor(prefix, data, can), <Pill tone={depositTone(state, dueDate, model.today)}>{t(`deposit.${state}`)}</Pill>)}
+        {state === 'OPEN' && dueDate && <span className={overdue ? 'fw-sheet-late' : 'fw-sheet-sub'}>{t(overdue ? 'list.depositOverdue' : 'list.depositDue', { date: day(dueDate) })}</span>}
+      </span>
+    )
+  }
+  const UnitsCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? (
+      <span className="fw-sheet-cell">
+        {door(linesDoor(prefix, data), String(data.units))}
+        <span className="fw-sheet-sub">{t('list.lines', { count: data.lineCount })}</span>
+      </span>
+    ) : null
+  const OrderedCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? (
+      <span className="fw-sheet-cell">
+        <span>{day(data.orderDate)}</span>
+        <span className="fw-sheet-sub">{data.requestedDate ? t('list.requested', { date: day(data.requestedDate) }) : t('list.noRequested')}</span>
+      </span>
+    ) : null
+  const PromiseCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? (
+      data.promiseDate ? (
+        <span className="fw-so-inline">
+          {door(linesDoor(prefix, data, true), day(data.promiseDate))}
+          {data.daysLate !== null && data.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: data.daysLate })}</Tag>}
+        </span>
+      ) : (
+        door(linesDoor(prefix, data, true), t('list.noPromise'))
+      )
+    ) : null
+  const ShippedCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? (
+      <span className="fw-so-progress">
+        <ProgressBar value={shippedPercent(data)} ariaLabel={t('list.shippedLabel', { number: data.number })} height={6} />
+        {door(shippedDoor(prefix, data), s('shippedOf', { shipped: data.shippedUnits, units: data.units }))}
+      </span>
+    ) : null
+  const InvoicedCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const cell = invoicedCell(data, can)
+    const state = data.invoiced?.state ?? 'NONE'
+    return (
+      <span className="fw-sheet-cell">
+        <span className="fw-sheet-inv">
+          <span className={`fw-sheet-dot ${state}`} aria-hidden />
+          {door(invoicedDoor(prefix, data, can), s(cell.word))}
+        </span>
+        {cell.amount !== null && <span className="fw-sheet-sub">{s('invoiced.amount', { amount: money(cell.amount, data.currency, locale) })}</span>}
+      </span>
+    )
+  }
+  const NetCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span>{money(data.netAmount, data.currency, locale)}</span> : null)
+  const GrossCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span>{money(data.grossAmount, data.currency, locale)}</span> : null)
+  const QuoteCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? data.quote ? door(quoteDoor(prefix, data), t('list.quoteRef', { number: data.quote.number, revision: data.quote.revision })) : <span className="fw-sheet-plain">—</span> : null
+  const companies = model.companies ?? []
+  const CompanyCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const name = companies.find((company) => company.id === data.companyId)?.name ?? s('company.unknown')
+    return (
+      <FunnelButton tip={s('company.filter', { name })} onClick={() => act()?.onCompany?.(data.companyId)}>
+        {name}
+      </FunnelButton>
+    )
+  }
+  const MoreCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? (
+      <Menu
+        label={<MoreHorizontal size={16} aria-hidden />}
+        align="right"
+        triggerProps={{ 'aria-label': t('list.rowMenu', { number: data.number }) }}
+        items={[
+          { id: 'open', label: t('list.open'), href: orderHref(prefix, data) },
+          { id: 'tab', label: t('list.openNewTab'), href: orderHref(prefix, data), target: '_blank' },
+          { id: 'deposit', label: t('tab.money'), href: orderHref(prefix, data, 'money') },
+          ...(data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
+          // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
+          ...(model.depth ? [printVerb(data, prefix, d)] : []),
+        ]}
+      />
+    ) : null
+  const also = (key: string, label: string) => ({ exportWith: [{ key, label }] })
+  return [
+    { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn },
+    { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 128, flex: 1, cellRenderer: NumberCell, context: also('customerRef', s('col.customerRef')) },
+    { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell },
+    { colId: 'brand', headerName: s('col.brand'), headerTooltip: s('col.brandHint'), minWidth: 100, flex: 1, sortable: false, cellRenderer: BrandCell },
+    { colId: 'status', headerName: t('col.status'), field: 'status', minWidth: 112, flex: 0.9, cellRenderer: StatusCell },
+    { colId: 'deposit', headerName: t('col.deposit'), minWidth: 96, flex: 0.8, cellRenderer: DepositCell },
+    { colId: 'units', headerName: t('col.units'), field: 'units', minWidth: 72, flex: 0.5, cellRenderer: UnitsCell },
+    { colId: 'orderDate', headerName: t('col.orderDate'), field: 'orderDate', minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: OrderedCell, context: also('requested', s('col.requested')) },
+    { colId: 'promised', headerName: t('col.promised'), field: 'promiseDate', minWidth: 108, flex: 0.9, cellRenderer: PromiseCell, context: also('daysLate', s('col.daysLate')) },
+    { colId: 'shipped', headerName: t('col.shipped'), minWidth: 84, flex: 0.7, cellRenderer: ShippedCell },
+    { colId: 'invoiced', headerName: s('col.invoiced'), headerTooltip: s('col.invoicedHint'), minWidth: 92, flex: 0.7, sortable: false, cellRenderer: InvoicedCell, ...(can.price ? { context: also('invoicedAmount', s('col.invoicedAmount')) } : {}) },
+    ...(can.price
+      ? [
+          { colId: 'net', headerName: t('col.net'), field: 'netAmount' as const, minWidth: 104, flex: 0.7, type: 'rightAligned', cellRenderer: NetCell },
+          { colId: 'gross', headerName: s('col.gross'), field: 'grossAmount' as const, minWidth: 106, flex: 0.7, type: 'rightAligned', hide: true, cellRenderer: GrossCell },
+        ]
+      : []),
+    // B-W2a-72: Margin % as estimated now (costing.view + the margin grain; Owner answer S2) — a wide column.
+    ...(model.margins ? [{ ...marginColumn(model.margins, t('col.margin'), t('col.marginHint'), locale), minWidth: 92, hide: !wide }] : []),
+    // B-W2b-323: Priority (inline, CellSaveMark) and Season — wide columns.
+    ...(model.depth ? depthColumns(model.depth, latest.current.actions?.depth, d).map((column) => ({ ...column, minWidth: column.colId === 'season' ? 76 : 108, hide: !wide })) : []),
+    { colId: 'quote', headerName: t('col.quote'), minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: QuoteCell },
+    ...(companies.length > 1 ? [{ colId: 'company', headerName: s('col.company'), minWidth: 88, flex: 0.8, sortable: false, cellRenderer: CompanyCell }] : []),
+    { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+  ]
+}
+// ── end B-TH-225 ──

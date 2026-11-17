@@ -96,8 +96,36 @@ const row = (n: number, status: OrderStatus, extra: Partial<OrderRow> = {}): Ord
   quote: { id: uid('4141', n), number: `Q-2026-${String(n + 100).padStart(4, '0')}`, versionId: uid('4242', n), revision: 1 },
   version: 3,
   updatedAt: at(29, 8, 10),
+  ...sheetOf(n, status),
   ...extra,
 })
+
+// ── B-TH-225 (TH-1a, picture 23): the sheet's Picture, Brand, Invoiced and doors, made up ──
+const STYLES = [
+  { code: 'JK-2207', name: 'Giacca touring' },
+  { code: 'PT-1102', name: 'Pantalone moto' },
+  { code: 'GL-0408', name: 'Guanto estivo' },
+]
+function sheetOf(n: number, status: OrderStatus): Pick<OrderRow, 'picture' | 'styleCount' | 'brands' | 'invoiced' | 'doors'> {
+  const party = PARTIES[n % 3]!
+  const style = STYLES[n % 3]!
+  const shipped = status === 'SHIPPED' || status === 'CLOSED' || status === 'PARTLY_SHIPPED'
+  const invoiced = status === 'CLOSED' ? 'ALL' : status === 'SHIPPED' ? 'PART' : 'NONE'
+  return {
+    picture: n % 5 === 0 ? null : { styleId: uid('7777', n), styleCode: style.code, styleName: style.name, fileId: n % 4 === 0 ? null : uid('8888', n), contentType: 'image/jpeg', small: n % 4 !== 0 },
+    styleCount: n % 3 === 0 ? 3 : 1,
+    // Own collection, the customer's own label, two labels on one order.
+    brands: n % 4 === 0 ? [{ partyId: null, name: null, own: true }] : n % 7 === 0 ? [{ partyId: party.id, name: party.name.replace(/ S\.r\.l\.| S\.p\.A\./, ''), own: false }, { partyId: null, name: null, own: true }] : [{ partyId: party.id, name: party.name.replace(/ S\.r\.l\.| S\.p\.A\./, ''), own: false }],
+    invoiced: { state: invoiced, pieces: invoiced === 'ALL' ? '14' : invoiced === 'PART' ? '6' : '0', toInvoice: 14, amount: invoiced === 'ALL' ? 624000 : invoiced === 'PART' ? 267400 : 0 },
+    doors: {
+      quote: { id: uid('4141', n), versionId: uid('4242', n) },
+      depositInvoice: n % 2 === 0 ? { id: uid('2121', n), number: `FA-2026-${String(n).padStart(5, '0')}` } : null,
+      deliveryNotes: shipped ? { count: status === 'PARTLY_SHIPPED' ? 2 : 1, only: status === 'PARTLY_SHIPPED' ? null : { id: uid('9191', n), number: `DDT-2026-${String(n).padStart(4, '0')}` }, shipmentId: status === 'PARTLY_SHIPPED' ? null : uid('9292', n) } : { count: 0, only: null, shipmentId: null },
+      invoices: invoiced === 'NONE' ? { count: 0, only: null } : invoiced === 'ALL' ? { count: 2, only: null } : { count: 1, only: { id: uid('2323', n), number: `FT-2026-${String(n).padStart(5, '0')}`, docType: 'TD01' } },
+    },
+  }
+}
+// ── end B-TH-225 ──
 
 export const LIST_ROWS: OrderRow[] = [
   row(88, 'CONFIRMED', { deposit: { state: 'OPEN', dueDate: '2026-11-04' }, orderDate: '2026-10-28' }),

@@ -1,6 +1,5 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
-import { money } from '../quotes/model'
 import {
   BOARD_LANES,
   ORDER_STATUSES,
@@ -146,19 +145,32 @@ export function partyFromAddress(params: { get(name: string): string | null } | 
   return UUID.test(value) ? value.toLowerCase() : null
 }
 
-/**
- * The chip's words for the customer of the address: its name once known (from the rows, else the customer's record), "…"
- * while it is looked up, and words that name no one when the person may not open that customer (W27: a link to another
- * customer's orders shows an empty list and never says whose).
- */
-export function customerChip(customer: { readonly name: string | null | undefined }): { readonly key: 'list.customerChip' | 'list.customerHidden'; readonly name: string } {
-  if (customer.name === null) return { key: 'list.customerHidden', name: '' }
-  return { key: 'list.customerChip', name: customer.name === undefined ? '…' : customer.name }
+// B-TH-226: the chip "Customer: <name>" of TH-0 went: the sheet's own chips (list/sheet) name every narrowing.
+
+// ── B-TH-225: Brand and Company narrow the sheet (`?brand=<party id>|own`, `?company=<id>`) ──
+/** The label on the garment the address narrows the sheet to: a brand party's id, `own` (our own collection), or null. */
+export function brandFromAddress(params: { get(name: string): string | null } | null): string | null {
+  const value = params?.get('brand')?.trim() ?? ''
+  if (value === 'own') return 'own'
+  return UUID.test(value) ? value.toLowerCase() : null
 }
+
+/** The company the address narrows the sheet to (`?company=<id>`), or null. */
+export function companyFromAddress(params: { get(name: string): string | null } | null): string | null {
+  const value = params?.get('company')?.trim() ?? ''
+  return UUID.test(value) ? value.toLowerCase() : null
+}
+
+/** What narrows every read beside the rows view and the search: the customer, the label, the company. */
+export interface Narrowing {
+  readonly brand?: string | null
+  readonly companyId?: string | null
+}
+// ── end B-TH-225 ──
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -168,14 +180,16 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   else if (next.rows === 'reaccept') query.set('reaccept', 'true') // B-W2b-323
   else if (isStatus(next.rows)) query.set('status', next.rows)
   if (next.party) query.set('party', next.party) // B-TH-201
+  if (next.brand) query.set('brand', next.brand) // B-TH-225
+  if (next.company) query.set('company', next.company) // B-TH-225
   if (next.q.trim()) query.set('q', next.q.trim())
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }
 
 /** The API's query for a saved rows view (and the search; B-TH-201: and the customer of the address). */
-export function rowsQuery(rows: RowView, q: string, cursor?: string | null, partyId?: string | null): OrderQuery {
-  const base: OrderQuery = { q, cursor: cursor ?? null, limit: 50, ...(partyId ? { partyId } : {}) }
+export function rowsQuery(rows: RowView, q: string, cursor?: string | null, partyId?: string | null, narrow: Narrowing = {}): OrderQuery {
+  const base: OrderQuery = { q, cursor: cursor ?? null, limit: 50, ...(partyId ? { partyId } : {}), ...narrowingOf(narrow) }
   if (rows === 'open') return { ...base, open: true }
   if (rows === 'late') return { ...base, late: true }
   if (rows === 'deposit') return { ...base, deposit: 'OPEN' }
@@ -208,9 +222,28 @@ export function boardLanes(rows: RowView): BoardLane[] {
 }
 
 /** The API query of one lane: its state, with the saved rows' other filter (late, deposit), the search (and the customer). */
-export function laneQuery(lane: BoardLane, rows: RowView, q: string, partyId?: string | null): OrderQuery {
-  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, reaccept: rows === 'reaccept' /* B-W2b-323 */, q, limit: 50, ...(partyId ? { partyId } : {}) /* B-TH-201 */ }
+export function laneQuery(lane: BoardLane, rows: RowView, q: string, partyId?: string | null, narrow: Narrowing = {}): OrderQuery {
+  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, reaccept: rows === 'reaccept' /* B-W2b-323 */, q, limit: 50, ...(partyId ? { partyId } : {}) /* B-TH-201 */, ...narrowingOf(narrow) /* B-TH-225 */ }
 }
+
+// B-TH-225: only the terms that narrow (an absent one never reaches the API).
+const narrowingOf = (narrow: Narrowing): Pick<OrderQuery, 'brand' | 'companyId'> => ({ ...(narrow.brand ? { brand: narrow.brand } : {}), ...(narrow.companyId ? { companyId: narrow.companyId } : {}) })
+
+/**
+ * B-TH-225 (band-F01: the honest count): how many orders the rows view holds, from the board's counts — the same filters
+ * (customer, label, company, search) and the same definitions — or null while the board is unread.
+ */
+export function viewCount(board: OrderBoard | null, rows: RowView): number | null {
+  if (!board) return null
+  const byStatus = (statuses: readonly string[]) => board.byStatus.filter((entry) => statuses.includes(entry.status)).reduce((sum, entry) => sum + entry.count, 0)
+  if (rows === 'open') return byStatus(OPEN_ORDER_STATUSES)
+  if (rows === 'all') return byStatus(board.byStatus.map((entry) => entry.status))
+  const tile = TILES.find((entry) => entry.rows === rows)
+  if (tile && (rows === 'late' || rows === 'deposit' || rows === 'reaccept')) return tileCount(board, tile.key)
+  return byStatus([rows])
+}
+/** The open orders (not shipped yet), as the API's `open=true` reads them. */
+const OPEN_ORDER_STATUSES: readonly OrderStatus[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED']
 
 export interface Lane {
   status: BoardLane
@@ -246,43 +279,6 @@ export function offBoard(board: OrderBoard | null): { closed: number; cancelled:
 
 /** How far the order's garments left (shipped of ordered), 0–100. */
 export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): number => (row.units > 0 ? Math.round((row.shippedUnits / row.units) * 100) : 0)
-
-// ---- the CSV of the selected rows (Export N) --------------------------------------------------------------------------------
-
-const cell = (value: string | number | null | undefined): string => {
-  const text = value === null || value === undefined ? '' : String(value)
-  return /[",;\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-}
-
-/** The selected rows as CSV: money columns only with the price grain (never more than the screen shows). */
-export function ordersCsv(rows: readonly OrderRow[], price: boolean, words: { header: (key: string) => string; status: (status: OrderStatus) => string; deposit: (state: DepositState) => string }, locale: Locale): string {
-  const columns = ['number', 'customer', 'customerRef', 'status', 'deposit', 'depositDue', 'lines', 'units', 'shipped', 'orderDate', 'requested', 'promised', 'daysLate', ...(price ? ['net', 'gross'] : []), 'quote']
-  const lines = [columns.map((column) => cell(words.header(column))).join(',')]
-  for (const row of rows) {
-    lines.push(
-      [
-        row.number,
-        row.partyName,
-        row.customerRef,
-        words.status(row.status),
-        words.deposit(row.deposit.state),
-        row.deposit.dueDate,
-        row.lineCount,
-        row.units,
-        row.shippedUnits,
-        row.orderDate,
-        row.requestedDate,
-        row.promiseDate,
-        row.daysLate,
-        ...(price ? [money(row.netAmount, row.currency, locale), money(row.grossAmount, row.currency, locale)] : []),
-        row.quote ? `${row.quote.number} v${row.quote.revision}` : '',
-      ]
-        .map(cell)
-        .join(','),
-    )
-  }
-  return lines.join('\n')
-}
 
 // ---- the record ---------------------------------------------------------------------------------------------------------
 

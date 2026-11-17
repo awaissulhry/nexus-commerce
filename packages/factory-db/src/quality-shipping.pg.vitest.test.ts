@@ -123,7 +123,7 @@ async function releasedWorkOrder(colour: 'BLK' | 'RED' = 'RED', quantity = 1): P
   await as(office(), (client) =>
     client.$transaction(async (tx) => {
       const exec = (table: string, row: Record<string, unknown>) => tx.$executeRawUnsafe(...insertSql(table, row))
-      await exec('WorkOrder', { id: ids.workOrderId, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: production().styleId, styleRevisionId: production().revisionId })
+      await exec('WorkOrder', { id: ids.workOrderId, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind: 'SIZE_GRID', styleId: production().styleId, styleRevisionId: production().revisionId, partyId: A.P1 /* B-PR-01 */ })
       await exec('WorkOrderSize', {
         id: ids.cellId,
         siteId: A.siteA,

@@ -441,7 +441,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     client.$transaction(async (tx) => {
       if (await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true } })) return
       await tx.workOrder.create({
-        data: { id: workOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0001', kind: WorkOrderKind.SIZE_GRID, styleId, styleRevisionId: revisionId, dueDate: DAY.due, ...stamp(T.planned) },
+        data: { id: workOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0001', kind: WorkOrderKind.SIZE_GRID, styleId, styleRevisionId: revisionId, dueDate: DAY.due, /* B-PR-01 */ partyId: brandId, ...stamp(T.planned) },
         select: { id: true },
       })
       const cells = (['BLK', 'RED'] as const).flatMap((code) =>
@@ -463,7 +463,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     client.$transaction(async (tx) => {
       if (await tx.workOrder.findUnique({ where: { id: draftWorkOrderId }, select: { id: true } })) return
       await tx.workOrder.create({
-        data: { id: draftWorkOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0002', kind: WorkOrderKind.SIZE_GRID, styleId, styleRevisionId: revisionId, dueDate: DAY.due, ...stamp(T.planned) },
+        data: { id: draftWorkOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0002', kind: WorkOrderKind.SIZE_GRID, styleId, styleRevisionId: revisionId, dueDate: DAY.due, /* B-PR-01 */ partyId: brandId, ...stamp(T.planned) },
         select: { id: true },
       })
       const { sizes, operations, materials } = parts((name) => firstId(`production:WO-0002:${name}`), draftWorkOrderId, [

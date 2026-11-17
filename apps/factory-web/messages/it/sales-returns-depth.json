@@ -125,7 +125,7 @@
       "sent": "Inviato",
       "decision": "Decisione del cliente",
       "customerNote": "Nota per il cliente",
-      "internalNote": "Nota interna",
+      "internalNote": "Nota d'ufficio",
       "withdrawn": "Ritirato"
     },
     "sum": {
@@ -234,7 +234,7 @@
     "terms": {
       "open": "Modifica condizioni",
       "title": "Condizioni del preventivo {revision}",
-      "sentOnly": "Inviato: cambia solo la nota interna.",
+      "sentOnly": "Inviato: cambia solo la nota d'ufficio.",
       "noDate": "Nessun ultimo giorno",
       "customerHint": "Mostrata al cliente con il preventivo.",
       "internalHint": "La legge solo l'ufficio.",
