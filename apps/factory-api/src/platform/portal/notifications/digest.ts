@@ -15,6 +15,8 @@ import { activeTenants, systemContext } from '../../outbox/system'
 import { partyReaders } from '../tasks/people'
 import { kindTopic } from './fan-out'
 import { logPartnerDeliveries, sendPartnerMail, unsubscribeKeyFor } from './mail'
+// B-TH-080 (threads plan TH-6, thread-G11): each item quotes the message we shared with the customer (never a note).
+import { partnerQuotes } from '../../email-out/digest/message-text'
 import { preferencesOf } from './settings'
 
 /**
@@ -114,7 +116,9 @@ async function digestOf(
   const listed = ofCompany.slice(0, DIGEST_MAX_ITEMS)
   const company = await caller.withClient((client) => client.company.findUnique({ where: { id: companyId }, select: { legalName: true, tradeName: true } }))
   const companyName = company ? (company.tradeName ?? company.legalName) : ''
-  const items = listed.map((row) => ({ notificationId: row.id, sentence: partnerSentence(row, reader.locale, companyName), link: portalRecordUrl(input.runtime.webOrigin, facts.partyCode, row.recordType, row.recordId, row.anchor) }))
+  // B-TH-080: only messages shared with this person's own customer.
+  const quotes = await caller.withClient((client) => partnerQuotes(client, input.partyId, listed))
+  const items = listed.map((row) => ({ notificationId: row.id, sentence: partnerSentence(row, reader.locale, companyName), link: portalRecordUrl(input.runtime.webOrigin, facts.partyCode, row.recordType, row.recordId, row.anchor), quote: quotes.get(row.id) ?? null }))
   const sent = await sendPartnerMail(caller, { tenantId: input.tenantId, companyId, person: { id: reader.personId, email: reader.email, displayName: reader.displayName, locale: reader.locale, partyId: input.partyId }, body: { kind: 'digest', weekly: input.weekly, items, more: ofCompany.length - listed.length }, runtime: input.runtime, unsubscribeKey: input.unsubscribeKey, ...(input.clock ? { clock: input.clock } : {}) })
   await logPartnerDeliveries(caller, {
     key: `portal-digest-${input.userId}-${businessDate(input.now)}`,

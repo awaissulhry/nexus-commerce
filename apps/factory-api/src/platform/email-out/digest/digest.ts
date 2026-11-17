@@ -41,6 +41,8 @@ import { matrixOf } from '../../notifications/preferences/store'
 import { activeTenants, asSystem, systemContext } from '../../outbox/system'
 import { deliverOutbound } from '../outbound'
 import { processEmail, type EmailRuntime } from '../service'
+// B-TH-080 (threads plan TH-6, thread-G11): each line quotes the message it is about, cut for this reader.
+import { officeQuotes } from './message-text'
 
 /**
  * The daily digest (B-W2a-20; PLT-142 "nothing is e-mailed unless the person turned it on"): the ONE way a notification
@@ -204,8 +206,11 @@ export async function sendDigest(caller: CommandCaller, subscription: Subscripti
     const identities = await client.emailIdentity.findMany({ where: { status: 'ACTIVE', isDefault: true, kind: { in: ['NOTIFICATION', 'CONVERSATION'] } }, orderBy: [{ kind: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }], select: IDENTITY })
     // The person's grains now (their live roles): an amount whose grain they lost since the fan-out is left out.
     const tenantId = 'tenantId' in (caller.factoryContext ?? {}) ? (caller.factoryContext as { tenantId: string }).tenantId : ''
-    const held = heldGrains({ audience: 'office', tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, subscription.userId, now), true) })
-    return { open: open.map((row) => ({ ...row, params: paramsFor(row.params, held) })), user, names, identity: identities.find((entry) => identityReady(entry)) ?? null }
+    const grants = sessionGrants({ requireMfa: false }, await heldRoles(client, subscription.userId, now), true)
+    const held = heldGrains({ audience: 'office', tenantId, grants })
+    // B-TH-080: the messages the listed notifications are about, while the person may still read their threads.
+    const quotes = await officeQuotes(client, { audience: 'office', tenantId, grants }, open.slice(0, DIGEST_MAX_ITEMS))
+    return { open: open.map((row) => ({ ...row, params: paramsFor(row.params, held) })), user, names, identity: identities.find((entry) => identityReady(entry)) ?? null, quotes }
   })
   const listed = facts.open.slice(0, DIGEST_MAX_ITEMS)
 
@@ -232,8 +237,10 @@ export async function sendDigest(caller: CommandCaller, subscription: Subscripti
   const greeting = locale === 'it' ? `Ciao ${facts.user.displayName},` : `Hello ${facts.user.displayName},`
   const intro = locale === 'it' ? 'ecco cosa ti aspetta nella fabbrica:' : 'this is what waits for you in the factory:'
   const footer = footerOf(company, privacyNoticeUrl(runtime.webOrigin, identity.companyId), locale)
-  const text = [greeting, intro, '', ...lines, '', footer.text].join('\n')
-  const html = `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><ul>${lines.map((line) => `<li>${escapeHtml(line.replace(/^• /, ''))}</li>`).join('')}</ul>${footer.html}`
+  // B-TH-080: under each line, the message it is about (the "… and N more" line has none).
+  const quoteAt = (index: number): string | null => (index < listed.length ? (facts.quotes.get(listed[index]!.id) ?? null) : null)
+  const text = [greeting, intro, '', ...lines.map((line, index) => (quoteAt(index) ? `${line}\n  “${quoteAt(index)}”` : line)), '', footer.text].join('\n')
+  const html = `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><ul>${lines.map((line, index) => `<li>${escapeHtml(line.replace(/^• /, ''))}${quoteAt(index) ? `<br><em>“${escapeHtml(quoteAt(index)!)}”</em>` : ''}</li>`).join('')}</ul>${footer.html}`
   const from = fromLine(identity, null)
   const outboundId = newId()
   const emailMessageId = messageIdFor(outboundId, identity.domain)

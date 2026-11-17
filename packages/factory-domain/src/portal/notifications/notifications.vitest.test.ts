@@ -79,6 +79,23 @@ describe('partner notifications (B-W2b-167, PLT-148)', () => {
     expect(() => composeNotificationMail({ recipientName: 'Anna', item: { ...item, link: 'javascript:alert(1)' }, links, footer, locale: 'en' })).toThrow()
   })
 
+  // B-TH-080 (threads plan TH-6, thread-G11): the shared message the notice is about, quoted and escaped; none, nothing extra.
+  it('quotes the shared message under its sentence (one mail and the summary), escaped; without one, the mail is as before', () => {
+    const footer = { text: '-- Factory Spa', html: '<div>Factory Spa</div>' }
+    const links = { manage: portalEmailSettingsUrl('https://web.example', 'P0001'), unsubscribe: unsubscribeUrl('https://web.example', unsubscribeToken(KEY, T, U)) }
+    const plain = { sentence: 'New message from Factory Spa on Q-1', link: portalRecordUrl('https://web.example', 'P0001', 'Quote', U, `message:${U}`) }
+    const quoted = { ...plain, quote: 'Your jackets <AX-100> ship on Monday.' }
+    const one = composeNotificationMail({ recipientName: 'Anna', item: quoted, links, footer, locale: 'en' })
+    expect(one.text).toContain('“Your jackets <AX-100> ship on Monday.”')
+    expect(one.html).toContain('<blockquote>Your jackets &lt;AX-100&gt; ship on Monday.</blockquote>')
+    expect(one.subject).toBe(plain.sentence)
+    const digest = composeDigestMail({ recipientName: 'Anna', company: 'Factory Spa', weekly: false, items: [quoted, plain], more: 0, links, footer, locale: 'en' })
+    expect(digest.text).toContain('• New message from Factory Spa on Q-1\n  “Your jackets <AX-100> ship on Monday.”\n  https://web.example/')
+    expect(digest.html).toContain('<em>“Your jackets &lt;AX-100&gt; ship on Monday.”</em>')
+    expect(composeNotificationMail({ recipientName: 'Anna', item: plain, links, footer, locale: 'en' })).toEqual(composeNotificationMail({ recipientName: 'Anna', item: { ...plain, quote: null }, links, footer, locale: 'en' }))
+    expect(composeNotificationMail({ recipientName: 'Anna', item: plain, links, footer, locale: 'en' }).html).not.toContain('blockquote')
+  })
+
   it('reads back only an unsubscribe token it made, for that tenant and person', () => {
     const token = unsubscribeToken(KEY, T, U)
     expect(readUnsubscribeToken(KEY, token)).toEqual({ tenantId: T, userId: U })
