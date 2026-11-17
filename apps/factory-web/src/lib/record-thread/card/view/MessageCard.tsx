@@ -33,7 +33,7 @@ export interface CardActions {
   /** Send again a message that did not go (the same Idempotency-Key: one message). */
   onRetry?: (messageId: string) => void
   onOpenFile?: (fileId: string) => void
-  /** "+14": the message's other files (the Files view). */
+  /** "+14": the message's other files (the Files view, TH-1c); without it the card shows them all in place. */
   onMoreFiles?: (messageId: string) => void
 }
 
@@ -53,6 +53,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const quotedId = useId()
   const [quotedOpen, setQuotedOpen] = useState(false)
   const [allShown, setAllShown] = useState(false)
+  const [allFiles, setAllFiles] = useState(false)
 
   const party = context.partyName || t('side.theParty')
   const who = authorWords(message)
@@ -63,7 +64,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const { text, quoted } = splitQuoted(message.body, message.kind)
   const fold = longFold(text)
   const folded = fold.folds && !allShown
-  const files = cardFiles(message.files, context.canReadFiles)
+  const files = cardFiles(message.files, context.canReadFiles, allFiles)
   const menu = cardActions(message, context)
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
@@ -92,7 +93,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
         )}
         <span className="fw-rt-msg-end">
           <time dateTime={message.at}>{time}</time>
-          {remind}
+          {!message.outbox && remind}
           {menu.length > 0 && (
             <Menu
               align="right"
@@ -151,7 +152,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
               ))}
               {files.more > 0 && (
                 <li className="fw-rt-photo">
-                  <button type="button" className="fw-rt-photo-more" aria-label={t('files.moreLabel', { count: files.more })} onClick={() => actions?.onMoreFiles?.(message.id)}>
+                  <button type="button" className="fw-rt-photo-more" aria-label={t('files.moreLabel', { count: files.more })} onClick={() => (actions?.onMoreFiles ? actions.onMoreFiles(message.id) : setAllFiles(true))}>
                     +{files.more}
                   </button>
                   <span>{t('files.more', { count: files.more })}</span>

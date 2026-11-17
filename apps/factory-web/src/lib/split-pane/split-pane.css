@@ -1,0 +1,53 @@
+/*
+ * SplitPane (B-TH-212): the list and its record, 35 : 65 from 1024 px, one at a time below. The page's height is the host's; both
+ * sides scroll on their own. DS tokens only.
+ */
+.fw-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.fw-split.is-open {
+  grid-template-columns: minmax(0, 35fr) minmax(0, 65fr);
+}
+
+.fw-split-list,
+.fw-split-pane {
+  min-width: 0;
+  min-height: 0;
+}
+
+.fw-split-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fw-split-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-split-back {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .fw-split.is-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-split.is-open .fw-split-list {
+    display: none;
+  }
+
+  .fw-split-back {
+    display: flex;
+  }
+}

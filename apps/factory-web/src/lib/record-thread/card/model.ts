@@ -169,14 +169,14 @@ export interface CardFiles {
   hidden: number
 }
 
-export function cardFiles(files: readonly CardFile[], canReadFiles: boolean): CardFiles {
+export function cardFiles(files: readonly CardFile[], canReadFiles: boolean, all = false): CardFiles {
   if (!canReadFiles) return { photos: [], others: [], held: [], more: 0, hidden: files.length }
-  const shown = files.slice(0, FILES_SHOWN)
+  const shown = all ? [...files] : files.slice(0, FILES_SHOWN)
   return {
     photos: shown.filter((file) => file.status === 'AVAILABLE' && PICTURES.has(file.contentType)),
     others: shown.filter((file) => file.status === 'AVAILABLE' && !PICTURES.has(file.contentType)),
     held: shown.filter((file) => file.status !== 'AVAILABLE'),
-    more: Math.max(0, files.length - FILES_SHOWN),
+    more: all ? 0 : Math.max(0, files.length - FILES_SHOWN),
     hidden: 0,
   }
 }

@@ -1,0 +1,65 @@
+/*
+ * RecordThread v1 (B-TH-212): ONE column — the feed fills it and scrolls, the box sits at the bottom. It fills the height its host
+ * gives it (Incoming's reading pane, the request's full page); no max-width (no dead space at 1920). DS tokens only.
+ */
+.fw-rt-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  overflow: hidden;
+}
+
+.fw-rt-notice {
+  flex: none;
+  padding: 10px 12px 0;
+}
+
+/* SCR-006-thread (design review): the column as tall as the reading pane at 1440 × 900; the page frame at 375 holds it whole. */
+.fw-rt-thread-case {
+  height: 720px;
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-rt-column {
+    border-radius: 0;
+    border-inline: none;
+  }
+
+  .fw-rt-thread-case {
+    height: 640px;
+  }
+}
+
+/* SCR-006-thread "reading pane": a stand-in for Incoming's list (B-TH-217 draws the real one). */
+.fw-rt-case-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  height: 100%;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm-plus);
+}
+
+.fw-rt-case-list li {
+  padding: 10px 12px;
+  border-radius: var(--nds-radius-lg);
+}
+
+.fw-rt-case-list li.is-current {
+  background: var(--nds-tonal-bg);
+  color: var(--nds-tonal-fg);
+  font-weight: 600;
+}

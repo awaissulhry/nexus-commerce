@@ -1,0 +1,20 @@
+{
+  "label": "Thread of {record}",
+  "notice": {
+    "noteAdded": "Office note added.",
+    "noteAddedFloor": "Office note added: the tablets of this work order read it too.",
+    "emailQueued": "The mail is on its way: its delivery word shows on the message.",
+    "linkCopied": "Link copied: it opens this record with the message open.",
+    "linkFailed": "The link could not be copied: this browser does not allow it here.",
+    "reopened": "The thread is open again.",
+    "statusConflict": "Someone changed the thread meanwhile: it was read again. Try again.",
+    "forbidden": "You may not do this here.",
+    "failed": "Something went wrong. Try again.",
+    "openFailed": "The file could not be opened. Try again.",
+    "partyUnread": "The customer’s contacts could not be read: type the address yourself."
+  },
+  "pane": {
+    "label": "Reading pane",
+    "close": "Close the reading pane"
+  }
+}

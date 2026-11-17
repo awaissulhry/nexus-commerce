@@ -1,0 +1,20 @@
+{
+  "label": "Conversazione di {record}",
+  "notice": {
+    "noteAdded": "Nota d'ufficio aggiunta.",
+    "noteAddedFloor": "Nota d'ufficio aggiunta: la leggono anche i tablet di questo ordine di lavoro.",
+    "emailQueued": "L'email è in partenza: lo stato di consegna compare sul messaggio.",
+    "linkCopied": "Link copiato: apre questo record con il messaggio aperto.",
+    "linkFailed": "Non è stato possibile copiare il link: questo browser non lo permette qui.",
+    "reopened": "La conversazione è di nuovo aperta.",
+    "statusConflict": "Qualcuno ha cambiato la conversazione nel frattempo: è stata riletta. Riprova.",
+    "forbidden": "Qui non puoi farlo.",
+    "failed": "Qualcosa non è andato. Riprova.",
+    "openFailed": "Non è stato possibile aprire il file. Riprova.",
+    "partyUnread": "Non è stato possibile leggere i contatti del cliente: scrivi tu l'indirizzo."
+  },
+  "pane": {
+    "label": "Riquadro di lettura",
+    "close": "Chiudi il riquadro di lettura"
+  }
+}
