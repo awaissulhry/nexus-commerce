@@ -1,7 +1,7 @@
 'use client'
 
 import { Banner } from '@nexus/ui/components'
-import { Button } from '@nexus/ui/primitives'
+import { Button, Skeleton } from '@nexus/ui/primitives'
 import { ListboxPanel, Modal } from '../../../i18n/ds-parts'
 import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -17,6 +17,8 @@ export interface OwnerDialogModel {
   readonly owner: HeadOwner | null
   /** The office people who read the thread (the API refuses anyone else). */
   readonly people: ReadonlyArray<{ readonly id: string; readonly name: string }>
+  /** Whether the people were read: "reading" and "could not be read" are said, never "nobody" before it knows. */
+  readonly peopleState?: 'loading' | 'ready' | 'failed'
   readonly meId: string
   readonly busy: boolean
   /** Why the last change was refused, in words. */
@@ -28,15 +30,15 @@ export interface OwnerDialogModel {
  * read it (me first), or back to the record's own owner (the request's assignee, the order's supervisor, else its maker). ↑ ↓ and
  * Enter choose. Draws its model; the container sends the change.
  */
-export function OwnerDialog({ model, onPick, onClose }: { model: OwnerDialogModel; onPick: (ownerId: string | null) => void; onClose: () => void }) {
+export function OwnerDialog({ model, onPick, onClose, onRetry }: { model: OwnerDialogModel; onPick: (ownerId: string | null) => void; onClose: () => void; onRetry?: () => void }) {
   return (
     <WithMessages namespaces={[HEAD_NS]}>
-      <Dialog model={model} onPick={onPick} onClose={onClose} />
+      <Dialog model={model} onPick={onPick} onClose={onClose} onRetry={onRetry} />
     </WithMessages>
   )
 }
 
-function Dialog({ model, onPick, onClose }: { model: OwnerDialogModel; onPick: (ownerId: string | null) => void; onClose: () => void }) {
+function Dialog({ model, onPick, onClose, onRetry }: { model: OwnerDialogModel; onPick: (ownerId: string | null) => void; onClose: () => void; onRetry?: () => void }) {
   const t = useT(HEAD_NS)
   const set = model.owner?.source === 'SET'
   const options = [
@@ -63,7 +65,26 @@ function Dialog({ model, onPick, onClose }: { model: OwnerDialogModel; onPick: (
         <p className="fw-rth-ownerhint">
           {model.owner ? `${t('owner.now', { name: model.owner.active ? model.owner.name : t('owner.inactive', { name: model.owner.name }) })} · ${t(`owner.source.${model.owner.source}`)}` : t('owner.nobody')}
         </p>
-        {options.length === 0 ? (
+        {model.peopleState === 'loading' ? (
+          <div aria-busy="true">
+            <p className="fw-rth-ownerhint" role="status">
+              {t('owner.loading')}
+            </p>
+            <Skeleton height={96} />
+          </div>
+        ) : model.peopleState === 'failed' ? (
+          <Banner
+            tone="danger"
+            title={t('owner.peopleFailed')}
+            action={
+              onRetry ? (
+                <Button size="sm" onClick={onRetry}>
+                  {t('owner.retry')}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : options.length === 0 ? (
           <p className="fw-rth-ownerhint">{t('owner.noPeople')}</p>
         ) : (
           <ListboxPanel

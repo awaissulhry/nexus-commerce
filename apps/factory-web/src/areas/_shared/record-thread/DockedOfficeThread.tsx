@@ -649,7 +649,12 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       {shares.model?.invite && <InviteDialog model={shares.model} actions={shares.actions} />}
       {closing && <CloseThreadConfirm record={host.recordLabel} party={party?.name ?? null} problem={closing.problem} onClose={() => void closeThread()} onCancel={() => setClosing(null)} />}
       {owning && (
-        <OwnerDialog model={{ record: host.recordLabel, owner: base.server.head?.owner ?? null, people: base.people, meId: session.user.id, busy: owning.busy, problem: owning.problem }} onPick={(ownerId) => void pickOwner(ownerId)} onClose={() => setOwning(null)} />
+        <OwnerDialog
+          model={{ record: host.recordLabel, owner: base.server.head?.owner ?? null, people: base.people, peopleState: base.peopleState, meId: session.user.id, busy: owning.busy, problem: owning.problem }}
+          onPick={(ownerId) => void pickOwner(ownerId)}
+          onClose={() => setOwning(null)}
+          onRetry={() => void base.loadPeople()}
+        />
       )}
       {reminder.dialog}
     </>

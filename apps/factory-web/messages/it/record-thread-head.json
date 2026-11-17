@@ -125,7 +125,10 @@
       "notFound": "il record non c'è più.",
       "network": "la rete non risponde; riprova.",
       "failed": "qualcosa è andato storto; riprova."
-    }
+    },
+    "loading": "Lettura di chi legge questa conversazione…",
+    "peopleFailed": "Non è stato possibile leggere chi legge questa conversazione.",
+    "retry": "Riprova"
   },
   "rule": {
     "sinceUs": "Tocca a noi dal {when}.",

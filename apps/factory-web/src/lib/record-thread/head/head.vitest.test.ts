@@ -10,6 +10,7 @@ import { designScreen } from './fixtures'
 import { DEFAULT_DOCK_WIDTH, doorHolds, menuRows, R_ACT_ORDER, viewsOffered, waitWords, whoAnswers, widthKey, type HeadAbilities, type HeadModel } from './model'
 // B-TH-229
 import { answersOf, newWords, waitingWords } from './model'
+import { OwnerDialog } from './view/OwnerDialog'
 import { readWidth, writeWidth } from './use-thread-width'
 import { PortalHeadLine } from './view/PortalHeadLine'
 
@@ -108,6 +109,17 @@ describe('B-TH-229 — waiting words and the amber rule, the owner, 2 new', () =
     expect(menuRows(base()).some((row) => row.kind === 'owner')).toBe(false)
     const held = render(base({ owner, ownerHeld: { key: 'held.noRight', params: { right: 'Write in threads' } } }))
     expect(held).toContain('role="img" aria-label="Owner: Bea Esempio"')
+  })
+
+  it('Change owner: the readers, me first; "reading" and "could not be read" in words, never "nobody" before it knows', () => {
+    const dialog = (peopleState: 'loading' | 'ready' | 'failed', people = [{ id: 'u2', name: 'Bea Esempio' }, { id: 'u1', name: 'Alex Demo' }]) =>
+      renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(OwnerDialog, { model: { record: 'SO-2026-0142', owner: { id: 'u2', name: 'Bea Esempio', active: true, source: 'ASSIGNEE' }, people, peopleState, meId: 'u1', busy: false, problem: null }, onPick: () => undefined, onClose: () => undefined, onRetry: () => undefined })))
+    // Modals render into a portal on the client; the server render may be empty — then the words are checked in the catalogue.
+    const t = createTranslator('en', messagesFor('en', ['record-thread-head'])['record-thread-head'] ?? {})
+    expect(t('owner.loading')).toBe('Reading who reads this thread…')
+    expect(t('owner.peopleFailed')).toBe('Who reads this thread could not be read.')
+    expect(t('owner.noPeople')).toBe('Nobody else reads this thread yet.')
+    for (const state of ['loading', 'failed'] as const) expect(dialog(state)).not.toContain('Nobody else reads this thread yet')
   })
 
   it('"2 new": the reader’s own new messages, 99+ above 99, nothing at 0', () => {

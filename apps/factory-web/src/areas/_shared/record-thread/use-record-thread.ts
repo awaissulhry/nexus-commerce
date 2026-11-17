@@ -73,6 +73,9 @@ export interface RecordThreadBase {
   readonly notify: (notice: Notice | null) => void
   /** B-TH-229: the reader's own new messages now (the Head's "2 new", the band's "Thread · 2 new"). */
   readonly newCount: number
+  /** B-TH-229: the people (Change owner's list) — read, being read, or failed; and the read again. */
+  readonly peopleState: 'loading' | 'ready' | 'failed'
+  readonly loadPeople: () => Promise<void>
 }
 
 const EMPTY_WORK = (draft: ComposerDraft = { mode: 'note', body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
@@ -96,6 +99,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const [filesRead, setFilesRead] = useState(false) // B-TH-300
   const [changes, setChanges] = useState<ThreadApiChange[]>([])
   const [people, setPeople] = useState<Array<{ id: string; name: string }>>([])
+  // B-TH-229: whether the people were read (Change owner says "reading" or "could not be read", never "nobody" before it knows).
+  const [peopleState, setPeopleState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [work, setWork] = useState<Work>(() => EMPTY_WORK())
   const [sending, setSending] = useState(false)
@@ -179,10 +184,13 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }, [api, key])
   const loadPeople = useCallback(async () => {
     if (!can.post) return
+    setPeopleState('loading')
     try {
       setPeople((await listPeople(api, key)).people)
+      setPeopleState('ready')
     } catch {
-      // Without the list a note mentions nobody.
+      // Without the list a note mentions nobody (Change owner says it could not be read, with Try again).
+      setPeopleState('failed')
     }
   }, [api, key, can.post])
 
@@ -661,6 +669,6 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     forgetDraft()
   }
 
-  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice, newCount: server.reading?.newCount ?? 0 }
+  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice, newCount: server.reading?.newCount ?? 0, peopleState, loadPeople }
   return { model, actions, kept, guard: { ask: leave.ask }, base }
 }

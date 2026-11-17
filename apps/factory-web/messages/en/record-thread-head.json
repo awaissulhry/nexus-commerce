@@ -125,7 +125,10 @@
       "notFound": "the record is no longer there.",
       "network": "the network is down; try again.",
       "failed": "something went wrong; try again."
-    }
+    },
+    "loading": "Reading who reads this thread…",
+    "peopleFailed": "Who reads this thread could not be read.",
+    "retry": "Try again"
   },
   "rule": {
     "sinceUs": "Waiting on us since {when}.",
