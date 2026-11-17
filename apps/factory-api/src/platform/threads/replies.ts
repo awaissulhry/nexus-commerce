@@ -7,7 +7,7 @@ import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { partyReaders } from '../portal/tasks/people'
 import type { MessageView, ThreadView } from './contract'
-import { mayOnThread, mayShare, notShareableRefusal } from './records'
+import { mayOnThread, mayShare, notShareableRefusal, wallScopeOf } from './records'
 import { attachmentProblems, contextOf, ensureThread, messageViewOf, officeRecord, scopeOfThread, THREAD_OFFICE, threadViewOf, visibleAttachments, writeMessage, type RecordRef, type ThreadRow } from './threads'
 
 /**
@@ -76,9 +76,11 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
     { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
-      // The thread as it is now (made by this command or a racing one): its scope decides.
-      if (!mayOnThread(actor, THREADS_READ, record.type, scopeOfThread(thread))) throw new NotFoundError('Record not found.')
-      if (!mayOnThread(actor, THREADS_POST, record.type, scopeOfThread(thread))) throw new ForbiddenError()
+      // The thread as it is now (made by this command or a racing one): its scope decides — with its wall party, as the note route
+      // checks it since B-PR-08a part 2 (a record never shared is refused before this; the rule stays the one rule).
+      const wall = await wallScopeOf(tools.tx, thread)
+      if (!mayOnThread(actor, THREADS_READ, record.type, wall)) throw new NotFoundError('Record not found.')
+      if (!mayOnThread(actor, THREADS_POST, record.type, wall)) throw new ForbiddenError()
       if (thread.partyId === null) throw replyRefusal('NO_PARTY')
       if (thread.status !== 'OPEN') throw replyRefusal('CLOSED')
       if (!(await portalReaderExists(tools.tx, context.tenantId, thread, tools.now))) throw replyRefusal('NO_PORTAL')
