@@ -172,3 +172,25 @@ export function withOutbox(server: readonly CardMessage[], outbox: readonly Outb
 export function settleOutbox(outbox: readonly OutboxItem[], serverIds: ReadonlySet<string>): OutboxItem[] {
   return outbox.filter((item) => !(item.messageId && serverIds.has(item.messageId)))
 }
+
+// ── B-TH-300: the docked thread ─────────────────────────────────────────────────────────────────────────────────────
+
+/** The Head's View (T1-F04), as the feed applies it. */
+export type FeedView = 'all' | 'shared' | 'notes' | 'changes'
+
+/**
+ * What the feed shows under the Head's View: All; With the customer (the messages shared with the party — theirs and ours —, no
+ * Office note and no record step); Office notes (notes and the floor's, no step); Changes (the record's steps only, no message: the
+ * Head offers it with audit.read). What is on its way or did not go stays under every view that holds its kind.
+ */
+export function feedForView<F extends { readonly messages: readonly CardMessage[]; readonly events: readonly FeedEvent[] }>(feed: F, view: FeedView): F {
+  if (view === 'all') return feed
+  if (view === 'changes') return { ...feed, messages: [] }
+  const keep = view === 'shared' ? (card: CardMessage) => card.kind === 'theirs' || card.kind === 'ours' : (card: CardMessage) => card.kind === 'note' || card.kind === 'floor'
+  return { ...feed, messages: feed.messages.filter(keep), events: [] }
+}
+
+/** What the Head's View offers for this thread (a kind the thread does not hold is not offered). */
+export function feedKinds(messages: readonly Pick<CardMessage, 'kind'>[]): { readonly hasShared: boolean; readonly hasNotes: boolean } {
+  return { hasShared: messages.some((card) => card.kind === 'theirs' || card.kind === 'ours'), hasNotes: messages.some((card) => card.kind === 'note' || card.kind === 'floor') }
+}

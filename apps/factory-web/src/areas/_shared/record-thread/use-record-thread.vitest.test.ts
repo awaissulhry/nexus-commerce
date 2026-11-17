@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
 import type { ApiClient } from '../../../lib/api/client'
 import type { ApiMessage } from '../../../record-panels/api'
-import { checkReply, postNoteKeyed, readContacts, sendReplyKeyed, shareWithParty } from './api'
+import { checkReply, officeOnly, postNoteKeyed, readContacts, removeFile, sendReplyKeyed, shareWithParty } from './api'
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type Work } from './state'
 
 /** B-TH-212 — the office container of RecordThread v1: its calls, a live read that never drops the draft, the errors in words. */
@@ -113,5 +113,51 @@ describe('the container’s calls', () => {
   it('the office container never runs in the portal (check-view-boundaries: areas is the Office view)', () => {
     const source = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
     expect(source).not.toMatch(/from '[^']*\/portal\//)
+  })
+})
+
+describe('B-TH-300 — the docked thread’s container', () => {
+  const recording = (answer: unknown) => {
+    const calls: Array<{ method: string; path: string; body?: unknown; query?: unknown }> = []
+    const api = {
+      request: async (method: string, path: string, options: { body?: unknown; query?: unknown; schema: { parse: (v: unknown) => unknown } }) => {
+        calls.push({ method, path, body: options.body, query: options.query })
+        return options.schema.parse(answer)
+      },
+    } as unknown as ApiClient
+    return { api, calls }
+  }
+
+  it('the Files view’s bulk work: office only takes every outside audience off; Delete sends the version as read', async () => {
+    const office = recording({ file: { id: 'f 1', version: 5, visibility: ['OFFICE'] } })
+    await officeOnly(office.api, { id: 'f 1', version: 4 })
+    expect(office.calls[0]).toMatchObject({ method: 'PUT', path: '/files/f%201/visibility', body: { visibility: ['OFFICE'], partyId: null, version: 4 } })
+    const removed = recording({ file: { id: 'f', version: 2, visibility: ['OFFICE'] } })
+    await removeFile(removed.api, { id: 'f', version: 1 })
+    expect(removed.calls[0]).toMatchObject({ method: 'DELETE', path: '/files/f', query: { version: 1 } })
+  })
+
+  it('one container: the docked bands read the same reads (no second thread, files or people read for the page)', () => {
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).not.toMatch(/readThreadPage|listFiles\(|listPeople\(|readTimeline\(/)
+    expect(docked).toContain('base.files')
+    const office = readFileSync(new URL('./OfficeRecordThread.tsx', import.meta.url), 'utf8')
+    expect(office).toContain('useRecordThread(host)')
+    expect(office.match(/useRecordThread\(/g)?.length).toBe(1)
+  })
+
+  it('Activity’s doors open the record panels’ EXISTING dialogs (R-ACT), never a copy', () => {
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    for (const part of ["record-panels/view/TaskNewDialog'", "record-panels/approvals/view/AskDialog'", "record-panels/share/view/InviteDialog'", "record-panels/view/FollowersControl'", "record-panels/approvals/use-approvals'", "record-panels/share/use-shares'"]) expect(docked).toContain(part)
+    const reminder = readFileSync(new URL('./use-thread-reminder.tsx', import.meta.url), 'utf8')
+    expect(reminder).toContain("shell/panels/remind-me/view/RemindMeDialog'")
+    expect(reminder).toContain('REMIND_ME_EVENT')
+  })
+
+  it('the brand wall: Share and Ask reach this record’s party only; the files are this record’s; no portal code', () => {
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('recordFiles(base.files.map((file) => fromApiFile(file)), key)')
+    expect(docked).toContain("shareWithParty(api, file, partyId)")
+    expect(docked).not.toMatch(/from '[^']*\/portal\//)
   })
 })

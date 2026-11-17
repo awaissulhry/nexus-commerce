@@ -209,15 +209,12 @@
   },
   "tab": {
     "lines": "Lines",
-    "dates": "Dates & promise",
-    "production": "Production",
-    "shipments": "Shipments",
+    "production": "Production & dates",
+    "shipments": "Shipments & invoices",
     "money": "Invoices & payments",
-    "documents": "Documents",
     "margin": "Margin",
-    "activity": "Activity",
     "depositOpen": "A deposit is open",
-    "changes": "Changes"
+    "changes": "Confirmation & changes"
   },
   "step": {
     "makeWorkOrders": "Make work orders",
@@ -255,13 +252,10 @@
         "title": "Couldn't load the order"
       }
     },
-    "dock": "Thread",
-    "dockHint": "The order's thread beside the tab",
     "dockLabel": "The order's thread",
     "more": "More for this order",
     "tabsLabel": "Sections of the order",
     "depositOpen": "Deposit open — due {date}",
-    "depositPaid": "Deposit paid",
     "depositMissing": "Deposit not asked",
     "late_one": "Late {count} day",
     "late_other": "Late {count} days",
@@ -273,7 +267,6 @@
     "closed": "Closed on {date}: nothing on it changes any more.",
     "closedNoDate": "Closed: nothing on it changes any more.",
     "readOnly": "Read-only: your role follows orders and changes none.",
-    "noPanels": "The thread, files and history open with the record.",
     "amended": "Amended · rev {revision}",
     "reapproval": "Waiting for the customer to accept the change",
     "typed": "Typed by the office"
@@ -683,10 +676,7 @@
     "document": "The signed PDF",
     "matches": "Matches the PDF sent",
     "differs": "Differs from the PDF sent",
-    "terms": "Terms version",
-    "filesTitle": "Documents and files",
-    "filesBody": "The order's files — the customer's PO, copies, anything added — are in Activity › Files, with who can see each.",
-    "openFiles": "Open the files"
+    "terms": "Terms version"
   },
   "part": {
     "loading": "Loading {part}…",

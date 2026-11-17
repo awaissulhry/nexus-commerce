@@ -56,6 +56,8 @@ export interface ComposerProps {
   onFiles?: (files: File[]) => void
   /** A line in the foot: "Draft kept on this device · saved 10:42" (TH-1c's DraftLine). */
   hint?: ReactNode
+  /** B-TH-300: the helpers beside the @ button (Saved replies ▾, TH-1c's B-TH-208). */
+  helpers?: ReactNode
 }
 
 /**
@@ -272,6 +274,7 @@ export function Composer(props: ComposerProps) {
       <div className="fw-rt-cx-foot">
         {props.clip}
         {draft.mode === 'note' && context.people.length > 0 && <MentionButton onClick={() => mention.current?.startMention()} />}
+        {props.helpers}
         {props.hint}
         <span className="fw-rt-cx-grow" />
         {length >= COUNTER_FROM && <span className={`fw-rt-cx-count${length > MAX_BODY ? ' is-over' : ''}`}>{t('counter', { count: MAX_BODY - length })}</span>}

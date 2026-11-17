@@ -41,7 +41,7 @@ const FILLED = {
   [id(103)]: `Dear ${BRAND_ALPHA.contact.name},\nthe delivery of SO-2026-0142 moves to {{order.promiseDate}}. We are sorry for the wait.\nAlex Demo`,
 }
 
-const c = (over: Partial<HelpersCaseModel> = {}): HelpersCaseModel => ({ mode: 'note', text: '', people: PEOPLE, replies: REPLIES, filled: FILLED, draft: null, frames: [519, 375], ...over })
+const c = (over: Partial<HelpersCaseModel> = {}): HelpersCaseModel => ({ mode: 'note', text: '', people: PEOPLE, replies: REPLIES, filled: FILLED, draft: null, ...over })
 
 export const designScreen = defineDesignScreen<HelpersCaseModel>({
   screen: 'SCR-006-helpers',

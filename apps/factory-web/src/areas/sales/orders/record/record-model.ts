@@ -1,10 +1,9 @@
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { ReactNode } from 'react' // B-W2b-340
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
 import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
 import type { DraftLine } from '../daily-model'
 import type { MarginTabModel } from './margin/model'
-import type { LiveState, StepUpState } from '../hooks'
+import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
 import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-depth' // B-W2b-323
@@ -80,8 +79,8 @@ export interface OrderRecordModel {
   sdi: Record<string, Part<SdiStatus>> | null
   /** The quote's versions with the acceptance evidence (quotes.view); null without the right or without a quote. */
   versions: Part<VersionsAnswer> | null
-  live: LiveState
-  dockOpen: boolean
+  /** B-TH-214: the person (the docked thread's width is remembered per person and record type on this device). */
+  personId?: string | null
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
   changed: { at: string } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
@@ -114,8 +113,6 @@ export interface OrderRecordModel {
   margin?: MarginTabModel
   /** B-W2a-80: the schedule card's verbs (open a before-shipping step for payment, invoice a paid step). */
   scheduleSteps?: ScheduleStepsModel
-  /** Design cases: what the panels show (the page mounts the live panels instead). */
-  panelsPreview?: RecordPanelsViewModel
   /** B-W2b-16: the CANCEL reasons (the code a close of lines names; the words of a closed line's code); null: not read. */
   cancelReasons?: readonly CancelReason[] | null
   /** B-W2b-323: the orders in depth (priority, season, the yes it waits for, what is frozen, priced changes, the customer's
@@ -149,7 +146,6 @@ export interface OrderRecordActions {
   onRetry?: () => void
   onRetryPart?: (part: 'workOrders' | 'settlement' | 'sdi' | 'versions' | 'schedule' | 'amendments' | 'cancelCheck') => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   onPromise?: (input: { date: string; reason: string; lineIds: string[] | null }) => void

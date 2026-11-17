@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { amendmentsFor, AMENDMENTS, inShell, NO_AMENDMENTS, order, STYLE, STYLE_ID, type Role } from '../../_demo/fixtures'
-import { amended, base } from '../fixtures'
+import { amended, base, orderDesignThread } from '../fixtures'
 import type { OrderRecordModel } from '../record-model'
 import { OrderRecordView } from '../view/OrderRecordView'
 
@@ -21,7 +21,7 @@ const production = amended(order('IN_PRODUCTION'))
 const view = (role: Role, over: Partial<OrderRecordModel> = {}): ChangesCase => base(role, production, { tab: 'changes', amendments: { value: amendmentsFor(role), problem: null }, changeStyles: { [STYLE_ID]: STYLE }, ...over })
 
 function ChangesDesign({ model }: { model: ChangesCase }) {
-  return inShell(`/sales/orders/${production.id}`, createElement(OrderRecordView, { model: model.record }), model.role)
+  return inShell(`/sales/orders/${production.id}`, createElement(OrderRecordView, { model: model.record, thread: orderDesignThread() /* B-TH-214 */ }), model.role)
 }
 
 export const designScreen = defineDesignScreen<ChangesCase>({

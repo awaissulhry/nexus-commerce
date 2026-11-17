@@ -244,12 +244,6 @@ p.fw-so-hint[role='status'] {
   color: var(--nds-text-muted);
 }
 
-.fw-so-keys {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: var(--nds-space-4);
-}
-
 .fw-so-tablabel {
   display: inline-flex;
   align-items: center;
@@ -263,25 +257,12 @@ p.fw-so-hint[role='status'] {
   background: var(--nds-warning);
 }
 
-.fw-so-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+/* B-TH-214: the order's body on RecordFrame (the frame docks the thread); a merged tab shows its parts one after the other. */
+.fw-so-merged {
+  display: flex;
+  flex-direction: column;
   gap: var(--nds-space-16);
   min-width: 0;
-}
-
-.fw-so-body.has-dock {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-}
-
-@media (max-width: 1279px) {
-  .fw-so-body.has-dock {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fw-so-dock {
-    display: none;
-  }
 }
 
 .fw-so-main,
