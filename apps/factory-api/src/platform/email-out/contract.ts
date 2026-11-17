@@ -78,6 +78,11 @@ export const sendEmailContract = defineContract({
     locale: z.enum(LOCALES).optional(),
     /** B-TH-004: "Send outside this customer" ticked: To and Cc may hold another party's address (recorded). */
     sendOutside: z.boolean().optional(),
+    // ---- B-TH-050 (thread-G20): "Reply" on a shared message names the message it answers; "Correct" on a mail we sent sends the
+    // correction by mail, linked to it (one of the two at most; a message of this conversation shared with the party).
+    replyToMessageId: id().optional(),
+    correctsMessageId: id().optional(),
+    // ---- end B-TH-050
   }),
   response: { 201: output({ thread: threadView, messageId: id(), email: emailView }) },
 })

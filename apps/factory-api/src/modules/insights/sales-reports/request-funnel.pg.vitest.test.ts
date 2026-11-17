@@ -29,6 +29,7 @@ await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAs
  *   I7  customer B, 25 Nov, QUOTED with Q3 whose order (O3) was cancelled: quoted, not ordered
  *   I8  a prospect (a made-up company), 24 Nov, NEED_INFO
  *   I9  customer A, 15 Oct: outside the default period
+ *   I10 customer B, 27 Nov, WITHDRAWN by B from its portal before we decided (B-TH-095): its own part, in the rates' whole
  * Every name and number is made up.
  */
 
@@ -151,6 +152,8 @@ beforeAll(async () => {
   await request('T052-INQ-7', B.id, '2026-11-25T08:00:00Z', 'QUOTED', { quoteId: q3.quoteId, closedAt: new Date('2026-11-26T08:00:00Z') })
   await request('T052-INQ-8', null, '2026-11-24T08:00:00Z', 'NEED_INFO', { prospectCompany: PROSPECT.company, prospectName: PROSPECT.name, prospectEmail: PROSPECT.email, prospectLawfulBasis: 'CONTRACT' })
   await request('T052-INQ-9', A.id, '2026-10-15T08:00:00Z', 'NEW')
+  // B-TH-095: withdrawn by the customer (test data past the guards: the portal's route itself is withdraw.pg's).
+  await request('T052-INQ-10', B.id, '2026-11-27T08:00:00Z', 'WITHDRAWN', { closedAt: new Date('2026-11-27T09:00:00Z') })
 
   SESSIONS.sales = session(grantsOf('sales'))
   // T30: a person limited to customer A on every grant (RoleAssignment.partyIds as the session holds it).
@@ -173,20 +176,21 @@ afterAll(async () => {
 }, 60_000)
 
 describe('B-TH-052 the request-to-order figure (GET /sales/reports/requests)', () => {
-  it('counts the requests received in November and what each became: quoted, ordered (straight or from its quote), declined, open; "Not an order" apart', async () => {
+  it('counts the requests received in November and what each became: quoted, ordered (straight or from its quote), declined, withdrawn, open; "Not an order" apart', async () => {
     const answer = await ok('sales', '/sales/reports/requests')
     expect(answer).toMatchObject({ from: '2026-11-01', to: '2026-11-30', by: 'week', sight: { requests: true, orders: true }, more: 0, complete: true })
-    expect(answer.all).toEqual({ received: 8, open: 2, quoted: 3, ordered: 2, declined: 1, lost: 0, notAnOrder: 1, quotedPct: '42.9', orderedPct: '28.6' })
-    expect(answer.buckets.reduce((sum: number, bucket: Json) => sum + bucket.figures.received, 0)).toBe(8)
+    // B-TH-095: the withdrawn request (I10) is a part of its own and stays in the rates' whole (9 − 1 "Not an order" = 8).
+    expect(answer.all).toEqual({ received: 9, open: 2, quoted: 3, ordered: 2, declined: 1, lost: 0, withdrawn: 1, notAnOrder: 1, quotedPct: '37.5', orderedPct: '25.0' })
+    expect(answer.buckets.reduce((sum: number, bucket: Json) => sum + bucket.figures.received, 0)).toBe(9)
     expect(answer.buckets.every((bucket: Json) => bucket.from >= '2026-11-01' && bucket.to <= '2026-11-30')).toBe(true)
     // By customer, the most requests first; each names its customer so the page opens Incoming for it.
     expect(answer.groups.map((row: Json) => [row.key, row.partyId, row.code, row.figures.received])).toEqual([
-      [B.id, B.id, B.code, 4],
+      [B.id, B.id, B.code, 5],
       [A.id, A.id, A.code, 3],
       ['prospects', null, null, 1],
     ])
     expect(group(answer, A.id)).toMatchObject({ name: A.tradeName ?? A.legalName, figures: { quoted: 2, ordered: 2, orderedPct: '66.7' } })
-    expect(group(answer, B.id).figures).toMatchObject({ received: 4, quoted: 1, ordered: 0, declined: 1, notAnOrder: 1, open: 1, quotedPct: '33.3' })
+    expect(group(answer, B.id).figures).toMatchObject({ received: 5, quoted: 1, ordered: 0, declined: 1, withdrawn: 1, notAnOrder: 1, open: 1, quotedPct: '25.0' })
     expect(group(answer, A.id).buckets.reduce((sum: number, bucket: Json) => sum + bucket.figures.received, 0)).toBe(3)
   })
 
@@ -203,9 +207,9 @@ describe('B-TH-052 the request-to-order figure (GET /sales/reports/requests)', (
     const answer = await ok('sales', '/sales/reports/requests?from=2026-10-01&to=2026-11-30&by=month')
     expect(answer.buckets.map((bucket: Json) => [bucket.key, bucket.figures.received])).toEqual([
       ['2026-10', 1],
-      ['2026-11', 8],
+      ['2026-11', 9],
     ])
-    expect(answer.all.received).toBe(9)
+    expect(answer.all.received).toBe(10)
   })
 
   it('T30: a person limited to customer A gets A’s figures only — no row, id, code, name or count of customer B anywhere', async () => {
@@ -213,19 +217,20 @@ describe('B-TH-052 the request-to-order figure (GET /sales/reports/requests)', (
     expect(answer.groups.map((row: Json) => row.key)).toEqual([A.id, 'prospects'])
     expect(answer.all).toMatchObject({ received: 4, quoted: 2, ordered: 2, declined: 0, notAnOrder: 0, open: 1 })
     const text = JSON.stringify(answer)
-    for (const word of [B.id, B.code, B.legalName, ...(B.tradeName ? [B.tradeName] : []), 'T052-INQ-4', 'T052-SO-3']) expect(text, word).not.toContain(word)
+    expect(answer.all.withdrawn).toBe(0)
+    for (const word of [B.id, B.code, B.legalName, ...(B.tradeName ? [B.tradeName] : []), 'T052-INQ-4', 'T052-INQ-10', 'T052-SO-3']) expect(text, word).not.toContain(word)
     expect(answer.buckets.reduce((sum: number, bucket: Json) => sum + bucket.figures.received, 0)).toBe(4)
   })
 
   it('each figure only within the reader’s own rights: no orders.view — an order made from a quote is not counted; no requests — null, never 0', async () => {
     const noOrders = await ok('noOrders', '/sales/reports/requests')
     expect(noOrders.sight).toMatchObject({ orders: false, requests: true })
-    expect(noOrders.all).toMatchObject({ received: 8, quoted: 3, ordered: 1 })
+    expect(noOrders.all).toMatchObject({ received: 9, quoted: 3, ordered: 1 })
     const noRequests = await ok('noRequests', '/sales/reports/requests')
     expect(noRequests).toMatchObject({ sight: { requests: false }, all: null, buckets: [], groups: [], more: 0 })
     // The production manager reads requests (B-TH-014) and the reports: the same counts, no amount anywhere.
     const manager = await ok('manager', '/sales/reports/requests')
-    expect(manager.all.received).toBe(8)
+    expect(manager.all.received).toBe(9)
   })
 
   it('refuses in words: no sales reports in the role (403), a period after today (400), an unknown key (400)', async () => {
@@ -251,6 +256,8 @@ const DOORS: Record<string, { tile: string; outcome?: string }> = {
   ordered: { tile: 'ALL', outcome: 'ORDERED' },
   declined: { tile: 'ALL', outcome: 'DECLINED' },
   lost: { tile: 'LOST' },
+  // B-TH-095: the customer's withdrawals open on their own outcome (the LOST tile keeps the office's "went away").
+  withdrawn: { tile: 'ALL', outcome: 'WITHDRAWN' },
   notAnOrder: { tile: 'ALL', outcome: 'NOT_AN_ORDER' },
 }
 const doorQuery = (figure: string, scope: { from: string; to: string; partyId?: string | null; prospect?: boolean }) => {
