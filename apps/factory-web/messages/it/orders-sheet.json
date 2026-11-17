@@ -260,5 +260,11 @@
     },
     "forbidden": "Fatturare lo spedito richiede il permesso di creare fatture.",
     "failed": "Non è stato possibile leggere lo spedito. Riprova."
+  },
+  "cells": {
+    "final": "Un ordine {status} non cambia mai.",
+    "nounOne": "ordine",
+    "nounOther": "ordini",
+    "noManage": "Modificare le celle richiede il permesso di modificare gli ordini."
   }
 }

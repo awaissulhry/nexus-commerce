@@ -284,6 +284,22 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'th4-invoice-drafts', label: 'TH-4 · Finance · Invoice shipped goods for 3: two drafts (one per customer and company), one order waits', model: sheet('finance', { selected: OPEN_ROWS.slice(0, 3).map((entry) => entry.id), invoiceDrafts: { count: 3, problem: null, value: { asOf: TODAY, drafts: [{ partyId: CUSTOMERS[0]!.id, companyId: DEMO_COMPANIES[0].id, code: 'C-1', legalName: CUSTOMERS[0]!.name, month: '2026-11', currency: 'EUR', orders: [{ id: OPEN_ROWS[0]!.id, number: OPEN_ROWS[0]!.number }], ddts: [{ ddtId: '0190f0e2-dd01-7000-8000-000000000001', number: 'DDT-2026-0101' }, { ddtId: '0190f0e2-dd01-7000-8000-000000000002', number: 'DDT-2026-0102' }], garments: '14', valueAmount: 624000, body: { ddtIds: ['0190f0e2-dd01-7000-8000-000000000001', '0190f0e2-dd01-7000-8000-000000000002'] } }, { partyId: CUSTOMERS[1]!.id, companyId: DEMO_COMPANIES[0].id, code: 'C-2', legalName: CUSTOMERS[1]!.name, month: '2026-11', currency: 'EUR', orders: [{ id: OPEN_ROWS[1]!.id, number: OPEN_ROWS[1]!.number }], ddts: [{ ddtId: '0190f0e2-dd01-7000-8000-000000000003', number: 'DDT-2026-0103' }], garments: '6', valueAmount: 270000, body: { ddtIds: ['0190f0e2-dd01-7000-8000-000000000003'] } }], held: [{ orderId: OPEN_ROWS[2]!.id, number: OPEN_ROWS[2]!.number, reason: 'NOTHING_SHIPPED' }] } } }) },
     { id: 'th4-totals-failed', label: 'TH-4 · The figures could not be read: in words with Try again (never 0)', model: base('owner', { rows: 'all', group: 'party', summary: { value: null, problem: 'problem.read.unavailable' }, list: { items: null, more: false, problem: 'problem.read.unavailable' } }) },
     // ── end B-TH-243 / B-TH-244 ──
+    // ── B-TH-245 (threads plan TH-4, picture 27): the sheet's cells edit — the order note and the custom values; Edit N ──
+    {
+      id: 'th4-cells',
+      label: 'TH-4 · Sales · Cells that edit: Order note and Hang tag (save mark, version checked); a closed order keeps its cells; Edit 2',
+      model: {
+        ...sheet('sales', { rows: 'all', list: { items: rowsFor('sales', LIST_ROWS), more: false, problem: null }, selected: OPEN_ROWS.slice(0, 2).map((entry) => entry.id) }),
+        tools: tools({
+          fields: { list: FIELDS.slice(0, 1), values: FIELD_VALUES },
+          layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note', 'cf:hang_tag'], hidden: [], pinned: [] } },
+          bulk: LIST_ROWS.map((entry) => ({ id: entry.id, label: entry.number, version: entry.version, values: { note: null, 'cf:hang_tag': FIELD_VALUES[entry.id]?.hang_tag?.value as string | null ?? null }, held: entry.status === 'CLOSED' || entry.status === 'CANCELLED' ? { '*': { code: 'held', status: entry.status } } : {} })),
+        }),
+      },
+      note: 'Double-click a cell or press F2: it saves by itself (↻ then ✓); someone else\'s change meanwhile is refused in words, never overwritten. The pencil cells are the only ones that edit: the rest of the row opens the order.',
+    },
+    { id: 'th4-cells-manager', label: 'TH-4 · Production manager · Every cell reads only (no right to change orders: said on Edit N)', model: { ...sheet('manager', { selected: OPEN_ROWS.slice(0, 1).map((entry) => entry.id) }), tools: tools({ layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note'], hidden: [], pinned: [] } } }) } },
+    // ── end B-TH-245 ──
   ],
 })
 

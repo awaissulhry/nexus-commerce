@@ -42,6 +42,7 @@ import type { ListGroups } from '../../../../../list-frame/groups/model'
 import { figureDoors, groupHref, invoiceShippedHeld, timingKey, totalNameKey } from '../sheet/overall'
 import { FiguresLine, InvoiceDraftsDialog } from '../sheet/overall-parts'
 import type { ExtraTerms } from '../../model'
+import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -255,6 +256,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   ) : undefined
 
   const pressed = TILES.find((tile) => tile.rows === model.rows)?.key ?? null
+  // ── B-TH-245 (threads plan TH-4, SHEET-G09; SHEET.brand-fields-F03, -F08): the sheet's cells that edit ──
+  const cellHeld = (row: OrderRow): string | null => heldCell(row, t, s)
+  const orderEdit = orderEditOf(model, s, cellHeld, (id, after, version) => actions?.onCellSaved?.(id, after, version))
+  // ── end B-TH-245 ──
   const groups = useOverallGroups(model, actions, t, s, locale) // B-TH-244
 
   return (
@@ -377,7 +382,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             </>
           }
           groups={groups /* B-TH-244 */}
-          custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId } /* B-TH-241 / B-TH-242: a customer's own columns on its sheet only */}
+          custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
+          edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
           builtInViews={{ items: builtInViewsOf(model, t, s), active: model.rows, onPick: (id) => actions?.onRows?.(id as RowView) }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
@@ -862,3 +868,27 @@ export function progressWords(row: Pick<OrderRow, 'progress'>, s: Translate): st
   return s('progress.text', { cut: figure(progress.cut), sewn: figure(progress.sewn), finished: figure(progress.finished), inWork: progress.inWork })
 }
 // ── end B-TH-244 ──
+
+// ── B-TH-245 (threads plan TH-4, SHEET-G09; features SHEET.brand-fields-F03 edit in a cell, -F08 Edit N; O-SAL-ORD-LIST.grid-F26) ──
+/** Why an order keeps its cells: a closed or cancelled order never changes (the database freezes it), in words; else null. */
+export function heldCell(row: Pick<OrderRow, 'status'>, t: Translate, s: Translate): string | null {
+  return row.status === 'CLOSED' || row.status === 'CANCELLED' ? s('cells.final', { status: t(`status.${row.status}`) }) : null
+}
+
+/**
+ * The sheet's own edit fields: the order note (the office's; the customer never sees it). The custom values join them in the list
+ * frame (`custom.edit`); the order's lines never edit here (an amendment changes them). A person without orders.manage reads every
+ * cell (held, in words); Edit N reviews old → new before it saves; a row changed by someone else meanwhile is refused as "changed
+ * since", never overwritten.
+ */
+export function orderEditOf(model: Pick<OrdersListModel, 'can'>, s: Translate, held: (row: OrderRow) => string | null, onSaved: (id: string, after: Readonly<Record<string, string | number | null>>, version: number) => void): ListEdit<OrderRow> {
+  return {
+    fields: { note: { kind: 'text', nullable: true, maxLength: 2000, label: s('col.note'), valueOf: (row) => row.internalNote ?? null, held } },
+    versionOf: (row) => row.version,
+    labelOf: (row) => row.number,
+    onSaved,
+    bulk: { noun: { one: s('cells.nounOne'), other: s('cells.nounOther') } },
+    held: model.can.manage ? null : s('cells.noManage'),
+  }
+}
+// ── end B-TH-245 ──

@@ -260,5 +260,11 @@
     },
     "forbidden": "Invoicing shipped goods needs the right to make invoices.",
     "failed": "The shipped goods could not be read. Try again."
+  },
+  "cells": {
+    "final": "A {status} order never changes.",
+    "nounOne": "order",
+    "nounOther": "orders",
+    "noManage": "Changing the cells needs the right to change orders."
   }
 }

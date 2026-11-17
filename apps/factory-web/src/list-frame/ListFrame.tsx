@@ -44,6 +44,8 @@ import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 import { useListToolsTransport } from './tools/transport'
 import { shownCustomIds, withCustomColumns, type ListCustom } from './custom/model'
 import { useCustomFields, useCustomValues } from './custom/use-custom-columns'
+import { cellValueOf, editFieldOf, fieldLabel } from './custom/model' // B-TH-245
+import type { ListEditField } from './w2b/model' // B-TH-245
 import { groupedRows, isGroupMarker, markerId, type GroupMarker, type ListGroups } from './groups/model'
 import { GroupLine } from './groups/GroupLine'
 import './list-frame.css'
@@ -251,8 +253,44 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   useEffect(() => shownRef.current?.(shownKey === '' ? [] : shownKey.split('|')), [shownKey])
   const apiRef = useRef<GridApi<T> | null>(null)
   const [ready, setReady] = useState(false)
+  // ── B-TH-245 (threads plan TH-4, SHEET-G09): the custom values edit in their cells beside the list's own fields (one bulk target) ──
+  const customFields = customColumns.fields
+  const customEdit = custom?.edit
+  const partyOfRef = useRef(custom?.partyOf)
+  partyOfRef.current = custom?.partyOf
+  const valuesRef = useRef(customValues.values)
+  valuesRef.current = customValues.values
+  const putValues = customValues.put
+  const editWithCustom = useMemo<ListEdit<T> | null | undefined>(() => {
+    if (!edit || !customEdit || !customFields || customFields.length === 0) return edit
+    const fields: Record<string, ListEditField<T>> = {}
+    for (const field of customFields) {
+      const spec = editFieldOf<T>(
+        field,
+        {
+          valueOf: (row) => cellValueOf(field, valuesRef.current.get(rowId(row))?.[field.code]),
+          ...(partyOfRef.current ? { partyOf: (row: T) => partyOfRef.current?.(row) ?? null } : {}),
+          ...(customEdit.held ? { held: customEdit.held } : {}),
+          label: fieldLabel(field, locale),
+          words: { notThisCustomer: t('custom.notThisCustomer'), yes: t('custom.yes'), no: t('custom.no') },
+        },
+        locale,
+      )
+      if (spec) fields[field.columnId] = spec
+    }
+    return {
+      ...edit,
+      fields: { ...edit.fields, ...fields },
+      // A saved cell's custom values go on the row in the frame; the list keeps its own fields and the row's new version.
+      onSaved: (savedId, after, version) => {
+        putValues(savedId, customFields, after)
+        edit.onSaved(savedId, after, version)
+      },
+    }
+  }, [edit, customEdit, customFields, rowId, locale, t, putValues])
+  // ── end B-TH-245 ──
   // B-W2b-13: inline edit (the cells save through the list's bulk target), the modes, the bulk edit.
-  const inline = useInlineEdit<T>({ edit: printing ? undefined : (edit ?? undefined), transport: listTools.transport, listKey: listTools.listKey, rowId, api: () => apiRef.current, t, markLabels: ds.cellSaveMark })
+  const inline = useInlineEdit<T>({ edit: printing ? undefined : (editWithCustom ?? undefined), transport: listTools.transport, listKey: listTools.listKey, rowId, api: () => apiRef.current, t, markLabels: ds.cellSaveMark })
   const gridColumns = useMemo(() => inline.columns(listTools.columns), [inline.columns, listTools.columns])
   // B-W2b-18: the phone card list is on unless the list says `cards={null}`.
   const cardsOn = cards !== null
@@ -377,6 +415,9 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   // B-TH-241: a group's line has an id of its own (never one of the list's).
   const getRowId = useCallback((params: { data: T }) => (isGroupMarker(params.data) ? markerId(params.data) : rowId(params.data)), [rowId])
 
+  // B-TH-245: the row click reads the cells that edit (they keep their own click).
+  const inlineRef = useRef(inline)
+  inlineRef.current = inline
   // B-TH-225: the rest of the row opens the record; a link, a button, a box or a field in the cell keeps its own click.
   const rowClickRef = useRef(onRowClick)
   rowClickRef.current = onRowClick
@@ -385,6 +426,9 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     const target = click?.target as HTMLElement | null | undefined
     if (!event.data || !click || !rowClickRef.current || isGroupMarker(event.data)) return
     if (target?.closest('a, button, input, select, textarea, label, [role="button"], [role="checkbox"], .ag-selection-checkbox, [contenteditable="true"]')) return
+    // B-TH-245 (one rule: door = link, editable cell = its editor, the rest of the row = the record): a click on a cell that edits stays.
+    const cellCol = target?.closest('.ag-cell')?.getAttribute('col-id')
+    if (cellCol && inlineRef.current?.editableFor(event.data, cellCol)) return
     rowClickRef.current(event.data, click)
   }, [])
 
@@ -602,11 +646,11 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
 
   const chips = quick && !printing ? <QuickChips quick={quick} t={t} /> : null
   const bulk =
-    bulkOpen && edit?.bulk && listTools.transport && listTools.listKey ? (
+    bulkOpen && editWithCustom?.bulk && listTools.transport && listTools.listKey ? (
       <BulkEditFlow<T>
         rows={pickedRows}
         rowId={rowId}
-        edit={edit}
+        edit={editWithCustom /* B-TH-245: Edit N offers the custom values too */}
         columns={listTools.columns}
         transport={listTools.transport}
         listKey={listTools.listKey}

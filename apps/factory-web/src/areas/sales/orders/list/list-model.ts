@@ -170,4 +170,7 @@ export interface OrdersListActions {
   onInvoiceShipped?: (ids: readonly string[]) => void
   onInvoiceShippedRetry?: () => void
   onCloseInvoiceDrafts?: () => void
+  // ---- B-TH-245 (threads plan TH-4: the sheet's cells edit) ----
+  /** A cell (or Edit N) saved: the row's new note and version (custom values stay in the list frame). */
+  onCellSaved?: (id: string, after: Readonly<Record<string, string | number | null>>, version: number) => void
 }

@@ -314,7 +314,8 @@
       "min": "At least {min}.",
       "max": "At most {max}.",
       "long": "Too long.",
-      "choice": "Not one of the choices."
+      "choice": "Not one of the choices.",
+      "number": "A number is needed."
     },
     "refusal": {
       "held": "Not changed: in its present state this field stays as it is.",
@@ -403,7 +404,8 @@
     "hint": "{label} — a custom field (Admin › Fields & lists)",
     "toolLabel": "{label} (custom field)",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "notThisCustomer": "This field belongs to another customer: it is not on this row."
   },
   "groups": {
     "show": "Show the rows of {name}",

@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import type { Locale } from '../../lib/i18n/locales'
 import type { ListField, ListFieldValue, ListToolsTransport } from '../tools/transport'
 import { cellWords, fieldLabel, fieldOnRow, idsToRead, type ListCustom } from './model'
+import { cellValueOf, fieldsForList, storedOfCell } from './model' // B-TH-245
+import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 
 /**
  * B-TH-241 (SHEET-G04): the custom columns of a list frame. `useCustomFields` reads the record type's fields in the list's scope
@@ -28,6 +30,7 @@ export function useCustomFields<T>(custom: ListCustom<T> | null | undefined, tra
   const companyId = custom?.companyId ?? null
   const partyId = custom?.partyId ?? null
   const reader = transport?.fields ?? null
+  const ownSheetOnly = !!custom?.partyFieldsOnPartySheet // B-TH-245
   useEffect(() => {
     if (!recordType || !reader) {
       setFields(null)
@@ -36,13 +39,14 @@ export function useCustomFields<T>(custom: ListCustom<T> | null | undefined, tra
     let gone = false
     reader
       .read(recordType, { companyId, partyId })
-      .then((found) => !gone && setFields(found))
+      // B-TH-245: a field for one customer only on that customer's own list.
+      .then((found) => !gone && setFields(fieldsForList(found, partyId, ownSheetOnly)))
       // A refused or failed read: no custom columns (the list itself works as before).
       .catch(() => !gone && setFields(null))
     return () => {
       gone = true
     }
-  }, [recordType, companyId, partyId, reader])
+  }, [recordType, companyId, partyId, reader, ownSheetOnly])
 
   // The row's customer through a ref (a list passes a new function each render; the columns stay the same).
   const partyRef = useRef(custom?.partyOf)
@@ -72,7 +76,9 @@ export function useCustomFields<T>(custom: ListCustom<T> | null | undefined, tra
         flex: 0.8,
         sortable: false,
         hide: true,
-        valueGetter: ({ data }: { data?: T }) => text(data) ?? '',
+        // B-TH-245: the cell's value is the stored one (a select's code, YES / NO: what an edit sends); its words are the formatter's.
+        valueGetter: ({ data }: { data?: T }) => (data && fieldOnRow(field, partyRef.current ? partyRef.current(data) : undefined) ? cellValueOf(field, values.get(rowId(data))?.[field.code]) : null),
+        valueFormatter: ({ data }: { data?: T }) => text(data) ?? '',
         cellRenderer: Cell,
         context: { optIn: true, toolLabel: t('custom.toolLabel', { label }) },
       } as ColDef<T>
@@ -85,6 +91,8 @@ export function useCustomFields<T>(custom: ListCustom<T> | null | undefined, tra
 export interface CustomValues {
   readonly values: Values
   readonly reading: ReadonlySet<string>
+  /** B-TH-245: a cell saved — its new custom values (by column id) on the row, as the save returned them. */
+  readonly put: (rowId: string, fields: readonly ListField[], after: Readonly<Record<string, BulkValue>>) => void
 }
 
 /** The values of the loaded rows, read while `wanted` (a custom column is in view). */
@@ -144,5 +152,24 @@ export function useCustomValues<T>(custom: ListCustom<T> | null | undefined, tra
     }
   }, [wanted, reader, recordType, rows, rowId])
 
-  return { values, reading }
+  // B-TH-245: a saved cell's values (the bulk target's `after`, by column id) replace the row's own.
+  const put = useCallback((rowId: string, fields: readonly ListField[], after: Readonly<Record<string, BulkValue>>) => {
+    const byColumn = new Map(fields.map((field) => [field.columnId, field]))
+    const touched = Object.keys(after).filter((column) => byColumn.has(column))
+    if (touched.length === 0) return
+    setValues((before) => {
+      const next = new Map(before)
+      const own: Record<string, ListFieldValue> = { ...(before.get(rowId) ?? {}) }
+      for (const column of touched) {
+        const field = byColumn.get(column)!
+        const value = after[column] ?? null
+        if (value === null) delete own[field.code]
+        else own[field.code] = { value: storedOfCell(field, value), wordsIt: null, wordsEn: null }
+      }
+      next.set(rowId, own)
+      return next
+    })
+  }, [])
+
+  return { values, reading, put }
 }

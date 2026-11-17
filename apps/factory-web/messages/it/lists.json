@@ -314,7 +314,8 @@
       "min": "Almeno {min}.",
       "max": "Al massimo {max}.",
       "long": "Troppo lungo.",
-      "choice": "Non è una delle scelte."
+      "choice": "Non è una delle scelte.",
+      "number": "Serve un numero."
     },
     "refusal": {
       "held": "Non cambiata: nel suo stato attuale questo campo resta com’è.",
@@ -403,7 +404,8 @@
     "hint": "{label} — un campo personalizzato (Amministrazione › Campi ed elenchi)",
     "toolLabel": "{label} (campo personalizzato)",
     "yes": "Sì",
-    "no": "No"
+    "no": "No",
+    "notThisCustomer": "Questo campo è di un altro cliente: non è su questa riga."
   },
   "groups": {
     "show": "Mostra le righe di {name}",

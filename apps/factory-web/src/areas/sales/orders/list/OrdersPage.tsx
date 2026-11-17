@@ -7,6 +7,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { findCustomers, getParty } from '../../quotes/api'
 import { getBoard, getOrderPicture, listOrderCustomers, listOrders, nextOrderNumber, type OrderBoard, type OrderCustomer } from '../api'
+import type { OrderRow } from '../api' // B-TH-245
 import { useCoalesced, useLive } from '../hooks'
 import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
 import type { OrderSort } from '../api' // B-TH-057
@@ -428,6 +429,12 @@ function OrdersContainer() {
         onInvoiceShippedRetry: () => invoiceShipped(invoiceAsked.current),
         onCloseInvoiceDrafts: () => setInvoiceDrafts(null),
         // ---- end B-TH-244 ----
+        // ---- B-TH-245: a saved cell's note and the row's new version, on the list and on the grouped view's rows ----
+        onCellSaved: (id, after, version) => {
+          const apply = <R extends OrderRow>(row: R): R => (row.id === id ? { ...row, version, ...(Object.hasOwn(after, 'note') ? { internalNote: after.note === null ? null : String(after.note) } : {}) } : row)
+          setList((current) => ({ ...current, items: current.items?.map(apply) ?? null }))
+          setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(apply) ?? null }])))
+        },
         onLayout: (next) => go({ layout: next }),
         onSearch: (next) => go({ q: next }),
         onClearCustomer: () => go({ party: null }), // B-TH-201
