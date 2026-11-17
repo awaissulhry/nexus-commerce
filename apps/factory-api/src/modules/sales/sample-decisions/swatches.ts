@@ -7,7 +7,7 @@ import type { CreateSwatchBody, DecisionBody, SwatchListQuery, SwatchView, Updat
 import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisions/permissions'
 import {
   decisionProblems,
-  leatherOnlyRefusal,
+  materialKindRefusal,
   swatchDecisionRefusal,
   swatchRoundRefusal,
   swatchSentOnceRefusal,
@@ -21,18 +21,22 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { databaseRefusal, officeOf, readRoundRow, type Reader } from '../samples/store'
 import { mayOn, officeSwatch, readSwatchRow, refuse, requireOn, SWATCH_COLUMNS, swatchCompanyOf, swatchFacts, swatchViewsOf, waitingRequest, type SwatchData } from './store'
+// B-PR-38: a swatch of a customer whose portal is on is the customer's to decide.
+import { customerDecides } from './owner'
 
 /**
  * Leather and colour swatches (B-W2b-252; SAL-314 "leather swatch and colour approval"; design products.samples › the round's
  * Approval tab, "Leather swatch and colour approvals": Swatch, Sent, Decision): a swatch of a material (its colour and/or one
  * of its lots) sent to a brand, for a style or one of its rounds, decided once — in the office, or by the brand answering its
- * approval request (COLOUR or LEATHER: ./approvals.ts).
+ * approval request (COLOUR or LEATHER: ./approvals.ts). B-PR-29: fabric and trim swatches too (FABRIC of a textile, lining,
+ * membrane or padding; TRIM of a trim, hardware, thread or label), asked with FABRIC or TRIM.
  *
  *   GET    /sales/samples/swatches                    sales.samples.view: by style, round or brand (one of them), kind, state
  *   POST   /sales/samples/swatches                    sales.samples.manage: recorded (sent already, or later)
  *   PATCH  /sales/samples/swatches/:swatchId          its colour and lot until sent, its note at any time, sent once
  *   DELETE /sales/samples/swatches/:swatchId          only before it is sent
- *   POST   /sales/samples/swatches/:swatchId/decision sales.samples.decide: the office records the brand's word, once sent
+ *   POST   /sales/samples/swatches/:swatchId/decision sales.samples.decide: the office records the brand's word, once sent;
+ *                                                     B-PR-38: never for a customer whose portal is on (./owner.ts)
  */
 
 const LIST_LIMIT = 100
@@ -129,7 +133,9 @@ export async function createSwatch(caller: CommandCaller, body: CreateSwatchBody
     await assertBrand(db, partyId, companyId)
     const item = await db.item.findUnique({ where: { id: body.itemId }, select: { id: true, code: true, kind: true } })
     if (!item) throw new ValidationError('No such material.', [{ path: 'body/itemId', message: 'No such material.' }])
-    if (body.kind === 'LEATHER' && item.kind !== 'LEATHER') refuse(leatherOnlyRefusal(item.code, item.kind))
+    // B-PR-29: a leather swatch of a leather, a fabric swatch of a textile, lining, membrane or padding, a trim swatch of a trim,
+    // hardware, thread or label (the database's rule, said first).
+    refuse(materialKindRefusal(body.kind, item.code, item.kind))
     const { lotSiteId } = await materialOf(db, item.id, body.itemColourId ?? null, body.lotId ?? null)
     return { partyId, companyId, lotSiteId }
   })
@@ -224,11 +230,12 @@ export async function decideSwatch(caller: CommandCaller, swatchId: string, body
   requireOn(context, SALES_SAMPLES_DECIDE, scope, 'Your role does not record swatch decisions for this company or customer')
   const problems = decisionProblems(body.decision, body.comments)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
-  refuse(swatchDecisionRefusal(swatchFacts(swatch), await caller.withClient((db) => waitingRequest(db, 'SampleSwatch', swatchId))))
+  // B-PR-38: never a silent office decision on a customer's own swatch (portal on): refused in words, pointing to Decide for the customer.
+  refuse(swatchDecisionRefusal(swatchFacts(swatch), await caller.withClient((db) => waitingRequest(db, 'SampleSwatch', swatchId)), await caller.withClient((db) => customerDecides(db, swatch.partyId))))
   await command(caller, { name: 'sales.samples.swatchDecide', idempotencyKey, input: { swatchId, ...body }, record: { type: 'SampleSwatch', id: swatchId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools
     const current = (await readSwatchRow(tx, swatchId))!
-    refuse(swatchDecisionRefusal(swatchFacts(current), await waitingRequest(tx, 'SampleSwatch', swatchId)))
+    refuse(swatchDecisionRefusal(swatchFacts(current), await waitingRequest(tx, 'SampleSwatch', swatchId), await customerDecides(tx, current.partyId)))
     const comments = body.comments ?? null
     await tx.sampleSwatch.update({ where: { id: swatchId }, data: { decision: body.decision, decisionComments: comments, decidedAt: now, decidedVia: 'OFFICE', decidedById: context.actorId, updatedAt: now }, select: { id: true } })
     tools.audit({ action: 'sales.samples.swatchDecide', recordType: 'SampleSwatch', recordId: swatchId, companyId: scope.companyId, before: { decision: null }, after: { decision: body.decision, decisionComments: comments, decidedAt: toUtcIso(now), decidedVia: 'OFFICE', decidedById: context.actorId } })
