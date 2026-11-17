@@ -1,0 +1,47 @@
+/* B-TH-211 — the thread's shared pop-ups (T-POP). Design-system tokens only; light and dark come from the tokens. */
+
+.fw-rtp-muted { margin: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+.fw-rtp-grow { flex: 1; min-width: 0; }
+.fw-rtp-loading { margin: 0; padding: var(--nds-space-24); display: flex; align-items: center; justify-content: center; gap: var(--nds-space-6); color: var(--nds-text-muted); }
+
+/* The viewer */
+.fw-rtp-viewer { min-height: 240px; }
+.fw-rtp-viewer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); width: 100%; }
+.fw-rtp-walk { display: inline-flex; gap: var(--nds-space-4); }
+.fw-rtp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.fw-rtp-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--nds-space-8); min-height: 240px; padding: var(--nds-space-24); text-align: center; border: 1px dashed var(--nds-border-strong); border-radius: var(--nds-radius-lg); background: var(--nds-surface-sunken); }
+.fw-rtp-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: var(--nds-radius-round); background: var(--nds-surface); color: var(--nds-text-2); }
+.fw-rtp-card-icon.is-held { color: var(--nds-warning-text); background: var(--nds-warning-soft); }
+.fw-rtp-card-title { margin: 0; font-weight: 600; color: var(--nds-text-strong); overflow-wrap: anywhere; }
+
+/* The original e-mail */
+.fw-rtp-original, .fw-rtp-send { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-rtp-meta { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--nds-space-4) var(--nds-space-12); font-size: var(--nds-font-size-sm); }
+.fw-rtp-meta dt { color: var(--nds-text-muted); }
+.fw-rtp-meta dd { margin: 0; color: var(--nds-text); overflow-wrap: anywhere; }
+.fw-rtp-checks, .fw-rtp-warnings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-rtp-check, .fw-rtp-warning { display: flex; align-items: flex-start; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-rtp-check svg, .fw-rtp-warning svg { flex: none; margin-top: 2px; }
+.fw-rtp-check.is-success svg { color: var(--nds-success-text); }
+.fw-rtp-check.is-danger, .fw-rtp-warning.is-danger { color: var(--nds-danger-text); }
+.fw-rtp-warning.is-warning { color: var(--nds-warning-text); }
+.fw-rtp-pictures { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-rtp-frame { width: 100%; min-height: min(60vh, 560px); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface); }
+.fw-rtp-plain { margin: 0; padding: var(--nds-space-12); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: var(--nds-font-size-base); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); color: var(--nds-text); max-height: min(60vh, 560px); overflow: auto; }
+
+/* The send check */
+.fw-rtp-outside { display: flex; flex-direction: column; gap: var(--nds-space-8); }
+
+/* One count popover */
+.fw-rtp-countchip { display: inline-flex; align-items: center; gap: var(--nds-space-4); height: 26px; padding: 0 var(--nds-space-8); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-pill); background: var(--nds-surface); color: var(--nds-text-strong); font-size: var(--nds-font-size-sm); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.fw-rtp-countchip:hover { background: var(--nds-surface-hover); }
+.fw-rtp-countchip:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rtp-countchip-in { display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+.fw-rtp-count { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-8); min-width: 220px; max-width: 320px; }
+.fw-rtp-count-title { margin: 0; font-weight: 600; color: var(--nds-text-strong); }
+.fw-rtp-count-lines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-6); width: 100%; }
+.fw-rtp-count-lines li { display: flex; flex-direction: column; gap: 2px; }
+.fw-rtp-count-label { color: var(--nds-text); overflow-wrap: anywhere; }
+
+/* The design stage */
+.fw-rtp-stage { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-16); }

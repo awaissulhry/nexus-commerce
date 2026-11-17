@@ -1,0 +1,93 @@
+{
+  "label": "Thread of {record}",
+  "answers": {
+    "us": "Waiting on us · {wait}",
+    "customer": "Waiting on customer · {wait}",
+    "supplier": "Waiting on supplier · {wait}",
+    "partner": "Waiting on partner · {wait}",
+    "tipUs": "{party} wrote last, {when}. Counted in clock hours since that message.",
+    "tipParty": "We wrote to {party} last, {when}. Counted in clock hours since that message."
+  },
+  "wait": {
+    "minutes": "{n} min",
+    "hours": "{n} h",
+    "days": "{n} d"
+  },
+  "closed": {
+    "by": "Closed by {name}, {date}",
+    "noName": "Closed, {date}"
+  },
+  "offline": "Offline · as of {time}",
+  "view": {
+    "label": "View",
+    "menu": "Choose what the thread shows",
+    "all": "All",
+    "shared": {
+      "customer": "With the customer",
+      "supplier": "With the supplier",
+      "partner": "With the partner"
+    },
+    "notes": "Office notes",
+    "changes": "Changes",
+    "clear": "Showing {view}: show all messages"
+  },
+  "count": {
+    "tasks": "Tasks ({count})",
+    "approvals": "Approvals ({count})",
+    "partners": "Partners ({count})",
+    "followers": "Followers ({count})"
+  },
+  "width": {
+    "label": "Thread width",
+    "third": "One third",
+    "forty": "40 %",
+    "half": "Half",
+    "full": "Full width",
+    "hide": "Hide the thread",
+    "reset": "Reset width"
+  },
+  "more": {
+    "label": "Thread tools"
+  },
+  "act": {
+    "task": "Add task",
+    "approve": "Ask a partner to approve",
+    "share": "Share with a partner",
+    "followers": "Followers",
+    "followersN": "Followers ({count})",
+    "follow": "Follow",
+    "unfollow": "Unfollow",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "muteHint": "News stops; mentions still come.",
+    "remind": "Remind me",
+    "reminderSet": "Reminder set for {at}",
+    "print": "Print or save as PDF",
+    "close": "Close thread…",
+    "closeHint": "The customer can no longer write here.",
+    "reopen": "Reopen",
+    "openTasks": "{count} open",
+    "openApprovals": "{count} waiting for an answer",
+    "invited": "{count} invited"
+  },
+  "held": {
+    "noRight": "You need the right “{right}”.",
+    "noRole": "Your role does not allow this here.",
+    "noParty": "This record has no customer or supplier.",
+    "offline": "You are offline.",
+    "followFirst": "Follow the record first.",
+    "notShareable": "This record stays inside the factory: it is never shared with a customer or supplier."
+  },
+  "portal": {
+    "needInfo": "We need something from you",
+    "lastFromYou": "Last message: from you, {date}",
+    "lastFromUs": "Last message: from {factory}, {date}",
+    "none": "No messages yet"
+  },
+  "design": {
+    "frame438": "Narrow dock, about 438 px",
+    "frame718": "Wide dock, about 718 px",
+    "frame375": "Phone, 375 px",
+    "frameLabel": "Thread column {width} px wide"
+  }
+}

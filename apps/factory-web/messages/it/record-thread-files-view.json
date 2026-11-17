@@ -1,0 +1,117 @@
+{
+  "title": "File di {record}",
+  "subtitle_one": "Un file che puoi vedere",
+  "subtitle_other": "{count} file che puoi vedere",
+  "close": "Chiudi",
+  "loading": "Lettura dei file del record…",
+  "keys": {
+    "move": "Spostati tra i file",
+    "choose": "Scegli o togli il file",
+    "range": "Scegli tutti i file fino a questo",
+    "open": "Apri il file nel visualizzatore"
+  },
+  "missing": {
+    "warn": "Manca prima di {status}: {document}. Il passaggio è comunque consentito.",
+    "block": "Manca prima di {status}: {document}. Il passaggio è rifiutato finché non c'è."
+  },
+  "refused": {
+    "title_one": "Un file non è stato aggiunto",
+    "title_other": "{count} file non sono stati aggiunti",
+    "dismiss": "Chiudi"
+  },
+  "forbidden": {
+    "title": "Non puoi vedere i file di questo record",
+    "body": "Il tuo ruolo non ti permette di leggere i file di questo record. Chiedi a un amministratore se ti servono."
+  },
+  "problem": {
+    "read": "Impossibile caricare i file",
+    "retry": "Riprova"
+  },
+  "empty": {
+    "title": "Ancora nessun file",
+    "bodyUpload": "Trascina i file qui sopra, oppure sfoglia: scegli tu il tipo e chi li vede.",
+    "body": "I file aggiunti a questo record compaiono qui."
+  },
+  "upload": {
+    "hint": "Trascina qui i file o sfoglia. Scegli tu il tipo e chi li vede; all'inizio solo l'ufficio.",
+    "noRight": "Non puoi aggiungere file qui: il tuo ruolo non consente di caricarli.",
+    "title_one": "Aggiungi un file",
+    "title_other": "Aggiungi {count} file",
+    "kind": "Che cos'è",
+    "who": "Chi lo vede",
+    "audience": {
+      "OFFICE": "Solo ufficio",
+      "OFFICEBody": "Solo i colleghi che possono leggere questo record.",
+      "FLOOR": "Ufficio e reparto",
+      "FLOORBody": "Anche i tablet del reparto dello stabilimento di questo record.",
+      "PARTNER": "Ufficio e {party}",
+      "PARTNERBody": "{party} lo vede nel suo portale. Solo il cliente o il fornitore di questo record.",
+      "LINK": "Ufficio e link",
+      "LINKBody": "Anche le persone con cui questo record è condiviso tramite link."
+    },
+    "cancel": "Annulla",
+    "confirm_one": "Aggiungi il file",
+    "confirm_other": "Aggiungi {count} file",
+    "busy": "I file sono in aggiunta."
+  },
+  "select": {
+    "all": "Scegli tutti i {count}",
+    "none": "Tutti i {count} scelti: togli",
+    "one": "Scegli {name}"
+  },
+  "bulk": {
+    "noun": "file",
+    "download": "Scarica {count}",
+    "share": "Condividi con {party} ({count})",
+    "officeOnly": "Rendi solo ufficio ({count})",
+    "remove": "Elimina {count}",
+    "onHold_one": "Un file scelto è sotto blocco legale: Elimina lo lascia.",
+    "onHold_other": "{count} file scelti sono sotto blocco legale: Elimina li lascia.",
+    "noneDownload": "Nessuno dei file scelti si può ancora scaricare.",
+    "noShareRight": "Cambiare chi vede un file richiede il diritto di condividere file fuori dall'ufficio.",
+    "allShared": "{party} vede già tutti i file scelti.",
+    "allOffice": "Tutti i file scelti sono già solo ufficio.",
+    "noDeleteRight": "Eliminare file richiede il diritto di cancellare un file.",
+    "allHeld": "Un blocco legale tiene tutti i file scelti."
+  },
+  "group": {
+    "kind": {
+      "PHOTO": "Foto",
+      "DOCUMENT": "Documenti",
+      "CERTIFICATE": "Certificati",
+      "ATTACHMENT": "File",
+      "AUDIO": "Note vocali",
+      "FISCAL_ARCHIVE": "Copie fiscali"
+    },
+    "origin": {
+      "party": {
+        "customer": "Dal cliente",
+        "supplier": "Dal fornitore",
+        "partner": "Dal partner"
+      },
+      "ours": "Nostri",
+      "made": "Fatti da noi",
+      "floor": "Reparto"
+    }
+  },
+  "version": {
+    "inForce": "v{n} in vigore",
+    "earlier_one": "Una versione precedente",
+    "earlier_other": "{count} versioni precedenti",
+    "line": "v{n} · {date}",
+    "replaced": "sostituita il {date}",
+    "open": "Apri",
+    "restore": "Ripristina"
+  },
+  "keep": {
+    "scanPending": "Trattenuto per l'antivirus: si apre quando la scansione dice che è pulito.",
+    "infected": "L'antivirus ha trovato qualcosa: non si può aprire.",
+    "held": "Trattenuto dai controlli dell'archivio.",
+    "legalHold": "Blocco legale: non si può eliminare.",
+    "until": "Conservato fino al {date}",
+    "due": "Da rimuovere"
+  },
+  "design": {
+    "openAgain": "Apri la vista dei file"
+  }
+}

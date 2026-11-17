@@ -1,0 +1,36 @@
+/* B-TH-210 — the thread's files line (T2): one 36 px row, the 64 px strip on demand. DS tokens only. */
+
+.fw-rtf { flex: none; display: flex; flex-direction: column; border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-surface); min-width: 0; }
+.fw-rtf-line { height: 36px; display: flex; align-items: center; gap: var(--nds-space-8); padding: 0 var(--nds-space-12); min-width: 0; }
+.fw-rtf > .fw-rtf-line { border-bottom: 0; }
+div.fw-rtf-line[role="status"] { border-bottom: 1px solid var(--nds-border-subtle); }
+.fw-rtf-chip { display: inline-flex; align-items: center; gap: var(--nds-space-6); height: 26px; padding: 0 var(--nds-space-8) 0 var(--nds-space-10); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-pill); background: var(--nds-surface); color: var(--nds-text-strong); font: inherit; font-size: var(--nds-font-size-sm); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.fw-rtf-chip:hover { background: var(--nds-surface-hover); }
+.fw-rtf-chip:focus-visible, .fw-rtf-tile:focus-visible, .fw-rtf-all:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rtf-chip.is-loading { cursor: default; color: var(--nds-text-muted); }
+.fw-rtf-minis { display: inline-flex; gap: 2px; }
+.fw-rtf-mini { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: var(--nds-radius-xs); overflow: hidden; background: var(--nds-surface-sunken); color: var(--nds-text-2); }
+.fw-rtf-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fw-rtf-strip { padding: 0 var(--nds-space-12) var(--nds-space-8); }
+.fw-rtf-tiles { margin: 0; padding: 2px; list-style: none; display: flex; gap: var(--nds-space-8); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.fw-rtf-tiles > li { flex: none; }
+.fw-rtf-tile, .fw-rtf-all { position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; padding: 0; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-sunken); color: var(--nds-text-2); cursor: pointer; overflow: hidden; font: inherit; }
+.fw-rtf-tile.is-held { border-style: dashed; border-color: var(--nds-border-strong); color: var(--nds-warning-text); background: var(--nds-warning-soft); }
+.fw-rtf-pic { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.fw-rtf-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fw-rtf-version { position: absolute; top: 3px; right: 3px; padding: 0 4px; border-radius: var(--nds-radius-xs); background: var(--nds-surface); color: var(--nds-text-strong); font-size: var(--nds-font-size-micro); font-weight: 700; line-height: 14px; }
+.fw-rtf-marks { position: absolute; left: 3px; bottom: 3px; right: 3px; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 1px; overflow: hidden; }
+.fw-rtf-mark { padding: 0 3px; border-radius: var(--nds-radius-xs); background: var(--nds-pill-neutral-bg); color: var(--nds-pill-neutral-fg); font-size: var(--nds-font-size-nano); font-weight: 700; line-height: 13px; white-space: nowrap; }
+.fw-rtf-mark.is-customer, .fw-rtf-mark.is-supplier, .fw-rtf-mark.is-partner { background: var(--nds-info-soft); color: var(--nds-info-text); }
+.fw-rtf-mark.is-floor { background: var(--nds-pill-warning-bg); color: var(--nds-pill-warning-fg); }
+.fw-rtf-mark.is-otherParty { background: var(--nds-pill-danger-bg); color: var(--nds-pill-danger-fg); }
+.fw-rtf-all { flex-direction: column; gap: 2px; background: var(--nds-surface); font-size: var(--nds-font-size-micro); font-weight: 600; color: var(--nds-text-link); }
+.fw-rtf-note { margin: var(--nds-space-4) 0 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+
+/* The design case: the line in a stand-in thread column at the dock's widths and the phone's. */
+.fw-rtf-frames { display: flex; flex-direction: column; gap: var(--nds-space-24); padding: var(--nds-space-16); }
+.fw-rtf-frame { display: flex; flex-direction: column; width: 519px; max-width: 100%; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-2xl); background: var(--nds-surface); overflow: hidden; }
+.fw-rtf-frame.is-711 { width: 711px; }
+.fw-rtf-frame.is-375 { width: 375px; }
+.fw-rtf-frame-label { margin: 0 0 var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-rtf-feed { height: 72px; background: var(--nds-surface-sunken); }
