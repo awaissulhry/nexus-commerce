@@ -163,7 +163,7 @@ describe('SCR-099 — the quote’s deposit (B-W2b-199)', () => {
       const html = render(acceptScreen as unknown as DesignScreen<unknown>, accepted.model, locale)
       expect(html).toContain('IT60 X054 2811 1010 0000 0123 456')
       expect(html).toContain(locale === 'it' ? 'Paga con carta o addebito diretto SEPA' : 'Pay by card or SEPA Direct Debit')
-      expect(html).toContain(locale === 'it' ? 'chiedi a Officina Demo' : 'ask Officina Demo')
+      expect(html).toContain(locale === 'it' ? 'chiedete a Officina Demo' : 'ask Officina Demo')
       expect(html.match(/\bquoteCard\.[a-zA-Z]+/)?.[0] ?? null).toBeNull()
     }
   })

@@ -5,9 +5,9 @@
     "buyerStart": "L'ufficio acquisti"
   },
   "answerBy": {
-    "title": "Rispondi entro {date}",
-    "body": "{buyer} di {company} ti chiede di confermare quantità e date, o di dire che cosa puoi fare invece.",
-    "bodyNoBuyer": "{company} ti chiede di confermare quantità e date, o di dire che cosa puoi fare invece."
+    "title": "Rispondete entro {date}",
+    "body": "{buyer} di {company} vi chiede di confermare quantità e date, o di dire che cosa potete fare invece.",
+    "bodyNoBuyer": "{company} vi chiede di confermare quantità e date, o di dire che cosa potete fare invece."
   },
   "order": {
     "title": "L'ordine",
@@ -21,7 +21,7 @@
     "incoterms": "Resa",
     "paymentTerms": "Pagamento",
     "note": "Nota di chi ordina",
-    "pdf": "Il PDF di questo ordine è nell'e-mail che ti abbiamo inviato.",
+    "pdf": "Il PDF di questo ordine è nell'e-mail che vi abbiamo inviato.",
     "noPrices": "Questa pagina mostra che cosa e quando, mai i prezzi."
   },
   "lines": {
@@ -31,7 +31,7 @@
     "asked": "{quantity} {unit}",
     "needed": "Serve il {date}",
     "colour": "Colore {colour}",
-    "yourCode": "tuo codice {code}",
+    "yourCode": "vostro codice {code}",
     "grade": "scelta {grade}",
     "thickness": "{min}–{max} mm",
     "thicknessFrom": "da {min} mm",
@@ -44,48 +44,48 @@
     "confirmed": "Confermato: {quantity} {unit} entro il {date}"
   },
   "answer": {
-    "title": "La tua risposta",
-    "review": "La tua risposta: {summary}.",
+    "title": "La vostra risposta",
+    "review": "La vostra risposta: {summary}.",
     "outcome": {
       "CONFIRMED": "Confermando, {buyer} sa che l'ordine va come richiesto.",
-      "PROPOSED": "{buyer} accetta o rifiuta le tue modifiche. Fino ad allora nulla è confermato.",
-      "DECLINED": "Non puoi consegnare nessuna riga: inviando, rifiuti l'ordine."
+      "PROPOSED": "{buyer} accetta o rifiuta le vostre modifiche. Fino ad allora nulla è confermato.",
+      "DECLINED": "Non potete consegnare nessuna riga: inviando, rifiutate l'ordine."
     },
     "confirmAll": "Conferma tutto come richiesto",
-    "sendChanges": "Invia le tue modifiche",
+    "sendChanges": "Invia le vostre modifiche",
     "sendDecline": "Invia: non posso consegnare",
     "decline": "Rifiuta l'ordine…",
-    "undoAll": "Annulla le tue modifiche",
-    "ref": "Il tuo numero d'ordine o di conferma",
+    "undoAll": "Annulla le vostre modifiche",
+    "ref": "Il vostro numero d'ordine o di conferma",
     "refHint": "Facoltativo. Lo riportiamo sui nostri documenti.",
-    "name": "Il tuo nome",
-    "nameOptional": "Il tuo nome (facoltativo)",
+    "name": "Il vostro nome",
+    "nameOptional": "Il vostro nome (facoltativo)",
     "nameHint": "Così {buyer} sa chi ha risposto.",
     "note": "Una nota per {buyer} (facoltativa)",
     "busy": "Invio della risposta…",
     "held": {
       "busy": "Invio della risposta…",
-      "incomplete": "La risposta a una riga non è completa: aprila e salvala di nuovo.",
-      "uploading": "Attendi che il PDF sia caricato.",
-      "file": "Scegli di nuovo il PDF, oppure toglilo.",
-      "name": "Scrivi prima il tuo nome.",
+      "incomplete": "La risposta a una riga non è completa: apritela e salvatela di nuovo.",
+      "uploading": "Attendete che il PDF sia caricato.",
+      "file": "Scegliete di nuovo il PDF, oppure toglietelo.",
+      "name": "Scrivete prima il vostro nome.",
       "ref": "Il numero ha al massimo 60 caratteri.",
       "note": "La nota ha al massimo 1000 caratteri."
     }
   },
   "file": {
-    "title": "Il tuo PDF di conferma",
-    "hint": "Facoltativo: la tua conferma in PDF, al massimo 20 MB. Va con la tua risposta.",
+    "title": "Il vostro PDF di conferma",
+    "hint": "Facoltativo: la vostra conferma in PDF, al massimo 20 MB. Va con la vostra risposta.",
     "choose": "Scegli un PDF",
     "change": "Scegline un altro",
     "remove": "Togli",
     "none": "Nessun file scelto",
     "uploading": "Caricamento di {name}…",
     "done": "{name} · {size} · caricato",
-    "quarantined": "{name} non è arrivato come è stato inviato. Sceglilo di nuovo.",
-    "failed": "Non è stato possibile caricare {name}. Sceglilo di nuovo.",
+    "quarantined": "{name} non è arrivato come è stato inviato. Sceglietelo di nuovo.",
+    "failed": "Non è stato possibile caricare {name}. Sceglietelo di nuovo.",
     "rejected": {
-      "notPdf": "{name} non è un PDF. Scegli un file PDF.",
+      "notPdf": "{name} non è un PDF. Scegliete un file PDF.",
       "tooBig": "{name} è più grande di 20 MB.",
       "empty": "{name} è vuoto."
     },
@@ -93,8 +93,8 @@
     "mb": "{size} MB"
   },
   "decline": {
-    "title": "Rifiuta questo ordine",
-    "body": "{buyer} vede subito la tua risposta. Se puoi consegnare una parte dell'ordine, rispondi riga per riga invece.",
+    "title": "Rifiutate questo ordine",
+    "body": "{buyer} vede subito la vostra risposta. Se potete consegnare una parte dell'ordine, rispondete riga per riga invece.",
     "reason": "Perché",
     "reasons": {
       "NO_CAPACITY": "Nessuna capacità per questo ordine",
@@ -102,9 +102,9 @@
       "OTHER": "Un altro motivo"
     },
     "note": "Una nota (facoltativa)",
-    "noteRequired": "Il tuo motivo",
+    "noteRequired": "Il vostro motivo",
     "held": {
-      "note": "Di' perché rifiuti."
+      "note": "Dite perché rifiutate."
     },
     "back": "Indietro",
     "go": "Rifiuta l'ordine"
@@ -116,32 +116,32 @@
       "expect": "Aspettiamo la merce a {site} entro il {date}.",
       "expectRange": "Aspettiamo la merce a {site} dal {first} al {last}.",
       "expectNoSite": "Aspettiamo la merce entro il {date}.",
-      "later": "Devi cambiare qualcosa più avanti? Rispondi alla nostra e-mail: arriva a {buyer}."
+      "later": "Dovete cambiare qualcosa più avanti? Rispondete alla nostra e-mail: arriva a {buyer}."
     },
     "PROPOSED": {
-      "title": "Inviato — {buyer} decide sulle tue modifiche",
-      "body": "La tua risposta: {summary}. Nulla è confermato finché {buyer} non accetta o rifiuta le tue modifiche; riceverai una risposta per e-mail."
+      "title": "Inviato — {buyer} decide sulle vostre modifiche",
+      "body": "La vostra risposta: {summary}. Nulla è confermato finché {buyer} non accetta o rifiuta le vostre modifiche; riceverete una risposta per e-mail."
     },
     "DECLINED": {
       "title": "Rifiutato",
-      "body": "{buyer} lo vede ora e ti ricontatterà."
+      "body": "{buyer} lo vede ora e vi ricontatterà."
     },
-    "ref": "Il tuo riferimento",
-    "file": "Il tuo PDF",
-    "lines": "La tua risposta, riga per riga"
+    "ref": "Il vostro riferimento",
+    "file": "Il vostro PDF",
+    "lines": "La vostra risposta, riga per riga"
   },
   "answered": {
     "CONFIRMED": {
       "title": "Questo ordine è confermato",
-      "body": "Non c'è altro da rispondere. Devi cambiare qualcosa? Rispondi alla nostra e-mail."
+      "body": "Non c'è altro da rispondere. Dovete cambiare qualcosa? Rispondete alla nostra e-mail."
     },
     "CHANGES_PROPOSED": {
-      "title": "Le tue modifiche sono da {buyer}",
-      "body": "{buyer} le accetta o le rifiuta. Riceverai una risposta per e-mail."
+      "title": "Le vostre modifiche sono da {buyer}",
+      "body": "{buyer} le accetta o le rifiuta. Riceverete una risposta per e-mail."
     },
     "DECLINED": {
-      "title": "Hai rifiutato questo ordine",
-      "body": "{buyer} lo modifica o lo annulla e ti ricontatta."
+      "title": "Avete rifiutato questo ordine",
+      "body": "{buyer} lo modifica o lo annulla e vi ricontatta."
     },
     "PARTLY_RECEIVED": {
       "title": "La merce di questo ordine sta arrivando",
@@ -153,11 +153,11 @@
     },
     "DRAFT": {
       "title": "Chi ordina sta modificando questo ordine",
-      "body": "L'ordine modificato ti arriva con un nuovo link."
+      "body": "L'ordine modificato vi arriva con un nuovo link."
     },
     "CANCELLED": {
       "title": "Questo ordine è stato annullato",
-      "body": "Non serve una risposta. Per qualsiasi domanda rispondi alla nostra e-mail."
+      "body": "Non serve una risposta. Per qualsiasi domanda rispondete alla nostra e-mail."
     },
     "CLOSED": {
       "title": "Questo ordine è chiuso",
@@ -165,29 +165,29 @@
     },
     "other": {
       "title": "Questo ordine ora non aspetta una risposta",
-      "body": "Per qualsiasi domanda rispondi alla nostra e-mail."
+      "body": "Per qualsiasi domanda rispondete alla nostra e-mail."
     }
   },
   "problem": {
-    "changed": "Questo ordine è cambiato poco fa. Guardalo di nuovo: quanto hai scritto resta.",
+    "changed": "Questo ordine è cambiato poco fa. Guardatelo di nuovo: quanto avete scritto resta.",
     "notAnswerable": "Questo ordine non accetta più una risposta.",
-    "invalid": "Alcune risposte non sono complete. Apri ogni riga modificata e controllala.",
-    "rateLimited": "Troppi tentativi. Attendi un minuto, poi invia di nuovo.",
-    "unavailableNow": "Ora non raggiungiamo il nostro sistema. La risposta non è stata inviata: riprova tra un momento.",
-    "internal": "Qualcosa non ha funzionato da parte nostra. La risposta non è stata inviata: riprova.",
-    "upload": "Non è stato possibile caricare il PDF. Sceglilo di nuovo, oppure invia la risposta senza."
+    "invalid": "Alcune risposte non sono complete. Aprite ogni riga modificata e controllatela.",
+    "rateLimited": "Troppi tentativi. Attendete un minuto, poi inviate di nuovo.",
+    "unavailableNow": "Ora non raggiungiamo il nostro sistema. La risposta non è stata inviata: riprovate tra un momento.",
+    "internal": "Qualcosa non ha funzionato da parte nostra. La risposta non è stata inviata: riprovate.",
+    "upload": "Non è stato possibile caricare il PDF. Sceglietelo di nuovo, oppure inviate la risposta senza."
   },
   "dead": {
     "ask": "Chiedi un nuovo link",
     "asked": "Richiesto — l'abbiamo inoltrato. Se il link era nostro, {sender} scrive all'indirizzo a cui era stato inviato.",
     "askedAnonymous": "Richiesto — l'abbiamo inoltrato. Se il link era nostro, chi l'ha inviato scrive all'indirizzo a cui era stato inviato.",
     "expiredTitle": "Questo link è scaduto il {time}",
-    "expiredBody": "Chiedine uno nuovo a {sender}.",
-    "expiredBodyAnonymous": "Chiedine uno nuovo a chi te l'ha inviato."
+    "expiredBody": "Chiedetene uno nuovo a {sender}.",
+    "expiredBodyAnonymous": "Chiedetene uno nuovo a chi ve l'ha inviato."
   },
   "error": {
     "title": "Non è stato possibile aprire l'ordine",
-    "body": "Qualcosa non ha funzionato da parte nostra. Riprova.",
+    "body": "Qualcosa non ha funzionato da parte nostra. Riprovate.",
     "retry": "Riprova"
   },
   "uom": {
@@ -210,7 +210,7 @@
     "BOX": "scatole"
   },
   "propose": {
-    "hint": "Non come richiesto? Modifica una riga: un’altra data o quantità, due consegne, o una riga che non puoi consegnare. {buyer} accetta o rifiuta ogni modifica.",
-    "hintAll": "Non come richiesto? Modifica una riga: un’altra data o quantità, due consegne, un articolo sostitutivo, un’altra modifica, o una riga che non puoi consegnare. {buyer} accetta o rifiuta ogni modifica; una modifica accettata crea una nuova versione dell’ordine e un nuovo link."
+    "hint": "Non come richiesto? Modificate una riga: un’altra data o quantità, due consegne, o una riga che non potete consegnare. {buyer} accetta o rifiuta ogni modifica.",
+    "hintAll": "Non come richiesto? Modificate una riga: un’altra data o quantità, due consegne, un articolo sostitutivo, un’altra modifica, o una riga che non potete consegnare. {buyer} accetta o rifiuta ogni modifica; una modifica accettata crea una nuova versione dell’ordine e un nuovo link."
   }
 }
