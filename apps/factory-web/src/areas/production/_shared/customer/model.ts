@@ -18,12 +18,14 @@ import { splitOfficePath } from '../../../../lib/session/session'
 export const PARTY_KEY = 'party'
 
 /**
- * The production pages that take the filter (company-free paths); a move between two of them keeps it. Work orders joins
- * when its list reads `?party=` (F-PR-03): its export already does, so carrying it there first would narrow the file only.
+ * The production pages that take the filter (company-free paths); a move between two of them keeps it. F-PR-03: Work orders
+ * reads `?party=` too (its list, tiles and export follow it).
  */
 export const CUSTOMER_PAGES = [
   // F-PR-17: Floor now reads it too.
   '/production/floor',
+  // F-PR-03: the work orders list.
+  '/production/work-orders',
   '/production/cutting',
   '/production/bundles',
   '/production/scrap',

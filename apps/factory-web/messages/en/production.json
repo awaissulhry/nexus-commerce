@@ -25,7 +25,7 @@
   },
   "list": {
     "tableLabel": "Work orders",
-    "search": "Search number, batch or style",
+    "search": "Search number, batch, style, customer, PO or SO",
     "viewLabel": "Rows",
     "new": "New work order",
     "keyNew": "New work order",
@@ -57,7 +57,11 @@
       "body": "A work order is made from the open lines of a confirmed sales order.",
       "bodyView": "Work orders appear here once the planner makes them."
     },
-    "viewing": "Showing: {view}"
+    "viewing": "Showing: {view}",
+    "doneNotCounted": "Finished not counted here",
+    "doneLabel": "Done of {number}: {figure}",
+    "po": "PO {po}",
+    "noCustomer": "No customer"
   },
   "view": {
     "open": "Open (not finished)",
@@ -76,7 +80,9 @@
     "released": "Released, not started",
     "inProgress": "In progress",
     "late": "Late",
-    "onHold": "On hold"
+    "onHold": "On hold",
+    "atRisk": "At risk",
+    "waitingOnCustomer": "Waiting on customer"
   },
   "col": {
     "number": "Work order",
@@ -89,7 +95,12 @@
     "due": "Due",
     "priority": "Priority",
     "site": "Site",
-    "more": "More"
+    "more": "More",
+    "stage": "Stage",
+    "done": "Done",
+    "health": "Health",
+    "waitingOn": "Waiting on",
+    "blockedBy": "Blocked by"
   },
   "progress": {
     "notFrozen": "Not released yet",
@@ -1070,5 +1081,47 @@
     "workOrder": "Work order notes",
     "workOrderHint": "Office only: never shared with a customer. Tick 'For the floor' to send a note to the tablets.",
     "orderShared": "{number}'s thread is shared with {customer}: what you send there reaches the customer."
+  },
+  "sort": {
+    "label": "Sort",
+    "risk": "Risk first",
+    "due": "Due date",
+    "newest": "Newest first"
+  },
+  "group": {
+    "label": "Group",
+    "none": "No grouping",
+    "party": "By customer",
+    "figures": "Open {open} · late {late} · at risk {atRisk} · waiting on customer {waiting}",
+    "figuresFailed": "Couldn't count this customer's work orders",
+    "mixedNote": "Made before the one-customer rule",
+    "noneNote": "Samples made for no customer",
+    "total": "{scope}: open {open} · late {late} · at risk {atRisk} · waiting on customer {waiting}",
+    "only": "Show only {name}"
+  },
+  "risk": {
+    "LATE": "Late",
+    "AT_RISK": "At risk",
+    "BLOCKED": "Blocked",
+    "ON_TRACK": "On track"
+  },
+  "blocked": {
+    "HOLD": "Hold",
+    "CUSTOMER": "Customer",
+    "MATERIAL": "Material"
+  },
+  "filter": {
+    "waitingOn": "Waiting on",
+    "health": "Health",
+    "blockedBy": "Blocked by"
+  },
+  "waitingChoice": {
+    "BRAND": "Customer",
+    "SUPPLIER": "Supplier",
+    "WORKSHOP": "Workshop",
+    "US": "Us"
+  },
+  "board": {
+    "customer": "Customer"
   }
 }

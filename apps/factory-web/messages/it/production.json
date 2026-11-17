@@ -25,7 +25,7 @@
   },
   "list": {
     "tableLabel": "Ordini di produzione",
-    "search": "Cerca numero, lotto o modello",
+    "search": "Cerca numero, lotto, modello, cliente, ordine cliente o di vendita",
     "viewLabel": "Righe",
     "new": "Nuovo ordine di produzione",
     "keyNew": "Nuovo ordine di produzione",
@@ -57,7 +57,11 @@
       "body": "Un ordine di produzione nasce dalle righe aperte di un ordine di vendita confermato.",
       "bodyView": "Gli ordini compaiono qui quando il pianificatore li crea."
     },
-    "viewing": "Righe mostrate: {view}"
+    "viewing": "Righe mostrate: {view}",
+    "doneNotCounted": "Finiti non contati qui",
+    "doneLabel": "Fatto di {number}: {figure}",
+    "po": "Ordine cliente {po}",
+    "noCustomer": "Nessun cliente"
   },
   "view": {
     "open": "Aperti (non finiti)",
@@ -76,7 +80,9 @@
     "released": "Rilasciati, non iniziati",
     "inProgress": "In lavorazione",
     "late": "In ritardo",
-    "onHold": "In sospeso"
+    "onHold": "In sospeso",
+    "atRisk": "A rischio",
+    "waitingOnCustomer": "Tocca al cliente"
   },
   "col": {
     "number": "Ordine",
@@ -89,7 +95,12 @@
     "due": "Consegna",
     "priority": "Priorità",
     "site": "Sede",
-    "more": "Altro"
+    "more": "Altro",
+    "stage": "Fase",
+    "done": "Fatto",
+    "health": "Andamento",
+    "waitingOn": "Tocca a",
+    "blockedBy": "Bloccato da"
   },
   "progress": {
     "notFrozen": "Non ancora rilasciato",
@@ -1070,5 +1081,47 @@
     "workOrder": "Note dell'ordine di produzione",
     "workOrderHint": "Solo ufficio: mai condivise con un cliente. Spunta 'Per il reparto' per mandare una nota ai tablet.",
     "orderShared": "La conversazione di {number} è condivisa con {customer}: ciò che invii lì arriva al cliente."
+  },
+  "sort": {
+    "label": "Ordina",
+    "risk": "Prima i più a rischio",
+    "due": "Data di consegna",
+    "newest": "Prima i più recenti"
+  },
+  "group": {
+    "label": "Raggruppa",
+    "none": "Nessun raggruppamento",
+    "party": "Per cliente",
+    "figures": "Aperti {open} · in ritardo {late} · a rischio {atRisk} · tocca al cliente {waiting}",
+    "figuresFailed": "Impossibile contare gli ordini di questo cliente",
+    "mixedNote": "Creati prima della regola di un solo cliente",
+    "noneNote": "Campioni fatti per nessun cliente",
+    "total": "{scope}: aperti {open} · in ritardo {late} · a rischio {atRisk} · tocca al cliente {waiting}",
+    "only": "Mostra solo {name}"
+  },
+  "risk": {
+    "LATE": "In ritardo",
+    "AT_RISK": "A rischio",
+    "BLOCKED": "Bloccato",
+    "ON_TRACK": "In linea"
+  },
+  "blocked": {
+    "HOLD": "Sospensione",
+    "CUSTOMER": "Cliente",
+    "MATERIAL": "Materiale"
+  },
+  "filter": {
+    "waitingOn": "Tocca a",
+    "health": "Andamento",
+    "blockedBy": "Bloccato da"
+  },
+  "waitingChoice": {
+    "BRAND": "Cliente",
+    "SUPPLIER": "Fornitore",
+    "WORKSHOP": "Terzista",
+    "US": "Noi"
+  },
+  "board": {
+    "customer": "Cliente"
   }
 }

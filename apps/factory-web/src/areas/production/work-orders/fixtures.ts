@@ -1,12 +1,14 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import type { OpenLines, OrderOption } from '../_shared/api'
+import type { OpenLines, OrderOption, WorkOrderRow } from '../_shared/api'
 import { at, canOf, COUNTS, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, type Role } from '../_shared/fixtures'
 import { NO_NEW_ORDER, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { DAILY_ROLE_OF, dailyDemo } from './daily/demo/fixtures'
 import type { ReadinessRow } from './daily/api'
 import type { ReleasePreviewRow } from './every-shift/api'
+// F-PR-03: the list by risk (made-up customers, orders, POs, risks and waits).
+import type { CustomerFilterState } from '../_shared/customer/model'
 
 /**
  * SCR-069 — Work orders (design production.workorders) with made-up data only: every state of the list (loading, error,
@@ -20,6 +22,37 @@ interface ListCase {
   role: Role
   list: WorkOrdersListModel
 }
+
+// ---- F-PR-03: each row with its customer, its orders' POs, its risk and what it waits on (B-PR-34's row), sorted by risk ----
+const ALPHA = { id: '0190f0e2-6666-7000-8000-000000000001', code: 'ALPHA', name: 'Moto Demo S.r.l.' }
+const BETA = { id: '0190f0e2-6666-7000-8000-000000000002', code: 'BETA', name: 'Esempio Racing S.p.A.' }
+const CUSTOMERS: CustomerFilterState = { options: [ALPHA, BETA], party: null, everyCustomer: true, names: true }
+const NOW = Date.parse('2026-10-29T09:42:00Z')
+const RISK_OF: Record<string, Pick<WorkOrderRow, 'risk' | 'waitingOn'>> = {
+  'WO-00008': { risk: { state: 'LATE', daysLate: 5, plannedEnd: '2026-10-31', planAfterDue: true, raised: null, blockedBy: null }, waitingOn: { on: 'US', since: '2026-10-27T08:00:00Z' } },
+  'WO-00003': { risk: { state: 'LATE', daysLate: 2, plannedEnd: null, planAfterDue: false, raised: null, blockedBy: 'CUSTOMER' }, waitingOn: { on: 'BRAND', since: '2026-10-26T15:00:00Z' } },
+  'WO-00009': { risk: { state: 'AT_RISK', daysLate: null, plannedEnd: '2026-11-09', planAfterDue: true, raised: null, blockedBy: null }, waitingOn: { on: 'WORKSHOP', since: '2026-10-28T10:00:00Z' } },
+  'WO-00012': { risk: { state: 'AT_RISK', daysLate: null, plannedEnd: null, planAfterDue: false, raised: 'MATERIAL_LATE', blockedBy: 'MATERIAL' }, waitingOn: { on: 'SUPPLIER', since: '2026-10-24T09:00:00Z' } },
+  'WO-00011': { risk: { state: 'BLOCKED', daysLate: null, plannedEnd: null, planAfterDue: false, raised: null, blockedBy: 'CUSTOMER' }, waitingOn: { on: 'BRAND', since: '2026-10-28T16:30:00Z' } },
+  'WO-00010': { risk: { state: 'ON_TRACK', daysLate: null, plannedEnd: '2026-11-14', planAfterDue: false, raised: null, blockedBy: null }, waitingOn: { on: 'US', since: '2026-10-29T07:00:00Z' } },
+  'WO-00007': { risk: { state: 'ON_TRACK', daysLate: null, plannedEnd: '2026-11-10', planAfterDue: false, raised: null, blockedBy: null }, waitingOn: null },
+}
+const RANK = ['LATE', 'AT_RISK', 'BLOCKED', 'ON_TRACK']
+/** The list rows as B-PR-34 answers them: the customer (one per work order), the orders' POs, the risk, the wait; by risk. */
+export const RISK_ROWS: WorkOrderRow[] = LIST_ROWS.map((row) => {
+  const customer = row.orders[0]?.partyName === BETA.name ? BETA : ALPHA
+  const facts = RISK_OF[row.number] ?? { risk: null, waitingOn: null }
+  return { ...row, customer, mixedCustomers: false, orders: row.orders.map((order) => ({ ...order, customerRef: customer === ALPHA ? 'PO-ESEMPIO-7' : null })), ...facts }
+})
+  .map((row, index) => ({ row, index }))
+  .sort((a, b) => (a.row.risk ? RANK.indexOf(a.row.risk.state) : 9) - (b.row.risk ? RANK.indexOf(b.row.risk.state) : 9) || a.index - b.index)
+  .map((entry) => entry.row)
+export const RISK_OPEN = RISK_ROWS.filter((row) => ['DRAFT', 'RELEASED', 'IN_PROGRESS'].includes(row.status))
+/** A work order made before the one-customer rule (two customers), seen only by a person of every customer. */
+const MIXED_ROW: WorkOrderRow = { ...RISK_OPEN[RISK_OPEN.length - 1]!, id: '0190f0e2-9191-7000-8000-000000000099', number: 'WO-00002', customer: null, mixedCustomers: true, risk: { state: 'ON_TRACK', daysLate: null, plannedEnd: null, planAfterDue: false, raised: null, blockedBy: null }, waitingOn: null }
+const RISK_COUNTS = { ...COUNTS, onHold: 1, atRisk: 2, waitingOnCustomer: 2 }
+const GROUP_COUNTS = { [ALPHA.id]: { draft: 1, released: 1, inProgress: 3, completed: 1, open: 5, late: 1, onHold: 0, atRisk: 2, waitingOnCustomer: 0 }, [BETA.id]: { draft: 1, released: 0, inProgress: 1, completed: 0, open: 2, late: 1, onHold: 0, atRisk: 0, waitingOnCustomer: 2 } }
+// ---- end F-PR-03
 
 const base = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => ({
   role,
@@ -42,6 +75,9 @@ const base = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => 
     ...over,
   },
 })
+
+/** F-PR-03: a case of the list by risk (rows with their risk, the customer filter, the tiles with At risk and Waiting on customer). */
+const risky = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => base(role, { sort: 'risk', rows: { items: RISK_OPEN, more: false, problem: null }, counts: RISK_COUNTS, customers: CUSTOMERS, now: NOW, ...over })
 
 const WORDS: ReadinessRow['word'][] = ['NOT_BOOKED', 'EXPECTED', 'NOT_ENOUGH', 'RECEIVED', 'REQUESTED', 'DELAYED', 'NOT_PLANNED']
 const READINESS_ROWS: Record<string, ReadinessRow> = Object.fromEntries(
@@ -164,5 +200,15 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'w2a-hold-many-held', label: 'W2a · Hold N held: a selected work order is not open (completed), in words', model: base('manager', { view: 'all', rows: { items: LIST_ROWS, more: false, problem: null }, selected: LIST_ROWS.filter((row) => ['COMPLETED', 'IN_PROGRESS'].includes(row.status)).slice(0, 2).map((row) => row.id) }) },
     { id: 'w2a-hold-many-no-right', label: 'W2a · Sales: Hold N held (quality.holds.place)', model: base('sales', { selected: OPEN_ROWS.slice(0, 1).map((row) => row.id) }) },
     { id: 'w2a-held-notice', label: 'W2a · After Hold 2: the notice', model: base('manager', { notice: { tone: 'success', words: { key: 'production-work-orders:notice.heldMany', params: { count: 2 } } } }) },
+    // ---- F-PR-03: the list by risk ----
+    { id: 'risk', label: 'F-PR-03 · Sorted by risk (the default): Customer with its order and PO, Stage, Done, Health, Waiting on, Blocked by', model: risky('manager'), note: 'Sort ▾ Risk first · Due date · Newest first; Quick filters ▾ Waiting on, Health, Blocked by; Group ▾ By customer.' },
+    { id: 'risk-tile', label: 'F-PR-03 · The At risk tile pressed (`?risk=AT_RISK`): its chip, the export follows', model: risky('manager', { risk: 'AT_RISK', rows: { items: RISK_OPEN.filter((row) => row.risk?.state === 'AT_RISK'), more: false, problem: null } }) },
+    { id: 'risk-waiting', label: 'F-PR-03 · Waiting on customer (`?waitingOn=BRAND`) with Blocked by Customer (two chips)', model: risky('manager', { waitingOn: 'BRAND', blockedBy: 'CUSTOMER', rows: { items: RISK_OPEN.filter((row) => row.waitingOn?.on === 'BRAND'), more: false, problem: null } }) },
+    { id: 'risk-customer', label: 'F-PR-03 · One customer picked (`?party=`): its rows and its tiles only', model: risky('manager', { customers: { ...CUSTOMERS, party: BETA.id }, counts: GROUP_COUNTS[BETA.id], rows: { items: RISK_OPEN.filter((row) => row.customer?.id === BETA.id), more: false, problem: null } }) },
+    { id: 'risk-grouped', label: 'F-PR-03 · Grouped by customer: each header the server’s figures for that customer; a mixed work order said apart', model: risky('owner', { group: 'party', rows: { items: [...RISK_OPEN, MIXED_ROW], more: false, problem: null }, groupCounts: GROUP_COUNTS }) },
+    { id: 'risk-grouped-reading', label: 'F-PR-03 · Grouped by customer: one customer’s figures still read, one failed (Try again)', model: risky('manager', { group: 'party', groupCounts: { [ALPHA.id]: 'reading', [BETA.id]: 'failed' } }) },
+    { id: 'risk-limited', label: 'F-PR-03 · An office person limited to one customer: All my customers, its code (no parties.view), nothing of the other', model: risky('sales', { customers: { options: [BETA], party: null, everyCustomer: false, names: false }, counts: GROUP_COUNTS[BETA.id], rows: { items: RISK_OPEN.filter((row) => row.customer?.id === BETA.id), more: false, problem: null } }) },
+    { id: 'risk-board', label: 'F-PR-03 · Board by state: each card the customer code, its health and who it waits on', model: risky('manager', { mode: 'board', view: 'all', rows: { items: RISK_ROWS, more: false, problem: null }, today: '2026-10-29' }) },
+    { id: 'risk-no-match', label: 'F-PR-03 · Blocked by Hold matches nothing: Clear filters (the sort and the grouping stay)', model: risky('manager', { blockedBy: 'HOLD', rows: { items: [], more: false, problem: null } }) },
   ],
 })

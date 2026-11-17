@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import type { RelativeDay } from '@nexus/factory-domain/views/quick/relative'
+// F-PR-03: the list's risk and waiting on (the domain's words lists).
+import { HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
+import { WAITING_ON as WAITING_ON_LIST } from '@nexus/factory-domain/production-brand/waiting'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 
@@ -29,6 +32,29 @@ export const INSPECTION_STATUSES = ['OPEN', 'PASSED', 'FAILED', 'CANCELLED'] as 
 const status = z.enum(WORK_ORDER_STATUSES)
 const progress = z.object({ cut: z.number().nullable(), bundled: z.number().nullable(), sewn: z.number().nullable(), finished: z.number().nullable() })
 
+// ── F-PR-03 (production plan: the work orders list by risk; B-PR-34's list, apps/factory-api modules/production/work-orders/risk.ts) ──
+/** The list's sorts (the API's LIST_SORTS; the screen's default is `risk`, the API's `newest`). */
+export const LIST_SORTS = ['newest', 'risk', 'due'] as const
+export type ListSort = (typeof LIST_SORTS)[number]
+/** A work order's risk on the list (the API's WORK_ORDER_RISKS): late, at risk, blocked, on track; a finished one has none. */
+export const WORK_ORDER_RISKS = ['LATE', 'AT_RISK', 'BLOCKED', 'ON_TRACK'] as const
+export type WorkOrderRisk = (typeof WORK_ORDER_RISKS)[number]
+/** What keeps an open work order from moving (the API's BLOCKED_BY): a hold, the customer, material. */
+export const BLOCKED_BY = ['HOLD', 'CUSTOMER', 'MATERIAL'] as const
+export type BlockedBy = (typeof BLOCKED_BY)[number]
+/** Who an open work order's order waits on (factory-domain production-brand/waiting WAITING_ON): the customer, a supplier, a workshop, us. */
+export { WAITING_ON, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
+const riskSchema = z.object({
+  state: z.enum(WORK_ORDER_RISKS),
+  daysLate: z.number().nullable(),
+  plannedEnd: z.string().nullable(),
+  planAfterDue: z.boolean(),
+  raised: z.enum(HEALTH_REASON_CODES).nullable(),
+  blockedBy: z.enum(BLOCKED_BY).nullable(),
+})
+const waitingSchema = z.object({ on: z.enum(WAITING_ON_LIST), since: z.string().nullable() })
+// ── end F-PR-03
+
 // ---- work orders ------------------------------------------------------------------------------------------------------------
 
 export const workOrderRowSchema = z.object({
@@ -46,7 +72,8 @@ export const workOrderRowSchema = z.object({
   styleName: z.string(),
   revision: z.number().nullable(),
   colourways: z.array(z.string()),
-  orders: z.array(z.object({ id: z.string(), number: z.string(), partyName: z.string() })),
+  // F-PR-03: the customer PO of each order (B-PR-03 sends it; absent from an older answer).
+  orders: z.array(z.object({ id: z.string(), number: z.string(), partyName: z.string(), customerRef: z.string().nullable().optional() })),
   cells: z.number(),
   pieces: z.number(),
   progress: progress.nullable(),
@@ -61,6 +88,9 @@ export const workOrderRowSchema = z.object({
   // F-PR-17 (B-PR-03's row): its one customer (null: none), or one made before the one-customer rule with several.
   customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
   mixedCustomers: z.boolean().optional(),
+  // F-PR-03 (B-PR-34): its risk (null: finished) and what its order waits on (null: finished, or nothing known).
+  risk: riskSchema.nullable().optional(),
+  waitingOn: waitingSchema.nullable().optional(),
 })
 export type WorkOrderRow = z.infer<typeof workOrderRowSchema>
 
@@ -81,7 +111,18 @@ export interface ListQuery {
   limit?: number
   /** F-PR-17: one customer's work orders (the Production pages' customer filter, `?party=`). */
   partyId?: string | undefined
+  // ── F-PR-03 (B-PR-34) ──
+  /** The order of the rows (absent: the API's newest first). */
+  sort?: ListSort | undefined
+  /** Open work orders whose order waits on the customer, a supplier, a workshop or us. */
+  waitingOn?: WaitingOnTerm | undefined
+  /** Open work orders of one risk. */
+  risk?: WorkOrderRisk | undefined
+  /** Open work orders blocked by a hold, the customer or material. */
+  blockedBy?: BlockedBy | undefined
+  // ── end F-PR-03
 }
+type WaitingOnTerm = (typeof WAITING_ON_LIST)[number]
 
 export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortSignal): Promise<WorkOrderPage> {
   return api.get('/production/work-orders', {
@@ -96,14 +137,19 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
       partyId: query.partyId,
+      // F-PR-03 (B-PR-34): the sort and the computed filters.
+      sort: query.sort,
+      waitingOn: query.waitingOn,
+      risk: query.risk,
+      blockedBy: query.blockedBy,
     },
     schema: listSchema,
     signal,
   })
 }
 
-// B-W2a-46: onHold (design wo-metrics "On hold (W2a)").
-const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number(), onHold: z.number().optional() }) })
+// B-W2a-46: onHold (design wo-metrics "On hold (W2a)"). F-PR-03 (B-PR-34): atRisk and waitingOnCustomer (open work orders).
+const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number(), onHold: z.number().optional(), atRisk: z.number().optional(), waitingOnCustomer: z.number().optional() }) })
 export type WorkOrderCounts = z.infer<typeof countsSchema>['counts']
 
 export async function countWorkOrders(api: ApiClient, signal?: AbortSignal, partyId?: string): Promise<WorkOrderCounts> {
