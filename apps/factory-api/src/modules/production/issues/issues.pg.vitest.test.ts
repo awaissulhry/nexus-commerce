@@ -35,6 +35,11 @@ import { findMarkers, markersOf, productionTwoBrands, supervisorPeople, supervis
 import { issueAnswered, ISSUE_ANSWERED_EVENTS } from './answered'
 import { issueClockOf, runIssueEscalation, ISSUE_ESCALATION_CRON, issueEscalationCron } from './escalate'
 import { issueDueOn, issueEscalationTaskId } from './raise'
+// F-PR-05b: the bell's words of an issue's task.
+import { sentenceOf } from '@nexus/factory-domain/notifications/rules'
+import { ruleContext } from '../../../platform/notifications/fan-out'
+import { ASSIGNMENT_RULES } from '../../../platform/notifications/rules/assignments'
+import { issueBellOf } from './bell'
 
 /**
  * B-PR-45 — the customer reports a problem, issues escalate, the office's issue list (production plan §1 "Report a problem on one
@@ -598,6 +603,31 @@ describe('B-PR-45 escalation (cron production.issueEscalation)', { timeout: SLOW
     expect(list.issues.find((issue: Json) => issue.id === batchIssues[0]!.id).escalation).toMatchObject({ step: 2 })
     expect(list.counts.escalated).toBeGreaterThanOrEqual(2)
   })
+
+  // ---- F-PR-05b: the office bell's words for a reported problem and its escalation (the tasks.assigned rule asks issues/bell.ts) ----
+  it('F-PR-05b: the bell says what an issue’s task is — the reported problem, step 1 (raise + 1 working day), step 2 (raise + 2); no person "assigned" it; another task keeps its words', async () => {
+    const rule = ASSIGNMENT_RULES.find((entry) => entry.name === 'tasks.assigned')!
+    const draftsOf = async (taskId: string) => {
+      const task = (await taskOf(taskId))!
+      return system.withClient((client) => client.$transaction((tx) => rule.drafts(ruleContext(tx, T, new Date()), { taskId, recordType: task.recordType, recordId: task.recordId, assigneeId: task.assigneeId, assignedById: null })))
+    }
+    const nameB = (await one<{ name: string }>(`SELECT coalesce("tradeName", "legalName") AS name FROM "Party" WHERE id = $1`, [ids.b]))!.name
+    const reported = await draftsOf(batchTask.id)
+    expect(reported).toEqual([expect.objectContaining({ userId: people.officeB, category: 'ASSIGNMENT', messageKey: 'notifications.production.problemReportedMany', actorId: null, record: expect.objectContaining({ type: 'SalesOrder', id: w.b.salesOrderId }) })])
+    expect(reported[0]!.params).toMatchObject({ customer: nameB, count: 2, taskId: batchTask.id })
+    expect(sentenceOf({ messageKey: reported[0]!.messageKey, params: reported[0]!.params, recordLabel: 'SEED-SO-B001', actorId: null }, new Map(), 'en')).toBe(`${nameB} reported a problem on 2 orders: answer in the thread of SEED-SO-B001`)
+    const stepOne = await draftsOf(issueEscalationTaskId(batchTask.id, 1, staff.pmB))
+    expect(stepOne).toEqual([expect.objectContaining({ userId: staff.pmB, messageKey: 'notifications.production.issueEscalatedBackup', actorId: null })])
+    expect(sentenceOf({ messageKey: stepOne[0]!.messageKey, params: stepOne[0]!.params, recordLabel: 'SEED-SO-B001', actorId: null }, new Map(), 'it')).toBe(`Senza risposta da 1 giorno lavorativo su SEED-SO-B001 (${nameB}): ora tocca a te`)
+    const stepTwo = await draftsOf(issueEscalationTaskId(batchTask.id, 2, staff.adminAll))
+    expect(stepTwo).toEqual([expect.objectContaining({ userId: staff.adminAll, messageKey: 'notifications.production.issueEscalatedOwner', actorId: null })])
+    // PW-17: the bell names B only, to people who read B's order; nothing of A.
+    expect(findMarkers([reported, stepOne, stepTwo], aMarkers)).toEqual([])
+    // A task that is no issue's (made by a person, or by the system beside the batch task under another id) keeps the generic words.
+    const bellOf = (task: { id: string; createdById: string | null }) => system.withClient((client) => client.$transaction((tx) => issueBellOf(tx, { ...task, recordType: 'SalesOrder', recordId: w.b.salesOrderId, assigneeId: staff.pmB })))
+    expect(await bellOf({ id: newId(), createdById: staff.adminAll })).toBeNull()
+    expect(await bellOf({ id: newId(), createdById: null })).toBeNull()
+  // ---- end F-PR-05b
 })
 
 describe('B-PR-45 answered: our first shared reply in one order’s thread answers the batch (T11 fallback)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

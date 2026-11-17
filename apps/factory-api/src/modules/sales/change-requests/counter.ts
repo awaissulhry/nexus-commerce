@@ -1,9 +1,10 @@
 import type { Prisma } from '@nexus/factory-db'
 import { COUNTER_OFFER_RECORD, KIND_RULES, type ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
 import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import {
+  acceptedWithCounter, // B-PR-27b
   ASKED_ONLY_FROM_COUNTER,
   counterAnswererHeld,
   counterFactsOf,
@@ -212,3 +213,9 @@ export const COUNTER_OFFER_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>
   },
   settle: (tools, request) => counterSettle(tools, request),
 })
+
+// ── B-PR-27b: the date an accept carries out ─────────────────────────────────────────────────────────────────────────────────────
+/** The date a request carries out: the one asked, or our counter's when the customer agreed it (factory-domain acceptedWithCounter). */
+export const agreedDateOf = (row: OfficeRequestRow): BusinessDate | null =>
+  row.status === 'COUNTERED' ? acceptedWithCounter({ requestedDate: dayOrNull(row.requestedDate) }, counterOfRow(row)).date : dayOrNull(row.requestedDate)
+// ── end B-PR-27b ──

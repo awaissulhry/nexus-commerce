@@ -38,6 +38,8 @@ const cell = output({
   /** The pieces when it was asked, and the pieces asked (0: none). */
   before: z.number().int(),
   asked: z.number().int(),
+  /** B-PR-27a: the colourway a change asks the line in (another of its style's); null: the line keeps its own. */
+  askedColourway: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
 })
 
 /**
@@ -182,6 +184,8 @@ export const rulesContract = defineContract({
           frozen: z.array(output({ size: z.string(), freeze: freezeOut })),
           split: askVerdictOut,
           samples: z.array(output({ sampleKind: z.enum(ASK_SAMPLE_KINDS), verdict: askVerdictOut })),
+          /** B-PR-27a: the other colourways of the line's style a change may ask it in, each with the sizes it is made in. */
+          colourways: z.array(output({ id: id(), code: z.string(), name: z.string(), sizes: z.array(z.string()) })),
         }),
       ),
       /**
@@ -225,6 +229,8 @@ const askBody = input({
   /** B-PR-25: a sample round: the line the sample is of, and the kind of round. */
   lineId: id().nullable().optional(),
   sampleKind: z.enum(ASK_SAMPLE_KINDS).nullable().optional(),
+  /** B-PR-27a: a change: a line in another colourway of its style (its sizes as the cells ask, else as they are). */
+  colourways: z.array(input({ lineId: id(), colourwayId: id() })).max(200).optional(),
 })
 
 /**
@@ -337,6 +343,16 @@ export const acceptContract = defineContract({
       orderCancelled: z.boolean(),
       /** B-W2b-F14: a cancel's fee as it stood when accepted (shown to the customer; no money moves); null: a change. */
       cancelFee: cancelFee.nullable(),
+      /**
+       * B-PR-27b: ship what is ready — the order ships as ready now, and the first part's date proposed to sales per line (each a
+       * re-promise sales accepts), the lines left out with why; null: not a ship-what-is-ready.
+       */
+      split: output({
+        shipComplete: z.boolean(),
+        proposals: z.array(output({ id: id(), orderLineId: id(), seq: z.number().int(), sizes: z.array(output({ size: z.string().nullable(), from: day.nullable(), to: day })) })),
+        skipped: z.array(output({ orderLineId: id(), seq: z.number().int(), words })),
+        words,
+      }).nullable(),
     }),
   },
 })

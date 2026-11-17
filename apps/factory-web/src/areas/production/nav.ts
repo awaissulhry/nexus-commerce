@@ -1,6 +1,8 @@
 import { Activity, BarChart3, BellRing, ClipboardCheck, ClipboardList, Factory, Kanban, Layers, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
 // B-W2b-234: Work instructions' icon.
 import { BookOpenCheck } from 'lucide-react'
+// F-PR-04: Production › Overview's icon.
+import { LayoutDashboard } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -24,6 +26,9 @@ export const officeArea: OfficeAreaNav = {
         hideLabel: true,
         noCrumb: true,
         items: [
+          // F-PR-04 (production plan §5): Production › Overview, the area's first page — every customer's production on one page,
+          // each number a door to Work orders with its filters (GET /production/overview, workorders.view).
+          { id: 'production-overview', label: 'shell:nav.production.overview', href: '/production/overview', icon: LayoutDashboard, permission: 'workorders.view' },
           // SCR-073: the floor at a glance (WIP per operation, late work orders), live from the scans.
           { id: 'production-floor', label: 'shell:nav.production.floor', href: '/production/floor', icon: Activity, permission: 'workorders.view' },
           // SCR-069 … SCR-072: the list and the work order studio.

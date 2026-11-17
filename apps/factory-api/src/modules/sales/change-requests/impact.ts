@@ -189,7 +189,9 @@ export function impactLinesOf(lines: readonly { readonly id: string; readonly se
 /** What the ask touches, as the impact rules read it (a change's cells that move, its date and address; a date of a rush or a split). */
 export function impactAskOf(kind: OrderRequestKind, cells: readonly AskedCell[], header: { readonly requestedDate: BusinessDate | null; readonly shipToAddressId: string | null }): ImpactAsk {
   if (kind === 'CHANGE') {
-    return { kind, cells: cells.filter((cell) => cell.size !== null && cell.quantity !== cell.quantityBefore).map((cell) => ({ lineId: cell.orderLineId, size: cell.size })), requestedDate: header.requestedDate, shipTo: header.shipToAddressId !== null }
+    // B-PR-27a: a cell of a line asked in another colourway reads the line's colour freeze (and its size's, when it changes).
+    const asked = cells.filter((cell) => (cell.size !== null && cell.quantity !== cell.quantityBefore) || (cell.colourwayId ?? null) !== null)
+    return { kind, cells: asked.map((cell) => ({ lineId: cell.orderLineId, size: cell.quantity !== cell.quantityBefore ? cell.size : null, ...((cell.colourwayId ?? null) !== null ? { colourway: true } : {}) })), requestedDate: header.requestedDate, shipTo: header.shipToAddressId !== null }
   }
   return { kind, requestedDate: kind === 'RUSH' || kind === 'SPLIT_SHIPMENT' ? header.requestedDate : null }
 }

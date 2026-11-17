@@ -50,6 +50,14 @@ export interface ListTerms {
   readonly supervisor: 'me' | null
   /** F-PR-18: one Customer urgency state (`?customerUrgency=`, the API's computed filter), or null. */
   readonly customerUrgency: CustomerUrgencyState | null
+  // ── F-PR-04: the Overview's numbers open this list with their filters (B-PR-33's list terms) ──
+  /** `?gate=true`: production work orders not started whose open order waits on a gate. */
+  readonly gate: boolean
+  /** `?mixed=true`: made before the one-customer rule with cells of several customers. */
+  readonly mixed: boolean
+  /** `?noCustomer=true`: the work of no customer (a sample for no customer). */
+  readonly noCustomer: boolean
+  // ── end F-PR-04
 }
 
 const pick = <Value extends string>(values: readonly Value[], value: string | null | undefined): Value | null => ((values as readonly string[]).includes(value ?? '') ? (value as Value) : null)
@@ -71,6 +79,10 @@ export function termsOf(params: Params | null | undefined, modes: readonly ListM
     group: params?.get('group') === 'party' ? 'party' : null,
     supervisor: params?.get('supervisor') === 'me' ? 'me' : null,
     customerUrgency: pick(CUSTOMER_URGENCY_STATES, params?.get('customerUrgency')), // F-PR-18
+    // F-PR-04
+    gate: params?.get('gate') === 'true',
+    mixed: params?.get('mixed') === 'true',
+    noCustomer: params?.get('noCustomer') === 'true',
   }
 }
 
@@ -93,6 +105,10 @@ export function listAddress(path: string, terms: ListTerms, extra: { readonly ne
   if (terms.group) query.set('group', terms.group)
   if (terms.supervisor) query.set('supervisor', terms.supervisor)
   if (terms.customerUrgency) query.set('customerUrgency', terms.customerUrgency) // F-PR-18
+  // F-PR-04
+  if (terms.gate) query.set('gate', 'true')
+  if (terms.mixed) query.set('mixed', 'true')
+  if (terms.noCustomer) query.set('noCustomer', 'true')
   if (extra.new) query.set('new', '1')
   const text = query.toString()
   return `${path}${text ? `?${text}` : ''}`
@@ -111,15 +127,19 @@ export function listQueryOf(terms: ListTerms, cursor: string | null = null): Lis
     blockedBy: terms.blockedBy ?? undefined,
     supervisor: terms.supervisor ?? undefined,
     customerUrgency: terms.customerUrgency ?? undefined, // F-PR-18
+    // F-PR-04
+    gate: terms.gate || undefined,
+    mixed: terms.mixed || undefined,
+    noCustomer: terms.noCustomer || undefined,
   }
 }
 
 /** Whether any term narrows the rows (the empty state then offers Clear filters). */
 export const narrowed = (terms: ListTerms): boolean =>
-  terms.q.trim() !== '' || !!terms.due || terms.rush || !!terms.waitingOn || !!terms.risk || !!terms.blockedBy || !!terms.party || !!terms.supervisor || /* F-PR-18 */ !!terms.customerUrgency || (terms.view !== 'all' && terms.view !== 'open')
+  terms.q.trim() !== '' || !!terms.due || terms.rush || !!terms.waitingOn || !!terms.risk || !!terms.blockedBy || !!terms.party || !!terms.supervisor || /* F-PR-18 */ !!terms.customerUrgency || /* F-PR-04 */ terms.gate || terms.mixed || terms.noCustomer || (terms.view !== 'all' && terms.view !== 'open')
 
 /** Every filter off (the sort, the mode and the grouping stay: they narrow nothing). */
-export const cleared = (terms: ListTerms): ListTerms => ({ ...terms, view: 'all', q: '', due: null, rush: false, waitingOn: null, risk: null, blockedBy: null, party: null, supervisor: null, /* F-PR-18 */ customerUrgency: null })
+export const cleared = (terms: ListTerms): ListTerms => ({ ...terms, view: 'all', q: '', due: null, rush: false, waitingOn: null, risk: null, blockedBy: null, party: null, supervisor: null, /* F-PR-18 */ customerUrgency: null, /* F-PR-04 */ gate: false, mixed: false, noCustomer: false })
 
 /**
  * The export's query (a saved view's terms, B-W2a-23): an address that names no sort is shown by risk, so the file is told so too —
@@ -297,6 +317,10 @@ export function filterChange(id: string, value: string | null): Partial<ListTerm
   if (id === 'risk') return { risk: pick(WORK_ORDER_RISKS, value) }
   if (id === 'blockedBy') return { blockedBy: pick(BLOCKED_BY, value) }
   if (id === 'customerUrgency') return { customerUrgency: pick(CUSTOMER_URGENCY_STATES, value) } // F-PR-18
+  // F-PR-04: the Overview's flags (a chip each; a second press takes it away).
+  if (id === 'gate') return { gate: value === 'true' }
+  if (id === 'mixed') return { mixed: value === 'true' }
+  if (id === 'noCustomer') return { noCustomer: value === 'true' }
   if (id === 'rush') return { rush: value === 'true' }
   if (id === 'due') return { due: isRelativeDay(value) ? value : null }
   return null

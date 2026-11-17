@@ -17,7 +17,7 @@ import { OperationsTab } from '../../progress/view/OperationsTab'
 // ---- end F-PR-06
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { RecordDialogs } from './Dialogs'
-import { DAILY_NAMESPACE, holdHeld, holdReasonWords } from '../../daily/model'
+import { DAILY_NAMESPACE, holdHeld, holdReasonWords, /* F-PR-05b */ plainHoldsOf, plainHoldWords, releaseTargetHeld, releaseTargetOf } from '../../daily/model'
 import { DailyDialogs } from '../../daily/view/DailyDialogs'
 import { say } from '../../daily/view/DailyParts'
 import { MaterialsTab } from './MaterialsTab'
@@ -148,7 +148,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign || /* F-PR-22 */ model.note?.dialog) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign || /* F-PR-22 */ model.note?.dialog || /* F-PR-05b */ model.customerCard?.dialog) return
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || typing) return
       // F-PR-05a: ⌘↵ takes the band's primary — Report finished while released garments wait, else the next step.
       if (reportPrimary) {
@@ -255,10 +255,19 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   // A notice's key may name its catalogue (`production-work-orders:notice.held`); else it is the area's.
   const notices = useScopedT('production')
   const activeHolds = (daily?.holds?.value ?? []).filter((hold) => hold.status === 'ACTIVE')
-  const heldOwnHold = workOrder.hold?.recordType === 'QualityHold' ? workOrder.hold.recordId : null
-  const releaseTarget = activeHolds[0]?.id ?? heldOwnHold
+  // F-PR-05b: Release the hold opens what the work order is held under — a quality hold (Quality's release, its checks, a fresh
+  // code) or a plain hold (lifted here with why, workorders.hold); a hold of another record (an NCR) is that record's to lift.
+  const releaseTarget = releaseTargetOf(workOrder, daily?.holds?.value ?? null, daily?.productionHolds?.value ?? null)
+  const releaseWait = daily ? say(tw, releaseTargetHeld(releaseTarget, daily.can)) : null
   const holdButton = !daily ? null : workOrder.status === 'ON_HOLD' ? (
-    <Button size="sm" heldReason={!daily.can.holdsRelease ? tw('held.noHoldRelease') : !releaseTarget ? tw('held.underRecord') : null} onClick={() => releaseTarget && actions?.daily?.onDialog?.({ kind: 'releaseHold', holdId: releaseTarget })}>
+    <Button
+      size="sm"
+      heldReason={releaseWait}
+      onClick={() => {
+        if (releaseTarget.kind === 'quality') actions?.daily?.onDialog?.({ kind: 'releaseHold', holdId: releaseTarget.holdId })
+        else if (releaseTarget.kind === 'plain') actions?.daily?.onDialog?.({ kind: 'liftHold', holdId: releaseTarget.holdId })
+      }}
+    >
       <Unlock size={14} aria-hidden /> <span>{tw('holds.release')}</span>
     </Button>
   ) : ['DRAFT', 'RELEASED', 'IN_PROGRESS'].includes(workOrder.status) ? (
@@ -266,7 +275,12 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       <PauseCircle size={14} aria-hidden /> <span>{tw('holds.put')}</span>
     </Button>
   ) : null
-  const holdWords = workOrder.hold ? (activeHolds[0] ? holdReasonWords(activeHolds[0].reasonCode, daily?.reasons ?? null, locale) : (workOrder.hold.reason ?? '—')) : null
+  // The banner's reason: the hold the work order is held under, in the person's words (else the work order's own reason).
+  const heldUnder = releaseTarget.kind === 'plain' || releaseTarget.kind === 'quality' ? releaseTarget.holdId : null
+  const plainRecord = releaseTarget.kind === 'plain' ? (plainHoldsOf(daily?.productionHolds?.value ?? null).standing.find((hold) => hold.id === heldUnder) ?? null) : null
+  const qualityRecord = releaseTarget.kind === 'quality' ? (activeHolds.find((hold) => hold.id === heldUnder) ?? null) : null
+  const recordWords = plainRecord ? (plainRecord.kind === 'BRAND' ? tw('holds.customerPause') : plainHoldWords(plainRecord, daily?.reasons ?? null, locale)) : qualityRecord ? holdReasonWords(qualityRecord.reasonCode, daily?.reasons ?? null, locale) : null
+  const holdWords = workOrder.hold ? (recordWords ?? workOrder.hold.reason ?? '—') : null
 
   const colourways = [...new Set(workOrder.cells.map((cell) => cell.colourwayCode))]
   // F-PR-05a: Report finished (moved out of the Bundles tab) while released garments wait; else the next step.

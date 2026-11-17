@@ -39,9 +39,12 @@ import { dayOf, type Reader, type SiteRow } from '../store'
 import { dueAtFor } from '@nexus/factory-domain/approvals-out/rules'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
 import { askCustomerInCommand, customerAnswersOf, withdrawOlderInCommand, type CustomerAnswerView } from './brand-answer'
+// B-PR-27b: the re-promise an accepted customer ask proposes.
+import { repromiseAsksOf, REPROMISE_SKIP_WORDS } from '@nexus/factory-domain/production-brand/accept'
 import {
   customerOf,
   keepLineFor,
+  makingSiteOf, // B-PR-27b
   KEEP_ORDER_STATUSES,
   lockLinePromise,
   readKeepLine,
@@ -251,62 +254,169 @@ async function taskInCommand(tools: CommandTools, context: OfficeContext, line: 
   return assigneeId
 }
 
+// ── B-PR-27b: the checks of a proposal and its write, shared with the accept of a customer's "Urgent – asked" and ship what is
+// ready (production/brand-requests, sales/change-requests: the accept proposes the date the customer asked to sales) ───────────
+
+/** A proposal as its checks found it, ready to be written inside a command. */
+export interface ProposalChecked {
+  readonly context: OfficeContext
+  readonly line: KeepLine
+  readonly site: SiteRow
+  readonly today: BusinessDate
+  readonly asks: readonly PromiseAsk[]
+  readonly reasonCode: string
+  readonly reason: string | null
+  readonly recipients: readonly string[]
+  readonly message: { readonly language: 'it' | 'en'; readonly subject: string; readonly body: string }
+  readonly planVersionId: string | null
+}
+
+/**
+ * The checks of new dates for a line (refused in words: 400 for the sizes and days, 409 for a certificate that does not cover a
+ * date), and the message to the customer in its language. The caller found the line and its site (keepLineFor, or its own read)
+ * and holds planning.promise.manage there.
+ */
+export async function proposalChecks(db: Reader, found: { readonly context: OfficeContext; readonly line: KeepLine; readonly site: SiteRow }, body: ProposeBody, now: Date): Promise<ProposalChecked> {
+  const { context, line, site } = found
+  const asks = askOf(body.sizes)
+  if (!(KEEP_ORDER_STATUSES as readonly string[]).includes(line.order.status)) throw new InvalidStateError(`${line.order.number} is ${line.order.status}: nothing more is promised on it.`)
+  const today = businessDate(now, site.timezone)
+  const shipped = await shippedOfLines(db, [line.id])
+  const sizes = sizesOfLine(line)
+  const rows = (await readPromiseRows(db, [line.id])).get(line.id) ?? []
+  const proposed = proposalSizesOf(line, rows, asks)
+  const problems = [
+    ...promiseAskProblems({
+      asks,
+      sizes: sizes.flatMap((entry) => (entry.size ? [entry.size] : [])),
+      openOf: (size) => max0((sizes.find((entry) => entry.size === size)?.ordered ?? 0) - shipped(line.id, size)),
+      madeToMeasure: line.kind === 'MADE_TO_MEASURE',
+      today,
+      orderDate: dayOf(line.order.orderDate),
+    }),
+    ...repromiseProblems({ sizes: proposed, reasonCode: body.reasonCode }),
+  ]
+  if (problems.length > 0) throw new ValidationError('The re-promise cannot be sent like this.', problems)
+  const refused = await certificateRefusals(db, line, site, asks, now, (index) => `body/sizes/${index}/date`)
+  if (refused.length > 0) throw new DomainError('conflict', `Only sizes a valid certificate covers through their date are promised: ${refused[0]!.message}`, refused)
+  const recipients = await recipientsOf(db, { partyId: line.partyId, quoteVersionId: line.order.quoteVersionId, language: line.order.language })
+  const language = messageLanguageOf(recipients.language)
+  const composed = customerMessageOf({ language, orderNumber: line.order.number, customerRef: line.order.customerRef, lineSeq: line.seq, style: line.style, colourway: line.colourway, sizes: proposed, reasonCode: body.reasonCode })
+  const plan = await db.planVersion.findFirst({ where: { siteId: site.id, kind: 'WORKING' }, select: { id: true } })
+  return {
+    context,
+    line,
+    site,
+    today,
+    asks,
+    reasonCode: body.reasonCode,
+    reason: body.reason?.trim() || null,
+    recipients: recipients.to,
+    message: { language, subject: body.message?.subject?.trim() || composed.subject, body: body.message?.body?.trim() || composed.body },
+    planVersionId: plan?.id ?? null,
+  }
+}
+
+/**
+ * The proposal written INSIDE the caller's command: the line's promise lock, one that waits per line (409 in words), the sizes
+ * read again (a promise that moved since is refused in words), the task for sales, the audit row on the order (the proposal), and
+ * order_promise.proposed.
+ */
+export async function proposeInCommand(tools: CommandTools, checked: ProposalChecked): Promise<{ readonly proposalId: string; readonly sizes: readonly ProposalSize[] }> {
+  const { tx } = tools
+  const { context, line, site, today, asks } = checked
+  await lockLinePromise(tx, context.tenantId, line.id)
+  if ((await readProposals(tx, [line.orderId])).some((proposal) => proposal.orderLineId === line.id && proposal.state === 'WAITING')) throw new DomainError('conflict', REPROMISE_REFUSALS.WAITING_EXISTS, [{ path: 'orderLineId', message: REPROMISE_REFUSALS.WAITING_EXISTS }])
+  const fresh = (await readKeepLine(tx, line.id))!
+  const rows = (await readPromiseRows(tx, [line.id])).get(line.id) ?? []
+  const sizes = proposalSizesOf(fresh, rows, asks)
+  const problems = repromiseProblems({ sizes, reasonCode: checked.reasonCode })
+  if (problems.length > 0) throw new ValidationError('The re-promise cannot be sent like this.', problems)
+  const proposalId = newId()
+  const assigneeId = await taskInCommand(tools, context, fresh, proposalId, sizes, today)
+  tools.audit({
+    action: PROPOSE_ACTION,
+    recordType: 'SalesOrder',
+    recordId: line.orderId,
+    companyId: line.companyId,
+    siteId: site.id,
+    after: { proposalId, orderLineId: line.id, siteId: site.id, planVersionId: checked.planVersionId, sizes, reasonCode: checked.reasonCode, reason: checked.reason, message: checked.message, recipients: checked.recipients, assigneeId },
+    ...(checked.reason ? { reason: checked.reason } : {}),
+  })
+  tools.emit({ type: 'order_promise.proposed', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId, siteId: site.id, sizes } })
+  return { proposalId, sizes }
+}
+
+/** What an accept proposes: one checked proposal per line, and the lines it does not propose with why (the office's words). */
+export interface AcceptProposals {
+  readonly checked: readonly ProposalChecked[]
+  readonly skipped: readonly { readonly orderLineId: string; readonly seq: number; readonly words: { readonly it: string; readonly en: string } }[]
+}
+
+/**
+ * The re-promise an accepted ask proposes to sales (a customer's "Urgent – asked", ship what is ready): for each open goods line of
+ * the order (`only`: these lines and sizes — a split's first part), every open size promised LATER than the date asked gets that
+ * date (factory-domain production-brand/accept repromiseAsksOf), with the reason "Changed at your request"; sales accepts it and
+ * tells the customer as with any re-promise. A line is left out, in words, when: no date was asked, it is promised by then
+ * already, it has no making site, the person may not propose dates there (planning.promise.manage), a re-promise of it waits for
+ * sales already, or its checks refuse it (a certificate, a day). Read in the caller's client before the accept's command;
+ * `proposeInCommand` writes each inside it.
+ */
+export async function acceptProposals(db: Reader, context: OfficeContext, input: { readonly orderId: string; readonly date: BusinessDate | null; readonly only?: ReadonlyMap<string, ReadonlySet<string>> | undefined; readonly now: Date }): Promise<AcceptProposals> {
+  const lines = await db.salesOrderLine.findMany({ where: { orderId: input.orderId, kind: { in: ['SIZE_GRID', 'MADE_TO_MEASURE'] }, closedShortQuantity: null }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } })
+  const wanted = input.only ? lines.filter((line) => input.only!.has(line.id)) : lines
+  if (input.date === null) return { checked: [], skipped: wanted.map((line) => ({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.NO_DATE })) }
+  const date = input.date
+  const waiting = new Set((await readProposals(db, [input.orderId])).filter((proposal) => proposal.state === 'WAITING').map((proposal) => proposal.orderLineId))
+  const checked: ProposalChecked[] = []
+  const skipped: AcceptProposals['skipped'][number][] = []
+  for (const entry of wanted) {
+    const line = await readKeepLine(db, entry.id)
+    if (!line) continue
+    const site = await makingSiteOf(db, line)
+    if (!site) {
+      skipped.push({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.NO_SITE })
+      continue
+    }
+    if (!mayPromiseAt(context, PLANNING_PROMISE_VIEW, site) || !mayPromiseAt(context, PLANNING_PROMISE_MANAGE, site)) {
+      skipped.push({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.NO_RIGHT })
+      continue
+    }
+    if (waiting.has(line.id)) {
+      skipped.push({ orderLineId: line.id, seq: line.seq, words: { it: 'Una nuova data di questa riga aspetta già le vendite.', en: REPROMISE_REFUSALS.WAITING_EXISTS } })
+      continue
+    }
+    const shipped = await shippedOfLines(db, [line.id])
+    const rows = (await readPromiseRows(db, [line.id])).get(line.id) ?? []
+    const typed = typedOf(line)
+    const only = input.only?.get(line.id)
+    const sizes = sizesOfLine(line)
+      .filter((size) => !only || size.size === null || only.has(size.size))
+      .map((size) => ({ size: size.size, open: max0(size.ordered - shipped(line.id, size.size)), promised: currentPromiseOf(size.size, rows, typed)?.date ?? null }))
+    const asks = repromiseAsksOf(sizes, date)
+    if (asks.length === 0) {
+      skipped.push({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.KEPT })
+      continue
+    }
+    try {
+      checked.push(await proposalChecks(db, { context, line, site }, { sizes: asks, reasonCode: ACCEPT_REASON_CODE }, input.now))
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error
+      skipped.push({ orderLineId: line.id, seq: line.seq, words: { it: error.message, en: error.message } })
+    }
+  }
+  return { checked, skipped }
+}
+
+/** The reason an accepted ask's re-promise carries (the customer reads it in its words: "Changed at your request"). */
+const ACCEPT_REASON_CODE = 'YOUR_CHANGE'
+// ── end B-PR-27b ──
+
 /** POST /planning/promises/order-lines/:orderLineId/re-promise — send new dates to sales for acceptance. */
 export async function proposeRepromise(caller: CommandCaller, orderLineId: string, body: ProposeBody, idempotencyKey?: string) {
-  const asks = askOf(body.sizes)
-  const checked = await caller.withClient(async (db) => {
-    const { context, line, site } = await keepLineFor(caller, db, orderLineId, PLANNING_PROMISE_MANAGE)
-    if (!(KEEP_ORDER_STATUSES as readonly string[]).includes(line.order.status)) throw new InvalidStateError(`${line.order.number} is ${line.order.status}: nothing more is promised on it.`)
-    const now = serverClock.now()
-    const today = businessDate(now, site.timezone)
-    const shipped = await shippedOfLines(db, [line.id])
-    const sizes = sizesOfLine(line)
-    const rows = (await readPromiseRows(db, [line.id])).get(line.id) ?? []
-    const proposed = proposalSizesOf(line, rows, asks)
-    const problems = [
-      ...promiseAskProblems({
-        asks,
-        sizes: sizes.flatMap((entry) => (entry.size ? [entry.size] : [])),
-        openOf: (size) => max0((sizes.find((entry) => entry.size === size)?.ordered ?? 0) - shipped(line.id, size)),
-        madeToMeasure: line.kind === 'MADE_TO_MEASURE',
-        today,
-        orderDate: dayOf(line.order.orderDate),
-      }),
-      ...repromiseProblems({ sizes: proposed, reasonCode: body.reasonCode }),
-    ]
-    if (problems.length > 0) throw new ValidationError('The re-promise cannot be sent like this.', problems)
-    const refused = await certificateRefusals(db, line, site, asks, now, (index) => `body/sizes/${index}/date`)
-    if (refused.length > 0) throw new DomainError('conflict', `Only sizes a valid certificate covers through their date are promised: ${refused[0]!.message}`, refused)
-    const recipients = await recipientsOf(db, { partyId: line.partyId, quoteVersionId: line.order.quoteVersionId, language: line.order.language })
-    const language = messageLanguageOf(recipients.language)
-    const composed = customerMessageOf({ language, orderNumber: line.order.number, customerRef: line.order.customerRef, lineSeq: line.seq, style: line.style, colourway: line.colourway, sizes: proposed, reasonCode: body.reasonCode })
-    const plan = await db.planVersion.findFirst({ where: { siteId: site.id, kind: 'WORKING' }, select: { id: true } })
-    return { context, line, site, today, recipients: recipients.to, message: { language, subject: body.message?.subject?.trim() || composed.subject, body: body.message?.body?.trim() || composed.body }, planVersionId: plan?.id ?? null }
-  })
-  const { context, line, site, today } = checked
-  const outcome = await command(caller, { name: PROPOSE_ACTION, idempotencyKey, input: { orderLineId, ...body } }, async (tools) => {
-    const { tx } = tools
-    await lockLinePromise(tx, context.tenantId, line.id)
-    if ((await readProposals(tx, [line.orderId])).some((proposal) => proposal.orderLineId === line.id && proposal.state === 'WAITING')) throw new DomainError('conflict', REPROMISE_REFUSALS.WAITING_EXISTS, [{ path: 'orderLineId', message: REPROMISE_REFUSALS.WAITING_EXISTS }])
-    const fresh = (await readKeepLine(tx, line.id))!
-    const rows = (await readPromiseRows(tx, [line.id])).get(line.id) ?? []
-    const sizes = proposalSizesOf(fresh, rows, asks)
-    const problems = repromiseProblems({ sizes, reasonCode: body.reasonCode })
-    if (problems.length > 0) throw new ValidationError('The re-promise cannot be sent like this.', problems)
-    const proposalId = newId()
-    const assigneeId = await taskInCommand(tools, context, fresh, proposalId, sizes, today)
-    tools.audit({
-      action: PROPOSE_ACTION,
-      recordType: 'SalesOrder',
-      recordId: line.orderId,
-      companyId: line.companyId,
-      siteId: site.id,
-      after: { proposalId, orderLineId: line.id, siteId: site.id, planVersionId: checked.planVersionId, sizes, reasonCode: body.reasonCode, reason: body.reason?.trim() || null, message: checked.message, recipients: checked.recipients, assigneeId },
-      ...(body.reason?.trim() ? { reason: body.reason.trim() } : {}),
-    })
-    tools.emit({ type: 'order_promise.proposed', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId, siteId: site.id, sizes } })
-    return { proposalId }
-  })
+  // B-PR-27b: the checks and the write are shared (proposalChecks, proposeInCommand).
+  const checked = await caller.withClient(async (db) => proposalChecks(db, await keepLineFor(caller, db, orderLineId, PLANNING_PROMISE_MANAGE), body, serverClock.now()))
+  const outcome = await command(caller, { name: PROPOSE_ACTION, idempotencyKey, input: { orderLineId, ...body } }, (tools) => proposeInCommand(tools, checked))
   return { proposal: await proposalAfter(caller, outcome.result.proposalId), replayed: outcome.replayed }
 }
 
