@@ -187,4 +187,14 @@ describe('B-TH-264 follow-up — a body part’s files open in the docked thread
     expect(docked).toContain('setViewer({ files, index, returnTo:')
   })
 })
+
+describe('TH-6 part B — the record’s own keys join the band menu’s ONE Keyboard line (PR-14)', () => {
+  it('RecordBand.keys are listed first in the frame’s Keyboard window, then the thread’s; the menu keeps one Keyboard line', () => {
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('readonly keys?: readonly { readonly keys: readonly string[]; readonly label: string }[]')
+    expect(frame.indexOf('(band.keys ?? []).map((entry) =>')).toBeGreaterThan(-1)
+    expect(frame.indexOf('(band.keys ?? []).map((entry) =>')).toBeLessThan(frame.indexOf('{FRAME_KEYS.map((entry) =>'))
+    expect(frame.match(/id: 'keys', label: t\('keys\.line'\)/g)?.length).toBe(1)
+  })
+})
 // ---- end B-TH-269 / B-TH-264 follow-up

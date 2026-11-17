@@ -38,6 +38,10 @@ export interface RecordBand {
   readonly more?: readonly MenuItemDef[]
   /** The ⋯ button's accessible name ("More actions"). */
   readonly moreLabel?: string
+  // ---- TH-6 part B (PR-14: key hints only in the band menu's ONE "Keyboard" line): the record's own keys (a certificate's k / r, a
+  // lot's c / r), listed first in the frame's Keyboard window, in the page's words — no second keys line, no "?" overlay.
+  readonly keys?: readonly { readonly keys: readonly string[]; readonly label: string }[]
+  // ---- end TH-6 part B
 }
 
 export interface RecordFrameProps {
@@ -437,6 +441,17 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
       {keys && (
         <Modal open size="sm" title={t('keys.title')} onClose={() => setKeys(false)}>
           <dl className="fw-rcf-keylist">
+            {/* TH-6 part B: the record's own keys first, then the thread's. */}
+            {(band.keys ?? []).map((entry) => (
+              <div key={`own-${entry.keys.join('+')}`} className="fw-rcf-keyrow">
+                <dt>
+                  {entry.keys.map((key) => (
+                    <Kbd key={key}>{key}</Kbd>
+                  ))}
+                </dt>
+                <dd>{entry.label}</dd>
+              </div>
+            ))}
             {FRAME_KEYS.map((entry) => (
               <div key={entry.words} className="fw-rcf-keyrow">
                 <dt>
