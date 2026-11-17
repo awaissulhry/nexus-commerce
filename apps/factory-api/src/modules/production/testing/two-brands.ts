@@ -260,6 +260,69 @@ async function brandProductionRows(
 }
 // ── end B-PR-15 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+// ── B-PR-42a: the people of the production supervisor (R-57; PW-14) ─────────────────────────────────────────────────────────
+/**
+ * The office people a supervisor test needs, as REAL users with live role assignments (the supervisor rule reads a person's own
+ * roles, never a test session's grants), written in the office scope as the app does. Two made-up custom office roles hold
+ * exactly what the rule asks (production plan §3 "Supervisor", L21): "supervise" = workorders.view, production.brand.manage,
+ * sales.measurements.view, threads.read, orders.view; "plan" = the same without the measurements right; "measure" = the
+ * measurements right and workorders.view without threads.read (cannot read the customer's order threads).
+ *
+ *   supervisorA   ACTIVE, "supervise" over every company, LIMITED to brand A — the seeds' supervisor of A
+ *   backupA       ACTIVE, "supervise" over every company and every customer — A's backup, eligible for B too
+ *   officeB       ACTIVE, "supervise" LIMITED to brand B — holds the measurements right, never A's (PW-14)
+ *   plannerB      ACTIVE, "plan" LIMITED to brand B — no measurements right: refused everywhere
+ *   noThread      ACTIVE, "measure" over every customer — cannot read the order threads: refused
+ *   inactive      SUSPENDED, "supervise" over every customer — "no longer active"
+ *
+ * Opt-in (the harness's other suites read no extra office people): call it after productionTwoBrands. Ids are fixed per
+ * namespace (`supervisorPeopleIds`), so a suite's test sessions can name them before the people exist. Idempotent. Every name
+ * is made up (`example.com`).
+ */
+export const SUPERVISOR_PEOPLE = ['supervisorA', 'backupA', 'officeB', 'plannerB', 'noThread', 'inactive'] as const
+export type SupervisorPerson = (typeof SUPERVISOR_PEOPLE)[number]
+
+export function supervisorPeopleIds(namespace: string): Readonly<Record<SupervisorPerson, string>> {
+  return Object.fromEntries(SUPERVISOR_PEOPLE.map((key) => [key, `ffffffff${seedUuid(namespace, `two-brands:supervisor-people:${key}`).slice(8)}`])) as Record<SupervisorPerson, string>
+}
+
+const SUPERVISE: readonly Permission[] = ['workorders.view', 'production.brand.manage', 'sales.measurements.view', 'threads.read', 'orders.view']
+const PLAN: readonly Permission[] = ['workorders.view', 'production.brand.manage', 'threads.read', 'orders.view']
+const MEASURE: readonly Permission[] = ['workorders.view', 'sales.measurements.view']
+
+export async function supervisorPeople(t: { readonly database: FactoryDatabase; readonly namespace: string }, w: Pick<ProductionTwoBrands, 'tenantId' | 'a' | 'b'>): Promise<Readonly<Record<SupervisorPerson, string>>> {
+  const ids = supervisorPeopleIds(t.namespace)
+  const fixed = (key: string) => `ffffffff${seedUuid(t.namespace, `two-brands:supervisor-people:${key}`).slice(8)}`
+  const actorId = seedUuid(t.namespace, 'actor')
+  const at = new Date('2026-11-10T08:00:00.000Z')
+  const roles = { supervise: { id: fixed('role:supervise'), permissions: SUPERVISE }, plan: { id: fixed('role:plan'), permissions: PLAN }, measure: { id: fixed('role:measure'), permissions: MEASURE } } as const
+  const people: readonly { key: SupervisorPerson; name: string; status: 'ACTIVE' | 'SUSPENDED'; role: keyof typeof roles; parties: string[] }[] = [
+    { key: 'supervisorA', name: 'T Supervisor Alpha', status: 'ACTIVE', role: 'supervise', parties: [w.a.partyId] },
+    { key: 'backupA', name: 'T Backup Alpha', status: 'ACTIVE', role: 'supervise', parties: [] },
+    { key: 'officeB', name: 'T Office Beta', status: 'ACTIVE', role: 'supervise', parties: [w.b.partyId] },
+    { key: 'plannerB', name: 'T Planner Beta', status: 'ACTIVE', role: 'plan', parties: [w.b.partyId] },
+    { key: 'noThread', name: 'T Measurements Only', status: 'ACTIVE', role: 'measure', parties: [] },
+    { key: 'inactive', name: 'T Former Supervisor', status: 'SUSPENDED', role: 'supervise', parties: [] },
+  ]
+  await t.database.withScope({ audience: 'office', tenantId: w.tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      for (const [key, role] of Object.entries(roles)) {
+        const data = { key: `t-pr42a-${key}`, name: `T ${key} (made up)`, audience: 'OFFICE' as const, permissions: [...role.permissions], grains: [] }
+        await tx.role.upsert({ where: { id: role.id }, create: { id: role.id, ...data, createdAt: at }, update: data, select: { id: true } })
+      }
+      for (const person of people) {
+        const user = { email: `${person.key.toLowerCase()}.${t.namespace}@example.com`, displayName: person.name, status: person.status, requireMfa: false }
+        await tx.user.upsert({ where: { id: ids[person.key] }, create: { id: ids[person.key], ...user, createdAt: at, createdById: actorId }, update: user, select: { id: true } })
+        const assignment = { userId: ids[person.key], roleId: roles[person.role].id, allCompanies: true, companyIds: [], siteIds: [], partyIds: person.parties, validFrom: at, grantedById: actorId }
+        const assignmentId = fixed(`assignment:${person.key}`)
+        await tx.roleAssignment.upsert({ where: { id: assignmentId }, create: { id: assignmentId, ...assignment, createdAt: at }, update: assignment, select: { id: true } })
+      }
+    }),
+  )
+  return ids
+}
+// ── end B-PR-42a ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /**
  * Everything of a customer that must never reach another: the threads' record markers (its names, code, contacts, addresses,
  * orders, references, files, threads, ids) and its work orders' numbers, batch numbers and ids, without repeats. Short values
