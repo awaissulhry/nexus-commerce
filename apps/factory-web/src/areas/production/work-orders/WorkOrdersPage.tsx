@@ -29,7 +29,7 @@ import { customerGroupsOf, groupsToCount, listAddress, listQueryOf, termsOf, wit
 // ---- end F-PR-03
 import { linesOfStyle, NO_NEW_ORDER, openGridOf, pickedAfter, stylesOf, type BulkReleaseModel, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
-import { getReadiness, holdReasons, placeHold, type ReadinessRow } from './daily/api'
+import { getReadiness, holdReasons, placeHold, /* F-PR-05b */ placeProductionHolds, type ReadinessRow } from './daily/api'
 import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, type DailyModel } from './daily/model'
 import { applyRowsOf } from '@nexus/factory-domain/views/bulk/rules'
 import { applyRelease, previewRelease } from './every-shift/api'
@@ -414,13 +414,19 @@ function WorkOrdersContainer() {
         onDismissNotice: () => setNotice(null),
         daily: {
           onDialog: (next) => setDaily((current) => ({ ...current, dialog: next, problem: null })),
+          // F-PR-05b: Hold N opens THE one dialog; the picked reason's kind decides the route — a quality hold over the work orders
+          // (/quality/holds) or one plain production hold per work order, all or none (POST /production/work-orders/holds).
           onPlaceHold: (input) => {
             if (daily.busy) return
             setDaily((current) => ({ ...current, busy: true, problem: null }))
-            placeHold(api, input)
-              .then((answer) => {
+            const run =
+              input.kind === 'PRODUCTION'
+                ? placeProductionHolds(api, { workOrderIds: input.workOrderIds, reasonCode: input.reasonCode, note: input.reasonNote, brandWords: input.customerWords }).then((answer) => answer.workOrders.length)
+                : placeHold(api, { workOrderIds: input.workOrderIds, reasonCode: input.reasonCode, reasonNote: input.reasonNote }).then((answer) => answer.workOrdersHeld.length)
+            run
+              .then((count) => {
                 setDaily((current) => ({ ...current, busy: false, dialog: null }))
-                setNotice({ tone: 'success', words: { key: `${DAILY_NAMESPACE}:notice.heldMany`, params: { count: answer.workOrdersHeld.length } } })
+                setNotice({ tone: 'success', words: { key: `${DAILY_NAMESPACE}:notice.heldMany`, params: { count } } })
                 void load()
               })
               .catch((error: unknown) => setDaily((current) => ({ ...current, busy: false, problem: dailyProblem(error) })))

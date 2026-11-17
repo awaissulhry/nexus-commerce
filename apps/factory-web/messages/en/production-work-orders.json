@@ -45,7 +45,7 @@
     "put": "Put on hold",
     "release": "Release the hold",
     "none": "No hold names this work order.",
-    "noRight": "Holds are shown to people with the quality holds role.",
+    "noRight": "Quality holds are shown to people with the quality holds role.",
     "since_one": "since {date} ({count} day)",
     "since_other": "since {date} ({count} days)",
     "overdue": "Past its expected release",
@@ -53,7 +53,21 @@
     "banner": "On hold: {reason}. It goes back to “{back}” when the hold is released.",
     "floorRefuses": "Floor tablets refuse its work and show the reason; nothing is issued to it.",
     "underRecord": "The hold comes from another record (a nonconformance): that record lifts it.",
-    "hint": "Quality releases a hold (with a fresh authenticator code); the person who placed it cannot release it."
+    "hint": "Quality releases a hold (with a fresh authenticator code); the person who placed it cannot release it.",
+    "kind": {
+      "QUALITY": "Quality",
+      "PRODUCTION": "Production",
+      "BRAND": "Customer’s pause"
+    },
+    "customerPause": "Paused at the customer’s request",
+    "by": "by {name}",
+    "officeOnly": "Office only",
+    "customerReads": "The customer reads: {words}",
+    "plainTitle": "Production holds",
+    "liftedTitle": "Holds lifted",
+    "lifted": "{reason}: lifted {date} by {name} — {why}",
+    "someone": "someone",
+    "hintBoth": "Quality releases a quality hold (with a fresh authenticator code; never the person who placed it). A production hold or a customer’s pause is lifted here, with why."
   },
   "hold": {
     "title": "Put {number} on hold",
@@ -75,8 +89,26 @@
       "reasons": "The hold reasons are still being read.",
       "reason": "Choose a reason first.",
       "note": "This reason needs a note of at least 3 characters.",
-      "noteLong": "The note is longer than 500 characters."
-    }
+      "noteLong": "The note is longer than 500 characters.",
+      "noteLongProduction": "The office note is longer than {count} characters.",
+      "customerWordsLine": "What the customer reads is one line, without line breaks.",
+      "customerWordsLong": "What the customer reads is longer than {count} characters."
+    },
+    "bodyProduction": "A production hold stops the work until we lift it: the floor refuses its work and shows the reason; the customer reads “On hold” with the words below.",
+    "reasonKinds": "A quality reason places a quality hold; a production reason places a production hold.",
+    "kind": {
+      "QUALITY": "Quality hold",
+      "PRODUCTION": "Production hold"
+    },
+    "kindIs": {
+      "QUALITY": "Quality hold: quality releases it",
+      "PRODUCTION": "Production hold: we lift it ourselves"
+    },
+    "officeNote": "Office note",
+    "officeNoteHint": "For us only: never shown on the floor or to the customer.",
+    "customerWords": "What the customer reads",
+    "customerWordsHint": "One line. Left empty, the customer reads the reason: {reason}.",
+    "liftBy": "Lifting it needs the production hold right; a quality hold that still stands keeps the work order held."
   },
   "releaseHold": {
     "title": "Release the hold",
@@ -127,7 +159,8 @@
       "wrong": "That code is wrong or was used already.",
       "locked": "Too many tries: wait a minute and try again.",
       "unavailable": "The code could not be checked: try again."
-    }
+    },
+    "urgencySentence": "Setting a customer’s order back to Regular, locking or unlocking it changes our plan for them: confirm it is you."
   },
   "finished": {
     "title": "Finished to stock",
@@ -315,7 +348,7 @@
   "held": {
     "busy": "Wait for the change in progress.",
     "loading": "Still reading.",
-    "noHoldPlace": "Placing holds needs the quality holds role.",
+    "noHoldPlace": "Placing holds needs the quality holds role or the production hold right.",
     "noHoldRelease": "Releasing holds needs the quality role.",
     "alreadyHeld": "It is on hold already.",
     "notOpen": "It is {status}.",
@@ -333,7 +366,9 @@
     "noReserve": "Reserving needs the stock reserve role.",
     "noBundles": "Splitting needs the bundles role.",
     "bundleVoid": "The bundle is void.",
-    "bundleOne": "A bundle of one garment cannot be split."
+    "bundleOne": "A bundle of one garment cannot be split.",
+    "noQualityHold": "A quality hold needs the quality holds role.",
+    "noProductionHold": "Placing or lifting a production hold needs the production hold right."
   },
   "notice": {
     "held": "Put on hold: the floor refuses its work until quality releases it.",
@@ -345,7 +380,9 @@
     "reserved_one": "{count} hide reserved for this work order.",
     "reserved_other": "{count} hides reserved for this work order.",
     "split_one": "{count} garment split off into a new bundle.",
-    "split_other": "{count} garments split off into a new bundle."
+    "split_other": "{count} garments split off into a new bundle.",
+    "heldProduction": "Put on a production hold: the floor refuses its work until we lift it.",
+    "holdLifted": "Hold lifted: the work goes on, unless another hold still names it."
   },
   "problem": {
     "conflict": "Someone changed it meanwhile, or it is not possible in its state now: the page reads it again.",
@@ -380,5 +417,20 @@
       "SET_BACK": "Set to regular by us"
     },
     "hint": "The customer's own mark: Urgent with its place in the customer's own urgent list (never a place in our plan). Our priority and rush stay ours."
+  },
+  "liftHold": {
+    "title": "Release the hold",
+    "body": "The work goes back to where it was held once no other hold names it.",
+    "bodyCustomer": "The customer asked for this pause. Releasing it lets the work go on once no other hold names it.",
+    "reason": "Why",
+    "reasonHint": "One line, kept with the hold.",
+    "go": "Release the hold",
+    "qualityStays_one": "{count} quality hold still stands: the work order stays on hold until quality releases it.",
+    "qualityStays_other": "{count} quality holds still stand: the work order stays on hold until quality releases them.",
+    "held": {
+      "reason": "Say why the hold is lifted.",
+      "line": "One line, without line breaks.",
+      "long": "At most {count} characters."
+    }
   }
 }

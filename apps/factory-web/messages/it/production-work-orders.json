@@ -45,7 +45,7 @@
     "put": "Metti in sospeso",
     "release": "Togli il blocco",
     "none": "Nessun blocco riguarda questo ordine di produzione.",
-    "noRight": "I blocchi sono visibili a chi ha il ruolo dei blocchi qualità.",
+    "noRight": "I blocchi qualità sono visibili a chi ha il ruolo blocchi qualità.",
     "since_one": "dal {date} ({count} giorno)",
     "since_other": "dal {date} ({count} giorni)",
     "overdue": "Oltre il rilascio previsto",
@@ -53,7 +53,21 @@
     "banner": "In sospeso: {reason}. Torna a “{back}” quando il blocco viene tolto.",
     "floorRefuses": "I tablet del reparto rifiutano il suo lavoro e mostrano il motivo; non gli si preleva nulla.",
     "underRecord": "Il blocco viene da un altro documento (una non conformità): è quello a toglierlo.",
-    "hint": "Il blocco lo toglie la qualità (con un nuovo codice dell’autenticatore); chi lo ha messo non può toglierlo."
+    "hint": "Il blocco lo toglie la qualità (con un nuovo codice dell’autenticatore); chi lo ha messo non può toglierlo.",
+    "kind": {
+      "QUALITY": "Qualità",
+      "PRODUCTION": "Produzione",
+      "BRAND": "Pausa del cliente"
+    },
+    "customerPause": "In pausa su richiesta del cliente",
+    "by": "da {name}",
+    "officeOnly": "Solo ufficio",
+    "customerReads": "Il cliente legge: {words}",
+    "plainTitle": "Blocchi di produzione",
+    "liftedTitle": "Blocchi tolti",
+    "lifted": "{reason}: tolto il {date} da {name} — {why}",
+    "someone": "qualcuno",
+    "hintBoth": "La qualità sblocca un blocco qualità (con un nuovo codice dell’autenticatore; mai chi l’ha messo). Un blocco di produzione o una pausa del cliente si toglie qui, dicendo perché."
   },
   "hold": {
     "title": "Metti {number} in sospeso",
@@ -75,8 +89,26 @@
       "reasons": "I motivi di blocco sono ancora in lettura.",
       "reason": "Scegli prima un motivo.",
       "note": "Questo motivo richiede una nota di almeno 3 caratteri.",
-      "noteLong": "La nota supera i 500 caratteri."
-    }
+      "noteLong": "La nota supera i 500 caratteri.",
+      "noteLongProduction": "La nota interna supera i {count} caratteri.",
+      "customerWordsLine": "Il testo per il cliente è una sola riga, senza a capo.",
+      "customerWordsLong": "Il testo per il cliente supera i {count} caratteri."
+    },
+    "bodyProduction": "Un blocco di produzione ferma il lavoro finché non lo togliamo noi: il reparto rifiuta il lavoro e mostra il motivo; il cliente legge “In sospeso” con le parole qui sotto.",
+    "reasonKinds": "Un motivo qualità mette un blocco qualità; un motivo di produzione mette un blocco di produzione.",
+    "kind": {
+      "QUALITY": "Blocco qualità",
+      "PRODUCTION": "Blocco di produzione"
+    },
+    "kindIs": {
+      "QUALITY": "Blocco qualità: lo sblocca la qualità",
+      "PRODUCTION": "Blocco di produzione: lo togliamo noi"
+    },
+    "officeNote": "Nota interna",
+    "officeNoteHint": "Solo per noi: mai mostrata al reparto né al cliente.",
+    "customerWords": "Cosa legge il cliente",
+    "customerWordsHint": "Una riga. Se vuoto, il cliente legge il motivo: {reason}.",
+    "liftBy": "Per toglierlo serve il permesso di blocco di produzione; un blocco qualità ancora attivo tiene bloccato l’ordine di lavoro."
   },
   "releaseHold": {
     "title": "Togli il blocco",
@@ -127,7 +159,8 @@
       "wrong": "Il codice è sbagliato o è già stato usato.",
       "locked": "Troppi tentativi: aspetta un minuto e riprova.",
       "unavailable": "Non è stato possibile controllare il codice: riprova."
-    }
+    },
+    "urgencySentence": "Riportare a normale, bloccare o sbloccare l’urgenza di un ordine del cliente cambia il nostro piano: conferma che sei tu."
   },
   "finished": {
     "title": "Capi finiti a magazzino",
@@ -315,7 +348,7 @@
   "held": {
     "busy": "Attendi la modifica in corso.",
     "loading": "Ancora in lettura.",
-    "noHoldPlace": "Per mettere blocchi serve il ruolo dei blocchi qualità.",
+    "noHoldPlace": "Per bloccare serve il ruolo blocchi qualità o il permesso di blocco di produzione.",
     "noHoldRelease": "Per togliere blocchi serve il ruolo qualità.",
     "alreadyHeld": "È già in sospeso.",
     "notOpen": "È {status}.",
@@ -333,7 +366,9 @@
     "noReserve": "Per prenotare serve il ruolo di prenotazione scorte.",
     "noBundles": "Per dividere serve il ruolo dei mazzetti.",
     "bundleVoid": "Il mazzetto è annullato.",
-    "bundleOne": "Un mazzetto di un solo capo non si può dividere."
+    "bundleOne": "Un mazzetto di un solo capo non si può dividere.",
+    "noQualityHold": "Un blocco qualità richiede il ruolo blocchi qualità.",
+    "noProductionHold": "Per mettere o togliere un blocco di produzione serve il permesso di blocco di produzione."
   },
   "notice": {
     "held": "Messo in sospeso: il reparto rifiuta il suo lavoro finché la qualità non toglie il blocco.",
@@ -345,7 +380,9 @@
     "reserved_one": "{count} pelle prenotata per questo ordine di produzione.",
     "reserved_other": "{count} pelli prenotate per questo ordine di produzione.",
     "split_one": "{count} capo separato in un nuovo mazzetto.",
-    "split_other": "{count} capi separati in un nuovo mazzetto."
+    "split_other": "{count} capi separati in un nuovo mazzetto.",
+    "heldProduction": "Messo in blocco di produzione: il reparto rifiuta il lavoro finché non lo togliamo.",
+    "holdLifted": "Blocco tolto: il lavoro riparte, salvo un altro blocco ancora attivo."
   },
   "problem": {
     "conflict": "Qualcuno lo ha cambiato nel frattempo, oppure non è possibile nel suo stato attuale: la pagina lo rilegge.",
@@ -380,5 +417,20 @@
       "SET_BACK": "Riportato a normale da noi"
     },
     "hint": "Il segno del cliente: urgente con il suo posto nell'elenco delle urgenze del cliente (mai un posto nel nostro piano). La nostra priorità e l'urgenza restano nostre."
+  },
+  "liftHold": {
+    "title": "Togli il blocco",
+    "body": "Il lavoro torna dove era stato bloccato appena nessun altro blocco lo ferma.",
+    "bodyCustomer": "Questa pausa l’ha chiesta il cliente. Toglierla fa ripartire il lavoro appena nessun altro blocco lo ferma.",
+    "reason": "Perché",
+    "reasonHint": "Una riga, resta con il blocco.",
+    "go": "Togli il blocco",
+    "qualityStays_one": "Resta {count} blocco qualità: l’ordine di lavoro resta bloccato finché la qualità non lo sblocca.",
+    "qualityStays_other": "Restano {count} blocchi qualità: l’ordine di lavoro resta bloccato finché la qualità non li sblocca.",
+    "held": {
+      "reason": "Scrivi perché togli il blocco.",
+      "line": "Una riga, senza a capo.",
+      "long": "Al massimo {count} caratteri."
+    }
   }
 }

@@ -11,8 +11,8 @@ import type { Notification, NotificationRow } from './model'
  * Placeholders: {actor} the person who caused it (by id, named in `people`; none: "the system"), {record} the record's
  * label, {title} a task's or a rule's title, {kind} a Today row's kind in words, {status} a decision (`w.status.<code>`),
  * {figure} the amount the reader may see — only when the params still hold it (the API drops an amount whose grain the
- * reader lost); {count}, {entered}, {left} the rows of a followed saved view (B-W2b-385). An unknown key says "News on
- * {record}".
+ * reader lost); {count}, {entered}, {left} the rows of a followed saved view (B-W2b-385); {customer} the customer of an issue's
+ * task (F-PR-05b). An unknown key says "News on {record}".
  */
 
 /** A marked amount `{ $money, value }` (kept by the API only for a reader with its grain), or the bare value. */
@@ -59,6 +59,8 @@ export function sentenceWords(notification: Pick<Notification, 'messageKey' | 'p
     count: typeof params.count === 'number' ? formatNumber(params.count, locale) : '',
     entered: typeof params.entered === 'number' ? formatNumber(params.entered, locale) : '',
     left: typeof params.left === 'number' ? formatNumber(params.left, locale) : '',
+    // F-PR-05b: the customer of an issue's task (a reported problem, an issue going up; told only to a reader of its record).
+    customer: typeof params.customer === 'string' ? params.customer : '',
   }
   const key = `w.${notification.messageKey}`
   const text = t(key, values)

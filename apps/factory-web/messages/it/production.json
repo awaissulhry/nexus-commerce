@@ -1231,5 +1231,148 @@
     "none": "Niente scartato né rilavorato.",
     "unknown": "Non noto: una rilavorazione non ha un costo al minuto in vigore.",
     "toQuality": "Scarti e motivi: Qualità"
+  },
+  "customerCard": {
+    "title": "Scheda cliente",
+    "aria": "Scheda cliente di {name}",
+    "mixedBlock_one": "Creato prima della regola di un solo cliente: questo blocco contiene {count} ordine di questo cliente soltanto.",
+    "mixedBlock_other": "Creato prima della regola di un solo cliente: questo blocco contiene {count} ordini di questo cliente soltanto.",
+    "failed": "Impossibile leggere {part}: {why}",
+    "someone": "qualcuno",
+    "po": "Ordine cliente {po} · {number}",
+    "row": {
+      "requests": "Richieste",
+      "approvals": "Chiesto al cliente",
+      "urgency": "Urgenza cliente",
+      "supervisor": "Supervisore di produzione",
+      "problems": "Problemi aperti",
+      "limits": "Limiti"
+    },
+    "age": {
+      "now": "adesso",
+      "hours_one": "{count} h",
+      "hours_other": "{count} h",
+      "days_one": "{count} g",
+      "days_other": "{count} g"
+    },
+    "requests": {
+      "none": "{name} non ha chiesto nulla su questo ordine.",
+      "waitingOnUs": "tocca a noi da {age}",
+      "waitingOnThem": "tocca al cliente (la nostra controproposta)",
+      "batch_one": "chiesto con {count} ordine",
+      "batch_other": "chiesto con {count} ordini",
+      "answer": "Rispondi in Approvazioni",
+      "answered": "{kind}: {state} ({date})",
+      "ourAnswer": "la nostra risposta: “{answer}”"
+    },
+    "approvals": {
+      "noRight": "Quello che abbiamo chiesto di approvare al cliente è visibile a chi può vedere le approvazioni dei partner.",
+      "none": "Nulla chiesto al cliente su questo ordine.",
+      "open": "{record} · in attesa della risposta, entro il {date}",
+      "decided": "{kind}: {state} ({date})",
+      "byUs": "deciso da noi per il cliente",
+      "status": {
+        "OPEN": "in attesa della risposta",
+        "APPROVED": "approvato",
+        "APPROVED_WITH_CHANGES": "approvato con modifiche",
+        "REFUSED": "rifiutato",
+        "WITHDRAWN": "ritirato",
+        "EXPIRED": "scaduto senza risposta"
+      }
+    },
+    "urgency": {
+      "urgentRank": "Urgente (cliente) · {rank} dei suoi {max}",
+      "urgent": "Urgente (cliente)",
+      "dormant": "Urgente (cliente), tenuto ma non usato finché i suoi ordini urgenti sono spenti",
+      "asked": "Urgente – richiesto",
+      "setBack": "Riportato a normale da noi",
+      "setBackWhy": "Riportato a normale da noi: {reason}",
+      "regular": "Normale",
+      "off": "Gli ordini urgenti sono spenti per questo cliente: i segni non contano nel nostro piano.",
+      "notListed": "Questo ordine non è nella lista delle urgenze del cliente (non è aperto, o non è ancora seguito).",
+      "locked": "Bloccato",
+      "lockedHint": "Il cliente non può segnarlo urgente finché non lo sblocchiamo.",
+      "setByUs": "impostato da {name} (noi), {date}",
+      "setByThem": "segnato da {name} (cliente), {date}",
+      "lockedBy": "bloccato da {name}, {date}",
+      "hint": "Il cliente ordina i propri ordini urgenti; il nostro livello, la priorità e l'urgenza interna vengono sempre prima. Riportare a normale, bloccare e sbloccare è il nostro piano: un nuovo codice, nessuna seconda persona.",
+      "act": {
+        "regular": "Riporta a normale…",
+        "lock": "Blocca…",
+        "unlock": "Sblocca…"
+      },
+      "held": {
+        "noOverride": "Solo chi può decidere per un cliente riporta a normale, blocca o sblocca la sua urgenza.",
+        "reason": "Scrivi il motivo che legge il cliente.",
+        "line": "Il motivo è una sola riga, senza a capo.",
+        "long": "Il motivo ha al massimo {count} caratteri."
+      },
+      "problem": {
+        "forbidden": "Non puoi cambiare l'urgenza di questo cliente.",
+        "conflict": "Nulla è cambiato: l'ordine è già così, o è cambiato nel frattempo. La scheda è stata riletta.",
+        "gone": "Questo ordine non è più nella lista delle urgenze del cliente.",
+        "invalid": "Il motivo non è stato accettato così com'è: controllalo.",
+        "failed": "Non è andato a buon fine: riprova."
+      },
+      "notice": {
+        "regular_one": "{count} ordine riportato a normale.",
+        "regular_other": "{count} ordini riportati a normale.",
+        "lock_one": "{count} ordine bloccato a normale: il cliente legge il tuo motivo.",
+        "lock_other": "{count} ordini bloccati a normale: il cliente legge il tuo motivo.",
+        "unlock_one": "{count} ordine sbloccato: il cliente può segnarlo di nuovo urgente.",
+        "unlock_other": "{count} ordini sbloccati: il cliente può segnarli di nuovo urgenti."
+      },
+      "outcome": {
+        "regular": "Riportati a normale: {numbers}.",
+        "lock": "Bloccati a normale: {numbers}.",
+        "unlock": "Sbloccati: {numbers}.",
+        "none": "Nulla è cambiato.",
+        "notDone": "{number} non cambiato: {why}",
+        "unchanged": "è già così.",
+        "notShown_one": "Altro {count} ordine non è stato cambiato.",
+        "notShown_other": "Altri {count} ordini non sono stati cambiati."
+      }
+    },
+    "dialog": {
+      "title": {
+        "regular": "Riporta {numbers} a normale",
+        "lock": "Blocca {numbers} a normale",
+        "unlock": "Sblocca {numbers}"
+      },
+      "go": {
+        "regular": "Riporta a normale",
+        "lock": "Blocca a normale",
+        "unlock": "Sblocca"
+      },
+      "body": {
+        "regular": "L'ordine torna normale nel nostro piano (dalla prossima pubblicazione al reparto). Il cliente legge “Cambiato da noi” e può segnarlo di nuovo urgente.",
+        "lock": "L'ordine è normale e resta così: il cliente legge “Riportato a normale da noi” con il tuo motivo e non può segnarlo urgente finché non lo sblocchiamo.",
+        "unlock": "Il cliente può segnare di nuovo l'ordine urgente, entro il suo limite."
+      },
+      "reason": "Motivo che legge il cliente",
+      "reasonHint": "Una riga, al massimo {count} caratteri; resta nella storia dell'ordine.",
+      "alsoLock": "Blocca anche a normale (il cliente non può segnarlo urgente finché non lo sblocchiamo)",
+      "stepUp": "Chiede un nuovo codice dell'autenticatore. Nessuna seconda persona: è il nostro piano e il cliente non perde nulla di ciò che ha firmato."
+    },
+    "problems": {
+      "none": "Nessun problema aperto su questo ordine.",
+      "waitingSince": "Tocca a noi dal {date}",
+      "noReply": "Nessuna risposta ancora inviata",
+      "openThread": "Apri la conversazione",
+      "threadHeld": "Qui non puoi leggere la conversazione di questo ordine.",
+      "batch_one": "Segnalato con {count} ordine: una risposta risponde a tutti.",
+      "batch_other": "Segnalato con {count} ordini: una risposta risponde a tutti."
+    },
+    "limits": {
+      "noRight": "I limiti del cliente sono visibili a chi può vedere il suo accesso al portale.",
+      "urgencyOn": "Ordini urgenti attivi (al massimo {max}, {now} ora)",
+      "urgencyOff": "Ordini urgenti spenti",
+      "open": "Scheda dei limiti",
+      "openNoRight": "La scheda dei limiti si apre con il permesso di vedere i clienti."
+    },
+    "sees": {
+      "withoutLimits": "Quello che vede il cliente si legge con i suoi limiti.",
+      "open": "Apri come {name}"
+    }
   }
 }

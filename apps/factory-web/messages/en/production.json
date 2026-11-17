@@ -1231,5 +1231,148 @@
     "none": "Nothing scrapped or reworked.",
     "unknown": "Not known: a rework has no cost per minute in force.",
     "toQuality": "Scrap and its reasons: Quality"
+  },
+  "customerCard": {
+    "title": "Customer card",
+    "aria": "Customer card of {name}",
+    "mixedBlock_one": "Made before the one-customer rule: this block holds {count} order of this customer only.",
+    "mixedBlock_other": "Made before the one-customer rule: this block holds {count} orders of this customer only.",
+    "failed": "{part} could not be read: {why}",
+    "someone": "someone",
+    "po": "PO {po} · {number}",
+    "row": {
+      "requests": "Requests",
+      "approvals": "Asked of the customer",
+      "urgency": "Customer urgency",
+      "supervisor": "Production supervisor",
+      "problems": "Open problems",
+      "limits": "Limits"
+    },
+    "age": {
+      "now": "just now",
+      "hours_one": "{count} h",
+      "hours_other": "{count} h",
+      "days_one": "{count} d",
+      "days_other": "{count} d"
+    },
+    "requests": {
+      "none": "{name} asked nothing on this order.",
+      "waitingOnUs": "waiting on us {age}",
+      "waitingOnThem": "waiting on the customer (our counter-offer)",
+      "batch_one": "asked with {count} order",
+      "batch_other": "asked with {count} orders",
+      "answer": "Answer in Approvals",
+      "answered": "{kind}: {state} ({date})",
+      "ourAnswer": "our answer: “{answer}”"
+    },
+    "approvals": {
+      "noRight": "What we asked the customer to approve is shown to people who may see partner approvals.",
+      "none": "Nothing asked of the customer on this order.",
+      "open": "{record} · waiting for the answer, due {date}",
+      "decided": "{kind}: {state} ({date})",
+      "byUs": "decided by us for the customer",
+      "status": {
+        "OPEN": "waiting for the answer",
+        "APPROVED": "approved",
+        "APPROVED_WITH_CHANGES": "approved with changes",
+        "REFUSED": "refused",
+        "WITHDRAWN": "withdrawn",
+        "EXPIRED": "expired without an answer"
+      }
+    },
+    "urgency": {
+      "urgentRank": "Urgent (customer) · {rank} of their {max}",
+      "urgent": "Urgent (customer)",
+      "dormant": "Urgent (customer), kept but not used while their urgent orders are off",
+      "asked": "Urgent – asked",
+      "setBack": "Set to regular by us",
+      "setBackWhy": "Set to regular by us: {reason}",
+      "regular": "Regular",
+      "off": "Urgent orders are off for this customer: marks count for nothing in our plan.",
+      "notListed": "This order is not in the customer’s urgency list (not open, or not followed yet).",
+      "locked": "Locked",
+      "lockedHint": "The customer cannot mark it urgent until we unlock it.",
+      "setByUs": "set by {name} (us), {date}",
+      "setByThem": "marked by {name} (customer), {date}",
+      "lockedBy": "locked by {name}, {date}",
+      "hint": "The customer orders its own urgent orders; our level, rank and rush always come first. Setting back, locking and unlocking is our own plan: a fresh code, no second person.",
+      "act": {
+        "regular": "Set to regular…",
+        "lock": "Lock…",
+        "unlock": "Unlock…"
+      },
+      "held": {
+        "noOverride": "Only people who may decide for a customer set its urgency back, lock or unlock it.",
+        "reason": "Write the reason the customer reads.",
+        "line": "The reason is one line, without line breaks.",
+        "long": "The reason is at most {count} characters."
+      },
+      "problem": {
+        "forbidden": "You may not change this customer’s urgency.",
+        "conflict": "Nothing was changed: the order is already so, or it changed meanwhile. The card was read again.",
+        "gone": "This order is no longer in the customer’s urgency list.",
+        "invalid": "The reason was not accepted as it is: check it.",
+        "failed": "It didn't go through: try again."
+      },
+      "notice": {
+        "regular_one": "{count} order set back to Regular.",
+        "regular_other": "{count} orders set back to Regular.",
+        "lock_one": "{count} order locked at Regular: the customer reads your reason.",
+        "lock_other": "{count} orders locked at Regular: the customer reads your reason.",
+        "unlock_one": "{count} order unlocked: the customer may mark it urgent again.",
+        "unlock_other": "{count} orders unlocked: the customer may mark them urgent again."
+      },
+      "outcome": {
+        "regular": "Set back to Regular: {numbers}.",
+        "lock": "Locked at Regular: {numbers}.",
+        "unlock": "Unlocked: {numbers}.",
+        "none": "Nothing was changed.",
+        "notDone": "{number} not changed: {why}",
+        "unchanged": "it is already so.",
+        "notShown_one": "{count} more order was not changed.",
+        "notShown_other": "{count} more orders were not changed."
+      }
+    },
+    "dialog": {
+      "title": {
+        "regular": "Set {numbers} back to Regular",
+        "lock": "Lock {numbers} at Regular",
+        "unlock": "Unlock {numbers}"
+      },
+      "go": {
+        "regular": "Set to regular",
+        "lock": "Lock at Regular",
+        "unlock": "Unlock"
+      },
+      "body": {
+        "regular": "The order counts as Regular in our plan again (from the next Publish on the floor). The customer reads “Changed by us” and may mark it urgent again.",
+        "lock": "The order is Regular and stays so: the customer reads “Set to regular by us” with your reason and cannot mark it urgent until we unlock it.",
+        "unlock": "The customer may mark the order urgent again, within its quota."
+      },
+      "reason": "Reason the customer reads",
+      "reasonHint": "One line, at most {count} characters; kept in the order’s history.",
+      "alsoLock": "Also lock it at Regular (the customer cannot mark it urgent until we unlock it)",
+      "stepUp": "Asks for a fresh authenticator code. No second person: it is our own plan, and the customer loses nothing it signed."
+    },
+    "problems": {
+      "none": "No open problem on this order.",
+      "waitingSince": "Waiting on us since {date}",
+      "noReply": "No reply sent yet",
+      "openThread": "Open thread",
+      "threadHeld": "You may not read this order’s thread here.",
+      "batch_one": "Raised with {count} order: one answer answers them all.",
+      "batch_other": "Raised with {count} orders: one answer answers them all."
+    },
+    "limits": {
+      "noRight": "The customer’s limits are shown to people who may see its portal access.",
+      "urgencyOn": "Urgent orders on (at most {max}, {now} now)",
+      "urgencyOff": "Urgent orders off",
+      "open": "Limits card",
+      "openNoRight": "The limits card opens with the right to see customers."
+    },
+    "sees": {
+      "withoutLimits": "What the customer sees is read with its limits.",
+      "open": "Open as {name}"
+    }
   }
 }

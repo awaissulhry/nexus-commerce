@@ -4,11 +4,14 @@ import { isAttentionKind, KIND_RULES } from '@nexus/factory-domain/insights/atte
 import { holds } from '@nexus/factory-domain/core/permissions'
 import { events as taskEvents } from '@nexus/factory-domain/tasks/events'
 import type { Draft, FanOutRule, RuleContext } from '../fan-out'
+// F-PR-05b: the words of an issue's task (a reported problem, its escalation).
+import { issueBellOf } from '../../../modules/production/issues/bell'
 
 /**
  * Something given to a person (the assignee notice, W1 leftover "attention.assigned waits for notifications"):
  *   attention.assigned   ASSIGNMENT to the person a row of Today was assigned to (not when they took it themselves)
- *   task.assigned        ASSIGNMENT to the person a task was given to (not when they gave it to themselves)
+ *   task.assigned        ASSIGNMENT to the person a task was given to (not when they gave it to themselves); F-PR-05b: an issue's task
+ *                        in its own words (a customer's reported problem, an issue going up a step)
  * Each re-checks that the person still reaches Home (home.view: the bell).
  */
 
@@ -50,9 +53,13 @@ export const ASSIGNMENT_RULES: readonly FanOutRule[] = Object.freeze([
       if (payload.assigneeId === null) return []
       const reader = await context.reader(payload.assigneeId)
       if (!reader || !holds(reader.actor, HOME_VIEW)) return []
-      const task = await context.tx.task.findUnique({ where: { id: payload.taskId }, select: { id: true, title: true, companyId: true, recordType: true, recordId: true, recordLabel: true, assigneeId: true, status: true } })
+      const task = await context.tx.task.findUnique({ where: { id: payload.taskId }, select: { id: true, title: true, companyId: true, recordType: true, recordId: true, recordLabel: true, assigneeId: true, status: true, /* F-PR-05b */ createdById: true } })
       if (!task || task.assigneeId !== payload.assigneeId || task.status !== 'OPEN') return []
       const onRecord = task.recordType !== null && task.recordId !== null
+      // ---- F-PR-05b: an issue's task says what it is — a problem a customer reported, an issue nobody answered going up (raise + 1
+      // working day, raise + 2) — made by the system: no person "assigned" it (modules/production/issues/bell.ts).
+      const bell = onRecord ? await issueBellOf(context.tx, task) : null
+      // ---- end F-PR-05b
       return [
         {
           userId: payload.assigneeId,
@@ -60,9 +67,9 @@ export const ASSIGNMENT_RULES: readonly FanOutRule[] = Object.freeze([
           record: onRecord ? { type: task.recordType!, id: task.recordId!, label: task.recordLabel ?? task.recordType! } : { type: 'Task', id: task.id, label: task.title },
           companyId: task.companyId,
           anchor: `task:${task.id}`,
-          messageKey: 'notifications.assigned.task',
-          params: { actorId: payload.assignedById, title: task.title, taskId: task.id },
-          actorId: payload.assignedById,
+          messageKey: bell ? bell.messageKey : 'notifications.assigned.task',
+          params: bell ? { ...bell.params, title: task.title, taskId: task.id } : { actorId: payload.assignedById, title: task.title, taskId: task.id },
+          actorId: bell ? null : payload.assignedById,
         },
       ]
     },

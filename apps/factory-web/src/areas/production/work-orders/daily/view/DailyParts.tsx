@@ -14,6 +14,8 @@ import {
   holdHeld,
   holdReasonWords,
   leatherMaterials,
+  plainHoldsOf, // F-PR-05b
+  plainHoldWords, // F-PR-05b
   READINESS_TONE,
   readinessPhrase,
   reserveHeld,
@@ -113,6 +115,9 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
   const own = workOrder.hold ?? null
   const holds = daily.holds?.value ?? null
   const active = (holds ?? []).filter((hold) => hold.status === 'ACTIVE')
+  // F-PR-05b: the plain holds beside the quality ones (B-PR-21) — ours and a customer's accepted pause — and the ones lifted.
+  const plain = plainHoldsOf(daily.productionHolds?.value ?? null)
+  const nothing = active.length === 0 && plain.standing.length === 0
   return (
     <Card padded className="fw-pr-card">
       <div className="fw-pr-card-head">
@@ -123,22 +128,24 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
           </Button>
         )}
       </div>
-      {/* The page's banner says the hold and where it goes back; here only a hold another record lifts. */}
-      {own && own.recordType && own.recordType !== 'QualityHold' && <p className="fw-pr-hint">{t('holds.underRecord')}</p>}
+      {/* The page's banner says the hold and where it goes back; here only a hold another record lifts (F-PR-05b: a plain hold is
+          one of this card's own, never "another record"). */}
+      {own && own.recordType && own.recordType !== 'QualityHold' && own.recordType !== 'WorkOrderHold' && <p className="fw-pr-hint">{t('holds.underRecord')}</p>}
       {daily.holds === null ? (
         <p className="fw-pr-hint">{t('holds.noRight')}</p>
       ) : !holds ? (
         <PartLine part={daily.holds} label={t('holds.title')} onRetry={() => actions?.onRetry?.('holds')} />
-      ) : active.length === 0 ? (
-        <p className="fw-pr-hint">{t('holds.none')}</p>
-      ) : (
+      ) : null}
+      {daily.productionHolds && !daily.productionHolds.value && <PartLine part={daily.productionHolds} label={t('holds.plainTitle')} onRetry={() => actions?.onRetry?.('productionHolds')} />}
+      {nothing && (holds || daily.holds === null) && (!daily.productionHolds || daily.productionHolds.value) ? <p className="fw-pr-hint">{t('holds.none')}</p> : null}
+      {!nothing && (
         <ul className="fw-wd-holds" aria-label={t('holds.title')}>
           {active.map((hold) => (
             <li key={hold.id} className="fw-wd-hold">
               <Lock size={16} className="fw-pr-ico is-blocked" aria-hidden />
               <span className="fw-pr-check-body">
                 <span>
-                  <b>{holdReasonWords(hold.reasonCode, daily.reasons, locale)}</b> — {t('holds.since', { date: day(hold.placedAt, locale), count: hold.ageDays })}
+                  <Tag tone="warning">{t('holds.kind.QUALITY')}</Tag> <b>{holdReasonWords(hold.reasonCode, daily.reasons, locale)}</b> — {t('holds.since', { date: day(hold.placedAt, locale), count: hold.ageDays })}
                   {hold.overdue && (
                     <>
                       {' '}
@@ -154,12 +161,53 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
               </Button>
             </li>
           ))}
+          {/* ---- F-PR-05b: the plain holds standing (ours: the reason, the office's note marked Office only, what the customer reads;
+              the customer's accepted pause), each lifted here with why (workorders.hold) ---- */}
+          {plain.standing.map((hold) => (
+            <li key={hold.id} className="fw-wd-hold">
+              <Lock size={16} className="fw-pr-ico is-blocked" aria-hidden />
+              <span className="fw-pr-check-body">
+                <span>
+                  <Tag tone={hold.kind === 'BRAND' ? 'info' : 'neutral'}>{t(`holds.kind.${hold.kind}`)}</Tag> <b>{hold.kind === 'BRAND' ? t('holds.customerPause') : plainHoldWords(hold, daily.reasons, locale)}</b> —{' '}
+                  {t('holds.since', { date: day(hold.placedAt, locale), count: daysSince(hold.placedAt) })}
+                  {hold.placedBy ? ` · ${t('holds.by', { name: hold.placedBy.name })}` : ''}
+                </span>
+                {hold.note && (
+                  <span className="fw-pr-hint">
+                    <Lock size={11} aria-hidden /> {t('holds.officeOnly')}: {hold.note}
+                  </span>
+                )}
+                <span className="fw-pr-hint">{t('holds.customerReads', { words: hold.customerReads })}</span>
+              </span>
+              <Button size="sm" variant="quiet" heldReason={daily.can.productionHold ? null : t('held.noProductionHold')} onClick={() => actions?.onDialog?.({ kind: 'liftHold', holdId: hold.id })}>
+                <Unlock size={13} aria-hidden /> {t('holds.release')}
+              </Button>
+            </li>
+          ))}
         </ul>
       )}
-      <p className="fw-pr-hint">{t('holds.hint')}</p>
+      {plain.lifted.length > 0 && (
+        <ul className="fw-pr-list" aria-label={t('holds.liftedTitle')}>
+          {plain.lifted.slice(0, 5).map((hold) => (
+            <li key={hold.id} className="fw-pr-hint">
+              {t('holds.lifted', {
+                reason: hold.kind === 'BRAND' ? t('holds.customerPause') : plainHoldWords(hold, daily.reasons, locale),
+                date: hold.liftedAt ? day(hold.liftedAt, locale) : '—',
+                name: hold.liftedBy?.name ?? t('holds.someone'),
+                why: hold.liftReason ?? '—',
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* ---- end F-PR-05b */}
+      <p className="fw-pr-hint">{daily.productionHolds ? t('holds.hintBoth') : t('holds.hint')}</p>
     </Card>
   )
 }
+
+/** Whole days since an instant (a plain hold's age; the quality API counts its own). */
+const daysSince = (at: string): number => Math.max(0, Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000))
 
 // ---- report finished to stock (wo-finish; wo-bundles "W2a Report finished to stock") ---------------------------------------------
 
