@@ -213,7 +213,7 @@ export const MAILS: DeliveryMail[] = [
 const MASK = (address: string) => `${address[0]}•••${address.slice(address.indexOf('@'))}`
 export const MAILS_MASKED: DeliveryMail[] = MAILS.map((item) => ({ ...item, fullAddresses: false, to: item.to.map(MASK) }))
 
-export const DELIVERY_COUNTS: DeliveryCounts = { WAITING: 1, SENT: 12, DELIVERED: 214, PROBLEM: 2, FAILED: 1 }
+export const DELIVERY_COUNTS: DeliveryCounts = { WAITING: 1, SENT: 12, DELIVERED: 214, PROBLEM: 2, FAILED: 1, WITHDRAWN: 1 }
 
 const blockedRow = (n: number, extra: Partial<BlockedAddress> & Pick<BlockedAddress, 'address' | 'reason' | 'at'>): BlockedAddress => ({
   id: uid(600 + n),
@@ -347,7 +347,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'delivery-invoices', label: 'Delivery log: invoices (one bounced, one refused)', model: withDelivery({ filter: 'INVOICES', mails: ledger0(MAILS.filter((item) => item.record?.type === 'Invoice')) }) },
     { id: 'delivery-links', label: 'Delivery log: mail that carried a link', model: withDelivery({ filter: 'LINKS', mails: ledger0(MAILS.filter((item) => item.link !== null)) }) },
     { id: 'delivery-filter-empty', label: 'Delivery log: nothing matches the filter', model: withDelivery({ filter: 'FAILED', mails: ledger0([]) }) },
-    { id: 'delivery-empty', label: 'Delivery log: no mail sent yet, nothing blocked', model: withDelivery({ mails: ledger0([]), counts: { WAITING: 0, SENT: 0, DELIVERED: 0, PROBLEM: 0, FAILED: 0 }, blockedCount: 0, blocked: ledger0([]) }) },
+    { id: 'delivery-empty', label: 'Delivery log: no mail sent yet, nothing blocked', model: withDelivery({ mails: ledger0([]), counts: { WAITING: 0, SENT: 0, DELIVERED: 0, PROBLEM: 0, FAILED: 0, WITHDRAWN: 0 }, blockedCount: 0, blocked: ledger0([]) }) },
     { id: 'delivery-loading', label: 'Delivery log: loading', model: withDelivery({ mails: ledger0(null), counts: null, blockedCount: null, blocked: ledger0(null) }) },
     { id: 'delivery-error', label: 'Delivery log: the log did not load (the rest of the page works)', model: withDelivery({ mails: ledger0(null, null, 'problem.unavailable'), counts: null, blocked: ledger0(null, null, 'problem.unavailable') }) },
     { id: 'blocked-selected', label: 'Blocked addresses: two ticked', model: withDelivery({ selected: [BLOCKED[0]!.id, BLOCKED[2]!.id] }), note: 'Unblock 2 says its reach.' },

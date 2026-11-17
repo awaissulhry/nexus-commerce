@@ -15,7 +15,7 @@ import { trustedProxies, TrustedProxiesError } from '@nexus/factory-domain/core/
  *   FACTORY_ENV               local | test | staging | production
  *   FACTORY_DATABASE_URL      the runtime login `factory_app` (never the owner; openFactoryDatabase audits it at boot)
  *   FACTORY_DATABASE_CLIENTS  optional, 1-64: most Prisma clients each process keeps, one per tenant, floor site and
- *                             portal party (about 90 MB of heap each); default factory-db's DEFAULT_CLIENT_CAPACITY (16)
+ *                             portal party (at most 138 MB of heap each); default factory-db's DEFAULT_CLIENT_CAPACITY (15)
  *   FACTORY_REDIS_URL         Redis (queues, rate limits, cron locks)
  *   FACTORY_QUEUE_PREFIX      every Redis key of the queues, cron locks and live screens sits under it; required with
  *                             local and test (the local Redis is shared by every worktree: the worktree's step, w0_12),

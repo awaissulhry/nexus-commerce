@@ -109,6 +109,8 @@ describe('delivery status', () => {
     expect(deliveryStateOf('DELIVERED', null)).toBe('DELIVERED')
     expect(deliveryStateOf('BOUNCED', 'PERMANENT')).toBe('BOUNCED')
     expect(deliveryStateOf('FAILED', null)).toBe('FAILED')
+    // B-TH-048: taken back in its undo window, its own word.
+    expect(deliveryStateOf('WITHDRAWN', null)).toBe('WITHDRAWN')
   })
 
   it('words the bounce task in the sender’s language', () => {

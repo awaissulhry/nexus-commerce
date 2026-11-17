@@ -115,7 +115,8 @@ async function rowIssues(client: Client, record: CustomRecord, resolved: Resolve
   if (!resolved.record) return [{ column: 'record', message: `No ${record.labelEn.toLowerCase()} ${String(row.key.record)} here (or two with that code).` }]
   if (!can(actor, record.view, resolved.record) || !can(actor, record.edit, resolved.record)) return [{ column: 'record', message: `Changing ${String(row.key.record)} needs the right to change it.` }]
   const field = resolved.field
-  if (!field || fieldsSeen(actor, [field], resolved.record.companyId).length === 0) return [{ column: 'field', message: `No custom field ${String(row.key.field)} on this ${record.labelEn.toLowerCase()}.` }]
+  // B-TH-056: a field for another customer is no field of this record (refused per row as unknown, in words).
+  if (!field || fieldsSeen(actor, [field], resolved.record.companyId, resolved.record.partyId ?? null).length === 0) return [{ column: 'field', message: `No custom field ${String(row.key.field)} on this ${record.labelEn.toLowerCase()}.` }]
   if (field.type === 'FILE') return [{ column: 'field', message: 'A file field takes no import: add the file on the record.' }]
   const value = await valueOfRow(client, resolved.record, field, resolved.current, rowWithCurrent(resolved, field, row))
   return 'issue' in value ? [value.issue] : []
