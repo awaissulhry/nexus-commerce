@@ -325,7 +325,11 @@ export interface SwitcherProps {
  * and late orders read by the API. A reader limited to one customer reads a fixed label; with no customer yet it is absent.
  */
 export function CustomerSwitcher({ state, party, partyName, t, query, searching, onQuery, onPick, onRetry, open: startOpen }: SwitcherProps) {
-  const [open, setOpen] = useState(!!startOpen)
+  // A design case opens it after the first paint (a popover is portaled to <body>: never in the server's HTML).
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (startOpen) setOpen(true)
+  }, [startOpen])
   const face = switcherFace(state, party, partyName)
   if (face.kind === 'hidden') return null
   if (face.kind === 'fixed')
