@@ -24,6 +24,13 @@
 // "seen by" list exists: each person reads only their own (the API), a portal session only its own party's people's (the
 // policy), the floor nothing. A read mark is the person's own data: named in the privacy notice, removed with the person's
 // erasure (the …_threads_reads_th_guards trigger on ErasureRecord).
+//
+// TH-3 (threads plan, schema wave 5/9, B-TH-038; gaps N7, thread-G08, thread-G19, thread-G20): the composer in depth. A
+// message may carry a typed amount (price grain; internal notes only, hidden from the partner role, never for the floor), the
+// message it answers or corrects (same thread; a shared message points only at a shared one), and `held`: the OUTBOUND
+// message of a mail waiting in its 10-second undo window, or taken back, which the partner role never reads. Message stays
+// append-only: the one change is the database's own release of `held` when its mail leaves the window (…_threads_composer_th_
+// guards). collab.prisma's Task names the message it came from; email.prisma's EmailOutbound holds the window and the take-back.
 
 /// The one conversation of one record (COL-001), made when its first message is written.
 model Thread {
@@ -138,6 +145,28 @@ model Message {
   /// When it entered the thread: posted (server time) or received (an inbound mail's arrival).
   at                DateTime          @db.Timestamptz(3)
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  /// TH-3 (threads plan, schema wave 5/9, B-TH-038; gap N7, feature T8-F04): a price typed in the composer's amount field
+  /// instead of the text, in minor units (cents) of `amountCurrency` (ISO 4217): both or neither, 0 or more. Only on an
+  /// internal note that stays in the office (never `forFloor`), so the API shows it only to people with the price grain
+  /// (B-TH-049) and the text keeps no money. Hidden from the partner role; the floor's role reads no message. Written with
+  /// the note, never changed.
+  /// @grain price
+  amount            Int?
+  /// @not-money the ISO 4217 currency of the amount (hidden with it from the portal; the floor reads no message)
+  amountCurrency    String?
+  /// TH-3 (B-TH-038; thread-G20, features T3-F07, T3-F11): the message it answers ("In reply to") or corrects ("Correct":
+  /// messages are never edited, a correction is a new message linked to the old one), at most one of the two: a message of
+  /// the same thread (the reference includes the thread), written before it. A message shared with the party answers or
+  /// corrects only a message shared with it (never an internal note, never a held mail); a correction keeps the direction
+  /// (so the audience) of what it corrects. Written with the message, never changed.
+  replyToMessageId  String?           @db.Uuid
+  correctsMessageId String?           @db.Uuid
+  /// TH-3 (B-TH-038; thread-G08, feature T7-F06, Owner decision 6 "undo send, 10 seconds"): true while the mail that carries
+  /// this OUTBOUND message waits in its undo window (EmailOutbound.sendAfter), and for good when that mail is taken back
+  /// (WITHDRAWN). The database clears it, once, when the mail leaves the window (the worker claims it, or it fails); nothing
+  /// else of the message changes. The partner role reads only messages that are not held, so a customer never sees a mail
+  /// that was taken back (its policy: onlyValues). False for every other message.
+  held              Boolean           @default(false)
 
   thread       Thread  @relation("ThreadMessages", fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // A shared message names its thread's own party: the reference is checked whenever partyId is set.
@@ -148,10 +177,21 @@ model Message {
   reminders    Reminder[]
   // TH-2 (B-TH-023): the read marks that stop at it.
   readMarks    ThreadRead[]
+  // TH-3 (B-TH-038): the message it answers or corrects, in its own thread (the reference includes the thread), and the
+  // messages that answer or correct it. Restrict, not Prisma's SetNull default for an optional relation: that would also
+  // clear tenantId and threadId.
+  replyTo      Message?  @relation("MessageReplies", fields: [tenantId, threadId, replyToMessageId], references: [tenantId, threadId, id], onDelete: Restrict, onUpdate: Restrict)
+  replies      Message[] @relation("MessageReplies")
+  corrects     Message?  @relation("MessageCorrections", fields: [tenantId, threadId, correctsMessageId], references: [tenantId, threadId, id], onDelete: Restrict, onUpdate: Restrict)
+  corrections  Message[] @relation("MessageCorrections")
+  // collab.prisma (TH-3, B-TH-038): the tasks made from it.
+  tasks        Task[]
 
   @@unique([tenantId, emailMessageId])
   // The target of the mentions' tenant-safe reference.
   @@unique([tenantId, id])
+  // TH-3 (B-TH-038): the target of a reply's and a correction's reference (a message of the same thread).
+  @@unique([tenantId, threadId, id])
   // A thread's messages, newest first (the record panel and the timeline).
   @@index([tenantId, threadId, at])
   @@index([tenantId, partyId])

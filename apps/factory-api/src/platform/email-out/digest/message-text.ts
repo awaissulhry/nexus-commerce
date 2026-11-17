@@ -3,7 +3,7 @@ import type { Actor } from '@nexus/factory-domain/core/permissions'
 import type { FactoryClient } from '@nexus/factory-db'
 import type { CommandTx } from '../../../core/command'
 import { mayOnThread } from '../../threads/records'
-import { scopeOfThread } from '../../threads/threads'
+import { wallScopesOf } from '../../threads/records' // B-PR-08a part 2: a work order's, hold's or NCR's message is quoted through its customer
 
 /**
  * B-TH-080 (threads plan TH-6, thread-G11; feature T8-F09 "Safe notification text"): a notification mail carries the message
@@ -48,13 +48,14 @@ export async function officeQuotes(db: Reader, actor: Actor, notifications: read
   if (wanted.length === 0) return new Map()
   const messages = await db.message.findMany({
     where: { id: { in: [...new Set(wanted.map((entry) => entry.messageId))] } },
-    select: { id: true, bodyText: true, thread: { select: { recordType: true, companyId: true, siteId: true, partyId: true } } },
+    select: { id: true, bodyText: true, thread: { select: { recordType: true, /* B-PR-08a */ recordId: true, companyId: true, siteId: true, partyId: true } } },
   })
   const byId = new Map(messages.map((message) => [message.id, message]))
+  const scopeOf = await wallScopesOf(db, messages.map((message) => message.thread)) // B-PR-08a part 2
   const quotes = new Map<string, string>()
   for (const entry of wanted) {
     const message = byId.get(entry.messageId)
-    if (!message || !mayOnThread(actor, THREADS_READ, message.thread.recordType, scopeOfThread(message.thread))) continue
+    if (!message || !mayOnThread(actor, THREADS_READ, message.thread.recordType, scopeOf(message.thread))) continue
     const quote = quoteOf(message.bodyText)
     if (quote) quotes.set(entry.id, quote)
   }

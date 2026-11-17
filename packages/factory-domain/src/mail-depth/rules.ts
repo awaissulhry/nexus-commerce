@@ -207,6 +207,8 @@ export type DeliveryState = (typeof DELIVERY_STATES)[number]
 export function deliveryStateOf(status: OutboundStatus, bounceKind: BounceKind | null): DeliveryState {
   if (status === 'QUEUED' || status === 'SENDING') return 'WAITING'
   if (status === 'SENT') return bounceKind === 'TRANSIENT' || bounceKind === 'UNDETERMINED' ? 'SOFT_BOUNCE' : 'SENT'
+  // B-TH-038: a mail taken back in its undo window never left (its own word comes with undo send, B-TH-048 / B-TH-236).
+  if (status === 'WITHDRAWN') return 'FAILED'
   return status
 }
 

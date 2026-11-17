@@ -37,7 +37,7 @@ export function entryOf(indexer: SearchIndexer, document: SearchDocument) {
   return {
     companyId: document.companyId,
     siteId: document.siteId,
-    partyId: document.partyId,
+    partyId: document.everyParty ? null : document.partyId, // B-PR-08a part 2: an entry of every customer names none of them
     number,
     title,
     subtitle,
@@ -45,11 +45,14 @@ export function entryOf(indexer: SearchIndexer, document: SearchDocument) {
     area: document.area ?? indexer.area,
     viewPermission: indexer.viewPermission as string,
     searchText: searchTextOf({ number, title, subtitle, words: document.words ?? [] }),
+    // B-PR-08a part 2: several customers (or customer work of none): every-customer readers only, naming none of them.
+    everyParty: document.everyParty ?? false,
   }
 }
 type EntryRow = ReturnType<typeof entryOf>
-const FIELDS = ['companyId', 'siteId', 'partyId', 'number', 'title', 'subtitle', 'status', 'area', 'viewPermission', 'searchText'] as const satisfies readonly (keyof EntryRow)[]
-const ENTRY_SELECT = { id: true, recordId: true, companyId: true, siteId: true, partyId: true, number: true, title: true, subtitle: true, status: true, area: true, viewPermission: true, searchText: true } as const
+// B-PR-08a part 2: + everyParty (an entry whose customers changed is rewritten).
+const FIELDS = ['companyId', 'siteId', 'partyId', 'number', 'title', 'subtitle', 'status', 'area', 'viewPermission', 'searchText', 'everyParty'] as const satisfies readonly (keyof EntryRow)[]
+const ENTRY_SELECT = { id: true, recordId: true, companyId: true, siteId: true, partyId: true, number: true, title: true, subtitle: true, status: true, area: true, viewPermission: true, searchText: true, /* B-PR-08a */ everyParty: true } as const
 
 /**
  * Upserts the documents' entries; an entry that would not change is left as it is. A record without an entry is

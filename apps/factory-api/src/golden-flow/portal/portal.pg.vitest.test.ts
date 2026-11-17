@@ -315,6 +315,9 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     // B-W2b-F59: the seed now writes the partner roles as tenant set-up does (seed/roles.ts); this step takes them away again to
     // show what a tenant whose templates have moved on sees, and the administrator's sync that brings them back.
     expect((await admin<{ n: number }>(w, `SELECT count(*)::int AS n FROM "Role" WHERE "tenantId" = $1 AND audience = 'PARTNER' AND system`, [w.tenant.id]))[0]!.n).toBeGreaterThan(0)
+    // B-PR-39's seed (seed/two-brands.ts, #1550) gives Seed Brand Two's portal people those roles: a tenant whose templates moved
+    // on keeps no assignment of a role that is gone, so theirs go first (no later step signs them in).
+    await admin(w, `DELETE FROM "RoleAssignment" WHERE "tenantId" = $1 AND "roleId" IN (SELECT id FROM "Role" WHERE "tenantId" = $1 AND audience = 'PARTNER' AND system)`, [w.tenant.id])
     await admin(w, `DELETE FROM "Role" WHERE "tenantId" = $1 AND audience = 'PARTNER' AND system`, [w.tenant.id])
     // ---- end B-W2b-F59
     // REFUSAL: without the partner roles a portal cannot be given to anybody.
