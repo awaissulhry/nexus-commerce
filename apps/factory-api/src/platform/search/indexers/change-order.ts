@@ -18,13 +18,14 @@ export default defineIndexer({
       where: idWhere(filter),
       orderBy: { id: 'asc' },
       take,
-      select: { id: true, companyId: true, number: true, title: true, status: true, style: { select: { code: true, name: true } } },
+      select: { id: true, companyId: true, number: true, title: true, status: true, style: { select: { code: true, name: true, brandPartyId: true } } },
     })
     return rows.map((row) => ({
       recordId: row.id,
       companyId: row.companyId,
       siteId: null,
-      partyId: null,
+      // B-TH-030 (WALL-G12): a change of a private-label style is its brand's.
+      partyId: row.style.brandPartyId,
       number: row.number,
       title: row.title,
       subtitle: `${row.style.code} · ${row.style.name}`,

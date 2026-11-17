@@ -249,7 +249,8 @@
     "NOT_THE_ROUNDS_PARTY": "Il campione colore va al cliente del giro.",
     "NO_COMPANY": "Un campione colore di un modello condiviso senza giro non si può chiedere al cliente: chiedilo su un giro o decidilo qui.",
     "other": "La fabbrica lo ha rifiutato così com’è.",
-    "ORDER_LINE_NEEDED": "Questo giro si crea su una riga d'ordine: solo un prototipo, un fit o un campionario vendita che non addebita nulla si crea senza."
+    "ORDER_LINE_NEEDED": "Questo giro si crea su una riga d'ordine: solo un prototipo, un fit o un campionario vendita che non addebita nulla si crea senza.",
+    "PRIVATE_STYLE": "Questo modello è un'esclusiva (private label) di un altro cliente: i suoi campioni si fanno solo per quel cliente."
   },
   "problem": {
     "unavailable": "La fabbrica non ha risposto. Riprova tra poco.",

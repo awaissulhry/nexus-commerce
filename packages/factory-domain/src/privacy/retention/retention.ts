@@ -156,6 +156,13 @@ export const RULE_HELD_WORDS: Readonly<Record<RuleHeld, string>> = Object.freeze
   NO_ACTION: 'No sweep may delete, anonymise or archive this record type: the rule can only report.',
 })
 
+/**
+ * B-TH-053 (threads plan TH-3, L2-G20): the period the Owner picked for a record type (2026-11-17: "your recommendations for
+ * all"), UNVERIFIED until the privacy consultant confirms it: a rule for it starts from this, and only reports until a person
+ * switches it on. Inquiry: the prospects of closed requests, 24 months after the close.
+ */
+export const SUGGESTED_KEEP_MONTHS = Object.freeze({ Inquiry: 24 } as const)
+
 /** Every period here is made up until the privacy paperwork is signed (GATE-PRIVACY): the screen says UNVERIFIED. */
 export const PERIODS_UNVERIFIED = true
 export const UNVERIFIED_WORDS = "UNVERIFIED: a made-up period until the Owner's privacy consultant sets it (GATE-PRIVACY). The sweep only reports until a person switches the rule on."

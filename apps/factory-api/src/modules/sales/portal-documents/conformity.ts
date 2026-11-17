@@ -8,7 +8,7 @@ import { styleFactsOf } from '../../product/compliance/read'
 import { publicDocAddress, publicDocCodeOf } from '@nexus/factory-domain/compliance/public-doc/code'
 import { processEmail } from '../../../platform/email-out/service'
 import { readLibrary, visibleEntries, type LibraryEntry } from './library'
-import { coveringCertificates, frozenRevisions, readCertificates, readOrderLines, readOrders, readShipmentLines, readShipmentsThatLeft, readStyles, type CertificateRow } from './store'
+import { CERTIFICATE_SELECT, coveringCertificates, frozenRevisions, heldByCompanyOr, readOrderLines, readOrders, readShipmentLines, readShipmentsThatLeft, readStyles, type CertificateRow } from './store'
 
 /**
  * Conformity per style received (B-W2b-178; SAL-087, QHS-111; design portal.customer.documents "Conformity per style you
@@ -43,6 +43,7 @@ const certificateFacts = (row: CertificateRow): CertificateFacts => ({
 export async function conformityPerStyle(app: FastifyInstance, request: FastifyRequest, query: { readonly q?: string | undefined }, now: Date) {
   const library = await readLibrary(app, request, now)
   const companyId = library.reader.session.company.id
+  const partyId = library.reader.session.partyId
   const own = await request.withClient(async (client) => {
     const shipments = await readShipmentsThatLeft(client, companyId)
     const lines = await readShipmentLines(client, shipments.map((row) => row.id))
@@ -57,8 +58,9 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
     const revisions = await frozenRevisions(client, [...new Set(own.lines.map((line) => line.workOrderId))])
     const styleIds = [...new Set(own.orderLines.map((line) => line.styleId))]
     const styles = await readStyles(client, styleIds)
-    const cited = await readCertificates(client, citedIds)
-    const covering = await coveringCertificates(client, styleIds)
+    // B-TH-035 (WALL-G16): a certificate held by another brand is never shown — neither cited nor covering.
+    const cited = citedIds.length === 0 ? [] : await client.certificate.findMany({ where: { AND: [{ id: { in: citedIds } }, heldByCompanyOr(partyId)] }, select: CERTIFICATE_SELECT })
+    const covering = await coveringCertificates(client, styleIds, partyId)
     // B-W2b-166: the batch numbers of the work orders the garments came from (printed on every garment label).
     const workOrderIds = [...new Set(own.lines.map((line) => line.workOrderId))]
     const batches = workOrderIds.length > 0 ? await client.workOrder.findMany({ where: { id: { in: workOrderIds }, batchNumber: { not: null } }, select: { id: true, batchNumber: true } }) : []

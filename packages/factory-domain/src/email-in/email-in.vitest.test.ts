@@ -68,6 +68,17 @@ describe('known senders (COL-022)', () => {
     expect(companyDomainOf('a@acme.example.com', shared)).toBe('acme.example.com')
     expect(SHARED_MAIL_DOMAINS.has('libero.it') && SHARED_MAIL_DOMAINS.has('gmail.com')).toBe(true)
   })
+
+  // B-TH-033 (WALL-G14, W22): a company domain makes a sender known only when it is the thread's party's alone.
+  it("never knows a sender by a domain another party's people use too; a contact or a participant stays known", () => {
+    const known = { contacts: ['anna@group.example.com'], participants: ['orders@shop.example.org'], elsewhere: ['bruno@group.example.com'] }
+    expect(knownSender('luca@group.example.com', known)).toBeNull()
+    expect(knownSender('bruno@group.example.com', known)).toBeNull()
+    expect(knownSender('anna@group.example.com', known)).toBe('CONTACT')
+    expect(knownSender('orders@shop.example.org', known)).toBe('PARTICIPANT')
+    expect(knownSender('luca@group.example.com', { ...known, elsewhere: ['bruno@other.example.com'] })).toBe('DOMAIN')
+    expect(knownSender('luca@group.example.com', { ...known, elsewhere: [] })).toBe('DOMAIN')
+  })
 })
 
 describe('where a mail goes (A1 §3.7 "Matching")', () => {

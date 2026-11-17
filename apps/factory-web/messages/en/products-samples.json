@@ -249,7 +249,8 @@
     "NOT_THE_ROUNDS_PARTY": "The swatch goes to the round's own customer.",
     "NO_COMPANY": "A swatch of a shared style with no round cannot be asked of the customer: ask on a round’s swatch, or decide it here.",
     "other": "The factory refused it as it is.",
-    "ORDER_LINE_NEEDED": "This round is made on an order line: only a proto, fit or salesman round that charges nobody is made without one."
+    "ORDER_LINE_NEEDED": "This round is made on an order line: only a proto, fit or salesman round that charges nobody is made without one.",
+    "PRIVATE_STYLE": "This style is another customer's private-label style: its samples are made for that customer only."
   },
   "problem": {
     "unavailable": "The factory didn't answer. Try again in a moment.",

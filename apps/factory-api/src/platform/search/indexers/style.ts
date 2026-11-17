@@ -2,7 +2,7 @@ import { defineIndexer, idWhere } from '../indexer'
 
 /**
  * Styles (modules/product/styles; product.styles.view): by code and name, the season and the brand's name. Scope as the
- * style library: its company (null: every company).
+ * style library: its company (null: every company); B-TH-030: a private-label style also its brand (Style.brandPartyId).
  */
 export default defineIndexer({
   recordType: 'Style',
@@ -15,7 +15,7 @@ export default defineIndexer({
       where: idWhere(filter),
       orderBy: { id: 'asc' },
       take,
-      select: { id: true, companyId: true, code: true, name: true, season: true, status: true, brandParty: { select: { code: true, legalName: true, tradeName: true } } },
+      select: { id: true, companyId: true, code: true, name: true, season: true, status: true, brandPartyId: true, brandParty: { select: { code: true, legalName: true, tradeName: true } } },
     })
     // B-W2b-227: the style's names in every language (StyleText), beside its code and its brand's.
     const texts = rows.length === 0 ? [] : await tx.styleText.findMany({ where: { styleId: { in: rows.map((row) => row.id) } }, select: { styleId: true, name: true } })
@@ -23,7 +23,9 @@ export default defineIndexer({
       recordId: row.id,
       companyId: row.companyId,
       siteId: null,
-      partyId: null,
+      // B-TH-030 (WALL-G12): a private-label style is its brand's: only people who reach that customer find it (and its brand's
+      // name); our own collection (no brand) stays open to every grant.
+      partyId: row.brandPartyId,
       number: row.code,
       title: row.name,
       subtitle: [row.season, row.brandParty ? (row.brandParty.tradeName?.trim() || row.brandParty.legalName) : null].filter(Boolean).join(' · ') || null,

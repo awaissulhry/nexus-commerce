@@ -95,7 +95,7 @@ async function supplierParty(db: Reader, facts: OrderFacts, today: string): Prom
  * The frozen order the PDF is painted from (prices included: the mailed commercial document). B-W2a-52: a cancelled line
  * is not part of what is sent (the revision's mail says it is cancelled).
  */
-function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: string): SupplierOrder {
+function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: string, ourName: string): SupplierOrder {
   const { order } = facts
   const sent = facts.lines.filter((line) => !isCancelledLine(line))
   return {
@@ -105,7 +105,8 @@ function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: stri
     date: today,
     currency: order.currency,
     supplier,
-    deliverTo: shipToPrintOf(facts.depth) ?? siteAddressOf(facts.site),
+    // B-TH-036: a customer's or brand's ship-to is printed under our name.
+    deliverTo: shipToPrintOf(facts.depth, ourName) ?? siteAddressOf(facts.site),
     requestedDate: dayOf(order.requestedDate),
     incoterms: order.incoterms,
     paymentTerms: order.paymentTerms,
@@ -235,7 +236,7 @@ export async function previewOrderPdf(caller: CommandCaller, orderId: string, la
     const read = await readFacts(client, order)
     return { facts: read, supplier: await supplierParty(client, read, today) }
   })
-  const frozen = supplierOrderOf(facts, supplier, today)
+  const frozen = supplierOrderOf(facts, supplier, today, company.legalName)
   const composed = sampleOrderDocument(composeDocument({ ...purchaseOrderDocument({ ...frozen, language: language ?? frozen.language }), company, sample: true }), developmentOf(facts.sample))
   return { pdf: await renderDocumentPdf(composed), fileName: documentFileName(composed) }
 }
@@ -334,8 +335,9 @@ export async function sendAs(host: SendHost, orderId: string, body: SendBody, id
     if (!checks.ready || !facts.contact?.email) refused = refusal(checks.checks)
     else if (gate?.mode === 'ASK') confirmByOf(body, now, null)
     else {
-      const frozen = supplierOrderOf(facts, supplier, today)
-      const composed = sampleOrderDocument(composeDocument({ ...purchaseOrderDocument(frozen), company: await companyLegalOf(caller, order.companyId), sample: false }), developmentOf(facts.sample))
+      const company = await companyLegalOf(caller, order.companyId)
+      const frozen = supplierOrderOf(facts, supplier, today, company.legalName)
+      const composed = sampleOrderDocument(composeDocument({ ...purchaseOrderDocument(frozen), company, sample: false }), developmentOf(facts.sample))
       const pdf = await renderDocumentPdf(composed)
       const fileName = documentFileName(composed)
       const file = await putGeneratedFile(processFiles(), caller, {
