@@ -104,7 +104,7 @@ export function waitingRowsOf(input: WaitingInput): WaitingRow[] {
   const tasks = tasksByApproval(input.tasks)
   const rows: WaitingRow[] = input.approvals
     .filter((approval) => approval.status === 'OPEN')
-    .map((approval) => {
+    .map((approval): WaitingRow => {
       const task = tasks.get(approval.id.toLowerCase()) ?? null
       const heldFor: WaitingRow['heldFor'] = approval.waitingFor ? { kind: 'person', name: approval.waitingFor } : approval.waitingForBuyer ? { kind: 'buyer' } : null
       return {
