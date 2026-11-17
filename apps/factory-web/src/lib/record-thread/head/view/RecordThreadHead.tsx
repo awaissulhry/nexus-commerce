@@ -12,6 +12,10 @@ import type { CountKind } from '../../popups/model'
 import { DOCK_WIDTHS, menuRows, newWords, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
 // B-TH-229: the owner's tile (the factory web's Avatar, B-TH-298).
 import { Avatar } from '../../parts/Avatar'
+// B-TH-251: "In project …" (a link to the project's page).
+import Link from 'next/link'
+import { FolderKanban } from 'lucide-react'
+import { inProjectWords } from '../model'
 import '../head.css'
 
 export const HEAD_NS = 'record-thread-head'
@@ -133,6 +137,7 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
   const ownerName = owner ? (owner.active ? owner.name : t('owner.inactive', { name: owner.name })) : null
   const ownerLabel = owner === undefined ? null : ownerName ? t('owner.label', { name: ownerName }) : t('owner.nobody')
   const ownerOpens = model.ownerHeld === null && !compact
+  const inProject = inProjectWords(model.projects) // B-TH-251
 
   return (
     <div ref={ref} className={`fw-rth${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
@@ -175,6 +180,16 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
               {owner ? <Avatar name={owner.name} size="sm" /> : <span className="fw-rth-owner-none">—</span>}
             </span>
           )}
+        </Tooltip>
+      )}
+      {/* B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" (+2: the tooltip names them all); never a project the reader may not open. */}
+      {inProject && !compact && (
+        <Tooltip label={inProject.more > 0 ? t('project.all', { names: inProject.all }) : `${inProject.first.number} ${inProject.first.label}`} portal>
+          <Link className="fw-rth-project" href={inProject.first.href} aria-label={inProject.more > 0 ? t('project.labelMore', { name: inProject.first.label, count: inProject.more }) : t('project.in', { name: inProject.first.label })}>
+            <FolderKanban size={13} aria-hidden />
+            <span className="fw-rth-project-name">{t('project.in', { name: inProject.first.label })}</span>
+            {inProject.more > 0 && <span className="fw-rth-project-more">{t('project.more', { count: inProject.more })}</span>}
+          </Link>
         </Tooltip>
       )}
       {model.offline && (
