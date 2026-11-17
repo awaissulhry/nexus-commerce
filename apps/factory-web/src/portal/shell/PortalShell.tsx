@@ -56,9 +56,9 @@ import {
   type PortalNotice,
   type SessionEnd,
 } from './model'
-import { portalChords, portalNavFor } from './nav/portal-nav'
+import { portalChords, portalNavFor, recordPageOf } from './nav/portal-nav'
 // ---- B-TH-273 (PL3-F03: no Ask modal): "Ask a question" focuses the docked conversation, else opens the conversation's page.
-import { accountConversationHref, conversationHref } from './record/model'
+import { accountConversationHref, askHref } from './record/model'
 import { PORTAL_ASK_EVENT } from './record/PortalRecordFrame'
 // B-TH-273 (PL3-F05): messages by mail "as it happens" is said as the default beside the setting.
 import { emailTopicNoteKey } from './model'
@@ -463,7 +463,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
   // ---- B-TH-273 (PL3-F03, P-ANY; no Ask modal, no copy of the conversation in a pop-up): a page that docks the record's
   // conversation (the portal record frame, `#messages`) shows it and focuses its box — narrower than 1280 px the frame opens its
   // full-width view first; a page with the conversation in place (the request page, a project) scrolls to its box; anywhere else
-  // the conversation opens as its own page (the generic page `/open/<type>/<id>?view=conversation`, the account `/open/Party/<id>`).
+  // the conversation opens as its own page (the generic page `/open/<type>/<id>?view=conversation`, the account `/open/Party/<id>`) —
+  // or, for a record whose own page docks it (an order from Documents), that page with its box focused (`askHref`).
   const ask = useCallback(
     (record: { type: string; id: string; label?: string | null } | null) => {
       const here = typeof document !== 'undefined' ? document.getElementById('messages') : null
@@ -474,9 +475,9 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
         here.querySelector<HTMLTextAreaElement>('textarea')?.focus()
         return
       }
-      leaveTo(record ? conversationHref(prefix, record) : accountConversationHref(prefix, me.party.id))
+      leaveTo(record ? askHref(prefix, record, recordPageOf(kinds, record.type, record.id)) : accountConversationHref(prefix, me.party.id))
     },
-    [me.party.id, prefix, leaveTo],
+    [me.party.id, prefix, leaveTo, kinds],
   )
   // ---- end B-TH-273
 

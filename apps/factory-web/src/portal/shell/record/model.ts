@@ -127,3 +127,17 @@ export function summaryTone(code: string | null | undefined): SummaryTone {
 export function parentHref(prefix: string, parent: { readonly recordType: string; readonly recordId: string }): string {
   return `${prefix}/open/${encodeURIComponent(parent.recordType)}/${encodeURIComponent(parent.recordId)}`
 }
+
+/**
+ * B-TH-273: the record types whose own portal page docks THEIR conversation in the record frame (an order, a return, a complaint, a
+ * repair, a purchase order, a job). "Ask a question" about one of them from another page (Documents' "Ask us for it" about an order)
+ * opens that page with the conversation shown and its box focused (`?tab=messages`: the frame's arrival rule) — not a second copy
+ * of the conversation; any other record opens its conversation page (`conversationHref`).
+ */
+export const DOCKED_RECORD_TYPES: ReadonlySet<string> = new Set(['SalesOrder', 'ReturnAuthorisation', 'Complaint', 'RepairOrder', 'PurchaseOrder', 'SubcontractOrder'])
+
+/** Where "Ask a question" about a record goes from a page that does not dock it: its own page's docked box, else its conversation page. */
+export function askHref(prefix: string, record: { readonly type: string; readonly id: string }, ownPage: string | null): string {
+  if (ownPage && DOCKED_RECORD_TYPES.has(record.type) && !ownPage.includes('?') && !ownPage.includes('#')) return `${prefix}${ownPage}?tab=messages`
+  return conversationHref(prefix, record)
+}

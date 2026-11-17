@@ -9,6 +9,7 @@ import { RecordView, type RecordSummaryModel } from '../view/RecordView'
 import { ThreadView, type ThreadViewModel } from '../view/ThreadView'
 import {
   accountConversationHref,
+  askHref,
   conversationHref,
   messagesButtonWords,
   opensOwnPage,
@@ -167,10 +168,17 @@ describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, el
   const shell = readFileSync(new URL('../PortalShell.tsx', import.meta.url), 'utf8')
   const thread = readFileSync(new URL('../thread/PortalThread.tsx', import.meta.url), 'utf8')
 
+  it('from another page: a record whose own page docks it opens there with its box focused; any other its conversation page', () => {
+    expect(askHref(PREFIX, { type: 'SalesOrder', id: 's-7' }, '/orders/s-7')).toBe(`${PREFIX}/orders/s-7?tab=messages`)
+    expect(askHref(PREFIX, { type: 'Invoice', id: 'i-1' }, '/documents?invoice=i-1')).toBe(`${PREFIX}/open/Invoice/i-1?view=conversation`)
+    expect(askHref(PREFIX, { type: 'Ddt', id: 'd-1' }, null)).toBe(`${PREFIX}/open/Ddt/d-1?view=conversation`)
+    expect(askHref(PREFIX, { type: 'ShipNotice', id: 'n-1' }, '/deliveries/n-1')).toBe(`${PREFIX}/open/ShipNotice/n-1?view=conversation`)
+  })
+
   it('PortalShell asks the dock first (PORTAL_ASK_EVENT), then the page’s own box, else the conversation page; no pop-up copy', () => {
     expect(PORTAL_ASK_EVENT).toBe('fw-portal-ask')
     expect(shell).toContain('here.dispatchEvent(new CustomEvent(PORTAL_ASK_EVENT, { cancelable: true }))')
-    expect(shell).toContain('leaveTo(record ? conversationHref(prefix, record) : accountConversationHref(prefix, me.party.id))')
+    expect(shell).toContain('leaveTo(record ? askHref(prefix, record, recordPageOf(kinds, record.type, record.id)) : accountConversationHref(prefix, me.party.id))')
     expect(shell).not.toMatch(/<Modal\b/)
     expect(shell).not.toContain('<PortalThread')
   })
