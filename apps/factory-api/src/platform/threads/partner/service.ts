@@ -41,6 +41,8 @@ import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
 import { erasedForOutside } from '../feed-depth'
 // ---- B-TH-092: the person's draft of the record goes with their post.
 import { clearDraftInCommand } from '../draft-keys'
+// ---- B-TH-093: their post makes a conversation marked done open work again (the same bookkeeping as its last activity).
+import { reopenOnSharedMessage } from '../work-state'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -445,9 +447,10 @@ async function openThreadFor(request: FastifyRequest, caller: PartnerCaller, ref
  * writeMessage does inside its own.
  */
 async function touchThread(request: FastifyRequest, caller: PartnerCaller, threadId: string, at: Date): Promise<void> {
-  await systemCallerOf(request)(caller.context.tenantId).withClient((client) =>
-    client.thread.updateMany({ where: { id: threadId, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } }),
-  )
+  await systemCallerOf(request)(caller.context.tenantId).withClient(async (client) => {
+    await client.thread.updateMany({ where: { id: threadId, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } })
+    await reopenOnSharedMessage(client, threadId) // B-TH-093
+  })
 }
 
 // ---- B-TH-085 (threads plan TH-7, the rest of G1; T6-F01…F08, P-CUS-NEW.files, X-P-CUS-REQ.thread; walls W25 and W37) ------------

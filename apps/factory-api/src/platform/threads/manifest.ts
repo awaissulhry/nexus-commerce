@@ -48,4 +48,7 @@ export const manifest = defineManifest({
   'PUT /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   'DELETE /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   // ---- end B-TH-092
+  // ---- B-TH-093: Done — whoever may write on the conversation marks it done or opens it again (office only).
+  'PUT /threads/:recordType/:recordId/done': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- end B-TH-093
 })

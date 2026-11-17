@@ -27,6 +27,9 @@ import { listPins, pinMessage, pinRequestNote, unpinMessage } from './pins'
 // B-TH-092: drafts on the server.
 import { discardDraftContract, getDraftContract, listDraftsContract, saveDraftContract } from './contract'
 import { discardOfficeDraft, getOfficeDraft, listOfficeDrafts, saveOfficeDraft } from './drafts'
+// B-TH-093: Done as a work state.
+import { setDoneContract } from './contract'
+import { setThreadDone } from './work-state'
 
 /**
  * Record threads and the record timeline (platform part; plan A1 §2.3, §3.7; features COL-001, COL-002, COL-003): read
@@ -61,6 +64,10 @@ export default defineRoutes('threads', manifest, async (app) => {
   app.put('/threads/:recordType/:recordId/draft', { schema: saveDraftContract }, async (request) => saveOfficeDraft(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
   app.delete('/threads/:recordType/:recordId/draft', { schema: discardDraftContract }, async (request) => discardOfficeDraft(request, { type: request.params.recordType, id: request.params.recordId }, idempotencyKeyFrom(request)))
   // ---- end B-TH-092
+
+  // ---- B-TH-093
+  app.put('/threads/:recordType/:recordId/done', { schema: setDoneContract }, async (request) => setThreadDone(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
+  // ---- end B-TH-093
 
   // ---- B-TH-027
   app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId }))))

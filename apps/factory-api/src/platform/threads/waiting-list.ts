@@ -124,6 +124,7 @@ export async function waitingRowsOf(client: Reader, context: RequestContext, que
      WHERE t."recordType" = ANY(${types}::text[])
        AND t."partyId" IS NOT NULL
        AND t."status" = 'OPEN'
+       AND t."doneAt" IS NULL -- B-TH-093: a conversation marked done waits on nobody
        AND t."lastMessageAt" IS NOT NULL
        AND last."direction" = 'INBOUND'
        AND (${companyId}::uuid IS NULL OR t."companyId" = ${companyId}::uuid)

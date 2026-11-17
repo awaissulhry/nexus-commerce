@@ -170,6 +170,8 @@ export const readThreadContract = defineContract({
       // ---- end B-TH-028
       // ---- B-TH-079: office only — mail for this conversation that waits for a person (null: none).
       waitingMail: waitingMailView.nullable().optional(),
+      // ---- B-TH-093: office only — marked done, when and by whom (null: open work). A portal or link reader is never told.
+      done: output({ at: instant(), by: output({ id: id(), name: z.string().nullable() }) }).nullable().optional(),
     }),
   },
 })
@@ -553,3 +555,12 @@ export const saveRequestDraftContract = defineContract({ body: draftBody, respon
 export const discardRequestDraftContract = defineContract({ response: { 200: output({ draft: z.null() }) } })
 export const listPortalDraftsContract = defineContract({ response: { 200: draftListAnswer } })
 // ---- end B-TH-092
+
+// ---- B-TH-093 (N18; T1-F13): Done — a work state apart from Close; office only (the portal is never told).
+export const doneView = output({ at: instant(), by: output({ id: id(), name: z.string().nullable() }) })
+export const setDoneContract = defineContract({
+  params: recordParams,
+  body: input({ /** true: mark done; false: open work again. */ done: z.boolean() }),
+  response: { 200: output({ done: doneView.nullable() }) },
+})
+// ---- end B-TH-093

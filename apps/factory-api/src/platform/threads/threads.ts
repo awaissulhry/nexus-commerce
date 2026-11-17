@@ -53,6 +53,8 @@ import { erasedAmong, erasedForOutside, feedAudienceWhere, skippedPartsOf, waiti
 // ---- end B-TH-079
 // ---- B-TH-092: what was typed has gone out — the sender's draft of the record is removed in the send's own command.
 import { clearDraftInCommand } from './draft-keys'
+// ---- B-TH-093: Done, a work state apart from Close (the office's head; a new shared message reopens it).
+import { doneOf, reopenOnSharedMessage, type DoneView } from './work-state'
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -396,6 +398,8 @@ export interface ThreadPage {
   // ---- end B-TH-027 / B-TH-028
   // ---- B-TH-079: the office's only — mail for this conversation that waits for a person (null: none).
   readonly waitingMail?: WaitingMail | null
+  // ---- B-TH-093: the office's only — marked done (null: open work).
+  readonly done?: DoneView | null
 }
 
 /** B-TH-079: a message as the page shows it, told erased (privacy) and, for the office, with an inbound mail's skipped files. */
@@ -452,7 +456,11 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     // ---- B-TH-027: the reader's own reading (office and portal people; a link has none). B-TH-028: the office's head only (W08).
     const who = whoOf(context)
     const reading = who ? await readingOf(client, thread.id, who) : null
-    const head = office ? await headOf(client, record, { ...thread, ownerId: (await client.thread.findUnique({ where: { id: thread.id }, select: { ownerId: true } }))?.ownerId ?? null }, serverClock.now()) : undefined
+    // ---- B-TH-093: the office also reads the work state; a conversation marked done waits on nobody (it leaves the waiting views).
+    const work = office ? await client.thread.findUnique({ where: { id: thread.id }, select: { ownerId: true, doneAt: true, doneById: true } }) : null
+    const fullHead = office ? await headOf(client, record, { ...thread, ownerId: work?.ownerId ?? null }, serverClock.now()) : undefined
+    const head = fullHead && work?.doneAt ? { ...fullHead, waiting: null } : fullHead
+    const done = office && work ? await doneOf(client, work) : undefined
     // ---- end B-TH-027 / B-TH-028
     // ---- B-TH-050: the office's page points at what its messages answer or correct (a portal or link reader: GET /portal/threads).
     const workerShown = gates.at(thread.siteId).open
@@ -468,6 +476,7 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
       reading,
       ...(head ? { head } : {}),
       ...(waitingMail !== undefined ? { waitingMail } : {}),
+      ...(done !== undefined ? { done } : {}), // B-TH-093
     }
     // ---- end B-TH-079
   })
@@ -619,6 +628,11 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
     select: MESSAGE_OFFICE,
   })
   await tools.tx.thread.updateMany({ where: { id: thread.id, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } })
+  // ---- B-TH-093: a message shared with the party (theirs or ours) makes a conversation marked done open work again.
+  if (audience === 'PARTNER' && (await reopenOnSharedMessage(tools.tx, thread.id))) {
+    tools.audit({ action: 'threads.reopenWork', recordType: 'Thread', recordId: thread.id, companyId: thread.companyId, siteId: thread.siteId, before: { done: true }, after: { done: false, messageId: id } })
+  }
+  // ---- end B-TH-093
   tools.audit({
     recordType: 'Message',
     recordId: id,
