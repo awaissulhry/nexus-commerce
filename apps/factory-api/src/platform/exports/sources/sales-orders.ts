@@ -150,13 +150,15 @@ function oneOf<T extends string>(address: URLSearchParams, name: string, values:
 }
 
 /** The overall view's door terms of the address, as the list reads them. */
-function doorTerms(address: URLSearchParams): Pick<ListFilters, 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency'> {
+function doorTerms(address: URLSearchParams): Pick<ListFilters, 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' | 'shippedNotInvoiced'> {
   const invoiced = oneOf<InvoicedState>(address, 'invoiced', INVOICED_STATES)
   const atRisk = oneOf(address, 'atRisk', ['true', 'false'] as const)
   const customerUrgency = oneOf<CustomerUrgency>(address, 'customerUrgency', CUSTOMER_URGENCIES)
   const currency = address.get('currency')?.trim() || undefined
   if (currency !== undefined && !/^[A-Z]{3}$/.test(currency)) throw new ValidationError('Not a currency: the file would not follow the screen.', [{ path: 'query/currency', message: 'Three capital letters (ISO 4217).' }])
-  return { ...(invoiced ? { invoiced } : {}), ...(atRisk ? { atRisk } : {}), ...(customerUrgency ? { customerUrgency } : {}), ...(currency ? { currency } : {}) }
+  // B-TH-244: the built-in view "Shipped, not invoiced" (screen = file).
+  const shippedNotInvoiced = oneOf(address, 'shippedNotInvoiced', ['true', 'false'] as const)
+  return { ...(invoiced ? { invoiced } : {}), ...(atRisk ? { atRisk } : {}), ...(customerUrgency ? { customerUrgency } : {}), ...(currency ? { currency } : {}), ...(shippedNotInvoiced ? { shippedNotInvoiced } : {}) }
 }
 
 /** The Progress cell: cut, sewn and finished of the pieces in work orders ("—" for a step nothing counts); none yet: empty. */

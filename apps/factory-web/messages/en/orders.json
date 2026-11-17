@@ -97,7 +97,8 @@
     "CANCELLED": "Cancelled",
     "PENDING_APPROVAL": "Waiting for a yes",
     "DELIVERED": "Delivered",
-    "all": "All orders"
+    "all": "All orders",
+    "uninvoiced": "Shipped, not invoiced"
   },
   "tile": {
     "late": "Late",
@@ -1184,5 +1185,108 @@
     "forbidden": "You may not preview this customer's portal.",
     "noKind": "This customer has no portal: it is neither a customer nor a brand in its roles.",
     "failed": "The customer's portal could not open. Try again."
+  },
+  "links": {
+    "title": "Complaints and returns",
+    "hint": "Only this order's own; each opens its record.",
+    "loading": "Reading the order's complaints and returns…",
+    "failed": "The order's complaints and returns couldn't be read",
+    "complaints": {
+      "title": "Complaints",
+      "none": "No complaints about this order."
+    },
+    "returns": {
+      "title": "Returns",
+      "none": "No returns of this order."
+    },
+    "col": {
+      "number": "Number",
+      "status": "Status",
+      "severity": "Severity",
+      "received": "Received",
+      "answerDue": "Answer due",
+      "wanted": "Customer wants",
+      "requested": "Requested",
+      "closed": "Closed"
+    },
+    "complaintStatus": {
+      "NEW": "New",
+      "TRIAGED": "Triaged",
+      "INVESTIGATING": "Investigating",
+      "ANSWERED": "Answered",
+      "CLOSED": "Closed"
+    },
+    "severity": {
+      "MINOR": "Minor",
+      "MAJOR": "Major",
+      "CRITICAL": "Critical"
+    },
+    "returnStatus": {
+      "REQUESTED": "Requested",
+      "AUTHORISED": "Authorised",
+      "RECEIVED": "Received",
+      "INSPECTED": "Inspected",
+      "CLOSED": "Closed",
+      "REJECTED": "Rejected",
+      "CANCELLED": "Cancelled"
+    },
+    "wanted": {
+      "REPLACE": "A replacement",
+      "REPAIR": "A repair",
+      "CREDIT": "A credit note",
+      "REMAKE": "Made again"
+    },
+    "gate": {
+      "title": "{place} blocked: {subject}",
+      "place": {
+        "WORK_ORDER_RELEASE": "Work order release",
+        "LABEL_PRINT": "Label printing",
+        "FINAL_RELEASE": "Final release",
+        "SHIPMENT": "Shipment"
+      },
+      "subject": {
+        "WorkOrder": "a work order of this order",
+        "Shipment": "a shipment of this order"
+      },
+      "open": "Open in Compliance",
+      "wordsOnly": "Compliance clears or overrides it."
+    },
+    "rePromise": {
+      "title": "Planning proposes new dates for line {line}",
+      "titleStyle": "Planning proposes new dates for line {line} · {style}",
+      "sizesLabel": "The new dates per size",
+      "size": "{size}: {from} → {to}",
+      "allSizes": "All sizes",
+      "by": "Proposed by {name} on {date}.",
+      "byUnknown": "Proposed on {date}.",
+      "note": "Planner's note: {note}",
+      "tell": "Tell the customer (the planner's message goes by e-mail on this order's thread)",
+      "noTell": "The customer is not told from here: sending e-mail needs the right to send e-mail.",
+      "accept": "Accept",
+      "decline": "Decline…"
+    },
+    "decline": {
+      "title": "Decline the new dates for line {line}?",
+      "body": "Nothing is promised and the customer is not told. The planner reads your reason.",
+      "reason": "Why (the planner reads it)",
+      "reasonNeeded": "Say why: the planner reads it.",
+      "go": "Decline the new dates"
+    },
+    "done": {
+      "accepted": "New dates accepted: the line's promise follows them.",
+      "acceptedTold": "New dates accepted, and the customer is told by e-mail on this order's thread.",
+      "declined": "New dates declined: the planner reads your reason."
+    },
+    "held": {
+      "busy": "Working…",
+      "noDecide": "Sales decides new dates (the right to manage orders), never the planner who proposed them."
+    },
+    "problem": {
+      "forbidden": "You may not do this on this order.",
+      "notFound": "This proposal or order is no longer there.",
+      "conflict": "Someone decided it meanwhile, or the dates changed since: the order is read again.",
+      "invalid": "Not sent as it is: check what you typed.",
+      "unavailable": "The factory server didn't answer. Try again."
+    }
   }
 }

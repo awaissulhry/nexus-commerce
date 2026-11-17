@@ -5,11 +5,12 @@ import { Archive, Calendar, CircleDollarSign, FileText, Hash, Link2, ListChecks,
 import { GRAINS, type Grain } from '@nexus/factory-domain/auth/grains/grains'
 import type { FieldType } from '@nexus/factory-domain/fields/rules'
 import { Banner, Card, Field as DsField } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Toggle } from '@nexus/ui/primitives'
+import { Button, Input, RadioCard, Spinner, Tag, Toggle } from '@nexus/ui/primitives'
 import { Listbox, Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { RECORD_KEYS, type EditorField, type Picklist, type RecordType } from '../api'
 import { draftHeld, FIELDS_NS, GALLERY, labelIn, portalHeld, previewField, sectionText, typedCode, withDraft, type FieldDraft } from '../model'
+import { portalLineOf, whereLineOf } from '../model' // B-TH-242
 import { PreviewControl } from './FormPreview'
 
 /** The picture of each field type in the gallery (lucide glyphs: the design system has no type pictures). */
@@ -43,6 +44,11 @@ export interface FieldDialogModel {
   portalRecord: boolean
   busy: boolean
   canManage: boolean
+  // ── B-TH-242: "For: every customer · one customer" (customers, quotes and orders), and the customer picker's search ──
+  /** The record type takes a field for one customer. */
+  customerChoice?: boolean
+  /** The picker: what was typed, the customers found (null while read), the read's refusal (a `fault.*` key). */
+  customers?: { query: string; results: ReadonlyArray<{ id: string; code: string; legalName: string }> | null; problem: string | null } | null
 }
 
 export interface FieldDialogActions {
@@ -53,6 +59,8 @@ export interface FieldDialogActions {
   onState?: (status: 'ACTIVE' | 'ARCHIVED') => void
   /** No list to pick from yet: go to Picklists. */
   onPicklists?: () => void
+  /** B-TH-242: the customer picker's search. */
+  onCustomerSearch?: (query: string) => void
 }
 
 /**
@@ -77,6 +85,9 @@ export function FieldDialog({ model, actions }: { model: FieldDialogModel; actio
   const portal = portalHeld(draft, model.portalRecord)
   const activeLists = model.picklists.filter((list) => list.status === 'ACTIVE' || list.id === draft.picklistId)
   const title = editing ? t('fieldDialog.titleEdit', { field: labelIn(editing, locale) }) : t('fieldDialog.title', { record: recordWord })
+  // B-TH-242: the line under the portal switch (a field for every customer puts its name in every customer's portal), where it shows.
+  const portalLine = model.customerChoice ? portalLineOf(draft, model.portalRecord) : null
+  const whereLine = model.customerChoice ? whereLineOf(draft) : null
   const TypeIcon = draft.type ? TYPE_ICONS[draft.type] : null
 
   return (
@@ -287,6 +298,7 @@ export function FieldDialog({ model, actions }: { model: FieldDialogModel; actio
                 </span>
               </label>
             )}
+            {portalLine && <Banner tone="warning" title={t(portalLine)} />}
           </fieldset>
 
           {!editing && model.companies.length > 0 && (
@@ -301,10 +313,54 @@ export function FieldDialog({ model, actions }: { model: FieldDialogModel; actio
             </fieldset>
           )}
           {editing && <p className="fw-flds-muted">{editing.companyId === null ? t('whose.everyFixed') : t('whose.oneFixed', { company: model.companies.find((company) => company.id === editing.companyId)?.name ?? t('whose.another') })}</p>}
+
+          {/* B-TH-242 (SHEET-G06, X-ADM-FIELDS.dialog-F01): For every customer or one customer only — set once, never changed. */}
+          {model.customerChoice && !editing && (
+            <fieldset className="fw-flds-choices">
+              <legend>{t('customer.legend')}</legend>
+              <div className="fw-flds-choice-row">
+                <RadioCard variant="row" name="fw-flds-customer" value="every" checked={draft.forCustomer === 'every'} selected={draft.forCustomer === 'every'} onChange={() => set({ forCustomer: 'every' })} title={t('customer.every')} description={t('customer.everyHint', { record: recordWord })} />
+                <RadioCard variant="row" name="fw-flds-customer" value="one" checked={draft.forCustomer === 'one'} selected={draft.forCustomer === 'one'} onChange={() => set({ forCustomer: 'one' })} title={t('customer.one')} description={t('customer.oneHint', { record: recordWord })} />
+              </div>
+              {draft.forCustomer === 'one' &&
+                (draft.partyId ? (
+                  <span className="fw-flds-inline">
+                    <Tag tone="info">{draft.partyName ?? '…'}</Tag>
+                    <Button size="sm" variant="quiet" onClick={() => set({ partyId: null, partyName: null })}>
+                      {t('customer.change')}
+                    </Button>
+                  </span>
+                ) : (
+                  <>
+                    <DsField label={t('customer.search')} hint={t('customer.searchHint')}>
+                      <Input type="search" autoComplete="off" value={model.customers?.query ?? ''} placeholder={t('customer.searchPlaceholder')} onChange={(event) => actions?.onCustomerSearch?.(event.target.value)} />
+                    </DsField>
+                    {model.customers?.problem ? (
+                      <Banner tone="danger" title={t(model.customers.problem)} />
+                    ) : !model.customers || model.customers.results === null ? (
+                      <p className="fw-flds-muted" role="status">
+                        <Spinner size={12} /> {t('customer.searching')}
+                      </p>
+                    ) : model.customers.results.length === 0 ? (
+                      <p className="fw-flds-muted">{t('customer.none')}</p>
+                    ) : (
+                      <div className="fw-flds-choice-row">
+                        {model.customers.results.map((row) => (
+                          <RadioCard key={row.id} variant="row" name="fw-flds-party" value={row.id} checked={false} onChange={() => set({ partyId: row.id, partyName: row.legalName })} title={row.legalName} description={row.code} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ))}
+            </fieldset>
+          )}
+          {model.customerChoice && editing && <p className="fw-flds-muted">{editing.partyId ? t('customer.oneFixed', { customer: draft.partyName ?? '—' }) : t('customer.everyFixed')}</p>}
         </div>
 
         <aside className="fw-flds-dialog-preview" aria-label={t('fieldDialog.preview')}>
           <Card header={t('fieldDialog.preview')} description={t('fieldDialog.previewHint', { record: recordWord, section: sectionText(draft.section) ?? t('section.custom') })}>
+            {/* B-TH-242: where the column will appear (every customer's records, or one customer's only). */}
+            {whereLine && <p className="fw-flds-muted">{t(whereLine.key, { record: recordWord, ...(whereLine.params ?? {}) })}</p>}
             {draft.type ? (
               <PreviewControl field={previewField(draft, model.picklists, editing)} recordLabel={recordWord} />
             ) : (

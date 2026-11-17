@@ -36,7 +36,13 @@ import {
   sourcesFor,
   stockKey,
   tabOf,
+  // B-TH-263
+  isWideTab,
+  MERGED_TABS,
+  RECORD_TABS,
 } from './record-model'
+import { readFileSync } from 'node:fs'
+import { textOf } from '../../../../lib/record-thread/parts/testing'
 
 /**
  * The subcontract order's record (SCR-128 record) and its job sheet (SCR-128-job-sheet): the record's rules, and every
@@ -51,6 +57,17 @@ describe('the record: tabs, the band, cells', () => {
     expect(tabOf('kit')).toBe('kit')
     expect(tabOf('nonsense')).toBe('ops')
     expect(tabOf(null)).toBe('ops')
+  })
+
+  // ---- B-TH-263: tabs 7 → 5 on RecordFrame; every old ?tab= keeps working (R-8)
+  it('B-TH-263: five tabs — Documents merged into Kit & documents, Activity gone; the old addresses land on their tab', () => {
+    expect(RECORD_TABS).toEqual(['ops', 'kit', 'back', 'balance', 'cost'])
+    expect(MERGED_TABS).toEqual({ documents: 'kit', activity: 'ops' })
+    expect(tabOf('documents')).toBe('kit')
+    expect(tabOf('activity')).toBe('ops')
+    expect(tabOf('constructor')).toBe('ops')
+    expect(isWideTab('ops')).toBe(true)
+    expect(isWideTab('back')).toBe(false)
   })
 
   it('the band offers the act of the state, and Send kit beside Receive back while something is left', () => {
@@ -166,8 +183,8 @@ describe('the dialogs: what holds them, what they send', () => {
 const NAMESPACES = ['shell', 'subcontracting', 'subcontract-order', 'lists', 'records']
 const groups = [...new Set(['subcontract-order', 'subcontracting'].flatMap((namespace) => Object.keys(CATALOGUE.en[namespace] ?? {}).map((key) => key.split('.')[0]!)))].join('|')
 const LEFT_KEY = new RegExp(`\\b(?:${groups})\\.[a-zA-Z_]+(?:\\.[a-zA-Z_]+)*\\b`)
-/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; a file name is no key. */
-const SAID = /\b(?:purchasing\.(?:view|subcontract\.(?:manage|kit|receive))|shipping\.ddt\.(?:issue|cancel)|workorders\.view|files\.read|inventory\.locations\.view|product\.materials\.view|money\.cost)\b|DDT-[\w-]+\.pdf/g
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; a file name is no key (B-TH-263: the docked thread's files, "sample back.jpg"). */
+const SAID = /\b(?:purchasing\.(?:view|subcontract\.(?:manage|kit|receive))|shipping\.ddt\.(?:issue|cancel)|workorders\.view|files\.read|inventory\.locations\.view|product\.materials\.view|money\.cost)\b|DDT-[\w-]+\.pdf|[\w-]+\.(?:pdf|jpe?g|png|xlsx|xml)\b|[\w.-]+@[\w-]+\.example(?:\.com)?\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>
@@ -202,7 +219,7 @@ describe('every design case draws in both languages with no key left on screen',
       for (const unit of UOMS) has(`uom.${unit}`)
       for (const status of KIT_LINE_STATUSES) has(`kitLine.status.${status}`)
       for (const status of ['QUARANTINE', 'RELEASED', 'BLOCKED', 'REJECTED']) has(`lot.${status}`)
-      for (const tab of ['ops', 'kit', 'back', 'documents', 'activity']) has(`tab.${tab}`)
+      for (const tab of ['ops', 'kit', 'back']) has(`tab.${tab}`)
       for (const step of ['draft', 'sent', 'kitOut', 'back', 'closed']) has(`journey.${step}`)
       for (const act of ['issue', 'send', 'receive', 'close', 'reopen', 'cancel']) has(`band.act.${act}`)
       for (const status of ['not_found', 'forbidden', 'error']) has(`record.${status}.title`)
@@ -212,5 +229,55 @@ describe('every design case draws in both languages with no key left on screen',
       has('receive.done.partPosted', 2)
     }
     expect(Object.keys(CATALOGUE.en['subcontract-order'] ?? {}).length).toBeGreaterThan(400)
+  })
+})
+
+// ---- B-TH-263: the subcontract order on RecordFrame (O-PUR-SUB; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-263: the subcontract order on RecordFrame', () => {
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = recordScreen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return render(recordScreen as unknown as DesignScreen<unknown>, found.model, locale)
+  }
+
+  it('ONE thread docked beside the tabs, its "⋯" (R-ACT) on every tab; no Activity tab, no record panels', () => {
+    for (const id of ['draft', 'issued-kit', 'documents', 'thread-docked']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('?tab=activity')
+      expect(page, id).not.toContain('?tab=documents')
+    }
+  })
+
+  it('Kit & documents holds the kit, then the job sheet and the kit DDTs: open, show here, print again, annul (nothing lost from Documents)', () => {
+    const text = textOf(html('documents'))
+    expect(text).toContain('Kit & documents')
+    expect(text).toContain('Job sheet and kit DDTs')
+    expect(text).toContain('Open job sheet')
+    expect(text).toContain('Open PDF')
+    expect(text).toContain('Annul…')
+    expect(text.indexOf('Job sheet and kit DDTs')).toBeGreaterThan(text.indexOf('Kit & documents'))
+    expect(textOf(html('documents-missing'))).toContain('Print again')
+    expect(textOf(html('documents', 'it'))).toContain('Kit e documenti')
+    expect(textOf(html('thread-docked'))).not.toMatch(/\bActivity\b/)
+  })
+
+  it('the page mounts the office thread docked with the order’s own workshop; no dock hook, no Documents tab', () => {
+    const container = readFileSync(new URL('./SubcontractRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('party={{ id: value.workshop.id, name: value.workshop.name }} partyRole="supplier"')
+    expect(container).not.toContain('useThreadDock')
+    const view = readFileSync(new URL('./view/SubcontractRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('RecordPanelsView')
+    expect(view).not.toContain("'documents'")
+  })
+
+  it('the wall (W08, W25, W36): the docked thread speaks of this order’s workshop only, never a customer’s name', () => {
+    const page = html('thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Laboratorio Cuciture Demo')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
   })
 })

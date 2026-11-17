@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { formatTime } from '../../../../lib/i18n/format'
@@ -53,12 +53,16 @@ import {
 import { useDecide } from '../use-decide'
 import type { ChangeRecordModel, Loaded, RecordDialog } from './view-model'
 import { ChangeRecordView } from './view/ChangeRecordView'
+// ---- B-TH-262: the docked thread on the change (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const LIVE_TYPES = ['change_request.', 'change_order.'] as const
 
 /**
- * `/w/<company>/products/changes/requests/<id>` and `/…/orders/<id>` `?tab=change|impact|approvals|affected|activity` (the
- * change's record, also opened in a new tab by ⌘-click on a row). It reads the record, then each tab's part on its own (the
+ * `/w/<company>/products/changes/requests/<id>` `?tab=change|impact|approvals` and `/…/orders/<id>` `?tab=change|impact|approvals|
+ * affected` (the change's record, also opened in a new tab by ⌘-click on a row; B-TH-262: an old `?tab=activity` lands on Change with
+ * the thread open, a request's old `?tab=affected` on Impact & affected). It reads the record, then each tab's part on its own (the
  * style's revisions for a request's revision; a change order's redline, the drift, the approver picker, the requests it may
  * carry) and does what the view asks — every write with the version read and one Idempotency-Key per attempt. Live
  * change_request.* / change_order.* of this record read it again (while a tab holds unsaved work: the "changed elsewhere"
@@ -68,11 +72,12 @@ export function ChangeRecord({ kind, id }: { kind: RecordKind; id: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const params = useSearchParams()
+  const pathname = usePathname()
   const locale = useLocale()
   const prefix = companyPrefix(session.company?.code ?? '')
   const me = session.user.id
   const can = useMemo(() => changesCan(session.permissions), [session.permissions])
-  const tab = recordTabOf(params)
+  const tab = recordTabOf(params, kind)
   const photosFailedTerm = Number(params.get('photosFailed') ?? 0) || 0
 
   const [loaded, setLoaded] = useState<Loaded>({ status: 'loading' })
@@ -314,13 +319,18 @@ export function ChangeRecord({ kind, id }: { kind: RecordKind; id: string }) {
   )
   const offline = live === 'offline'
 
-  const panels =
-    loaded.status === 'ready' && can.thread ? (
-      <RecordPanels
-        record={{ type: kind === 'order' ? 'ChangeOrder' : 'ChangeRequest', id, companyId: (order ?? request)!.companyId, siteId: request?.siteId ?? null }}
-        title={`${order?.number ?? request?.number ?? ''} · ${(order ?? request)!.style.code}`}
-      />
+  // B-TH-262: the docked thread beside every tab (its Head holds Activity's doors, R-ACT); the print view keeps the panels' print form.
+  // Brand wall (W08, W12, W20, W25, W34): a request's own customer or supplier only (the one who asked); a change order has none (notes only).
+  const current = order ?? request
+  const record = current ? { type: kind === 'order' ? 'ChangeOrder' : 'ChangeRequest', id, companyId: current.companyId, siteId: request?.siteId ?? null } : null
+  const recordLabel = order?.number ?? request?.number ?? ''
+  const title = current ? `${recordLabel} · ${current.style.code}` : ''
+  const party = request?.party ? { id: request.party.id, name: request.party.name } : null
+  const thread =
+    record && loaded.status === 'ready' ? (
+      <OfficeRecordThread docked record={record} title={title} recordLabel={recordLabel || title} party={party} partyRole={request?.source === 'SUPPLIER' ? 'supplier' : 'customer'} printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
+  const printThread = record && loaded.status === 'ready' ? <RecordPanels record={record} title={title} party={party ? { ...party, emails: [] } : null} /> : null
 
   return (
     <ChangeRecordView
@@ -345,7 +355,8 @@ export function ChangeRecord({ kind, id }: { kind: RecordKind; id: string }) {
         dialog,
         decide: decide ? { ...decide, offline, holds: offline ? { APPROVED: { key: 'held.offline' }, REJECTED: { key: 'held.offline' }, IN_REVIEW: { key: 'held.offline' } } : decide.holds } : null,
       }}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onReload: () => {

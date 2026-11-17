@@ -16,10 +16,10 @@ const LINK_TONE = { LIVE: 'success', REVOKED: 'neutral', USED_UP: 'info', EXPIRE
 const DEPOSIT_TONE = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' } as const
 
 /**
- * Documents (design `quote.docs.*`): the quote's PDF — a draft's live preview in either language, made by the server
- * (also in a new tab), or the frozen PDF of the sent version with its fingerprint —, the accept link and what it did,
- * the acceptance's evidence (append-only) and the deposit request made at acceptance. The record's files are in
- * Activity › Files.
+ * The sending half of Approval & sending (design `quote.docs.*`; B-TH-257: the old Documents tab, merged under the approval — R-1,
+ * it does work): the quote's PDF — a draft's live preview in either language, made by the server (also in a new tab), or the
+ * frozen PDF of the sent revision with its fingerprint —, the accept link and what it did, the acceptance's evidence
+ * (append-only), the proofs and the deposit request made at acceptance. The record's files are in the docked thread's Files view.
  */
 export function DocumentsTab({ quote, model, actions, proofs, depositActions }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; /** B-W2b-165 (SAL-199): the proofs panel (record/proofs). */ proofs?: ReactNode; /** B-W2b-316: the deposit's pay-online page. */ depositActions?: ReactNode }) {
   const t = useT('sales')

@@ -143,7 +143,9 @@ describe('every design case draws in both languages with no key left on screen a
     for (const item of (designScreen as unknown as DesignScreen<unknown>).cases) {
       for (const locale of LOCALES) {
         const html = render(item.model, locale)
-        const panel = html.slice(html.indexOf('fw-ws'))
+        // B-TH-263: the panel only — the docked thread beside the tab is the thread's (its own tests).
+        const dock = html.indexOf('class="fw-rcf-dock"')
+        const panel = html.slice(html.indexOf('fw-ws'), dock > html.indexOf('fw-ws') ? dock : undefined)
         expect(html.indexOf('fw-ws') > 0 || item.id === 'loading' || item.id === 'slow' || item.id === 'error', `${item.id} (${locale}): the panel draws`).toBe(true)
         expect(panel.match(LEFT_KEY)?.[0] ?? null, `${item.id} (${locale})`).toBeNull()
         expect(panel, item.id).not.toMatch(/€|Fee per piece|Prezzo|Compenso/)

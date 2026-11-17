@@ -5,6 +5,11 @@ import { AUTHOR_KINDS, MAX_ATTACHMENTS, MAX_BODY_LENGTH, MAX_MENTIONS, MESSAGE_A
 import { FOLLOW_REASONS } from '@nexus/factory-domain/threads/followers'
 import { TIMELINE_KINDS } from '@nexus/factory-domain/threads/timeline'
 import { WAITING_SIDES } from '@nexus/factory-domain/threads/view-gates' // B-TH-047
+// ---- B-TH-049: the typed amount (price grain). B-TH-050: messages that point at messages.
+import { currency } from '@nexus/factory-domain/core/contracts'
+import { money } from '@nexus/factory-domain/money/marked'
+import { MESSAGE_AMOUNT_MAX } from '@nexus/factory-domain/threads/price-check'
+// ---- end B-TH-049 / B-TH-050
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
 
 /**
@@ -50,6 +55,17 @@ export const attachmentView = output({
 })
 export type AttachmentView = z.infer<typeof attachmentView>
 
+// ---- B-TH-050 (thread-G20): a message another points at, as a card shows it ("In reply to Anna, 14 Nov: …", "Corrects …").
+export const linkedMessageView = output({ id: id(), /** Null: a floor worker the site's gate keeps back. */ authorName: z.string().nullable(), excerpt: z.string(), at: instant() })
+/** B-TH-050: what a new message answers or corrects — one at most, a message of the same conversation. */
+export const messageLinkInput = {
+  /** "Reply" on a message: the message it answers. */
+  replyToMessageId: id().optional(),
+  /** "Correct": the message it corrects (messages are never edited; the old one shows "Corrected below"). */
+  correctsMessageId: id().optional(),
+}
+// ---- end B-TH-050
+
 export const messageView = output({
   id: id(),
   threadId: id(),
@@ -75,6 +91,14 @@ export const messageView = output({
   attachments: z.array(attachmentView),
   /** B-TH-231 (B-TH-029): how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
   hiddenAttachments: z.number().int().min(1).optional(),
+  // ---- B-TH-049 (N7, T8-F04): the price typed in the amount field (minor units of its currency); office only, and only for a reader
+  // holding the price grain (money.price: the answer drops it for everyone else). Null: the note has none.
+  amount: money.price(output({ value: z.number().int(), currency: z.string() }).nullable()),
+  // ---- B-TH-050 (thread-G20): office only — what it answers or corrects, and the newest message that corrects it ("Corrected below").
+  replyTo: linkedMessageView.nullable().optional(),
+  corrects: linkedMessageView.nullable().optional(),
+  correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
+  // ---- end B-TH-049 / B-TH-050
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>
@@ -155,6 +179,14 @@ export const postNoteContract = defineContract({
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
     /** "For the floor": the tablets working on the work order read it too. A work order's note only; default false, it stays in the office. */
     forFloor: z.boolean().optional(),
+    /**
+     * B-TH-049: a price in its own field, never in the words — minor units (cents) of an ISO 4217 currency. Only a reader holding
+     * the price grain sends it (money.price: refused otherwise); never with "For the floor". A floor note whose words look like a
+     * price is held (409 refusal/FLOOR_PRICE, the reason named).
+     */
+    amount: money.price(input({ value: z.number().int().min(0).max(MESSAGE_AMOUNT_MAX), currency: currency() })),
+    // B-TH-050: the message it answers or corrects (an office note corrects an office note; a correction of a floor note goes to the floor).
+    ...messageLinkInput,
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
@@ -169,6 +201,8 @@ export const postReplyContract = defineContract({
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
     /** The batch of one action that replies on several records (the same id on each call). */
     batchId: id().optional(),
+    // B-TH-050: the shared message it answers, or the portal reply of ours it corrects (a mail is corrected by mail).
+    ...messageLinkInput,
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })

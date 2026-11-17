@@ -399,6 +399,7 @@
       "ordered": "Ordinate",
       "declined": "Rifiutate",
       "lost": "Perse",
+      "withdrawn": "Ritirate",
       "notAnOrder": "Non è un ordine",
       "open": "Ancora aperte"
     },
@@ -408,6 +409,7 @@
       "ordered": "È stato fatto un ordine",
       "declined": "Rifiutate da noi",
       "lost": "Il cliente è andato altrove",
+      "withdrawn": "Il cliente l'ha ritirata prima della nostra decisione",
       "notAnOrder": "Contate a parte: fuori dalle percentuali",
       "open": "In attesa da noi o dal cliente"
     },

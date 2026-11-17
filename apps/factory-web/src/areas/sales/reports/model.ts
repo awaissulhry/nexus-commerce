@@ -340,6 +340,7 @@ export const REQUEST_DOORS: Readonly<Record<RequestFigure, { readonly tile: 'ALL
   ordered: { tile: 'ALL', outcome: 'ORDERED' },
   declined: { tile: 'ALL', outcome: 'DECLINED' },
   lost: { tile: 'LOST', outcome: null },
+  withdrawn: { tile: 'ALL', outcome: 'WITHDRAWN' }, // B-TH-095
   notAnOrder: { tile: 'ALL', outcome: 'NOT_AN_ORDER' },
 })
 

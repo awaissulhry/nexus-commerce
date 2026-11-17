@@ -327,15 +327,18 @@
   "record": {
     "offline": "Offline: quello che vedi potrebbe non essere aggiornato; le modifiche aspettano il ritorno della connessione.",
     "stale": "Questa scheda è cambiata alle {time} mentre lavoravi.",
-    "reload": "Rileggi"
+    "reload": "Rileggi",
+    "dockLabel": "La conversazione del pilota",
+    "threadLabel": "Misure {garment}",
+    "name": "Profilo pilota",
+    "tabsLabel": "Schede del profilo pilota"
   },
   "tab": {
     "measurements": "Misure",
     "photos": "Foto",
     "fittings": "Prove",
     "proofs": "Bozze",
-    "orders": "Ordini",
-    "activity": "Attività"
+    "orders": "Ordini"
   },
   "meas": {
     "none": "Ancora nessuna misura",
@@ -853,8 +856,8 @@
     "CHECKING": "In verifica",
     "REFUSED": "Rifiutata"
   },
-  "activity": {
-    "title": "Attività",
+  "history": {
+    "title": "Storico",
     "sub": "Tutto ciò che è successo alle misure di questo pilota, prima il più recente.",
     "none": "Ancora nulla. Il primo cambiamento compare qui.",
     "recorded": "Revisione {revision} registrata da {by}",
@@ -866,8 +869,7 @@
     "by": "Da {name}",
     "quoteUnit": "Preventivo {number}: un capo sulla revisione {revision}",
     "orderUnit": "Ordine {number}: un capo sulla revisione {revision}",
-    "style": "{style} · {colourway}",
-    "noThread": "I tuoi ruoli non leggono le conversazioni dei record: note e messaggi sul pilota non sono mostrati qui."
+    "style": "{style} · {colourway}"
   },
   "sheet": {
     "noRight": "Non puoi vedere questa scheda di lavoro",

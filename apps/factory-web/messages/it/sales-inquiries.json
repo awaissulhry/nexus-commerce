@@ -135,7 +135,8 @@
     "outcome": {
       "ORDERED": "Diventate: un ordine (subito o dal preventivo)",
       "DECLINED": "Diventate: rifiutate (non “Non è un ordine”)",
-      "NOT_AN_ORDER": "Diventate: non è un ordine"
+      "NOT_AN_ORDER": "Diventate: non è un ordine",
+      "WITHDRAWN": "Diventate: ritirate dal cliente"
     },
     "kind": "Tipo: {kind}"
   },

@@ -30,8 +30,8 @@ const FIX_TAB: Readonly<Record<string, QuoteTab>> = {
   NO_COST_REVISION: 'price',
   CERTIFICATE: 'lines',
   VAT_CHANGED: 'lines',
-  // B-W2b-165: a proof still uploading, being checked or refused (Documents › Proofs).
-  PROOF_NOT_READY: 'documents',
+  // B-W2b-165: a proof still uploading, being checked or refused (Approval & sending › Proofs; B-TH-257: Documents merged there).
+  PROOF_NOT_READY: 'approval',
   // B-W2b-325: a line under a minimum order quantity (sales/line-checks).
   BELOW_MINIMUM: 'lines',
   // B-W2b-294: the customer and product rules (sales/line-checks); the customer's account is settled on its record.

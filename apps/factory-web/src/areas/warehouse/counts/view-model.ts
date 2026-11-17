@@ -1,4 +1,3 @@
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { CountItemKind, CountKind, CountLine, CountPlace, CountReason, CountRecord, CountRow, CountTiles, LineFilter, MaterialChoice } from './api'
 import type { CountsCan, ListView, Phrase, RecordTab } from './model'
 // B-W2b-320: the count schedules (Due counts, Due this week, Count schedule), the freeze and class of New count, the blocked places.
@@ -184,8 +183,8 @@ export interface CountRecordModel {
   places?: CountPlace[] | null
   /** B-W2b-320: the places this count blocks now (conn "Locations (blocked during a count)"); null: not read. */
   blocked?: BlockedPlace[] | null
-  /** Design cases: the Activity tab's record panels (the page mounts the real ones). */
-  panelsPreview?: RecordPanelsViewModel | null
+  /** B-TH-264: the person (the record frame remembers their thread width per record type). */
+  personId?: string | null
   /** Design cases: Differences rows ticked, the keys list open. */
   selected?: string[]
   helpOpen?: boolean

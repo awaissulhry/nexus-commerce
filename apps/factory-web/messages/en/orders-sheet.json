@@ -15,7 +15,21 @@
     "daysLate": "Days late",
     "invoicedAmount": "Invoiced amount",
     "brandHint": "The label on the garment — not the customer.",
-    "invoicedHint": "Issued invoices less credit notes, by pieces; drafts and deposit invoices do not count."
+    "invoicedHint": "Issued invoices less credit notes, by pieces; drafts and deposit invoices do not count.",
+    "openUnits": "Open pcs",
+    "openUnitsHint": "Pieces the order still owes (none once shipped, closed or cancelled)",
+    "progress": "Progress",
+    "progressHint": "Cut, sewn and finished of the pieces in work orders (read only while this column is shown)",
+    "paid": "Paid",
+    "balance": "Balance",
+    "balanceHint": "Still to pay: the gross less credit notes and what is paid",
+    "site": "Site",
+    "note": "Order note",
+    "noteHint": "The office’s own note: the customer never sees it",
+    "atRisk": "At risk",
+    "atRiskHint": "The promise is near and the order is still being made (the alert rule’s days)",
+    "customerUrgency": "Customer’s mark",
+    "customerUrgencyHint": "The customer’s own mark, read-only (Priority stays the office’s)"
   },
   "door": {
     "order": "Open order {number} · its thread on the right",
@@ -95,7 +109,15 @@
     "company": "Company: {name}",
     "remove": "Remove “{name}”",
     "clearAll": "Clear all",
-    "cf": "Custom fields: {terms}"
+    "cf": "Custom fields: {terms}",
+    "late": "Late",
+    "deposit": "Waiting for deposit",
+    "reaccept": "Waiting for the customer",
+    "uninvoiced": "Shipped, not invoiced",
+    "invoiced": "Invoiced: {state}",
+    "atRisk": "At risk",
+    "currency": "Currency: {currency}",
+    "urgency": "Customer’s mark: {urgency}"
   },
   "switcher": {
     "title": "Customer",
@@ -157,5 +179,92 @@
     "daysLateBack": "Days late, fewest first",
     "ordered": "Order date, oldest first",
     "orderedBack": "Order date, newest first"
+  },
+  "views": {
+    "suggest": "{customer} — tracking",
+    "ofCustomer": "Orders of {customer}"
+  },
+  "group": {
+    "label": "Group the rows",
+    "none": "No groups",
+    "party": "Group by customer"
+  },
+  "uninvoiced": {
+    "none": "Everything shipped is invoiced",
+    "noneBody": "No order has shipped goods that wait for an invoice."
+  },
+  "urgency": {
+    "URGENT": "Urgent",
+    "REGULAR": "Regular",
+    "filter": "Show only the orders the customer marks {urgency}"
+  },
+  "atRisk": {
+    "filter": "Show only the orders at risk",
+    "days_one": "At risk · {count} day left",
+    "days_other": "At risk · {count} days left"
+  },
+  "progress": {
+    "none": "Not in work yet",
+    "text": "Cut {cut} · Sewn {sewn} · Finished {finished} of {inWork}"
+  },
+  "totals": {
+    "orders_one": "{n} order",
+    "orders_other": "{n} orders",
+    "ordered": "{n} pcs ordered",
+    "shipped": "{n} shipped",
+    "open": "{n} still open",
+    "late": "Late {n}",
+    "atRisk": "At risk {n}",
+    "invoiced": {
+      "NONE": "Not invoiced {n}",
+      "PART": "Invoiced in part {n}",
+      "ALL": "Invoiced {n}"
+    },
+    "timing": {
+      "PER_SHIPMENT": "Invoiced per shipment",
+      "MONTHLY": "Invoiced monthly"
+    },
+    "all": "All customers",
+    "allMine": "All my customers",
+    "of": "Figures of {name}",
+    "openSheet": "Open the sheet of {name}"
+  },
+  "groups": {
+    "more": "Show more of {name}"
+  },
+  "invoiceShipped": {
+    "action_one": "Invoice shipped goods for {count}",
+    "action_other": "Invoice shipped goods for {count}",
+    "pick": "Pick the orders whose shipped goods to invoice",
+    "tooMany": "At most 100 orders at once",
+    "title_one": "Invoice the shipped goods of {count} order",
+    "title_other": "Invoice the shipped goods of {count} orders",
+    "close": "Close",
+    "retry": "Try again",
+    "reading": "Reading what is shipped and not invoiced…",
+    "none": "Nothing to invoice: none of these orders has shipped goods waiting.",
+    "drafts_one": "One draft, opened in Finance with its DDTs chosen. Nothing is made here.",
+    "drafts_other": "{count} drafts — one per customer and company. Each opens in Finance with its DDTs chosen; nothing is made here.",
+    "ddts_one": "{count} DDT",
+    "ddts_other": "{count} DDTs",
+    "orders": "Orders {numbers}",
+    "open": "Open in Finance",
+    "heldTitle_one": "{count} order waits:",
+    "heldTitle_other": "{count} orders wait:",
+    "held": {
+      "NOTHING_SHIPPED": "Nothing shipped yet",
+      "SHIPPED_WITHOUT_DDT": "Shipped without a DDT",
+      "IN_DRAFT": "Already in a draft",
+      "INVOICED": "Already invoiced",
+      "OTHER": "Nothing to invoice now"
+    },
+    "forbidden": "Invoicing shipped goods needs the right to make invoices.",
+    "failed": "The shipped goods could not be read. Try again."
+  },
+  "cells": {
+    "final": "A {status} order never changes.",
+    "nounOne": "order",
+    "nounOther": "orders",
+    "noManage": "Changing the cells needs the right to change orders."
   }
 }

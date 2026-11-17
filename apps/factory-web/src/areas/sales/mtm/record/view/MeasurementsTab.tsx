@@ -8,7 +8,7 @@ import { Button, InfoTip, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { CheckList, Section, type CheckLine } from '../../../../quality/_shared/parts'
 import { Timeline } from '../../../../../lib/i18n/ds-parts'
 import type { ProfileRecord, Revision } from '../../api'
-import { basicLines, beyondPoints, brokenRules, formPoints, measureLines, rangeVerdict, reviewDraftFor, reviewHeld, rightHeld, ruleWords, styleFindingsOf, templatesHref, type Phrase } from '../../model'
+import { basicLines, beyondPoints, brokenRules, formPoints, historyOf, measureLines, rangeVerdict, reviewDraftFor, reviewHeld, rightHeld, ruleWords, styleFindingsOf, templatesHref, type Phrase } from '../../model'
 import { ReviewPill, useWords } from '../../parts'
 import type { ProfileRecordActions, ProfileRecordModel } from '../view-model'
 import { Listbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
@@ -20,6 +20,9 @@ import { Listbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS 
  * size, fit notes and the internal note, who measured, where and when, the privacy notice given; the Factory review (SAL-292:
  * state, who, when, the words; Confirm · Ask for more, held with why); the Certified range check per MTM style (PRD-288:
  * inside or outside, the base size suggested, the impossible ratios flagged, the points that fall out and by how much).
+ * B-TH-258 (R1-G03): then History — the rider timeline that was the Activity tab: each revision recorded or sent by the link (who,
+ * where), each factory review, each worksheet kept, each quote or order unit made to it, newest first. Domain history, not the
+ * thread's: the notes and messages are the docked thread's.
  */
 export function MeasurementsTab({ model, record, actions }: { model: ProfileRecordModel; record: ProfileRecord; actions?: ProfileRecordActions }) {
   const { t, say, day, when } = useWords()
@@ -137,7 +140,24 @@ export function MeasurementsTab({ model, record, actions }: { model: ProfileReco
           <RangePanel model={model} record={record} actions={actions} />
         </div>
       </div>
+      {/* B-TH-258: the rider timeline (once the Activity tab). */}
+      <HistorySection record={record} />
     </div>
+  )
+}
+
+/** B-TH-258 (R1-G03): Measurements › History — what happened to the rider's garment type, newest first (the old Activity timeline). */
+function HistorySection({ record }: { record: ProfileRecord }) {
+  const { t, say } = useWords()
+  const steps = historyOf(record)
+  return (
+    <Section id="mtm-history" title={t('history.title')} sub={t('history.sub')}>
+      {steps.length === 0 ? (
+        <EmptyState title={t('history.none')} />
+      ) : (
+        <Timeline label={t('history.title')} steps={steps.map((step) => ({ key: step.key, label: say(step.label) ?? '', tone: step.tone === 'neutral' ? 'neutral' : step.tone, at: step.at, detail: step.detail ? (say(step.detail) ?? undefined) : undefined }))} />
+      )}
+    </Section>
   )
 }
 
@@ -181,7 +201,7 @@ function ReviewPanel({ model, record, actions }: { model: ProfileRecordModel; re
           label={t('reviewPanel.history')}
           steps={history.map((revision) => ({
             key: revision.id,
-            label: t(revision.review.status === 'CONFIRMED' ? 'activity.confirmed' : 'activity.needMore', { revision: revision.revision, by: revision.review.by?.name ?? '' }),
+            label: t(revision.review.status === 'CONFIRMED' ? 'history.confirmed' : 'history.needMore', { revision: revision.revision, by: revision.review.by?.name ?? '' }),
             tone: revision.review.status === 'CONFIRMED' ? 'success' : 'warning',
             at: revision.review.at,
             detail: revision.review.note ?? undefined,

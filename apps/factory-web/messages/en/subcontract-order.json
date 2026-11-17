@@ -49,8 +49,7 @@
     "changed": "Changed at {time} by someone else · your open dialog is kept",
     "reload": "Reload",
     "cancelled": "Cancelled on {date}",
-    "readOnly": "You read this order: changing it, sending its kit or receiving goods back need another role.",
-    "noPanels": "The thread, files and history appear here."
+    "readOnly": "You read this order: changing it, sending its kit or receiving goods back need another role."
   },
   "band": {
     "back": "Subcontract orders",
@@ -63,9 +62,7 @@
       "reopen": "Back to draft",
       "cancel": "Cancel order"
     },
-    "dock": "Thread",
-    "dockHint": "The thread beside any tab on a wide screen (⌘J)",
-    "dockLabel": "Thread, files and history",
+    "dockLabel": "The subcontract order’s thread",
     "more": "More actions",
     "jobSheet": "Print job sheet",
     "printDdt": "Print kit DDT {number}",
@@ -99,10 +96,8 @@
   "tab": {
     "label": "The order’s tabs",
     "ops": "Operations & quantities",
-    "kit": "Kit sent",
-    "back": "Received back",
-    "documents": "Documents",
-    "activity": "Activity"
+    "kit": "Kit & documents",
+    "back": "Received back"
   },
   "notice": {
     "issued": "Sent to the workshop: the warehouse can send the kit now.",
@@ -215,17 +210,6 @@
       "bodyEdit": "Plan it from the work order’s materials, or add the lines one by one. Leather tracked by the hide goes cut, as bundles."
     },
     "floorLater": "Here the office sends the kit with its DDT; the warehouse can also send it from the tablet (Subcontract kits).",
-    "ddts": {
-      "title": "Kit DDTs (work on our behalf)",
-      "none": "No DDT issued for this order yet.",
-      "col": {
-        "number": "Number",
-        "date": "Date",
-        "lines": "Kit lines",
-        "state": "State",
-        "open": "PDF"
-      }
-    },
     "count_one": "{count} kit line",
     "count_other": "{count} kit lines",
     "removeN_one": "Remove {count} line",
@@ -293,6 +277,7 @@
     "qualityLater": "The quality inspection of what came back is not linked from here yet."
   },
   "docs": {
+    "title": "Job sheet and kit DDTs",
     "jobSheet": {
       "name": "Job sheet {number}",
       "status": "Printed and sent with the kit; no price on it. It opens in a new tab: print it, or save it as a PDF.",

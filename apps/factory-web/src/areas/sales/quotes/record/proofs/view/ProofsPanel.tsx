@@ -16,7 +16,7 @@ import '../proofs.css'
 const STATE_TONE = { READY: 'success', UPLOADING: 'info', CHECKING: 'info', REFUSED: 'danger' } as const
 
 /**
- * SCR-035-proofs — Documents › Proofs (B-W2b-165; SAL-199): the proofs the customer accepts with the quote — an artwork
+ * SCR-035-proofs — Approval & sending › Proofs (B-W2b-165; SAL-199): the proofs the customer accepts with the quote — an artwork
  * proof, a size chart, a measurement sheet. The current version: add (drop or choose a PDF or a picture), a new version of
  * one, remove one, carry over an earlier version's (each held with its reason before the click: the role, the version
  * sent, the version full, an upload running); then each version the customer saw, with what was sent and what the

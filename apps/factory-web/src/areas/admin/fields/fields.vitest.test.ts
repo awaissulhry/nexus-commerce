@@ -206,7 +206,7 @@ const sources = (dir: string): string[] =>
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.test.') && entry.name !== 'fixtures.ts' && entry.name !== 'demo.ts' ? [path] : []
   })
 const FILES = [...sources(join(SRC, 'areas/admin/fields')), ...sources(join(SRC, 'record-panels/custom-fields'))]
-const PREFIXES = ['band', 'live', 'later', 'pick', 'tabs', 'recordType', 'shared', 'readOnly', 'refused', 'error', 'state', 'fields', 'col', 'section', 'type', 'typeHint', 'grain', 'audience', 'audienceHint', 'move', 'preview', 'fieldDialog', 'whose', 'lists', 'values', 'listDialog', 'renameDialog', 'valueDialog', 'look', 'mark', 'keys', 'wait', 'fault', 'done', 'cf']
+const PREFIXES = ['band', 'live', 'later', 'pick', 'tabs', 'recordType', 'shared', 'readOnly', 'refused', 'error', 'state', 'fields', 'col', 'section', 'type', 'typeHint', 'grain', 'audience', 'audienceHint', 'move', 'preview', 'fieldDialog', 'whose', 'lists', 'values', 'listDialog', 'renameDialog', 'valueDialog', 'look', 'mark', 'keys', 'wait', 'fault', 'done', 'cf', /* B-TH-242 */ 'customer', 'portalLine']
 /** Strings shaped like keys that are not ours: the permissions the code names, and the list frame's own `keys.click`. */
 const NOT_KEYS: ReadonlySet<string> = new Set<string>([...FACTORY_PERMISSIONS.assignable.map((definition) => definition.name), 'keys.click'])
 const own = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale][NS] ?? {}
@@ -283,3 +283,81 @@ describe('every design case draws in both languages with no key on screen', () =
     expect(recordScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['values', 'reader', 'editing', 'editing-problems', 'link-picker', 'loading', 'error']))
   })
 })
+
+// ── B-TH-242 (threads plan TH-4, SHEET-G06 / WALL-G08; X-ADM-FIELDS.dialog-F01, -F02; wall W17): a column for one customer ──
+import { customerChoiceOn, customerLineOf, customerSearchFault, portalLineOf, whereLineOf } from './model'
+import { DEMO_ALPHA_FIELD, DEMO_FIELD_CUSTOMERS } from './demo'
+
+describe('a field for one customer (B-TH-242)', () => {
+  const alpha = DEMO_FIELD_CUSTOMERS[0]
+  const named = (patch: Parameters<typeof withDraft>[1]) => withDraft(withDraft(newDraft('custom'), { type: 'TEXT', labelEn: 'Hang tag', labelIt: 'Cartellino' }, grains), patch, grains)
+
+  it('"For" is offered on customers, quotes and orders only (their records name their customer)', () => {
+    expect(customerChoiceOn('ORDER')).toBe(true)
+    expect(customerChoiceOn('QUOTE')).toBe(true)
+    expect(customerChoiceOn('CUSTOMER')).toBe(true)
+    expect(customerChoiceOn('MATERIAL')).toBe(false)
+    expect(customerChoiceOn('SUPPLIER')).toBe(false)
+  })
+
+  it('one customer kept: POST /fields sends it for an order; every customer sends none; never on a record type that takes none', () => {
+    const one = named({ forCustomer: 'one', partyId: alpha.id, partyName: alpha.legalName })
+    expect(newFieldBody('ORDER', one).partyId).toBe(alpha.id)
+    expect(newFieldBody('ORDER', named({})).partyId).toBeNull()
+    expect(newFieldBody('MATERIAL', one).partyId).toBeNull()
+    // The name is the dialog's own: never sent.
+    expect(JSON.stringify(newFieldBody('ORDER', one))).not.toContain(alpha.legalName)
+  })
+
+  it('"One customer" waits for the customer; back to every customer drops it', () => {
+    const waiting = named({ forCustomer: 'one' })
+    expect(draftHeld(waiting, context())).toBe('wait.customer')
+    expect(draftHeld(named({ forCustomer: 'one', partyId: alpha.id, partyName: alpha.legalName }), context())).toBeNull()
+    const back = withDraft(named({ forCustomer: 'one', partyId: alpha.id, partyName: alpha.legalName }), { forCustomer: 'every' }, grains)
+    expect(back.partyId).toBeNull()
+    expect(back.partyName).toBeNull()
+  })
+
+  it('a field\'s customer never changes: its dialog keeps it fixed and its change sends no customer', () => {
+    const draft = draftOfField(DEMO_ALPHA_FIELD)
+    expect(draft.forCustomer).toBe('one')
+    expect(draft.partyId).toBe(alpha.id)
+    expect(draft.partyName).toBe(alpha.legalName)
+    expect(fieldChangeOf(DEMO_ALPHA_FIELD, { ...draft, labelEn: 'Alpha tag' })).toEqual({ version: DEMO_ALPHA_FIELD.version, labelEn: 'Alpha tag' })
+  })
+
+  it('the preview line: a field for every customer shown in the portal tells that every customer sees its name; one customer\'s never', () => {
+    expect(portalLineOf({ shownInPortal: true, forCustomer: 'every', audience: 'INTERNAL', grain: null }, true)).toBe('portalLine.every')
+    expect(portalLineOf({ shownInPortal: true, forCustomer: 'one', audience: 'INTERNAL', grain: null }, true)).toBeNull()
+    expect(portalLineOf({ shownInPortal: false, forCustomer: 'every', audience: 'INTERNAL', grain: null }, true)).toBeNull()
+    // Personal data never goes to the portal: no line.
+    expect(portalLineOf({ shownInPortal: true, forCustomer: 'every', audience: 'PERSONAL', grain: null }, true)).toBeNull()
+    expect(CATALOGUE.en[NS]?.['portalLine.every']).toBe('Every customer will see this column name in its portal.')
+  })
+
+  it('where it shows, and the field\'s line in the grid', () => {
+    expect(whereLineOf({ forCustomer: 'every', partyId: null, partyName: null }).key).toBe('customer.previewEvery')
+    expect(whereLineOf({ forCustomer: 'one', partyId: null, partyName: null }).key).toBe('customer.previewPick')
+    expect(whereLineOf({ forCustomer: 'one', partyId: alpha.id, partyName: alpha.legalName })).toEqual({ key: 'customer.previewOne', params: { customer: alpha.legalName } })
+    expect(customerLineOf(DEMO_ALPHA_FIELD)).toEqual({ key: 'customer.lineOne', params: { customer: alpha.legalName } })
+    expect(customerLineOf(DEMO_ORDER_FIELDS[0]!)).toEqual({ key: 'customer.lineEvery' })
+  })
+
+  it('the customer picker\'s refusal in our words', () => {
+    expect(customerSearchFault(new ApiError('forbidden', 403, 'forbidden', 'no', null, []))).toBe('customer.cannotSearch')
+    expect(customerSearchFault(new ApiError('unavailable', 0, 'network', 'no', null, []))).toBe('fault.offline')
+    expect(customerSearchFault(new Error('x'))).toBe('customer.searchFailed')
+  })
+
+  it('the design shows the customer column, the picker, the portal line and a fixed customer', () => {
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['th4-for-customer', 'th4-add-one-customer', 'th4-add-one-customer-picked', 'th4-add-every-portal', 'th4-edit-one-customer', 'th4-customers-refused']))
+    const View = designScreen.view as ComponentType<{ model: unknown }>
+    for (const locale of LOCALES) {
+      const html = (id: string) => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: designScreen.cases.find((item) => item.id === id)!.model })))
+      const line = CATALOGUE[locale][NS]?.['portalLine.every'] ?? ''
+      expect(html('th4-add-every-portal')).toContain(line.replace(/'/g, '&#x27;'))
+      expect(html('th4-add-one-customer-picked')).not.toContain(line.replace(/'/g, '&#x27;'))
+    }
+  })
+})
+// ── end B-TH-242 ──

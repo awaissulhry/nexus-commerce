@@ -135,7 +135,8 @@
     "outcome": {
       "ORDERED": "Became: an order (straight or from its quote)",
       "DECLINED": "Became: declined (not “Not an order”)",
-      "NOT_AN_ORDER": "Became: not an order"
+      "NOT_AN_ORDER": "Became: not an order",
+      "WITHDRAWN": "Became: withdrawn by the customer"
     },
     "kind": "Kind: {kind}"
   },

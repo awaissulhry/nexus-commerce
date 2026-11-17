@@ -97,7 +97,8 @@
     "CANCELLED": "Annullati",
     "PENDING_APPROVAL": "In attesa di approvazione",
     "DELIVERED": "Consegnati",
-    "all": "Tutti gli ordini"
+    "all": "Tutti gli ordini",
+    "uninvoiced": "Spedito, non fatturato"
   },
   "tile": {
     "late": "In ritardo",
@@ -1184,5 +1185,108 @@
     "forbidden": "Non puoi vedere in anteprima il portale di questo cliente.",
     "noKind": "Questo cliente non ha un portale: nei suoi ruoli non è né cliente né marchio.",
     "failed": "Il portale del cliente non si è aperto. Riprova."
+  },
+  "links": {
+    "title": "Reclami e resi",
+    "hint": "Solo quelli di questo ordine; ognuno apre la sua scheda.",
+    "loading": "Lettura dei reclami e dei resi dell'ordine…",
+    "failed": "Non è stato possibile leggere i reclami e i resi dell'ordine",
+    "complaints": {
+      "title": "Reclami",
+      "none": "Nessun reclamo su questo ordine."
+    },
+    "returns": {
+      "title": "Resi",
+      "none": "Nessun reso di questo ordine."
+    },
+    "col": {
+      "number": "Numero",
+      "status": "Stato",
+      "severity": "Gravità",
+      "received": "Ricevuto",
+      "answerDue": "Risposta entro",
+      "wanted": "Il cliente vuole",
+      "requested": "Richiesto",
+      "closed": "Chiuso"
+    },
+    "complaintStatus": {
+      "NEW": "Nuovo",
+      "TRIAGED": "Valutato",
+      "INVESTIGATING": "In analisi",
+      "ANSWERED": "Risposto",
+      "CLOSED": "Chiuso"
+    },
+    "severity": {
+      "MINOR": "Lieve",
+      "MAJOR": "Grave",
+      "CRITICAL": "Critico"
+    },
+    "returnStatus": {
+      "REQUESTED": "Richiesto",
+      "AUTHORISED": "Autorizzato",
+      "RECEIVED": "Ricevuto",
+      "INSPECTED": "Controllato",
+      "CLOSED": "Chiuso",
+      "REJECTED": "Respinto",
+      "CANCELLED": "Annullato"
+    },
+    "wanted": {
+      "REPLACE": "Una sostituzione",
+      "REPAIR": "Una riparazione",
+      "CREDIT": "Una nota di credito",
+      "REMAKE": "Rifatto"
+    },
+    "gate": {
+      "title": "{place} bloccato: {subject}",
+      "place": {
+        "WORK_ORDER_RELEASE": "Rilascio dell'ordine di lavoro",
+        "LABEL_PRINT": "Stampa etichette",
+        "FINAL_RELEASE": "Rilascio finale",
+        "SHIPMENT": "Spedizione"
+      },
+      "subject": {
+        "WorkOrder": "un ordine di lavoro di questo ordine",
+        "Shipment": "una spedizione di questo ordine"
+      },
+      "open": "Apri in Conformità",
+      "wordsOnly": "La Conformità lo risolve o lo deroga."
+    },
+    "rePromise": {
+      "title": "La pianificazione propone nuove date per la riga {line}",
+      "titleStyle": "La pianificazione propone nuove date per la riga {line} · {style}",
+      "sizesLabel": "Le nuove date per taglia",
+      "size": "{size}: {from} → {to}",
+      "allSizes": "Tutte le taglie",
+      "by": "Proposto da {name} il {date}.",
+      "byUnknown": "Proposto il {date}.",
+      "note": "Nota del pianificatore: {note}",
+      "tell": "Avvisa il cliente (il messaggio del pianificatore parte per e-mail nella conversazione di questo ordine)",
+      "noTell": "Da qui il cliente non viene avvisato: inviare e-mail richiede il permesso di invio e-mail.",
+      "accept": "Accetta",
+      "decline": "Rifiuta…"
+    },
+    "decline": {
+      "title": "Rifiutare le nuove date per la riga {line}?",
+      "body": "Non si promette nulla e il cliente non viene avvisato. Il pianificatore legge il motivo.",
+      "reason": "Perché (lo legge il pianificatore)",
+      "reasonNeeded": "Scrivi il motivo: lo legge il pianificatore.",
+      "go": "Rifiuta le nuove date"
+    },
+    "done": {
+      "accepted": "Nuove date accettate: la promessa della riga le segue.",
+      "acceptedTold": "Nuove date accettate e il cliente è avvisato per e-mail nella conversazione di questo ordine.",
+      "declined": "Nuove date rifiutate: il pianificatore legge il motivo."
+    },
+    "held": {
+      "busy": "In corso…",
+      "noDecide": "Le nuove date le decide la vendita (il permesso di gestire gli ordini), mai il pianificatore che le ha proposte."
+    },
+    "problem": {
+      "forbidden": "Non puoi farlo su questo ordine.",
+      "notFound": "Questa proposta o questo ordine non c'è più.",
+      "conflict": "Qualcuno l'ha già deciso, o le date sono cambiate nel frattempo: l'ordine viene riletto.",
+      "invalid": "Non inviato così: controlla ciò che hai scritto.",
+      "unavailable": "Il server della fabbrica non ha risposto. Riprova."
+    }
   }
 }

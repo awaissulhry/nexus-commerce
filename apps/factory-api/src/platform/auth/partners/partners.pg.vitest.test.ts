@@ -279,3 +279,187 @@ describe('time-boxed access (PLT-022)', { timeout: SLOW_TEST_TIMEOUT_MS }, () =>
     expect((await gina.get('/portal/me')).status).toBe(401)
   })
 })
+
+// ---- B-PR-14: a customer's production limits (the limits card) ---------------------------------------------------------------
+
+describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const card = (partyId: string) => `/partners/${partyId}/production`
+  async function asOwnerPut(url: string, body: Record<string, unknown>) {
+    await stepUp(h, owner, ownerSecret)
+    return owner.put(url, body)
+  }
+  const audits = async (partyId: string) =>
+    (await h.db.admin.query(`SELECT action, before, after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'PortalSettings' AND "recordId" = $2 AND action = 'partners.changeProduction' ORDER BY at, id`, [tenant.id, partyId])).rows as { action: string; before: Record<string, unknown> | null; after: Record<string, unknown> }[]
+  /** A made-up office person limited to one customer (a sales rep of that customer only), signed in. */
+  async function repOf(partyId: string, email: string): Promise<Browser> {
+    const person = await addUser(h, tenant, { email })
+    await inWorld(h, world, async (client) => {
+      const role = await client.role.findFirstOrThrow({ where: { key: 'sales', system: true }, select: { id: true } })
+      await client.roleAssignment.create({ data: { id: newId(), userId: person.id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+    })
+    const browser = new Browser(h.app)
+    expect((await browser.signIn(SLUG, person.email, person.password)).status).toBe(200)
+    await enrolTotp(h, browser)
+    return browser
+  }
+
+  it('reads the defaults (Status only, urgency off, quota 3, no asks, no supervisor); a write asks a step-up; the preset turns on Progress, urgency and every ask', async () => {
+    const alpha = await party(['CUSTOMER'])
+    const read = await owner.get(card(alpha))
+    expect(read.status, JSON.stringify(read.body)).toBe(200)
+    expect(read.body).toMatchObject({
+      party: { id: alpha },
+      production: {
+        level: 'STATUS',
+        progressShared: false,
+        urgency: { on: false, max: 3, now: 0, dormant: null, overQuota: null },
+        askKinds: [],
+        openAsks: [],
+        approver: null,
+        overrideFourEyes: false,
+        supervisor: null,
+        backup: null,
+        productionRoleOffered: true,
+        productionRoleWords: null,
+        version: 1,
+      },
+      mayManage: true,
+    })
+
+    // PW-S01: no step-up in the last 5 minutes: refused before anything is written.
+    h.clock.advance(6 * 60_000)
+    const held = await owner.put(card(alpha), { preset: 'PRODUCTION_PARTNER', version: 1 })
+    expect(held.status).toBe(403)
+    expect(held.body.error.issues).toEqual([expect.objectContaining({ path: 'stepUp' })])
+    expect(await audits(alpha)).toEqual([])
+
+    const preset = await asOwnerPut(card(alpha), { preset: 'PRODUCTION_PARTNER', version: 1 })
+    expect(preset.status, JSON.stringify(preset.body)).toBe(200)
+    expect(preset.body.production).toMatchObject({
+      level: 'PROGRESS',
+      progressShared: true,
+      urgency: { on: true, max: 3, now: 0 },
+      askKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'],
+      openAsks: ['RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'],
+      version: 2,
+    })
+    // progressShared stays in every contract, derived from the level: the Portal access tab and the list say so too.
+    expect((await owner.get(`/partners/${alpha}`)).body.settings).toMatchObject({ progressShared: true })
+    expect((await owner.get('/partners')).body.organisations.find((entry: { party: { id: string } }) => entry.party.id === alpha)).toMatchObject({ progressShared: true })
+    // PW-S01: every change has its audit row.
+    expect(await audits(alpha)).toEqual([
+      expect.objectContaining({
+        before: expect.objectContaining({ productionLevel: 'STATUS', productionUrgencyOn: false, progressShared: false }),
+        after: expect.objectContaining({ productionLevel: 'PROGRESS', productionUrgencyOn: true, productionAskKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'], progressShared: true, preset: 'PRODUCTION_PARTNER' }),
+      }),
+    ])
+    const event = (await events('partner_portal.settings_changed')).at(-1)!
+    expect(event).toEqual({
+      partyId: alpha,
+      fields: ['productionLevel', 'productionUrgencyOn', 'productionAskKinds', 'progressShared'],
+      portalOn: true,
+      progressShared: true,
+      productionLevel: 'PROGRESS',
+      productionUrgencyOn: true,
+      productionUrgentMax: 3,
+      productionAskKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'],
+    })
+  })
+
+  it('refuses in words: RUSH in the asks, a quota out of 0 to 20, a stale version, nothing to change, an approver of another organisation, a supplier', async () => {
+    const beta = await party(['BRAND'])
+    const rush = await asOwnerPut(card(beta), { productionAskKinds: ['RUSH'], version: 1 })
+    expect(rush.status).toBe(400)
+    expect(rush.body.error.issues).toEqual([{ path: 'body/productionAskKinds/0', message: '"Urgent – asked" follows the urgency switch, not this list.' }])
+    expect((await asOwnerPut(card(beta), { productionUrgentMax: 21, version: 1 })).status).toBe(400)
+    expect((await asOwnerPut(card(beta), { version: 1 })).status).toBe(400)
+    expect((await asOwnerPut(card(beta), { productionLevel: 'GATES', version: 0 })).status).toBe(409)
+    expect((await asOwnerPut(card(beta), { productionLevel: 'STATUS', version: 1 })).status).toBe(409)
+    // Neutral: a person of another organisation reads as no person of this one.
+    const other = newId()
+    await inWorld(h, world, (client) =>
+      client.user.create({ data: { id: other, email: 'omar@brand-alpha.example', displayName: 'Omar Other', status: 'ACTIVE', audience: 'PARTNER', partyId: world.partyId, partnerKind: 'CUSTOMER' }, select: { id: true } }),
+    )
+    const foreign = await asOwnerPut(card(beta), { productionApproverId: other, version: 1 })
+    expect(foreign.status).toBe(400)
+    expect(foreign.body.error.issues).toEqual([{ path: 'body/productionApproverId', message: "The approver is an active person of this customer's portal." }])
+    expect(JSON.stringify(foreign.body)).not.toContain('Brand Alpha')
+    const supplier = await party(['SUPPLIER'])
+    const refused = await asOwnerPut(card(supplier), { productionUrgencyOn: true, version: 1 })
+    expect(refused.status).toBe(409)
+    expect(refused.body.error.message).toBe('Production limits are set only for a customer or a brand.')
+  })
+
+  it("names the customer's own approver; switching urgency off keeps the marks (audited, R-46); a lower quota keeps them; a customer without a portal row gets one with the portal off", async () => {
+    const gamma = await party(['CUSTOMER'])
+    const approverId = newId()
+    await inWorld(h, world, (client) =>
+      client.user.create({ data: { id: approverId, email: 'paola@brand-gamma.example', displayName: 'Paola Approver', status: 'ACTIVE', audience: 'PARTNER', partyId: gamma, partnerKind: 'CUSTOMER' }, select: { id: true } }),
+    )
+    const named = await asOwnerPut(card(gamma), { preset: 'PRODUCTION_PARTNER', productionApproverId: approverId, overrideFourEyes: true, productionUrgentMax: 5, version: 1 })
+    expect(named.status, JSON.stringify(named.body)).toBe(200)
+    expect(named.body.production).toMatchObject({ approver: { id: approverId, name: 'Paola Approver', active: true }, overrideFourEyes: true, urgency: { on: true, max: 5 } })
+
+    const off = await asOwnerPut(card(gamma), { productionUrgencyOn: false, version: 2 })
+    expect(off.status, JSON.stringify(off.body)).toBe(200)
+    expect(off.body.production).toMatchObject({ urgency: { on: false, max: 5, now: 0, dormant: null }, openAsks: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] })
+    expect((await audits(gamma)).at(-1)!.after).toMatchObject({ productionUrgencyOn: false, urgencyMarksKept: 0, urgencyMarks: 'kept, not used while urgency is off' })
+
+    const on = await asOwnerPut(card(gamma), { productionUrgencyOn: true, productionUrgentMax: 1, version: 3 })
+    expect(on.status, JSON.stringify(on.body)).toBe(200)
+    expect(on.body.production.urgency).toMatchObject({ on: true, max: 1, overQuota: null })
+
+    // No portal row yet (no portal): the card makes one with the portal OFF; nobody can sign in through it.
+    const delta = newId()
+    await inWorld(h, world, (client) => client.party.create({ data: { id: delta, code: `P${delta.slice(-6)}`, kind: 'ORGANISATION', legalName: 'Made-up Brand Delta S.r.l.', roles: ['BRAND'] }, select: { id: true } }))
+    expect((await owner.get(card(delta))).body.production).toMatchObject({ level: 'STATUS', version: 0 })
+    const made = await asOwnerPut(card(delta), { productionLevel: 'GATES', version: 0 })
+    expect(made.status, JSON.stringify(made.body)).toBe(200)
+    expect((await h.db.admin.query('SELECT "portalOn", "progressShared", "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1', [delta])).rows).toEqual([{ portalOn: false, progressShared: true, level: 'GATES' }])
+  })
+
+  it("says when the customer's allowed roles leave out the Production role", async () => {
+    const epsilon = await party(['CUSTOMER'])
+    await inWorld(h, world, (client) => client.portalSettings.update({ where: { id: epsilon }, data: { allowedRoleKeys: ['customer-buyer', 'customer-viewer'] }, select: { id: true } }))
+    expect((await owner.get(card(epsilon))).body.production).toMatchObject({ productionRoleOffered: false, productionRoleWords: { en: "The Production role is not among this customer's allowed roles: add it to give it to someone." } })
+  })
+
+  it('wall (PW-S01, PW-08b): a person limited to another customer gets 404 on this card, its write and its preview; its own card answers', async () => {
+    const zeta = await party(['CUSTOMER'])
+    const eta = await party(['CUSTOMER'])
+    const rep = await repOf(eta, 'rep.eta@partners-a.example')
+    for (const answer of [await rep.get(card(zeta)), await rep.put(card(zeta), { productionUrgencyOn: true, version: 1 }), await rep.post(`/partners/${zeta}/preview`, { companyId: world.companyId })]) {
+      expect(answer.status, JSON.stringify(answer.body)).toBe(404)
+      expect(JSON.stringify(answer.body)).not.toContain(zeta)
+    }
+    const own = await rep.get(card(eta))
+    expect(own.status, JSON.stringify(own.body)).toBe(200)
+    // A sales rep keeps the card (partners.production.manage) of its own customer.
+    expect(own.body.mayManage).toBe(true)
+    expect(await audits(zeta)).toEqual([])
+  })
+
+  it('wall (PW-15): the supervisor and backup show on the office card by name only; the settings event and the preview carry none', async () => {
+    const theta = await party(['CUSTOMER'])
+    const backup = await addUser(h, tenant, { email: 'backup.theta@partners-a.example', role: 'production_manager' })
+    await inWorld(h, world, (client) =>
+      client.portalSettings.update({ where: { id: theta }, data: { productionSupervisorId: ownerUser.id, productionSupervisorSetAt: h.clock.now(), productionBackupId: backup.id }, select: { id: true } }),
+    )
+    const read = await owner.get(card(theta))
+    expect(read.body.production).toMatchObject({ supervisor: { id: ownerUser.id, name: 'owner', active: true }, backup: { id: backup.id, active: true } })
+    const changed = await asOwnerPut(card(theta), { productionLevel: 'QUALITY', version: read.body.production.version })
+    expect(changed.status, JSON.stringify(changed.body)).toBe(200)
+    const event = (await events('partner_portal.settings_changed')).at(-1)!
+    expect(Object.keys(event).sort()).toEqual(['fields', 'partyId', 'portalOn', 'productionAskKinds', 'productionLevel', 'productionUrgencyOn', 'productionUrgentMax', 'progressShared'])
+    expect(JSON.stringify(event)).not.toContain(ownerUser.id)
+    expect(JSON.stringify(event)).not.toContain(backup.id)
+    const opened = await owner.post(`/partners/${theta}/preview`, { companyId: world.companyId })
+    expect(opened.status, JSON.stringify(opened.body)).toBe(200)
+    for (const answer of [opened, await owner.get('/portal/me'), await owner.get('/portal/access')]) {
+      const text = JSON.stringify(answer.body)
+      expect(text).not.toMatch(/supervis|backup/i)
+      expect(text).not.toContain(ownerUser.id)
+      expect(text).not.toContain(backup.id)
+    }
+  })
+})

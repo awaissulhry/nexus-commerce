@@ -31,7 +31,7 @@ export interface CountsCan {
   locations: boolean
   /** The frozen valued list's files. */
   files: boolean
-  /** B-W2b-15: the count's thread, files and history (Activity: threads.read). */
+  /** B-W2b-15: the count's thread, files and history (threads.read); B-TH-264: docked beside every tab, none without it. */
   threads: boolean
 }
 
@@ -149,10 +149,20 @@ export const COUNT_CSV_COLUMNS = ['number', 'kind', 'status', 'site', 'scope', '
 
 // ---- the record --------------------------------------------------------------------------------------------------------------
 
-/** B-W2b-15: Activity = the count's thread, files and history (the record panels). */
-export const RECORD_TABS = ['lines', 'differences', 'approval', 'activity'] as const
+/**
+ * B-TH-264 (the rule of picture 38; 08-tabs O-WH-CNT): tabs 4 → 3 — Lines, Differences, Approval. Activity went: the count's thread
+ * is docked beside every tab (notes only: a count has no party), its tools in the thread's "⋯" (R-ACT).
+ */
+export const RECORD_TABS = ['lines', 'differences', 'approval'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const recordTabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines')
+/** Every old `?tab=` keeps working (R-8): Activity lands on Lines and the record frame opens the thread. */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { activity: 'lines' }
+export const recordTabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  return (RECORD_TABS as readonly string[]).includes(asked) ? (asked as RecordTab) : (MERGED_TABS[asked] ?? 'lines')
+}
+/** The tab whose body is a wide grid (the counted lines): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'differences'
 
 /** The band's one primary step for this count now (or none). */
 export type NextStep = 'start' | 'submit' | 'approve' | 'apply' | 'signOff' | null

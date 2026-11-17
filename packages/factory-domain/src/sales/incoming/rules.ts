@@ -36,6 +36,8 @@ export interface Words {
  *   ALL               every row                        every row (never a draft)    every row
  *
  * A change request the office ACCEPTED is in ALL only (its order changed; nothing of Incoming's waits).
+ * B-TH-095: a request its customer withdrew from the portal (WITHDRAWN) is in ALL and in its own outcome (`?outcome=WITHDRAWN`, the
+ * request figure's "Withdrawn" door), not in LOST: the figure's Lost door counts the office's LOST only, exactly.
  */
 
 export const INCOMING_KINDS = ['REQUEST', 'CATALOGUE_ORDER', 'CHANGE_REQUEST'] as const

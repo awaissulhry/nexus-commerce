@@ -1,7 +1,7 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
+// ---- B-TH-262: the change's docked thread in the design cases (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { ACCEPTED_REQUEST, APPROVED_ORDER, APPROVER_OPTIONS, canFor, COMPARE, DRAFT_ORDER, DRIFT, inShell, JACKET_DETAIL, ME, NOW, ORDER, OWN_REQUEST, PREFIX, REJECTED_REQUEST, REQUEST, REQUESTS, type RoleCase } from '../demo/fixtures'
 import { approversOf, orderDraftOf, requestDraftOf, rowOfOrder, rowOfRequest, wipLinesOf, type RecordKind, type RecordTab } from '../model'
 import type { OrderView, RequestView } from '../api'
@@ -11,7 +11,8 @@ import { ChangeRecordView } from './view/ChangeRecordView'
 /**
  * SCR-117-record — a change (Products › Changes & versions › a change request or a change order), made-up data only:
  * ECO-DEMO-0001 waiting for approval (every tab: Change with its redline, Impact with the work in progress and quotes on
- * an older revision, Approvals "1 of 2", Affected records, Activity), a draft change order (edit, start the draft revision,
+ * an older revision, Approvals "1 of 2", Affected records), the thread docked beside every tab (B-TH-262: Activity's tools in its
+ * "⋯"; a change order's thread holds notes only, a request's reaches the customer or supplier who asked), a draft change order (edit, start the draft revision,
  * approvers, work in progress, submit held), an approved one (Release held before its day), a floor request to triage, an
  * accepted request (Write a change order), a rejected one read-only, every dialog, the page's states and the role cases.
  */
@@ -19,15 +20,17 @@ import { ChangeRecordView } from './view/ChangeRecordView'
 interface RecordCase {
   readonly role: RoleCase
   readonly record: ChangeRecordModel
-  readonly panels: RecordPanelsViewModel | null
 }
 
-const PANELS = (panelsScreen.cases.find((one) => one.id === 'conversation') ?? panelsScreen.cases[0]!).model
-const panelsOf = (kind: RecordKind, value: OrderView | RequestView): RecordPanelsViewModel => ({
-  ...PANELS,
-  record: { type: kind === 'order' ? 'ChangeOrder' : 'ChangeRequest', id: value.id, companyId: value.companyId, siteId: null },
-  title: `${value.number ?? ''} · ${value.style.code}`,
-})
+/** B-TH-262: the change's made-up thread — a change order's notes only; a request's with the customer or supplier who asked, if any. */
+const threadOf = (record: ChangeRecordModel) => {
+  if (record.loaded.status !== 'ready') return null
+  const order = record.loaded.order ?? null
+  const request = record.loaded.request ?? null
+  if (order) return designDockedThread({ recordType: 'ChangeOrder', record: order.number, party: null })
+  if (!request) return null
+  return designDockedThread({ recordType: 'ChangeRequest', record: request.number ?? request.style.code, party: request.party ? { name: request.party.name, role: request.source === 'SUPPLIER' ? 'supplier' : 'customer' } : null })
+}
 
 function base(kind: RecordKind, tab: RecordTab, value: OrderView | RequestView, role: RoleCase): ChangeRecordModel {
   return {
@@ -54,10 +57,10 @@ function base(kind: RecordKind, tab: RecordTab, value: OrderView | RequestView, 
 }
 
 function order(tab: RecordTab, over: Partial<ChangeRecordModel> = {}, value: OrderView = ORDER, role: RoleCase = 'owner'): RecordCase {
-  return { role, panels: tab === 'activity' ? panelsOf('order', value) : null, record: { ...base('order', tab, value, role), ...over } }
+  return { role, record: { ...base('order', tab, value, role), ...over } }
 }
 function request(tab: RecordTab, over: Partial<ChangeRecordModel> = {}, value: RequestView = REQUEST, role: RoleCase = 'owner'): RecordCase {
-  return { role, panels: tab === 'activity' ? panelsOf('request', value) : null, record: { ...base('request', tab, value, role), ...over } }
+  return { role, record: { ...base('request', tab, value, role), ...over } }
 }
 const dialog = (value: RecordDialog, of: OrderView = ORDER, tab: RecordTab = 'change') => order(tab, { dialog: value }, of)
 
@@ -68,7 +71,7 @@ function RecordDesign({ model }: { model: RecordCase }) {
   const loadedOrder = record.loaded.status === 'ready' ? (record.loaded.order ?? null) : null
   const view = createElement(ChangeRecordView, {
     model: record,
-    panelsPreview: model.panels ?? undefined,
+    thread: threadOf(record),
     actions: {
       onRequestDraft: (patch) => setRecord((now) => (loadedRequest ? { ...now, request: { ...now.request, draft: { ...(now.request.draft ?? requestDraftOf(loadedRequest)), ...patch } } } : now)),
       onRequestDiscard: () => setRecord((now) => ({ ...now, request: { ...now.request, draft: null } })),
@@ -96,6 +99,8 @@ function RecordDesign({ model }: { model: RecordCase }) {
   return inShell('/products/changes', view, model.role)
 }
 
+const CUSTOMER_REQUEST: RequestView = { ...REQUEST, ...REQUESTS[1]!, photosList: [], made: null, moves: REQUEST.moves }
+const SUPPLIER_REQUEST: RequestView = { ...REQUEST, ...REQUESTS[4]!, photosList: [], made: null, moves: REQUEST.moves }
 const EDITED_ORDER = { ...orderDraftOf(DRAFT_ORDER), description: 'Pocket opening +2 cm on both knees.', effect: 'DATE' as const, effectiveDate: '2026-11-20' }
 const DECIDE = { row: rowOfOrder(ORDER), ids: [rowOfOrder(ORDER).id], reading: false, problem: null, order: ORDER, request: null, minutes: null, redline: { compare: COMPARE, problem: null }, drift: { value: DRIFT, problem: null }, holds: {}, reason: '', busy: false, notice: null, offline: false }
 
@@ -109,7 +114,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'order-impact', label: 'Impact: work in progress per open work order (what is made), quotes on an older revision', model: order('impact') },
     { id: 'order-approvals', label: 'Approvals: 1 of 2 — Carla approved, you are asked (Approve…)', model: order('approvals') },
     { id: 'order-affected', label: 'Affected records: revision 2 → 3, open orders on older revisions', model: order('affected') },
-    { id: 'order-activity', label: 'Activity: the record panels (thread, files, history)', model: order('activity') },
+    // ---- B-TH-262: the thread docked (the rule of picture 38); Activity is gone, its tools are in the thread's "⋯" (R-ACT).
+    { id: 'thread-docked', label: 'TH-6 · The change order’s thread docked beside Approvals (40 %): office notes only', model: order('approvals'), note: 'The band sits in the shell’s band row; the thread is docked at 40 %, sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). Below 1280 px the band’s Thread button opens it full width. An old ?tab=activity lands on Change with the thread open.' },
     { id: 'decide', label: 'Approve… (A): the redline and the impact, Approve / Reject', model: order('approvals', { decide: DECIDE }) },
     { id: 'draft', label: 'A draft change order: edit what, why, when; Start the draft revision; Submit held (no draft revision)', model: order('change', {}, DRAFT_ORDER) },
     { id: 'draft-editing', label: 'A draft changed: description and the day it takes effect (the EditModeBar)', model: order('change', { order: { draft: EDITED_ORDER, saving: false, redline: { compare: null, problem: null, none: true }, drift: null } }, DRAFT_ORDER) },
@@ -121,7 +127,9 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cancel', label: 'Cancel change order: why', model: dialog({ kind: 'cancel', reason: '', busy: false, notice: null }) },
     { id: 'request', label: 'A floor request to triage: what and why, the work order, photos (Accept or reject…)', model: request('change') },
     { id: 'request-editing', label: 'A request changed: its priority (the EditModeBar)', model: request('change', { request: { draft: { ...requestDraftOf(REQUEST), priority: 'NORMAL' }, style: { value: JACKET_DETAIL, problem: null }, saving: false, photos: { busy: false, failed: 0 } } }) },
-    { id: 'request-impact', label: 'A request: the work order where it was seen, what is already made', model: request('impact') },
+    { id: 'request-impact', label: 'A request: Impact & affected — the work order where it was seen, what is already made, then the style and revision it is about', model: request('impact') },
+    { id: 'request-customer', label: 'TH-6 · A customer’s request: its thread reaches that customer only (Reply to the customer who asked)', model: request('change', {}, CUSTOMER_REQUEST) },
+    { id: 'request-supplier', label: 'TH-6 · A supplier’s request: its thread reaches that supplier only', model: request('impact', {}, SUPPLIER_REQUEST) },
     { id: 'request-approvals', label: 'A request: not sent for approval yet', model: request('approvals') },
     { id: 'request-decide', label: 'Accept or reject… (the triage)', model: request('change', { decide: { ...DECIDE, row: rowOfRequest(REQUEST), order: null, request: REQUEST, redline: null, drift: null } }) },
     // B-W2b-GF5 (G282): the raiser's own request: Accept is held with the reason (never self-approve).
@@ -129,7 +137,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'request-accepted', label: 'An accepted request: Write a change order', model: request('approvals', {}, ACCEPTED_REQUEST) },
     { id: 'request-rejected', label: 'A rejected request: read-only, the reason in a banner', model: request('change', {}, REJECTED_REQUEST) },
     { id: 'request-photos-failed', label: 'Two photos could not be sent', model: request('change', { request: { draft: null, style: { value: JACKET_DETAIL, problem: null }, saving: false, photos: { busy: false, failed: 2 } } }) },
-    { id: 'request-affected', label: 'A request: the style and revision it is about', model: request('affected', {}, { ...REQUEST, ...REQUESTS[2]!, photosList: [], made: null, moves: REQUEST.moves }) },
+    { id: 'request-affected', label: 'A request: Impact & affected — the style and revision it is about (an old ?tab=affected lands here)', model: request('impact', {}, { ...REQUEST, ...REQUESTS[2]!, photosList: [], made: null, moves: REQUEST.moves }) },
+    { id: 'notices', label: 'TH-6 · One notice: a refusal shows, the offline and changed-elsewhere notices wait behind "2 more notices"', model: order('change', { order: { draft: EDITED_ORDER, saving: false, redline: null, drift: null }, notice: { key: 'problem.invalid', tone: 'danger' }, lines: [{ key: 'field.effectiveDate' }], stale: '10:42', live: 'offline' }, DRAFT_ORDER) },
     { id: 'refused', label: 'A save refused (our words; the field named)', model: order('change', { order: { draft: EDITED_ORDER, saving: false, redline: null, drift: null }, notice: { key: 'problem.invalid', tone: 'danger' }, lines: [{ key: 'field.effectiveDate' }] }, DRAFT_ORDER) },
     { id: 'stale', label: 'Changed elsewhere while you edited (Read it again)', model: order('change', { order: { draft: EDITED_ORDER, saving: false, redline: null, drift: null }, stale: '10:42' }, DRAFT_ORDER) },
     { id: 'offline', label: 'Offline: the change as last read, every step held', model: order('change', { live: 'offline' }) },

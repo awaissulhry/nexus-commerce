@@ -105,3 +105,21 @@ describe('the Invoiced state of an order', () => {
     expect(answer).toMatchObject({ state: 'ALL', pieces: '4' })
   })
 })
+
+// ── B-TH-244 (threads plan TH-4; feature SHEET.overall-F06): shipped goods no issued invoice bills yet ──
+import { shippedNotInvoiced } from './invoiced'
+
+describe('shippedNotInvoiced (B-TH-244)', () => {
+  it('true while more pieces left than issued invoices bill (less credit notes); never for an order that shipped nothing', () => {
+    expect(shippedNotInvoiced(10, { pieces: '0' })).toBe(true)
+    expect(shippedNotInvoiced(10, undefined)).toBe(true)
+    expect(shippedNotInvoiced(10, { pieces: '6' })).toBe(true)
+    expect(shippedNotInvoiced(10, { pieces: '10' })).toBe(false)
+    expect(shippedNotInvoiced(10, { pieces: '12.0000' })).toBe(false)
+    expect(shippedNotInvoiced(0, { pieces: '0' })).toBe(false)
+    // The Invoiced rule's own pieces: a credit note takes pieces back, so they wait to be invoiced again.
+    const state = invoicedOf([jackets], [bill('line-jackets', '10', 1000), bill('line-jackets', '4', 400, { docType: 'TD04' })])
+    expect(shippedNotInvoiced(10, state)).toBe(true)
+  })
+})
+// ── end B-TH-244 ──

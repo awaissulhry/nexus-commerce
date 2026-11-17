@@ -157,7 +157,8 @@ export function baseWhere(context: OfficeContext, query: Omit<InquiryListQuery, 
  * What a request became, exactly as Sales › Reports' request figure counts it (modules/insights/sales-reports facts requestsOf):
  * ORDERED — ORDERED (made straight into an order), or QUOTED with an order of one of its quote's versions that is not cancelled
  * and that the reader may see (orders.view over that order's company and customer; none without it, as the figure counts none);
- * DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an order.
+ * DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an order; B-TH-095: WITHDRAWN — its customer
+ * withdrew it from the portal before the office decided.
  */
 function outcomeWhere(context: OfficeContext, outcome: RequestOutcome): Prisma.InquiryWhereInput {
   switch (outcome) {
@@ -169,6 +170,8 @@ function outcomeWhere(context: OfficeContext, outcome: RequestOutcome): Prisma.I
       return { status: 'DECLINED', NOT: { declineReason: 'NOT_AN_ORDER' } }
     case 'NOT_AN_ORDER':
       return { status: 'DECLINED', declineReason: 'NOT_AN_ORDER' }
+    case 'WITHDRAWN': // B-TH-095
+      return { status: 'WITHDRAWN' }
   }
 }
 // ---- end B-TH-235

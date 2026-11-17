@@ -26,6 +26,8 @@ const orderParams = input({ orderId: id() })
 const ruleView = output({
   id: id(),
   companyId: id(),
+  /** B-PR-14: the customer whose own rule it is (null: the company's rule). */
+  partyId: id().nullable(),
   field,
   fieldWords: words,
   frozenFrom: stage,
@@ -40,14 +42,25 @@ const ruleView = output({
 })
 
 export const listFreezeRulesContract = defineContract({
-  querystring: input({ companyId: id() }),
-  response: { 200: output({ companyId: id(), rules: z.array(ruleView), fields: z.array(output({ field, words, scope: z.enum(['SIZE', 'LINE', 'ORDER']) })), mayManage: z.boolean() }) },
+  /** B-PR-14: partyId — that customer's own rules beside the company's (404 for a customer the caller does not reach). */
+  querystring: input({ companyId: id(), partyId: id().optional() }),
+  response: {
+    200: output({
+      companyId: id(),
+      partyId: id().nullable(),
+      rules: z.array(ruleView),
+      /** B-PR-14 `set`: whose rules decide the field for the customer asked (COMPANY without one). */
+      fields: z.array(output({ field, words, scope: z.enum(['SIZE', 'LINE', 'ORDER']), set: z.enum(['CUSTOMER', 'COMPANY']) })),
+      mayManage: z.boolean(),
+    }),
+  },
 })
 
 const note = z.string().max(FREEZE_LIMITS.note + 10).nullable().optional()
 
 export const createFreezeRuleContract = defineContract({
-  body: input({ companyId: id(), field, frozenFrom: stage, action, note }),
+  /** B-PR-14: partyId — a customer's own rule (sales.settings.manage or partners.production.manage over it). */
+  body: input({ companyId: id(), partyId: id().nullable().optional(), field, frozenFrom: stage, action, note }),
   response: { 201: output({ rule: ruleView }) },
 })
 

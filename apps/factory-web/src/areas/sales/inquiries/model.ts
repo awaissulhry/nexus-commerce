@@ -182,7 +182,7 @@ export interface ListAddress {
   /** The first and last day a request came (Rome days, both included; `?from=&to=`). */
   readonly from: string | null
   readonly to: string | null
-  /** What a request became, as the figure counts it (`?outcome=`): Ordered, Declined (not "Not an order"), Not an order. */
+  /** What a request became, as the figure counts it (`?outcome=`): Ordered, Declined (not "Not an order"), Not an order, Withdrawn (B-TH-095). */
   readonly outcome: RequestOutcome | null
   // ---- end B-TH-235
   // ---- B-TH-233: one kind of row (`?kind=`), and the catalogue order open in the reading pane (`?catalogue=<id>`; a request is `?open=`).

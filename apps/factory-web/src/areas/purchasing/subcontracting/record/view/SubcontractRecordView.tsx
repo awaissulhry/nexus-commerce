@@ -1,28 +1,28 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, MessageSquare, MoreHorizontal, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, Stepper, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { FileX, ShieldOff } from 'lucide-react'
+import { Banner, Card, EmptyState, Stepper, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { dayAt } from '../../../../_shared/buying/model'
 import type { OrderAction, SubcontractOrder } from '../../api'
 import { actHeld, JOURNEY, journeyIndex, say, STATUS_TONE } from '../../model'
-import { liveDdt, primaryAct, RECORD_TABS, sendBeside, type RecordTab, type SubcontractRecordActions, type SubcontractRecordModel } from '../record-model'
+import { isWideTab, liveDdt, primaryAct, RECORD_TABS, sendBeside, type RecordTab, type SubcontractRecordActions, type SubcontractRecordModel } from '../record-model'
 import { BackTab } from './BackTab'
 import { RecordDialogs } from './Dialogs'
-import { DocumentsTab } from './DocumentsTab'
 import { KitTab } from './KitTab'
 import { OperationsTab } from './OperationsTab'
 import { useSay } from './parts'
 import { DEPTH } from '../../depth/model'
 import '../../../../_shared/buying/buying.css'
 import '../record.css'
+// ---- B-TH-263: the subcontract order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 export type { SubcontractRecordActions, SubcontractRecordModel } from '../record-model'
 
@@ -31,75 +31,83 @@ export const RECORD_NAMESPACES = ['subcontracting', 'subcontract-order', 'lists'
 
 /**
  * SCR-128 record — a subcontract order (design purchasing.subcontracting "Record: Subcontract order"; 00 §2.2; Owner L1:
- * the tabs always in view). The band: ‹ Subcontract orders, "<number> · <workshop>", its state in the design's words
- * (Draft · Sent · In work · Partly back · Back · Closed · Cancelled), late, the services, the work order and its style,
- * the site; the journey (Sent → Kit out (DDT) → In work → Back → Closed); the act of the state — Issue to the workshop,
- * Send kit, Receive back, Close — each held with why in words; the thread (⌘J); ⋯ Print job sheet, Print kit DDT, Back to
- * draft, Cancel, Copy number. Tabs: Operations & quantities (a draft saves cell by cell), Kit sent, Received back,
- * Documents (job sheet, kit DDTs), Activity. Fees and amounts only with the cost grain (never drawn as '—' without it).
+ * the tabs always in view), on RecordFrame (B-TH-263; the rule of picture 38, the tabs of 08-tabs O-PUR-SUB). The band in the
+ * shell's band row: ‹ Subcontract orders, "<number> · <workshop>", ONE state pill in the design's words (Draft · Sent · In work ·
+ * Partly back · Back · Closed · Cancelled), late, the services, the work order and its style, the site; the act of the state —
+ * Issue to the workshop, Send kit, Receive back, Close — each held with why in words; the Thread button (⌘J, the frame's); ⋯ Print
+ * job sheet, Print kit DDT, Back to draft, Cancel, Copy number, its Keyboard line. The journey (Sent → Kit out (DDT) → In work →
+ * Back → Closed) and what the order waits for head the body. The thread is docked beside every tab; Activity's tools are in its
+ * "⋯" (R-ACT). Tabs 7 → 5: Operations & quantities (a draft saves cell by cell), Kit & documents (the kit, then the job sheet and
+ * the kit DDTs — the old Documents tab's work), Received back, Material balance, Cost. Fees and amounts only with the cost grain
+ * (never drawn as '—' without it). ONE notice in the body column.
  */
-export function SubcontractRecordView({ model, actions, panels }: { model: SubcontractRecordModel; actions?: SubcontractRecordActions; panels?: ReactNode }) {
+// B-TH-263: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function SubcontractRecordView({ model, actions, thread, printThread }: { model: SubcontractRecordModel; actions?: SubcontractRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <WithMessages namespaces={RECORD_NAMESPACES}>
-      <Record model={model} actions={actions} panels={panels} />
+      <Record model={model} actions={actions} thread={thread} printThread={printThread} />
     </WithMessages>
   )
 }
 
-function Record({ model, actions, panels }: { model: SubcontractRecordModel; actions?: SubcontractRecordActions; panels?: ReactNode }) {
+function Record({ model, actions, thread, printThread }: { model: SubcontractRecordModel; actions?: SubcontractRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('subcontract-order')
   const listHref = `${model.prefix}/purchasing/subcontracting`
   const loaded = model.order
+  const frame = (body: ReactNode) => (
+    <RecordFrame
+      recordType="SubcontractOrder"
+      personId={model.personId ?? null}
+      band={{ back: <Link href={listHref}>{t('band.back')}</Link>, title: loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('band.title'), moreLabel: t('band.more') }}
+      thread={null}
+      threadLabel={t('band.dockLabel')}
+    >
+      {body}
+    </RecordFrame>
+  )
   if (!model.can.view) {
-    return (
-      <div className="fw-by">
-        <Card padded>
-          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('record.noAccess.title')} description={t('record.noAccess.body')} />
-        </Card>
-      </div>
+    return frame(
+      <Card padded>
+        <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('record.noAccess.title')} description={t('record.noAccess.body')} />
+      </Card>,
     )
   }
   if (loaded.status !== 'ready') {
-    return (
-      <div className="fw-by">
-        <div className="fw-by-band">
-          <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('band.back')}</Link>} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('band.title')} />
-        </div>
-        {loaded.status === 'loading' ? (
-          <Card padded aria-busy="true">
-            <p className="fw-by-hint" role="status">
-              <Spinner size={14} /> {t('record.loading')}
-            </p>
-            <div className="fw-by-stack">
-              {Array.from({ length: 6 }, (_, index) => (
-                <Skeleton key={index} height={22} />
-              ))}
-            </div>
-          </Card>
-        ) : (
-          <Card padded>
-            <EmptyState
-              icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
-              title={t(`record.${loaded.status}.title`)}
-              description={loaded.status === 'error' ? t(loaded.problem) : t(`record.${loaded.status}.body`)}
-              action={
-                loaded.status === 'error' ? (
-                  <Button size="sm" onClick={() => actions?.onRetry?.()}>
-                    {t('common.retry')}
-                  </Button>
-                ) : (
-                  <Button size="sm" asChild>
-                    <Link href={listHref}>{t('record.backToList')}</Link>
-                  </Button>
-                )
-              }
-            />
-          </Card>
-        )}
-      </div>
+    return frame(
+      loaded.status === 'loading' ? (
+        <Card padded aria-busy="true">
+          <p className="fw-by-hint" role="status">
+            <Spinner size={14} /> {t('record.loading')}
+          </p>
+          <div className="fw-by-stack">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} height={22} />
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <Card padded>
+          <EmptyState
+            icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+            title={t(`record.${loaded.status}.title`)}
+            description={loaded.status === 'error' ? t(loaded.problem) : t(`record.${loaded.status}.body`)}
+            action={
+              loaded.status === 'error' ? (
+                <Button size="sm" onClick={() => actions?.onRetry?.()}>
+                  {t('common.retry')}
+                </Button>
+              ) : (
+                <Button size="sm" asChild>
+                  <Link href={listHref}>{t('record.backToList')}</Link>
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ),
     )
   }
-  return <ReadyRecord order={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} />
 }
 
 /** The journey in one line for a phone: "Step 2 of 5: Sent · then Kit out (DDT)". */
@@ -109,7 +117,7 @@ function journeyLine(index: number, t: (key: string, params?: Record<string, str
   return next ? `${now} · ${t('journey.next', { label: t(`journey.${next}`) })}` : now
 }
 
-function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrder; model: SubcontractRecordModel; actions?: SubcontractRecordActions; panels?: ReactNode }) {
+function ReadyRecord({ order, model, actions, thread, printThread }: { order: SubcontractOrder; model: SubcontractRecordModel; actions?: SubcontractRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('subcontract-order')
   const sc = useT('subcontracting')
   const depth = useT(DEPTH)
@@ -130,23 +138,11 @@ function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrde
     else if (act === 'close') actions?.onDialog?.({ kind: 'close', note: '' })
   }
 
-  // Keys: ⌘J the thread (never while a dialog holds the focus for its own keys).
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        actions?.onDock?.()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
-
+  // ⌘J is the frame's (the thread).
   const tabCount = (tab: RecordTab): number | null => {
     if (tab === 'ops') return order.operations.length
     if (tab === 'kit') return order.kitLines.filter((line) => line.status !== 'CANCELLED').length
     if (tab === 'back') return order.receipts.length
-    if (tab === 'documents') return order.ddts.length + 1
     return null
   }
   const tabs: TabItem[] = RECORD_TABS.map((tab) => ({ id: tab, href: `${recordHref}?tab=${tab}`, label: tab === 'balance' || tab === 'cost' ? depth(`tab.${tab}`) : t(`tab.${tab}`), count: tabCount(tab) }))
@@ -171,60 +167,54 @@ function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrde
     { id: 'copy', label: t('band.copyNumber'), onSelect: () => actions?.onCopyNumber?.() },
   ]
 
-  const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
-  const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
   const workOrderHref = `${model.prefix}/production/work-orders/${order.workOrder.id}`
   const ended = order.status === 'CANCELLED'
   const writes = model.can.manage || model.can.kit || model.can.receive
 
   return (
-    <div className="fw-by">
-      <div className="fw-by-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={`${model.prefix}/purchasing/subcontracting`}>{t('band.back')}</Link>}
-          title={
+    <>
+      <RecordFrame
+        recordType="SubcontractOrder"
+        personId={model.personId ?? null}
+        threadLabel={t('band.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        wide={isWideTab(model.tab)}
+        band={{
+          back: <Link href={`${model.prefix}/purchasing/subcontracting`}>{t('band.back')}</Link>,
+          title: (
             <span className="fw-by-title">
               {order.number} <span className="fw-by-title-sub">· {order.workshop.name}</span>
             </span>
-          }
-          actions={
-            <span className="fw-by-actions">
-              {primary === 'receive' && sendBeside(order) && button('send', 'secondary')}
-              {primary && button(primary, 'primary')}
-              {activity && (
-                <Button size="sm" variant={model.dockOpen ? 'tonal' : 'secondary'} active={model.dockOpen} aria-pressed={model.dockOpen} onClick={() => actions?.onDock?.()} title={t('band.dockHint')}>
-                  <MessageSquare size={14} aria-hidden /> <span>{t('band.dock')}</span>
-                  <span className="fw-by-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
-              )}
-              <Menu label={<MoreHorizontal size={16} aria-label={t('band.more')} />} items={more} align="right" triggerProps={{ 'aria-label': t('band.more') }} />
-            </span>
-          }
-        />
-        <div className="fw-by-meta-row">
-          <span className="fw-by-meta">
-            <Pill tone={STATUS_TONE[order.status]}>{sc(`status.${order.status}`)}</Pill>
-            {order.late && <Tag tone="danger">{t('band.late', { date: order.expectedBackDate ? formatDate(dayAt(order.expectedBackDate), place) : '—' })}</Tag>}
-            <span className="fw-by-hint">{order.services.map((service) => service.name).join(' · ')}</span>
-            <span className="fw-by-hint">
-              {model.can.workOrders ? (
-                <Link className="fw-by-link" href={workOrderHref}>
-                  {order.workOrder.number}
-                </Link>
-              ) : (
-                order.workOrder.number
-              )}{' '}
-              · {order.workOrder.style.code} {order.workOrder.style.name} · {order.site.code}
-            </span>
-          </span>
-          <span className="fw-by-status" role="status">
-            {sc(`live.${model.live}`)}
-          </span>
-        </div>
+          ),
+          status: <Pill tone={STATUS_TONE[order.status]}>{sc(`status.${order.status}`)}</Pill>,
+          meta: (
+            <>
+              {order.late && <Tag tone="danger">{t('band.late', { date: order.expectedBackDate ? formatDate(dayAt(order.expectedBackDate), place) : '—' })}</Tag>}
+              <span className="fw-by-hint">{order.services.map((service) => service.name).join(' · ')}</span>
+              <span className="fw-by-hint">
+                {model.can.workOrders ? (
+                  <Link className="fw-by-link" href={workOrderHref}>
+                    {order.workOrder.number}
+                  </Link>
+                ) : (
+                  order.workOrder.number
+                )}{' '}
+                · {order.workOrder.style.code} {order.workOrder.style.name} · {order.site.code}
+              </span>
+            </>
+          ),
+          primary: primary ? (
+              <span className="fw-by-actions">
+                {primary === 'receive' && sendBeside(order) && button('send', 'secondary')}
+                {primary && button(primary, 'primary')}
+              </span>
+            ) : undefined,
+          more,
+          moreLabel: t('band.more'),
+        }}
+      >
+        {/* The journey and what the order waits for head the body (the band is one row). */}
         {!ended && (
           <>
             <div className="fw-by-journey">
@@ -235,56 +225,50 @@ function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrde
         )}
         <p className="fw-by-hint">{waitWords(order, t, place)}</p>
         <Tabs ariaLabel={t('tab.label')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
-      </div>
 
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatTime(model.changed.at, place) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={sayWords(model.notice.words)}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-              {t('common.dismiss')}
-            </Button>
-          }
-        />
-      )}
-      {ended && (
-        <Banner tone="danger" title={t('record.cancelled', { date: order.cancelledAt ? formatDateTime(order.cancelledAt, place) : '—' })}>
-          {order.cancelReason}
-        </Banner>
-      )}
-      {!writes && !ended && <Banner tone="info" title={t('record.readOnly')} />}
+        {/* B-TH-263: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
+          {ended && (
+            <Banner tone="danger" title={t('record.cancelled', { date: order.cancelledAt ? formatDateTime(order.cancelledAt, place) : '—' })}>
+              {order.cancelReason}
+            </Banner>
+          )}
+          {model.notice && (
+            <Banner
+              tone={model.notice.tone}
+              title={sayWords(model.notice.words)}
+              action={
+                <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+                  {t('common.dismiss')}
+                </Button>
+              }
+            />
+          )}
+          {model.changed && (
+            <Banner
+              tone="info"
+              title={t('record.changed', { time: formatTime(model.changed.at, place) })}
+              action={
+                <Button size="sm" onClick={() => actions?.onReload?.()}>
+                  {t('record.reload')}
+                </Button>
+              }
+            />
+          )}
+          {!writes && !ended && <Banner tone="info" title={t('record.readOnly')} />}
+        </RecordNotices>
 
-      <div className={showDock ? 'fw-by-body has-dock' : 'fw-by-body'}>
         <div className="fw-by-main">
           {model.tab === 'ops' && <OperationsTab order={order} model={model} actions={actions} />}
           {model.tab === 'kit' && <KitTab order={order} model={model} actions={actions} />}
           {model.tab === 'back' && <BackTab order={order} model={model} actions={actions} />}
           {model.tab === 'balance' && model.depth?.balance}
           {model.tab === 'cost' && model.depth?.cost}
-          {model.tab === 'documents' && <DocumentsTab order={order} model={model} actions={actions} />}
-          {model.tab === 'activity' && (activity ?? <p className="fw-by-hint">{t('record.noPanels')}</p>)}
         </div>
-        {showDock && (
-          <aside className="fw-by-dock" aria-label={t('band.dockLabel')}>
-            {activity}
-          </aside>
-        )}
-      </div>
+      </RecordFrame>
 
       <RecordDialogs order={order} model={model} actions={actions} />
-    </div>
+    </>
   )
 }
 

@@ -8,7 +8,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { storeUrl } from '../../../../record-panels/store'
-import { useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
+import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { answerClaim, cancelClaim, claimReasons, closeClaim, ddtPdfLink, fileAddress, getClaim, makeLetter, removeClaimPhoto, removeLine, returnGoods, sendCheck, sendClaim, updateClaim, uploadClaimPhoto, type Claim, type PickerReason } from '../api'
 import {
   answerBody,
@@ -38,11 +38,15 @@ import {
   type Words,
 } from '../model'
 import { ClaimRecordView } from './view/ClaimRecordView'
+// ---- B-TH-263: the docked thread on the claim (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const TIME_ZONE = 'Europe/Rome'
 
 /**
- * `/w/<company>/purchasing/claims/<id>` (SCR-131 record; `?tab=claim|goods|credit|activity`): loads the claim
+ * `/w/<company>/purchasing/claims/<id>` (SCR-131 record; `?tab=claim|goods`, the old credit and activity land on their merged tab —
+ * B-TH-263 —; the thread docked beside every tab, the claim's own supplier only): loads the claim
  * (purchasing.view; values with the cost grain), the CLAIM reason list when its reason may still change, the send check
  * when Send opens; every write is ONE call with the claim's version as read and one Idempotency-Key per dialog (a new one
  * after a refusal). Live: supplier_claim.* events of this claim read it again — or, while a dialog or the form is open,
@@ -85,7 +89,6 @@ function Container({ claimId }: { claimId: string }) {
   open.current = { dialog, form }
   const key = useRef(newIdempotencyKey())
   const saveKey = useRef(newIdempotencyKey())
-  const { dockOpen, toggleDock } = useThreadDock('SupplierClaim')
 
   const load = useCallback(async () => {
     try {
@@ -311,12 +314,17 @@ function Container({ claimId }: { claimId: string }) {
     [api],
   )
 
-  const model: ClaimRecordModel = { prefix, can, tab, claim, live, dockOpen, changed, notice, busy, dialog, dialogProblem, form, formProblem, saving, reasons, timeZone: TIME_ZONE, photos, photoStep, uploading }
+  const model: ClaimRecordModel = { prefix, can, tab, claim, live, personId: session.user.id /* B-TH-263 */, changed, notice, busy, dialog, dialogProblem, form, formProblem, saving, reasons, timeZone: TIME_ZONE, photos, photoStep, uploading }
+  // B-TH-263: the docked thread (Head with Activity's doors, files line, Files view, feed, box), the claim's own supplier only; the print
+  // view keeps the panels' print form.
+  const record = value ? { type: 'SupplierClaim', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
+  const title = value ? `${value.number} · ${value.supplier.name}` : ''
 
   return (
     <ClaimRecordView
       model={model}
-      panels={value && (tab === 'activity' || dockOpen) ? <RecordPanels record={{ type: 'SupplierClaim', id: value.id, companyId: value.companyId, siteId: value.site.id }} title={`${value.number} · ${value.supplier.name}`} /> : null}
+      thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
+      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.supplier.id, name: value.supplier.name, emails: [] }} /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => {
@@ -324,7 +332,6 @@ function Container({ claimId }: { claimId: string }) {
           setFormProblem(null)
           void load()
         },
-        onDock: toggleDock,
         onDialog: openDialog,
         onConfirm: () => void confirm(),
         onForm: (next) => {

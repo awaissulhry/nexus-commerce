@@ -49,17 +49,17 @@
     },
     "from": "Da",
     "held": {
-      "notDraft": "Solo una bozza accetta una nota: prima crea la versione {next}.",
+      "notDraft": "Solo una bozza accetta una nota: prima crea la revisione {next}.",
       "reading": "Attendi il confronto.",
       "same": "Nulla è diverso."
     },
     "noPrices": "I prezzi non sono nel tuo ruolo: il confronto mostra pezzi e condizioni.",
     "noteDone": "Nella nota delle modifiche",
     "noteSaved": "Il campo Cosa è cambiato della bozza ora contiene questa differenza.",
-    "option": "Versione {n} · {status}",
-    "pickTwo": "Scegli due versioni diverse da confrontare.",
+    "option": "Revisione {n} · {status}",
+    "pickTwo": "Scegli due revisioni diverse da confrontare.",
     "reading": "Confronto in corso…",
-    "same": "Le due versioni sono uguali.",
+    "same": "Le due revisioni sono uguali.",
     "section": {
       "lines": "Righe",
       "margin": "Margine",
@@ -67,8 +67,8 @@
       "terms": "Condizioni e consegna"
     },
     "sentOn": "inviata il {date}",
-    "swap": "Scambia le due versioni",
-    "title": "Confronta versioni",
+    "swap": "Scambia le due revisioni",
+    "title": "Confronta revisioni",
     "to": "A",
     "total": {
       "deposit": "Acconto",
@@ -81,7 +81,7 @@
     },
     "unchanged": "Uguale in entrambe: {sections}.",
     "useNote": "Usa come nota delle modifiche",
-    "version": "Versione {n}",
+    "version": "Revisione {n}",
     "yes": "Sì"
   },
   "composer": {
@@ -713,7 +713,7 @@
       "found_one": "1 preventivo",
       "found_other": "{count} preventivi",
       "hint": "Scrivi parte del numero o il nome del cliente.",
-      "line": "Versione {revision} · {lines} righe · {units} pezzi",
+      "line": "Revisione {revision} · {lines} righe · {units} pezzi",
       "none": "Nessun preventivo trovato.",
       "search": "Numero del preventivo",
       "type": "Scrivi per trovare il preventivo."
@@ -776,7 +776,7 @@
     },
     "startBody": {
       "empty": "Indica intestazione e righe qui.",
-      "quote": "Un preventivo come modello: righe, sezioni e condizioni della versione corrente."
+      "quote": "Un preventivo come modello: righe, sezioni e condizioni della revisione corrente."
     },
     "startFrom": "Parti da",
     "status": {
@@ -799,10 +799,10 @@
     "compare": "Confronta",
     "compareLatest": "Confronta {from} con {to}",
     "compareThese": "Confronta {from} e {to}",
-    "count_one": "1 versione",
-    "count_other": "{count} versioni",
-    "downloadOf": "Scarica il PDF della versione {revision}",
-    "pickTwo": "Seleziona esattamente due versioni."
+    "count_one": "1 revisione",
+    "count_other": "{count} revisioni",
+    "downloadOf": "Scarica il PDF della revisione {revision}",
+    "pickTwo": "Seleziona esattamente due revisioni."
   },
   "view": {
     "blocks": "Blocchi",

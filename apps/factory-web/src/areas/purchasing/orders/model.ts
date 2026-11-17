@@ -4,8 +4,7 @@ import { decimalValue, phrase, type BuyingCan, type Loaded, type Part, type Phra
 import type { MaterialDetail, MaterialOption, SiteOption, SupplierOption } from '../../_shared/buying/api'
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { DocumentSendModel } from '../../_shared/document-send/model'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
-import type { OrderDocuments, OrderReceipt, OrderReminders, OrderRevisions, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SendCard, SendCheck, SendCheckAnswer, SendOutcome, SupplierAnswer, SupplierView } from './api'
+import type { OrderReceipt, OrderReminders, OrderRevisions, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SendCard, SendCheck, SendCheckAnswer, SendOutcome, SupplierAnswer, SupplierView } from './api'
 import type { DailyDialog, SendExtra } from './daily-model'
 // B-W2b-333: purchase orders in depth on screen (the depth parts of the studio).
 import { DOCUMENT_CODES, depthFixOf, type ChaseActions, type ChaseModel, type DepthCan, type OrderDepthActions, type OrderDepthModel, type WorklistPart } from './depth/model'
@@ -115,9 +114,31 @@ export function confirmationPhrase(row: Pick<OrderRow, 'status' | 'sentAt' | 'co
 
 // B-W2a-81: Invoices (the supplier invoices with a line on this order, Finance's; design order lines, answer, receipts, invoices).
 // B-W2b-333: Delivery schedule (design rec tab `schedule`, W2b) after Lines.
-export const RECORD_TABS = ['lines', 'schedule', 'answer', 'receipts', 'invoices', 'documents', 'activity'] as const
+// ---- B-TH-263 (threads plan TH-6; 08-tabs O-PUR-PO; the rule of picture 38): tabs 7 → 5. Documents goes — its frozen PDFs are files
+// of the order (FISCAL_ARCHIVE on the PurchaseOrder record) and show in the docked thread's Files view, the draft's sample PDF is the
+// band's ⋯ "Preview PDF", each mail's delivery shows on its thread card (R1-G02), a revision's PDF stays on Supplier's answer ›
+// Revisions —; Activity goes (R-ACT: its tools are in the thread's "⋯").
+export const RECORD_TABS = ['lines', 'schedule', 'answer', 'receipts', 'invoices'] as const
 export type OrderTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): OrderTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as OrderTab) : 'lines')
+/** Every old `?tab=` keeps working (R-8): Documents → Lines (its PDFs: the thread's Files view); Activity → Lines with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, OrderTab>> = Object.freeze({ documents: 'lines', activity: 'lines' })
+export const tabOf = (value: string | null | undefined): OrderTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as OrderTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'lines'
+}
+/** A tab whose body is a wide grid (the lines): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: OrderTab): boolean => tab === 'lines'
+/**
+ * The band's ⋯ "Preview PDF" (what the Documents tab held for a draft): the draft's sample PDF in a new tab, as the order stands
+ * now — only with the cost grain (it prints prices), else held with why; null for a sent order (its PDF was frozen at the send: a
+ * file of the order, in the docked thread's Files view).
+ */
+export function previewPdf(status: PoStatus, previewHref: string | null | undefined): { readonly href: string } | { readonly held: string } | null {
+  if (status !== 'DRAFT') return null
+  return previewHref ? { href: previewHref } : { held: 'po.send.previewNeedsCost' }
+}
+// ---- end B-TH-263
 
 /** The journey under the title: drafted → sent → confirmed → received (Stepper's current index; a closed order is past the end). */
 export function journeyIndex(status: PoStatus): number {
@@ -423,7 +444,6 @@ export interface OrderRecordModel {
   order: Loaded<PurchaseOrder>
   answer: Part<SupplierAnswer>
   receipts: Part<OrderReceipt[]> | null
-  documents: Part<OrderDocuments>
   /** B-W2a-69: every revision with its diff and answer, the draft's changes so far; the reminders and the confirm-by. */
   revisions: Part<OrderRevisions>
   reminders: Part<OrderReminders>
@@ -438,13 +458,13 @@ export interface OrderRecordModel {
   /** A draft's sample PDF for a new tab (the preview route; only with the cost grain), else null. */
   previewHref?: string | null
   live: LiveState
-  dockOpen: boolean
+  /** B-TH-263: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   changed: { at: string } | null
   notice: { tone: 'success' | 'danger' | 'info'; words: Phrase } | null
   busy: boolean
   dialog: OrderDialog | null
   dialogProblem: Phrase | null
-  panelsPreview?: RecordPanelsViewModel
   /** B-W2b-333: the depth parts (schedule, kinds, compliance, demand, approval, chase); absent in older design cases. */
   depth?: OrderDepthModel | null
   /** Design cases. */
@@ -456,7 +476,6 @@ export interface OrderRecordModel {
 export interface OrderRecordActions {
   onRetry?: () => void
   onReload?: () => void
-  onDock?: () => void
   onDialog?: (dialog: OrderDialog | null) => void
   onDismissNotice?: () => void
   onSend?: {
@@ -482,8 +501,7 @@ export interface OrderRecordActions {
   onEditLine?: (lineId: string) => void
   onAddLine?: () => void
   onSupplierView?: () => void
-  onDownload?: (fileId: string) => void
-  onRetryPart?: (part: 'answer' | 'receipts' | 'documents' | 'revisions' | 'reminders') => void
+  onRetryPart?: (part: 'answer' | 'receipts' | 'revisions' | 'reminders') => void
   /** B-W2a-69: the changes after the send. */
   daily?: {
     onSendExtra?: (extra: SendExtra) => void
