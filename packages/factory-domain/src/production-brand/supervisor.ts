@@ -56,6 +56,11 @@ export function workOrderSupervisor(input: { readonly orders: readonly { readonl
   return effectiveSupervisor(distinct.size === 1 ? (own ?? null) : null, input.customerDefault)
 }
 
+// ---- B-PR-42b (R-60): the orders a supervisor follows and is told of — open in production, not shipped, not cancelled (the same
+// states the customer's stage keeper keeps: apps/factory-api production/brand/facts KEEPER_ORDER_STATES).
+export const SUPERVISED_ORDER_STATES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const
+// ---- end B-PR-42b
+
 /** How a list shows the supervisor to a viewer (never a name outside one order). */
 export const SUPERVISOR_MARKS = ['ME', 'SOMEONE_ELSE', 'NOT_SET'] as const
 export type SupervisorMark = (typeof SUPERVISOR_MARKS)[number]
