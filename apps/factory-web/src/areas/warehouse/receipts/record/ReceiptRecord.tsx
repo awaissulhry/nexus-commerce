@@ -9,7 +9,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
-import { downloadText, useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
+import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { buyingCan, csvOf, part, PART_LOADING, phrase, readProblem, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
 import { getReceipt, receiptLots, reverseReceipt, type LotWithHides, type Receipt } from '../api'
 import {
@@ -61,11 +61,15 @@ import { useReceiptDepth } from '../reception/useReceiptDepth'
 // B-W2b-382 (B-W2b-377's hold): a receipt that waits for a yes — which lines and why, Cancel, Post after the last yes.
 import { useHeldReceipt } from '../held/use-held-receipt'
 import { CancelHeldDialog, HeldBanner } from '../held/view/HeldBanner'
+// ---- B-TH-264: the receipt on RecordFrame (the docked thread beside every tab; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const TIME_ZONE = 'Europe/Rome'
 
 /**
- * `/w/<company>/warehouse/receipts/<id>` (SCR-063; `?tab=lines|lots|documents|discrepancies|activity`, `?open=<discrepancy>`):
+ * `/w/<company>/warehouse/receipts/<id>` (SCR-063; `?tab=lines|lots|documents|discrepancies`, `?open=<discrepancy>`; B-TH-264: an old
+ * `?tab=activity` lands on Lines with the docked thread opened):
  * loads the receipt (inventory.stock.view; values with the cost grain), its lots with every hide and — B-W2a-63 — its
  * discrepancies and the DISCREPANCY and CLAIM reason lists; reverses it (inventory.reverse); records, changes, settles and
  * removes a discrepancy with its photos, sends the report to the supplier (its check, its PDF in the viewer, then the
@@ -104,7 +108,6 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   const [notice, setNotice] = useState<ReceiptRecordModel['notice']>(null)
   const [changed, setChanged] = useState<{ at: string } | null>(null)
   const reverseKey = useRef(newIdempotencyKey())
-  const { dockOpen, toggleDock } = useThreadDock('GoodsReceipt')
 
   // ---- B-W2a-63: the receipt every day ----
   const [discrepancies, setDiscrepancies] = useState<Part<Discrepancy[]>>(PART_LOADING)
@@ -453,7 +456,10 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   }
 
   const dailyModel: ReceiptDailyModel = { can: dCan, discrepancies, reasons, dialog: daily, busy: dailyBusy, problem: dailyProblem, notice: dailyNotice, open: openId, photos, ddtStep, uploading }
-  const model: ReceiptRecordModel = { prefix, can, tab, receipt, lots, live, dockOpen, changed, notice, notes: null, busy, dialog, dialogProblem, timeZone: TIME_ZONE, daily: dailyModel }
+  const model: ReceiptRecordModel = { prefix, can, tab, receipt, lots, live, personId: session.user.id, changed, notice, notes: null, busy, dialog, dialogProblem, timeZone: TIME_ZONE, daily: dailyModel }
+  // B-TH-264: the receipt's ONE thread, docked beside every tab — its supplier is the only party it may reach ("Request from
+  // supplier" and the discrepancy report write their mails in it). The print view keeps the record panels' print form.
+  const receiptRef = value ? { type: 'GoodsReceipt', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
 
   return (
     <ReceiptRecordView
@@ -477,11 +483,23 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
             }
           : depth
       }
-      panels={value && (tab === 'activity' || dockOpen) ? <RecordPanels record={{ type: 'GoodsReceipt', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.supplier.name}`} /> : null}
+      thread={
+        value && receiptRef ? (
+          <OfficeRecordThread
+            docked
+            record={receiptRef}
+            title={`${value.number} · ${value.supplier.name}`}
+            recordLabel={value.number}
+            party={{ id: value.supplier.id, name: value.supplier.name }}
+            partyRole="supplier"
+            printHref={printHref(pathname, params?.toString() ?? '')}
+          />
+        ) : null
+      }
+      printThread={value && receiptRef ? <RecordPanels record={receiptRef} title={`${value.number} · ${value.supplier.name}`} /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => void load(),
-        onDock: toggleDock,
         onDialog: (next) => {
           setDialogProblem(null)
           if (next && !dialogRef.current) reverseKey.current = newIdempotencyKey()

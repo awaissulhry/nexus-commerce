@@ -41,6 +41,8 @@ import {
 import { bookDraftFor, draftFromRevision, formPoints, linkDraftFor, resultDraftFor, reviewDraftFor, type RecordTab } from '../model'
 import type { ProfileRecordModel, RecordDialog } from './view-model'
 import { ProfileRecordView } from './view/ProfileRecordView'
+// ---- B-TH-258: the rider's thread docked beside every tab (the rule of picture 38) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-036-record — the rider profile (design sales.mtm "Record: Rider profile") with made-up data only. Each case is a state the
@@ -48,9 +50,14 @@ import { ProfileRecordView } from './view/ProfileRecordView'
  * a value kept outside its range, view only, made-to-measure off for the template), the certified range check (inside, outside,
  * off), Review measurements (confirm, ask for more, held for the measurer and without the right), Compare revisions, New
  * revision, the Photos tab (opened, the deletion day), the Fittings tab (booked, off, empty; Book a fitting; the appointment's
- * panel and its forms; Record outcome; Send to alteration), the Proofs, Orders (Repeat order, old measures) and Activity tabs,
- * Send a measurement link, Use in a new quote, and the record's own states.
+ * panel and its forms; Record outcome; Send to alteration), the Proofs and Orders tabs (Repeat order, old measures), Measurements ›
+ * History (once the Activity tab), Send a measurement link, Use in a new quote, and the record's own states. B-TH-258: on RecordFrame
+ * — the band in the shell's row, the rider's thread docked beside every tab (made-up: its record label names no rider; the party is
+ * the rider's own customer), Activity's tools in the thread's "⋯".
  */
+
+/** B-TH-258: the rider's made-up thread (no rider name in its record label, as the API's label; the rider's own customer). */
+export const riderThread = () => designDockedThread({ recordType: 'MeasurementProfile', record: `Measurements ${RECORD.garmentType}`, party: { name: RECORD.customer.name, role: 'customer' } })
 
 interface DesignModel {
   readonly role: RoleCase
@@ -80,6 +87,7 @@ const record = (over: Partial<ProfileRecordModel> = {}, role: RoleCase = 'owner'
     measurements: null,
     link: null,
     quote: null,
+    thread: riderThread(), // B-TH-258
     ...over,
   },
 })
@@ -205,7 +213,15 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'orders-empty', label: 'Orders: not used yet (Use in a new quote; Repeat held)', model: tab('orders', { loaded: { status: 'ready', record: RECORD_NEW } }) },
     { id: 'repeat', label: 'Repeat order from the latest profile: copy a unit on revision 3', model: tab('orders', { dialog: { kind: 'repeat', facts: REPEAT, problem: null, fromLineId: REPEAT.earlier[0]!.lineId, measuredOk: false, busy: false, notice: null } }) },
     { id: 'repeat-old', label: 'Repeat order: measured 14 months ago — held until "order on these measures anyway"', model: tab('orders', { dialog: { kind: 'repeat', facts: REPEAT_OLD, problem: null, fromLineId: REPEAT_OLD.earlier[0]!.lineId, measuredOk: false, busy: false, notice: null } }) },
-    { id: 'activity', label: 'Activity: revisions, reviews, the worksheets and the units, newest first', model: tab('activity') },
+    // ---- B-TH-258: the docked thread (Activity gone: its tools in the thread's "⋯", its timeline in Measurements › History) ----
+    {
+      id: 'thread-docked',
+      label: 'The rider’s thread docked beside Measurements (40 %): its “⋯” holds Add task, Ask a partner to approve, Share, Followers, Remind me',
+      model: record(),
+      note: 'One thread per rider and garment type (on the first revision); only a reader of measurements who reads threads gets it. Below 1280 px the band’s Thread button opens it full width; ⌘J hides it.',
+    },
+    { id: 'history', label: 'Measurements › History: revisions, reviews, the worksheets and the units, newest first (once the Activity tab)', model: record(), note: 'Scroll under the review and the range check: the rider timeline is domain history, not the thread’s.' },
+    { id: 'no-thread', label: 'A role that reads measurements but no threads: no dock, no Thread button; History stays', model: record({ thread: null }) },
     { id: 'notice', label: 'A review done: the orders waiting went on', model: record({ notice: { key: 'review.done.confirmedOrders', params: { count: 1, orders: 'SO-DEMO-0003' }, tone: 'success' } }) },
     { id: 'stale', label: 'Changed while working (Read it again)', model: record({ stale: '10:14' }) },
     { id: 'offline', label: 'Offline: the actions held', model: record({ live: 'offline' }) },

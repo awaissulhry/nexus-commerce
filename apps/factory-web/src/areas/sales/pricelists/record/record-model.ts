@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { PartyRow, StyleDetail, StyleRow } from '../../quotes/api'
 import type { CompareAnswer, PriceEntry, PriceListDetail, PriceVersion, VersionAnswer } from '../api'
 import type { Phrase, PriceListAbilities, RecordTab, Tone } from '../model'
@@ -96,8 +95,8 @@ export interface PriceListRecordModel {
   stylePick: StylePick
   customerPick: CustomerPick
   compare: CompareView
-  /** The design index's stand-in for the record panels (the live page mounts the real ones). */
-  panelsPreview?: RecordPanelsViewModel
+  /** B-TH-258: who reads (the docked thread's width is remembered per person and record type). */
+  personId?: string | null
   /** Design cases: the row that has the focus. */
   focusRow?: number
   /** B-W2b-343: Breaks & surcharges (its own reads), the import's button and dialog, the version's export and PDF. */
@@ -192,6 +191,11 @@ export interface PriceListRecordActions {
 export interface PriceListRecordProps {
   model: PriceListRecordModel
   actions?: PriceListRecordActions
-  /** The record panels (thread, files, history) for Activity: the container mounts them. */
-  panels?: ReactNode
+  /**
+   * B-TH-258: the list's thread docked beside every tab (the office's OfficeRecordThread docked: notes only, a price list prices many
+   * customers), or null where the person reads no threads (no dock, no Thread button). A design case passes its made-up one.
+   */
+  thread?: ReactNode
+  /** B-TH-258: what the print view (`?print=1`) shows of the thread under the body (the record panels' print form). */
+  printThread?: ReactNode
 }

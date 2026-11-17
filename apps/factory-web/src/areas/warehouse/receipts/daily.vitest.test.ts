@@ -105,9 +105,10 @@ describe('the list: tile, view, address', () => {
     expect(tile.count(null, null)).toBeNull()
   })
 
-  it('the record’s tabs in the design’s order', () => {
-    expect(RECEIPT_TABS).toEqual(['lines', 'lots', 'documents', 'discrepancies', 'activity'])
+  it('the record’s tabs in the design’s order (B-TH-264: Activity gone, its address lands on Lines)', () => {
+    expect(RECEIPT_TABS).toEqual(['lines', 'lots', 'documents', 'discrepancies'])
     expect(receiptTabOf('discrepancies')).toBe('discrepancies')
+    expect(receiptTabOf('activity')).toBe('lines')
     expect(receiptTabOf('nope')).toBe('lines')
   })
 })

@@ -9,6 +9,8 @@ import type { ApprovalView, RoundView, SwatchView } from '../../api'
 import { approvalHeld, needsPhrase, recordHref, refusalPhrase, type Phrase } from '../../model'
 import { DecisionTag, useWords } from '../../parts'
 import type { SampleRecordActions, SampleRecordModel } from '../view-model'
+// B-TH-262 (R-ACT): "Ask the customer" opens the docked thread's Ask a partner to approve.
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 
 /** Why a swatch's step is held, in our words (the right first, then the API's code). */
 export function swatchHeld(swatch: SwatchView, step: 'send' | 'decide', offline: boolean): Phrase | null {
@@ -20,8 +22,8 @@ export function swatchHeld(swatch: SwatchView, step: 'send' | 'decide', offline:
 /**
  * Approval (design rec tab sample.approval, SAL-312, SAL-314, PRD-158; an explicit decision): the decision — approved,
  * approved with comments or rejected, by whom (the office, or the customer by link or portal), when, on which revision,
- * the comments — or "Waiting for a decision" with the request to the brand; Record decision, Ask the customer (Links ›
- * Approve: the record panels' Approvals, where the files go with the request), after a rejection "Make the next round"
+ * the comments — or "Waiting for a decision" with the request to the brand; Record decision, Ask the customer (B-TH-262: the
+ * docked thread's Ask a partner to approve, where the files go with the request), after a rejection "Make the next round"
  * and "Raise a change"; the leather and colour swatches sent and decided; a CE test sample's notified body, zones, result
  * and certificate. Every step held says why (the right it needs, or the rule in our words).
  */
@@ -86,7 +88,10 @@ function Ready({
   const nextHeld = say(approvalHeld(view, 'nextRound', offline))
   const changeHeld = say(approvalHeld(view, 'raiseChangeRequest', offline))
   const testHeld = say(approvalHeld(view, 'testResult', offline))
-  const askHref = recordHref(model.prefix, round.id, 'activity', 'panel=approvals')
+  // B-TH-262 (R-ACT, 08-tabs O-PRD-SMP Approval): the thread's "Ask a partner to approve" (the docked thread shows, then the Ask opens);
+  // without a frame the address does the same on arrival (`panel=approvals`, R-8).
+  const frame = useRecordFrame()
+  const askHref = recordHref(model.prefix, round.id, 'approval', 'panel=approvals')
 
   return (
     <div className="fw-smp-stack">
@@ -124,6 +129,10 @@ function Ready({
               {!decision && round.party && (
                 askHeld ? (
                   <Button size="sm" heldReason={askHeld}>
+                    <Send size={14} aria-hidden /> {t('approval.ask')}
+                  </Button>
+                ) : frame?.openDoor ? (
+                  <Button size="sm" onClick={() => frame.openDoor?.('approve')}>
                     <Send size={14} aria-hidden /> {t('approval.ask')}
                   </Button>
                 ) : (

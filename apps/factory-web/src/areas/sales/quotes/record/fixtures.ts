@@ -1,5 +1,5 @@
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import { CATALOGUE, createTranslator } from '../../../../lib/i18n/messages'
 import type { Locale } from '../../../../lib/i18n/locales'
@@ -10,6 +10,9 @@ import type { QuoteRecordViewModel } from './record-model'
 import { sendItems } from './send-model'
 import { duplicateOf } from '../duplicate/model'
 import { QuoteRecordView } from './view/QuoteRecordView'
+// ---- B-TH-257: the quote on RecordFrame in the Office shell, with its docked thread (design only) ----
+import { inShell } from '../../orders/_demo/fixtures'
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-035 the quote record — made-up data only (PLAN §3.1): an invented company, customer, jacket and people; every
@@ -344,9 +347,6 @@ export const PARTY: PartyDetail = {
 
 const PDF = samplePdf(['Preventivo Q-2026-0142 v1 - ESEMPIO', 'Officina Demo S.r.l. - documento di prova', 'Squadra Corse Fittizia S.r.l.', 'DEMO-JKT-01 Nero  50x2 52x4 54x2   8 x 450,00 = 3.600,00', 'DEMO-JKT-01 Rosso 50x1 52x3 54x2   6 x 440,00 = 2.640,00', 'Imponibile 6.240,00  IVA 22% 1.372,80  Totale 7.612,80', 'Acconto 30% 2.283,84'])
 
-const panels = panelsScreen.cases.find((item) => item.id === 'conversation')!.model
-const PANELS = { ...panels, record: { type: 'Quote', id: QUOTE_ID, companyId: COMPANY_ID, siteId: null }, title: 'Q-2026-0142 · Squadra Corse Fittizia S.r.l.' }
-
 export function model(overrides: Partial<QuoteRecordViewModel> = {}): QuoteRecordViewModel {
   return {
     prefix: PREFIX,
@@ -372,8 +372,10 @@ export function model(overrides: Partial<QuoteRecordViewModel> = {}): QuoteRecor
     notice: null,
     changed: null,
     today: '2026-10-29',
-    dockOpen: false,
-    panelsPreview: PANELS,
+    // B-TH-257
+    personId: PEOPLE.sales,
+    readsRequests: true,
+    orders: { view: true, make: true },
     ...overrides,
   }
 }
@@ -421,10 +423,28 @@ const LIBRARY = [
   { id: '0190f0e2-6120-7000-8000-000000000002', companyId: null, code: 'BB60', name: 'Bonifico 60 gg', nameI18n: null, method: 'MP05', deposit: null, summary: { it: '100 % a 60 giorni dalla fattura, bonifico', en: '100 % 60 days from the invoice, bank transfer' }, status: 'ACTIVE' as const, customers: 5, version: 1 },
 ]
 
+// ---- B-TH-257 (threads plan TH-6, O-SAL-QUO-REC; the rule of picture 38) --------------------------------------------------------
+/**
+ * The quote as the page draws it: on RecordFrame inside the Office shell (the band in the shell's band row), with the made-up docked
+ * thread of its own customer only (the page mounts the office's OfficeRecordThread docked).
+ */
+function QuoteDesign({ model }: { model: QuoteRecordViewModel }) {
+  const value = model.quote.status === 'ready' ? model.quote.value : null
+  const thread = value ? designDockedThread({ recordType: 'Quote', record: value.number, party: { name: value.party.legalName, role: 'customer' } }) : null
+  return inShell(`/sales/quotes/${value?.id ?? QUOTE_ID}`, createElement(QuoteRecordView, { model, thread }), 'sales')
+}
+
+/** B-TH-078's sources on the quote: made from a request, and the accepted quote's order (made, cancelled, or why it waits). */
+const MADE_FROM = { inquiryId: '0190f0e2-5151-7000-8000-000000000042', number: 'INQ-2026-0042' }
+const ORDER_MADE = { state: 'MADE' as const, id: '0190f0e2-4444-7000-8000-000000000088', number: 'SO-2026-0088', status: 'CONFIRMED', reason: null, words: null }
+const orderWaits = (reason: 'NO_SALES_ORDER_SERIES' | 'ACCOUNT_ON_HOLD' | 'PO_NUMBER_REQUIRED' | 'NOT_MADE') => ({ state: 'WAITS' as const, id: null, number: null, status: null, reason, words: 'Order waits.' })
+const SENDING = (over: Partial<QuoteRecordViewModel> = {}) => ({ tab: 'approval' as const, document: { src: PDF, openHref: null, problem: null, frozen: true }, ...over })
+// ---- end B-TH-257
+
 export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
   screen: 'SCR-035',
-  title: 'Quote record: lines, price & margin, terms, versions, approval, documents',
-  view: QuoteRecordView,
+  title: 'Quote record: lines, price & margin, terms, revisions, approval & sending — the docked thread',
+  view: QuoteDesign,
   cases: [
     { id: 'owner-lines', label: 'Owner · Lines (draft, every grain)', model: model(), note: 'Style block: colours × sizes typed from the keyboard (autosaved), each colour line\'s price, net, unit cost and margin %; size 56 without certificate is a warning; the summary rail with margin € and %.' },
     { id: 'sales-lines', label: 'Sales · Lines (margin %, no cost: S2)', model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote())) }), note: 'Sales sees prices and the margin % against the floor, never a cost or a margin amount.' },
@@ -447,14 +467,29 @@ export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
     { id: 'price-only', label: 'A role with prices only', model: model({ tab: 'price', grains: GRAINS.priceOnly, can: CAN.viewer, quote: ready(withoutCost(quote({ current: { marginPct: undefined, marginFloorPct: undefined, marginFloorBreached: undefined } }))) }), note: 'Without the margin grain: no margin figures at all, said once.' },
     { id: 'terms-edit', label: 'Sales · Terms & delivery (draft, explicit save)', model: model({ tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote())) }), note: 'Change a field and the EditModeBar appears (⌘S, Discard).' },
     { id: 'terms-read-only', label: 'Terms & delivery (sent: read only)', model: model({ tab: 'terms', quote: ready(sentQuote) }) },
-    { id: 'versions', label: 'Versions (v2 draft, v1 sent)', model: model({ tab: 'versions', quote: ready(quote({ currentRevision: 2, current: { revision: 2, changeNote: 'Aggiunto il colore rosso.' } })), versions: { items: [version({ id: '0190f0e2-9999-7000-8000-100000000002', revision: 2, documentNumber: 'Q-2026-0142 v2', changeNote: 'Aggiunto il colore rosso.', createdAt: at(30, 9) }), SENT_VERSION], people: { [PEOPLE.sales]: 'Sara Vendite' }, problem: null } }) },
-    { id: 'sent', label: 'Sent · read only, Make version 2', model: model({ quote: ready(sentQuote), versions: { items: [SENT_VERSION], people: { [PEOPLE.sales]: 'Sara Vendite' }, problem: null } }), note: 'Validity countdown in the band; the grid is drawn as text; the primary is Make version 2.' },
-    { id: 'documents-draft', label: 'Documents · draft preview', model: model({ tab: 'documents' }) },
-    { id: 'documents-sent', label: 'Documents · sent: link live', model: model({ tab: 'documents', quote: ready(sentQuote), document: { src: PDF, openHref: null, problem: null, frozen: true }, versions: { items: [SENT_VERSION], people: {}, problem: null } }) },
-    { id: 'accepted', label: 'Accepted · evidence and deposit', model: model({ tab: 'documents', quote: ready(acceptedQuote), document: { src: PDF, openHref: null, problem: null, frozen: true }, versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } }) },
-    { id: 'documents-needs', label: 'Documents · the PDF still needs addresses', model: model({ tab: 'documents', document: { src: null, openHref: null, problem: 'docs.problem.needs', frozen: false } }) },
-    { id: 'activity', label: 'Activity (thread, files, history)', model: model({ tab: 'activity' }) },
-    { id: 'dock', label: 'Thread beside the tab (wide screens, ⌘J)', model: model({ dockOpen: true }), note: 'Owner O1: at 1280 px and wider; narrower, the button opens Activity.' },
+    { id: 'versions', label: 'Revisions (r2 draft, r1 sent)', model: model({ tab: 'versions', quote: ready(quote({ currentRevision: 2, current: { revision: 2, changeNote: 'Aggiunto il colore rosso.' } })), versions: { items: [version({ id: '0190f0e2-9999-7000-8000-100000000002', revision: 2, documentNumber: 'Q-2026-0142 v2', changeNote: 'Aggiunto il colore rosso.', createdAt: at(30, 9) }), SENT_VERSION], people: { [PEOPLE.sales]: 'Sara Vendite' }, problem: null } }) },
+    { id: 'sent', label: 'Sent · read only, Make revision 2', model: model({ quote: ready(sentQuote), versions: { items: [SENT_VERSION], people: { [PEOPLE.sales]: 'Sara Vendite' }, problem: null } }), note: 'Validity countdown in the band; the grid is drawn as text; the primary is Make revision 2.' },
+    // B-TH-257: Approval & sending — the approval, then the quote's way to the customer (Documents merged into it).
+    { id: 'sending-draft', label: 'Approval & sending · the rules, then the draft preview', model: model({ tab: 'approval' }), note: 'One path from approval to acceptance: the rules and requests first, then the live PDF in either language (also in a new tab).' },
+    { id: 'sending-sent', label: 'Approval & sending · sent: the frozen PDF, the accept link live', model: model(SENDING({ quote: ready(sentQuote), versions: { items: [SENT_VERSION], people: {}, problem: null } })) },
+    { id: 'accepted', label: 'Approval & sending · accepted: evidence and deposit', model: model(SENDING({ quote: ready(acceptedQuote), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })) },
+    { id: 'sending-needs', label: 'Approval & sending · the PDF still needs addresses', model: model({ tab: 'approval', document: { src: null, openHref: null, problem: 'docs.problem.needs', frozen: false } }) },
+    // B-TH-257: the docked thread (the rule of picture 38).
+    {
+      id: 'thread-docked',
+      label: 'TH-6 · Sales · The thread docked beside Terms & delivery (40 %)',
+      model: model({ tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote())) }),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 % (one third on Lines under 1600 px), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me); Reply goes to this quote’s customer only. Below 1280 px the band’s Thread button opens it full width.',
+    },
+    { id: 'thread-lines', label: 'TH-6 · Owner · Lines with the thread: one third under 1600 px', model: model(), note: 'The colour × size grids need the room: on Lines the thread takes one third below 1600 px unless the person chose a width in its width menu.' },
+    // B-TH-257 (B-TH-078's API): where the quote came from and where it went.
+    { id: 'th-257-made-from', label: 'TH-6 · Sales · Made from a request: "Made from INQ-2026-0042 — Open", "Customer sees: Quote being prepared"', model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote({ madeFrom: MADE_FROM, order: null }))) }), note: 'The customer reads the request’s state in the portal’s own words, from the quote’s state: a draft is "Quote being prepared", never "Quote sent".' },
+    { id: 'th-257-customer-sees-sent', label: 'TH-6 · Sent from a request: "Customer sees: Quote sent (see your e-mail)"', model: model({ quote: ready(quote({ status: 'SENT', current: { status: 'SENT' }, madeFrom: MADE_FROM, order: null })), versions: { items: [SENT_VERSION], people: {}, problem: null } }) },
+    { id: 'th-257-no-request-right', label: 'TH-6 · Made from a request, read by someone without the requests right: the number, no link', model: model({ readsRequests: false, quote: ready(quote({ madeFrom: MADE_FROM, order: null })) }) },
+    { id: 'th-257-order', label: 'TH-6 · Accepted: "Order SO-2026-0088 — Open" on the band', model: model(SENDING({ quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, madeFrom: MADE_FROM, order: ORDER_MADE })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })) },
+    { id: 'th-257-order-waits', label: 'TH-6 · Accepted, no order yet: "Order waits" + Make the order now', model: model(SENDING({ quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, order: orderWaits('NOT_MADE') })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })), note: 'The customer accepted, the order is not made: the notice says so and Make the order now makes it from the accepted revision (orders.manage).' },
+    { id: 'th-257-order-waits-held', label: 'TH-6 · Order waits, read by someone who cannot make orders: held with the reason', model: model(SENDING({ orders: { view: true, make: false }, quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, order: orderWaits('NOT_MADE') })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })) },
+    { id: 'th-257-order-waits-series', label: 'TH-6 · Order waits: the company has no order numbering', model: model(SENDING({ quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, order: orderWaits('NO_SALES_ORDER_SERIES') })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })) },
     { id: 'changed', label: 'Changed by someone else (unsaved work kept)', model: model({ changed: { at: at(29, 9, 30) }, drafts: { [STYLE_ID]: { [BLK]: { '50': 3, '52': 4, '54': 2 } } } }) },
     { id: 'viewer', label: 'A viewer: read only', model: model({ can: CAN.viewer, grains: GRAINS.priceOnly, quote: ready(withoutCost(quote({ current: { marginPct: undefined, marginFloorPct: undefined, marginFloorBreached: undefined } }))) }) },
     // B-W2a-49: list price on the lines (SAL-165), the library terms (FIN-075), the minimum order, Duplicate (SAL-155).

@@ -327,15 +327,18 @@
   "record": {
     "offline": "Offline: what you see may be out of date; changes wait until the connection is back.",
     "stale": "This profile changed at {time} while you were working.",
-    "reload": "Read it again"
+    "reload": "Read it again",
+    "dockLabel": "The rider's thread",
+    "threadLabel": "Measurements {garment}",
+    "name": "Rider profile",
+    "tabsLabel": "Rider profile tabs"
   },
   "tab": {
     "measurements": "Measurements",
     "photos": "Photos",
     "fittings": "Fittings",
     "proofs": "Proofs",
-    "orders": "Orders",
-    "activity": "Activity"
+    "orders": "Orders"
   },
   "meas": {
     "none": "No measurements yet",
@@ -853,8 +856,8 @@
     "CHECKING": "Being checked",
     "REFUSED": "Refused"
   },
-  "activity": {
-    "title": "Activity",
+  "history": {
+    "title": "History",
     "sub": "Everything that happened to this rider’s measures, newest first.",
     "none": "Nothing yet. The first change appears here.",
     "recorded": "Revision {revision} recorded by {by}",
@@ -866,8 +869,7 @@
     "by": "By {name}",
     "quoteUnit": "Quote {number}: a unit on revision {revision}",
     "orderUnit": "Order {number}: a unit on revision {revision}",
-    "style": "{style} · {colourway}",
-    "noThread": "Your roles do not read record threads: the rider's notes and messages are not shown here."
+    "style": "{style} · {colourway}"
   },
   "sheet": {
     "noRight": "You cannot see this worksheet",

@@ -55,6 +55,8 @@ import { OrderRecordView } from './view/OrderRecordView'
 // ---- B-TH-214: the docked thread the order's cases show (RecordFrame beside every tab) ----
 import { dockedThread } from '../../../../lib/record-thread/fixtures'
 import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
+// ---- B-TH-256: what points at the order (complaints, returns, planning's re-promise, a gate refusal) ----
+import { LINKS_FULL, LINKS_MANAGER, LINKS_NONE, linksModel } from './links/fixtures'
 import { BRAND_ALPHA, type BrandFixture } from '../../../../lib/testing/two-brands'
 import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 // B-W2b-380 (XF6:02): cost changed since priced on the lines.
@@ -359,6 +361,14 @@ export const designScreen = defineDesignScreen<RecordCase>({
     },
     { id: 'thread-lines', label: 'Sales · Lines with the thread: one third under 1600 px', model: base('sales', production), note: 'The size grids need the room: on Lines the thread takes one third below 1600 px unless the person chose a width in its width menu.' },
     { id: 'notices', label: 'Sales · One notice, the rest behind “N more notices”', model: base('sales', late, { tab: 'production', changed: { at: at(29, 10, 42) } }), note: 'The order is late and changed meanwhile: the most serious notice shows, the other waits behind "1 more notice".' },
+    // ---- B-TH-256: what points at the order (picture 29's 'Shipments & invoices with complaints and returns', ORD-G04, the gate block) ----
+    { id: 'th-256-links', label: 'TH-6 · Sales · Shipments & invoices: the order’s complaints and returns (each opens its record)', model: base('sales', production, { tab: 'shipments', links: linksModel({ ...LINKS_FULL, rePromises: [], gates: [] }) }), note: 'Only this order’s own complaints and returns (wall W27), each by its own right; a real link to each record.' },
+    { id: 'th-256-links-none', label: 'TH-6 · Sales · Shipments & invoices: no complaints or returns', model: base('sales', production, { tab: 'shipments', links: linksModel(LINKS_NONE) }) },
+    { id: 'th-256-repromise', label: 'TH-6 · Sales · Planning proposes new dates: Accept / Decline in the one notice, "Tell the customer" ticked', model: base('sales', production, { tab: 'production', links: linksModel({ ...LINKS_FULL, gates: [] }, { tell: { [LINKS_FULL.rePromises[0]!.id]: true } }) }), note: 'The proposer never decides it; the customer is told only with the tick (and the right to send e-mail).' },
+    { id: 'th-256-repromise-manager', label: 'TH-6 · Production manager · The proposal read-only (held with why); the gate in words only; no complaints or returns', model: base('manager', production, { tab: 'shipments', links: linksModel(LINKS_MANAGER) }) },
+    { id: 'th-256-decline', label: 'TH-6 · Sales · Decline the new dates? (the reason the planner reads)', model: base('sales', production, { tab: 'production', links: linksModel({ ...LINKS_FULL, gates: [] }, { decline: { proposalId: LINKS_FULL.rePromises[0]!.id, reason: 'Il cliente ha già promesso la consegna al negozio.', problem: null } }) }) },
+    { id: 'th-256-gate', label: 'TH-6 · Sales · A compliance gate blocks a work order: the gate’s own words, Open in Compliance', model: base('sales', production, { tab: 'production', links: linksModel({ ...LINKS_FULL, rePromises: [] }) }), note: 'Same words as Compliance › Gate refusals; the link only with the compliance view right.' },
+    { id: 'th-256-accepted', label: 'TH-6 · Sales · New dates accepted, the customer told', model: base('sales', production, { tab: 'production', links: linksModel(LINKS_NONE, { said: { key: 'links.done.acceptedTold', tone: 'success' } }) }) },
     { id: 'changed', label: 'Sales · Someone changed the order while a dialog was open', model: base('sales', production, { changed: { at: at(29, 10, 42) } }) },
     { id: 'notice', label: 'Sales · After a write: a notice', model: base('sales', production, { tab: 'production', notice: { tone: 'success', words: { key: 'notice.promise' } } }) },
     { id: 'loading', label: 'Loading', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'loading' } } } },

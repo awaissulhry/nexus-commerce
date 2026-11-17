@@ -68,6 +68,10 @@ export interface RecordFrameState {
   readonly clearDoor: () => void
   /** B-TH-229: the thread tells the band how many messages are new to the reader ("Thread · 2 new"). */
   readonly reportNew?: (count: number) => void
+  // ---- B-TH-262 (R-ACT; 08-tabs R-ACT "the sample Approval tab's Ask the customer opens the Ask popover"): a part of the body opens
+  // one of the thread's doors — the thread shows (docked) or opens full width (narrower), then the door opens, as `panel=approvals` does.
+  readonly openDoor?: (door: 'approve') => void
+  // ---- end B-TH-262
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -309,9 +313,18 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
     }
   }, [])
 
+  // B-TH-262: a body part's door (the sample's "Ask the customer"): show the thread, then the door.
+  const openDoor = useCallback(
+    (asked: 'approve') => {
+      if (mode === 'docked') sizes.show()
+      else if (!viewOpen) openView()
+      setDoor(asked)
+    },
+    [mode, sizes, viewOpen, openView],
+  )
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh }),
-    [mode, width, phone, choose, closeView, door],
+    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */ }),
+    [mode, width, phone, choose, closeView, door, openDoor],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229

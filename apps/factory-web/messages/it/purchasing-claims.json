@@ -459,9 +459,7 @@
     "changed": "Modificato da un altro alle {time}",
     "copyNumber": "Copia il numero",
     "created": "creato il {date}",
-    "dock": "Thread",
-    "dockHint": "Il thread accanto a questa scheda (⌘J)",
-    "dockLabel": "Il thread del reclamo",
+    "dockLabel": "La conversazione del reclamo",
     "error": {
       "title": "Impossibile caricare il reclamo"
     },
@@ -471,7 +469,6 @@
     },
     "loading": "Caricamento del reclamo…",
     "more": "Altre azioni",
-    "noPanels": "Thread, file e storico non sono disponibili.",
     "not_found": {
       "body": "Non è mai stato creato, o appartiene a un’altra azienda.",
       "title": "Questo reclamo non esiste"
@@ -646,10 +643,8 @@
     "SENT": "inviato, in attesa del fornitore"
   },
   "tab": {
-    "activity": "Attività",
     "claim": "Reclamo",
-    "credit": "Credito",
-    "goods": "Merce resa"
+    "goods": "Merce e accredito"
   },
   "tile": {
     "closed": "Chiusi questo mese",

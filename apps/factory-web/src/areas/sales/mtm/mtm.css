@@ -133,7 +133,13 @@
   align-items: start;
 }
 
-@media (min-width: 1180px) {
+/* B-TH-258: the record's body sits beside the docked thread (RecordFrame): its two columns follow the body's own width, not the
+   window's (two columns from 900 px of body: 1920 with the thread, 1440 with it hidden). */
+.fw-mtm-record {
+  container: fw-mtm-record / inline-size;
+}
+
+@container fw-mtm-record (min-width: 900px) {
   .fw-mtm-two {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }

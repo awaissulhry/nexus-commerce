@@ -6,26 +6,33 @@ import { breaksModel, MINIMUMS, RULES, RULES_V1, V2_DATED } from '../_demo/fixtu
 import { emptyBreak, emptyMinimum, emptySurcharge } from '../depth/model'
 import type { PriceListRecordModel } from './record-model'
 import { PriceListRecordView } from './view/PriceListRecordView'
+// ---- B-TH-258: the list's thread docked beside every tab (notes only: no party) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-106 — a price list record (design sales.pricelists "Record: Price list"; B-W2a-49) with made-up data only: a
  * customer list whose version 1 is in force (it ends on 20 November) with version 2 as a draft (+4 % on the jackets, a
  * glove added). Every tab — Prices (autosave per cell on the draft; standard cost with the cost grain, margin % with the
  * margin grain, under the floor toned; Raise by % reviewed before it is written), Customers, Versions (changed rows,
- * activate, compare), Activity — every dialog, the read-only reasons, and the states. Roles: Owner (cost and margin),
- * Sales (margin %, no cost: Owner S2), Finance (reads), Read-only (no money), Planner (no access).
+ * activate, compare) — every dialog, the read-only reasons, and the states. Roles: Owner (cost and margin),
+ * Sales (margin %, no cost: Owner S2), Finance (reads), Read-only (no money), Planner (no access). B-TH-258: on RecordFrame — the band
+ * in the shell's row, the list's thread docked beside every tab (notes only: a list prices many customers), Activity's tools in the
+ * thread's "⋯"; one third beside the wide grids (Prices, Breaks & surcharges) under 1600 px.
  */
 
 interface RecordCase {
   role: PriceListRole
   record: PriceListRecordModel
+  /** B-TH-258: a person who reads no threads (no dock, no Thread button). */
+  noThread?: boolean
 }
 
 const recordCase = (role: PriceListRole, over: Partial<PriceListRecordModel> = {}): RecordCase => ({ role, record: recordModel(role, over) })
 
 function PriceListDesign({ model }: { model: RecordCase }) {
   const list = model.record.list.status === 'ready' ? model.record.list.value : DETAIL
-  return inShell(`/sales/price-lists/${list.id}`, createElement(PriceListRecordView, { model: model.record }), model.role)
+  const thread = model.record.can.threads && !model.noThread ? designDockedThread({ recordType: 'PriceList', record: list.code, party: null }) : null
+  return inShell(`/sales/price-lists/${list.id}`, createElement(PriceListRecordView, { model: model.record, thread }), model.role)
 }
 
 const ids = (n: number) => recordModel('owner').prices.answer!.entries.slice(0, n).map((entry) => entry.id)
@@ -81,7 +88,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     },
     { id: 'compare', label: 'Compare version 1 → version 2: 4 rows changed', model: recordCase('sales', { tab: 'versions', dialog: { kind: 'compare' } }) },
     { id: 'compare-loading', label: 'Compare: reading', model: recordCase('sales', { tab: 'versions', dialog: { kind: 'compare' }, compare: { beforeId: V1.id, afterId: V2.id, answer: null, problem: null, loading: true } }) },
-    { id: 'activity', label: 'Activity (thread, files, history)', model: recordCase('sales', { tab: 'activity' }) },
+    // ---- B-TH-258: the docked thread (Activity gone: its tools in the thread's "⋯") ----
+    {
+      id: 'thread-docked',
+      label: 'The list’s thread docked beside Customers (40 %): notes only; its “⋯” holds Add task, Ask a partner to approve, Share, Followers, Remind me',
+      model: recordCase('sales', { tab: 'customers' }),
+      note: 'A price list prices many customers: its thread takes office notes only (no mail, no “Reply to”). On Prices and Breaks & surcharges the thread takes one third under 1600 px; ⌘J hides it.',
+    },
+    { id: 'thread-prices', label: 'Prices with the thread: one third under 1600 px (the grid needs the room)', model: recordCase('sales') },
+    { id: 'no-thread', label: 'A role that reads no threads: no dock, no Thread button', model: { ...recordCase('finance', { tab: 'versions' }), noThread: true } },
     { id: 'archive', label: 'Archive (a list that prices nobody)', model: recordCase('owner', { list: { status: 'ready', value: { ...DETAIL, customers: [] } }, dialog: { kind: 'archive' } }) },
     { id: 'archived', label: 'Archived: read only until reactivated', model: recordCase('owner', { list: { status: 'ready', value: ARCHIVED_DETAIL }, versionId: ARCHIVED_DETAIL.versions[0]!.id, prices: { answer: { version: ARCHIVED_DETAIL.versions[0]!, entries: V1_ENTRIES }, problem: null, loading: false } }) },
     { id: 'activated', label: 'After Activate: what it ended, in words', model: recordCase('sales', { notice: { tone: 'success', words: { key: 'activate.doneEnded', params: { revision: 2, from: '21 nov 2026', ended: 1, to: '20 nov 2026' } } } }) },

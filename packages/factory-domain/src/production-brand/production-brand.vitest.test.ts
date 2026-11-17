@@ -12,6 +12,32 @@ import { CUSTOMER_PRODUCTION_ROLE } from './permissions'
 import { BRAND_STAGES, lineStageOf, movedForward, orderStageOf, type LineStageFacts } from './stages'
 import { BLOCKER_KINDS, BLOCKER_OWNER, brandSideOf, waitingOn, WAITING_ON } from './waiting'
 import { aheadWords, ASK_KIND_WORDS, ASK_NOT_OPEN_WORDS, BRAND_WAITING_WORDS, HEALTH_REASON_WORDS, HEALTH_WORDS, LEVEL_WORDS, OFFICE_WAITING_WORDS, SEWING_NOT_COUNTED_WORDS, STAGE_WORDS } from './words'
+// B-PR-41
+import { workingCalendar, type CalendarLayer } from '../calendars/working-time'
+import type { Actor, Grant, Permission } from '../core/permissions'
+import { backupProblems, effectiveSupervisor, escalationClock, escalationStepAt, escalationStepsDue, supervisorMarkOf, supervisorProblems, supervisorRefusals, workOrderSupervisor, type EscalationClock, type SupervisorCandidate } from './supervisor'
+import { brandList, listCompare, markDecision, moveToTop, newMarkRank, undoPlan, urgentMaxProblems, urgentOrderProblems, usedOf, URGENT_MAX, type MarkFacts, type UrgencyRow } from './urgency'
+import {
+  ASK_US_WORDS,
+  askUsWords,
+  CHANGED_BY_US_WORDS,
+  CHANGED_SINCE_WORDS,
+  CUSTOMER_URGENCY_WORDS,
+  dormantMarksWords,
+  ESCALATION_WORDS,
+  MARK_URGENT_FIRST_WORDS,
+  NOT_IN_PRODUCTION_WORDS,
+  overQuotaWords,
+  PRODUCTION_ROLE_NOT_OFFERED_WORDS,
+  setBackWords,
+  SUPERVISOR_MARK_WORDS,
+  SUPERVISOR_REFUSAL_WORDS,
+  SUPERVISOR_WORDS,
+  unchangedWords,
+  URGENCY_NOT_OPEN_WORDS,
+  URGENCY_WORDS,
+  urgentUsedWords,
+} from './words'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -290,5 +316,304 @@ describe('B-PR-13 the words', () => {
     // A supplier or a workshop reads to the customer as us.
     expect(BRAND_WAITING_WORDS[brandSideOf('SUPPLIER')]).toEqual(BRAND_WAITING_WORDS.US)
     expect(BRAND_WAITING_WORDS[brandSideOf('WORKSHOP')]).toEqual(BRAND_WAITING_WORDS.US)
+  })
+})
+
+// ---- B-PR-41: customer urgency and the production supervisor ---------------------------------------------------------------
+
+const A = 'party-a'
+const B = 'party-b'
+const urgencyRow = (orderId: string, over: Partial<UrgencyRow> = {}): UrgencyRow => ({
+  orderId,
+  partyId: A,
+  number: orderId.toUpperCase(),
+  orderDate: '2026-11-01',
+  createdAt: new Date('2026-11-01T09:00:00Z'),
+  urgency: 'REGULAR',
+  urgentRank: null,
+  setBy: null,
+  locked: false,
+  lockReason: null,
+  open: true,
+  ...over,
+})
+const urgent = (orderId: string, rank: number, over: Partial<UrgencyRow> = {}) => urgencyRow(orderId, { urgency: 'URGENT', urgentRank: rank, setBy: 'BRAND', ...over })
+
+describe('B-PR-41 customer urgency: the list and the quota', () => {
+  const rows = [
+    urgencyRow('so-new', { orderDate: '2026-11-10' }),
+    urgent('so-u2', 2, { orderDate: '2026-09-01' }),
+    urgencyRow('so-old', { orderDate: '2026-10-01' }),
+    urgencyRow('so-same-later', { createdAt: new Date('2026-11-01T11:00:00Z') }),
+    urgent('so-u1', 1, { orderDate: '2026-11-15' }),
+    urgencyRow('so-same-earlier', { createdAt: new Date('2026-11-01T08:00:00Z') }),
+    urgencyRow('so-shipped', { orderDate: '2026-08-01', open: false }),
+  ]
+
+  it('Urgent first in the customer\'s own order, then Regular by date sent (oldest first), when made, number; a closed order leaves the list', () => {
+    expect(brandList(rows, { partyId: A, urgencyOn: true }).map((row) => row.orderId)).toEqual(['so-u1', 'so-u2', 'so-old', 'so-same-earlier', 'so-same-later', 'so-new'])
+    expect(listCompare(urgent('x', 1), urgencyRow('y', { orderDate: '2020-01-01' }))).toBeLessThan(0)
+    // Same date and time: the number decides.
+    expect(brandList([urgencyRow('b'), urgencyRow('a')], { partyId: A, urgencyOn: true }).map((row) => row.number)).toEqual(['A', 'B'])
+  })
+
+  it('with the switch off the marks are kept but order nothing: every order by date sent (R-46)', () => {
+    expect(brandList(rows, { partyId: A, urgencyOn: false }).map((row) => row.orderId)).toEqual(['so-u2', 'so-old', 'so-same-earlier', 'so-same-later', 'so-new', 'so-u1'])
+    expect(rows.filter((row) => row.urgency === 'URGENT')).toHaveLength(2)
+  })
+
+  it('"n of max used" counts only the customer\'s own open urgent orders; above the quota after an agreed ask "4 of 3 · 1 agreed with us"', () => {
+    expect(usedOf(rows, { partyId: A, max: 3 })).toEqual({ used: 2, max: 3, agreed: 0, left: 1, over: false })
+    expect(urgentUsedWords(usedOf(rows, { partyId: A, max: 3 }))).toEqual({ it: '2 urgenti su 3', en: '2 of 3 urgent used' })
+    const agreed = [urgent('a1', 1), urgent('a2', 2), urgent('a3', 3), urgent('a4', 4, { setBy: 'FACTORY' }), urgent('closed', 5, { open: false })]
+    const use = usedOf(agreed, { partyId: A, max: 3 })
+    expect(use).toEqual({ used: 4, max: 3, agreed: 1, left: 0, over: true })
+    expect(urgentUsedWords(use)).toEqual({ it: '4 urgenti su 3 · 1 concordato con noi', en: '4 of 3 · 1 agreed with us' })
+    expect(newMarkRank(rows, A)).toBe(3)
+  })
+
+  it("wall (PW-11 pure): a list or a count given another customer's order throws; no field carries a place or another customer's count", () => {
+    const foreign = [...rows, urgent('so-b', 1, { partyId: B })]
+    expect(() => brandList(foreign, { partyId: A, urgencyOn: true })).toThrow(/another customer/)
+    expect(() => usedOf(foreign, { partyId: A, max: 3 })).toThrow(/another customer/)
+    expect(() => moveToTop(foreign, { partyId: A, orderId: 'so-u2' })).toThrow(/another customer/)
+    expect(() => urgentOrderProblems(foreign, { partyId: A, urgencyOn: true, orderIds: ['so-u1', 'so-u2'] })).toThrow(/another customer/)
+    expect(Object.keys(usedOf(rows, { partyId: A, max: 3 })).sort()).toEqual(['agreed', 'left', 'max', 'over', 'used'])
+    expect(JSON.stringify(urgentUsedWords({ used: 4, max: 3, agreed: 1 }))).not.toMatch(/place|position|posto|posizione|queue|coda|other|altr/i)
+  })
+
+  it('the quota is a whole number from 0 to 20, 3 by default', () => {
+    expect(URGENT_MAX).toEqual({ min: 0, max: 20, byDefault: 3 })
+    for (const ok of [0, 3, 20]) expect(urgentMaxProblems(ok)).toEqual([])
+    for (const no of [-1, 21, 2.5, '3', null]) expect(urgentMaxProblems(no)).toEqual([{ path: 'body/productionUrgentMax', message: 'The urgent quota is a whole number from 0 to 20.' }])
+  })
+})
+
+describe('B-PR-41 the mark: at once inside the quota and before Cutting (live cut facts), else an ask', () => {
+  const facts = (over: Partial<MarkFacts> = {}): MarkFacts => ({ urgencyOn: true, max: 3, row: urgencyRow('so-1'), used: 2, cut: null, ...over })
+
+  it('inside the quota and nothing cut: at once', () => {
+    expect(markDecision('URGENT', facts())).toEqual({ outcome: 'AT_ONCE' })
+  })
+
+  it('over the quota, or with a cut logged or a bundle made (read live), it becomes an ask ("Ask us")', () => {
+    expect(markDecision('URGENT', facts({ used: 3 }))).toEqual({ outcome: 'ASK', reason: 'OVER_QUOTA', words: askUsWords('OVER_QUOTA', 3) })
+    expect(markDecision('URGENT', facts({ max: 0, used: 0 }))).toMatchObject({ outcome: 'ASK', reason: 'OVER_QUOTA' })
+    // The live cut facts decide, whatever stage the keeper stored: there is no stored stage in the facts at all (R-61).
+    expect(markDecision('URGENT', facts({ cut: { day: '2026-11-16', leather: true } }))).toEqual({ outcome: 'ASK', reason: 'CUT', words: askUsWords('CUT', 3) })
+    expect(markDecision('URGENT', facts({ cut: { day: '2026-11-16', leather: false }, used: 0 }))).toMatchObject({ outcome: 'ASK', reason: 'CUT' })
+    expect(Object.keys(facts())).not.toContain('stage')
+    expect(askUsWords('OVER_QUOTA', 3).en).toBe('You have used your 3 urgent marks: ask us to make it urgent.')
+  })
+
+  it('back to Regular is always free (over the quota, after the cut); refused while we locked it; nothing changes twice', () => {
+    expect(markDecision('REGULAR', facts({ row: urgent('so-1', 1), used: 5, cut: { day: '2026-11-16', leather: true } }))).toEqual({ outcome: 'AT_ONCE' })
+    const locked = urgencyRow('so-1', { locked: true, lockReason: 'The fabric is already cut for another delivery.' })
+    expect(markDecision('URGENT', facts({ row: locked }))).toEqual({ outcome: 'REFUSED', code: 'LOCKED', words: setBackWords('The fabric is already cut for another delivery.') })
+    expect(setBackWords('The fabric is already cut for another delivery.').en).toBe('Set to Regular by us: The fabric is already cut for another delivery.')
+    expect(markDecision('REGULAR', facts({ row: locked }))).toMatchObject({ outcome: 'REFUSED', code: 'UNCHANGED' })
+    expect(markDecision('URGENT', facts({ row: urgent('so-1', 1) }))).toEqual({ outcome: 'REFUSED', code: 'UNCHANGED', words: unchangedWords('URGENT') })
+  })
+
+  it('refused in neutral words while the switch is off (both ways) and once the order left production', () => {
+    expect(markDecision('URGENT', facts({ urgencyOn: false }))).toEqual({ outcome: 'REFUSED', code: 'URGENCY_OFF', words: URGENCY_NOT_OPEN_WORDS })
+    expect(markDecision('REGULAR', facts({ urgencyOn: false, row: urgent('so-1', 1) }))).toMatchObject({ outcome: 'REFUSED', code: 'URGENCY_OFF' })
+    expect(markDecision('URGENT', facts({ row: urgencyRow('so-1', { open: false }) }))).toEqual({ outcome: 'REFUSED', code: 'NOT_OPEN', words: NOT_IN_PRODUCTION_WORDS })
+  })
+})
+
+describe("B-PR-41 the customer's Urgent list: move to top, the whole list", () => {
+  const rows = [urgent('u1', 1), urgent('u2', 2), urgent('u3', 3), urgencyRow('r1')]
+
+  it('"Move to top" puts an urgent order first; on a Regular order it says "Mark urgent first" (R-65)', () => {
+    expect(moveToTop(rows, { partyId: A, orderId: 'u3' })).toEqual({ orderIds: ['u3', 'u1', 'u2'] })
+    expect(moveToTop(rows, { partyId: A, orderId: 'r1' })).toEqual({ refused: MARK_URGENT_FIRST_WORDS })
+    expect(moveToTop(rows, { partyId: A, orderId: 'unknown' })).toEqual({ refused: NOT_IN_PRODUCTION_WORDS })
+  })
+
+  it('the new order names every urgent order once; a Regular one says "Mark urgent first"; an unknown id is only "not found"', () => {
+    expect(urgentOrderProblems(rows, { partyId: A, urgencyOn: true, orderIds: ['u2', 'u3', 'u1'] })).toEqual([])
+    expect(urgentOrderProblems(rows, { partyId: A, urgencyOn: true, orderIds: ['u2', 'u3', 'u1', 'r1'] })).toEqual([{ path: 'body/orderIds/3', message: 'Mark urgent first' }])
+    expect(urgentOrderProblems(rows, { partyId: A, urgencyOn: true, orderIds: ['u2', 'u3', 'u1', 'so-of-someone'] })).toEqual([{ path: 'body/orderIds/3', message: 'Order not found.' }])
+    expect(urgentOrderProblems(rows, { partyId: A, urgencyOn: true, orderIds: ['u2', 'u2', 'u1', 'u3'] })).toEqual([{ path: 'body/orderIds/1', message: 'This order is named twice.' }])
+    expect(urgentOrderProblems(rows, { partyId: A, urgencyOn: true, orderIds: ['u2', 'u1'] })).toEqual([{ path: 'body/orderIds', message: 'Name every urgent order, in the order you want them.' }])
+    expect(urgentOrderProblems(rows, { partyId: A, urgencyOn: false, orderIds: ['u1', 'u2', 'u3'] })).toEqual([{ path: 'body/orderIds', message: URGENCY_NOT_OPEN_WORDS.en }])
+  })
+})
+
+describe('B-PR-41 undo of an urgency batch', () => {
+  const batch = 'batch-1'
+  const base = { partyId: A, urgencyOn: true, max: 3, cuts: new Map() }
+
+  it('puts each row back; a row changed since is left as it is; going back to Urgent passes the mark\'s rules; Regular is free', () => {
+    const entries = [
+      { row: urgencyRow('r-was-urgent'), batchIdNow: batch, before: { urgency: 'URGENT' as const, urgentRank: 1 } },
+      { row: urgencyRow('r-changed-since'), batchIdNow: 'batch-2', before: { urgency: 'URGENT' as const, urgentRank: 2 } },
+      { row: urgencyRow('r-locked', { locked: true, lockReason: 'Our plan.' }), batchIdNow: batch, before: { urgency: 'URGENT' as const, urgentRank: 3 } },
+      { row: urgent('u-was-regular', 4), batchIdNow: batch, before: { urgency: 'REGULAR' as const, urgentRank: null } },
+    ]
+    expect(undoPlan(batch, entries, { ...base, used: 2 })).toEqual({
+      restore: [
+        { orderId: 'r-was-urgent', urgency: 'URGENT', urgentRank: 1 },
+        { orderId: 'u-was-regular', urgency: 'REGULAR', urgentRank: null },
+      ],
+      skipped: [
+        { orderId: 'r-changed-since', words: CHANGED_SINCE_WORDS },
+        { orderId: 'r-locked', words: setBackWords('Our plan.') },
+      ],
+    })
+  })
+
+  it('never makes an urgent mark the customer could not: over the quota or after a cut (live) it is skipped with the ask words', () => {
+    const entries = [{ row: urgencyRow('r1'), batchIdNow: batch, before: { urgency: 'URGENT' as const, urgentRank: 1 } }]
+    expect(undoPlan(batch, entries, { ...base, used: 3 }).skipped).toEqual([{ orderId: 'r1', words: askUsWords('OVER_QUOTA', 3) }])
+    expect(undoPlan(batch, entries, { ...base, used: 0, cuts: new Map([['r1', { day: '2026-11-16', leather: false }]]) }).skipped).toEqual([{ orderId: 'r1', words: askUsWords('CUT', 3) }])
+    expect(() => undoPlan(batch, [{ row: urgencyRow('b1', { partyId: B }), batchIdNow: batch, before: { urgency: 'URGENT', urgentRank: 1 } }], { ...base, used: 0 })).toThrow(/another customer/)
+  })
+})
+
+describe('B-PR-41 the production supervisor', () => {
+  const grant = (permissions: readonly string[], parties: Grant['parties'] = 'all', companies: Grant['companies'] = 'all'): Grant => ({ permissions: permissions as Permission[], companies, sites: 'all', parties })
+  const office = (...grants: Grant[]): Actor => ({ audience: 'office', tenantId: 'tenant-1', grants })
+  const person = (actor: Actor, over: Partial<SupervisorCandidate> = {}): SupervisorCandidate => ({ audience: 'OFFICE', status: 'ACTIVE', actor, ...over })
+  const scope = { companyId: 'company-1', partyId: A }
+
+  it("an order's own supervisor, else the customer's default; a work order's is its single order's, else the customer's default", () => {
+    expect(effectiveSupervisor('user-own', 'user-default')).toEqual({ userId: 'user-own', from: 'ORDER' })
+    expect(effectiveSupervisor(null, 'user-default')).toEqual({ userId: 'user-default', from: 'BRAND' })
+    expect(effectiveSupervisor(null, null)).toEqual({ userId: null, from: null })
+    expect(workOrderSupervisor({ orders: [{ salesOrderId: 'so-1', supervisorId: 'user-own' }, { salesOrderId: 'so-1', supervisorId: 'user-own' }], customerDefault: 'user-default' })).toEqual({ userId: 'user-own', from: 'ORDER' })
+    expect(workOrderSupervisor({ orders: [{ salesOrderId: 'so-1', supervisorId: null }], customerDefault: 'user-default' })).toEqual({ userId: 'user-default', from: 'BRAND' })
+    expect(workOrderSupervisor({ orders: [{ salesOrderId: 'so-1', supervisorId: 'user-own' }, { salesOrderId: 'so-2', supervisorId: 'user-other' }], customerDefault: 'user-default' })).toEqual({ userId: 'user-default', from: 'BRAND' })
+    expect(workOrderSupervisor({ orders: [], customerDefault: null })).toEqual({ userId: null, from: null })
+  })
+
+  it('lists say Me / Someone else / Not set, never a name', () => {
+    expect(supervisorMarkOf({ userId: 'me', from: 'ORDER' }, 'me')).toBe('ME')
+    expect(supervisorMarkOf({ userId: 'other', from: 'BRAND' }, 'me')).toBe('SOMEONE_ELSE')
+    expect(supervisorMarkOf({ userId: null, from: null }, 'me')).toBe('NOT_SET')
+    expect(SUPERVISOR_MARK_WORDS.SOMEONE_ELSE).toEqual({ it: 'Qualcun altro', en: 'Someone else' })
+  })
+
+  it('eligible: an active office person with production.brand.manage or workorders.view over the company and the customer, and the measurements right', () => {
+    expect(supervisorRefusals(person(office(grant(['production.brand.manage', 'sales.measurements.view']))), scope)).toEqual([])
+    expect(supervisorRefusals(person(office(grant(['workorders.view', 'sales.measurements.view']))), scope)).toEqual([])
+    expect(supervisorRefusals(person(office(grant(['workorders.view']))), scope)).toEqual(['NO_MEASUREMENTS'])
+    expect(supervisorRefusals(person(office(grant(['sales.measurements.view']))), scope)).toEqual(['NO_REACH'])
+    expect(supervisorRefusals(person(office(grant(['workorders.view', 'sales.measurements.view'])), { status: 'SUSPENDED' }), scope)).toEqual(['NOT_ACTIVE'])
+    expect(supervisorRefusals(person({ audience: 'partner', tenantId: 'tenant-1', partyId: A, grants: [grant(['workorders.view', 'sales.measurements.view'])] }, { audience: 'PARTNER' }), scope)).toEqual(['NOT_OFFICE'])
+    expect(supervisorRefusals(person(office(grant(['workorders.view', 'sales.measurements.view'], 'all', ['company-2']))), scope)).toEqual(['NO_REACH', 'NO_MEASUREMENTS'])
+    expect(supervisorProblems(person(office(grant(['workorders.view']))), scope)).toEqual([{ path: 'body/supervisorId', message: SUPERVISOR_REFUSAL_WORDS.NO_MEASUREMENTS.en }])
+  })
+
+  it('wall (PW-14 pure): a person whose grant does not reach the customer is not eligible, even holding every permission for another one', () => {
+    const limitedToB = person(office(grant(['production.brand.manage', 'workorders.view', 'sales.measurements.view'], [B])))
+    expect(supervisorRefusals(limitedToB, scope)).toEqual(['NO_REACH', 'NO_MEASUREMENTS'])
+    expect(supervisorRefusals(limitedToB, { companyId: 'company-1', partyId: B })).toEqual([])
+    // The measurements right over the other customer only does not count for this one.
+    expect(supervisorRefusals(person(office(grant(['workorders.view']), grant(['sales.measurements.view'], [B]))), scope)).toEqual(['NO_MEASUREMENTS'])
+  })
+
+  it('a backup only beside a supervisor and never the same person', () => {
+    expect(backupProblems({ supervisorId: 'u1', backupId: 'u2' })).toEqual([])
+    expect(backupProblems({ supervisorId: 'u1', backupId: null })).toEqual([])
+    expect(backupProblems({ supervisorId: null, backupId: 'u2' })[0]?.message).toMatch(/beside a supervisor/)
+    expect(backupProblems({ supervisorId: 'u1', backupId: 'u1' })[0]?.message).toMatch(/another person/)
+  })
+})
+
+describe('B-PR-41 the escalation clock: due raise + 1 working day → backup, raise + 2 → Owner and Admin, 08:00 company time (R-44)', () => {
+  const window = { from: '2026-11-01', to: '2026-12-31' }
+  const plain = workingCalendar({ layers: [], patterns: new Map(), timeZone: 'Europe/Rome', window })
+  const holiday: CalendarLayer = {
+    id: 'calendar-1',
+    scope: 'COMPANY',
+    name: 'Company A (made up)',
+    workingWeekdays: [1, 2, 3, 4, 5],
+    shiftPatternId: null,
+    days: new Map([['2026-11-19', { date: '2026-11-19', kind: 'HOLIDAY' as const, name: 'Made-up holiday', shiftPatternId: null }]]),
+  }
+  const withHoliday = workingCalendar({ layers: [holiday], patterns: new Map(), timeZone: 'Europe/Rome', window })
+  const clockOf = (calendar: typeof plain, raisedAt: string): EscalationClock => {
+    const clock = escalationClock(calendar, new Date(raisedAt))
+    if ('beyond' in clock) throw new Error('the window ran out')
+    return clock
+  }
+
+  it('raised on a Tuesday: due Wednesday, the backup at 08:00 Wednesday, the Owner and Admin at 08:00 Thursday (Rome time)', () => {
+    expect(clockOf(plain, '2026-11-17T10:00:00Z')).toEqual({ dueOn: '2026-11-18', backupAt: new Date('2026-11-18T07:00:00.000Z'), ownerAt: new Date('2026-11-19T07:00:00.000Z') })
+  })
+
+  it('counts working days of the company calendar: a weekend and a holiday are skipped; the raise day is the company\'s day', () => {
+    expect(clockOf(plain, '2026-11-20T15:00:00Z')).toEqual({ dueOn: '2026-11-23', backupAt: new Date('2026-11-23T07:00:00.000Z'), ownerAt: new Date('2026-11-24T07:00:00.000Z') })
+    expect(clockOf(withHoliday, '2026-11-17T10:00:00Z')).toEqual({ dueOn: '2026-11-18', backupAt: new Date('2026-11-18T07:00:00.000Z'), ownerAt: new Date('2026-11-20T07:00:00.000Z') })
+    // 00:30 on Wednesday in Rome is still Tuesday in UTC: the company's day counts.
+    expect(clockOf(plain, '2026-11-17T23:30:00Z').dueOn).toBe('2026-11-19')
+    expect(escalationClock(workingCalendar({ layers: [], patterns: new Map(), timeZone: 'Europe/Rome', window: { from: '2026-11-01', to: '2026-11-18' } }), new Date('2026-11-17T10:00:00Z'))).toEqual({ beyond: '2026-11-18' })
+  })
+
+  it('the step reached by now, and the steps still to take (each once)', () => {
+    const clock = clockOf(plain, '2026-11-17T10:00:00Z')
+    expect(escalationStepAt(clock, new Date('2026-11-18T06:59:59Z'))).toBe(0)
+    expect(escalationStepAt(clock, new Date('2026-11-18T07:00:00Z'))).toBe(1)
+    expect(escalationStepAt(clock, new Date('2026-11-19T07:00:00Z'))).toBe(2)
+    expect(escalationStepsDue(clock, 0, new Date('2026-11-19T08:00:00Z'))).toEqual([1, 2])
+    expect(escalationStepsDue(clock, 1, new Date('2026-11-19T08:00:00Z'))).toEqual([2])
+    expect(escalationStepsDue(clock, 2, new Date('2026-11-25T08:00:00Z'))).toEqual([])
+    expect(escalationStepsDue(clock, 0, new Date('2026-11-17T12:00:00Z'))).toEqual([])
+  })
+})
+
+describe('B-PR-41 the words of urgency, the supervisor and the limits card', () => {
+  const brandWords = [
+    ...Object.values(URGENCY_WORDS),
+    urgentUsedWords({ used: 2, max: 3, agreed: 0 }),
+    urgentUsedWords({ used: 4, max: 3, agreed: 1 }),
+    CHANGED_BY_US_WORDS,
+    setBackWords(null),
+    MARK_URGENT_FIRST_WORDS,
+    ASK_US_WORDS,
+    askUsWords('CUT', 3),
+    askUsWords('OVER_QUOTA', 3),
+    askUsWords('OVER_QUOTA', 1),
+    askUsWords('OVER_QUOTA', 0),
+    URGENCY_NOT_OPEN_WORDS,
+    NOT_IN_PRODUCTION_WORDS,
+    unchangedWords('URGENT'),
+    unchangedWords('REGULAR'),
+    CHANGED_SINCE_WORDS,
+  ]
+  const officeWords = [
+    CUSTOMER_URGENCY_WORDS.header,
+    CUSTOMER_URGENCY_WORDS.chip,
+    ...Object.values(SUPERVISOR_WORDS),
+    ...Object.values(SUPERVISOR_MARK_WORDS),
+    ...Object.values(SUPERVISOR_REFUSAL_WORDS),
+    ESCALATION_WORDS,
+    dormantMarksWords(1)!,
+    dormantMarksWords(3)!,
+    overQuotaWords(4, 3)!,
+    PRODUCTION_ROLE_NOT_OFFERED_WORDS,
+  ]
+
+  it('every word in Italian and English; the picks of 17-web-r2 §5', () => {
+    for (const words of [...brandWords, ...officeWords]) {
+      expect(words.it.trim()).not.toBe('')
+      expect(words.en.trim()).not.toBe('')
+    }
+    expect(URGENCY_WORDS).toEqual({ URGENT: { it: 'Urgente', en: 'Urgent' }, REGULAR: { it: 'Normale', en: 'Regular' } })
+    expect(CUSTOMER_URGENCY_WORDS).toEqual({ header: { it: 'Urgenza cliente', en: 'Customer urgency' }, chip: { it: 'Urgente (cliente)', en: 'Urgent (customer)' } })
+    expect(SUPERVISOR_WORDS.title.it).toBe('Supervisore di produzione')
+    expect(dormantMarksWords(3)!.en).toBe('3 urgent marks are kept but not used while this is off.')
+    expect(dormantMarksWords(0)).toBeNull()
+    expect(overQuotaWords(2, 3)).toBeNull()
+  })
+
+  it('wall: the words a customer reads name no place, no other customer, no supervisor, no person, and take no name', () => {
+    const forbidden = /supplier|workshop|worker|operator|station|production line|another customer|other customer|supervis|position|place in|queue|fornitor|laborator|operai|postazion|linea di produzione|altro cliente|altri clienti|supervisor|posizione|coda|\{/i
+    for (const words of brandWords) {
+      expect(words.en, words.en).not.toMatch(forbidden)
+      expect(words.it, words.it).not.toMatch(forbidden)
+    }
   })
 })

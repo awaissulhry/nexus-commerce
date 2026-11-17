@@ -49,8 +49,7 @@
     "changed": "Modificato alle {time} da qualcun altro · la finestra aperta resta",
     "reload": "Ricarica",
     "cancelled": "Annullato il {date}",
-    "readOnly": "Puoi leggere questo ordine: modificarlo, inviare il kit o ricevere il rientro richiedono un altro ruolo.",
-    "noPanels": "Qui compaiono conversazione, file e cronologia."
+    "readOnly": "Puoi leggere questo ordine: modificarlo, inviare il kit o ricevere il rientro richiedono un altro ruolo."
   },
   "band": {
     "back": "Ordini ai terzisti",
@@ -63,9 +62,7 @@
       "reopen": "Riporta in bozza",
       "cancel": "Annulla ordine"
     },
-    "dock": "Conversazione",
-    "dockHint": "La conversazione accanto a ogni scheda su schermo largo (⌘J)",
-    "dockLabel": "Conversazione, file e cronologia",
+    "dockLabel": "La conversazione dell’ordine di lavorazione",
     "more": "Altre azioni",
     "jobSheet": "Stampa scheda di lavorazione",
     "printDdt": "Stampa DDT kit {number}",
@@ -99,10 +96,8 @@
   "tab": {
     "label": "Schede dell’ordine",
     "ops": "Lavorazioni e quantità",
-    "kit": "Kit inviato",
-    "back": "Rientri",
-    "documents": "Documenti",
-    "activity": "Attività"
+    "kit": "Kit e documenti",
+    "back": "Rientri"
   },
   "notice": {
     "issued": "Inviato al terzista: il magazzino può spedire il kit.",
@@ -215,17 +210,6 @@
       "bodyEdit": "Prevedilo dai materiali dell’ordine di produzione, o aggiungi le righe una a una. La pelle gestita a pelli parte tagliata, in pacchi."
     },
     "floorLater": "Qui l’ufficio spedisce il kit con il DDT; il magazzino può spedirlo anche dal tablet (Kit terzisti).",
-    "ddts": {
-      "title": "DDT del kit (conto lavorazione)",
-      "none": "Nessun DDT ancora emesso per questo ordine.",
-      "col": {
-        "number": "Numero",
-        "date": "Data",
-        "lines": "Righe kit",
-        "state": "Stato",
-        "open": "PDF"
-      }
-    },
     "count_one": "{count} riga di kit",
     "count_other": "{count} righe di kit",
     "removeN_one": "Togli {count} riga",
@@ -293,6 +277,7 @@
     "qualityLater": "Il controllo qualità di quanto rientrato non è ancora collegato da qui."
   },
   "docs": {
+    "title": "Scheda di lavoro e DDT del kit",
     "jobSheet": {
       "name": "Scheda di lavorazione {number}",
       "status": "Si stampa e si spedisce con il kit; senza prezzi. Si apre in una nuova scheda: stampala o salvala in PDF.",

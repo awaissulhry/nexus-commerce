@@ -2,10 +2,10 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { useT } from '../../../../lib/i18n/provider'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
-import { at, canOf, COLOURS, inShell, MATERIALS, panels, panelsModel, PREFIX, ROLES, TIME_ZONE, uid, type Role } from '../../../_shared/buying/fixtures'
+import { at, canOf, COLOURS, inShell, MATERIALS, PREFIX, ROLES, TIME_ZONE, uid, type Role } from '../../../_shared/buying/fixtures'
 import { part, PART_LOADING } from '../../../_shared/buying/model'
 import type { PoStatus, PurchaseOrder, SendCheckAnswer } from '../api'
-import { answerOf, BLOCKED_DRAFT, DOCUMENTS, leatherLine, order, protectorLine, RECEIPTS, withoutPrices } from '../demo/fixtures'
+import { answerOf, BLOCKED_DRAFT, leatherLine, order, protectorLine, RECEIPTS, withoutPrices } from '../demo/fixtures'
 import { reachOf, remindersOf, revisionsDraftTwo, revisionsOne, revisionsTwo, SENT_PAST } from '../demo/daily/fixtures'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import { sendModelOf, type LineDraft, type OrderRecordModel, type SendCheckState } from '../model'
@@ -14,13 +14,16 @@ import { WithMessages } from '../../../../record-panels/i18n'
 // B-W2b-333: purchase orders in depth on screen (made-up depth data).
 import { approvalOf, chaseModel, chaseOf, complianceOf, depthModel, depthOf, depthOrder, kindsOf, liningLine, REQUEST } from '../depth/demo/fixtures'
 import { DEPTH, kindDraftOf, scheduleDraftOf, type OrderDepthModel } from '../depth/model'
+// ---- B-TH-263: the PO's docked thread in the design cases (RecordFrame beside every tab; the order's own supplier, made-up) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-059 — the PO studio (design purchasing.orders "Record: Purchase order", with the shared send dialog SCR-037) with
  * made-up data only: a draft (ready, or held by its checks), the send dialog (checks, the confirm link, what the
  * supplier can do; sending; sent; the mail failed), sent and waiting, the supplier's proposal and the buyer's review
  * (accept / refuse), confirmed by link, partly received with its receipts, received, declined, cancelled; the line
- * dialog (leather specs), remove lines, details, cancel, what the supplier sees; Documents and Activity; and the states.
+ * dialog (leather specs), remove lines, details, cancel, what the supplier sees; the docked thread (B-TH-263: Documents and
+ * Activity went — the PDFs are the order's files in the thread's Files view, the draft's preview is the band's ⋯); the states.
  * Roles: Owner, Buyer, Planner and Warehouse (no money), Read-only, Sales (none).
  */
 
@@ -44,20 +47,17 @@ function recordCase(role: Role, status: PoStatus, over: Partial<OrderRecordModel
       order: { status: 'ready', value: shown },
       answer: part(answerOf(base)),
       receipts: can.stockView ? part(['PARTLY_RECEIVED', 'RECEIVED'].includes(status) ? RECEIPTS : []) : null,
-      documents: part(DOCUMENTS(base)),
       revisions: part(revisionsOne(base)),
       reminders: part(remindersOf(base)),
       now: at(30, 9, 0),
       send: null,
       previewHref: can.cost && status === 'DRAFT' ? '#' : null,
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
       dialog: null,
       dialogProblem: null,
-      panelsPreview: panelsModel('PurchaseOrder', base.id, base.number),
       timeZone: TIME_ZONE,
       today: '2026-10-29',
       ...over,
@@ -110,7 +110,7 @@ function RecordDesignInner({ model }: { model: RecordCase }) {
       : null
   return inShell(
     `/purchasing/orders/${value?.id ?? 'x'}`,
-    createElement(OrderRecordView, { model: { ...model.record, send }, panels: model.record.tab === 'activity' || model.record.dockOpen ? panels('PurchaseOrder', value?.id ?? 'x', value?.number ?? '') : null }),
+    createElement(OrderRecordView, { model: { ...model.record, send }, thread: value ? designDockedThread({ recordType: 'PurchaseOrder', record: value.number, party: { name: value.supplier.name, role: 'supplier' } }) : null }),
     model.role,
   )
 }
@@ -266,7 +266,7 @@ const DEPTH_CASES = [
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-059',
-  title: 'Purchase order studio (lines, send, supplier’s answer, receipts, documents)',
+  title: 'Purchase order studio (lines, send, supplier’s answer, receipts, the docked thread)',
   view: RecordDesign,
   cases: [
     { id: 'draft', label: 'A draft: leather by area with its specs (≈ hides, grade, thickness, one dye batch, tolerance, Cr VI), one warning', model: recordCase('buyer', 'DRAFT') },
@@ -304,14 +304,18 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...DAILY_CASES,
     { id: 'new-link', label: 'Send a new link', model: recordCase('buyer', 'SENT', { dialog: { kind: 'newLink', message: '' } }) },
     { id: 'supplier-view', label: 'What the supplier sees: the link page as a copy, no price', model: recordCase('buyer', 'SENT', { dialog: { kind: 'supplierView', view: { status: 'ready', value: { order: { number: 'PO-2026-0003', documentNumber: 'PO-2026-0003', status: 'SENT', orderDate: '2026-10-27', requestedDate: '2026-11-18', note: null }, lines: order('SENT').lines.map((line) => ({ id: line.id, seq: line.seq, code: line.supplierArticleCode ?? line.item.code, name: line.item.name, colour: line.colour ? { name: line.colour.name, supplierCode: line.supplierColourCode } : null, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity, baseUom: line.baseUom, needDate: line.needDate, grade: line.grade, thicknessMinMm: line.thicknessMinMm, thicknessMaxMm: line.thicknessMaxMm, oneDyeBatch: line.oneDyeBatch, areaTolerancePct: line.areaTolerancePct, estimatedHides: line.estimatedHides, requiresCrViTest: line.requiresCrViTest, confirmedQuantity: null, confirmedDate: null })) } } } }) },
-    { id: 'documents', label: 'Documents: the frozen PDF, the mails', model: recordCase('buyer', 'CONFIRMED', { tab: 'documents' }) },
-    { id: 'documents-draft', label: 'Documents of a draft: the PDF is made when it is sent', model: recordCase('buyer', 'DRAFT', { tab: 'documents' }) },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: recordCase('buyer', 'SENT', { tab: 'activity' }) },
-    { id: 'dock', label: 'The thread beside a tab (⌘J, 1280 px and wider)', model: recordCase('buyer', 'SENT', { dockOpen: true }) },
+    // ---- B-TH-263: the thread docked (picture 38's rule); Documents and Activity went ----
+    {
+      id: 'thread-docked',
+      label: 'The thread docked beside Supplier’s answer (40 %): its "⋯" holds Activity’s tools, the frozen PDF is a file of the order',
+      model: recordCase('buyer', 'CONFIRMED', { tab: 'answer' }),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 % (one third on Lines under 1600 px), ⌘J hides it. The frozen PDF of each send is a file of the order (the files line and the Files view); each mail shows its delivery on its card. The draft’s sample PDF is the band’s ⋯ “Preview PDF”.',
+    },
+    { id: 'thread-lines', label: 'Lines with the thread: one third under 1600 px', model: recordCase('buyer', 'SENT'), note: 'The lines grid needs the room: on Lines the thread takes one third below 1600 px unless the person chose a width.' },
     { id: 'changed', label: 'Changed by someone else while a dialog is open: Reload', model: recordCase('buyer', 'DRAFT', { changed: { at: at(29, 9, 42) }, dialog: { kind: 'details', draft: { requestedDate: '', incoterms: '', paymentTerms: '', note: '', internalNote: 'checking' } } }) },
     { id: 'notice', label: 'After a write: a notice', model: recordCase('buyer', 'CONFIRMED', { notice: { tone: 'success', words: { key: 'po.notice.accepted' } } }) },
     { id: 'part-failed', label: 'A part failed (the answer): in words, with Try again', model: recordCase('buyer', 'SENT', { tab: 'answer', answer: { value: null, problem: 'problem.offline' } }) },
-    { id: 'part-loading', label: 'A part still loading (documents)', model: recordCase('buyer', 'SENT', { tab: 'documents', documents: PART_LOADING }) },
+    { id: 'part-loading', label: 'A part still loading (receipts)', model: recordCase('buyer', 'PARTLY_RECEIVED', { tab: 'receipts', receipts: PART_LOADING }) },
     { id: 'owner', label: 'Owner: everything', model: recordCase('owner', 'SENT') },
     { id: 'planner', label: 'Planner: reads the order without a price, writes nothing', model: recordCase('planner', 'CONFIRMED') },
     { id: 'warehouse', label: 'Warehouse: no price, Receive goods', model: recordCase('warehouse', 'CONFIRMED') },

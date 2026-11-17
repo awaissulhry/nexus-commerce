@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef } from 'react'
 import { useLiveBus } from '../../../shell/live/use-live'
 import type { LiveChange } from '../../../record-panels/model'
 
@@ -35,48 +34,6 @@ export function useCoalesced(run: () => void, ms = 600): () => void {
       latest.current()
     }, ms)
   }, [ms])
-}
-
-const WIDE = '(min-width: 1280px)'
-
-/**
- * Owner O1: a record's thread beside any tab on a wide screen (1280 px and wider, ⌘J), remembered on this device per
- * record type (a per-viewer convenience: localStorage with try/catch); narrower, the same button opens Activity.
- */
-export function useThreadDock(recordType: string) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const key = `fw.buying.dock.${recordType}`
-  const [open, setOpen] = useState(false)
-  useEffect(() => {
-    try {
-      setOpen(window.localStorage.getItem(key) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setOpen(false)
-    }
-  }, [key])
-  const toggle = useCallback(() => {
-    let wide = false
-    try {
-      wide = window.matchMedia(WIDE).matches
-    } catch {
-      wide = false
-    }
-    if (!wide) {
-      router.push(`${pathname}?tab=activity`)
-      return
-    }
-    setOpen((current) => {
-      const next = !current
-      try {
-        window.localStorage.setItem(key, next ? '1' : '0')
-      } catch {
-        // Not kept on this device; the dock still toggles.
-      }
-      return next
-    })
-  }, [key, pathname, router])
-  return { dockOpen: open, toggleDock: toggle }
 }
 
 /** The byte-order mark spreadsheet programs need to read a UTF-8 CSV as UTF-8. */

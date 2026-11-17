@@ -16,6 +16,9 @@ import { QuotesListView } from './view/QuotesListView'
 import { useNewFrom } from '../new-from/use-new-from'
 // B-W2b-348: Quote speed under the list (design sales.quotes sec quotes.speed).
 import { QuoteSpeed } from '../speed/QuoteSpeed'
+// ---- B-TH-257 (X-SAL-QUO-LIST.grid-F03): the New messages column, B-TH-230's one read per page ----
+import { readUnreadWith } from '../../../../lib/last-message-cell/api'
+import { useUnread } from '../../../../lib/last-message-cell/use-unread'
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -135,11 +138,23 @@ function QuotesContainer() {
     void loadTiles()
   }, [loadTiles])
 
+  // ---- B-TH-257: the reader's own new messages per quote on the page (threads.read; one POST /threads/unread of ≤ 200 rows), read
+  // again on a thread's live change (the same one connection).
+  const readsThreads = session.permissions.includes('threads.read')
+  const [unreadTick, setUnreadTick] = useState(0)
+  const unreadRows = useMemo(() => (rows.items ?? []).map((row) => ({ recordType: 'Quote', id: row.id })), [rows.items])
+  const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  // ---- end B-TH-257
+
   useLiveChanges({
     onChange: (change) => {
       if (isQuoteChange(change.type)) setUpdates((count) => count + 1)
+      if (change.type.startsWith('thread.')) setUnreadTick((tick) => tick + 1) // B-TH-257
     },
-    onReconnect: () => setUpdates((count) => count + 1),
+    onReconnect: () => {
+      setUpdates((count) => count + 1)
+      setUnreadTick((tick) => tick + 1) // B-TH-257
+    },
   })
 
   const go = (next: ListFilters) => router.replace(`${pathname}${searchOf(next)}`)
@@ -252,6 +267,10 @@ function QuotesContainer() {
     busy,
     duplicate: duplicate.model,
     pageLinks: { prefix, promiseDates: session.permissions.includes('planning.promise.view') },
+    // ---- B-TH-257
+    unread: readsThreads ? unread : null,
+    readsRequests: session.permissions.includes('sales.inquiries.view'),
+    readsOrders: session.permissions.includes('orders.view'),
   }
 
   const cancelMany = async (ids: readonly string[], reason: string): Promise<boolean> => {

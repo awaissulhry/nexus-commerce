@@ -524,9 +524,9 @@
   "tab": {
     "change": "Change",
     "impact": "Impact",
+    "impactAffected": "Impact & affected",
     "approvals": "Approvals",
-    "affected": "Affected records",
-    "activity": "Activity"
+    "affected": "Affected records"
   },
   "record": {
     "back": "Changes & versions",
@@ -559,7 +559,8 @@
     "draftStarted": "Draft revision {revision} started: make the change there",
     "wipSaved": "Work in progress saved",
     "approversSaved": "Approvers saved",
-    "requestsSaved": "Requests saved"
+    "requestsSaved": "Requests saved",
+    "dockLabel": "The change's thread"
   },
   "approvers": {
     "change": "Change approvers",
@@ -596,17 +597,13 @@
   "photos": {
     "none": "No photos yet.",
     "sending": "Sending the photos…",
-    "inActivity": "They are also in Activity › Files.",
+    "inFiles": "They are also in the thread's Files view.",
     "count_one": "{count} photo",
     "failed_one": "{count} photo could not be sent: add it again.",
     "added_one": "{count} photo added",
     "count_other": "{count} photos",
     "failed_other": "{count} photos could not be sent: add them again.",
     "added_other": "{count} photos added"
-  },
-  "activity": {
-    "none": "Nothing yet. The first change or message appears here.",
-    "noRight": "Your role does not read the thread and history."
   },
   "dialog": {
     "cancelTitle": "Cancel {number}?",

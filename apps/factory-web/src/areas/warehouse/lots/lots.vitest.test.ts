@@ -25,6 +25,11 @@ import { HOLD_REASONS, holdRow } from './demo/daily/fixtures'
 import { designScreen as traceScreen } from './trace/fixtures'
 import { dailyCan, hidesValue, reserveHides, reserveSelectionHeld, scrapSelectionHeld, scrapTarget } from './shared/daily'
 import { holdGroups, LOT_TABS, rejectedWithStock } from './model'
+// B-TH-264: the lot on RecordFrame.
+import { readFileSync } from 'node:fs'
+import { MERGED_TABS } from './model'
+import { arrivalOf } from '../../_shared/record-frame/model'
+import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
 import { expectedPhrase, phraseMatches, releasable, releaseHeldKey, releaseRefusalKey, whyNot, type ReleaseLine } from './release/model'
 
 /**
@@ -159,9 +164,9 @@ describe('B-W2a-64: reserved hides, held hides, reserve and scrap', () => {
 })
 
 describe('B-W2a-64: the lot record’s holds, a rejected lot, release N lots', () => {
-  it('adds Quality status after the overview and groups the holds by kind with the active ones counted', () => {
-    expect(LOT_TABS.slice(0, 2)).toEqual(['overview', 'quality'])
-    expect(lotTabOf('quality')).toBe('quality')
+  it('groups the holds by kind with the active ones counted (B-TH-264: on Overview & quality; an old ?tab=quality lands there)', () => {
+    expect(LOT_TABS[0]).toBe('overview')
+    expect(lotTabOf('quality')).toBe('overview')
     const groups = holdGroups({ lot: [holdRow(1, { subjectType: 'Lot', subjects: [], status: 'RELEASED' }), holdRow(2, { subjectType: 'Lot', subjects: [] })], hides: [] })
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({ kind: 'Lot', active: 1 })
@@ -297,5 +302,80 @@ describe('every design case draws in both languages with no key left on screen',
       for (const status of ['ACTIVE', 'RELEASED', 'CLOSED']) has(`lt.quality.holdStatus.${status}`)
       for (const direction of ['BOTH', 'BACKWARD', 'FORWARD']) has(`lt.tracePage.directions.${direction}`)
     }
+  })
+})
+
+// ---- B-TH-264: the lot on RecordFrame (threads plan O-WH-LOT; the rule of picture 38, the tabs of picture 39) ----
+describe('B-TH-264: the lot on RecordFrame — tabs 5 → 3, the docked thread, the same conversation as Compliance › Tests', () => {
+  const lotView = lotScreen.view as ComponentType<{ model: unknown }>
+  const drawLot = (id: string, locale: 'it' | 'en' = 'en') => renderView(lotView, lotScreen.cases.find((item) => item.id === id)!.model, locale)
+
+  it('three tabs: Overview & quality · Trace · Moves (Activity and Quality status gone)', () => {
+    expect(LOT_TABS).toEqual(['overview', 'trace', 'moves'])
+    const text = textOf(drawLot('thread-docked'))
+    for (const tab of ['Overview & quality', 'Trace', 'Moves']) expect(text).toContain(tab)
+    expect(text).not.toMatch(/\bActivity\b/)
+    expect(text).not.toContain('Quality status')
+    expect(textOf(drawLot('thread-docked', 'it'))).toContain('Panoramica e qualità')
+  })
+
+  it('every old ?tab= keeps working (R-8): quality → Overview & quality, activity → it with the thread opened, unknown → Overview', () => {
+    expect(MERGED_TABS).toEqual({ quality: 'overview', activity: 'overview' })
+    expect(lotTabOf('quality')).toBe('overview')
+    expect(lotTabOf('activity')).toBe('overview')
+    expect(lotTabOf('trace')).toBe('trace')
+    expect(lotTabOf('moves')).toBe('moves')
+    expect(lotTabOf('constructor')).toBe('overview')
+    expect(lotTabOf(null)).toBe('overview')
+    expect(arrivalOf('?tab=activity')).toEqual({ openThread: true, door: null })
+  })
+
+  it('Overview & quality holds what Quality status showed: where it is decided, the holds of the lot and its hides, the inspections', () => {
+    const text = textOf(drawLot('quality-tab'))
+    expect(text).toContain('Release, block, reject and the Cr VI result are decided in Compliance › Tests & substances.')
+    expect(text).toContain('Holds and inspections')
+    expect(text).toContain('Venature da verificare con la conceria')
+    expect(text).toContain('Release checklist')
+    expect(textOf(drawLot('quality-no-right'))).toContain('Your role does not see quality holds.')
+    expect(textOf(drawLot('w2b-not-kept')).length).toBeGreaterThan(200)
+  })
+
+  it('ONE thread on the page, docked; its "⋯" (Activity’s tools, R-ACT) on every tab; no record panels', () => {
+    for (const id of ['thread-docked', 'trace', 'thread-moves', 'quality-tab']) {
+      const html = drawLot(id)
+      expect(html.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(html.match(/class="fw-rt-column[ "]/g)?.length, id).toBe(1)
+      expect(html, id).toContain('aria-label="Thread tools"')
+      expect(html, id).not.toContain('fw-rp-tabs')
+    }
+    // Loading / not found: the band, no thread.
+    expect(drawLot('loading')).not.toContain('class="fw-rcf-dock"')
+    expect(drawLot('not-found')).not.toContain('class="fw-rcf-dock"')
+  })
+
+  it('says once that the thread is the same conversation as Compliance › Tests & substances (a link with quality.lots.view, words without)', () => {
+    const html = drawLot('thread-docked')
+    expect(textOf(html)).toContain('Same conversation as Compliance › Tests & substances')
+    expect(html).toContain(`/compliance/tests/${LOT_ROWS[0]!.id}"`)
+    const it_ = textOf(drawLot('thread-docked', 'it'))
+    expect(it_).toContain('Stessa conversazione di Conformità › Test e sostanze')
+    const held = drawLot('no-quality')
+    expect(textOf(held)).toContain('Same conversation as Compliance › Tests & substances')
+    expect(held).not.toContain(`/compliance/tests/${LOT_ROWS[0]!.id}"`)
+  })
+
+  it('the brand wall: the lot’s thread reaches its own supplier only; an opening-stock lot has none (office notes only)', () => {
+    const opening = textOf(drawLot('thread-opening'))
+    expect(opening).not.toContain('Reply to')
+    const container = readFileSync(new URL('./record/LotRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain("partyRole=\"supplier\"")
+    expect(container).toContain('party={supplier ? { id: supplier.id, name: supplier.name } : null}')
+    expect(container).not.toContain('useThreadDock')
+    expect(container).not.toContain('onDock')
+    const view = readFileSync(new URL('./record/view/LotRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain("'activity'")
+    expect(view).not.toContain('RecordPanelsView')
+    expect(view).toContain('<RecordNotices>')
   })
 })

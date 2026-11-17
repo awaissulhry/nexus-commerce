@@ -2,12 +2,11 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, CircleDashed, ClipboardCheck, GitBranch, MinusCircle, MoreHorizontal, Trash2, Undo2, XCircle } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable, type TabItem } from '@nexus/ui/components'
-import { Button, Pill, Tag } from '@nexus/ui/primitives'
+import { CheckCircle2, CircleDashed, ClipboardCheck, FileX, GitBranch, MinusCircle, ShieldOff, Trash2, Undo2, XCircle } from 'lucide-react'
+import { Banner, Card, EmptyState, KeyValue, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { LotRecord } from '../../../../_shared/stock/api'
@@ -15,7 +14,7 @@ import { lotWaitKey, movesHref, quantity } from '../../../../_shared/stock/model
 import { CrViPill, Dual, QualityPill, Qty } from '../../../../_shared/stock/parts'
 import type { ReleaseChecklist } from '../../api'
 import { checkKey, checklistHead, holdGroups, LOT_TABS, rejectedWithStock, traceSummary, type LotHolds, type LotRecordActions, type LotRecordModel, type LotTab } from '../../model'
-import { DockButton, LotsMessages, MovesTable, PartState, RecordFrame, useWords, type Words } from '../../shared/parts'
+import { LotsMessages, MovesTable, PartState, useWords, type Words } from '../../shared/parts'
 import { demandLabel, demandRecord, holdsBySubject, reasonLabel, reservationCell } from '../../../stock/daily/model' // B-W2b-GB29: + reservationCell
 import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
 import { TraceDialog } from '../../trace/TraceDialog'
@@ -26,30 +25,74 @@ import { AttributesDialog } from '../../depth/view/AttributesDialog'
 import { AttributesFacts, DepletedLine, DepthNotice, IncomingCheck, IncomingList, LifecycleCard, LifecyclePill, SeparationLine, useDepthWords } from '../../depth/view/DepthParts'
 import { SplitDialog } from '../../depth/view/SplitDialog'
 import { ReportsCard, TraceReportDialog } from '../../depth/view/TraceReportDialog'
+// ---- B-TH-264: the lot on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 export type { LotRecordActions, LotRecordModel } from '../../model'
 
 /**
- * SCR-201-record — a lot (design warehouse.lots "Record: Lot"): the band (‹ Lots & traceability, "Lot <code> · material
- * colour · supplier", its quality and Cr VI, the way to the release checklist in Compliance › Tests & substances — the
- * ONE place a lot is released, blocked or rejected, held in words without quality.lots.view), and the tabs: Overview
- * (the release checklist read-only in our words, the lot's facts, where its stock is, its hides), Trace (came from: the
- * supplier, the purchase order line, the receipt and the supplier's DDT; went to: the work orders, their shipments and
- * customers), Moves (the ledger filtered by the lot with the running balance) and Activity (thread, files, history).
- * B-W2a-64: the band's Trace…; Overview's "Where it is" with reserved and available (the lot at its site: reservations
- * hold a site's stock, not a place) and who reserved it; Quality status (the status, read only, and the holds that touch
- * the lot and its hides, by kind with counts; incoming inspections come later); the Trace tab's tree under the recorded
- * links; a rejected lot with stock asks what happens to it: return to the supplier (a claim) or write it off per place.
+ * SCR-201-record — a lot (design warehouse.lots "Record: Lot"), on RecordFrame (B-TH-264; threads plan O-WH-LOT, the rule of picture
+ * 38, the tabs of picture 39): the band in the shell's band row (‹ Lots & traceability, "Lot <code> · material colour · supplier", ONE
+ * pill — its quality —, its lifecycle and Cr VI, the site, when it came, "Same conversation as Compliance › Tests & substances"; the
+ * primary: the way to the release checklist in Compliance › Tests & substances — the ONE place a lot is released, blocked or
+ * rejected, held in words without quality.lots.view —; ⋯ Trace…, the moves, the receipt, the hides, Copy, Split, Trace report), the
+ * Thread button (⌘J) and the docked thread beside every tab (40 %; one third on Moves under 1600 px): the lot's ONE thread, the same
+ * as Compliance › Tests' (the Lot record), Activity's tools in its "⋯" (R-ACT), its files in the Files view. Tabs 5 → 3: Overview &
+ * quality (the release checklist read-only in our words, the lot's facts, where its stock is and who reserved it; its status, the
+ * holds that touch the lot and its hides, the incoming inspections — Quality status merged in, R-5), Trace (came from: the supplier,
+ * the purchase order line, the receipt and the supplier's DDT; went to: the work orders, their shipments and customers; the tree; the
+ * trace reports), Moves (the ledger filtered by the lot with the running balance). ONE notice in the body column: a rejected lot with
+ * stock asks what happens to it (return to the supplier — a claim — or write it off per place), then the rest behind "N more".
  */
-export function LotRecordView({ model, actions, panels }: { model: LotRecordModel; actions?: LotRecordActions; panels?: ReactNode }) {
+export function LotRecordView({ model, actions, thread, printThread }: { model: LotRecordModel; actions?: LotRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <LotsMessages>
-      <LotRecordBody model={model} actions={actions} panels={panels} />
+      <LotRecordBody model={model} actions={actions} thread={thread} printThread={printThread} />
     </LotsMessages>
   )
 }
 
-function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; actions?: LotRecordActions; panels?: ReactNode }) {
+/** The lot while it is read, or when it is not there for this person (inside the frame: the band stays, no thread). */
+function LotState({ record, listHref, onRetry }: { record: Exclude<LotRecordModel['record'], { status: 'ready' }>; listHref: string; onRetry?: () => void }) {
+  const t = useWords()
+  if (record.status === 'loading') {
+    return (
+      <Card padded aria-busy="true">
+        <p className="fw-wl-hint" role="status">
+          <Spinner size={14} /> {t('rec.loading')}
+        </p>
+        <div className="fw-wl-stack tight">
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton key={index} height={22} />
+          ))}
+        </div>
+      </Card>
+    )
+  }
+  return (
+    <Card padded>
+      <EmptyState
+        icon={record.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+        title={t(record.status === 'error' ? 'rec.failed' : record.status === 'forbidden' ? 'rec.forbidden' : 'lt.record.notFound')}
+        description={record.status === 'error' ? t(`stock:${record.problem}`) : record.status === 'forbidden' ? t('rec.forbiddenBody') : t('lt.record.notFoundBody')}
+        action={
+          record.status === 'error' ? (
+            <Button size="sm" onClick={onRetry}>
+              {t('rec.retry')}
+            </Button>
+          ) : (
+            <Button size="sm" asChild>
+              <Link href={listHref}>{t('lt.record.backToList')}</Link>
+            </Button>
+          )
+        }
+      />
+    </Card>
+  )
+}
+
+function LotRecordBody({ model, actions, thread, printThread }: { model: LotRecordModel; actions?: LotRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -58,163 +101,162 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
   const depth = model.depth ?? null
   const dv = depth?.depth.value ?? null
   const record = model.record
-  const value = record.status === 'ready' ? record.value : null
-  const lot = value?.lot ?? null
-  const base = lot ? `${model.prefix}/warehouse/lots/${encodeURIComponent(lot.id)}` : listHref
-  const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
-  const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
-  const decideHref = lot ? `${model.prefix}/compliance/tests/${encodeURIComponent(lot.id)}?tab=release` : ''
-  const keyHref = lot ? movesHref(model.prefix, { siteId: lot.siteId, itemId: lot.item.id, lotId: lot.id }) : ''
+  const back = <Link href={listHref}>{t('lt.back')}</Link>
 
-  const activeHolds = model.holds?.value ? holdGroups(model.holds.value).reduce((sum, group) => sum + group.active, 0) : null
+  if (record.status !== 'ready') {
+    return (
+      <RecordFrame
+        recordType="Lot"
+        personId={model.personId ?? null}
+        band={{ back, title: record.status === 'loading' ? <Skeleton width={260} height={22} /> : t('lt.record.name'), moreLabel: t('rec.more') }}
+        thread={null}
+        threadLabel={t('lt.record.dockLabel')}
+      >
+        <LotState record={record} listHref={listHref} onRetry={actions?.onRetry} />
+      </RecordFrame>
+    )
+  }
+
+  const value = record.value
+  const lot = value.lot
+  const base = `${model.prefix}/warehouse/lots/${encodeURIComponent(lot.id)}`
+  const testsHref = `${model.prefix}/compliance/tests/${encodeURIComponent(lot.id)}`
+  const decideHref = `${testsHref}?tab=release`
+  const keyHref = movesHref(model.prefix, { siteId: lot.siteId, itemId: lot.item.id, lotId: lot.id })
+
+  // B-TH-264: the three tabs, each counting what it lists.
   const tabs: TabItem[] = LOT_TABS.map((tab: LotTab) => ({
     id: tab,
     href: tab === 'overview' ? base : `${base}?tab=${tab}`,
     label: t(`lt.tab.${tab}`),
-    count: tab === 'moves' && value ? value.moves : tab === 'trace' && value ? value.trace.forward.workOrders.length : tab === 'quality' && activeHolds ? activeHolds : null,
+    count: tab === 'moves' ? value.moves : tab === 'trace' ? value.trace.forward.workOrders.length : null,
   }))
 
-  const title = lot ? (
-    <span className="fw-wl-title">
-      {t('lt.record.title', { code: lot.code })}{' '}
-      <span className="fw-wl-title-sub">· {[`${lot.item.code} ${lot.item.name}`, lot.colour?.name, lot.supplier?.name].filter(Boolean).join(' · ')}</span>
-    </span>
-  ) : null
-  const actionsBar = lot ? (
-    <span className="fw-st-actions">
-      {model.can.lotsView ? (
-        <Button size="sm" variant="primary" asChild>
-          <Link href={decideHref}>
-            <ClipboardCheck size={14} aria-hidden /> {t('lt.record.toChecklist')}
-          </Link>
-        </Button>
-      ) : (
-        <Button size="sm" variant="primary" heldReason={t('lt.record.noQuality')}>
-          <ClipboardCheck size={14} aria-hidden /> {t('lt.record.toChecklist')}
-        </Button>
-      )}
-      <Button size="sm" onClick={() => actions?.onTrace?.()}>
-        <GitBranch size={14} aria-hidden /> {t('lt.find.open')}
-      </Button>
-      {activity && <DockButton open={model.dockOpen} onDock={actions?.onDock} />}
-      <Menu
-        label={<MoreHorizontal size={16} aria-label={t('rec.more')} />}
-        align="right"
-        triggerProps={{ 'aria-label': t('rec.more') }}
-        items={[
-          { id: 'moves', label: t('lt.openMoves'), href: keyHref },
-          ...(lot.receipt ? [{ id: 'receipt', label: t('lt.openReceipt', { number: lot.receipt.number }), href: `${model.prefix}/warehouse/receipts/${encodeURIComponent(lot.receipt.id)}` }] : []),
-          { id: 'hides', label: t('lt.openHides'), href: `${model.prefix}/warehouse/hides?lot=${encodeURIComponent(lot.id)}&view=all` },
-          { id: 'copy', label: t('lt.record.copyCode'), onSelect: () => void navigator.clipboard?.writeText(lot.code).catch(() => undefined) },
-          // B-W2b-320: Split into shade groups (lt-split) and Trace report (lt-report), each held with why.
-          ...(depth
-            ? (() => {
-                const splitWait = say(splitHeldKey({ tracking: lot.item.tracking, qualityStatus: lot.qualityStatus }, depth.can, dv?.may)) ?? (dv ? null : td('ld.common.reading'))
-                const reportWait = depth.can.report && (!dv || dv.may.report) ? null : td('ld.report.held.noRight')
-                return [
-                  { id: 'split', label: td('ld.split.menu'), disabled: !!splitWait, description: splitWait ?? undefined, onSelect: () => actions?.depth?.onSplit?.(true) },
-                  { id: 'report', label: td('ld.report.menu'), disabled: !!reportWait, description: reportWait ?? undefined, onSelect: () => actions?.depth?.onReport?.(true) },
-                ]
-              })()
-            : []),
-        ]}
-      />
-    </span>
-  ) : null
+  const primary = model.can.lotsView ? (
+    <Button size="sm" variant="primary" asChild>
+      <Link href={decideHref}>
+        <ClipboardCheck size={14} aria-hidden /> {t('lt.record.toChecklist')}
+      </Link>
+    </Button>
+  ) : (
+    <Button size="sm" variant="primary" heldReason={t('lt.record.noQuality')}>
+      <ClipboardCheck size={14} aria-hidden /> {t('lt.record.toChecklist')}
+    </Button>
+  )
+  // B-W2b-320: Split into shade groups (lt-split) and Trace report (lt-report), each held with why.
+  const depthItems: MenuItemDef[] = depth
+    ? (() => {
+        const splitWait = say(splitHeldKey({ tracking: lot.item.tracking, qualityStatus: lot.qualityStatus }, depth.can, dv?.may)) ?? (dv ? null : td('ld.common.reading'))
+        const reportWait = depth.can.report && (!dv || dv.may.report) ? null : td('ld.report.held.noRight')
+        return [
+          { id: 'split', label: td('ld.split.menu'), disabled: !!splitWait, description: splitWait ?? undefined, onSelect: () => actions?.depth?.onSplit?.(true) },
+          { id: 'report', label: td('ld.report.menu'), disabled: !!reportWait, description: reportWait ?? undefined, onSelect: () => actions?.depth?.onReport?.(true) },
+        ]
+      })()
+    : []
+  const more: MenuItemDef[] = [
+    { id: 'trace', label: t('lt.find.open'), icon: <GitBranch size={15} aria-hidden />, onSelect: () => actions?.onTrace?.() },
+    { id: 'moves', label: t('lt.openMoves'), href: keyHref },
+    ...(lot.receipt ? [{ id: 'receipt', label: t('lt.openReceipt', { number: lot.receipt.number }), href: `${model.prefix}/warehouse/receipts/${encodeURIComponent(lot.receipt.id)}` }] : []),
+    { id: 'hides', label: t('lt.openHides'), href: `${model.prefix}/warehouse/hides?lot=${encodeURIComponent(lot.id)}&view=all` },
+    { id: 'copy', label: t('lt.record.copyCode'), onSelect: () => void navigator.clipboard?.writeText(lot.code).catch(() => undefined) },
+    ...depthItems,
+  ]
 
   return (
     <RecordFrame
-      backHref={listHref}
-      backLabel={t('lt.back')}
-      loaded={record}
-      kind="lt"
-      title={title}
-      actions={actionsBar}
-      tabs={tabs}
-      tab={model.tab}
-      tabsLabel={t('lt.record.tabsLabel')}
-      onRetry={actions?.onRetry}
-      meta={
-        lot ? (
+      recordType="Lot"
+      personId={model.personId ?? null}
+      threadLabel={t('lt.record.dockLabel')}
+      thread={thread ?? null}
+      printThread={printThread}
+      wide={model.tab === 'moves'}
+      band={{
+        back,
+        title: (
+          <span className="fw-wl-title">
+            {t('lt.record.title', { code: lot.code })} <span className="fw-wl-title-sub">· {[`${lot.item.code} ${lot.item.name}`, lot.colour?.name, lot.supplier?.name].filter(Boolean).join(' · ')}</span>
+          </span>
+        ),
+        status: <QualityPill status={lot.qualityStatus} />,
+        meta: (
           <>
-            <QualityPill status={lot.qualityStatus} />
             {dv && <LifecyclePill state={dv.lifecycle.state} />}
             {(lot.crVi.required || lot.crVi.status !== 'NOT_REQUIRED') && <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} />}
             <Tag tone="neutral">{lot.siteCode}</Tag>
             <span className="fw-wl-hint">{lot.receivedAt ? t('lt.record.received', { date: formatDate(lot.receivedAt, place) }) : t('lt.opening')}</span>
+            {/* B-TH-264: ONE conversation per lot — the thread docked here is Compliance › Tests & substances' (the Lot record). */}
+            {model.can.lotsView ? (
+              <Link className="fw-st-link fw-wl-hint" href={testsHref}>
+                {t('lt.record.sameThread')}
+              </Link>
+            ) : (
+              <span className="fw-wl-hint">{t('lt.record.sameThread')}</span>
+            )}
           </>
-        ) : null
-      }
-      status={
-        <>
-          {model.asOf ? t('stock:live.updated', { time: formatTime(model.asOf, place) }) : null}
-          {model.asOf ? ' · ' : null}
-          {t(`stock:live.${model.live}`)}
-        </>
-      }
+        ),
+        primary,
+        more,
+        moreLabel: t('rec.more'),
+      }}
     >
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('rec.changed', { time: formatTime(model.changed.at, place) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('rec.reload')}
-            </Button>
-          }
-        />
-      )}
-      {depth && <DepthNotice model={depth} actions={actions?.depth} />}
-      {lot?.qualityStatus === 'REJECTED' && <Banner tone="info" title={t('lt.record.rejected', { date: lot.qualityDecidedAt ? formatDate(lot.qualityDecidedAt, place) : '—' })}>{lot.qualityNote ?? undefined}</Banner>}
-      {value && rejectedWithStock(value) && <RejectedStock value={value} model={model} actions={actions} />}
-      {value && (
-        <div className={showDock ? 'fw-wl-body has-dock' : 'fw-wl-body'}>
-          <div className="fw-wl-stack">
-            {model.tab === 'overview' && <OverviewTab value={value} model={model} actions={actions} decideHref={decideHref} keyHref={keyHref} />}
-            {model.tab === 'quality' && <QualityTab value={value} model={model} actions={actions} decideHref={decideHref} />}
-            {model.tab === 'trace' && (
-              <>
-                <TraceTab value={value} model={model} />
-                <Card padded>
-                  <div className="fw-wl-stack tight">
-                    <div className="fw-wl-card-head">
-                      <h3 className="fw-wl-h3">{t('lt.tree.title')}</h3>
-                      {depth && (
-                        <Button size="sm" heldReason={depth.can.report && (!dv || dv.may.report) ? null : td('ld.report.held.noRight')} onClick={() => actions?.depth?.onReport?.(true)}>
-                          {td('ld.report.menu')}
-                        </Button>
-                      )}
-                    </div>
-                    <p className="fw-wl-hint">{t('lt.tree.intro')}</p>
-                    {model.trace && (
-                      <PartState value={model.trace} label={t('lt.tree.title')} onRetry={actions?.onRetryTrace}>
-                        {(trace) => <TraceTree trace={trace} prefix={model.prefix} holdReasons={model.holdReasons} affectedOnly={model.affectedOnly} />}
-                      </PartState>
-                    )}
-                  </div>
-                </Card>
-                {depth && <ReportsCard model={depth} timeZone={model.timeZone} actions={actions?.depth} />}
-              </>
-            )}
-            {model.tab === 'moves' && (
-              <PartState value={model.moves} label={t('lt.tab.moves')} onRetry={actions?.onRetryMoves}>
-                {(moves) => <MovesTable moves={moves} prefix={model.prefix} label={t('lt.movesLabel', { code: value.lot.code })} keyHref={keyHref} onMore={actions?.onMoreMoves} />}
-              </PartState>
-            )}
-            {model.tab === 'activity' && (activity ?? <p className="fw-wl-hint">{t('rec.noPanels')}</p>)}
-          </div>
-          {showDock && (
-            <aside className="fw-wl-dock" aria-label={t('rec.dockLabel')}>
-              {activity}
-            </aside>
-          )}
-        </div>
-      )}
+      <Tabs ariaLabel={t('lt.record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+
+      {/* B-TH-264: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+      <RecordNotices>
+        {rejectedWithStock(value) && <RejectedStock value={value} model={model} actions={actions} />}
+        {model.changed && (
+          <Banner
+            tone="info"
+            title={t('rec.changed', { time: formatTime(model.changed.at, place) })}
+            action={
+              <Button size="sm" onClick={() => actions?.onReload?.()}>
+                {t('rec.reload')}
+              </Button>
+            }
+          />
+        )}
+        {depth && <DepthNotice model={depth} actions={actions?.depth} />}
+        {lot.qualityStatus === 'REJECTED' && <Banner tone="info" title={t('lt.record.rejected', { date: lot.qualityDecidedAt ? formatDate(lot.qualityDecidedAt, place) : '—' })}>{lot.qualityNote ?? undefined}</Banner>}
+      </RecordNotices>
+
+      <div className="fw-wl-stack">
+        {model.tab === 'overview' && <OverviewTab value={value} model={model} actions={actions} decideHref={decideHref} keyHref={keyHref} />}
+        {model.tab === 'trace' && (
+          <>
+            <TraceTab value={value} model={model} />
+            <Card padded>
+              <div className="fw-wl-stack tight">
+                <div className="fw-wl-card-head">
+                  <h3 className="fw-wl-h3">{t('lt.tree.title')}</h3>
+                  {depth && (
+                    <Button size="sm" heldReason={depth.can.report && (!dv || dv.may.report) ? null : td('ld.report.held.noRight')} onClick={() => actions?.depth?.onReport?.(true)}>
+                      {td('ld.report.menu')}
+                    </Button>
+                  )}
+                </div>
+                <p className="fw-wl-hint">{t('lt.tree.intro')}</p>
+                {model.trace && (
+                  <PartState value={model.trace} label={t('lt.tree.title')} onRetry={actions?.onRetryTrace}>
+                    {(trace) => <TraceTree trace={trace} prefix={model.prefix} holdReasons={model.holdReasons} affectedOnly={model.affectedOnly} />}
+                  </PartState>
+                )}
+              </div>
+            </Card>
+            {depth && <ReportsCard model={depth} timeZone={model.timeZone} actions={actions?.depth} />}
+          </>
+        )}
+        {model.tab === 'moves' && (
+          <PartState value={model.moves} label={t('lt.tab.moves')} onRetry={actions?.onRetryMoves}>
+            {(moves) => <MovesTable moves={moves} prefix={model.prefix} label={t('lt.movesLabel', { code: value.lot.code })} keyHref={keyHref} onMore={actions?.onMoreMoves} />}
+          </PartState>
+        )}
+      </div>
       {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
       {model.find && <TraceDialog model={model.find} actions={actions?.find} />}
       {depth?.attributes && dv && <AttributesDialog depth={dv} model={depth.attributes} actions={actions?.depth} />}
       {depth?.split && <SplitDialog model={depth.split} can={depth.can} prefix={model.prefix} actions={actions?.depth} />}
-      {depth?.report && lot && <TraceReportDialog code={lot.code} model={depth.report} can={depth.can} timeZone={model.timeZone} actions={actions?.depth} />}
+      {depth?.report && <TraceReportDialog code={lot.code} model={depth.report} can={depth.can} timeZone={model.timeZone} actions={actions?.depth} />}
     </RecordFrame>
   )
 }
@@ -395,13 +437,19 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
                 { label: t('lt.side.onHand'), value: leather ? <Dual hides={lot.hides} area={lot.onHand} uom={lot.item.baseUom} both /> : <Qty value={lot.onHand} uom={lot.item.baseUom} /> },
               ]}
             />
-            {model.can.lotsView && (
+            {/* B-TH-264: Quality status merged here (R-5): where the lot is decided, the separation of who received and who decided. */}
+            <p className="fw-wl-hint">{t('lt.quality.where')}</p>
+            {model.can.lotsView ? (
               <Link className="fw-st-link" href={decideHref}>
                 {t('lt.decide')}
               </Link>
+            ) : (
+              <p className="fw-wl-hint">{t('lt.record.noQuality')}</p>
             )}
+            {model.depth && <SeparationLine model={model.depth} />}
           </div>
         </Card>
+        <HoldsCard model={model} actions={actions} />
         {model.depth && <LifecycleCard model={model.depth} actions={actions?.depth} prefix={model.prefix} timeZone={model.timeZone} />}
       </div>
     </div>
@@ -581,50 +629,26 @@ function RejectedStock({ value, model, actions }: { value: LotRecord; model: Lot
   )
 }
 
-/** Quality status (design rec:Lot/quality): the status read only (decided in Compliance), and the holds that touch the lot. */
-function QualityTab({ value, model, actions, decideHref }: { value: LotRecord; model: LotRecordModel; actions?: LotRecordActions; decideHref: string }) {
+/**
+ * B-TH-264: the holds and incoming inspections that touch the lot (design rec:Lot/quality; the Quality status tab's second card, now on
+ * Overview & quality): the holds of the lot and of its hides by kind with counts (null without quality.holds.view), the inspections.
+ */
+function HoldsCard({ model, actions }: { model: LotRecordModel; actions?: LotRecordActions }) {
   const t = useWords()
-  const locale = useLocale()
-  const place = { locale, timeZone: model.timeZone }
-  const lot = value.lot
-  const wait = lotWaitKey(lot)
   return (
-    <div className="fw-wl-cards">
-      <Card padded>
-        <div className="fw-wl-stack tight">
-          <h3 className="fw-wl-h3">{t('lt.quality.status')}</h3>
-          <span className="fw-wl-chips">
-            <QualityPill status={lot.qualityStatus} />
-            {(lot.crVi.required || lot.crVi.status !== 'NOT_REQUIRED') && <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} />}
-          </span>
-          <p className="fw-wl-text">{wait ? t(`stock:${wait}`) : t('lt.side.usable')}</p>
-          {lot.qualityDecidedAt && <p className="fw-wl-hint">{t('lt.side.decided', { date: formatDateTime(lot.qualityDecidedAt, place) })}</p>}
-          {lot.qualityNote && <p className="fw-wl-hint">{t('lt.side.note', { note: lot.qualityNote })}</p>}
-          <p className="fw-wl-hint">{t('lt.quality.where')}</p>
-          {model.can.lotsView ? (
-            <Link className="fw-st-link" href={decideHref}>
-              {t('lt.decide')}
-            </Link>
-          ) : (
-            <p className="fw-wl-hint">{t('lt.record.noQuality')}</p>
-          )}
-          {model.depth && <SeparationLine model={model.depth} />}
-        </div>
-      </Card>
-      <Card padded>
-        <div className="fw-wl-stack tight">
-          <h3 className="fw-wl-h3">{t('lt.quality.holdsTitle')}</h3>
-          {model.holds === null ? (
-            <p className="fw-wl-hint">{t('lt.quality.noRight')}</p>
-          ) : (
-            <PartState value={model.holds} label={t('lt.quality.holdsTitle')} onRetry={actions?.onRetryHolds}>
-              {(holds) => <HoldLinks holds={holds} model={model} />}
-            </PartState>
-          )}
-          {model.depth ? <IncomingList model={model.depth} prefix={model.prefix} timeZone={model.timeZone} /> : <p className="fw-wl-hint">{t('lt.quality.inspections')}</p>}
-        </div>
-      </Card>
-    </div>
+    <Card padded>
+      <div className="fw-wl-stack tight">
+        <h3 className="fw-wl-h3">{t('lt.quality.holdsTitle')}</h3>
+        {model.holds === null ? (
+          <p className="fw-wl-hint">{t('lt.quality.noRight')}</p>
+        ) : (
+          <PartState value={model.holds} label={t('lt.quality.holdsTitle')} onRetry={actions?.onRetryHolds}>
+            {(holds) => <HoldLinks holds={holds} model={model} />}
+          </PartState>
+        )}
+        {model.depth ? <IncomingList model={model.depth} prefix={model.prefix} timeZone={model.timeZone} /> : <p className="fw-wl-hint">{t('lt.quality.inspections')}</p>}
+      </div>
+    </Card>
   )
 }
 

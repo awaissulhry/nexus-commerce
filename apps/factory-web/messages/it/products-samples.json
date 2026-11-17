@@ -229,7 +229,7 @@
     "NO_WORK_ORDER": "Il giro è deciso o annullato: non si crea un ordine di lavoro.",
     "LINE_OF_ANOTHER_PARTY": "Quella riga è di un altro cliente: i campioni si fanno sull'ordine del cliente del giro.",
     "NOTHING_MADE": "Non è stato fatto ancora nulla: un giro richiesto si decide quando è fatto o spedito.",
-    "BRAND_ASKED": "Il cliente è stato interpellato e non ha risposto: ritira la richiesta (Attività › Approvazioni) prima di decidere qui.",
+    "BRAND_ASKED": "Il cliente è stato interpellato e non ha risposto: ritira la richiesta (⋯ del thread › Chiedi a un partner di approvare) prima di decidere qui.",
     "INTERNAL_ROUND": "Un giro interno non ha un cliente da interpellare.",
     "NOT_REJECTED": "Il giro successivo segue solo un giro respinto.",
     "RESULT_ONCE": "Il risultato è già registrato.",
@@ -483,19 +483,15 @@
     "offline": "Offline — il giro com’era all’ultima lettura; ogni modifica aspetta.",
     "stale": "Qualcuno ha cambiato questo giro alle {time}",
     "reload": "Rileggi",
-    "cancelledBanner": "Annullato: {reason}"
+    "cancelledBanner": "Annullato: {reason}",
+    "dockLabel": "La conversazione del giro"
   },
   "tab": {
     "request": "Richiesta",
     "sample": "Campione",
     "fit": "Fit e commenti",
     "approval": "Approvazione",
-    "shipments": "Spedizioni",
-    "activity": "Attività"
-  },
-  "activity": {
-    "none": "Ancora nulla. Qui compare la prima modifica o il primo messaggio.",
-    "noRight": "Il tuo ruolo non legge messaggi e storia del giro."
+    "shipments": "Spedizioni"
   },
   "sample": {
     "made": "Cosa è stato fatto",

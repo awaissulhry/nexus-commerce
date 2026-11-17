@@ -1,5 +1,4 @@
 import type { PdfInput } from '@nexus/ui/components/PdfViewer/index'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import type { PaymentTermsRow } from '../../customers/terms/api'
 import type { DuplicateActions, DuplicateModel } from '../duplicate/model'
@@ -61,9 +60,9 @@ export interface QuoteRecordViewModel {
   versions: { items: QuoteVersionRow[] | null; people: Readonly<Record<string, string>>; problem: string | null }
   approvals: { items: ApprovalRow[] | null; problem: string | null }
   party: { value: PartyDetail | null; problem: string | null }
-  /** The Documents tab's preview language (a draft's PDF is made by the server in either). */
+  /** Approval & sending's preview language (a draft's PDF is made by the server in either). */
   previewLanguage: 'it' | 'en'
-  /** The PDF the Documents tab shows: the live preview (draft) or the frozen one (sent); null while it is found. */
+  /** The PDF Approval & sending shows: the live preview (draft) or the frozen one (sent); null while it is found. */
   document: { src: PdfInput | null; openHref: string | null; problem: string | null; frozen: boolean }
   /** The send dialog (null: closed). */
   send: DocumentSendModel | null
@@ -74,10 +73,14 @@ export interface QuoteRecordViewModel {
   changed: { at: string } | null
   /** Today in the site's zone (YYYY-MM-DD). */
   today: string
-  /** The thread beside the tab on a wide screen (Owner O1). */
-  dockOpen: boolean
-  /** The design index's stand-in for the record panels (the live page mounts the real ones). */
-  panelsPreview?: RecordPanelsViewModel
+  // ---- B-TH-257: the quote on RecordFrame (the frame docks the thread; the band names where the quote came from and went)
+  /** The signed-in person, for the thread's width remembered per person (RecordFrame). */
+  personId?: string | null
+  /** The person reads requests (sales.inquiries.view): "Made from INQ-…" opens it; else the number alone. */
+  readsRequests?: boolean
+  /** The accepted quote's order: open it (orders.view), make it while it waits (orders.manage). */
+  orders?: { readonly view: boolean; readonly make: boolean }
+  // ---- end B-TH-257
   /** B-W2a-49: the payment terms library of the quote's company (Terms & delivery); null items while read. */
   library?: { items: PaymentTermsRow[] | null; problem: string | null; allowed: boolean }
   /** B-W2a-49: Duplicate (band ⋯); null: closed. */
@@ -114,5 +117,6 @@ export interface QuoteRecordActions extends DuplicateActions {
   onPreviewLanguage?: (language: 'it' | 'en') => void
   onDownload?: (fileId: string) => void
   onDismissNotice?: () => void
-  onDock?: () => void
+  /** B-TH-257: "Make the order now" (an accepted quote whose order is not made yet). */
+  onMakeOrder?: () => void
 }

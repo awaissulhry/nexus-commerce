@@ -2,7 +2,7 @@ import { isProofType, PROOFS_OPEN_STATUSES, proofShapeOf } from '@nexus/factory-
 import type { ProofVersion, QuoteProof, QuoteProofs } from './api'
 
 /**
- * SCR-035-proofs — the quote record's Documents › Proofs (B-W2b-165; SAL-199; design sales.quotes "Documents and files",
+ * SCR-035-proofs — the quote record's Approval & sending › Proofs (B-W2b-165; SAL-199; design sales.quotes "Documents and files",
  * links.quote sec:proofs): what the panel draws, pure. The current version's proofs may change while it is unsent (the
  * person's role and the version's state say so before any click, in our words); every sent version shows what went to the
  * customer, and an accepted one what the acceptance named (name, version, SHA-256). Nothing here fetches.

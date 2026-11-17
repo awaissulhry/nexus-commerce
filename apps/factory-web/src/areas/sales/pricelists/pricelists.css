@@ -1,5 +1,5 @@
 /*
- * Sales › Price lists & contracts (SCR-106) LAYOUT: the page column, the list's head row, the record band, the Prices
+ * Sales › Price lists & contracts (SCR-106) LAYOUT: the page column, the list's head row, the record band's title (B-TH-258: the band is RecordFrame's), the Prices
  * tab's head, the price cell, the dialogs' forms and tables. The controls are the design system's; semantic tokens only,
  * no colours of their own. No page max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens
  * put cards side by side.
@@ -27,13 +27,6 @@
   min-width: 0;
 }
 
-.fw-pl-band {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
 .fw-pl-title {
   overflow-wrap: anywhere;
 }
@@ -41,15 +34,6 @@
 .fw-pl-title-sub {
   font-weight: var(--nds-font-weight-medium);
   color: var(--nds-text-muted);
-}
-
-.fw-pl-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  min-width: 0;
 }
 
 .fw-pl-chips,
@@ -61,15 +45,6 @@
   align-items: center;
   gap: var(--nds-space-6);
   min-width: 0;
-}
-
-.fw-pl-status {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-6);
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
 }
 
 .fw-pl-hint {
