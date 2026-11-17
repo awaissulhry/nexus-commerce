@@ -460,8 +460,7 @@
     "uncovered_one": "{count} line not fully in production",
     "uncovered_other": "{count} lines not fully in production",
     "noProgressRight": "Floor progress is shown to people who follow production.",
-    "progressLabel": "Finished pieces of {number}",
-    "progress": "Cut {cut} · sewn {sewn} · finished {finished} of {pieces}",
+    "progressLabel": "Progress of {number}: {figure}",
     "notReleased": "Not released yet",
     "col": {
       "number": "Work order",
@@ -472,6 +471,16 @@
       "due": "Due",
       "site": "Site",
       "released": "Released"
+    },
+    "notCounted": {
+      "cut": "Cutting not counted here",
+      "sewn": "Sewing not counted here",
+      "finished": "Finishing not counted here"
+    },
+    "step": {
+      "cut": "Cut",
+      "sewn": "Sewn",
+      "finished": "Finished"
     }
   },
   "woStatus": {

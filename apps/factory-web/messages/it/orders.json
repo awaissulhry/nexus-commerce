@@ -460,8 +460,7 @@
     "uncovered_one": "{count} riga non ancora tutta in produzione",
     "uncovered_other": "{count} righe non ancora tutte in produzione",
     "noProgressRight": "L'avanzamento del reparto è visibile a chi segue la produzione.",
-    "progressLabel": "Capi finiti di {number}",
-    "progress": "Tagliati {cut} · cuciti {sewn} · finiti {finished} su {pieces}",
+    "progressLabel": "Avanzamento di {number}: {figure}",
     "notReleased": "Non ancora rilasciato",
     "col": {
       "number": "Ordine di lavoro",
@@ -472,6 +471,16 @@
       "due": "Scadenza",
       "site": "Sede",
       "released": "Rilasciato"
+    },
+    "notCounted": {
+      "cut": "Il taglio non si conta qui",
+      "sewn": "La cucitura non si conta qui",
+      "finished": "La finitura non si conta qui"
+    },
+    "step": {
+      "cut": "Tagliati",
+      "sewn": "Cuciti",
+      "finished": "Finiti"
     }
   },
   "woStatus": {
