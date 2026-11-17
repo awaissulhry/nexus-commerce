@@ -52,7 +52,8 @@ const state = output({ code: z.enum(PORTAL_REQUEST_STATES), words, open: z.boole
 /** One request of the list (P-CUS-ORD-LIST, Kind = Request). */
 export const portalRequestRow = output({
   id: id(),
-  /** The office's number (INQ-…), the one the office sees. */
+  /** th2-backend step 7 (threads plan §0.5, counts do not leak): the customer's own reference ("#7"); the office's INQ-… series
+   *  is the office's only. */
   number: z.string(),
   /** B-TH-105: "Your request 7" (the customer's own count). */
   yourNumber,

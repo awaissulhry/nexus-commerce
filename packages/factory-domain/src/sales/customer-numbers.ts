@@ -24,3 +24,15 @@ export function customerNumberOf(kind: CustomerNumberKind, seq: number | null | 
   if (seq === null || seq === undefined || !Number.isInteger(seq) || seq < 1) return null
   return { seq, words: { en: `${WORDS[kind].en} ${seq}`, it: `${WORDS[kind].it} ${seq}` } }
 }
+
+// ---- B-TH-105 follow-up (threads plan §0.5, "counts do not leak"; th2-backend step 7) ------------------------------------------
+
+/**
+ * The customer's own reference of a record where one short, language-free text is needed — a notice's record chip, the portal
+ * search's "ours", a portal thread's header: "#7". Never the office's series (INQ-…, QT-…, SO-…): a customer reads only its own
+ * count. Null when the record has no number of its own yet.
+ */
+export function customerRefOf(kind: CustomerNumberKind, seq: number | null | undefined): string | null {
+  const own = customerNumberOf(kind, seq)
+  return own ? `#${own.seq}` : null
+}

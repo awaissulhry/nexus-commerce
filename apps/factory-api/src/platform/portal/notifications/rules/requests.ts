@@ -5,6 +5,8 @@ import { events as inquiryEvents } from '@nexus/factory-domain/sales-inquiries/e
 import { PORTAL_ORDER_REQUESTS_MANAGE } from '@nexus/factory-domain/sales/portal-ordering/permissions'
 import { PORTAL_SALES_ORDERS_VIEW } from '@nexus/factory-domain/sales/portal-orders/permissions'
 import type { PartnerDraft, PartnerRule } from './types'
+// th2-backend step 7 (§0.5): the customer's own number, never the office's series.
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 
 /**
  * A customer's requests in its portal news and mail (B-TH-011; threads plan N24, L2-G05, L2-G19; design P-CUS-NEW.receipt-F02,
@@ -12,10 +14,12 @@ import type { PartnerDraft, PartnerRule } from './types'
  * portal.salesOrders.view over the request's company and party): never another party (W06), never an office person, the close
  * words or an amount. Topic ORDERS (transactional: mailed at once).
  *
- *   inquiry.received   a request the customer sent from the portal: "We received your request INQ-… (your request 7)" — the
- *                      copy of what was sent (the receipt mail, P-CUS-NEW.receipt-F02), the one news a partner gets of its own act
- *   inquiry.changed    NEED_INFO: "We need something from you on your request INQ-…" (the question is the thread's message)
- *   inquiry.closed     DECLINED: "Your request INQ-… was declined" (our message, if any, is the thread's)
+ *   inquiry.received   a request the customer sent from the portal: "We received your request 7" — the copy of what was sent
+ *                      (the receipt mail, P-CUS-NEW.receipt-F02), the one news a partner gets of its own act
+ *   inquiry.changed    NEED_INFO: "We need something from you on your request 7" (the question is the thread's message)
+ *   inquiry.closed     DECLINED: "Your request 7 was declined" (our message, if any, is the thread's)
+ * th2-backend step 7 (threads plan §0.5, counts do not leak): the customer reads only its own number — the notice's record chip is
+ * "#7" (customerRefOf), the sentence "your request 7" in the reader's language; never the office's series (INQ-…).
  *   portal_order_request.refused   a catalogue order we did not accept (its words are on its page), to who may order
  */
 
@@ -36,9 +40,9 @@ async function requestNews(context: Parameters<PartnerRule['drafts']>[0], inquir
     {
       partyId: inquiry.partyId,
       companyId: inquiry.companyId,
-      record: { type: 'Inquiry', id: inquiry.id, label: inquiry.number },
+      record: { type: 'Inquiry', id: inquiry.id, label: customerRefOf('REQUEST', inquiry.customerSeq) ?? '—' },
       messageKey,
-      params: { yourSeq: inquiry.customerSeq },
+      params: { yourKind: 'REQUEST', yourSeq: inquiry.customerSeq },
       anchor: null,
       forReader: (reader) => can(reader.actor, PORTAL_HOME_VIEW, place) && can(reader.actor, PORTAL_SALES_ORDERS_VIEW, place),
     },
