@@ -12,7 +12,7 @@ import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { systemContext } from '../outbox/system'
-import { mayOnThread, resolveRecord } from '../threads/records' // B-TH-003; B-TH-029: mayOnThread
+import { resolveRecord } from '../threads/records' // B-TH-003 (B-TH-029's record read: ./record-scope.ts)
 import type { FileView } from './contract'
 import type { PresignedRequest, StoredObject } from './port'
 import {
@@ -47,6 +47,8 @@ import { keyShownTo } from './thumbs/outside'
 // B-W2b-F56: a file whose bytes are missing from the store (404 in words, never an outage).
 import { MissingFileError } from './missing'
 import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
+// B-PR-44: a file's record read through its own resolver, its parent's, its work order's or its party (fail closed for limited people).
+import { fileRecordScope, reachesFileRecord } from './record-scope'
 // B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
 import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
 
@@ -245,15 +247,18 @@ export async function readVisible(caller: CommandCaller, fileId: string, path: U
  * person limited to some customers (RoleAssignment.partyIds) or sites opened any record's file by id. Now an office read — the
  * file by id, its download, preview, versions and history, and a record's file list — also asks files.read over the RECORD's
  * own scope (company, site and party from its thread resolver, platform/threads/records.ts) and the record type's thread gate
- * (a person's records: users.view, workers.view …), exactly as threads do (mayOnThread). A record type no resolver knows, or a
- * record gone, keeps the file's company check. A person without a customer or site limit (the default: the factory sees it
- * all) reads what they read before; a site-limited person no longer reads the files of another site's records.
+ * (a person's records: users.view, workers.view …), exactly as threads do (mayOnThread). A person without a customer or site limit
+ * (the default: the factory sees it all) reads what they read before; a site-limited person no longer reads the files of another
+ * site's records.
+ * B-PR-44 (Decision 17: a customer limit covers customer records): a record type the resolver does not know is read through
+ * ./record-scope.ts — a line through its order or quote, a work order's record through its customer, any table naming its
+ * party through that party; a customer-carrying record whose customer cannot be read opens only for every-customer readers.
  */
-async function officeReachesRecord(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string }): Promise<boolean> {
+async function officeReachesRecord(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string; readonly companyId?: string | null }): Promise<boolean> {
   const context = contextOf(caller)
   if (context.audience !== 'office') return true
-  const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
-  return scope === null || mayOnThread(actorOf(context), FILES_READ, record.recordType, scope)
+  const found = await caller.withClient((client) => fileRecordScope(client, context.tenantId, record))
+  return reachesFileRecord(actorOf(context), FILES_READ, found, record.companyId ?? null)
 }
 // ---- end B-TH-029
 
@@ -270,9 +275,9 @@ async function officeReachesRecord(caller: CommandCaller, record: { readonly rec
 export async function opensMeasurementSheets(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string; readonly companyId: string | null }): Promise<boolean> {
   const context = contextOf(caller)
   if (context.audience !== 'office') return true
-  const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
-  // As threads read a record (its gate and its wall party: B-PR-08a part 2); a type no resolver knows keeps the file's company.
-  return scope ? mayOnThread(actorOf(context), MEASUREMENT_SHEET_PERMISSION, record.recordType, scope) : can(actorOf(context), MEASUREMENT_SHEET_PERMISSION, { companyId: record.companyId })
+  // As threads read a record (its gate and its wall party: B-PR-08a part 2); B-PR-44: any other type through ./record-scope.ts.
+  const found = await caller.withClient((client) => fileRecordScope(client, context.tenantId, record))
+  return reachesFileRecord(actorOf(context), MEASUREMENT_SHEET_PERMISSION, found, record.companyId)
 }
 
 /** A locked sheet as an office reader without the permission sees it: what it is and where, never its name or content. */
@@ -291,6 +296,17 @@ export async function recordSheetOpening(caller: CommandCaller, row: Pick<Row, '
 // ---- end B-TH-083
 
 export const readOffice = async (caller: CommandCaller, fileId: string): Promise<OfficeRow> => (await readRow(caller, fileId)) as OfficeRow
+
+/**
+ * B-PR-44: a file an office person CHANGES by id (share, retention, delete, tag, mark up, a new version, a restore) is first one
+ * of a record they reach (./record-scope.ts), the same 404 as a read: a person limited to customer B never touches customer A's
+ * file. The system and modules' own callers are not asked (they checked their record).
+ */
+export async function readOfficeReached(caller: CommandCaller, fileId: string): Promise<OfficeRow> {
+  const row = await readOffice(caller, fileId)
+  if (contextOf(caller).audience === 'office' && !(await officeReachesRecord(caller, row))) throw new NotFoundError('File not found.')
+  return row
+}
 
 /** A store call's failure for the caller: the store is not reachable now (503), a retained object (409). */
 export async function storeCall<T>(work: () => Promise<T>): Promise<T> {
@@ -860,7 +876,7 @@ async function withOrigins(caller: CommandCaller, views: readonly FileView[]): P
 
 /** files.delete: refused while retained or on legal hold; then the object is removed from the store (best effort). */
 export async function deleteFile(runtime: FilesRuntime, caller: CommandCaller, fileId: string, input: { version?: number | undefined; reason?: string | undefined }, idempotencyKey?: string) {
-  const before = await readOffice(caller, fileId)
+  const before = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_DELETE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   assertTransition(fileMachine, before.status, 'DELETED', { legalHold: before.legalHold, retainUntil: before.retainUntil, now: runtime.clock.now() })
   const { result } = await command(
@@ -917,7 +933,7 @@ export async function setVisibility(
   input: { visibility: readonly FileAudience[]; floorSiteId?: string | null | undefined; partyId?: string | null | undefined; version: number },
   idempotencyKey?: string,
 ): Promise<FileView> {
-  const before = await readOffice(caller, fileId)
+  const before = await readOfficeReached(caller, fileId) // B-PR-44
   // B-TH-003: a portal or link share reaches the file's record's own party only.
   const sharing: Sharing = await withRecordParty(caller, before, {
     visibility: normaliseVisibility(input.visibility),
@@ -965,7 +981,7 @@ export async function setRetention(
   input: { legalHold?: boolean | undefined; retainUntil?: string | undefined; reason: string; version: number },
   idempotencyKey?: string,
 ): Promise<FileView> {
-  const before = await readOffice(caller, fileId)
+  const before = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_MANAGE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   if (before.status === 'DELETED') throw new InvalidStateError('This file is deleted.')
   if (input.legalHold === undefined && input.retainUntil === undefined) {

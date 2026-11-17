@@ -8,7 +8,7 @@ import { isDocumentCategory, isRequiredRecordType, REQUIRED_RECORD_TYPES, requir
 import { isCurrentVersion } from '@nexus/factory-domain/files/versions/rules'
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { contextOf, mayWrite, opensMeasurementSheets, readOffice } from '../files' // B-TH-083: opensMeasurementSheets
+import { contextOf, mayWrite, opensMeasurementSheets, readOfficeReached } from '../files' // B-TH-083: opensMeasurementSheets; B-PR-44: readOfficeReached
 import { isMeasurementSheet } from '@nexus/factory-domain/files/measurements'
 import { assertGenericPath, readsThroughModule } from '../owned'
 import { activeRulesOf, documentsOf, recordFactsOf, type DocumentRow } from './check'
@@ -99,7 +99,7 @@ export async function setDocument(
 ) {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new NotFoundError('File not found.')
-  const file = await readOffice(caller, fileId)
+  const file = await readOfficeReached(caller, fileId) // B-PR-44
   if (!can(actorOf(context), FILES_READ, { companyId: file.companyId })) throw new NotFoundError('File not found.')
   // B-TH-083: a measurement sheet's tag (and its date) is changed only by someone who may open it: taking the tag off opens it to all.
   if (isMeasurementSheet(file) && !(await opensMeasurementSheets(caller, file))) throw new NotFoundError('File not found.')

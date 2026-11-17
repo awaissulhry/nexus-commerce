@@ -13,6 +13,7 @@ import { normaliseVisibility, type FileAudience, type FileKind } from './rules'
 import type { FilesRuntime } from './service'
 // B-TH-231: the records a file may be carried to, found as global search finds them.
 import { MESSAGE_TYPE, searchRecords } from '../search/search'
+import { fileRecordParty, fileRecordScope } from './record-scope' // B-PR-44
 import { SEARCH_LIMITS } from '@nexus/factory-domain/search/text'
 import { THREAD_RECORDS } from '../threads/records'
 
@@ -60,14 +61,15 @@ export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fi
   if (body.recordType === source.recordType && body.recordId === source.recordId) throw new ValidationError(USE_ON_WORDS.sameRecord, [{ path: 'body/recordId', message: USE_ON_WORDS.sameRecord }])
   const { target, from, category } = await caller.withClient(async (client) => ({
     target: isUuid(body.recordId) ? await resolveRecord(client, body.recordType, body.recordId) : null,
-    from: await resolveRecord(client, source.recordType, source.recordId),
+    // B-PR-44: the source's record read as file reads read it (a line through its order or quote, a work order's record …).
+    from: await fileRecordScope(client, context.tenantId, source),
     category: (await client.storedFile.findUnique({ where: { id: source.id }, select: { category: true } }))?.category ?? null,
   }))
   if (!target || !mayOnThread(actor, FILES_READ, body.recordType, target)) throw new NotFoundError('Record not found.')
   if (!can(actor, FILES_UPLOAD, target)) throw new ForbiddenError('Adding files to this record needs the right to upload files over it.')
   // The brand wall: the source's customer (its record's; else the party the file is shared with) is the target's, or either has none.
   // B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party (records.ts; several or none: the every-party marker).
-  const sourceParty = wallPartyOf(from) ?? source.partyId ?? null
+  const sourceParty = fileRecordParty(from) ?? source.partyId ?? null
   const targetParty = wallPartyOf(target)
   if (sourceParty !== null && targetParty !== null && sourceParty !== targetParty) {
     const words = USE_ON_WORDS.otherParty(source.originalName)
@@ -122,9 +124,9 @@ export async function useOnTargets(caller: CommandCaller, fileId: string, query:
   const found = await searchRecords(caller, { q: query.q, type: query.type, types, limit: SEARCH_LIMITS.maxPage, offset: 0 })
   if (found.tooShort) return { tooShort: true, targets: [] }
   return caller.withClient(async (client) => {
-    const from = await resolveRecord(client, source.recordType, source.recordId)
-    // As the carry compares them (B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party).
-    const sourceParty = wallPartyOf(from) ?? source.partyId ?? null
+    // As the carry compares them (B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party; B-PR-44: a line's
+    // through its order or quote).
+    const sourceParty = fileRecordParty(await fileRecordScope(client, context.tenantId, source)) ?? source.partyId ?? null
     const targets: UseOnTarget[] = []
     for (const result of found.results) {
       if (targets.length >= USE_ON_TARGETS) break
