@@ -130,7 +130,24 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // emits (a project made, changed, moved; a person added twice-told (thread.follower_added + project.person_added) and by the
     // portal path; a person removed with thread.followers_changed; linked, unlinked; an invitation ended at close): 948 → 957,
     // 1499 → 1510.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(957 declared event version\(s\), 1510 literal emit/) })
+    // ---- END CHECK (fix wave 3c, counted by the guard on each main commit): the TH-5 count missed two literal emits merged
+    // before it — B-PR-41 + B-PR-14 (#1572: one) and B-TH-049…054 (#1573: one) — so the guard counted 956 and 1511 on TH-5's tree
+    // (a8e20d4036), 957 and 1512 with the planted event and emit. Since then:
+    // B-PR-16: ten events (brand_production.stage_reached, .health_changed, .urgency_changed, .hold_changed, .supervisor_changed;
+    // work_order_hold.placed, .lifted; production_issue.raised, .answered, .escalated) and no literal emit: 956 → 966.
+    // B-PR-21: no event and four literal emits (a production hold placed and lifted: work_order_hold.placed and .lifted, each with its
+    // workorder.status_changed): 1511 → 1515.
+    // B-PR-24: four events (approval_request.decided_for_party, .reversed; order_change_request.countered, .counter_answered) and
+    // no literal emit: 966 → 970.
+    // B-PR-25 + B-PR-28 (#1610): no event and two literal emits (a new promise date asked of the customer: approval_request.asked;
+    // the open ask about an older date of that line: approval_request.withdrawn): 1515 → 1517.
+    // B-PR-30a + B-PR-30b (#1613): no event and two literal emits (decided for the customer: approval_request.decided_for_party;
+    // its answer reversed: approval_request.reversed): 1517 → 1519.
+    // B-PR-26 (#1615): no event and four literal emits (the factory answers a customer's ask: order_change_request.answered,
+    // .countered, .counter_answered; approval_request.asked): 1519 → 1523.
+    // The guard counts 970 and 1523 on main 368044503c; with the planted event and emit: 971, 1524.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(971 declared event version\(s\), 1524 literal emit/) })
+    // ---- end END CHECK
   })
 
   it.each<[string, Plants, RegExp]>([

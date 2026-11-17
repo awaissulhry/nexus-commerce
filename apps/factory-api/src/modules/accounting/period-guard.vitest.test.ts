@@ -30,10 +30,21 @@ describe('month locks on the wire', () => {
     })
   })
 
-  it('leaves every other database error unexpected (500, logged)', () => {
-    expect(mapError(databaseRefusal('23514', 'payments: deposit request x is PAID (final); its allocations stay'))).toMatchObject({ status: 500, code: 'internal_error', unexpected: true })
+  // TH-0A Open 3 (#1533): another rule of the database is no month lock: a 409 in its own words (refusal/DATABASE_RULE), never
+  // period/…; a CHECK constraint's own message and any other SQLSTATE stay a logged 500.
+  it('answers any other rule of the database in its words (not a month lock), and leaves every other database error unexpected (500, logged)', () => {
+    expect(mapError(databaseRefusal('23514', 'payments: deposit request x is PAID (final); its allocations stay'))).toEqual({
+      status: 409,
+      code: 'conflict',
+      message: 'Deposit request x is PAID (final); its allocations stay.',
+      issues: [{ path: 'refusal/DATABASE_RULE', message: 'Deposit request x is PAID (final); its allocations stay.' }],
+      unexpected: false,
+      guard: 'payments: deposit request x is PAID (final); its allocations stay',
+    })
+    expect(mapError(databaseRefusal('23514', 'new row for relation "Payment" violates check constraint "Payment_amount_check"'))).toMatchObject({ status: 500, code: 'internal_error', unexpected: true })
     expect(mapError(databaseRefusal('23505', LOCKED))).toMatchObject({ status: 500, unexpected: true })
   })
+  // ---- end TH-0A Open 3
 
   it("answers the commands' own checks as 409s at their paths", () => {
     expect(mapError(new PeriodLockedError('September 2026 is closed for good …', 'body/receivedOn'))).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'body/receivedOn', message: 'Dated inside a month closed for good.' }] })
