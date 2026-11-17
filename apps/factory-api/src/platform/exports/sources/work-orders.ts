@@ -98,7 +98,16 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     const rush = rushWord === 'true' ? true : rushWord === 'false' ? false : undefined
     const partyId = partyTerm(address) // B-PR-03
     // B-PR-34: the list's sort and computed filters.
-    const ranked = { sort: termOf(address, 'sort', LIST_SORTS), waitingOn: termOf(address, 'waitingOn', WAITING_ON), risk: termOf(address, 'risk', WORK_ORDER_RISKS), blockedBy: termOf(address, 'blockedBy', BLOCKED_BY), /* B-PR-42a */ supervisor: termOf(address, 'supervisor', SUPERVISOR_FILTERS) }
+    const ranked = {
+      sort: termOf(address, 'sort', LIST_SORTS),
+      waitingOn: termOf(address, 'waitingOn', WAITING_ON),
+      risk: termOf(address, 'risk', WORK_ORDER_RISKS),
+      blockedBy: termOf(address, 'blockedBy', BLOCKED_BY),
+      /* B-PR-42a */ supervisor: termOf(address, 'supervisor', SUPERVISOR_FILTERS),
+      // B-PR-33: the Overview's "blocked by a gate" and "made before the rule" (the file follows the screen).
+      gate: address.get('gate') === 'true' ? true : undefined,
+      mixed: address.get('mixed') === 'true' ? true : undefined,
+    }
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
     if (view === 'late') return { late: true, q, due, rush, partyId, ...ranked }
     if (view === 'all') return { q, due, rush, partyId, ...ranked }

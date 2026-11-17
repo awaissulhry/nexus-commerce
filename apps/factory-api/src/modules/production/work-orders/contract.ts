@@ -214,6 +214,12 @@ export const listContract = defineContract({
     // ── end B-PR-34 ──
     /** B-PR-42a: `me` — the work orders whose production supervisor is the caller ("Mine"); there is no filter by another person. */
     supervisor: z.enum(['me']).optional(),
+    // ── B-PR-33 (Production › Overview: every number opens this list with its filters) ──
+    /** `true`: production work orders not started whose open order waits on a gate (the planning board does not place them). */
+    gate: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** `true`: made before the one-customer rule with cells of several customers (a split is needed; every customer only). */
+    mixed: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    // ── end B-PR-33 ──
     /** The `nextCursor` of the page before (newest: a work order id; risk and due: a position token of that sort). */
     cursor: z.string().trim().min(1).max(80).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
