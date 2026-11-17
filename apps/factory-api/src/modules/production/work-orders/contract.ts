@@ -18,6 +18,8 @@ import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from './risk'
 // B-PR-42a: the production supervisor — a mark per row, by name on the record.
 import { SUPERVISOR_MARKS, SUPERVISOR_SOURCES } from '@nexus/factory-domain/production-brand/supervisor'
+// B-PR-22b: the customer's urgency per row.
+import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -257,6 +259,10 @@ export const listContract = defineContract({
           waitingOn: waitingFacts.nullable(),
           /** B-PR-42a: its production supervisor for the caller — ME, SOMEONE_ELSE or NOT_SET (never a name on a list); null: no customer. */
           supervisor: z.enum(SUPERVISOR_MARKS).nullable(),
+          /** B-PR-22b: its customer's urgency that counts (its orders' best; null: none, or the customer's switch off). */
+          customerUrgency: z.enum(BRAND_URGENCIES).nullable(),
+          /** B-PR-22b: its place in the customer's OWN Urgent list (1 first; null when Regular) — never a place in our plan. */
+          urgentRank: z.number().int().nullable(),
         }),
       ),
       /** B-PR-34: a work order id (newest) or a position token (risk, due). */

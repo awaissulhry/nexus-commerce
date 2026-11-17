@@ -28,7 +28,9 @@ import { dayOf, type Reader } from './store'
  * The sorts: `risk` = LATE → AT_RISK → BLOCKED → ON_TRACK → finished, then by due date (oldest first, none last), then newest;
  * `due` = by due date, then newest; `newest` = by id, newest first (the list's default, as before). A computed sort pages with an
  * opaque cursor over (risk, due, id): `<sort>~<rank>~<due>~<id>`, so the next page starts right after the last row read even when
- * that row left the list meanwhile. The customer urgency tie-break ("ties by brand priority") comes with B-PR-22b.
+ * that row left the list meanwhile. B-PR-22b: in the risk sort a tie (same risk, same due date) goes to the work order whose
+ * customer marked its order Urgent (its place in the customer's own list; ../brand/urgency-of), before the newest; the token then
+ * carries it (`risk~<rank>~<due>~u<place>~<id>`).
  */
 
 // ── B-PR-34 ──
@@ -113,10 +115,15 @@ export interface SortKey {
   readonly rank: number
   readonly due: BusinessDate | null
   readonly id: string
+  /** B-PR-22b: the risk sort's tie — its customer's urgency that counts (its place in the customer's own Urgent list; absent: Regular or none). */
+  readonly urgent?: number
 }
 
 const byDue = (a: BusinessDate | null, b: BusinessDate | null): number => (a === b ? 0 : a === null ? 1 : b === null ? -1 : a < b ? -1 : 1)
 const newestFirst = (a: string, b: string): number => (a === b ? 0 : a < b ? 1 : -1)
+
+// B-PR-22b: an urgent customer order first among ties (its place in its customer's own list), then Regular and none.
+const byUrgent = (a: number | undefined, b: number | undefined): number => (a ?? Number.MAX_SAFE_INTEGER) - (b ?? Number.MAX_SAFE_INTEGER)
 
 /** The order of two rows in a sort (negative: `a` first). */
 export function compareKeys(sort: ListSort, a: SortKey, b: SortKey): number {
@@ -125,13 +132,20 @@ export function compareKeys(sort: ListSort, a: SortKey, b: SortKey): number {
     const due = byDue(a.due, b.due)
     if (due !== 0) return due
   }
+  // B-PR-22b (06-tree §0.4 "ties by brand priority"): in the risk sort, the customer's urgency breaks a tie before the newest.
+  if (sort === 'risk') {
+    const urgent = byUrgent(a.urgent, b.urgent)
+    if (urgent !== 0) return urgent
+  }
   return newestFirst(a.id, b.id)
 }
 
-const CURSOR = /^(risk|due)~([0-9])~(\d{4}-\d{2}-\d{2})?~([0-9a-fA-F-]{36})$/
+// B-PR-22b: the risk sort's token may carry the tie's customer urgency (`u<place>~`) before the id.
+const CURSOR = /^(risk|due)~([0-9])~(\d{4}-\d{2}-\d{2})?~(?:u(\d{1,6})~)?([0-9a-fA-F-]{36})$/
 
 /** The cursor of the page after a row: its id for `newest` (as before), else its position token in the sort. */
-export const encodeCursor = (sort: ListSort, key: SortKey): string => (sort === 'newest' ? key.id : `${sort}~${key.rank}~${key.due ?? ''}~${key.id}`)
+export const encodeCursor = (sort: ListSort, key: SortKey): string =>
+  sort === 'newest' ? key.id : `${sort}~${key.rank}~${key.due ?? ''}~${sort === 'risk' && key.urgent !== undefined ? `u${key.urgent}~` : ''}${key.id}`
 
 /** A cursor as the list wrote it (a work order id for `newest`, else the position token of the same sort); else refused in words. */
 export function decodeCursor(sort: ListSort, cursor: string | undefined): SortKey | null {
@@ -140,7 +154,10 @@ export function decodeCursor(sort: ListSort, cursor: string | undefined): SortKe
     if (isUuid(cursor)) return { rank: 0, due: null, id: cursor.toLowerCase() }
   } else {
     const match = CURSOR.exec(cursor)
-    if (match && match[1] === sort && isUuid(match[4]!)) return { rank: Number(match[2]), due: match[3] ?? null, id: match[4]!.toLowerCase() }
+    if (match && match[1] === sort && isUuid(match[5]!) && (match[4] === undefined || sort === 'risk')) {
+      const key = { rank: Number(match[2]), due: match[3] ?? null, id: match[5]!.toLowerCase() }
+      return match[4] === undefined ? key : { ...key, urgent: Number(match[4]) }
+    }
   }
   throw new ValidationError('This page of the list cannot be read: start from the first page.', [{ path: 'query/cursor', message: `Not a cursor of the ${sort} sort.` }])
 }

@@ -55,6 +55,8 @@ import { assertUnitCells, assertUnitStarted, unitCellProfile, unitOfRequest } fr
 // B-PR-34 (production plan, the work order list by risk): risk and waiting on per row, the risk and due sorts.
 import type { WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { decodeCursor, pageOf, passes, riskFactsOf, riskRank, type BlockedBy, type ListSort, type RiskRow, type RowFacts, type SortKey, type WorkOrderRisk } from './risk'
+// B-PR-22b (production plan §5 "Customer urgency" column; the risk sort's tie): the customer's urgency per row.
+import { workOrderCustomerUrgency, type WorkOrderUrgency } from '../brand/urgency-of'
 // B-PR-42a (production plan §3 "Supervisor"): the supervisor per row (Me / Someone else / Not set), "Mine", and by name on the record.
 import { supervisorMarkOf, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
 import { recordSupervisorOf, workOrderSupervisorsOf, type Reader as SupervisorReader, type RecordSupervisor, type WorkOrderOrders } from '../supervisor/resolver'
@@ -252,8 +254,10 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   const rows = await caller.withClient((client) => client.workOrder.findMany({ where, orderBy: { id: 'desc' }, take: query.limit + 1, select: LIST_SELECT }))
   const page = rows.slice(0, query.limit)
   return {
-    // B-PR-34: risk facts; B-PR-42a: the supervisor marks of the page.
-    workOrders: await caller.withClient(async (client) => listRowsOf(client, page, await riskFactsOf(client, page.map(riskRowOf), today), today, await supervisorMarksOf(client, page.map(ordersOfRow), context.actorId))),
+    // B-PR-34: risk facts; B-PR-42a: the supervisor marks of the page; B-PR-22b: its customer urgency.
+    workOrders: await caller.withClient(async (client) =>
+      listRowsOf(client, page, await riskFactsOf(client, page.map(riskRowOf), today), today, await supervisorMarksOf(client, page.map(ordersOfRow), context.actorId), await workOrderCustomerUrgency(client, page.map((row) => row.id))),
+    ),
     nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
   }
 }
@@ -270,13 +274,23 @@ async function listComputed(caller: CommandCaller, context: ReturnType<typeof of
     const facts = await riskFactsOf(client, light.map(riskRowOf), today)
     // B-PR-42a: "Mine" — only the work orders whose supervisor (its order's own, else the customer's default) is the caller.
     const mine = query.supervisor === 'me' ? await mineOf(client, where, context.actorId) : null
-    const keyed = light.filter((row) => passes(facts.get(row.id), computedFilter(query)) && (mine === null || mine.has(row.id))).map((row) => ({ key: { rank: riskRank(facts.get(row.id)?.risk ?? null), due: dayOrNull(row.dueDate), id: row.id } }))
+    const kept = light.filter((row) => passes(facts.get(row.id), computedFilter(query)) && (mine === null || mine.has(row.id)))
+    // B-PR-22b: the risk sort's tie — the customer's urgency of each row (its place in the customer's own Urgent list).
+    const urgency = sort === 'risk' ? await workOrderCustomerUrgency(client, kept.map((row) => row.id)) : null
+    const keyed = kept.map((row) => {
+      const urgent = urgency?.get(row.id)
+      const key = { rank: riskRank(facts.get(row.id)?.risk ?? null), due: dayOrNull(row.dueDate), id: row.id }
+      return { key: urgent?.urgency === 'URGENT' && urgent.urgentRank !== null ? { ...key, urgent: urgent.urgentRank } : key }
+    })
     const { page, next } = pageOf(keyed, sort, after, query.limit)
     const ids = page.map((row) => row.key.id)
     const rows = ids.length === 0 ? [] : await client.workOrder.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: LIST_SELECT })
     const byId = new Map(rows.map((row) => [row.id, row]))
     const ordered = ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
-    return { workOrders: await listRowsOf(client, ordered, facts, today, await supervisorMarksOf(client, ordered.map(ordersOfRow), context.actorId)), nextCursor: next }
+    return {
+      workOrders: await listRowsOf(client, ordered, facts, today, await supervisorMarksOf(client, ordered.map(ordersOfRow), context.actorId), urgency ?? (await workOrderCustomerUrgency(client, ids))),
+      nextCursor: next,
+    }
   })
 }
 
@@ -288,7 +302,14 @@ async function mineOf(client: Reader, where: Prisma.WorkOrderWhereInput, viewerI
 }
 
 /** The rows as the list answers them: progress per row (SCR-069: the record's own counts, summed; null for a draft), risk, waiting. */
-async function listRowsOf(client: Reader, page: readonly ListRow[], facts: ReadonlyMap<string, RowFacts>, today: BusinessDate, /* B-PR-42a */ marks: ReadonlyMap<string, SupervisorMark | null>) {
+async function listRowsOf(
+  client: Reader,
+  page: readonly ListRow[],
+  facts: ReadonlyMap<string, RowFacts>,
+  today: BusinessDate,
+  /* B-PR-42a */ marks: ReadonlyMap<string, SupervisorMark | null>,
+  /* B-PR-22b */ urgency: ReadonlyMap<string, WorkOrderUrgency>,
+) {
   const progress = new Map<string, Awaited<ReturnType<typeof progressTotalsOf>>>()
   for (const row of page) progress.set(row.id, await progressTotalsOf(client, { id: row.id, siteId: row.siteId, styleId: row.style.id, status: row.status }))
   return page.map((row) => {
@@ -329,6 +350,9 @@ async function listRowsOf(client: Reader, page: readonly ListRow[], facts: Reado
       waitingOn: fact?.waiting ? { on: fact.waiting.on, since: fact.waiting.since ? toUtcIso(fact.waiting.since) : null } : null,
       // B-PR-42a: its production supervisor for this viewer — ME / SOMEONE_ELSE / NOT_SET, never a name on a list; null: no customer.
       supervisor: marks.get(row.id) ?? null,
+      // B-PR-22b: its customer's urgency that counts (its orders' best: Urgent n, else Regular; null: none, or the switch off).
+      customerUrgency: urgency.get(row.id)?.urgency ?? null,
+      urgentRank: urgency.get(row.id)?.urgentRank ?? null,
     }
   })
 }

@@ -38,6 +38,12 @@ import {
   URGENCY_WORDS,
   urgentUsedWords,
 } from './words'
+// B-PR-22a
+import { placeInUrgentList, ranksOf, URGENCY_OUTCOMES } from './urgency'
+// B-PR-22b
+import { lockReasonProblems, URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from './urgency'
+import { ALREADY_LOCKED_WORDS, customerUrgencyChipWords, NO_OVERRIDE_RIGHT_WORDS, NOT_LOCKED_WORDS } from './words'
+import { CHANGED_BY_US_SINCE_WORDS, changedAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS, ORDER_NOT_FOUND_WORDS, URGENT_ORDER_UNCHANGED_WORDS } from './words'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -614,6 +620,55 @@ describe('B-PR-41 the words of urgency, the supervisor and the limits card', () 
     for (const words of brandWords) {
       expect(words.en, words.en).not.toMatch(forbidden)
       expect(words.it, words.it).not.toMatch(forbidden)
+    }
+  })
+})
+
+// ── B-PR-22a ──
+describe('B-PR-22a the Urgent list put back and the portal command words', () => {
+  it('places undone orders back at their old places, from the first place down, clamped to the end; the rest keep their order', () => {
+    expect(placeInUrgentList(['c', 'a', 'b'], [{ orderId: 'a', rank: 1 }, { orderId: 'b', rank: 2 }])).toEqual(['a', 'b', 'c'])
+    expect(placeInUrgentList(['b', 'a', 'c'], [{ orderId: 'a', rank: 1 }, { orderId: 'b', rank: 2 }])).toEqual(['a', 'b', 'c'])
+    expect(placeInUrgentList(['a', 'c'], [{ orderId: 'b', rank: 2 }])).toEqual(['a', 'b', 'c'])
+    expect(placeInUrgentList(['a'], [{ orderId: 'b', rank: 9 }])).toEqual(['a', 'b'])
+    expect(placeInUrgentList([], [])).toEqual([])
+    expect([...ranksOf(['x', 'y', 'z'])]).toEqual([
+      ['x', 1],
+      ['y', 2],
+      ['z', 3],
+    ])
+  })
+
+  it('every outcome is a known code; the refusal words name no person, place, line or other customer', () => {
+    expect(URGENCY_OUTCOMES).toEqual(expect.arrayContaining(['DONE', 'ASK_CUT', 'ASK_OVER_QUOTA', 'URGENCY_OFF', 'NOT_OPEN', 'LOCKED', 'UNCHANGED', 'NOT_KEPT']))
+    const forbidden = /supervisor|line \d|work order|worker|other customer|another customer|position|queue/i
+    for (const words of [ORDER_NOT_FOUND_WORDS, NOT_KEPT_YET_WORDS, changedAtWords('10:42'), CHANGED_BY_US_SINCE_WORDS, URGENT_ORDER_UNCHANGED_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS]) {
+      expect(words.en.length).toBeGreaterThan(0)
+      expect(words.it.length).toBeGreaterThan(0)
+      expect(words.en, words.en).not.toMatch(forbidden)
+    }
+    expect(changedAtWords('10:42')).toEqual({ it: "Cambiato alle 10:42: rileggi l'elenco.", en: 'Changed at 10:42: read the list again.' })
+  })
+})
+
+// ── B-PR-22b ──
+describe("B-PR-22b the factory's set-back reason and the board's chip", () => {
+  it('a reason is one line of 1 to 500 characters (the customer reads it while locked)', () => {
+    expect(lockReasonProblems('Made-up: the deposit is not paid yet.')).toEqual([])
+    expect(lockReasonProblems('')).toEqual([{ path: 'body/reason', message: 'Give the reason the customer reads.' }])
+    expect(lockReasonProblems(undefined)).toHaveLength(1)
+    expect(lockReasonProblems('one\ntwo')).toEqual([{ path: 'body/reason', message: 'The reason is one line.' }])
+    expect(lockReasonProblems('x'.repeat(URGENCY_LOCK_REASON_MAX))).toEqual([])
+    expect(lockReasonProblems('x'.repeat(URGENCY_LOCK_REASON_MAX + 1))).toHaveLength(1)
+    expect(URGENCY_OFFICE_BATCH_MAX).toBe(100)
+  })
+
+  it('the chip names the place in the customer\'s own list only, in both languages; the office words name no person', () => {
+    expect(customerUrgencyChipWords(2)).toEqual({ it: 'Urgenza cliente: Urgente 2', en: 'Customer urgency: Urgent 2' })
+    expect(customerUrgencyChipWords(null)).toEqual({ it: 'Urgenza cliente: Urgente', en: 'Customer urgency: Urgent' })
+    for (const words of [ALREADY_LOCKED_WORDS, NOT_LOCKED_WORDS, NO_OVERRIDE_RIGHT_WORDS]) {
+      expect(words.en.length).toBeGreaterThan(0)
+      expect(words.it.length).toBeGreaterThan(0)
     }
   })
 })

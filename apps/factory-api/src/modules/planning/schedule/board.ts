@@ -28,6 +28,8 @@ import { diffSlotOf, publishedOf, slotsOf, userNamesOf, type SlotRow } from './s
 // B-W2b-312: the earliest start with material (PLN-134) and the problems list's three W2b kinds.
 import { materialStartsOf, materialStartViewOf } from '../schedule-depth/material'
 import { depthProblemsOf } from '../schedule-depth/problems'
+// B-PR-22b: the customer's urgency chip of a board work order.
+import { workOrderCustomerUrgency, type WorkOrderUrgency } from '../../production/brand/urgency-of'
 // B-W2b-329 (PLN-133): each bar's state on the floor (not started, running, paused, done) and its progress.
 import { floorStatusesOf } from '../schedule-log/floor'
 
@@ -41,6 +43,17 @@ import { floorStatusesOf } from '../schedule-log/floor'
 
 const DEFAULT_DAYS = { DAY: 13, WEEK: 55, MONTH: 182 } as const
 const NOT_READY = new Set(['NOT_ENOUGH', 'DELAYED'])
+
+// ── B-PR-22b ──
+/**
+ * The board's chip of a work order whose customer marked its order Urgent ("Customer urgency: Urgent 2": its place in the customer's
+ * OWN list, never a place in our plan; production plan §5, F-PR-18); Regular, none, or the customer's switch off: no chip. Read
+ * only: the board's order and the floor never move by it (the planner Publishes; the backlog's brand-slot pass is the backlog's).
+ */
+function customerUrgencyView(urgency: WorkOrderUrgency | undefined): { readonly urgentRank: number | null; readonly words: { readonly it: string; readonly en: string } } | null {
+  return urgency && urgency.urgency === 'URGENT' && urgency.chip ? { urgentRank: urgency.urgentRank, words: urgency.chip } : null
+}
+// ── end B-PR-22b ──
 
 /** The work order as the board's order view and the bar popover give it. */
 export function workOrderViewOf(world: ScheduleWorld, workOrder: BoardWorkOrder, readiness: WorkOrderReadiness | null): WorkOrderView {
@@ -218,7 +231,13 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
     const names = await userNamesOf(db, shown.flatMap((slot) => [slot.updatedById, slot.pinnedById])) // B-W2b-312: who pinned it too
     // B-W2b-312: per work order its earliest start with material, from the readiness read above.
     const starts = query.readiness === 'false' || visible.length === 0 ? null : await materialStartsOf(db, world, visible.map((workOrder) => workOrder.id), readiness)
-    const workOrders = visible.map((workOrder) => ({ ...workOrderViewOf(world, workOrder, readinessOf.get(workOrder.id) ?? null), materialStart: starts ? materialStartViewOf(world, workOrder, starts.get(workOrder.id)!) : null }))
+    // B-PR-22b: each visible work order's customer urgency that counts (the chip "Customer urgency: Urgent 2"; walled like the rows).
+    const urgency = await workOrderCustomerUrgency(db, visible.map((workOrder) => workOrder.id))
+    const workOrders = visible.map((workOrder) => ({
+      ...workOrderViewOf(world, workOrder, readinessOf.get(workOrder.id) ?? null),
+      materialStart: starts ? materialStartViewOf(world, workOrder, starts.get(workOrder.id)!) : null,
+      customerUrgency: customerUrgencyView(urgency.get(workOrder.id)), // B-PR-22b
+    }))
     const header = await planHeaderOf(db, world, context, wall.every)
     const tray = visible
       .map((workOrder) => ({ workOrder, schedule: world.schedules.get(workOrder.id)! }))
@@ -359,7 +378,11 @@ export async function workOrderSchedule(caller: CommandCaller, workOrderId: stri
       site: siteViewOf(row!.site),
       asOf: toUtcIso(now),
       // B-W2b-312: the earliest start with material (PLN-134).
-      workOrder: { ...workOrderViewOf(world, workOrder, readiness ?? null), materialStart: materialStartViewOf(world, workOrder, (await materialStartsOf(db, world, [workOrder.id], readiness ? [readiness] : [])).get(workOrder.id)!) },
+      workOrder: {
+        ...workOrderViewOf(world, workOrder, readiness ?? null),
+        materialStart: materialStartViewOf(world, workOrder, (await materialStartsOf(db, world, [workOrder.id], readiness ? [readiness] : [])).get(workOrder.id)!),
+        customerUrgency: customerUrgencyView((await workOrderCustomerUrgency(db, [workOrder.id])).get(workOrder.id)), // B-PR-22b
+      },
       sizes: row!.sizes.map((size) => ({ colourway: size.colourway.code, size: size.size, quantity: size.quantity })),
       slots: slots.map((slot) => ({ ...slotViewOf(world, slot, names), floor: floor.get(slot.id) ?? null })), // B-W2b-329: floor
       lanes: [...world.lanes.values()]
