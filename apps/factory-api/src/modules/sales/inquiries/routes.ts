@@ -47,6 +47,9 @@ import { inquiryPicture } from './row-extras'
 import { inquiryAddresses, inquiryAddressesContract, saveInquiryAddresses, saveInquiryAddressesContract } from './from-mail'
 // B-TH-221: New request's customer picker (wall W23).
 import { inquiryCustomers, inquiryCustomersContract } from './customers'
+// B-TH-042: answer a new customer.
+import { customerCheckContract, makeCustomerContract } from './contract'
+import { customerCheck, makeCustomer } from './make-customer'
 
 /**
  * Inquiries and requests for quotation (B-W2b-295): ./inquiries.ts (the list, the record, new, change, assign, ask for more
@@ -80,4 +83,7 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   app.put('/sales/inquiries/addresses', { schema: saveInquiryAddressesContract }, async (request) => saveInquiryAddresses(request, request.body, idempotencyKeyFrom(request)))
   // B-TH-221
   app.get('/sales/inquiries/customers', { schema: inquiryCustomersContract }, async (request) => inquiryCustomers(request, request.query))
+  // B-TH-042
+  app.get('/sales/inquiries/:inquiryId/customer', { schema: customerCheckContract }, async (request) => customerCheck(request, request.params.inquiryId))
+  app.post('/sales/inquiries/:inquiryId/customer', { schema: makeCustomerContract }, async (request) => makeCustomer(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
 })

@@ -8,6 +8,8 @@ import { periodOf, periodProblems, spanOf, type Period } from '@nexus/factory-do
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { SALES_RETURNS_VIEW } from '@nexus/factory-domain/sales/returns/permissions'
+// B-TH-052: the requests the request-to-order figure counts (sales.inquiries.view, as Sales › Incoming lists them).
+import { SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -41,16 +43,21 @@ export interface Place {
   readonly span: { readonly start: Date; readonly end: Date }
   readonly today: BusinessDate
   readonly now: Date
-  readonly sight: { readonly orders: boolean; readonly quotes: boolean; readonly returns: boolean; readonly values: boolean }
+  /** B-TH-052: `requests` — the caller reaches requests (sales.inquiries.view) in the company. */
+  readonly sight: { readonly orders: boolean; readonly quotes: boolean; readonly returns: boolean; readonly values: boolean; readonly requests: boolean }
   /** The records the figures count: the caller's (the record's view and the page's), of the company on screen. */
   readonly orders: Prisma.SalesOrderWhereInput
   readonly quotes: Prisma.QuoteWhereInput
   readonly returns: Prisma.ReturnAuthorisationWhereInput
+  /** B-TH-052: the requests, as Sales › Incoming lists them to the caller (company; customer, a prospect's request with no customer too). */
+  readonly requests: Prisma.InquiryWhereInput
 }
 
 const PARTY_SCOPE = { company: 'companyId', party: 'partyId' } as const
 const RETURN_SCOPE = { company: 'companyId', site: 'siteId', party: 'partyId' } as const
 const COMPANY_SCOPE = { company: 'companyId' } as const
+// B-TH-052: a request's customer may be none yet (a prospect's): the inquiries' own scope (modules/sales/inquiries baseWhere).
+const REQUEST_SCOPE = { company: 'companyId', party: { field: 'partyId', nullable: true } } as const
 
 export const partyRef = (row: { readonly id: string; readonly code: string; readonly legalName: string; readonly tradeName: string | null }): Ref => ({ id: row.id, code: row.code, name: row.tradeName ?? row.legalName })
 
@@ -94,10 +101,11 @@ export async function placeOf(db: Reader, caller: CommandCaller, query: { readon
     span: spanOf(period),
     today,
     now,
-    sight: { orders: reaches(actor, ORDERS_VIEW, companyId), quotes: reaches(actor, QUOTES_VIEW, companyId), returns: reaches(actor, SALES_RETURNS_VIEW, companyId), values: heldGrains(actor).has('price') },
+    sight: { orders: reaches(actor, ORDERS_VIEW, companyId), quotes: reaches(actor, QUOTES_VIEW, companyId), returns: reaches(actor, SALES_RETURNS_VIEW, companyId), values: heldGrains(actor).has('price'), requests: reaches(actor, SALES_INQUIRIES_VIEW, companyId) },
     orders: { AND: [scopeWhere(actor, ORDERS_VIEW, PARTY_SCOPE) as Prisma.SalesOrderWhereInput, pageScope as Prisma.SalesOrderWhereInput, own] },
     quotes: { AND: [scopeWhere(actor, QUOTES_VIEW, PARTY_SCOPE) as Prisma.QuoteWhereInput, pageScope as Prisma.QuoteWhereInput, own] },
     returns: { AND: [scopeWhere(actor, SALES_RETURNS_VIEW, RETURN_SCOPE) as Prisma.ReturnAuthorisationWhereInput, pageScope as Prisma.ReturnAuthorisationWhereInput, own] },
+    requests: { AND: [scopeWhere(actor, SALES_INQUIRIES_VIEW, REQUEST_SCOPE) as Prisma.InquiryWhereInput, pageScope as Prisma.InquiryWhereInput, own] }, // B-TH-052
   }
 }
 

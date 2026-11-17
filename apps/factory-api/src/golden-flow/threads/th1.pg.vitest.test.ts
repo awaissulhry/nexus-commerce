@@ -13,6 +13,8 @@ import { indexNewTenants } from '../../platform/search/indexing'
 import { everyHandler, searchIndexers, settler } from '../daily/testing/day'
 import { addressesOf, asBrand, BRAND_ALPHA, BRAND_BETA, findMarkers, mailText, markersOf, setUpBrand, type BrandInWorld, type Seen } from '../portal/testing/two-brands'
 import { admin, ok, person, QUIET, startWorld, type Person, type World } from '../testing/world'
+// th3b follow-up 6: one clock for the whole flow.
+import { DATABASE_FUTURE_MS, oneClock } from '../testing/world'
 
 /**
  * B-TH-021 — GOLDEN FLOW TH-1b: A CUSTOMER WRITES A REQUEST LIKE AN E-MAIL (threads plan TH-1b; §0 the brand wall; Owner rule
@@ -62,23 +64,20 @@ const B = (method: 'GET' | 'POST', url: string, body?: unknown, status: number |
 const officeNumber = async (inquiryId: string) => (await admin<{ number: string }>(w, 'SELECT number FROM "Inquiry" WHERE id = $1', [inquiryId]))[0]!.number
 const ownRequests = async (partyId: string) => (await admin<{ n: number }>(w, 'SELECT count(*)::int AS n FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2', [w.tenant.id, partyId]))[0]!.n
 
-/**
- * The harness clock (a clock the test moves; each two-factor step moved it 30 s on) no later than real time before the first
- * request: a portal request is dated by the app's (harness) clock, while the office closes it on the server's — a request is
- * closed "not before it came and not in the future". It goes back no further than the newest role given (a role must have
- * started); real time catches up with it for the rest (the harness clock stands still while real time runs).
- */
-async function settleClock(): Promise<void> {
-  const [latest] = await admin<{ at: Date | null }>(w, 'SELECT max("validFrom") AS at FROM "RoleAssignment" WHERE "tenantId" = $1', [w.tenant.id])
-  w.h.clock.set(new Date(Math.min(w.h.clock.now().getTime(), Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000))))
+// ---- th3b follow-up 6: ONE clock (golden-flow/testing/world.ts oneClock). The portal dates a request by the harness clock (each
+// two-factor step moved it 30 s on) and the office now closes it on the same clock, so nothing waits for real time after the set-up.
+// The database's own "not in the future" checks (5 minutes) still read its clock: the flow proves the harness clock stays within them.
+function clockWithinDatabase(): void {
   const ahead = w.h.clock.now().getTime() - Date.now()
-  if (ahead > 0) await new Promise((resolve) => setTimeout(resolve, ahead + 1000))
+  expect(ahead, `the harness clock runs ${Math.round(ahead / 1000)} s ahead of the database's`).toBeLessThan(DATABASE_FUTURE_MS)
 }
+// ---- end th3b follow-up 6
 
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
   w = await startWorld()
   w.h.clock.set(new Date())
+  oneClock(w) // th3b follow-up 6
   freshGuard(w.h)
   usePortalOptions({ answerFloorMs: 0 })
   indexers = await searchIndexers()
@@ -105,9 +104,8 @@ describe('B-TH-021 golden flow TH-1b: a request like an e-mail, from the portal 
     alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA(), BUYER)
     beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA(), BUYER)
     await settle()
-    // Each two-factor step moved the harness clock 30 s on, while a request is closed "not in the future" of the database's clock
-    // (5 minutes of difference allowed): the clock goes back as far as every role given so far still holds (no step-up follows).
-    await settleClock()
+    // th3b follow-up 6: one clock — no wait; the harness clock stays within the database's 5 minutes.
+    clockWithinDatabase()
   }, 900_000)
 
   it('T37 customer A sends a request from its portal, text only: the receipt says “Your request N” (its own count), never the office series', async () => {

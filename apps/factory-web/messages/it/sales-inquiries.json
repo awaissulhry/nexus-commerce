@@ -238,6 +238,11 @@
     "NO_LINES": "{number} non indica ancora cosa produrre: aggiungi prima le righe (modello, variante colore, taglie)",
     "LINES_NOT_READY": "{number} ha righe non pronte per un ordine: ognuna vuole un modello, la sua variante colore e i pezzi per taglia (crea prima la bozza del modello)",
     "STYLE_DRAFTS_FULL": "{number} ha già il numero massimo di bozze di modello per una richiesta",
+    "NOT_PROSPECT": "{number} è già del suo cliente",
+    "PROSPECT_ERASED": "I dati del potenziale cliente di {number} sono stati cancellati: abbinala invece a un cliente",
+    "CONFIRM_MATCH": "Verifica che {number} sia di questo cliente, poi conferma l’abbinamento",
+    "MATCH_FOUND": "Il potenziale cliente di {number} potrebbe essere già un cliente: usalo, oppure conferma un nuovo cliente",
+    "CODE_TAKEN": "Questo codice è già di un altro soggetto: scegline un altro",
     "other": "La fabbrica ha rifiutato questa modifica"
   },
   "problem": {
