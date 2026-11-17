@@ -36,7 +36,10 @@
     "pay": "Paga l’acconto",
     "history": "Storia della data promessa",
     "confirmation": "PDF della conferma d’ordine",
-    "newOrder": "Nuovo ordine"
+    "newOrder": "Nuovo ordine",
+    "downloadAll": "Scarica tutto (Excel)",
+    "downloading": "Preparazione del file…",
+    "downloadAllHint": "Tutti gli ordini di questa vista con le vostre colonne, in un unico file Excel."
   },
   "keys": {
     "search": "Cerca nei tuoi ordini",
@@ -586,5 +589,11 @@
       "OPEN_REQUESTS": "Inviate, non ancora un ordine",
       "OPEN_ORDERS": "Non ancora consegnati"
     }
+  },
+  "sheet": {
+    "yes": "Sì",
+    "no": "No",
+    "columnHint": "Una colonna che il fornitore tiene per voi",
+    "downloadFailed": "Non è stato possibile preparare il file. Riprova."
   }
 }
