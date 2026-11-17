@@ -10,6 +10,7 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { namesFor, officeOf as rulesOfficeOf } from '../register-of-rules/common'
 import { readEntry, type EntryRecord } from '../register/store'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * What recall, withdrawal and authority's parts share (B-W2b-260; modules/compliance/recall): the office context, the module
@@ -22,7 +23,14 @@ import { readEntry, type EntryRecord } from '../register/store'
 export type Reader = FactoryClient | CommandTx
 export { namesFor }
 
-export const officeOf = (caller: CommandCaller): OfficeContext => rulesOfficeOf(caller)
+// B-PR-10 (the brand wall, production plan §2): recalls, withdrawals and authority notices hang on the manufacturer's one register
+// and reach every customer's distributors and shipments: a person limited to some customers gets 403 in words that name none
+// of them (as the register itself, ../register/register.ts).
+export const officeOf = (caller: CommandCaller): OfficeContext => {
+  const context = rulesOfficeOf(caller)
+  assertEveryParty(actorOf(context), REGISTER_VIEW)
+  return context
+}
 
 let clock: Clock = serverClock
 /** Test only: the module clock (today, the commands' time). */

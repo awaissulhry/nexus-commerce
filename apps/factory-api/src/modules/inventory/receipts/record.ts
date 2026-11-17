@@ -198,10 +198,11 @@ export interface RecordOptions {
 export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, idempotencyKey?: string): Promise<RecordResult> {
   const context = officeContextOf(caller)
   const order = isUuid(body.purchaseOrderId)
-    ? await caller.withClient((client) => client.purchaseOrder.findUnique({ where: { id: body.purchaseOrderId }, select: { companyId: true, siteId: true } }))
+    ? await caller.withClient((client) => client.purchaseOrder.findUnique({ where: { id: body.purchaseOrderId }, select: { companyId: true, siteId: true, partyId: true } }))
     : null
   const actor = actorOf(context)
-  const scope = order ? { companyId: order.companyId, siteId: order.siteId } : null
+  // B-PR-10: the order's party too (as its list): an order of a party the person does not reach is not found, never "a draft".
+  const scope = order ? { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId } : null
   if (!scope || !(can(actor, INVENTORY_RECEIVE, scope) || can(actor, INVENTORY_STOCK_VIEW, scope))) {
     throw new NotFoundError('Purchase order not found.')
   }

@@ -4,7 +4,7 @@ import { STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves
 import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { readLedger, type LedgerQuery } from '../../../modules/inventory/stock/ledger-read'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-10 */ everyCustomerRefusal } from '../source'
 
 /**
  * Warehouse › Movements (SCR-064, `/warehouse/moves`): the export of the ledger as the screen shows it. The address is
@@ -38,6 +38,8 @@ const SEPARATOR = '~'
 export const moves = defineExportSource<Query, Row>({
   listKey: 'warehouse.moves',
   permission: INVENTORY_STOCK_VIEW,
+  // B-PR-10: the warehouse is one stock for every customer (its rows name every customer's work orders): every customer only.
+  refusal: everyCustomerRefusal(INVENTORY_STOCK_VIEW),
   query(address) {
     const key = { itemId: idTerm(address, 'item'), lotId: idTerm(address, 'lot'), hideId: idTerm(address, 'hide'), locationId: idTerm(address, 'location') }
     const keyed = !!(key.itemId || key.lotId || key.hideId || key.locationId)

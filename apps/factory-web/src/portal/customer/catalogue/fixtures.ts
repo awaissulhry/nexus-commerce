@@ -1,7 +1,7 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { Locale } from '../../../lib/i18n/locales'
 import { at, catalogueRead, orderingWords, PREFIX, shellOf, STYLES, styleDetail } from '../neworder/design-data'
-import { newOrderHref } from '../neworder/model'
+import { catalogueStartHref } from '../neworder/request-model'
 import { OrderingCase, type OrderingCaseBuilder } from '../neworder/view/OrderingCase'
 import { catalogueBandOf } from './band'
 import { NO_FILTERS } from './model'
@@ -36,7 +36,7 @@ function page(build: (locale: Locale) => Over = () => ({}), startHeld: string | 
       detail: null,
       ...over,
     }
-    const band = catalogueBandOf({ words, asOf: read?.asOf ?? null, start: newOrderHref(PREFIX), startHeld: view.addHeld ? words.t(view.addHeld) : null })
+    const band = catalogueBandOf({ words, asOf: read?.asOf ?? null, start: catalogueStartHref(PREFIX) /* B-TH-304 */, startHeld: view.addHeld ? words.t(view.addHeld) : null })
     return { shell: shellOf(locale, band, '/catalogue'), body: { kind: 'catalogue', model: view } }
   }
 }

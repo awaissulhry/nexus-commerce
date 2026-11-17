@@ -118,7 +118,16 @@
     "clearAll": "Togli tutti",
     "status": "Stato: {status}",
     "company": "Azienda: {name}",
-    "companyUnknown": "Azienda: una azienda"
+    "companyUnknown": "Azienda: una azienda",
+    "received": "Arrivate: {from} – {to}",
+    "receivedOn": "Arrivate: {day}",
+    "receivedFrom": "Arrivate dal {from}",
+    "receivedTo": "Arrivate fino al {to}",
+    "outcome": {
+      "ORDERED": "Diventate: un ordine (subito o dal preventivo)",
+      "DECLINED": "Diventate: rifiutate (non “Non è un ordine”)",
+      "NOT_AN_ORDER": "Diventate: non è un ordine"
+    }
   },
   "notice": {
     "label": "Avvisi",
@@ -244,6 +253,7 @@
     "CONFIRM_MATCH": "Verifica che {number} sia di questo cliente, poi conferma l’abbinamento",
     "MATCH_FOUND": "Il potenziale cliente di {number} potrebbe essere già un cliente: usalo, oppure conferma un nuovo cliente",
     "CODE_TAKEN": "Questo codice è già di un altro soggetto: scegline un altro",
+    "SENDS_NOTHING": "“Non è un ordine” chiude {number} senza scrivere al cliente (legge “Chiusa”): scegli un altro motivo per inviare un messaggio",
     "other": "La fabbrica ha rifiutato questa modifica"
   },
   "problem": {

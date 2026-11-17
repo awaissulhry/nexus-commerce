@@ -1,4 +1,4 @@
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { isLocked, lockedRefusal } from '@nexus/factory-domain/product/versions/lock'
 import type { StyleVersionsView } from '@nexus/factory-domain/product/versions/contracts'
@@ -6,6 +6,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf, readStyleFor } from '../bom/store'
 import { REVISION_COLUMNS, type Db } from './read'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * A style's revisions (B-W2b-220; PRD-166 "every style has versions with who, when and why", PRD-167 "a released version
@@ -38,22 +39,25 @@ export async function listVersions(caller: CommandCaller, styleId: string): Prom
     const rows = await client.styleRevision.findMany({ where: { styleId }, select: REVISION_COLUMNS, orderBy: { revision: 'desc' } })
     const people = await names(client, rows.flatMap((row) => [row.createdById, row.releasedById]))
     // Counts per revision, read only for the kinds the role reaches (row-level security narrows them to the caller's grants).
+    // B-PR-10 (the brand wall): of a style several customers order, only what the caller reaches counts (its customers'
+    // work orders, quote lines and order lines), never another customer's.
+    const ofCustomers = (permission: Permission) => scopeWhere(actor, permission, { party: 'partyId' })
     let workOrders: Map<string, number> | null = null
     if (reaches('workorders.view')) {
-      const groups = await client.workOrder.groupBy({ by: ['styleRevisionId'], where: { styleId }, _count: { _all: true } })
+      const groups = await client.workOrder.groupBy({ by: ['styleRevisionId'], where: { AND: [{ styleId }, workOrderWhere(actor, 'workorders.view' as Permission)] }, _count: { _all: true } })
       workOrders = countBy(groups)
     }
     let quoteLines: Map<string, number> | null = null
     if (reaches('quotes.view')) {
-      const groups = await client.quoteLine.groupBy({ by: ['styleRevisionId'], where: { styleId }, _count: { _all: true } })
+      const groups = await client.quoteLine.groupBy({ by: ['styleRevisionId'], where: { AND: [{ styleId }, ofCustomers('quotes.view' as Permission)] }, _count: { _all: true } })
       quoteLines = countBy(groups)
     }
     let orderLines: Map<string, number> | null = null
     if (reaches('orders.view')) {
       // An order line is on its own revision, else on its quote line's (as the drift reads it).
-      const groups = await client.salesOrderLine.groupBy({ by: ['styleRevisionId'], where: { styleId, styleRevisionId: { not: null } }, _count: { _all: true } })
+      const groups = await client.salesOrderLine.groupBy({ by: ['styleRevisionId'], where: { AND: [{ styleId, styleRevisionId: { not: null } }, ofCustomers('orders.view' as Permission)] }, _count: { _all: true } })
       orderLines = countBy(groups)
-      const quoted = await client.salesOrderLine.groupBy({ by: ['quoteLineId'], where: { styleId, styleRevisionId: null, quoteLineId: { not: null } }, _count: { _all: true } })
+      const quoted = await client.salesOrderLine.groupBy({ by: ['quoteLineId'], where: { AND: [{ styleId, styleRevisionId: null, quoteLineId: { not: null } }, ofCustomers('orders.view' as Permission)] }, _count: { _all: true } })
       const quoteIds = quoted.map((group) => group.quoteLineId).filter((id): id is string => id !== null)
       const revisionOf = new Map(quoteIds.length ? (await client.quoteLine.findMany({ where: { id: { in: quoteIds } }, select: { id: true, styleRevisionId: true } })).map((row) => [row.id, row.styleRevisionId]) : [])
       for (const group of quoted) {

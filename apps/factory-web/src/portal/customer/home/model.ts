@@ -4,6 +4,9 @@ import type { MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import type { Locale } from '../../../lib/i18n/locales'
 import { isPreviewable, mainFileOf } from '../documents/preview/model'
 import type { ApprovalRead, Conversation, CustomerDocument, DocumentsRead, HomeRead, OpenItemsRead, OrderRow, OrdersRead } from './api'
+// B-TH-238: the Messages card reads the customer's requests (its own numbers and true states, never an office series).
+import type { RequestRow } from '../requests/api'
+import { requestHref, requestOrder, yourNumberText } from '../requests/model'
 
 // The document pop-up's rules are the documents' own (lifted by B-W2b-195); Home reads them from there.
 export { isPdf, isPicture, neighbourOf } from '../documents/preview/model'
@@ -187,6 +190,127 @@ export function replyHref(prefix: string, conversation: Pick<Conversation, 'reco
   if (own) return `${prefix}${own}${own.includes('?') ? '&' : '?'}tab=messages#messages`
   return `${prefix}/open/${encodeURIComponent(type)}/${encodeURIComponent(id)}#messages`
 }
+
+// ── B-TH-238 (P-HOME.messages): the Messages card — what needs the customer first, then new messages, the account's conversation ──
+/** One row of the Messages card, as the view draws it (words resolved by the view from `kind` and the facts). */
+export interface MessageRow {
+  readonly key: string
+  readonly kind: 'needsYou' | 'conversation' | 'account'
+  /** Where it opens: the request's page, the record's page with its thread in view, the account's conversation. */
+  readonly href: string
+  /** Their reference and the customer's own one (never an office series: the API's partner views say "#7"). */
+  readonly theirs: string | null
+  readonly ours: string | null
+  /** A request's own number in words ("Your request 7") and subject; a record's subtitle. */
+  readonly yours: string | null
+  readonly subject: string | null
+  /** A request's true state in the page's language (needsYou rows). */
+  readonly state: string | null
+  /** The last message: from the customer's side or ours, and when; null when none yet. */
+  readonly last: { readonly from: 'you' | 'us'; readonly at: string; readonly excerpt: string | null } | null
+  /** The messages new to this person (its own read marks; the party's shared messages only). */
+  readonly newCount: number
+}
+
+export interface MessagesCard {
+  /** Requests waiting for the customer's answer (NEED_INFO), as Orders & requests orders them (their last move, newest first). */
+  readonly needsYou: readonly MessageRow[]
+  /** How many requests need the customer in all (the API's count: the same number as Orders & requests' first tile). */
+  readonly needsYouCount: number
+  /** Conversations with new messages first, then by their last message. */
+  readonly conversations: readonly MessageRow[]
+  /** The account's own conversation (questions about no record): always offered. */
+  readonly account: MessageRow
+  /** More conversations than the card shows. */
+  readonly more: number
+}
+
+export const MESSAGES_NEEDS_YOU = 3
+export const MESSAGES_CONVERSATIONS = 5
+
+/**
+ * The Messages card from the session's OWN reads only (GET /portal/inquiries?state=OPEN for what needs the customer, GET
+ * /portal/threads for every conversation it may read with its new messages, POST /threads/unread for the waiting requests): a
+ * request that needs the customer comes first (and is not repeated among the conversations), then the conversations with new
+ * messages, then by last message; the account's conversation last, always (its page opens it even before a first message).
+ * Nothing here is shared between sign-ins: another customer's rows never reach these reads (W05, W06, W08).
+ */
+export function messagesCardOf(input: {
+  readonly prefix: string
+  readonly partyId: string
+  readonly locale: Locale
+  readonly waiting: readonly RequestRow[]
+  readonly needsYouCount: number | null
+  readonly conversations: readonly Conversation[]
+  /** New messages per waiting request id (POST /threads/unread). */
+  readonly unread: Readonly<Record<string, number>>
+  readonly recordPage: (type: string, id: string) => string | null
+}): MessagesCard {
+  const asked = requestOrder(input.waiting).filter((row) => row.state.needsYou)
+  const shownAsked = asked.slice(0, MESSAGES_NEEDS_YOU)
+  const askedIds = new Set(asked.map((row) => row.id))
+  const conversationOf = new Map(input.conversations.map((conversation) => [`${conversation.record.type}:${conversation.record.id}`, conversation]))
+  const lastOf = (conversation: Conversation | undefined): MessageRow['last'] => (conversation ? { from: conversation.last.side === 'PARTNER' ? 'you' : 'us', at: conversation.last.at, excerpt: conversation.last.excerpt || null } : null)
+  const needsYou = shownAsked.map((row): MessageRow => {
+    const conversation = conversationOf.get(`Inquiry:${row.id}`)
+    return {
+      key: `Inquiry:${row.id}`,
+      kind: 'needsYou',
+      href: requestHref(input.prefix, row.id),
+      theirs: row.customerRef,
+      ours: null,
+      yours: yourNumberText(row.yourNumber, input.locale),
+      subject: row.subject,
+      state: row.state.words[input.locale],
+      last: lastOf(conversation),
+      newCount: Math.max(input.unread[row.id] ?? 0, conversation?.newCount ?? 0),
+    }
+  })
+  const others = input.conversations
+    .filter((conversation) => conversation.record.type !== 'Party' && !(conversation.record.type === 'Inquiry' && askedIds.has(conversation.record.id)))
+    // New messages first (the order of the API — the newest message first — kept inside each part).
+    .map((conversation, index) => ({ conversation, index }))
+    .sort((a, b) => Number(b.conversation.newCount > 0) - Number(a.conversation.newCount > 0) || a.index - b.index)
+    .map(({ conversation }) => conversation)
+  const conversations = others.slice(0, MESSAGES_CONVERSATIONS).map(
+    (conversation): MessageRow => ({
+      key: `${conversation.record.type}:${conversation.record.id}`,
+      kind: 'conversation',
+      href: replyHref(input.prefix, conversation, input.recordPage),
+      theirs: conversation.record.theirRef,
+      ours: conversation.record.ourRef,
+      yours: null,
+      subject: conversation.record.subtitle,
+      state: null,
+      last: lastOf(conversation),
+      newCount: conversation.newCount,
+    }),
+  )
+  const accountConversation = input.conversations.find((conversation) => conversation.record.type === 'Party' && conversation.record.id === input.partyId)
+  const account: MessageRow = {
+    key: `Party:${input.partyId}`,
+    kind: 'account',
+    href: `${input.prefix}/open/Party/${encodeURIComponent(input.partyId)}#messages`,
+    theirs: null,
+    ours: null,
+    yours: null,
+    subject: null,
+    state: null,
+    last: lastOf(accountConversation),
+    newCount: accountConversation?.newCount ?? 0,
+  }
+  return { needsYou, needsYouCount: input.needsYouCount ?? asked.length, conversations, account, more: Math.max(0, others.length - conversations.length) }
+}
+
+/** The card's numbers (what needs the customer, its new messages): what a test holds still while another customer moves. */
+export function messagesCountsOf(card: MessagesCard): { readonly needsYou: number; readonly newMessages: number; readonly conversations: number } {
+  const rows = [...card.needsYou, ...card.conversations, card.account]
+  return { needsYou: card.needsYouCount, newMessages: rows.reduce((sum, row) => sum + row.newCount, 0), conversations: card.conversations.length + card.more }
+}
+
+/** Nothing to show but the account's offer (the card says "No messages yet" above it). */
+export const messagesEmpty = (card: MessagesCard): boolean => card.needsYou.length === 0 && card.conversations.length === 0 && card.account.last === null
+// ── end B-TH-238
 
 // ── What waits for you: the rows the Approve pop-up answers ────────────────────────────────────────────────────────────
 const APPROVAL_TASK_KINDS: ReadonlySet<string> = new Set(['APPROVE', 'RECONFIRM_ORDER'])

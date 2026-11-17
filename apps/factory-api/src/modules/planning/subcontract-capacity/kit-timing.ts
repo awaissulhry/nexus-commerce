@@ -17,6 +17,9 @@ import { scheduleWorld } from '../schedule/service'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { capacityRowOf, readCapacityRows, type Job, type WorkOrderOperations } from './store'
 import { operationsNamed, plannedWorkOrder } from './workshops'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
+import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions' // B-PR-10
 
 /**
  * Kit timing (B-W2b-321; PLN-164; design planning.allocation › pop:kit-timing "Send to Workshop Beta": "Kit ship-out date =
@@ -147,7 +150,9 @@ export async function kitTiming(caller: CommandCaller, workOrderId: string, quer
 /** PUT /planning/subcontract-orders/:subcontractOrderId/kit-due. */
 export async function setKitDue(caller: CommandCaller, orderId: string, body: { readonly version: number; readonly kitDueAt: string | null }, idempotencyKey?: string) {
   const context = officeContextOf(caller)
-  const order = await caller.withClient((db) => (isUuid(orderId) ? db.subcontractOrder.findUnique({ where: { id: orderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, orderDate: true, expectedBackDate: true, kitDueAt: true, version: true, site: { select: { timezone: true } } } }) : Promise.resolve(null)))
+  const found = await caller.withClient((db) => (isUuid(orderId) ? db.subcontractOrder.findUnique({ where: { id: orderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, orderDate: true, expectedBackDate: true, kitDueAt: true, version: true, site: { select: { timezone: true } }, workOrder: { select: { companyId: true, siteId: true, partyId: true } } } }) : Promise.resolve(null)))
+  // B-PR-10: an order for another customer's work order answers as an unknown one.
+  const order = found && reachesWorkOrder(actorOf(context), PLANNING_VIEW, found.workOrder) ? found : null
   assertMayAt(context, PLANNING_SUBCONTRACT_OUTSOURCE, order ? { companyId: order.companyId, siteId: order.siteId } : null, 'Subcontract order')
   if (order!.status !== 'DRAFT') throw new ConflictError(`${order!.number} is ${order!.status.toLowerCase()}: its kit time is one of its terms, set while it is a draft (reopen it to change it).`)
   const kitDueAt = body.kitDueAt === null ? null : new Date(body.kitDueAt)

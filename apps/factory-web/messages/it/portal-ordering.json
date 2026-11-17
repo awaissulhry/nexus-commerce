@@ -73,8 +73,10 @@
     "empty": "Ancora nessuna riga.",
     "emptyBody": "Aggiungi un modello, riordina un ordine passato o carica un foglio.",
     "lineTitle": "Riga {seq}: {title}",
-    "fromOrder": "dall'ordine {order}",
-    "fromOrderRef": "dall'ordine {order} (tuo numero {ref})",
+    "fromOwn": "dal vostro ordine {seq}",
+    "fromOwnRef": "dal vostro ordine {seq} (tuo numero {ref})",
+    "fromDay": "dal vostro ordine del {day}",
+    "fromDayRef": "dal vostro ordine del {day} (tuo numero {ref})",
     "colour": "Colore",
     "colourGone": "{colour} (fuori produzione)",
     "menu": "Altro per la riga {seq}",
@@ -117,7 +119,8 @@
     "back": "Tutti gli ordini passati",
     "orderFailed": "Non è stato possibile leggere questo ordine.",
     "todayPrices": "Le righe che si possono copiare sono già scelte. Una riga con un colore fuori produzione si sceglie quando indichi un altro colore.",
-    "linesLabel": "Righe di {order}",
+    "linesOwn": "Righe del vostro ordine {seq}",
+    "linesDay": "Righe del vostro ordine del {day}",
     "linesCount_one": "{count} riga",
     "linesCount_other": "{count} righe",
     "noLines": "Questo ordine non ha righe da copiare.",
@@ -240,18 +243,16 @@
   },
   "sent": {
     "title": "Richiesta d'ordine inviata",
-    "body": "La nostra richiesta {number}.",
-    "bodyRef": "Il tuo numero {ref}, la nostra richiesta {number}.",
+    "bodyNone": "La trovi in Ordini e richieste come ordine da catalogo.",
+    "bodyYours": "Il tuo numero {ref}: la trovi in Ordini e richieste come ordine da catalogo.",
     "next": "Fino ad allora la segui negli Ordini come «Da confermare da noi».",
-    "reference": "La nostra richiesta",
     "open": "Apri l'ordine",
     "newOrder": "Nuovo ordine"
   },
   "closed": {
-    "title": "Richiesta {number}",
     "titleNone": "Questa richiesta",
     "SENT": "Questa richiesta è stata inviata: la nostra risposta arriva negli Ordini. Per cambiarla ritirala negli Ordini o chiedici.",
-    "ACCEPTED": "Abbiamo confermato questa richiesta come ordine {order}.",
+    "ACCEPTED": "Abbiamo confermato questa richiesta come ordine: aprilo per seguirlo.",
     "REFUSED": "Non abbiamo accettato questa richiesta: il motivo è negli Ordini.",
     "WITHDRAWN": "Questa richiesta è stata ritirata.",
     "DRAFT": "Questa bozza è aperta."
@@ -457,8 +458,7 @@
     "home": "Vai alla Home"
   },
   "ref": {
-    "yours": "Tuo ordine",
-    "ours": "Nostro ordine"
+    "yours": "Tuo ordine"
   },
   "request": {
     "title": "Nuovo ordine",
@@ -503,7 +503,9 @@
     "returnsLink": "Vai a Resi e reclami",
     "returnsSafety": "Un problema di sicurezza con un capo? Segnalatelo lì.",
     "unsaved": "La richiesta non è ancora inviata e questo dispositivo non può tenerla.",
-    "keySend": "Invia la richiesta (dal riquadro del messaggio)"
+    "keySend": "Invia la richiesta (dal riquadro del messaggio)",
+    "catalogueTitle": "Ordina dal catalogo",
+    "catalogueBody": "Scegli i tuoi modelli con tutte le taglie in una griglia, riordina un ordine passato o carica un foglio. Arriva alle Vendite come una richiesta: la segui in Ordini e richieste."
   },
   "receipt": {
     "title": "Ricevuta — la vostra richiesta {seq}.",

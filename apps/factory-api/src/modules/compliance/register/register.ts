@@ -28,6 +28,7 @@ import { ensureThread, mentionProblems, writeMessage } from '../../../platform/t
 import type { EntryDetail, EntryView } from './contract'
 import { insertEntry, lockEntry, nextReference, readEntries, readEntry, updateEntry, type EntryChanges, type EntryRecord } from './store'
 import { traceOf, type TraceConcern } from './trace'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * The PPE register, office side (B-W1-43; QHS-118; A2 compliance.register, SCR-113): list and read the entries (each
@@ -73,6 +74,10 @@ export class RegisterRefusedError extends InvalidStateError {
 function officeOf(caller: CommandCaller): RequestContext & { audience: 'office' } {
   const context = caller.factoryContext
   if (!context || context.audience !== 'office') throw new ForbiddenError()
+  // B-PR-10 (the brand wall, production plan §2 "a view that mixes brands needs access to every brand"): the register is the
+  // manufacturer's one register of complaints and recalls; its traces follow material lots into every customer's work orders
+  // and shipments. A person limited to some customers gets 403 in words that name none of them, for every route.
+  assertEveryParty(actorOf(context), REGISTER_VIEW)
   return context
 }
 

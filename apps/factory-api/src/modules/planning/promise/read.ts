@@ -20,6 +20,7 @@ import { askedOptions, quoteLineOptionsOf } from './steps'
 // B-W2b-F44: the first day a garment still to make may be promised (the site's calendar, THE calendars service).
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { addWorkingDaysFor } from '../../../platform/calendars/service'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Reading promise dates (B-W2b-301; design planning.promise › atp, the Promise calculator, Sales › Quote "Suggest date"):
@@ -66,6 +67,8 @@ export async function whereOf(db: Reader, site: SiteRow, now: Date, country: str
 export async function availableToPromise(caller: CommandCaller, query: { readonly siteId: string; readonly styleId: string; readonly weeks?: number | undefined }) {
   return caller.withClient(async (db) => {
     const site = await promiseSite(caller, query.siteId, PLANNING_PROMISE_VIEW, db)
+    // B-PR-10: what is available to promise is every customer's orders and capacity together: every customer only.
+    assertEveryParty(actorOf(officeContextOf(caller)), PLANNING_PROMISE_VIEW, { companyId: site.companyId, siteId: site.id })
     const facts = await readStyleFacts(db, query.styleId)
     if (!facts) throw new NotFoundError('Style not found.')
     const now = serverClock.now()
@@ -99,6 +102,7 @@ export async function availableToPromise(caller: CommandCaller, query: { readonl
 export async function stockStyles(caller: CommandCaller, query: { readonly siteId: string; readonly q?: string | undefined; readonly limit?: number | undefined }) {
   return caller.withClient(async (db) => {
     const site = await promiseSite(caller, query.siteId, PLANNING_PROMISE_VIEW, db)
+    assertEveryParty(actorOf(officeContextOf(caller)), PLANNING_PROMISE_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-10: as the ATP
     return { siteId: site.id, styles: await readStockStyles(db, site, query.q, query.limit ?? 50) }
   })
 }
@@ -128,6 +132,11 @@ export async function calculatePromise(caller: CommandCaller, body: CalculateBod
   if (twice.length > 0) throw new ValidationError('Each size once.', twice)
   return caller.withClient(async (db) => {
     const site = await promiseSite(caller, body.siteId, PLANNING_PROMISE_VIEW, db)
+    // B-PR-10: another customer's private-label style is not known here (the engine's words for an unknown style).
+    const brand = isUuid(body.styleId) ? await db.style.findUnique({ where: { id: body.styleId }, select: { brandPartyId: true } }) : null
+    if (brand && !can(actorOf(officeContextOf(caller)), PLANNING_PROMISE_VIEW, { companyId: site.companyId, siteId: site.id, partyId: brand.brandPartyId })) {
+      throw new ValidationError('The style is not known.', [{ path: 'body/styleId', message: 'Name a style.' }])
+    }
     const { where, view } = await whereOf(db, site, serverClock.now(), body.country ?? null)
     const optionValueIds = await askedOptions(db, body.styleId, body.optionValueIds) // B-W2b-365
     const [answer] = await answerPromises(db, where, [{ key: 'calculator', styleId: body.styleId, colourwayId: body.colourwayId, revisionId: body.revisionId ?? null, sizes: body.sizes, wantedDate: body.wantedDate ?? null, optionValueIds }])

@@ -5,6 +5,8 @@ import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { companyReach, dayOf, seen, type Reader } from './common'
+import { styleWorkWall } from '../wall' // B-PR-10
+import { TECHFILES_VIEW } from '@nexus/factory-domain/compliance/techfiles/permissions' // B-PR-10
 
 /**
  * The technical files' reads (B-W2b-251): the rows as selected, the style and certificate facts a file shows, and the
@@ -54,7 +56,7 @@ export const ITEM_SELECT = {
 } as const satisfies Prisma.TechnicalFileItemSelect
 export type ItemRow = Prisma.TechnicalFileItemGetPayload<{ select: typeof ITEM_SELECT }>
 
-export const STYLE_SELECT = { id: true, code: true, name: true, companyId: true, ppeCategory: true, ppeStandard: true, ppeClass: true, status: true, measurementTemplateId: true } as const satisfies Prisma.StyleSelect
+export const STYLE_SELECT = { id: true, code: true, name: true, companyId: true, brandPartyId: true, ppeCategory: true, ppeStandard: true, ppeClass: true, status: true, measurementTemplateId: true } as const satisfies Prisma.StyleSelect
 export type StyleRow = Prisma.StyleGetPayload<{ select: typeof STYLE_SELECT }>
 
 export const CERTIFICATE_SELECT = { id: true, number: true, standard: true, status: true, validFrom: true, validTo: true, notifiedBodyName: true, notifiedBodyNumber: true, companyId: true } as const satisfies Prisma.CertificateSelect
@@ -65,7 +67,8 @@ export const NOT_FOUND = 'Technical file not found.'
 /** The file, when the caller may see it (its company reached by the view permission), else the one 404. */
 export async function readFile(db: Reader, actor: Actor, fileId: string): Promise<FileRow> {
   if (!isUuid(fileId)) throw new NotFoundError(NOT_FOUND)
-  return seen(await db.technicalFile.findUnique({ where: { id: fileId }, select: FILE_SELECT }), actor, NOT_FOUND)
+  // B-PR-10: a technical file of another customer's private-label style is not found (as an unknown id).
+  return seen(await db.technicalFile.findFirst({ where: { id: fileId, ...(styleWorkWall(actor, TECHFILES_VIEW, { workOrder: false }) as Prisma.TechnicalFileWhereInput) }, select: FILE_SELECT }), actor, NOT_FOUND)
 }
 
 export async function readStyle(db: Reader, styleId: string): Promise<StyleRow> {
@@ -98,7 +101,7 @@ export async function coveringCertificates(db: Reader, styleIds: readonly string
 export const certificateRef = (row: CertificateRow) => ({ id: row.id, number: row.number, standard: row.standard, status: row.status, validTo: dayOf(row.validTo)! })
 
 /** The files of the technical files a person reaches (the list's filter). */
-export const fileReach = (actor: Actor): Prisma.TechnicalFileWhereInput => companyReach(actor) as Prisma.TechnicalFileWhereInput
+export const fileReach = (actor: Actor): Prisma.TechnicalFileWhereInput => ({ AND: [companyReach(actor) as Prisma.TechnicalFileWhereInput, styleWorkWall(actor, TECHFILES_VIEW, { workOrder: false }) as Prisma.TechnicalFileWhereInput] }) // B-PR-10: by brand too
 
 // ---- the evidence an item names -------------------------------------------------------------------------------------------
 

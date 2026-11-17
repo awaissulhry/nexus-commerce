@@ -12,7 +12,7 @@ import { ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { workerGatesFor } from '../../people/privacy/worker-gate'
-import { mayAt, officeContextOf, seesCost, siteFor, stockContextOf } from './access'
+import { mayAt, officeContextOf, seesCost, siteFor, stockContextOf, assertWholeWarehouse } from './access'
 import type { MoveView } from './contract'
 import { completeKeys, LEDGER_SELECT, lockStock, postMoves, readBalances, type MoveDraft, type PostedMove } from './post-moves'
 import { remnantsOnScrapReversed } from '../remnants/lifecycle'
@@ -120,6 +120,7 @@ export interface TransferInput extends StockInput {
 /** inventory.transfer: stock from one location of a site to another (office; a floor device at its own site). */
 export async function transfer(caller: CommandCaller, body: TransferInput, idempotencyKey?: string): Promise<{ move: MoveView }> {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, body.siteId, INVENTORY_TRANSFER, 'body/siteId')
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt)! : undefined
   const draft: MoveDraft = {
@@ -169,6 +170,7 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
  */
 export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string; readonly periodLockOverride?: PeriodLockOverride | undefined; readonly postingDate?: string | undefined }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const original = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: { ...LEDGER_SELECT, reversals: { select: { id: true } } } })) : null
   if (!original || !mayAt(context, INVENTORY_REVERSE, original)) throw new NotFoundError('Stock move not found.')
   // B-W2b-100: a REMNANT (a part of a hide back from a work order, with its tag) is RETURN's twin.
@@ -234,6 +236,7 @@ export interface CountInput {
  */
 export async function postCount(caller: CommandCaller, body: CountInput, idempotencyKey?: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, body.siteId, INVENTORY_ADJUST, 'body/siteId')
   const location = isUuid(body.locationId) ? await caller.withClient((client) => client.location.findUnique({ where: { id: body.locationId }, select: { siteId: true } })) : null
   if (location?.siteId !== site.id) throw new ValidationError('The location is not valid.', [{ path: 'body/locationId', message: 'Not a location of this site.' }])
@@ -322,6 +325,7 @@ async function authorWhere(db: FactoryClient, createdById: string): Promise<Pris
  */
 export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const author = query.createdById ? await caller.withClient((client) => authorWhere(client, query.createdById!)) : {}
   const where: Prisma.StockMoveWhereInput = {
     AND: [

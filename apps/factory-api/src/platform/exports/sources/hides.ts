@@ -3,7 +3,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { listHides, type HideQuery } from '../../../modules/inventory/stock/hides'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-10 */ everyCustomerRefusal } from '../source'
 
 /**
  * Warehouse › Hides (SCR-200, `/warehouse/hides`): the export of the list as the screen shows it. The address is the
@@ -54,6 +54,8 @@ const text = (address: URLSearchParams, name: string, max: number): string | und
 export const hides = defineExportSource<Query, Row>({
   listKey: 'warehouse.hides',
   permission: INVENTORY_STOCK_VIEW,
+  // B-PR-10: the warehouse is one stock for every customer (its rows name every customer's work orders): every customer only.
+  refusal: everyCustomerRefusal(INVENTORY_STOCK_VIEW),
   query(address) {
     return {
       ...VIEW_FILTER[viewOf(address)],

@@ -2,6 +2,9 @@ import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { DECLINE_REASONS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, quotableLines } from '@nexus/factory-domain/sales/inquiries/rules'
+// B-TH-235: what a request became (Sales › Reports' request figure opens this list with it).
+import { REQUEST_OUTCOMES } from '@nexus/factory-domain/sales/inquiries/rules'
+import { isFiltered, queryOf } from './model'
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
@@ -346,3 +349,31 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 })
+
+// ---- B-TH-235: Sales › Reports' request figure opens this list with the days the requests came and what each became ----------
+describe('B-TH-235 the list reads the request figure’s doors: the days, what a request became, each a chip', () => {
+  it('the address round-trips ?from=&to=&outcome=, drops anything else, and the API query names them', () => {
+    const party = ROWS[0]!.party!.id
+    const address = addressOf(new URLSearchParams(`tile=ALL&party=${party}&from=2026-11-09&to=2026-11-15&outcome=ORDERED`))
+    expect(address).toEqual({ ...HOME_ADDRESS, tile: 'ALL', party, from: '2026-11-09', to: '2026-11-15', outcome: 'ORDERED' })
+    expect(addressOf(new URLSearchParams(addressText(address).slice(1)))).toEqual(address)
+    expect(queryOf(address)).toMatchObject({ tile: 'ALL', partyId: party, receivedFrom: '2026-11-09', receivedTo: '2026-11-15', outcome: 'ORDERED' })
+    expect(addressOf(new URLSearchParams('from=9/11/2026&to=x&outcome=SHIPPED'))).toEqual(HOME_ADDRESS)
+    expect(isFiltered({ ...HOME_ADDRESS, outcome: 'DECLINED' })).toBe(true)
+    expect(isFiltered({ ...HOME_ADDRESS, from: '2026-11-01' })).toBe(true)
+  })
+
+  it('a chip says the days and what the requests became, in words; ✕ clears them', () => {
+    const chips = chipsOf({ ...HOME_ADDRESS, tile: 'ALL', from: '2026-11-09', to: '2026-11-15', outcome: 'NOT_AN_ORDER' }, null)
+    expect(chips.map((chip) => chip.id)).toEqual(['tile', 'received', 'outcome'])
+    expect(chips[1]).toMatchObject({ label: { key: 'chip.received', params: { from: '2026-11-09', to: '2026-11-15' } }, clear: { from: null, to: null } })
+    expect(chipsOf({ ...HOME_ADDRESS, from: '2026-11-09', to: '2026-11-09' }, null)[0]!.label).toEqual({ key: 'chip.receivedOn', params: { day: '2026-11-09' } })
+    expect(chips[2]).toMatchObject({ label: { key: 'chip.outcome.NOT_AN_ORDER' }, clear: { outcome: null } })
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['sales-inquiries'] as { chip: Record<string, unknown> & { outcome: Record<string, string> } }
+      for (const key of ['received', 'receivedOn', 'receivedFrom', 'receivedTo']) expect(typeof words.chip[key], `${locale} ${key}`).toBe('string')
+      for (const outcome of REQUEST_OUTCOMES) expect(typeof words.chip.outcome[outcome], `${locale} ${outcome}`).toBe('string')
+    }
+  })
+})
+// ---- end B-TH-235

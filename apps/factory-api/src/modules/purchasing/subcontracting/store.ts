@@ -5,8 +5,9 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { PURCHASING_VIEW } from '@nexus/factory-domain/purchasing/permissions'
 import type { Cell, SizePieces } from '@nexus/factory-domain/purchasing/subcontracting/rules'
 import type { CommandCaller } from '../../../core/command'
-import type { OfficeContext } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
 import { assertMay, officeContextOf, type Reader } from '../store'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * The subcontract orders' reads (factory-db subcontract.prisma: SubcontractOrder, SubcontractOperation,
@@ -91,7 +92,11 @@ export const readKitLines = (db: Reader, orderId: string): Promise<KitRow[]> => 
 /** The order the caller may see (purchasing.view, else 404), and act on with `permission` (else 403). */
 export async function officeOrder(caller: CommandCaller, orderId: string, permission: Permission = PURCHASING_VIEW): Promise<{ context: OfficeContext; order: OrderRow }> {
   const context = officeContextOf(caller)
-  const order = await caller.withClient((client) => readOrder(client, orderId))
+  // B-PR-10 (the brand wall): an order names its workshop (its party) AND the customer of the work order it carries: another
+  // customer's work answers as an unknown order, whatever workshop the person reaches.
+  const found = await caller.withClient((client) => readOrder(client, orderId))
+  const work = found ? await caller.withClient((client) => client.workOrder.findUnique({ where: { id: found.workOrderId }, select: { companyId: true, siteId: true, partyId: true } })) : null
+  const order = found && work && reachesWorkOrder(actorOf(context), PURCHASING_VIEW, work) ? found : null
   assertMay(context, permission, order, 'Subcontract order')
   return { context, order: order! }
 }
@@ -112,6 +117,8 @@ export interface WorkOrderFacts {
   readonly number: string
   readonly companyId: string
   readonly siteId: string
+  /** B-PR-10: its one customer (the brand wall). */
+  readonly partyId: string | null
   readonly status: string
   readonly styleRevisionId: string | null
   readonly style: { readonly id: string; readonly code: string; readonly name: string }
@@ -122,7 +129,7 @@ export interface WorkOrderFacts {
 /** The work order with its cells and operations, or null (not found or not in scope). */
 export async function readWorkOrderFacts(db: Reader, workOrderId: string): Promise<WorkOrderFacts | null> {
   if (!isUuid(workOrderId)) return null
-  const row = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, status: true, styleRevisionId: true, styleId: true } })
+  const row = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, status: true, styleRevisionId: true, styleId: true } })
   if (!row) return null
   const style = await db.style.findUnique({ where: { id: row.styleId }, select: { id: true, code: true, name: true } })
   const cells = await db.workOrderSize.findMany({ where: { workOrderId }, select: { id: true, quantity: true, size: true, colourwayId: true }, orderBy: [{ colourwayId: 'asc' }, { size: 'asc' }] })
@@ -135,6 +142,7 @@ export async function readWorkOrderFacts(db: Reader, workOrderId: string): Promi
     number: row.number,
     companyId: row.companyId,
     siteId: row.siteId,
+    partyId: row.partyId,
     status: row.status,
     styleRevisionId: row.styleRevisionId,
     style: style ?? { id: row.styleId, code: '', name: '' },

@@ -19,6 +19,7 @@ import { sendToSdi } from '../sdi/send'
 import type { SdiRuntime } from '../sdi/runtime'
 import { mayOn, officeContextOf, type Reader } from '../store'
 import { refusingInWords } from '../tax-codes/store'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * The monthly invoice run (B-W2b-396; FIN-068 "Monthly invoice run"; design finance.invoices ⋯ "Monthly invoice run":
@@ -69,6 +70,8 @@ async function readRun(db: Reader, runId: string): Promise<RunRow | null> {
 /** The run the caller may see (else 404) and act on with `permission` over its company (else 403). */
 async function officeRun(caller: CommandCaller, runId: string, permission: Permission = INVOICES_VIEW): Promise<{ context: OfficeContext; run: RunRow }> {
   const context = officeContextOf(caller)
+  // B-PR-10 (the brand wall): an invoice run invoices many customers at once: every customer only, before the run is read.
+  assertEveryParty(actorOf(context), INVOICES_VIEW)
   const run = await caller.withClient((client) => readRun(client, runId))
   if (!run || !mayCompany(context, INVOICES_VIEW, run.companyId)) throw new NotFoundError('Invoice run not found.')
   if (!mayCompany(context, permission, run.companyId)) throw new DomainError('forbidden', 'You may not do this for invoices of this company.')

@@ -10,7 +10,7 @@ import { Dec, HUNDRED, ZERO, type Decimal } from '@nexus/factory-domain/tax/deci
 import type { CommandCaller } from '../../../core/command'
 import { readLines } from '../../product/bom/store'
 import { liveEntries, yieldEntries, type EntryRow } from '../../production/yield/views'
-import { officeContextOf, seesCost, siteFor } from '../access'
+import { everyPartySiteFor, officeContextOf, seesCost } from '../access'
 import type { Reader, SiteRow } from '../store'
 import type { YieldRowView } from './contract'
 import { decisionsOf, siteViewOf, type StoredDecision } from './facts'
@@ -119,7 +119,7 @@ export async function leatherYield(caller: CommandCaller, query: { readonly site
   const withCost = seesCost(context)
   return caller.withClient(async (client) => {
     const db = client as Reader
-    const site = await siteFor(caller, query.siteId, PLANNING_VIEW, db)
+    const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW, db) // B-PR-10: every customer's cuts
     const from = windowStart(site, new Date())
     const rows: YieldRowView[] = [...(await styleYields(db, site, from, undefined, withCost)).values()].map((row) => {
       const extra = extraLoss(row)

@@ -153,6 +153,8 @@ export const listOrdersContract = defineContract({
     due: z.enum(['LATE', 'THIS_WEEK']).optional(),
     /** B-W2a-52 (SCM-087): only orders still waiting for the supplier's answer after their confirm-by time. */
     pastConfirmBy: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** B-TH-047 ("Supplier replies"): only orders whose conversation waits on us — the supplier's message is the newest shared one. */
+    supplierReplies: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -170,6 +172,8 @@ export const listOrdersContract = defineContract({
         late: z.number().int().nullable(),
         /** B-W2a-52: orders still waiting after their confirm-by time. */
         pastConfirmBy: z.number().int(),
+        /** B-TH-047: orders whose conversation waits on us (the supplier wrote last). Always sent; optional for the web's typed demo data. */
+        supplierReplies: z.number().int().optional(),
       }),
       orders: z.array(
         output({

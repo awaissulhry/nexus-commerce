@@ -8,7 +8,7 @@ import { planLevelled } from '@nexus/factory-domain/planning/planned-orders/mult
 import { peggingRowsOf } from '@nexus/factory-domain/planning/pegging/pegging'
 import { PLANNING_RUN } from '@nexus/factory-domain/planning/permissions'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandTools } from '../../core/command'
-import { officeContextOf, siteFor } from './access'
+import { everyPartySiteFor, officeContextOf } from './access'
 import type { RunView, Trigger } from './contract'
 import { detectInputs, refreshExceptions } from './exceptions/refresh'
 import { latestDoneRun, readPlanInputs } from './inputs'
@@ -245,7 +245,7 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
 /** planning.run: a new plan of the site (POST /planning/runs). */
 export async function runPlan(caller: CommandCaller, body: { readonly siteId: string; readonly note?: string | undefined }, idempotencyKey?: string): Promise<{ run: RunView; replayed: boolean }> {
   officeContextOf(caller)
-  const site = await siteFor(caller, body.siteId, PLANNING_RUN)
+  const site = await everyPartySiteFor(caller, body.siteId, PLANNING_RUN) // B-PR-10: a run plans every customer's work
   const note = body.note?.trim() ? body.note.trim() : null
   try {
     const { result, replayed } = await runCommand(

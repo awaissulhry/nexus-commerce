@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { dutiesOf, KIND_WORDS } from '@nexus/factory-domain/compliance/register/rules'
 import { REGISTER_VIEW } from '@nexus/factory-domain/compliance/register/permissions'
 import { CERTIFICATES_VIEW } from '@nexus/factory-domain/compliance/certificates/permissions'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { reachesEveryParty, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { actingPermission, KIND_RULES, type AttentionCandidate } from '@nexus/factory-domain/insights/attention'
 import { complianceActs, openDuties, registerSeverity } from '@nexus/factory-domain/insights/states'
 import { phrase, registerDutyWords, styleComplianceWords } from '@nexus/factory-domain/insights/words'
@@ -24,6 +24,8 @@ import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 /** REGISTER_DUTY: OPEN entries with a required duty not done. */
 export const registerDuty: Source = async ({ caller, viewer }) =>
   caller.withClient(async (db) => {
+    // B-PR-10: the register needs every customer (modules/compliance/register): nothing of it for a person limited to some.
+    if (!reachesEveryParty(viewer.actor, REGISTER_VIEW)) return { kind: 'REGISTER_DUTY', candidates: [], complete: true }
     const scope = scopeWhere(viewer.actor, REGISTER_VIEW, ENTRY_SCOPE) as Prisma.PpeRegisterEntryWhereInput
     const entries = await readEntries(db, { scope, status: 'OPEN', limit: CHECK_LIMIT + 1 })
     const complete = entries.length <= CHECK_LIMIT

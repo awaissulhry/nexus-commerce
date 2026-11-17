@@ -9,7 +9,7 @@ import { listStockLots, type StockLotQuery } from '../../../modules/inventory/st
 // B-W2b-320: the W2b views (Depleted, Documents expiring) and the Lifecycle column, through B-W2b-313's list.
 import { listLotsDepth } from '../../../modules/inventory/lots-depth/list'
 import type { LotLifecycle } from '@nexus/factory-domain/inventory/lots-depth/lifecycle'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-10 */ everyCustomerRefusal } from '../source'
 
 /**
  * Warehouse › Lots & traceability (`/warehouse/lots`): the export of the list as the screen shows it. The address is
@@ -55,6 +55,8 @@ function viewOf(address: URLSearchParams): View | 'default' {
 export const lots = defineExportSource<Query, Row>({
   listKey: 'warehouse.lots',
   permission: INVENTORY_STOCK_VIEW,
+  // B-PR-10: the warehouse is one stock for every customer (its rows name every customer's work orders): every customer only.
+  refusal: everyCustomerRefusal(INVENTORY_STOCK_VIEW),
   query(address) {
     const siteId = address.get('site') || undefined
     if (siteId && !isUuid(siteId)) throw new ValidationError('Not a site.', [{ path: 'query/site', message: 'A site id.' }])

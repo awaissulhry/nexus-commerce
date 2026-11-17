@@ -16,6 +16,7 @@ import type {
   OrderMilestone,
   OrderRecord,
   OrderRow,
+  OrdersRead,
   PaymentIntent,
   PromiseMoveRead,
   RevisedOrder,
@@ -402,19 +403,62 @@ export type ListRow = { kind: 'request'; id: string; request: RequestRow } | { k
 
 /** The web's own choice beside the API's chips: the requests that ended (declined, closed, or made into an order). */
 export const CLOSED_REQUESTS = 'CLOSED_REQUESTS'
-export type ListChip = OrderChip | typeof CLOSED_REQUESTS
-export const isListChip = (value: unknown, chips: readonly string[]): value is ListChip => value === CLOSED_REQUESTS || (typeof value === 'string' && chips.includes(value))
+// ---- B-TH-238 (P-CUS-ORD-LIST.tiles): the three tiles' own rows — what needs the customer, its open requests, its open orders.
+export const NEEDS_YOU = 'NEEDS_YOU'
+export const OPEN_REQUESTS = 'OPEN_REQUESTS'
+export const OPEN_ORDERS = 'OPEN_ORDERS'
+export const TILE_CHIPS = [NEEDS_YOU, OPEN_REQUESTS, OPEN_ORDERS] as const
+export type TileChip = (typeof TILE_CHIPS)[number]
+// ---- end B-TH-238
+export type ListChip = OrderChip | typeof CLOSED_REQUESTS | TileChip
+export const isListChip = (value: unknown, chips: readonly string[]): value is ListChip => value === CLOSED_REQUESTS || (TILE_CHIPS as readonly unknown[]).includes(value) || (typeof value === 'string' && chips.includes(value))
 
-/** The requests a chip shows: the open ones under Open and Requested, all under All, the ended ones under Closed requests. */
+/**
+ * The requests a chip shows: the open ones under Open and Requested, all under All, the ended ones under Closed requests;
+ * B-TH-238: the ones that need the customer under "We need something from you", the open ones under "Open requests", none
+ * under "Open orders".
+ */
 export function requestsInChip(chip: ListChip, rows: readonly RequestRow[]): RequestRow[] {
-  if (chip === 'OPEN' || chip === 'REQUESTED') return rows.filter((row) => row.state.open)
+  if (chip === 'OPEN' || chip === 'REQUESTED' || chip === OPEN_REQUESTS) return rows.filter((row) => row.state.open)
   if (chip === 'ALL') return [...rows]
   if (chip === CLOSED_REQUESTS) return rows.filter((row) => !row.state.open)
+  if (chip === NEEDS_YOU) return rows.filter((row) => row.state.needsYou)
   return []
 }
 
-/** The orders' read answers this chip (the closed requests have no order in them). */
-export const ordersInChip = (chip: ListChip): boolean => chip !== CLOSED_REQUESTS
+/** The orders' read answers this chip (the closed requests, and the two request tiles, have no order in them). */
+export const ordersInChip = (chip: ListChip): boolean => chip !== CLOSED_REQUESTS && chip !== NEEDS_YOU && chip !== OPEN_REQUESTS
+
+/** B-TH-238: the API's chip for the orders' read of a chip ("Open orders" is the API's Open without the requests); null: none. */
+export function apiChipOf(chip: ListChip | null): OrderChip | null {
+  if (chip === null) return null
+  if (chip === OPEN_ORDERS) return 'OPEN'
+  if (chip === CLOSED_REQUESTS || chip === NEEDS_YOU || chip === OPEN_REQUESTS) return null
+  return chip
+}
+
+// ---- B-TH-238 (P-CUS-ORD-LIST.tiles-F01): the tiles above Orders & requests ----------------------------------------------------
+export interface ListTile {
+  readonly chip: TileChip
+  /** null: not counted yet or the read failed ("—", never 0). */
+  readonly value: number | null
+}
+
+/**
+ * We need something from you · Open requests · Open orders, each a filter of this page. The first is the SAME number as Home's
+ * Messages card (GET /portal/inquiries counts.needsYou: one read, the session's own requests); the second the requests still
+ * open; the third the orders the API counts Open (a catalogue order still waiting for us among them). Only the session's own
+ * reads count: another customer's rows never reach them (W05, W10).
+ */
+export function listTiles(requests: { readonly counts: { readonly needsYou: number; readonly open: number } } | null, read: Pick<OrdersRead, 'chips'> | null): ListTile[] {
+  const open = read?.chips.find((entry) => entry.chip === 'OPEN')?.count ?? null
+  return [
+    { chip: NEEDS_YOU, value: requests ? requests.counts.needsYou : null },
+    { chip: OPEN_REQUESTS, value: requests ? requests.counts.open : null },
+    { chip: OPEN_ORDERS, value: open },
+  ]
+}
+// ---- end B-TH-238
 
 /** The rows of the list: the chip's requests that match the search, then the orders read. */
 export function listRows(chip: ListChip, q: string, requests: readonly RequestRow[], orders: readonly OrderRow[], locale: Locale): ListRow[] {

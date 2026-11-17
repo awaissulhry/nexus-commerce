@@ -118,7 +118,16 @@
     "clearAll": "Clear all",
     "status": "State: {status}",
     "company": "Company: {name}",
-    "companyUnknown": "Company: one company"
+    "companyUnknown": "Company: one company",
+    "received": "Came in: {from} – {to}",
+    "receivedOn": "Came in: {day}",
+    "receivedFrom": "Came in from {from}",
+    "receivedTo": "Came in until {to}",
+    "outcome": {
+      "ORDERED": "Became: an order (straight or from its quote)",
+      "DECLINED": "Became: declined (not “Not an order”)",
+      "NOT_AN_ORDER": "Became: not an order"
+    }
   },
   "notice": {
     "label": "Notices",
@@ -244,6 +253,7 @@
     "CONFIRM_MATCH": "Check that {number} is from this customer, then confirm the match",
     "MATCH_FOUND": "The prospect of {number} may already be a customer: use it, or confirm a new customer",
     "CODE_TAKEN": "This code is already another party's: choose another",
+    "SENDS_NOTHING": "“Not an order” closes {number} without a word to the customer (they read “Closed”): pick another reason to send a message",
     "other": "The factory refused this change"
   },
   "problem": {

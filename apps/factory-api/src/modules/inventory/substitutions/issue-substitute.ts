@@ -7,10 +7,11 @@ import { INVENTORY_ISSUE } from '@nexus/factory-domain/inventory/permissions'
 import { issueRefusal, type SubstitutionStatus } from '@nexus/factory-domain/inventory/substitutions/rules'
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import { mayAt, stockContextOf } from '../ledger/access'
+import { stockContextOf } from '../ledger/access'
 import { issueInCommand, type IssueInput, type IssueResult } from '../issue/issue'
 import { lockWorkOrderIssues, readAtWorkOrder, readPickHeader } from '../issue/store'
 import { changed, lockSubstitution, readItemsOf, readSubstitution, refuse, substitutionViews, SUBSTITUTION_COLUMNS } from './store'
+import { mayPick } from '../issue/picking' // B-PR-10
 
 /**
  * An approved substitute issued with its own moves (B-W2b-298; MES-139: "then issued with its own move"). POST
@@ -135,7 +136,7 @@ export async function issueSubstitute(caller: CommandCaller, substitutionId: str
   const context = stockContextOf(caller)
   const found = await caller.withClient((db) => readSubstitution(db, substitutionId))
   const header = found ? await caller.withClient((db) => readPickHeader(db, found.workOrderId)) : null
-  if (!found || !header || !mayAt(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Substitute not found.')
+  if (!found || !header || !mayPick(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Substitute not found.') // B-PR-10: and its customer
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt) : null
   const key = `inventory.issueSubstitute:${idempotencyKey ?? `g-${newId()}`}`
   const { result } = await command(

@@ -8,7 +8,7 @@ import { workOrderUses } from '@nexus/factory-domain/quality/lab/trace'
 import { ZERO } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { mayAt, officeContextOf } from '../ledger/access'
+import { mayAt, officeContextOf, assertWholeWarehouse } from '../ledger/access'
 import { decimalText, fixed, locatedBy, PARTY_SELECT, partyName, SCOPE, type Located } from './read-kit'
 import type { LotRow } from './reads-contract'
 
@@ -132,6 +132,7 @@ export interface StockLotQuery {
 /** The lots the caller may see, newest first (UUIDv7: the order they were made), with the tiles' counts. */
 export async function listStockLots(caller: CommandCaller, query: StockLotQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const scope: Prisma.LotWhereInput = { AND: [scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.LotWhereInput, query.siteId ? { siteId: query.siteId } : {}] }
   const text = query.q?.trim()
   return caller.withClient(async (client) => {
@@ -177,6 +178,7 @@ export async function listStockLots(caller: CommandCaller, query: StockLotQuery)
 /** One lot: where its stock is, its hides, and its trace both ways. */
 export async function stockLotRecord(caller: CommandCaller, lotId: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const lot = isUuid(lotId) ? await caller.withClient((client) => client.lot.findUnique({ where: { id: lotId }, select: { ...LOT_SELECT, receiptLine: { select: { ...LOT_SELECT.receiptLine.select, receipt: { select: { id: true, number: true, status: true, receivedAt: true, supplierDdtNumber: true, supplierDdtDate: true } } } } } })) : null
   if (!lot || !mayAt(context, INVENTORY_STOCK_VIEW, lot)) throw new NotFoundError('Lot not found.')
   return caller.withClient(async (client) => {

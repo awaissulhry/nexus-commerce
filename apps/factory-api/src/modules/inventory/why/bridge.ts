@@ -9,7 +9,7 @@ import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { mayAt, officeContextOf } from '../ledger/access'
+import { mayAt, officeContextOf, assertWholeWarehouse } from '../ledger/access'
 import { fixed, SCOPE } from '../stock/read-kit'
 import { before, postingDayRange, type DayBasis } from './days'
 
@@ -74,6 +74,7 @@ const LAST_SELECT = {
 
 export async function whyIsItThisNumber(caller: CommandCaller, query: WhyQuery, now: Date = new Date()) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const basis: DayBasis = query.basis ?? 'POSTING'
   const today = businessDate(now)
   const to = query.to ?? today

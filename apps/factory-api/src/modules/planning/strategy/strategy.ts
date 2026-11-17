@@ -17,7 +17,7 @@ import {
   type ProductionStrategy,
 } from '@nexus/factory-domain/planning/strategy/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
-import { officeContextOf, siteFor } from '../access'
+import { everyPartySiteFor, officeContextOf } from '../access'
 import { namesOf as userNamesOf } from '../milestones/store'
 import { emitChange, lockKey } from '../settings/items'
 import { siteViewOf } from '../settings/store'
@@ -122,7 +122,9 @@ export interface ListStrategyQuery {
 
 /** GET /planning/strategy. */
 export async function listStrategy(caller: CommandCaller, query: ListStrategyQuery) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  // B-PR-10 (the named leftover of B-PR-09: its file already needs every customer): the master schedule lists every item of
+  // every customer's private-label styles: every customer only (403 in words that name none).
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW)
   const itemIds = query.itemIds ? [...new Set(query.itemIds.split(',').map((value) => value.trim()).filter(Boolean))] : undefined
   if (itemIds && (itemIds.length > STRATEGY_LIMITS.bulk || itemIds.some((value) => !isUuid(value)))) {
     throw new ValidationError('Name at most 200 items by their ids.', [{ path: 'querystring/itemIds', message: `Comma-separated item ids, at most ${STRATEGY_LIMITS.bulk}.` }])
@@ -222,7 +224,7 @@ function refuseAll(problems: readonly Issue[], what: string): void {
 }
 
 async function writableSite(caller: CommandCaller, siteId: string): Promise<SiteRow> {
-  const site = await siteFor(caller, siteId, PLANNING_STRATEGY_MANAGE)
+  const site = await everyPartySiteFor(caller, siteId, PLANNING_STRATEGY_MANAGE) // B-PR-10: as the screen
   if (site.status !== 'ACTIVE') throw new InvalidStateError('This site is archived: its planning cannot change.')
   return site
 }

@@ -7,6 +7,8 @@ import type { OrderRecord } from '../orders/api'
 import type { RequestRow, SendAnswer } from '../requests/api'
 import { requestHref, requestOrder, stateTone, yourNumberText } from '../requests/model'
 import type { OpenRequestItem, RequestReceipt } from './view/RequestPageView'
+// B-TH-304: the catalogue door's ways and addresses.
+import { newOrderHref, WAYS, type Way } from './model'
 
 /**
  * Portal › New order as an e-mail (B-TH-220, B-TH-303), pure: whether the catalogue door shows, the fixed recipient line, the
@@ -18,17 +20,33 @@ import type { OpenRequestItem, RequestReceipt } from './view/RequestPageView'
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
 
 /**
- * The catalogue door ("Order from the catalogue", B-W2b-194's draft with lines) is CLOSED until catalogue orders open in
- * Sales › Incoming (B-TH-039/040): it returns with B-TH-304 (PR-18). While closed, `/orders/new` is always the request like an
- * e-mail; a catalogue's "Add to order" or an order's "Reorder this line" carry their styles into the message instead.
+ * The catalogue door ("Order from the catalogue", B-W2b-194's draft with lines). B-TH-304 (PR-18) OPENS it again: catalogue orders
+ * land in Sales › Incoming (B-TH-039 the one read, B-TH-040 their thread) and no door promises an answer time (B-TH-041).
+ * `/orders/new` is the request like an e-mail, whose side column offers the door's three ways (`?way=pick|reorder|upload`); a
+ * catalogue's "Add to order" (`?way=pick&styles=`), an order's "Reorder this line" (`?reorder=`) and a draft (`?draft=`) open the
+ * door's page. Set back to false, every one of them carries its styles into the message instead (the request's own words).
  */
-export const CATALOGUE_DOOR_OPEN = false
+export const CATALOGUE_DOOR_OPEN = true
 
 /** The address terms of the catalogue door (B-W2b-194): only they open its page, and only while the door is open. */
 export function opensCatalogueDoor(search: Pick<URLSearchParams, 'get'> | null, open: boolean = CATALOGUE_DOOR_OPEN): boolean {
   if (!open || !search) return false
   return Boolean(search.get('draft') || search.get('way') || search.get('reorder'))
 }
+
+// ── B-TH-304: the catalogue door on New order ────────────────────────────────────────────────────────────────────────────
+/** The door's three ways in (B-W2b-194's start), each its page's address; null while the door is closed. */
+export interface CatalogueDoor {
+  readonly ways: readonly { readonly way: Way; readonly href: string }[]
+}
+
+export function catalogueDoorOf(prefix: string, open: boolean = CATALOGUE_DOOR_OPEN): CatalogueDoor | null {
+  if (!open) return null
+  return { ways: WAYS.map((way) => ({ way, href: newOrderHref(prefix, { way }) })) }
+}
+
+/** Where the catalogue's "Start an order" leads: the door's style picker while it is open, else the request like an e-mail. */
+export const catalogueStartHref = (prefix: string, open: boolean = CATALOGUE_DOOR_OPEN): string => (open ? newOrderHref(prefix, { way: 'pick' }) : newOrderHref(prefix))
 
 /** "Sales at <company>": the company of this sign-in, never a choice (W11). */
 export const goesToOf = (company: string, t: Translate): string => t('request.goesTo', { company })

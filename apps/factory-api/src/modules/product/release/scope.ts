@@ -11,6 +11,7 @@ import { assertMayWrite, bumpRevision, contextOf, findRevision, lockStyleRow, re
 import { requireEditRule } from '../lifecycle/edit-rule'
 import { problemsOf, readScopeRow, type Reader } from './facts'
 import { gateInTx } from './gate'
+import { styleScope } from '../styles/store' // B-PR-10
 
 /**
  * What a revision is released for (B-W2b-231; PRD-191 "Release by colourway and size", PRD-197 "Release event"):
@@ -133,8 +134,8 @@ export async function releasedScopeOf(db: Reader, styleId: string): Promise<Rele
 export async function releasedScopeFor(caller: CommandCaller, styleId: string): Promise<ReleasedScopeView> {
   const actor = actorOf(contextOf(caller))
   return caller.withClient(async (client) => {
-    const style = await client.style.findUnique({ where: { id: styleId }, select: { companyId: true } })
-    if (!style || !can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+    const style = await client.style.findUnique({ where: { id: styleId }, select: { companyId: true, brandPartyId: true } })
+    if (!style || !can(actor, PRODUCT_STYLES_VIEW, styleScope(style))) throw new NotFoundError('Style not found.') // B-PR-10: its brand too
     return releasedScopeOf(client, styleId)
   })
 }

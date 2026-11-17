@@ -8,7 +8,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { listLocations } from '../../../modules/inventory/locations/locations'
 import { stockOverview } from '../../../modules/inventory/stock/stock'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-10 */ everyCustomerRefusal } from '../source'
 
 /**
  * Warehouse › Locations (`/warehouse/locations`): the export of the list as the screen shows it — ONE site's tree, in
@@ -58,6 +58,8 @@ async function stockByPlace(caller: CommandCaller, siteId: string): Promise<Map<
 export const locations = defineExportSource<Query, Row>({
   listKey: 'warehouse.locations',
   permission: INVENTORY_LOCATIONS_VIEW,
+  // B-PR-10: the warehouse is one stock for every customer (its rows name every customer's work orders): every customer only.
+  refusal: everyCustomerRefusal(INVENTORY_LOCATIONS_VIEW),
   query(address) {
     const siteId = address.get('site') || null
     if (siteId && !isUuid(siteId)) throw new ValidationError('Not a site.', [{ path: 'query/site', message: 'A site id.' }])

@@ -9,7 +9,7 @@ import { Field } from '@nexus/ui/components'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import type { DraftLine, DraftRecord } from '../api'
-import { columnsOf, noticeTone, noticeWords, piecesOfCells, problemWords, type Cells } from '../model'
+import { columnsOf, fromOrderText, noticeTone, noticeWords, piecesOfCells, problemWords, type Cells } from '../model'
 import { useOrderingWords, type OrderingWords } from '../words'
 
 /**
@@ -129,7 +129,8 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
             <span className="fw-pno-linename">{t('lines.lineTitle', { seq: line.seq, title })}</span>
             <span className="fw-pno-quiet">
               {line.colourway.name} ({line.colourway.code})
-              {line.source ? ` · ${line.source.customerRef ? t('lines.fromOrderRef', { order: line.source.orderNumber, ref: line.source.customerRef }) : t('lines.fromOrder', { order: line.source.orderNumber })}` : ''}
+              {/* B-TH-304: the customer's own order number, never the office's series. */}
+              {line.source ? ` · ${fromOrderText(line.source, t, words.day)}` : ''}
             </span>
           </div>
           <div className="fw-pno-lineactions">

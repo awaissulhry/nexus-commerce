@@ -228,7 +228,8 @@ export async function sendPriceListPdf(caller: CommandCaller, listId: string, ve
     const identity = await db.emailIdentity.findFirst({ where: { companyId: list.companyId!, kind: 'CONVERSATION', isDefault: true, status: 'ACTIVE' }, select: { id: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
     return { party, contact, sender, identity }
   })
-  if (!facts.party) throw new ValidationError('Not a customer of yours.', [{ path: 'body/partyId', message: 'Not a customer of yours.' }])
+  // B-PR-10: a customer the person does not reach is not one of theirs (the words of an unknown one, never "may not").
+  if (!facts.party || !can(actorOf(context), PRICE_LISTS_MANAGE, { partyId: facts.party.id })) throw new ValidationError('Not a customer of yours.', [{ path: 'body/partyId', message: 'Not a customer of yours.' }])
   if (facts.party.companyId !== null && facts.party.companyId !== list.companyId) throw new ValidationError(`${facts.party.code} is a customer of another company than ${list.code}.`, [{ path: 'body/partyId', message: "A customer of the list's company." }])
   if (!can(actorOf(context), PRICE_LISTS_MANAGE, { companyId: list.companyId, partyId: facts.party.id })) throw new ForbiddenError()
   const to = body.to && body.to.length > 0 ? [...body.to] : facts.contact?.email ? [facts.contact.email] : []

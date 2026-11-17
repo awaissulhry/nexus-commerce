@@ -24,6 +24,7 @@ import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, SYSTEM_ACTOR_ID, type RequestContext, type SystemContext } from '../../../core/context'
 import { editRuleOf } from '../lifecycle/edit-rule'
 import { mayWrite } from '../materials/store'
+import { styleScope } from '../styles/store' // B-PR-10
 
 /**
  * A style's pictures and pattern files (factory-db `StyleImage`, `StyleRevisionFile`, B-W2b-206) and the files they name
@@ -39,7 +40,7 @@ import { mayWrite } from '../materials/store'
 
 export type Client = FactoryClient | CommandTx
 
-export const STYLE_COLUMNS = { id: true, code: true, name: true, companyId: true, status: true, sizes: true } as const satisfies Prisma.StyleSelect
+export const STYLE_COLUMNS = { id: true, code: true, name: true, companyId: true, status: true, sizes: true, brandPartyId: true } as const satisfies Prisma.StyleSelect
 export type StyleRow = Prisma.StyleGetPayload<{ select: typeof STYLE_COLUMNS }>
 
 export const PICTURE_COLUMNS = {
@@ -97,7 +98,7 @@ export async function readStyleFor(caller: CommandCaller, styleId: string, permi
   const context = contextOf(caller)
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
   const row = await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: STYLE_COLUMNS }))
-  if (!row || !can(actorOf(context), permission, { companyId: row.companyId })) throw new NotFoundError('Style not found.')
+  if (!row || !can(actorOf(context), permission, styleScope(row))) throw new NotFoundError('Style not found.') // B-PR-10: its brand too
   return row
 }
 
