@@ -308,3 +308,19 @@
     text-align: left;
   }
 }
+
+/* ---- B-TH-277: the order as sent (price-free PDF) under the Lines tab's facts — the Documents tab's first file; the price-talk
+   line above the docked conversation (the portal record frame). */
+.fw-pso-assent {
+  margin-top: var(--nds-space-12);
+  padding-bottom: 0;
+  border-top: 1px solid var(--nds-border-subtle);
+  border-bottom: 0;
+}
+
+.fw-pso-thread-hint {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+/* ---- end B-TH-277 */

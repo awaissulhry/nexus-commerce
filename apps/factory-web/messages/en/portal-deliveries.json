@@ -417,5 +417,8 @@
     "ROLL": "rolls",
     "CONE": "cones",
     "BOX": "boxes"
+  },
+  "thread": {
+    "label": "Messages about order {number}"
   }
 }

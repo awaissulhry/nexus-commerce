@@ -460,8 +460,6 @@
     "kit": "Kit ricevuto",
     "progress": "Avanzamento",
     "sendback": "Reso",
-    "documents": "Documenti",
-    "messages": "Messaggi",
     "toDo": "Da fare"
   },
   "docs": {
@@ -543,5 +541,8 @@
     "held": {
       "name": "Il tuo nome: al massimo 200 caratteri."
     }
+  },
+  "thread": {
+    "label": "Messaggi sulla lavorazione {number}"
   }
 }
