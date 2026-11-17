@@ -5,7 +5,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
-import type { AssignBody, BulkAssignBody, BulkDeclineBody, CreateInquiryBody, DeclineBody, InquiryListQuery, LineBody, LoseBody, ProspectBody, UpdateInquiryBody, VersionBody } from '@nexus/factory-domain/sales/inquiries/contracts'
+import type { AskInfoBody, AssignBody, BulkAssignBody, BulkDeclineBody, CreateInquiryBody, DeclineBody, InquiryListQuery, LineBody, LoseBody, ProspectBody, UpdateInquiryBody, VersionBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 import { SALES_INQUIRIES_MANAGE, SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import {
   askInfoRefusal,
@@ -39,6 +39,11 @@ import { serverClock } from '../../../core/time'
 import { heldRoles } from '../../../platform/auth/roles/access'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { followInCommand } from '../../../platform/threads/followers'
+// B-TH-013: the question of "Ask for more information" (a portal reply, or a mail under the recipient rule).
+import { cleanBody } from '@nexus/factory-domain/threads/rules'
+import { EMAIL_SEND } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { sendEmail } from '../../../platform/email-out/outbound'
+import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 import { joinMailInCommand } from './join'
 import {
   asDay,
@@ -487,6 +492,9 @@ export async function updateInquiry(caller: CommandCaller, inquiryId: string, bo
   const changing = fields.filter((field) => (OPEN_FIELDS as readonly string[]).includes(field))
   if (changing.length > 0) refuse(editRefusal(factsOf(seen)))
   if (changes.partyId !== undefined && seen.partyId !== null && changes.partyId !== seen.partyId) badBody('partyId', `${seen.number} is from its customer for good; a request of another customer is a new inquiry.`)
+  // B-TH-010 (L2-G02): a request the customer sent from the portal keeps its words as sent (its thread's first message too);
+  // the office adds a note or a message instead.
+  if (changes.request !== undefined && seen.source === 'PORTAL' && changes.request !== seen.request) badBody('request', `${seen.number} keeps the customer's words as they sent them; add a note or a message instead.`)
   const partyId = changes.partyId ?? seen.partyId
   const prospect = changes.prospect === undefined ? undefined : checkedProspect(changes.prospect)
   if (changes.prospect === null && partyId === null) badBody('prospect', 'A prospect is cleared only once the inquiry names its customer.')
@@ -603,20 +611,56 @@ export async function assignInquiries(caller: CommandCaller, body: BulkAssignBod
 
 // ---- waiting for the customer ------------------------------------------------------------------------------------------
 
-/** POST /sales/inquiries/:inquiryId/ask-info: "Ask for more information" (the message to the customer is the thread's). */
-export async function askInfo(caller: CommandCaller, inquiryId: string, body: VersionBody, idempotencyKey?: string) {
+// ---- B-TH-013: the question goes with "Ask for more information" ---------------------------------------------------------
+const ASK_NEEDS_CUSTOMER = 'Make the customer first: a question goes to a customer of this request (a prospect has no portal and no contact yet).'
+const ASK_NO_ADDRESS = 'Say whom to ask: this request names no contact with an e-mail address.'
+
+/**
+ * POST /sales/inquiries/:inquiryId/ask-info: "Ask for more information". NEED_INFO, and — B-TH-013 — the question in the same
+ * command: on a request the customer sent from the portal, an OUTBOUND PORTAL message of its thread by the office person (the
+ * customer reads it in its portal; its "We need something from you" news is B-TH-011's); on any other, a mail on the request's
+ * thread (platform/email-out sendEmail: the one recipient rule, B-TH-004) to `to`, else the request's contact. A prospect's
+ * request takes no question until it is made a customer (said in words). The customer's answer takes it up again by itself
+ * (./resume-on-reply.ts).
+ */
+export async function askInfo(caller: CommandCaller, inquiryId: string, body: AskInfoBody, idempotencyKey?: string) {
   const { context, inquiry } = await officeInquiry(caller, inquiryId, SALES_INQUIRIES_MANAGE)
   refuse(askInfoRefusal(factsOf(inquiry)))
+  const message = body.message
+  if (message && inquiry.partyId === null) throw new ValidationError(ASK_NEEDS_CUSTOMER, [{ path: 'body/message', message: ASK_NEEDS_CUSTOMER }])
+  // A mail goes only from who may send mail there (email.send, as the thread's own send).
+  if (message && inquiry.source !== 'PORTAL' && !can(actorOf(context), EMAIL_SEND, scopeOf(inquiry))) throw new ForbiddenError('Your role does not send mail for this company or customer.')
+  if (message && inquiry.source !== 'PORTAL' && !message.to) {
+    const contact = inquiry.contactId ? await caller.withClient((db) => db.partyContact.findUnique({ where: { id: inquiry.contactId! }, select: { email: true } })) : null
+    if (!contact?.email) throw new ValidationError(ASK_NO_ADDRESS, [{ path: 'body/message/to', message: ASK_NO_ADDRESS }])
+  }
   const { result } = await command(caller, { name: 'sales.inquiries.askInfo', idempotencyKey, input: { inquiryId, ...body } }, async (tools) => {
     const row = await lockForChange(tools, context, inquiryId, body.version)
     refuse(askInfoRefusal(factsOf(row)))
+    let asked: { via: 'PORTAL' | 'MAIL'; messageId: string } | null = null
+    if (message) {
+      const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
+      const record = { type: 'Inquiry', id: row.id }
+      if (row.source === 'PORTAL') {
+        const { thread } = await ensureThread(tools, record, context.actorId)
+        if (thread.status !== 'OPEN') throw new InquiryRefusedError({ code: 'CLOSED', message: 'The request\'s conversation is closed; reopen it to ask.' })
+        const written = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: context.actorId, name: user.displayName }, bodyText: cleanBody(message.body) })
+        asked = { via: 'PORTAL', messageId: written.id }
+      } else {
+        const contact = row.contactId ? await tools.tx.partyContact.findUnique({ where: { id: row.contactId }, select: { email: true } }) : null
+        const to = message.to ?? (contact?.email ? [contact.email] : [])
+        const sent = await sendEmail(tools, { record, sender: { userId: context.actorId, name: user.displayName, email: user.email }, to, subject: message.subject ?? null, body: message.body, sendOutside: message.sendOutside })
+        asked = { via: 'MAIL', messageId: sent.messageId }
+      }
+    }
     await writeInquiry(tools, row, { status: 'NEED_INFO' })
-    tools.audit({ action: 'sales.inquiries.askInfo', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'NEED_INFO' } })
+    tools.audit({ action: 'sales.inquiries.askInfo', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'NEED_INFO', ...(asked ? { asked: asked.via, messageId: asked.messageId } : {}) } })
     emitChanged(tools, row, 'NEED_INFO', 'NEED_INFO', row.partyId, row.assigneeId)
     return { inquiry: await viewInCommand(tools, row.id) }
   }).catch(databaseRefusal)
   return result
 }
+// ---- end B-TH-013
 
 /** POST /sales/inquiries/:inquiryId/resume: the customer answered. */
 export async function resumeInquiry(caller: CommandCaller, inquiryId: string, body: VersionBody, idempotencyKey?: string) {

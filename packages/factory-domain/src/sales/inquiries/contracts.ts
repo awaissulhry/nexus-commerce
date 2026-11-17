@@ -143,6 +143,24 @@ export type BulkAssignBody = z.output<typeof bulkAssignBody>
 export const versionBody = input({ version: version() })
 export type VersionBody = z.output<typeof versionBody>
 
+/**
+ * B-TH-013 (threads plan G4): "Ask for more information" carries the question. On a request sent from the portal the question
+ * is a reply the customer reads in its portal (and its "We need something from you" news); on any other request a mail on the
+ * request's thread to `to` (default: the request's contact, else the prospect's e-mail is no address of a customer: a prospect
+ * is made a customer first), under the one recipient rule (B-TH-004: `sendOutside` ticked for an address of another party).
+ * Without `message` the request only waits for the customer, as before.
+ */
+export const askInfoBody = input({
+  version: version(),
+  message: input({
+    body: text(20_000),
+    subject: line(200).optional(),
+    to: z.array(z.string().trim().min(3).max(320)).min(1).max(20).optional(),
+    sendOutside: z.boolean().optional(),
+  }).optional(),
+})
+export type AskInfoBody = z.output<typeof askInfoBody>
+
 /** "Decline inquiry": the reason (OTHER with words). */
 export const declineBody = input({ version: version(), reason: z.enum(DECLINE_REASONS), note: text(INQUIRY_LIMITS.closeNote).optional() })
 export type DeclineBody = z.output<typeof declineBody>
