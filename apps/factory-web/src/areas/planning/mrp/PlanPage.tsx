@@ -10,8 +10,8 @@ import { findSuppliers, listSites, type SiteOption } from '../../_shared/buying/
 import { downloadText, useCoalesced, useLive } from '../../_shared/buying/hooks'
 import { DEFAULT_TIME_ZONE } from '../../../lib/i18n/format'
 import { buyingCan, csvOf, phrase, readProblem, todayIn, writeProblem, type Loaded } from '../../_shared/buying/model'
-import { draftFromPlan, explainLine, firmLine, getLatestPlan, getShortages, listRuns, openDrafts, reopen, runPlan, sendChecks, sendMany, setAside, undoDraft, unusableStock, type Explain, type Plan, type PlanLine, type Shortages, type StockLine } from './api'
-import { draftable, moveFirmProblem, MRP_NAMESPACE, sendable, shortageAskKey, viewOf, type DraftDialog, type PlanDialog, type PlanModel, type PlanNotice, type PlanView as PlanViewName } from './model'
+import { draftFromPlan, explainLine, firmLine, getLatestPlan, getShortages, listRuns, openDrafts, reopen, runPlan, sendChecks, sendMany, setAside, undoDraft, unfirmLine /* W1-BGF */, unusableStock, type Explain, type Plan, type PlanLine, type Shortages, type StockLine } from './api'
+import { draftable, moveFirmProblem, MRP_NAMESPACE, sendable, shortageAskKey, unfirmHeld /* W1-BGF */, viewOf, type DraftDialog, type PlanDialog, type PlanModel, type PlanNotice, type PlanView as PlanViewName } from './model'
 import { PlanView } from './view/PlanView'
 // B-W2b-332: "Ask to buy" on a shortage (requests/ask's dialog in its shortage mode).
 import { listAsked } from '../../purchasing/requests/ask/api'
@@ -385,6 +385,23 @@ function PlanContainer() {
     }
   }, [api, dialog, load, today])
 
+  // ── W1-BGF: Plan it again (not firm): the line's firm planned order taken back, so Draft PO buys what the plan suggests ──
+  const unfirm = useCallback(
+    async (lineId: string) => {
+      const line = linesById([lineId])[0]
+      if (!line || unfirmHeld(line, canFirm)) return
+      try {
+        await unfirmLine(api, line.id, line.version)
+        setNotice({ tone: 'success', words: phrase('mrp:notice.unfirmed', { material: line.item.code }) })
+      } catch (error) {
+        setNotice({ tone: 'danger', words: writeProblem(error) })
+      }
+      void load()
+    },
+    [api, canFirm, load],
+  )
+  // ── end W1-BGF ──
+
   /** B-W2a-70 (Send n): the drafts just made, each with its checks, then each sent on its own. */
   const sendStep = useCallback(async () => {
     if (dialog?.kind !== 'draft' || !dialog.draft.result) return
@@ -526,6 +543,7 @@ function PlanContainer() {
             .then((answer) => setShortages({ status: 'ready', value: answer }))
             .catch((error: unknown) => setShortages({ status: 'error', problem: readProblem(error) }))
         },
+        onUnfirm: (lineId) => void unfirm(lineId), // W1-BGF
         onMoveFirm: (requirementId) => {
           const line = linesById([requirementId])[0]
           setDialog({ kind: 'moveFirm', requirementId, date: line?.firm?.date ?? today, busy: false, problem: null })
