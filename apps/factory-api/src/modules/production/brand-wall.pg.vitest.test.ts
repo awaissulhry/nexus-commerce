@@ -15,7 +15,7 @@ import { readSchemaFolder, type SchemaModel } from '../../../../../packages/fact
 import { localFileStore } from '../../adapters/local-files/local'
 import { routesFiles } from '../../core/autoload'
 import { buildApp } from '../../core/app'
-import { testAuthenticator, type SessionContext } from '../../core/context'
+import { testAuthenticator } from '../../core/context'
 import type { RouteManifestEntry } from '../../core/manifest'
 import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../env'
 import { createOfficeAuth } from '../../platform/auth/sessions/office-auth'
@@ -23,7 +23,7 @@ import { createEmailRuntime, useEmail } from '../../platform/email-out/service'
 import { createFilesRuntime, useFiles } from '../../platform/files/service'
 import type { Gateway } from '../../platform/gateway/gateway'
 import { useGateway } from '../../platform/gateway/service'
-import { findMarkers, markersOf, OWN_STYLE_CODE, productionTwoBrands, twoBrandIds, twoBrandSessions, walkWorkOrderRoutes, workOrderModels, type Marker, type ProductionTwoBrands, type WalkedRoute } from './testing/two-brands'
+import { findMarkers, markersOf, OWN_STYLE_CODE, productionTwoBrands, twoBrandIds, twoBrandSessions, walkWorkOrderRoutes, workOrderModels, type Marker, type OfficeSession, type ProductionTwoBrands, type WalkedRoute } from './testing/two-brands'
 
 /**
  * B-PR-10 — THE BRAND-WALL SWEEP (production plan §2 "Proof": "a sweep of every route, reads AND writes, that touches work
@@ -61,8 +61,8 @@ const SCHEMA_DIR = fileURLToPath(new URL('../../../../../packages/factory-db/pri
 const SEED_DIR = fileURLToPath(new URL('../../../../../packages/factory-db/seed', import.meta.url))
 /** Every permission an office role can hold, money grains included (the sweep reads every field there is). */
 const OFFICE_PERMISSIONS = FACTORY_PERMISSIONS.all.filter((definition) => definition.link === undefined && definition.partner === undefined).map((definition) => definition.name)
-const SESSIONS: Record<string, SessionContext> = twoBrandSessions(ids.tenantId, ids.a, ids.b, OFFICE_PERMISSIONS)
-const REPORT = process.env.PR10_SWEEP_REPORT
+const SESSIONS: Record<string, OfficeSession> = twoBrandSessions(ids.tenantId, ids.a, ids.b, OFFICE_PERMISSIONS)
+const REPORT = process.env.FACTORY_PR10_SWEEP_REPORT
 
 /**
  * Routes the walker lists that the sweep does not call, each with its reason. Office routes only are swept: a floor device

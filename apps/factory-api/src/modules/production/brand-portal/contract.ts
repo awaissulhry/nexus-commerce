@@ -142,16 +142,23 @@ export const listContract = defineContract({
     locale: z.enum(['it', 'en']).optional(),
   }),
   response: {
-    200: output({
-      asOf: instant(),
-      ...levelFields,
-      chip: z.enum(PRODUCTION_CHIPS),
-      chips: z.array(output({ chip: z.enum(PRODUCTION_CHIPS), count: z.number().int(), words })),
-      /** Rows in the chip (after the search): every one is in `items` (no page, no cut). */
-      count: z.number().int(),
-      items: z.array(row),
-      live,
-    }),
+    /**
+     * The list (JSON), or with `format=csv` its own file: the CSV's bytes, which leave as they are (fastify sends a Buffer
+     * unserialized; the JSON branch is the one serialized and checked).
+     */
+    200: z.union([
+      output({
+        asOf: instant(),
+        ...levelFields,
+        chip: z.enum(PRODUCTION_CHIPS),
+        chips: z.array(output({ chip: z.enum(PRODUCTION_CHIPS), count: z.number().int(), words })),
+        /** Rows in the chip (after the search): every one is in `items` (no page, no cut). */
+        count: z.number().int(),
+        items: z.array(row),
+        live,
+      }),
+      z.custom<Buffer>((value) => Buffer.isBuffer(value), { message: 'Expected the file bytes.' }),
+    ]),
   },
 })
 

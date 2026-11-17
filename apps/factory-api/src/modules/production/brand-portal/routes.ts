@@ -15,10 +15,10 @@ import { markUrgency, orderUrgent, undoUrgency } from './urgency'
 export default defineRoutes('portal-production', manifest, async (app) => {
   app.get('/portal/production', { schema: listContract }, async (request, reply) => {
     if (request.query.format === 'csv') {
-      // "Export": every own row of the chip and search, written here in the partner's scope (never the export job).
-      // A Buffer leaves as it is (the 200 schema serializes the JSON answer only); `never`: the handler's typed answer is the JSON's.
+      // "Export": every own row of the chip and search, written here in the partner's scope (never the export job). The
+      // contract's 200 is the list or the file's bytes; a Buffer leaves as it is (only the JSON answer is serialized).
       const file = await productionCsv(app, request, request.query, appClock(app).now())
-      return reply.type(file.contentType).header('content-disposition', attachmentDisposition(file.fileName)).header('cache-control', 'no-store').send(Buffer.from(file.bytes)) as never
+      return reply.type(file.contentType).header('content-disposition', attachmentDisposition(file.fileName)).header('cache-control', 'no-store').send(Buffer.from(file.bytes))
     }
     return productionList(app, request, request.query, appClock(app).now())
   })
