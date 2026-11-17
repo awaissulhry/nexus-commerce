@@ -31,6 +31,10 @@ import {
   type Notice,
 } from '../model'
 import { Freshness, InstructionsMessages, KeysDialog, LanguageChips, NoticeBanner, PageHead, useSay } from './parts'
+// F-PR-02: the customer filter and the Customer column (the style's brand).
+import { useProductionWords } from '../../../../lib/production/words'
+import type { CustomerFilterState } from '../../_shared/customer/model'
+import { CustomerFilter, useCustomerCell } from '../../_shared/customer/view/CustomerFilter'
 
 /** The pickers' choices of New instruction (each read when the dialog opens). */
 export interface Choices<T> {
@@ -61,6 +65,8 @@ export interface InstructionsListModel {
   readonly prefix: string
   readonly can: InstructionsCan
   readonly address: ListAddress
+  /** F-PR-02: the customer filter (`?party=`, set through onAddress); absent: none drawn. */
+  readonly customers?: CustomerFilterState
   readonly rows: { readonly items: readonly InstructionRow[] | null; readonly truncated: boolean; readonly problem: string | null }
   readonly tiles: Readonly<Record<ListView, number | null>>
   readonly asOf: string | null
@@ -141,6 +147,8 @@ function List({ model, actions }: { model: InstructionsListModel; actions?: Inst
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
 
+  const words = useProductionWords()
+  const customerCell = useCustomerCell(model.customers?.names ?? false)
   const columns = useMemo<ColDef<InstructionRow>[]>(() => {
     const OperationCell = ({ data }: ICellRendererParams<InstructionRow>) =>
       data ? (
@@ -204,6 +212,7 @@ function List({ model, actions }: { model: InstructionsListModel; actions?: Inst
     return [
       { colId: 'operation', headerName: t('col.operation'), field: 'operation.code' as never, minWidth: 200, flex: 1.6, cellRenderer: OperationCell },
       { colId: 'styles', headerName: t('col.styles'), minWidth: 150, flex: 1.1, cellRenderer: StylesCell, valueGetter: (params) => params.data?.style?.code ?? '' },
+      { colId: 'customer', headerName: words.t('customer.column'), minWidth: 110, flex: 0.7, valueGetter: (params) => (params.data ? customerCell(params.data) : '') },
       { colId: 'languages', headerName: t('col.languages'), minWidth: 140, flex: 1, cellRenderer: LanguagesCell, sortable: false },
       { colId: 'version', headerName: t('col.version'), minWidth: 130, flex: 0.9, cellRenderer: VersionCell, valueGetter: (params) => params.data?.current?.number ?? 0 },
       { colId: 'status', headerName: t('col.status'), minWidth: 130, flex: 0.7, cellRenderer: StatusCell, sortable: false },
@@ -212,7 +221,7 @@ function List({ model, actions }: { model: InstructionsListModel; actions?: Inst
       { colId: 'changed', headerName: t('col.changed'), field: 'updatedAt', minWidth: 140, flex: 0.6, valueFormatter: (params) => (params.value ? formatDate(params.value as string, { locale }) : '—') },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, say, locale, recordHref, model.prefix])
+  }, [t, say, locale, recordHref, model.prefix, words, customerCell])
 
   const filtered = isFiltered(model.address)
   const problem = model.rows.problem
@@ -332,13 +341,16 @@ function List({ model, actions }: { model: InstructionsListModel; actions?: Inst
           />
         }
         tools={
-          <Select size="sm" aria-label={t('list.viewFilter')} value={model.address.view} onChange={(event) => actions?.onAddress?.({ ...model.address, view: event.target.value as ListView })}>
-            {LIST_VIEWS.map((view) => (
-              <option key={view} value={view}>
-                {t(`view.${view}`)}
-              </option>
-            ))}
-          </Select>
+          <>
+            <Select size="sm" aria-label={t('list.viewFilter')} value={model.address.view} onChange={(event) => actions?.onAddress?.({ ...model.address, view: event.target.value as ListView })}>
+              {LIST_VIEWS.map((view) => (
+                <option key={view} value={view}>
+                  {t(`view.${view}`)}
+                </option>
+              ))}
+            </Select>
+            {model.customers && <CustomerFilter state={model.customers} onPick={(party) => actions?.onAddress?.({ ...model.address, party })} />}
+          </>
         }
         selection={{
           selected,

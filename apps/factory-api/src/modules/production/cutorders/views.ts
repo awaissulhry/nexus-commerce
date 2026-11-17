@@ -93,7 +93,14 @@ function lineView(row: LineRow) {
 /** The plies a fabric cut order takes: its lines' (they share them); null for leather. */
 const pliesOf = (order: CutOrderRow, lines: readonly LineRow[]): number | null => (order.kind === 'FABRIC' ? Math.max(0, ...lines.map((line) => line.plies ?? 0)) : null)
 
-export function summaryView(order: CutOrderRow, lines: readonly LineRow[], lays: readonly LayRow[], tickets: readonly TicketRow[]) {
+/** F-PR-02: a customer of a cut order's cells as the office names it (the floor gets none: shared floor screens, L13). */
+export interface CutOrderCustomer {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+}
+
+export function summaryView(order: CutOrderRow, lines: readonly LineRow[], lays: readonly LayRow[], tickets: readonly TicketRow[], customers: readonly CutOrderCustomer[] = []) {
   const workOrders = new Map<string, { id: string; number: string }>()
   const styles = new Map<string, { id: string; code: string; name: string }>()
   for (const line of lines) {
@@ -126,6 +133,8 @@ export function summaryView(order: CutOrderRow, lines: readonly LineRow[], lays:
     createdAt: toUtcIso(order.createdAt),
     version: order.version,
     words: { it: planWords(plan, 'it'), en: planWords(plan, 'en') },
+    // F-PR-02: the customers of its cells, by name (the Customer column; "Customers: A, B" on the record's band).
+    customers: [...customers],
   }
 }
 export type CutOrderSummary = ReturnType<typeof summaryView>
@@ -138,6 +147,8 @@ export interface RecordParts {
   readonly tickets: readonly TicketRow[]
   readonly plyRuns: readonly PlyRunRow[]
   readonly manage: boolean
+  /** F-PR-02: the customers of its cells (office readers only). */
+  readonly customers?: readonly CutOrderCustomer[]
 }
 
 export function recordView(parts: RecordParts) {
@@ -189,7 +200,7 @@ export function recordView(parts: RecordParts) {
   const started = tickets.some((ticket) => ticket.status === 'STARTED' || ticket.status === 'DONE')
   return {
     cutOrder: {
-      ...summaryView(order, lines, lays, tickets),
+      ...summaryView(order, lines, lays, tickets, parts.customers ?? []), // F-PR-02
       marker,
       markerName: order.markerName,
       note: order.note,

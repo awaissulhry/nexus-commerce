@@ -20,7 +20,8 @@
     "write": "Non è stato possibile salvare. Riprova.",
     "changed": "Qualcuno lo ha cambiato dopo la tua lettura: il tabellone è stato riletto.",
     "stale": "Non è stato possibile rileggere il tabellone: ciò che vedi potrebbe non essere aggiornato.",
-    "noTarget": "Questo sito non ha linee da stampare."
+    "noTarget": "Questo sito non ha linee da stampare.",
+    "everyCustomer": "Questa vista somma tutti i clienti: serve l'accesso a tutti i clienti."
   },
   "live": {
     "connecting": "Connessione",

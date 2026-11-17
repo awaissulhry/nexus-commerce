@@ -17,6 +17,11 @@ import { SubscribeDialog, type SubscribeActions, type SubscribeModel } from './S
 import { YieldPanel, type YieldPanelModel } from '../yield/view/YieldPanel'
 import type { YieldPeriod } from '../yield/model'
 import '../reports.css'
+// F-PR-02: the customer filter on the style × size tables; the honest words when the report needs every customer.
+import { useProductionWords } from '../../../../lib/production/words'
+import { pickedLabel, type CustomerFilterState } from '../../_shared/customer/model'
+import { CustomerFilter, EveryCustomerNotice } from '../../_shared/customer/view/CustomerFilter'
+import { EVERY_CUSTOMER_PROBLEM } from '../model'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 
@@ -37,6 +42,8 @@ export interface ReportsModel {
   readonly cutYield?: YieldPanelModel
   /** B-W2b-435 (prr-wip, ANA-015): WIP ageing by line — the container's (it reads its own data); absent: not drawn. */
   readonly wipAgeing?: ReactNode
+  /** F-PR-02: the customer filter of the style × size tables (`?party=`); absent: none drawn. */
+  readonly customers?: CustomerFilterState
 }
 
 export interface ReportsActions extends SubscribeActions {
@@ -47,6 +54,8 @@ export interface ReportsActions extends SubscribeActions {
   /** B-W2b-130. */
   onYieldDays?: (days: YieldPeriod) => void
   onRetryYield?: () => void
+  /** F-PR-02: a customer picked (null: every customer). */
+  onCustomer?: (party: string | null) => void
 }
 
 /**
@@ -71,9 +80,12 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
   const locale = useLocale()
   const daily = model.daily.value
   const day = (date: string) => formatDate(`${date}T12:00:00Z`, { locale })
-  const address: ReportAddress = { site: daily?.site.id ?? model.address.site, date: daily?.day ?? model.address.date }
+  const address: ReportAddress = { site: daily?.site.id ?? model.address.site, date: daily?.day ?? model.address.date, party: model.address.party ?? null }
   const mine = model.mine?.active ? model.mine : null
   const weekdays = mine ? weekdaysPhrase(mine.weekdays) : null
+  // F-PR-02: the customer the style × size tables are narrowed to (a print keeps the same address).
+  const words = useProductionWords()
+  const narrowedTo = model.customers ? pickedLabel(model.customers) : null
 
   if (!model.can.view) {
     return (
@@ -138,6 +150,8 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
             </Button>
           )}
         </span>
+        {/* F-PR-02: only once the report was read (a person limited to some customers is refused the whole report). */}
+        {daily && model.customers && <CustomerFilter state={model.customers} onPick={actions?.onCustomer} />}
         <span className="fw-prr-muted">{t('privacy')}</span>
       </div>
 
@@ -146,14 +160,19 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
           <h2 className="fw-prr-h2">{t('daily.title')}</h2>
           {daily && <span className="fw-prr-muted">{daily.day === daily.today ? t('daily.soFar', { day: day(daily.day) }) : t('daily.of', { day: day(daily.day) })}</span>}
         </div>
-        {model.daily.problem ? (
+        {model.daily.problem === EVERY_CUSTOMER_PROBLEM ? (
+          <EveryCustomerNotice />
+        ) : model.daily.problem ? (
           <EmptyState title={t('daily.failed')} description={t(model.daily.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
         ) : !daily ? (
           <p className="fw-prr-muted" role="status">
             <Spinner size={12} /> {t('common.loading')}
           </p>
         ) : (
-          <DailyPanel daily={daily} prefix={model.prefix} can={model.can} />
+          <>
+            {narrowedTo && <p className="fw-prr-muted">{words.t('customer.narrowedTables', { name: narrowedTo })}</p>}
+            <DailyPanel daily={daily} prefix={model.prefix} can={model.can} />
+          </>
         )}
       </Card>
 

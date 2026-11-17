@@ -1017,5 +1017,19 @@
       "connecting": "Connessione…",
       "never": "Non ancora letto"
     }
+  },
+  "customer": {
+    "filter": "Cliente",
+    "all": "Tutti i clienti",
+    "allMine": "Tutti i miei clienti",
+    "unknown": "Non tra i tuoi clienti",
+    "mixed": "Clienti misti (creato prima della regola)",
+    "everyTitle": "Serve l'accesso a tutti i clienti",
+    "every": "Questa vista somma tutti i clienti: serve l'accesso a tutti i clienti.",
+    "column": "Cliente",
+    "several_one": "{count} cliente",
+    "several_other": "{count} clienti",
+    "facts": "Clienti: {names}",
+    "narrowedTables": "Tabelle per modello e taglia: solo {name}. I dati delle linee sono di tutti i clienti."
   }
 }

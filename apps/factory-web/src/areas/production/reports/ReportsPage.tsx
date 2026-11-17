@@ -32,6 +32,8 @@ import { getCutYield, type CutYield } from './yield/api'
 import { withYieldDays, yieldCanOf, yieldDaysOf, yieldPeriod } from './yield/model'
 // B-W2b-435: WIP ageing by line (prr-wip).
 import { WipAgeing } from './wip-ageing/WipAgeing'
+// F-PR-02: the customer filter.
+import { useProductionCustomers } from '../_shared/customer/use-customers'
 
 /**
  * `/w/<company>/production/reports` (SCR-240): reads the day's report of the site in the address (`?site=&date=`; else the
@@ -49,6 +51,8 @@ export function ReportsPage() {
   const prefix = pathname.replace(/\/production\/reports\/?$/, '')
   const can = useMemo(() => reportsCanOf(session.permissions), [session.permissions])
   const address = useMemo(() => addressOf(params), [params])
+  // F-PR-02: the customer filter (the style × size tables follow it).
+  const customers = useProductionCustomers('reports')
   const [daily, setDaily] = useState<{ value: DailyReport | null; problem: string | null }>({ value: null, problem: null })
   const [subscriptions, setSubscriptions] = useState<Subscription[] | null>(null)
   const [dialog, setDialog] = useState<{ draft: SubscribeDraft; people: { value: Recipient[] | null; problem: string | null }; busy: boolean; problem: Phrase | null } | null>(null)
@@ -76,7 +80,7 @@ export function ReportsPage() {
     if (!can.view) return
     const target = asked.current
     try {
-      const value = await getDaily(api, { siteId: target.site, date: target.date })
+      const value = await getDaily(api, { siteId: target.site, date: target.date, partyId: target.party ?? undefined })
       if (asked.current === target) {
         setDaily({ value, problem: null })
         loadYield(value.site.id, value.day)
@@ -104,7 +108,8 @@ export function ReportsPage() {
     () => void load(),
   )
 
-  const go = (next: ReportAddress) => router.replace(withYieldDays(reportsHref(prefix, next), days), { scroll: false })
+  // F-PR-02: a move to another site or day keeps the customer filter.
+  const go = (next: ReportAddress) => router.replace(withYieldDays(reportsHref(prefix, { ...next, party: next.party ?? address.party ?? null }), days), { scroll: false })
   const site = daily.value?.site ?? null
   const mine = mySubscription(subscriptions, site?.id ?? null)
   const me = { id: session.user.id, name: session.user.displayName }
@@ -123,7 +128,8 @@ export function ReportsPage() {
     onDay: (date) => go({ site: site?.id ?? address.site, date: date === daily.value?.today ? null : date }),
     onRetry: () => void load(),
     onOpenSubscribe: openSubscribe,
-    onYieldDays: (next) => router.replace(withYieldDays(reportsHref(prefix, { site: daily.value?.site.id ?? address.site, date: address.date }), next), { scroll: false }),
+    onYieldDays: (next) => router.replace(withYieldDays(reportsHref(prefix, { site: daily.value?.site.id ?? address.site, date: address.date, party: address.party ?? null }), next), { scroll: false }),
+    onCustomer: customers.onPick,
     onRetryYield: () => (daily.value ? loadYield(daily.value.site.id, daily.value.day) : void load()),
     onCloseSubscribe: () => setDialog(null),
     onDraft: (change) => setDialog((current) => (current ? { ...current, draft: { ...current.draft, ...change }, problem: null } : current)),
@@ -157,6 +163,7 @@ export function ReportsPage() {
     prefix,
     can,
     address,
+    customers: customers.state,
     daily,
     mine,
     live,
