@@ -146,6 +146,8 @@ export const acceptContract = defineContract({
     version,
     /** Our words to the customer (optional on an accept). */
     answer: z.string().trim().max(MAX_ANSWER).nullable().optional(),
+    /** B-PR-27b, RUSH only: true = "Accept and rush the floor" (also first on every tablet); false or left out = "Accept as urgent". */
+    rushFloor: z.boolean().optional(),
   }),
   response: {
     200: output({
@@ -157,6 +159,28 @@ export const acceptContract = defineContract({
         paused: z.array(acceptedWorkOrder),
         /** RESUME: the work orders whose pause was lifted now. */
         resumed: z.array(acceptedWorkOrder),
+        // ── B-PR-27b ──
+        /** RUSH: the order's urgency in the customer's own list after the accept, and "4 of 3 urgent used · 1 agreed with us". */
+        urgency: output({
+          urgency: z.enum(['URGENT', 'REGULAR']),
+          urgentRank: z.number().int().nullable(),
+          /** It was Urgent already: its place kept, nothing written. */
+          already: z.boolean(),
+          batchId: id().nullable(),
+          use: output({ used: z.number().int(), max: z.number().int(), agreed: z.number().int(), left: z.number().int(), over: z.boolean(), words }),
+        }).nullable(),
+        /** RUSH with rushFloor: the work orders rushed now (changed) or rushed already. */
+        rushed: z.array(acceptedWorkOrder),
+        /** RUSH with rushFloor: the mixed work orders left alone (rush them by hand). */
+        rushSkipped: words.nullable(),
+        /** RUSH: the new date proposed to sales per line (each a re-promise sales accepts), and the lines left out with why. */
+        repromise: output({
+          proposals: z.array(output({ id: id(), orderLineId: id(), seq: z.number().int(), sizes: z.array(output({ size: z.string().nullable(), from: businessDate().nullable(), to: businessDate() })) })),
+          skipped: z.array(output({ orderLineId: id(), seq: z.number().int(), words })),
+        }).nullable(),
+        /** SAMPLE_ROUND: the round it made (named on the request). */
+        sampleRound: output({ id: id(), number: z.string(), kind: z.string() }).nullable(),
+        // ── end B-PR-27b ──
         words,
       }),
     }),

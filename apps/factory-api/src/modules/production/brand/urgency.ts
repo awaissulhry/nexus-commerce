@@ -314,6 +314,8 @@ function record(
     readonly undoOf?: string
     readonly locked: boolean
     readonly reason?: string | null
+    /** B-PR-27b: our mark came from accepting the customer's own "Urgent – asked" (its notices say no "changed by us"). */
+    readonly asked?: boolean
     readonly before: readonly UrgencyState[]
     readonly after: readonly UrgencyState[]
     readonly rows: readonly UrgencyOrderRow[]
@@ -345,7 +347,7 @@ function record(
     if (orderIds.length === 0) continue
     const share = { companyId: input.companyId, partyId: input.partyId, orderIds }
     assertOneParty(share, partyOf)
-    tools.emit(urgencyChangedEvent(share, { urgency, by: input.by, change: input.change, locked: input.locked, undo: input.undo, asked: false, batchId: input.batchId }))
+    tools.emit(urgencyChangedEvent(share, { urgency, by: input.by, change: input.change, locked: input.locked, undo: input.undo, asked: input.asked ?? false /* B-PR-27b */, batchId: input.batchId }))
   }
 }
 
@@ -891,3 +893,60 @@ export async function customerUrgencyCard(caller: CommandCaller, partyId: string
   })
 }
 // ── end B-PR-22b ──
+
+// ── B-PR-27b: an accepted "Urgent – asked" (production/brand-requests/accept.ts) ─────────────────────────────────────────────────
+// Production plan §3 "Brand-slot rule": "Putting an order ahead of other brands stays our act: accept its 'Urgent – asked'"; "4 of
+// 3 · 1 agreed with us"; lead pick L18; review fixes R-40, R-64. Our mark (urgencySetBy FACTORY, the person who accepts) puts the
+// order LAST in the customer's own Urgent list — it may pass the customer's quota: the customer reads "agreed with us" — and moves
+// it only among that customer's own places (planning's brand-slot pass); it never writes the office's levers (priority,
+// priorityLevel, backlogRank, WorkOrder.priority): rushing the floor is the accept's own, separate act.
+
+/** Why an "Urgent – asked" is not accepted as urgent now, in the office's words (409 `request/<code>`). */
+export const ASK_ACCEPT_REFUSALS = ['NOT_KEPT', 'NOT_OPEN', 'URGENCY_OFF', 'LOCKED'] as const
+export type AskAcceptRefusal = (typeof ASK_ACCEPT_REFUSALS)[number]
+
+export class AskAcceptRefused extends DomainError {
+  override name = 'AskAcceptRefused'
+  constructor(readonly refusal: AskAcceptRefusal, words: Words) {
+    super('invalid_state', words.en, [{ path: `request/${refusal}`, message: words.en }])
+  }
+}
+
+/** What accepting the ask as urgent did to the order's urgency (the customer's own list only). */
+export interface AcceptedUrgency {
+  readonly urgency: BrandUrgency
+  /** Its place in the customer's own Urgent list (1 first). */
+  readonly urgentRank: number | null
+  /** It was Urgent already: its place is kept, nothing written. */
+  readonly already: boolean
+  readonly batchId: string | null
+  /** "4 of 3 urgent used · 1 agreed with us" (the customer's own open orders). */
+  readonly use: UrgentUse & { readonly words: Words }
+}
+
+/**
+ * Accepting a customer's "Urgent – asked", inside the accept's command: under the customer's own lock (as every urgency command),
+ * the order marked Urgent by us (last in its Urgent list, its batch and the state before in ONE audit row
+ * `production.brandUrgency.acceptAsk`, ONE brand_production.urgency_changed with `asked: true`); an order Urgent already keeps its
+ * place. Refused in words (nothing written): no production row yet, no longer in production, the customer's urgency switched off,
+ * or we locked it at Regular.
+ */
+export async function acceptAskInCommand(tools: CommandTools, input: { readonly partyId: string; readonly companyId: string; readonly orderId: string; readonly actorId: string }, words: Readonly<Record<AskAcceptRefusal, Words>>): Promise<AcceptedUrgency> {
+  const settings = await lockCustomerUrgency(tools.tx, input.partyId)
+  const rows = await readUrgencyRows(tools.tx, { partyId: input.partyId, companyId: input.companyId, orderIds: [input.orderId] })
+  const row = rows.find((entry) => entry.orderId === input.orderId)
+  if (!row) throw new AskAcceptRefused('NOT_KEPT', words.NOT_KEPT)
+  if (!row.open) throw new AskAcceptRefused('NOT_OPEN', words.NOT_OPEN)
+  if (!settings.urgencyOn) throw new AskAcceptRefused('URGENCY_OFF', words.URGENCY_OFF)
+  if (row.locked) throw new AskAcceptRefused('LOCKED', words.LOCKED)
+  if (row.urgency === 'URGENT') return { urgency: 'URGENT', urgentRank: row.urgentRank, already: true, batchId: null, use: useOf(rows, input.partyId, settings.max) }
+  const batchId = newId()
+  const urgentList = [...urgentListOf(rows), row.orderId]
+  const urgency = new Map<string, BrandUrgency>([[row.orderId, 'URGENT']])
+  const { before, after } = await writeUrgency(tools, { rows, urgency, urgentList, batchRows: new Set([row.orderId]), batchId, by: 'FACTORY', byId: input.actorId })
+  record(tools, { action: 'production.brandUrgency.acceptAsk', partyId: input.partyId, companyId: input.companyId, batchId, by: 'FACTORY', byId: input.actorId, change: 'MARK', undo: false, locked: false, asked: true, before, after, rows })
+  const ranks = ranksOf(urgentList)
+  const now = rows.map((entry) => (entry.orderId === row.orderId ? { ...entry, urgency: 'URGENT' as const, urgentRank: ranks.get(row.orderId) ?? null, setBy: 'FACTORY' as const } : { ...entry, urgentRank: entry.urgency === 'URGENT' ? (ranks.get(entry.orderId) ?? entry.urgentRank) : null }))
+  return { urgency: 'URGENT', urgentRank: ranks.get(row.orderId) ?? null, already: false, batchId, use: useOf(now, input.partyId, settings.max) }
+}
+// ── end B-PR-27b ──

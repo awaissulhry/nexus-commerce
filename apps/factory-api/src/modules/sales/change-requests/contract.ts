@@ -343,6 +343,16 @@ export const acceptContract = defineContract({
       orderCancelled: z.boolean(),
       /** B-W2b-F14: a cancel's fee as it stood when accepted (shown to the customer; no money moves); null: a change. */
       cancelFee: cancelFee.nullable(),
+      /**
+       * B-PR-27b: ship what is ready — the order ships as ready now, and the first part's date proposed to sales per line (each a
+       * re-promise sales accepts), the lines left out with why; null: not a ship-what-is-ready.
+       */
+      split: output({
+        shipComplete: z.boolean(),
+        proposals: z.array(output({ id: id(), orderLineId: id(), seq: z.number().int(), sizes: z.array(output({ size: z.string().nullable(), from: day.nullable(), to: day })) })),
+        skipped: z.array(output({ orderLineId: id(), seq: z.number().int(), words })),
+        words,
+      }).nullable(),
     }),
   },
 })

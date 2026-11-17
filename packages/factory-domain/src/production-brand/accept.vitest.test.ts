@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ASK_RULES, ORDER_REQUEST_KINDS } from '../sales/change-requests/rules'
 import { CUSTOMER_PAUSE_REASON, isProductionAccept, pauseDoneWords, pausePlan, plainHoldWordsOf, PRODUCTION_ACCEPT_KINDS, resumeReasonOf, type AcceptWorkOrder } from './accept'
+// B-PR-27b
+import { ACCEPT_DONE_WORDS, joinedWords, NOTHING_TO_RUSH_WORDS, repromiseAsksOf, REPROMISE_SKIP_WORDS, RUSH_FLOOR_ONLY_WORDS, RUSH_REFUSAL_WORDS, RUSH_RIGHT_WORDS, rushMixedWords, rushPlan, sampleCellsOf, sampleInstructionsOf, type RushWorkOrder } from './accept'
 
 /** B-PR-27a: what accepting a customer's pause and resume does to the order's work, pure (production-brand/accept). */
 
@@ -57,5 +59,50 @@ describe('B-PR-27a: the pause', () => {
     expect(resumeReasonOf('SO-0001')).toBe("Resumed at the customer's request (SO-0001).")
     expect(resumeReasonOf('X'.repeat(600))).toHaveLength(500)
     expect(resumeReasonOf('SO-0001')).not.toMatch(/[\r\n]/)
+  })
+})
+
+// ── B-PR-27b: "Urgent – asked", ship what is ready, another sample round ─────────────────────────────────────────────────────────
+describe('B-PR-27b: rushing the floor, the re-promise, the sample round', () => {
+  const rush = (id: string, patch: Partial<RushWorkOrder> = {}): RushWorkOrder => ({ ...wo(id), rush: false, ...patch })
+
+  it('rushes the open own work orders (one rushed already is said so); a mixed one is never rushed by the accept', () => {
+    expect(rushPlan([rush('01'), rush('02', { rush: true }), rush('03', { partyId: null }), rush('04', { status: 'CLOSED' })])).toEqual({ rush: ['01'], already: ['02'], mixed: ['WO-03'] })
+    expect(rushPlan([rush('01', { status: 'COMPLETED' })])).toEqual({ rush: [], already: [], mixed: [] })
+    expect(rushMixedWords(['WO-03']).en).toBe("Work order WO-03 also makes other customers' pieces: rush it by hand if needed.")
+  })
+
+  it('proposes the date asked for every open size promised later; a size promised by then, shipped or unpromised keeps its date', () => {
+    expect(
+      repromiseAsksOf(
+        [
+          { size: '50', open: 2, promised: '2026-12-20' },
+          { size: '52', open: 2, promised: '2026-12-01' },
+          { size: '54', open: 0, promised: '2026-12-20' },
+          { size: '56', open: 1, promised: null },
+        ],
+        '2026-12-05',
+      ),
+    ).toEqual([{ size: '50', date: '2026-12-05' }])
+  })
+
+  it('a size set is one piece of each size the line orders; any other round one piece of the base size', () => {
+    const line = { colourwayId: 'blk', baseSize: null, sizes: [{ size: '52', quantity: 2 }, { size: '50', quantity: 1 }, { size: '54', quantity: 0 }] }
+    const style = { baseSize: '52', sizes: ['48', '50', '52', '54'] }
+    expect(sampleCellsOf('SIZE_SET', line, style)).toEqual([{ colourwayId: 'blk', size: '50', quantity: 1 }, { colourwayId: 'blk', size: '52', quantity: 1 }])
+    expect(sampleCellsOf('PRE_PRODUCTION', line, style)).toEqual([{ colourwayId: 'blk', size: '52', quantity: 1 }])
+    expect(sampleCellsOf('TOP_OF_PRODUCTION', { ...line, baseSize: '50' }, style)).toEqual([{ colourwayId: 'blk', size: '50', quantity: 1 }])
+    expect(sampleCellsOf('BRAND', line, { baseSize: null, sizes: ['48', '50', '52'] })).toEqual([{ colourwayId: 'blk', size: '50', quantity: 1 }])
+    expect(sampleInstructionsOf('SO-1', 10, null)).toBe('Asked by the customer from its portal (SO-1, line 10).')
+    expect(sampleInstructionsOf('SO-1', 10, 'One of each.')).toBe('Asked by the customer from its portal (SO-1, line 10): One of each.')
+  })
+
+  it('says each refusal and what was done in the office’s words, it and en', () => {
+    for (const words of [...Object.values(RUSH_REFUSAL_WORDS), NOTHING_TO_RUSH_WORDS, RUSH_RIGHT_WORDS, RUSH_FLOOR_ONLY_WORDS, ...Object.values(REPROMISE_SKIP_WORDS)]) {
+      expect(words.it.length, words.en).toBeGreaterThan(0)
+      expect(words.en.length).toBeGreaterThan(0)
+    }
+    expect(joinedWords([ACCEPT_DONE_WORDS.urgent(3, false), ACCEPT_DONE_WORDS.rushed(['WO-1']), ACCEPT_DONE_WORDS.repromised(1)]).en).toBe("Marked Urgent by us: number 3 in the customer's own Urgent list. Rushed on the floor: WO-1. New date proposed to sales for 1 line.")
+    expect(ACCEPT_DONE_WORDS.urgent(2, true).en).toBe('The order was Urgent already: it keeps its place.')
   })
 })
