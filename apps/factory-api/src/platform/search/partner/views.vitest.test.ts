@@ -27,10 +27,29 @@ function partnerReadable(): Set<string> {
 
 const indexedTypes = (): Set<string> => new Set(indexerFiles(SRC).map((file) => readFileSync(file, 'utf8').match(/recordType: '([A-Za-z]+)'/)?.[1] ?? ''))
 
+// ---- B-TH-073: the one view of a record the partner role cannot read — a brand's own private-label style (factory-db grants
+// the partner role no Style read; no schema change in TH-5). It reads the party in the partner scope first, then the styles in
+// the tenant scope kept to the private label naming that party (views/style.ts). Any other view must be partner-readable.
+const TENANT_READ_VIEWS: Readonly<Record<string, { readonly file: string; readonly partyColumn: string }>> = Object.freeze({
+  Style: { file: 'views/style.ts', partyColumn: 'brandPartyId' },
+})
+// ---- end B-TH-073
+
 describe('the partner views', () => {
   it('name only records the partner role reads and that have a thread', () => {
     const readable = partnerReadable()
     for (const view of PARTNER_VIEWS) {
+      // ---- B-TH-073: a tenant-read view: the partner role truly cannot read it, and its file keeps the read to the party's own.
+      const tenantRead = Object.hasOwn(TENANT_READ_VIEWS, view.recordType) ? TENANT_READ_VIEWS[view.recordType] : undefined
+      if (tenantRead) {
+        expect(readable.has(view.recordType), `${view.recordType}: read in the tenant scope only because the partner role cannot`).toBe(false)
+        const source = readFileSync(fileURLToPath(new URL(tenantRead.file, import.meta.url)), 'utf8')
+        expect(source, `${view.recordType}: the party is read in the partner scope first`).toMatch(/client\.party\.findMany/)
+        expect(source, `${view.recordType}: the tenant read keeps to the party's own`).toMatch(new RegExp(`${tenantRead.partyColumn}: partyId`))
+        expect(Object.hasOwn(THREAD_RECORDS, view.recordType), `${view.recordType}: it has a thread`).toBe(true)
+        continue
+      }
+      // ---- end B-TH-073
       expect(readable.has(view.recordType), `${view.recordType}: the partner role reads it`).toBe(true)
       expect(Object.hasOwn(THREAD_RECORDS, view.recordType), `${view.recordType}: it has a thread`).toBe(true)
     }
@@ -52,6 +71,12 @@ describe('the partner views', () => {
     expect(viewFits(partnerViewOf('Party')!, [])).toBe(false)
     // An invoice is found only with the price grain; no supplier or workshop view asks one (Owner answer C2).
     expect(partnerViewOf('Invoice')?.grain).toBe('price')
+    // B-TH-073: a customer's own styles and sample rounds, in the Samples group; never a supplier's or a workshop's.
+    for (const type of ['Style', 'SampleRound']) {
+      expect(partnerViewOf(type)?.group, type).toBe('samples')
+      expect(viewFits(partnerViewOf(type)!, ['CUSTOMER']), type).toBe(true)
+      expect(viewFits(partnerViewOf(type)!, ['SUPPLIER', 'SUBCONTRACTOR', 'GUEST']), type).toBe(false)
+    }
     for (const view of PARTNER_VIEWS.filter((entry) => entry.kinds.includes('SUPPLIER') || entry.kinds.includes('SUBCONTRACTOR'))) expect(view.grain).toBeUndefined()
   })
 

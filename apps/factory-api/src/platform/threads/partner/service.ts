@@ -14,8 +14,8 @@ import { encodeCursor } from '@nexus/factory-domain/threads/timeline'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { systemCallerOf } from '../../files/files'
 import { audienceSees, type FileAudience } from '../../files/rules'
-import { kindsOfSession, partnerCallerOf, type PartnerCaller } from '../../search/partner/session'
-import type { PartnerRecord } from '../../search/partner/view'
+import { kindsOfSession, partnerCallerOf, partnerReaderOf, type PartnerCaller } from '../../search/partner/session'
+import type { PartnerReader, PartnerRecord } from '../../search/partner/view'
 import { partnerViewOf, viewFits } from '../../search/partner/views'
 import type { AttachmentView } from '../contract'
 import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
@@ -83,11 +83,11 @@ interface OpenRecord {
 }
 
 /** The record if the partner may open it (its view, the person's kinds, threads.read over it), else 404 in words. */
-async function openRecord(client: FactoryClient, caller: PartnerCaller, ref: RecordRef): Promise<OpenRecord> {
+async function openRecord(client: FactoryClient, caller: PartnerCaller, ref: RecordRef, /* B-TH-069 */ reader: PartnerReader): Promise<OpenRecord> {
   const view = partnerViewOf(ref.type)
   const kinds = await kindsOfSession(client, caller)
   if (!view || !viewFits(view, kinds)) throw new NotFoundError('Record not found.')
-  const [record] = await view.read(client, [ref.id])
+  const [record] = await view.read(client, [ref.id], reader)
   const scope = { companyId: record?.companyId ?? null, partyId: caller.context.partyId }
   if (!record || !can(caller.actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
   return { record, scope }
@@ -159,7 +159,7 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
   const caller = partnerCallerOf(request)
   const cursor = cursorOf(page.cursor)
   const read = await request.withClient(async (client) => {
-    const { record, scope } = await openRecord(client, caller, ref)
+    const { record, scope } = await openRecord(client, caller, ref, partnerReaderOf(request, caller))
     const thread = await threadOf(client, ref)
     const rows = thread
       ? await client.message.findMany({
@@ -196,7 +196,7 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
 // ---- B-TH-027: POST /portal/threads/<type>/<id>/read — the record as the partner may open it, then the person's own mark.
 export async function markPartnerThreadRead(request: FastifyRequest, ref: RecordRef, body: { readonly messageId?: string | undefined }, idempotencyKey?: string) {
   const caller = partnerCallerOf(request)
-  await request.withClient((client) => openRecord(client, caller, ref))
+  await request.withClient((client) => openRecord(client, caller, ref, partnerReaderOf(request, caller)))
   return markThreadRead(request as CommandCaller, ref, body, idempotencyKey, { preview: caller.session.preview })
 }
 // ---- end B-TH-027
@@ -222,7 +222,7 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
     for (const type of new Set(threads.map((thread) => thread.recordType))) {
       const view = partnerViewOf(type)
       if (!view || !viewFits(view, kinds)) continue
-      for (const record of await view.read(client, threads.filter((thread) => thread.recordType === type).map((thread) => thread.recordId))) {
+      for (const record of await view.read(client, threads.filter((thread) => thread.recordType === type).map((thread) => thread.recordId), partnerReaderOf(request, caller))) {
         if (can(caller.actor, THREADS_READ, { companyId: record.companyId, partyId: caller.context.partyId })) records.set(`${type}:${record.id}`, record)
       }
     }
@@ -308,7 +308,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   if (problems.length > 0) throw new ValidationError('The message is not valid.', problems)
 
   const opened = await request.withClient(async (client) => {
-    const { scope } = await openRecord(client, caller, ref)
+    const { scope } = await openRecord(client, caller, ref, partnerReaderOf(request, caller))
     if (caller.session.preview) throw new ForbiddenError(partnerThreadWords('PREVIEW', caller.session.person.locale, caller.session.company.name))
     if (!options.firstOfRequest && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
