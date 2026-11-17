@@ -5,6 +5,8 @@ import type { DeclineDraft, InquiriesCan, LineDraft, Loaded, Notice, OrderDraft,
 import type { CustomerCheck } from './api'
 import type { CustomerChoice, TaskDraft } from './model'
 import type { StyleRead } from './view/LinesEditor'
+// B-TH-252: "Start a project…" from the request (⋯ of the pane and the full page).
+import type { StartProjectActions, StartProjectModel } from './start-project'
 
 /**
  * The inquiry's record as its views draw it (design sales.inquiries rec:Inquiry — Request, Files & specs, Quote, Activity):
@@ -49,6 +51,8 @@ export interface InquiryRecordModel {
   readonly dialog: RecordDialog | null
   /** The mail's remote pictures were allowed (Show pictures). */
   readonly pictures: boolean
+  // ---- B-TH-252: "Start a project…" — why the ⋯ line is held (a key of `sales-incoming-pane`, null: it may) and its dialog when open.
+  readonly startProject?: { readonly held: string | null; readonly dialog: StartProjectModel | null }
 }
 
 export interface InquiryRecordActions {
@@ -66,6 +70,8 @@ export interface InquiryRecordActions {
   onOpenFile?: (fileId: string) => void
   onCopy?: () => void
   onDismissNotice?: () => void
+  // ---- B-TH-252: "Start a project…" (open the dialog; its draft, Start, close).
+  startProject?: StartProjectActions & { readonly onOpen?: () => void }
   dialog?: {
     onAssign?: (assigneeId: string | null) => void
     onRetryPeople?: () => void

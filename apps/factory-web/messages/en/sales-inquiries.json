@@ -1166,5 +1166,46 @@
       "noDomain": "Set up the mail domain first",
       "setUp": "Admin › Connections"
     }
+  },
+  "project": {
+    "open": "Start a project…",
+    "openHint": "Development work for this customer (a collection, a style family, a programme): the request is linked to it",
+    "held": {
+      "read": "Needs the right to read conversations.",
+      "right": "Needs the right to keep projects.",
+      "prospect": "The request has no customer yet: match it to its customer first (a project’s outside company never changes afterwards).",
+      "offline": "You are offline: try again when the network is back."
+    },
+    "title": "Start a project from this request",
+    "rule": "A project is for work on several styles, samples or orders, or work with no record yet. About this one order? Answer the request instead.",
+    "customer": "Outside company",
+    "customerHint": "Only {customer} and our team will be in this project. This cannot be changed later.",
+    "name": "Name",
+    "nameHint": "The request’s subject unless you type another name.",
+    "target": "Target date",
+    "targetHint": "When it should be done; its lead is reminded when it is past this date and quiet.",
+    "goal": "Goal",
+    "goalHint": "One paragraph: what the project should reach.",
+    "files_one": "Carry {count} file to the project",
+    "files_other": "Carry {count} files to the project",
+    "noFiles": "The request has no files to carry.",
+    "after": "The request is linked to the project and stays as it is: answer it, quote it or decline it as before. You lead the project; add colleagues and {customer} people on its page.",
+    "go": "Start the project",
+    "problem": {
+      "name": "The name is one line of up to 200 characters.",
+      "target": "Pick the target date.",
+      "targetPast": "The target date is in the past: pick today or a later day.",
+      "goal": "The goal is up to 4000 characters.",
+      "invalid": "Check the fields: the project could not be made as typed.",
+      "forbidden": "Your role cannot start a project for this customer.",
+      "notFound": "The request is no longer there.",
+      "unavailable": "The service does not answer right now. Try again in a moment."
+    },
+    "refusal": {
+      "NO_PARTY_REQUEST": "The request has no customer yet: match it to its customer first (a project’s outside company never changes afterwards).",
+      "PARTY_BLOCKED": "This customer is blocked or archived: a new project cannot be shared with it.",
+      "SEASON": "This season is not a season of the request’s company.",
+      "LEAD": "A project is led by an active office person who may read it."
+    }
   }
 }
