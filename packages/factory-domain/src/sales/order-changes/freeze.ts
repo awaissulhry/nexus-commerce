@@ -133,6 +133,18 @@ export function freezeVerdict(rules: readonly FreezeRuleFacts[], field: OrderFre
   return { field, state: rule.action, stage, ruleId: rule.id, frozenFrom: rule.frozenFrom, words }
 }
 
+/**
+ * B-PR-13 (production plan lead pick L7; 08-backend §2 "Freeze per brand"): the rules that decide for one customer. A company
+ * keeps its own set (OrderFreezeRule.partyId null) and may keep a set per customer (partyId set, B-PR-12): for each field the
+ * customer's set replaces the company's as soon as it holds an ACTIVE rule of that field; else the company's rules of that
+ * field decide. Another customer's rules never decide (they are left out even when passed). `partyId` null: the company's set
+ * alone (an order of a party with no set of its own reads the same). `freezeVerdict` then reads the result as before.
+ */
+export function rulesForParty<R extends Pick<FreezeRuleFacts, 'field' | 'active'> & { readonly partyId: string | null }>(rules: readonly R[], partyId: string | null): R[] {
+  const own = new Set(partyId === null ? [] : rules.filter((rule) => rule.partyId === partyId && rule.active).map((rule) => rule.field))
+  return rules.filter((rule) => (own.has(rule.field) ? rule.partyId === partyId : rule.partyId === null))
+}
+
 /** Every field's verdict at a stage (the "What is frozen" panel's rows). */
 export const verdictsAt = (rules: readonly FreezeRuleFacts[], stage: OrderFreezeStage | null): FreezeVerdict[] => ORDER_FREEZE_FIELDS.map((field) => freezeVerdict(rules, field, stage))
 

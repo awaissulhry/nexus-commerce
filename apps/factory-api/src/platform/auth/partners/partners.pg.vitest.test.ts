@@ -102,7 +102,8 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
     const tab = await owner.get(`/partners/${world.partyId}`)
     expect(tab.status).toBe(200)
     expect(tab.body).toMatchObject({ kinds: ['CUSTOMER'], settings: { portalOn: true, progressShared: false }, seats: { taken: 0, max: null }, termsInForce: null })
-    expect(tab.body.roles.map((role: { key: string }) => role.key)).toEqual(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'customer-admin'])
+    // B-PR-13: + the customer Production role.
+    expect(tab.body.roles.map((role: { key: string }) => role.key)).toEqual(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-production', 'customer-viewer', 'customer-admin'])
 
     const email = 'bea@brand-alpha.example'
     // No step-up in the last 5 minutes: refused before anything is written.
@@ -127,7 +128,8 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
     expect(people.find((user) => user.id === ownerUser.id)).toMatchObject({ audience: 'OFFICE', partyId: null, partnerKind: null, accessUntil: null })
     expect((await bea.get('/portal/me')).body.permissions).toEqual([])
     await acknowledge(bea)
-    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', 'portal.orderRequests.manage', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'portal.upload', 'threads.read'])
+    // B-PR-13: the Buyer also sees production and marks orders urgent.
+    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', 'portal.orderRequests.manage', 'portal.production.urgency', 'portal.production.view', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'portal.upload', 'threads.read'])
     const access = await bea.get('/portal/access')
     expect(access.body).toMatchObject({ kind: 'CUSTOMER', role: { key: 'customer-buyer', name: 'Buyer', seesPrices: true, admin: false }, capabilities: ['comment', 'upload', 'approve'], admins: [], preview: false })
     const team = await bea.get('/portal/colleagues')
@@ -240,7 +242,8 @@ describe('preview as the partner (read-only, every preview audited)', { timeout:
     expect(opened.status, JSON.stringify(opened.body)).toBe(200)
     expect(opened.body).toMatchObject({ party: { id: world.partyId, name: 'Brand Alpha' }, company: { code: 'C1' } })
     const me = await owner.get('/portal/me')
-    expect(me.body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'] })
+    // B-PR-13: + portal.production.view (a preview reads production, never the urgency mark).
+    expect(me.body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'] })
     expect((await owner.get('/portal/colleagues')).body).toMatchObject({ canManage: false })
     const write = await owner.post('/portal/colleagues', { email: 'x@brand-alpha.example', displayName: 'X', roleKey: 'customer-viewer' })
     expect(write.status).toBe(403)

@@ -307,7 +307,9 @@
       "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità",
       "portal_complaints_view": "Seguire i tuoi reclami di qualità",
       "portal_approvals_view": "Vedere cosa ti chiediamo di approvare",
-      "portal_samples_view": "Vedere i tuoi campioni, i tuoi modelli in sviluppo e le loro schede tecniche"
+      "portal_samples_view": "Vedere i tuoi campioni, i tuoi modelli in sviluppo e le loro schede tecniche",
+      "portal_production_view": "Vedere i tuoi ordini in produzione: fase, data prevista, stato e a chi tocca",
+      "portal_production_urgency": "Segnare urgenti o normali i tuoi ordini in produzione, entro le urgenze concesse"
     }
   },
   "display": {
@@ -340,6 +342,7 @@
     "customer-finance": "Amministrazione",
     "customer-quality": "Qualità",
     "customer-designer": "Stilista",
+    "customer-production": "Produzione",
     "customer-viewer": "Consultazione",
     "customer-admin": "Amministratore",
     "supplier-orders": "Ordini",

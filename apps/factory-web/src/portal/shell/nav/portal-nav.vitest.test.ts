@@ -191,6 +191,8 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       'customer-quality': customerRead,
       // The Designer: the catalogue, the samples (B-W2b-262) and its colleagues only.
       'customer-designer': ['home:nav.home#home', 'quotes:nav.quotesSamples#quotes', 'account:nav.account#account'],
+      // B-PR-13: the Production role — its orders, the samples (no catalogue), the shared files; its Production area comes with F-PR-11.
+      'customer-production': ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.samples#quotes', 'documents:nav.documents#documents', 'account:nav.account#account'],
       'customer-viewer': customerRead,
       'customer-admin': customerFull,
       'supplier-orders': supplierOrders,

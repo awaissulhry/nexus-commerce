@@ -417,6 +417,8 @@ import { IMPORTS_DUPLICATES_DEFINITIONS, IMPORTS_DUPLICATES_PERMISSIONS } from '
 import { HOME_DIGEST_DEFINITIONS, HOME_DIGEST_PERMISSIONS } from '../../insights-digest/permissions'
 // B-W2b-415: integration health (integrations.errors.manage: the error queue's retry and dismiss; security.jobs.run: Run now).
 import { INTEGRATION_ERRORS_DEFINITIONS, INTEGRATION_HEALTH_PERMISSIONS, JOBS_RUN_DEFINITIONS } from '../../integration-health/permissions'
+// B-PR-13: a customer's own production (partners.production.manage, production.brand.manage | override; portal.production.*, partner).
+import { PORTAL_PRODUCTION_DEFINITIONS, PORTAL_PRODUCTION_PERMISSIONS, PRODUCTION_BRAND_DEFINITIONS, PRODUCTION_BRAND_PERMISSIONS } from '../../production-brand/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1146,6 +1148,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-415
   INTEGRATION_ERRORS_DEFINITIONS,
   JOBS_RUN_DEFINITIONS,
+  // B-PR-13: a customer's own production (areas `partners`, `production`; the portal's in `portal`, flagged partner; all declared above).
+  PRODUCTION_BRAND_DEFINITIONS,
+  PORTAL_PRODUCTION_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1564,6 +1569,9 @@ for (const name of IMPORTS_DUPLICATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of HOME_DIGEST_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-415: integration health.
 for (const name of INTEGRATION_HEALTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-PR-13: a customer's own production; the portal's flagged partner.
+for (const name of PRODUCTION_BRAND_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_PRODUCTION_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -12,7 +12,8 @@ import type { RoleContent } from './templates'
  * people and bound to their own party. A person holds ONE main role of their kind and, beside it, the capabilities
  * (comment, upload, approve: COL-062) they were given; none is "view only".
  *
- *   customer        Buyer, Finance, Quality, Designer, Viewer, Admin — prices only for Buyer, Finance and Admin
+ *   customer        Buyer, Finance, Quality, Designer, Production (B-PR-13), Viewer, Admin — prices only for Buyer, Finance
+ *                   and Admin
  *   supplier        Orders, Invoices, Quality, Admin — never a price (Owner answer C2)
  *   subcontractor   Jobs, Admin — never a price
  *   guest           Accountant — read-only, an end of access always; its exports carry prices (FIN-158)
@@ -63,6 +64,8 @@ const MAIN_ROLES: Readonly<Record<PartnerKind, Readonly<Record<string, MainRole>
     finance: { name: 'Finance', description: 'Invoices, payments and statements, with prices.', price: true, allowed: ALL, byDefault: ['comment', 'upload'] },
     quality: { name: 'Quality', description: 'Certificates and declarations, quality reports, returns and complaints; no prices.', price: false, allowed: ALL, byDefault: ALL },
     designer: { name: 'Designer', description: 'Samples, tech packs, artwork and design proofs; no prices.', price: false, allowed: ALL, byDefault: ALL },
+    // B-PR-13 (production plan §5 Roles, L10): the customer's production person; its permissions in production-brand/permissions.
+    production: { name: 'Production', description: 'Orders in production: stages, dates and what waits for it; approvals, urgent orders and messages on its orders, and their shared files; no prices.', price: false, allowed: ALL, byDefault: ALL },
     viewer: { name: 'Viewer', description: 'Sees orders and documents and changes nothing; no prices.', price: false, allowed: ['comment'], byDefault: [] },
   },
   SUPPLIER: {

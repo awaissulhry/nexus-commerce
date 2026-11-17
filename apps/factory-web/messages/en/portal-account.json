@@ -156,6 +156,7 @@
       "customer-finance": "Invoices, payments and documents",
       "customer-quality": "Quality, certificates and complaints",
       "customer-designer": "Samples, the catalogue and approvals of designs",
+      "customer-production": "Orders in production, approvals and urgent orders",
       "customer-viewer": "Orders and documents, read only",
       "customer-admin": "Everything, and invites and removes colleagues",
       "withPrices": "What the role covers",
