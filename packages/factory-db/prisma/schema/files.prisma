@@ -16,6 +16,11 @@
 // are stored under `legal/` (the locked bucket), carry a retention date at least ten years ahead, and like every file
 // never change their content; nothing deletes them before that date or while on legal hold (the domain checks it, the
 // trigger refuses it for every login, the locked bucket refuses it at R2).
+//
+// TH-7 (threads plan, schema wave 6/9, B-TH-082; gaps N11, G12): measurement sheets (FileCategory MEASUREMENTS, body data,
+// never on a floor) and design files from customers (Illustrator, EPS, Photoshop, ZIP), download-only: an attachment or a
+// document, never a photo, never a thumbnail. No file is of a type a browser runs or renders as a page (HTML, SVG, scripts).
+// The …_files_measurements_th_guards trigger holds it for every login; who may open a sheet is the API's (B-TH-083).
 
 /// One file in object storage, kept for one record (COL-045). Content columns (name, type, size, SHA-256, store and key)
 /// never change after the row is written; a new version is a new file. Rows are never deleted: a deleted file keeps its
@@ -331,6 +336,11 @@ enum FileCategory {
   /// (deleteAfter). Personal data.
   MTM_PHOTO
   FITTING_PHOTO
+  /// TH-7 (threads plan, schema wave 6/9, B-TH-082; gap N11): a customer's measurement sheet (body data), filed by a tick at
+  /// upload (office, portal, link; B-TH-083): a document, an attachment or a photo of one, opened only by people with
+  /// sales.measurements.view (the API; each opening recorded), never shared with a floor, shared with a portal or a link only
+  /// with its record's own party (the …_files_measurements_th_guards and …_files_record_party_th_guards triggers).
+  MEASUREMENTS
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it
