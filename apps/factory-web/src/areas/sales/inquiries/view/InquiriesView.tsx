@@ -77,6 +77,9 @@ import { NewRequestDialog, type NewRequestActions, type NewRequestModel } from '
 import { SplitPane } from '../../../../lib/split-pane/SplitPane'
 import { CloseThreadConfirm } from '../../../../lib/record-thread/popups/view/Confirms'
 import { RequestPane, type PaneSlots } from './pane/RequestPane'
+// B-TH-290 (list-F10): the Production column — production's answer on each request.
+import { ProductionCell } from './pane/production/ProductionAnswer'
+import { companyToday, productionCell } from '../production-answer'
 
 /** Assign to… or Decline N over a selection (all or none: the API's bulk routes). */
 export type BulkDialog = { readonly kind: 'assign'; readonly ids: readonly string[]; readonly model: AssignModel } | { readonly kind: 'decline'; readonly ids: readonly string[]; readonly model: DeclineModel }
@@ -223,6 +226,8 @@ const CARD_FIELDS = Object.freeze({
   picture: { role: 'aside' as const },
   waitingHours: { role: 'field' as const },
   status: { role: 'field' as const },
+  // B-TH-290: production's answer on the card too (the production manager judges requests on a phone as well).
+  production: { role: 'field' as const },
   ...Object.fromEntries(['files', 'pieces', 'wantedDate', 'received', 'owner', 'source', 'number', 'company', 'targetPrice'].map((id) => [id, { role: 'hidden' as const }])),
 })
 
@@ -277,6 +282,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     return () => window.removeEventListener('keydown', onKey)
   }, [model.newRequest, model.bulk, paneOpen, model.can, offline, selected, byKey])
 
+  const today = companyToday() // B-TH-290
   const columns = useMemo<ColDef<IncomingRow>[]>(() => {
     const { model: m } = latest.current
     const act = () => latest.current.actions
@@ -529,6 +535,9 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       { colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 185, flex: 0.8, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell },
       { colId: 'owner', headerName: t('col.owner'), minWidth: 120, flex: 0.5, valueGetter: (params) => (params.data?.request ? (say(assigneePhrase(params.data.request)) ?? '') : '—') },
       { colId: 'status', headerName: t('col.state'), minWidth: 170, flex: 0.8, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: StateCell },
+      // B-TH-290 (list-F10, N17): production's answer — "OK" / "Not before week 14" (and how late against the wanted date); '—' until
+      // production answered and for the kinds that take none (a catalogue order, a change request). Screen = file (the export's column).
+      { colId: 'production', headerName: t('production.col'), headerTooltip: t('production.colHint'), minWidth: 140, flex: 0.6, valueGetter: (params) => (params.data?.request ? (say(productionCell(params.data.request.production, today)) ?? '') : ''), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data?.request ? <ProductionCell row={data.request} today={today} /> : data ? <span className="fw-inq-hint">—</span> : null) },
       // B-TH-230 (list-F01): New messages — the reader's own, only for a reader of threads; a door to the row at the first new one.
       ...(m.unread
         ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.5, valueGetter: (params: { data?: IncomingRow }) => unreadValue(unreadOf(params.data)), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data ? <LastMessageCell unread={unreadOf(data)} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<IncomingRow>]
@@ -556,7 +565,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     ]
     // The cells read the latest model and actions through `latest`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, !!model.catalogue, wide, l, model.unread /* B-TH-230 */])
+  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, !!model.catalogue, wide, l, model.unread /* B-TH-230 */, today /* B-TH-290 */])
 
   // ---- B-TH-233 (list-F14): "Customer replies" — the one office inbox of conversations waiting on us, each opening its record at the message ----
   const replyColumns = useMemo<ColDef<WaitingRow>[]>(() => {

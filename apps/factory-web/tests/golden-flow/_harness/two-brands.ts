@@ -48,6 +48,16 @@ export async function setUpBrand(flow: Flow, office: Desk, brand: BrandFixture, 
   await flow.write(page, 'POST', `/partners/${partyId}/people`, { email: brand.portalPerson.email, displayName: brand.portalPerson.name, locale: 'en', roleKey: 'customer-buyer', capabilities: ['comment'], companyId: flow.companyId })
 }
 
+// ---- B-TH-284 / B-TH-247 / B-TH-254 (UI golden flows TH-7, TH-4, TH-5): each stage runs alone on a fresh stack (`--stages th7-files`)
+// or after another stage of the same run (th1b-request made the two brands already): the set-up runs once per party.
+/** setUpBrand unless the party is that brand already (its code): a later stage of the run, or a kept stack, reuses it. */
+export async function ensureBrand(flow: Flow, office: Desk, brand: BrandFixture, partyId: string): Promise<void> {
+  const party = (await flow.read(office.page, `/parties/${partyId}`)).party as { code?: string }
+  if (party.code === brand.code) return
+  await setUpBrand(flow, office, brand, partyId)
+}
+// ---- end B-TH-284 / B-TH-247 / B-TH-254
+
 /** A desktop browser context of the portal (English, the company's time zone), traced, closed at the end of the run. */
 async function portalContext(flow: Flow, name: string): Promise<{ context: BrowserContext; page: Page }> {
   const context = await flow.browser.newContext({ baseURL: flow.web, viewport: { width: 1440, height: 900 }, locale: 'en-GB', timezoneId: 'Europe/Rome', colorScheme: 'light' })

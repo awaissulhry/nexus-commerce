@@ -5,12 +5,15 @@ import { canFor, COMPANY_ID, CONTACTS, CUSTOMERS, DECLINED_VIEW, DEMO_PICTURES, 
 // B-TH-228: Make order, Make style draft.
 import { ORDERABLE_VIEW, ORDERED_VIEW } from '../../demo/fixtures'
 import { orderDraftOf, styleDraftOf } from '../../model'
-import type { CustomerCheck, InquiryView } from '../../api'
+import type { CustomerCheck, InquiryView, ProductionSuggestion } from '../../api'
 import { HOME_ADDRESS } from '../../model'
 import type { InquiryRecordModel } from '../../record-model'
 import { InquiriesView, type InquiriesModel } from '../InquiriesView'
 // B-TH-252: "Start a project…" (⋯) and its dialog.
 import { carriableFiles, startDraftOf } from '../../start-project'
+// B-TH-290: production's answer (the chip, Details' Production section and its editor).
+import { PRODUCTION_ACTION, PRODUCTION_NOT_MINE, PRODUCTION_OK, PRODUCTION_WEEKS_LATE } from '../../demo/fixtures'
+import { answersHere, companyToday, productionDraftOf, productionHeld, weekChoices, type ProductionEditor, type ProductionModel } from '../../production-answer'
 
 /**
  * SCR-105-pane — Incoming's reading pane (B-TH-217, B-TH-218; threads plan TH-1b, pictures 13–15 drawn to the approved look: the
@@ -32,6 +35,30 @@ const CHECK_CONTACT: CustomerCheck = { ...CHECK_BASE, candidates: [{ party: { id
 const CHECK_DOMAIN: CustomerCheck = { ...CHECK_BASE, candidates: [{ party: { id: CUSTOMERS[1]!.id, code: CUSTOMERS[1]!.code, name: CUSTOMERS[1]!.legalName }, contact: null, matchedBy: 'DOMAIN' }] }
 const CHECK_NONE: CustomerCheck = CHECK_BASE
 // ---- end B-TH-234
+
+// ---- B-TH-290: production's answer — a view as answered, and the record's production model for a role ----
+const TODAY = companyToday()
+const answered = (view: InquiryView, production: InquiryView['production'], mine: boolean): InquiryView => ({ ...view, production, productionAction: mine ? PRODUCTION_ACTION : PRODUCTION_NOT_MINE })
+const productionOf = (view: InquiryView, editor: ProductionEditor | null = null): ProductionModel => ({ current: view.production ?? null, answers: answersHere(view), held: productionHeld(view, false), editor, today: TODAY })
+const editorOf = (view: InquiryView, over: Partial<ProductionEditor> = {}): ProductionEditor => ({ draft: productionDraftOf(view.production ?? null, TODAY), weeks: weekChoices(TODAY), suggestion: { status: 'loading' }, plants: null, plantId: null, busy: false, notice: null, ...over })
+const PM_VIEW = answered(VIEW, null, true)
+/** Planning's answer on the RFQ (made-up): the jacket lines dated, the trousers with no colourway and the glove asked in words left out. */
+const SUGGESTION: ProductionSuggestion = {
+  inquiry: { id: VIEW.id, number: VIEW.number, version: VIEW.version, wantedDate: VIEW.wantedDate },
+  site: { id: '0190f0e2-6101-7000-8000-000000000001', code: 'PLANT-1', name: 'Demo plant' },
+  today: TODAY,
+  suggestion: { answer: 'NOT_BEFORE', notBefore: '2027-02-08', week: '2027-W06', readyDate: '2027-02-10', partial: true, words: { it: 'Pronto il 2027-02-10: la pianificazione suggerisce "non prima della settimana 6 del 2027". Solo alcune righe sono datate.', en: 'Ready on 2027-02-10: planning suggests "not before week 6 of 2027". Only some lines are dated.' } },
+  lines: [
+    { lineId: VIEW.lines[0]!.id, seq: 10, date: '2027-02-03', complete: true, meetsWanted: false, words: 'x', warnings: [] },
+    { lineId: VIEW.lines[1]!.id, seq: 20, date: '2027-02-10', complete: false, meetsWanted: false, words: 'x', warnings: [] },
+  ],
+  leftOut: [
+    { lineId: VIEW.lines[2]!.id, seq: 30, why: { it: 'Nessun colore del modello scelto: la pianificazione data un modello in un colore.', en: 'No colourway of the style picked: planning dates a style in one colourway.' } },
+    { lineId: VIEW.lines[3]!.id, seq: 40, why: { it: 'Chiesta a parole: nessun modello da pianificare (crea la bozza del modello, poi sceglilo sulla riga).', en: 'Asked in words: no style to plan (make the style draft, then pick it on the line).' } },
+  ],
+  current: null,
+}
+// ---- end B-TH-290
 
 interface PaneCase {
   readonly role: RoleCase
@@ -149,5 +176,15 @@ export const designScreen = defineDesignScreen<PaneCase>({
     { id: 'th5-252-start', label: 'TH-5 · ⋯ Start a project: the request\'s customer is the project\'s (said, never chosen); a name, the target date, the files to carry', model: paneCase(VIEW, 'owner', { startProject: { held: null, dialog: { number: VIEW.number, customer: VIEW.party?.name ?? 'Brand Alpha', draft: { ...startDraftOf(VIEW), targetDate: '2027-03-31' }, files: carriableFiles(VIEW), busy: false, notice: null, offline: false } } }), note: 'The request is linked to the new project and stays as it is; the project opens after Start.' },
     { id: 'th5-252-start-prospect', label: 'TH-5 · A prospect\'s request: ⋯ Start a project is held — match it to its customer first', model: paneCase(PROSPECT_VIEW, 'owner', { startProject: { held: 'project.held.prospect', dialog: null } }), note: 'Open ⋯: the line is held with the reason (a project\'s outside company never changes afterwards).' },
     // ---- end B-TH-252
+    // ---- B-TH-290 (TH-9, N17): production's answer — the chip on row 1, Details' Production section, typed by the production manager
+    { id: 'th9-290-sales', label: 'TH-9 · Sales reads production\'s answer: "Production: not before week 6 of 2027" on row 1 (amber), in Details with who and when and "3 weeks after the wanted date"', model: paneCase(answered(VIEW, PRODUCTION_WEEKS_LATE, false), 'owner', { production: productionOf(answered(VIEW, PRODUCTION_WEEKS_LATE, false)) }), note: 'A click on the chip opens Details at Production. Sales does not type it: Details says who does (planning or the production manager). The customer never sees it.' },
+    { id: 'th9-290-ok', label: 'TH-9 · "Production: OK" (green) on row 1', model: paneCase(answered(VIEW, PRODUCTION_OK, false), 'owner', { production: productionOf(answered(VIEW, PRODUCTION_OK, false)) }) },
+    { id: 'th9-290-pm', label: 'TH-9 · The production manager, not answered yet: Details › Production "Answer for production"; ⋯ "Production answer…"; no chip until he answers', model: paneCase(PM_VIEW, 'production', { production: productionOf(PM_VIEW) }) },
+    { id: 'th9-290-editor', label: 'TH-9 · He answers in Details: OK or not before a week; planning\'s suggestion offered (the jacket lines dated, two lines left out with why); "Use this suggestion" fills it, Save writes it', model: paneCase(PM_VIEW, 'production', { production: productionOf(PM_VIEW, editorOf(PM_VIEW, { draft: { answer: 'NOT_BEFORE', week: '2027-W06' }, suggestion: { status: 'ready', value: SUGGESTION } })) }), note: 'Nothing is written until Save; the week list starts at this week (a week that is over is refused). Open Details ▾ at 1440; its own column at 1920.' },
+    { id: 'th9-290-asking', label: 'TH-9 · Asking planning (the suggestion being read); nothing picked yet: Save says "Pick OK or a week"', model: paneCase(PM_VIEW, 'production', { production: productionOf(PM_VIEW, editorOf(PM_VIEW, { notice: { key: 'production.problem.pick', tone: 'danger' } })) }) },
+    { id: 'th9-290-plants', label: 'TH-9 · A company with several plants: pick the plant planning asks at', model: paneCase(PM_VIEW, 'production', { production: productionOf(PM_VIEW, editorOf(PM_VIEW, { suggestion: { status: 'error', problem: 'production.suggest.several' }, plants: [{ id: '0190f0e2-6101-7000-8000-000000000001', name: 'Demo plant North' }, { id: '0190f0e2-6101-7000-8000-000000000002', name: 'Demo plant South' }] })) }) },
+    { id: 'th9-290-change', label: 'TH-9 · He changes his answer: the current week picked, "Take the answer back" beside Save', model: paneCase(answered(VIEW, PRODUCTION_WEEKS_LATE, true), 'production', { production: productionOf(answered(VIEW, PRODUCTION_WEEKS_LATE, true), editorOf(answered(VIEW, PRODUCTION_WEEKS_LATE, true), { suggestion: { status: 'ready', value: SUGGESTION } })) }) },
+    { id: 'th9-290-closed', label: 'TH-9 · A quoted (closed) request keeps the answer it had: "Change the answer" held with why', model: paneCase({ ...QUOTED_VIEW, production: PRODUCTION_OK, productionAction: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } } }, 'production', { production: productionOf({ ...QUOTED_VIEW, production: PRODUCTION_OK, productionAction: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } } }) }) },
+    // ---- end B-TH-290
   ],
 })

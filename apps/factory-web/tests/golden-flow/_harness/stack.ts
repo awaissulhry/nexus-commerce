@@ -77,6 +77,14 @@ const { createCarrierRuntime, useCarrier } = await imp<typeof import('../../../.
 const { runSdiPoll } = await imp<typeof import('../../../../factory-api/src/modules/invoicing/sdi/poll')>('modules/invoicing/sdi/poll.ts')
 const { runTrackingPoll } = await imp<typeof import('../../../../factory-api/src/modules/shipping/labels/poll')>('modules/shipping/labels/poll.ts')
 const { handlers, HANDLER_FACTORIES } = await import('./handlers')
+// ---- B-TH-284 (UI golden flow TH-7): the FAKE virus scanner on demand (control `/scanner`, `/tick/scan`). The stack starts with the
+// process's own (FACTORY_VIRUS_SCAN, off by default: uploads AVAILABLE unscanned), so the W1 stages are untouched; the TH-7 stage
+// switches the fake one on (a file waits QUARANTINED until its scan says CLEAN), down (the file stays held) and back.
+const { fakeScanner } = await imp<typeof import('../../../../factory-api/src/platform/files/scan/fake')>('platform/files/scan/fake.ts')
+const { useScanner } = await imp<typeof import('../../../../factory-api/src/platform/files/scan/service')>('platform/files/scan/service.ts')
+const { sweepPendingScans } = await imp<typeof import('../../../../factory-api/src/platform/files/scan/sweep')>('platform/files/scan/sweep.ts')
+const scanner = fakeScanner()
+// ---- end B-TH-284
 
 type Json = Record<string, any>
 const log = {
@@ -310,6 +318,30 @@ const routes: Record<string, (body: Json, query: URLSearchParams) => Promise<unk
     return { tick }
   },
   'GET /prints': async () => ({}),
+  // ---- B-TH-284: the FAKE virus scanner — `fake` (scans, clean unless EICAR), `down` (a scan cannot run: the file stays held),
+  // `process` (back to the process's own, as the stack started); `/tick/scan` runs the scheduler's sweep once, its clock two
+  // minutes ahead (a held file is swept after a minute), as the cron `files.scanPending` would.
+  'POST /scanner': async (body) => {
+    const mode = String(body.mode)
+    if (mode === 'fake') {
+      scanner.up()
+      useScanner(scanner)
+    } else if (mode === 'down') {
+      useScanner(scanner)
+      scanner.down()
+    } else if (mode === 'process') {
+      scanner.up()
+      useScanner(undefined)
+    } else throw new Error(`no scanner mode ${mode} (fake, down, process)`)
+    return { mode, scans: scanner.scans }
+  },
+  'POST /tick/scan': async () => {
+    await settle()
+    const tick = await sweepPendingScans({ database, log, clock: { now: () => new Date(Date.now() + 2 * 60_000) } })
+    await settle()
+    return { tick, scans: scanner.scans }
+  },
+  // ---- end B-TH-284
 }
 
 const control = createServer(async (request: IncomingMessage, response: ServerResponse) => {

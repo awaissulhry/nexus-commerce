@@ -30,6 +30,8 @@ import {
   VIEW,
   type RoleCase,
 } from './demo/fixtures'
+// B-TH-290: the Production column (production's answer on each request).
+import { PRODUCTION_ROWS } from './demo/fixtures'
 import { emptyDecline, emptyLine, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
 import { acceptDraftOf, type CatalogueModel } from './catalogue-model'
 import type { AddressesModel } from './addresses/model' // B-TH-285
@@ -271,5 +273,9 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'reader', label: 'A reader: sees the queue, changes nothing (held with the reason), no target price', model: page({}, 'reader') },
     { id: 'reader-detail', label: 'A reader opens an inquiry: "You can view, not change", no price', model: open(VIEW, 'request', {}, 'reader') },
     { id: 'no-permission', label: "Warehouse: no access (the page is not in the overlay)", model: page({}, 'warehouse') },
+    // ---- B-TH-290 (TH-9, list-F10): the Production column — "OK" green, "Not before week 6 of 2027" amber with "3 weeks after the wanted date", '—' until answered
+    { id: 'th9-290-column', label: 'TH-9 · The Production column: production\'s answer on each request ("OK", "Not before week 6 of 2027" and how late), "—" until production answered', model: page({ list: listOf(PRODUCTION_ROWS) }), note: 'Screen = file: Download writes the same answer. A catalogue order and a change request take none ("—").' },
+    { id: 'th9-290-column-production', label: 'TH-9 · The production manager\'s list: the Production column beside the state, no target price', model: page({ list: listOf(PRODUCTION_ROWS) }, 'production') },
+    // ---- end B-TH-290
   ],
 })
