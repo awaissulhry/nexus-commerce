@@ -291,3 +291,19 @@ export function placeInUrgentList(current: readonly string[], placed: readonly {
 
 /** The ranks 1..n of an Urgent list in its order. */
 export const ranksOf = (order: readonly string[]): Map<string, number> => new Map(order.map((orderId, index) => [orderId, index + 1]))
+
+// ---- B-PR-22b: the factory's set-back, lock and unlock ------------------------------------------------------------------------
+
+/** The most orders one office urgency command names (the Work orders and Customer card bulk, L21's "max 100"). */
+export const URGENCY_OFFICE_BATCH_MAX = 100
+
+/** The reason of a set-back or a lock: one line the customer reads (BrandOrderProduction.urgencyLockReason: ≤ 500, the guard's). */
+export const URGENCY_LOCK_REASON_MAX = 500
+
+/** What a set-back's reason as written would break (the customer reads it beside "Set to Regular by us"). */
+export function lockReasonProblems(reason: unknown, at = 'body/reason'): Issue[] {
+  if (typeof reason !== 'string' || reason.trim() === '') return [{ path: at, message: 'Give the reason the customer reads.' }]
+  if (/[\r\n]/.test(reason)) return [{ path: at, message: 'The reason is one line.' }]
+  if (reason.trim().length > URGENCY_LOCK_REASON_MAX) return [{ path: at, message: `The reason is at most ${URGENCY_LOCK_REASON_MAX} characters.` }]
+  return []
+}

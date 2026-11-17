@@ -166,6 +166,11 @@ export const workOrderView = output({
   readiness: readinessView,
   /** B-W2b-312 (PLN-134): the first day (and instant on its first operation's lane) its work may start with every material; null when readiness is not asked. */
   materialStart: materialStartView.nullable().optional(),
+  /**
+   * B-PR-22b: the chip "Customer urgency: Urgent 2" — its customer marked its order Urgent (its place in the customer's OWN list,
+   * never a place in our plan) and the customer's switch is on; null: no chip. Read only: nothing on the board moves by it.
+   */
+  customerUrgency: output({ urgentRank: z.number().int().nullable(), words: output({ it: z.string(), en: z.string() }) }).nullable().optional(),
   operations: z.array(operationView),
 })
 export type WorkOrderView = z.infer<typeof workOrderView>

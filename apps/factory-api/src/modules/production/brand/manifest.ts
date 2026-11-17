@@ -13,4 +13,9 @@ export const manifest = defineManifest({
   'GET /production/brand-orders/:orderId/health': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'PUT /production/brand-orders/:orderId/health': { audiences: ['office'], permission: 'production.brand.manage', scope: 'record' },
   'DELETE /production/brand-orders/:orderId/health': { audiences: ['office'], permission: 'production.brand.manage', scope: 'record' },
+  // B-PR-22b: the customer's urgency — the Customer card's list (workorders.view over the customer), our set-back with lock and
+  // our unlock (production.brand.override over each order's company and customer, step-up, no second person).
+  'GET /production/brands/:partyId/urgency': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'POST /production/brand-orders/urgency/regular': { audiences: ['office'], permission: 'production.brand.override', scope: 'record' },
+  'POST /production/brand-orders/urgency/unlock': { audiences: ['office'], permission: 'production.brand.override', scope: 'record' },
 })

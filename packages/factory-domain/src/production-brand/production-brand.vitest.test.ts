@@ -40,6 +40,9 @@ import {
 } from './words'
 // B-PR-22a
 import { placeInUrgentList, ranksOf, URGENCY_OUTCOMES } from './urgency'
+// B-PR-22b
+import { lockReasonProblems, URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from './urgency'
+import { ALREADY_LOCKED_WORDS, customerUrgencyChipWords, NO_OVERRIDE_RIGHT_WORDS, NOT_LOCKED_WORDS } from './words'
 import { CHANGED_BY_US_SINCE_WORDS, changedAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS, ORDER_NOT_FOUND_WORDS, URGENT_ORDER_UNCHANGED_WORDS } from './words'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
@@ -645,5 +648,27 @@ describe('B-PR-22a the Urgent list put back and the portal command words', () =>
       expect(words.en, words.en).not.toMatch(forbidden)
     }
     expect(changedAtWords('10:42')).toEqual({ it: "Cambiato alle 10:42: rileggi l'elenco.", en: 'Changed at 10:42: read the list again.' })
+  })
+})
+
+// ── B-PR-22b ──
+describe("B-PR-22b the factory's set-back reason and the board's chip", () => {
+  it('a reason is one line of 1 to 500 characters (the customer reads it while locked)', () => {
+    expect(lockReasonProblems('Made-up: the deposit is not paid yet.')).toEqual([])
+    expect(lockReasonProblems('')).toEqual([{ path: 'body/reason', message: 'Give the reason the customer reads.' }])
+    expect(lockReasonProblems(undefined)).toHaveLength(1)
+    expect(lockReasonProblems('one\ntwo')).toEqual([{ path: 'body/reason', message: 'The reason is one line.' }])
+    expect(lockReasonProblems('x'.repeat(URGENCY_LOCK_REASON_MAX))).toEqual([])
+    expect(lockReasonProblems('x'.repeat(URGENCY_LOCK_REASON_MAX + 1))).toHaveLength(1)
+    expect(URGENCY_OFFICE_BATCH_MAX).toBe(100)
+  })
+
+  it('the chip names the place in the customer\'s own list only, in both languages; the office words name no person', () => {
+    expect(customerUrgencyChipWords(2)).toEqual({ it: 'Urgenza cliente: Urgente 2', en: 'Customer urgency: Urgent 2' })
+    expect(customerUrgencyChipWords(null)).toEqual({ it: 'Urgenza cliente: Urgente', en: 'Customer urgency: Urgent' })
+    for (const words of [ALREADY_LOCKED_WORDS, NOT_LOCKED_WORDS, NO_OVERRIDE_RIGHT_WORDS]) {
+      expect(words.en.length).toBeGreaterThan(0)
+      expect(words.it.length).toBeGreaterThan(0)
+    }
   })
 })

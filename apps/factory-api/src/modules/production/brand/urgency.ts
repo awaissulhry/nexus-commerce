@@ -1,11 +1,14 @@
+import type { FastifyRequest } from 'fastify'
 import type { Prisma } from '@nexus/factory-db'
-import { DomainError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
-import { newId } from '@nexus/factory-domain/core/ids'
+import { DomainError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { isUuid, newId } from '@nexus/factory-domain/core/ids'
+import { can } from '@nexus/factory-domain/core/permissions'
 import { BUSINESS_TIME_ZONE, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 import { assertOneParty, urgencyChangedEvent, type URGENCY_CHANGES } from '@nexus/factory-domain/production-brand/events'
 import {
   listCompare,
+  lockReasonProblems,
   markDecision,
   placeInUrgentList,
   ranksOf,
@@ -20,21 +23,34 @@ import {
   type UrgentUse,
 } from '@nexus/factory-domain/production-brand/urgency'
 import {
+  ALREADY_LOCKED_WORDS,
   ASK_US_WORDS,
   CHANGED_BY_US_SINCE_WORDS,
   CHANGED_SINCE_WORDS,
   changedAtWords,
+  dormantMarksWords,
+  NO_OVERRIDE_RIGHT_WORDS,
   NOT_KEPT_YET_WORDS,
   NOT_IN_PRODUCTION_WORDS,
   NOTHING_TO_UNDO_WORDS,
+  NOT_LOCKED_WORDS,
   NOTHING_UNDONE_WORDS,
+  unchangedWords,
   URGENCY_NOT_OPEN_WORDS,
+  URGENCY_WORDS,
   URGENT_ORDER_UNCHANGED_WORDS,
   urgentUsedWords,
 } from '@nexus/factory-domain/production-brand/words'
+import { PRODUCTION_BRAND_MANAGE, PRODUCTION_BRAND_OVERRIDE } from '@nexus/factory-domain/production-brand/permissions'
+import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { CutStart } from '@nexus/factory-domain/sales/change-requests/rules'
-import type { CommandTools, CommandTx } from '../../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { actorOf } from '../../../core/context'
+import { serverClock } from '../../../core/time'
+import { requireStepUp } from '../../../platform/auth/office/account'
+import type { OfficeAuth } from '../../../platform/auth/sessions/office-auth'
 import { readCuts } from '../../sales/change-requests/store'
+import { officeContextOf } from '../work-orders/access'
 import { dayOf, type Reader } from '../work-orders/store'
 import { isKeptState, KEEPER_ORDER_STATES } from './facts'
 
@@ -215,6 +231,9 @@ export interface UrgencyState {
   readonly orderId: string
   readonly urgency: BrandUrgency
   readonly urgentRank: number | null
+  /** B-PR-22b: the factory's lock, in the rows of a set-back, lock or unlock. */
+  readonly locked?: boolean
+  readonly lockReason?: string | null
 }
 
 const stateOf = (row: Pick<UrgencyOrderRow, 'orderId' | 'urgency' | 'urgentRank'>): UrgencyState => ({ orderId: row.orderId, urgency: row.urgency, urgentRank: row.urgentRank })
@@ -232,6 +251,8 @@ interface UrgencyWrite {
   readonly by: UrgencyActor
   /** The person (a portal person of the customer for BRAND, an office person for FACTORY; null: the system). */
   readonly byId: string | null
+  /** B-PR-22b: the factory's lock (or unlock) of the batch's rows, with the reason the customer reads; a lock also names us as who set it. */
+  readonly lock?: { readonly locked: boolean; readonly reason: string | null; readonly byId: string }
 }
 
 /**
@@ -250,20 +271,29 @@ async function writeUrgency(tools: CommandTools, write: UrgencyWrite): Promise<{
     if (urgency === 'URGENT' && urgentRank === null) throw new Error(`production urgency: order ${row.orderId} is Urgent with no place in its customer's list`)
     const stamped = write.batchRows.has(row.orderId)
     if (!flipped && !stamped && urgentRank === row.urgentRank) continue
+    // B-PR-22b: the lock of a batch row (a lock names us as who set it last, as a set-back does).
+    const lock = stamped && write.lock ? write.lock : null
+    const setNow = flipped || (lock !== null && lock.locked)
     await tools.tx.brandOrderProduction.update({
       where: { id: row.rowId },
       data: {
         urgentRank,
-        ...(flipped ? { urgency, urgencySetAt: tools.now, urgencySetBy: write.by, urgencySetById: write.byId } : {}),
+        ...(flipped ? { urgency } : {}),
+        ...(setNow ? { urgencySetAt: tools.now, urgencySetBy: write.by, urgencySetById: write.byId } : {}),
         ...(stamped ? { urgencyBatchId: write.batchId } : {}),
+        ...(lock
+          ? lock.locked
+            ? { urgencyLocked: true, urgencyLockReason: lock.reason, urgencyLockedAt: tools.now, urgencyLockedById: lock.byId }
+            : { urgencyLocked: false, urgencyLockReason: null, urgencyLockedAt: null, urgencyLockedById: null }
+          : {}),
         updatedAt: tools.now,
         version: { increment: 1 },
       },
       select: { id: true },
     })
     if (stamped) {
-      before.push(stateOf(row))
-      after.push({ orderId: row.orderId, urgency, urgentRank })
+      before.push(lock ? { ...stateOf(row), locked: row.locked, lockReason: row.lockReason } : stateOf(row))
+      after.push(lock ? { orderId: row.orderId, urgency, urgentRank, locked: lock.locked, lockReason: lock.locked ? lock.reason : null } : { orderId: row.orderId, urgency, urgentRank })
     }
   }
   return { before, after }
@@ -603,3 +633,256 @@ export async function undoInCommand(tools: CommandTools, input: UndoInput): Prom
 
 /** The audit row's "when" as the reads give it. */
 export const isoOrNull = (at: Date | null): string | null => (at ? toUtcIso(at) : null)
+
+// ── B-PR-22b ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The office's side (production plan §3 "Set a customer's order back to Regular, lock, unlock": production.brand.override,
+// step-up, NO second person — it is our own plan and the customer loses nothing it signed; R-45, R-46, R-48, R-51): per row, one
+// audit row and one urgency_changed per customer (and company) of the command; the Customer card's list. The office sees who set
+// a mark and who locked it (names inside the card only); the customer reads "Changed by us" and our reason, never a name.
+
+/** One customer's (at one company) orders of an office command, as the office read found them. */
+export interface OfficeShare {
+  readonly partyId: string
+  readonly companyId: string
+  readonly orders: readonly NamedOrder[]
+}
+
+export interface OfficeUrgencyInput {
+  /** The office person (urgencySetById, urgencyLockedById: an active office person, the guard checks). */
+  readonly actorId: string
+  readonly kind: 'SET_BACK' | 'UNLOCK'
+  /** SET_BACK: lock it at Regular too. */
+  readonly lock: boolean
+  /** SET_BACK: the reason (the customer reads it beside "Set to Regular by us" while locked; always in the audit). */
+  readonly reason: string | null
+  readonly shares: readonly OfficeShare[]
+}
+
+/**
+ * The factory sets orders back to Regular (and locks them with the reason the customer reads), or unlocks them: per customer under
+ * its own lock, per row its own outcome (not open, not kept yet, the same already), the customer's open Urgent list rewritten 1..n;
+ * one audit row (`production.brandUrgency.setBack|lock|unlock`) and one event per customer that changed (each its own batch: a
+ * batch never spans two customers). Never the office's levers (priority, priorityLevel, backlogRank, WorkOrder.priority, rush).
+ */
+export async function officeUrgencyInCommand(tools: CommandTools, input: OfficeUrgencyInput): Promise<{ readonly results: UrgencyResult[]; readonly batches: { readonly partyId: string; readonly batchId: string }[] }> {
+  const results: UrgencyResult[] = []
+  const batches: { partyId: string; batchId: string }[] = []
+  const change: UrgencyChange = input.kind === 'UNLOCK' ? 'UNLOCK' : input.lock ? 'LOCK' : 'SET_BACK'
+  // Each customer's lock in id order (two commands over the same customers never wait on each other the other way round).
+  for (const share of [...input.shares].sort((a, b) => (a.partyId < b.partyId ? -1 : a.partyId > b.partyId ? 1 : a.companyId < b.companyId ? -1 : 1))) {
+    await lockCustomerUrgency(tools.tx, share.partyId)
+    const rows = await readUrgencyRows(tools.tx, { partyId: share.partyId, companyId: share.companyId, orderIds: share.orders.map((order) => order.orderId) })
+    const byId = new Map(rows.map((row) => [row.orderId, row]))
+    const urgency = new Map<string, BrandUrgency>()
+    const touched = new Set<string>()
+    for (const order of share.orders) {
+      const row = byId.get(order.orderId)
+      if (!row || !row.open) {
+        results.push(!row && isKeptState(order.status) ? refusalOf('NOT_KEPT', order, NOT_KEPT_YET_WORDS, row) : refusalOf('NOT_OPEN', order, NOT_IN_PRODUCTION_WORDS, row))
+        continue
+      }
+      if (input.kind === 'UNLOCK' ? !row.locked : input.lock ? row.locked : row.urgency === 'REGULAR') {
+        results.push(refusalOf('UNCHANGED', order, input.kind === 'UNLOCK' ? NOT_LOCKED_WORDS : input.lock ? ALREADY_LOCKED_WORDS : unchangedWords('REGULAR'), row))
+        continue
+      }
+      if (input.kind === 'SET_BACK' && row.urgency === 'URGENT') urgency.set(row.orderId, 'REGULAR')
+      touched.add(row.orderId)
+      results.push({ orderId: order.orderId, number: order.number, customerRef: order.customerRef, outcome: 'DONE', done: true, words: null, ask: null, urgency: 'REGULAR', urgentRank: null })
+    }
+    if (touched.size === 0) continue
+    const batchId = newId()
+    const urgentList = urgentListOf(rows).filter((orderId) => !urgency.has(orderId))
+    const lock = input.kind === 'UNLOCK' ? { locked: false, reason: null, byId: input.actorId } : input.lock ? { locked: true, reason: input.reason, byId: input.actorId } : undefined
+    const { before, after } = await writeUrgency(tools, { rows, urgency, urgentList, batchRows: touched, batchId, by: 'FACTORY', byId: input.actorId, ...(lock ? { lock } : {}) })
+    record(tools, {
+      action: `production.brandUrgency.${change === 'UNLOCK' ? 'unlock' : change === 'LOCK' ? 'lock' : 'setBack'}`,
+      partyId: share.partyId,
+      companyId: share.companyId,
+      batchId,
+      by: 'FACTORY',
+      byId: input.actorId,
+      change,
+      undo: false,
+      locked: change === 'LOCK',
+      reason: input.reason,
+      before,
+      after,
+      rows,
+    })
+    batches.push({ partyId: share.partyId, batchId })
+  }
+  if (batches.length === 0) {
+    const orders = input.shares.flatMap((share) => share.orders)
+    throw nothingChanged(results, orders, input.kind === 'UNLOCK' ? NOT_LOCKED_WORDS : unchangedWords('REGULAR'))
+  }
+  return { results, batches }
+}
+
+/** One order of the Customer card's urgency list (the office's: who set it and who locked it, by name). */
+export interface CardOrder {
+  readonly id: string
+  readonly number: string
+  readonly customerRef: string | null
+  readonly status: string
+  readonly orderDate: string
+  readonly urgency: BrandUrgency
+  /** It counts in our plan now (Urgent while the customer's switch is on). */
+  readonly counted: boolean
+  readonly urgentRank: number | null
+  readonly setBy: UrgencyActor | null
+  readonly setAt: string | null
+  readonly setByPerson: { readonly id: string; readonly name: string } | null
+  readonly locked: boolean
+  readonly lockReason: string | null
+  readonly lockedAt: string | null
+  readonly lockedBy: { readonly id: string; readonly name: string } | null
+  readonly words: Words
+}
+
+/** The customer's open orders at one company in its own list's order, with who set and locked each (office names). */
+export async function cardOrdersOf(db: Reader, scope: { readonly partyId: string; readonly companyId: string; readonly urgencyOn: boolean }): Promise<{ rows: UrgencyOrderRow[]; orders: CardOrder[] }> {
+  const rows = (await readUrgencyRows(db, scope)).filter((row) => row.open).sort(listCompare)
+  const people = [...new Set(rows.flatMap((row) => [row.setById, row.lockedById]).filter((value): value is string => value !== null))]
+  const names = new Map((people.length === 0 ? [] : await db.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
+  const person = (userId: string | null) => (userId && names.has(userId) ? { id: userId, name: names.get(userId)! } : null)
+  return {
+    rows,
+    orders: rows.map((row) => ({
+      id: row.orderId,
+      number: row.number,
+      customerRef: row.customerRef,
+      status: row.status,
+      orderDate: row.orderDate,
+      urgency: row.urgency,
+      counted: scope.urgencyOn && row.urgency === 'URGENT',
+      urgentRank: row.urgentRank,
+      setBy: row.setBy,
+      setAt: isoOrNull(row.setAt),
+      setByPerson: person(row.setById),
+      locked: row.locked,
+      lockReason: row.lockReason,
+      lockedAt: isoOrNull(row.lockedAt),
+      lockedBy: person(row.lockedById),
+      words: URGENCY_WORDS[row.urgency],
+    })),
+  }
+}
+
+export { customerUrgencyOf } from './urgency-of'
+// ── end B-PR-22b ──
+
+// ── B-PR-22b: the office's routes (./routes.ts) ────────────────────────────────────────────────────────────────────────────────────
+
+export interface OfficeUrgencyBody {
+  readonly orderIds: readonly string[]
+  /** SET_BACK: the reason (one line, ≤ 500; the customer reads it while the order is locked). */
+  readonly reason?: string | undefined
+  /** SET_BACK: lock it at Regular too. */
+  readonly lock?: boolean | undefined
+}
+
+/** The orders of an office command split by customer: those the caller may change, those it sees but may not (named), the rest counted. */
+async function officeOrders(caller: CommandCaller, orderIds: readonly string[]): Promise<{ shares: OfficeShare[]; noRight: UrgencyResult[]; notFound: number; indexOf: Map<string, number> }> {
+  const actor = actorOf(officeContextOf(caller))
+  const rows = await caller.withClient((client) => client.salesOrder.findMany({ where: { id: { in: [...orderIds] } }, select: { id: true, number: true, customerRef: true, status: true, companyId: true, partyId: true } }))
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const shares = new Map<string, { partyId: string; companyId: string; orders: NamedOrder[] }>()
+  const noRight: UrgencyResult[] = []
+  let notFound = 0
+  orderIds.forEach((orderId, index) => {
+    const row = byId.get(orderId)
+    const at = row ? { companyId: row.companyId, partyId: row.partyId } : null
+    // Another customer's order (one the caller does not reach): counted, never named — the words of an unknown id.
+    if (!row || !at || !(can(actor, WORKORDERS_VIEW, at) || can(actor, PRODUCTION_BRAND_MANAGE, at) || can(actor, PRODUCTION_BRAND_OVERRIDE, at))) {
+      notFound += 1
+      return
+    }
+    const order: NamedOrder = { orderId, number: row.number, customerRef: row.customerRef, status: row.status, index }
+    if (!can(actor, PRODUCTION_BRAND_OVERRIDE, at)) {
+      noRight.push(refusalOf('NO_RIGHT', order, NO_OVERRIDE_RIGHT_WORDS, undefined))
+      return
+    }
+    const key = `${row.companyId}|${row.partyId}`
+    const share = shares.get(key) ?? { partyId: row.partyId, companyId: row.companyId, orders: [] }
+    share.orders.push(order)
+    shares.set(key, share)
+  })
+  return { shares: [...shares.values()], noRight, notFound, indexOf: new Map(orderIds.map((orderId, index) => [orderId, index])) }
+}
+
+function twiceIn(orderIds: readonly string[]): Issue[] {
+  const seen = new Set<string>()
+  return orderIds.flatMap((orderId, index) => {
+    const twice = seen.has(orderId)
+    seen.add(orderId)
+    return twice ? [{ path: `body/orderIds/${index}`, message: 'This order is named twice.' }] : []
+  })
+}
+
+/** The office command over the orders (the caller's step-up first: nothing is read or written before it). */
+async function officeCommand(auth: OfficeAuth, request: FastifyRequest, input: { readonly kind: 'SET_BACK' | 'UNLOCK'; readonly body: OfficeUrgencyBody; readonly idempotencyKey: string | undefined }) {
+  const twice = twiceIn(input.body.orderIds)
+  if (twice.length > 0) throw new ValidationError('Name each order once.', twice)
+  const reason = input.kind === 'SET_BACK' ? (input.body.reason ?? '').trim() : null
+  if (input.kind === 'SET_BACK') {
+    const problems = lockReasonProblems(input.body.reason)
+    if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+  }
+  const lock = input.kind === 'SET_BACK' && input.body.lock === true
+  // production.brand.override asks a fresh code (step-up action production.override); no second person (R-45).
+  requireStepUp(auth, request)
+  const context = officeContextOf(request)
+  const found = await officeOrders(request, input.body.orderIds)
+  if (found.shares.length === 0) {
+    if (found.noRight.length > 0) throw new ForbiddenError(NO_OVERRIDE_RIGHT_WORDS.en)
+    throw new NotFoundError('Sales order not found.')
+  }
+  const name = input.kind === 'UNLOCK' ? 'production.brandUrgency.unlock' : 'production.brandUrgency.setBack'
+  const { result, replayed } = await command(request, { name, idempotencyKey: input.idempotencyKey, input: { orderIds: input.body.orderIds, reason, lock } }, (tools) =>
+    officeUrgencyInCommand(tools, { actorId: context.actorId, kind: input.kind, lock, reason, shares: found.shares }),
+  )
+  const results = [...found.noRight, ...result.results].sort((a, b) => (found.indexOf.get(a.orderId) ?? 0) - (found.indexOf.get(b.orderId) ?? 0))
+  return { results, batches: result.batches, notFound: found.notFound, replayed }
+}
+
+/** POST /production/brand-orders/urgency/regular {orderIds 1–100, reason, lock} (production.brand.override, step-up). */
+export const setBackUrgency = (auth: OfficeAuth, request: FastifyRequest, body: OfficeUrgencyBody, idempotencyKey: string | undefined) => officeCommand(auth, request, { kind: 'SET_BACK', body, idempotencyKey })
+
+/** POST /production/brand-orders/urgency/unlock {orderIds 1–100} (production.brand.override, step-up). */
+export const unlockUrgency = (auth: OfficeAuth, request: FastifyRequest, body: OfficeUrgencyBody, idempotencyKey: string | undefined) => officeCommand(auth, request, { kind: 'UNLOCK', body, idempotencyKey })
+
+/**
+ * GET /production/brands/:partyId/urgency (workorders.view over the customer; another one: "Customer not found."): the Customer
+ * card's urgency — the switch and quota, the dormant marks' words while off (R-46), and per company the caller reaches its open
+ * orders in its own list's order with who set each mark and who locked it (names: the office's own card), "2 of 3 urgent used",
+ * whether the caller may set back, lock or unlock (production.brand.override).
+ */
+export async function customerUrgencyCard(caller: CommandCaller, partyId: string) {
+  const actor = actorOf(officeContextOf(caller))
+  return caller.withClient(async (db) => {
+    const party = isUuid(partyId) ? await db.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true, tradeName: true, companyId: true } }) : null
+    if (!party || !can(actor, WORKORDERS_VIEW, { partyId: party.id, ...(party.companyId ? { companyId: party.companyId } : {}) })) throw new NotFoundError('Customer not found.')
+    const settings = await readUrgencySettings(db, party.id)
+    const held = await db.brandOrderProduction.findMany({ where: { partyId: party.id, salesOrder: { status: { in: [...KEEPER_ORDER_STATES] } } }, distinct: ['companyId'], select: { companyId: true } })
+    const reached = held.map((row) => row.companyId).filter((companyId) => can(actor, WORKORDERS_VIEW, { companyId, partyId: party.id }))
+    const companies = reached.length === 0 ? [] : await db.company.findMany({ where: { id: { in: reached } }, select: { id: true, code: true, legalName: true, tradeName: true }, orderBy: [{ code: 'asc' }] })
+    const lists: { company: { id: string; code: string; name: string }; use: ReturnType<typeof useOf>; mayOverride: boolean; orders: CardOrder[] }[] = []
+    for (const company of companies) {
+      const { rows, orders } = await cardOrdersOf(db, { partyId: party.id, companyId: company.id, urgencyOn: settings.urgencyOn })
+      lists.push({
+        company: { id: company.id, code: company.code, name: company.tradeName ?? company.legalName },
+        use: useOf(rows, party.id, settings.max),
+        mayOverride: can(actor, PRODUCTION_BRAND_OVERRIDE, { companyId: company.id, partyId: party.id }),
+        orders,
+      })
+    }
+    const dormant = settings.urgencyOn ? null : dormantMarksWords(lists.flatMap((list) => list.orders).filter((order) => order.urgency === 'URGENT').length)
+    return {
+      asOf: toUtcIso(serverClock.now()),
+      customer: { id: party.id, code: party.code, name: party.tradeName ?? party.legalName },
+      urgency: { on: settings.urgencyOn, max: settings.max, dormant },
+      companies: lists,
+    }
+  })
+}
+// ── end B-PR-22b ──

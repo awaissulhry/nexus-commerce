@@ -33,9 +33,9 @@ type Json = Record<string, any>
 const people = { alpha: 'ada.buyer@pr22a-alpha.example.com', beta: 'bea.production@pr22a-beta.example.com', betaDesigner: 'dora.designer@pr22a-beta.example.com' }
 const browsers = {} as Record<keyof typeof people, Browser>
 const personIds = {} as Record<keyof typeof people, string>
-const B: Record<string, string> = {}
-const A: Record<string, string> = {}
-const batches: Record<string, string> = {}
+const B = {} as { locked: string; b2: string; b3: string; b4: string }
+const A = {} as { so2: string; alpha: string }
+const batches = {} as { mark: string; drag: string; undoDrag: string }
 let aMarkers: Marker[] = []
 const seenByB: { url: string; body: unknown }[] = []
 

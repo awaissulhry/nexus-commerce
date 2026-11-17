@@ -236,3 +236,23 @@ export const NOTHING_TO_UNDO_WORDS: Words = Object.freeze({ it: 'Modifica non tr
 
 /** An Undo that put nothing back: every order changed since (or may no longer be put back). */
 export const NOTHING_UNDONE_WORDS: Words = Object.freeze({ it: 'Niente annullato: ogni ordine è cambiato nel frattempo.', en: 'Nothing was undone: every order changed since.' })
+
+// ---- B-PR-22b: the office's set-back, lock and unlock; the board's chip --------------------------------------------------------
+
+/** A lock asked on an order we locked already. */
+export const ALREADY_LOCKED_WORDS: Words = Object.freeze({ it: "L'ordine è già bloccato su normale.", en: 'This order is locked at Regular already.' })
+
+/** An unlock asked on an order we did not lock. */
+export const NOT_LOCKED_WORDS: Words = Object.freeze({ it: "L'ordine non è bloccato.", en: 'This order is not locked.' })
+
+/** An office person who sees the order but may not change its customer's urgency (production.brand.override). */
+export const NO_OVERRIDE_RIGHT_WORDS: Words = Object.freeze({
+  it: "Non puoi cambiare l'urgenza degli ordini di questo cliente.",
+  en: "You may not change the urgency of this customer's orders.",
+})
+
+/** The planning board's chip of a work order whose order the customer marked Urgent (its place in the customer's own list). */
+export function customerUrgencyChipWords(urgentRank: number | null): Words {
+  const place = urgentRank !== null && urgentRank > 0 ? ` ${urgentRank}` : ''
+  return { it: `${CUSTOMER_URGENCY_WORDS.header.it}: Urgente${place}`, en: `${CUSTOMER_URGENCY_WORDS.header.en}: Urgent${place}` }
+}
