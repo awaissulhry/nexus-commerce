@@ -95,7 +95,8 @@ export async function sendJobLink(request: FastifyRequest, orderId: string, body
   const facts = await request.withClient(async (client) => {
     const order = (await readJobOrder(client, seen.id))!
     const rows = await readJobRows(client, order)
-    const context2 = await readJobContext(client, rows, null)
+    // B-TH-036: the job as the workshop reads it (the link's mail and view go to the workshop).
+    const context2 = await readJobContext(client, rows, null, true)
     const party = await client.party.findUnique({ where: { id: order.partyId }, select: { language: true } })
     const contact = body.contactId ? await client.partyContact.findFirst({ where: { id: body.contactId, partyId: order.partyId, status: 'ACTIVE' }, select: { email: true, language: true } }) : null
     const user = await client.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })

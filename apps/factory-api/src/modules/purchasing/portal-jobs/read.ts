@@ -187,15 +187,46 @@ export interface JobContext {
   readonly hides: ReadonlyMap<string, string>
   readonly ddts: ReadonlyMap<string, { readonly number: string; readonly date: string | null; readonly cancelled: boolean }>
   readonly companyName: string
+  /**
+   * B-TH-036 (WALL-G18, W36): read for the workshop (its portal, its link, the link's mail) — a private-label style's name, which
+   * may name the brand, is then said as the kind of garment (`workshopStyleName`); the office reads it whole.
+   */
+  readonly forWorkshop: boolean
+  /** The style's brand and kind of garment: a private-label style (brandPartyId set) or null (our own range). */
+  readonly privateStyle: { readonly productType: string } | null
   /** Rows the office entered for the workshop (createdById set): their ids. */
   readonly byOffice: ReadonlySet<string>
   readonly photos: ReadonlyMap<string, { readonly id: string; readonly originalName: string; readonly createdAt: string }[]>
 }
 
-export async function readJobContext(system: Reader, rows: JobRows, photoParty: string | null): Promise<JobContext> {
+// ---- B-TH-036 (WALL-G18, W36; the brand wall: a workshop never reads a brand's name) --------------------------------------------
+
+const GARMENT_WORDS: Readonly<Record<string, Readonly<Record<Locale, string>>>> = Object.freeze({
+  JACKET: { it: 'Giacca', en: 'Jacket' },
+  TROUSERS: { it: 'Pantaloni', en: 'Trousers' },
+  SUIT: { it: 'Tuta', en: 'Suit' },
+  GLOVES: { it: 'Guanti', en: 'Gloves' },
+  VEST: { it: 'Gilet', en: 'Vest' },
+  OTHER: { it: 'Capo', en: 'Garment' },
+})
+
+/**
+ * The name of a job's style as a workshop reads it: our own range's name as it is; a private-label style's (made for a brand: its
+ * name may carry the brand's; `privateProductType` its kind of garment) as the kind of garment, beside our style code. Letting a workshop read the brand's name per job
+ * waits for the Owner's per-job switch (a schema column; not in TH-2).
+ */
+export const workshopStyleName = (name: string, privateProductType: string | null, locale: Locale): string =>
+  privateProductType === null ? name : (GARMENT_WORDS[privateProductType] ?? GARMENT_WORDS.OTHER!)[locale]
+
+/**
+ * `forWorkshop`: the read is for the workshop (its portal or link: a photo party is named; the job link's mail says so itself), so
+ * a private-label style's name is not said (B-TH-036).
+ */
+export async function readJobContext(system: Reader, rows: JobRows, photoParty: string | null, forWorkshop: boolean = photoParty !== null): Promise<JobContext> {
   const { order } = rows
   const operations = await system.subcontractOperation.findMany({ where: { subcontractOrderId: order.id }, orderBy: { seq: 'asc' }, select: OPERATION_COLUMNS })
   const workOrder = await readWorkOrderFacts(system, order.workOrderId)
+  const styleFacts = workOrder ? await system.style.findUnique({ where: { id: workOrder.style.id }, select: { brandPartyId: true, productType: true } }) : null
   const cells = new Map((workOrder?.cells ?? []).map((cell) => [cell.id, { colourway: cell.colourway, size: cell.size }]))
   const operationNames = new Map((workOrder?.operations ?? []).map((operation) => [operation.id, { code: operation.code, name: operation.name }]))
   const sent = await system.subcontractBundle.findMany({ where: { subcontractOrderId: order.id }, orderBy: { sentAt: 'asc' }, select: { bundleId: true, quantity: true, sentAt: true } })
@@ -230,6 +261,8 @@ export async function readJobContext(system: Reader, rows: JobRows, photoParty: 
     hides: new Map(hides.map((row) => [row.id, row.code])),
     ddts: new Map(ddts.map((row) => [row.id, { number: row.number, date: dayOf(row.documentDate), cancelled: row.cancellations.length > 0 }])),
     companyName: company ? (company.tradeName ?? company.legalName) : '',
+    forWorkshop,
+    privateStyle: styleFacts?.brandPartyId ? { productType: styleFacts.productType } : null,
     byOffice: new Set(entered.map((row) => row.id)),
     photos,
   }
@@ -307,7 +340,8 @@ export function jobView(rows: JobRows, context: JobContext, locale: Locale) {
     nextStep,
     nextStepWords: NEXT_STEP_WORDS[nextStep][locale],
     from: { companyName: context.companyName },
-    workOrder: context.workOrder,
+    // B-TH-036: a private-label style's name is not said to the workshop.
+    workOrder: context.forWorkshop && context.privateStyle ? { number: context.workOrder.number, style: { code: context.workOrder.style.code, name: workshopStyleName(context.workOrder.style.name, context.privateStyle.productType, locale) } } : context.workOrder,
     orderDate: dayOf(order.orderDate)!,
     expectedBackDate: dayOf(order.expectedBackDate),
     issuedAt: iso(order.issuedAt),
@@ -505,7 +539,8 @@ export async function listPortalJobs(request: FastifyRequest, query: PortalJobsQ
   const ids = page.map((order) => order.id)
   const system = await systemOf(request, session.tenantId).withClient(async (client) => {
     const operations = await client.subcontractOperation.findMany({ where: { subcontractOrderId: { in: ids } }, orderBy: { seq: 'asc' }, select: { ...OPERATION_COLUMNS, subcontractOrderId: true } })
-    const workOrders = await client.workOrder.findMany({ where: { id: { in: unique(page.map((order) => order.workOrderId)) } }, select: { id: true, number: true, style: { select: { code: true, name: true } } } })
+    // B-TH-036: with the style's brand and kind, so a private-label style's name is not said (workshopStyleName).
+    const workOrders = await client.workOrder.findMany({ where: { id: { in: unique(page.map((order) => order.workOrderId)) } }, select: { id: true, number: true, style: { select: { code: true, name: true, brandPartyId: true, productType: true } } } })
     const steps = await client.workOrderOperation.findMany({ where: { id: { in: unique(operations.map((operation) => operation.workOrderOperationId)) } }, select: { id: true, code: true, name: true } })
     return { operations, workOrders: new Map(workOrders.map((row) => [row.id, row])), steps: new Map(steps.map((row) => [row.id, row])) }
   })
@@ -534,7 +569,7 @@ export async function listPortalJobs(request: FastifyRequest, query: PortalJobsQ
       nextStep,
       nextStepWords: NEXT_STEP_WORDS[nextStep][locale],
       operations: operations.map((row) => ({ seq: row.seq, code: system.steps.get(row.workOrderOperationId)?.code ?? '', name: system.steps.get(row.workOrderOperationId)?.name ?? '' })),
-      workOrder: { number: workOrder?.number ?? '', style: { code: workOrder?.style.code ?? '', name: workOrder?.style.name ?? '' } },
+      workOrder: { number: workOrder?.number ?? '', style: { code: workOrder?.style.code ?? '', name: workOrder ? workshopStyleName(workOrder.style.name, workOrder.style.brandPartyId ? workOrder.style.productType : null, locale) : '' } },
       pieces,
       finished,
       kitDate: kitDays.at(-1) ?? null,

@@ -12,7 +12,7 @@ import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { systemContext } from '../outbox/system'
-import { resolveRecord } from '../threads/records' // B-TH-003
+import { mayOnThread, resolveRecord } from '../threads/records' // B-TH-003; B-TH-029: mayOnThread
 import type { FileView } from './contract'
 import type { PresignedRequest, StoredObject } from './port'
 import {
@@ -225,8 +225,28 @@ export async function readVisible(caller: CommandCaller, fileId: string, path: U
   if (!audienceSees(viewerOf(context), row) || (!office && row.status !== 'AVAILABLE') || (!throughModule && !can(actorOf(context), FILES_READ, scopeOf(context, row)))) {
     throw new NotFoundError('File not found.')
   }
+  // B-TH-029: and its record's own scope (the same 404: a file of a record out of reach is as unknown as a wrong id).
+  if (office && !throughModule && !(await officeReachesRecord(caller, row))) throw new NotFoundError('File not found.')
   return row
 }
+
+// ---- B-TH-029 (threads plan TH-2, WALL-G13, wall test T26): an office file read checks its record's own scope ---------------
+/**
+ * The brand wall inside the office (Owner rule 2026-11-16): for an office person a file was checked by its company only, so a
+ * person limited to some customers (RoleAssignment.partyIds) or sites opened any record's file by id. Now an office read — the
+ * file by id, its download, preview, versions and history, and a record's file list — also asks files.read over the RECORD's
+ * own scope (company, site and party from its thread resolver, platform/threads/records.ts) and the record type's thread gate
+ * (a person's records: users.view, workers.view …), exactly as threads do (mayOnThread). A record type no resolver knows, or a
+ * record gone, keeps the file's company check. A person without a customer or site limit (the default: the factory sees it
+ * all) reads what they read before; a site-limited person no longer reads the files of another site's records.
+ */
+async function officeReachesRecord(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string }): Promise<boolean> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office') return true
+  const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
+  return scope === null || mayOnThread(actorOf(context), FILES_READ, record.recordType, scope)
+}
+// ---- end B-TH-029
 
 export const readOffice = async (caller: CommandCaller, fileId: string): Promise<OfficeRow> => (await readRow(caller, fileId)) as OfficeRow
 
@@ -521,7 +541,8 @@ export async function putGeneratedFile(runtime: FilesRuntime, caller: CommandCal
 export async function recordGeneratedFile(
   tools: Pick<CommandTools, 'tx' | 'audit' | 'emit' | 'now' | 'context'>,
   prepared: PreparedGeneratedFile,
-  options: { readonly action?: Permission; readonly details?: GeneratedFileOptions['details'] } = {},
+  // B-TH-024: `category`, a carried copy keeps its source's (StoredFile.category, set with the row).
+  options: { readonly action?: Permission; readonly details?: GeneratedFileOptions['details']; readonly category?: FileCategory | null } = {},
 ): Promise<FileView> {
   const { tx, now: at, context: inside } = tools
   const sharing: Sharing = { visibility: [...prepared.visibility], companyId: prepared.companyId, floorSiteId: prepared.floorSiteId, partyId: prepared.partyId }
@@ -551,6 +572,7 @@ export async function recordGeneratedFile(
       retainUntil: prepared.retainUntil,
       // B-W2b-160 (FV1:01): a copy names its source; the database checks the bytes match and the source is AVAILABLE.
       ...(prepared.sourceFileId ? { sourceFileId: prepared.sourceFileId } : {}),
+      ...(options.category ? { category: options.category } : {}),
       createdAt: at,
       updatedAt: at,
       createdById: inside.audience === 'office' ? inside.actorId : null,
@@ -743,6 +765,8 @@ export async function listFiles(caller: CommandCaller, record: { readonly record
   const context = contextOf(caller)
   if (context.audience === 'link' && (context.record.type !== record.recordType || context.record.id !== record.recordId)) return []
   if (readsThroughModule(record.recordType)) return []
+  // B-TH-029: an office list asks the record's own scope first (a record out of reach lists nothing).
+  if (!(await officeReachesRecord(caller, record))) return []
   const columns: ScopeColumns = {
     company: { field: 'companyId', nullable: true },
     ...(context.audience === 'floor' ? { site: 'floorSiteId' } : {}),
@@ -759,7 +783,23 @@ export async function listFiles(caller: CommandCaller, record: { readonly record
   const rows = (await caller.withClient((client) =>
     client.storedFile.findMany({ where, select: selectFor(context), orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 500 }),
   )) as Row[]
-  return rows.filter((row) => audienceSees(viewerOf(context), row)).map(viewOf)
+  const views = rows.filter((row) => audienceSees(viewerOf(context), row)).map(viewOf)
+  // B-TH-024: the office sees where a copy came from (the source's record, name and version), when it may open that record.
+  return context.audience === 'office' ? withOrigins(caller, views) : views
+}
+
+/** B-TH-024: each copy's origin — its source file's record, name and version — for the office (null: its record out of reach). */
+async function withOrigins(caller: CommandCaller, views: readonly FileView[]): Promise<FileView[]> {
+  const sourceIds = [...new Set(views.flatMap((view) => (view.sourceFileId ? [view.sourceFileId] : [])))]
+  if (sourceIds.length === 0) return [...views]
+  const sources = await caller.withClient((client) => client.storedFile.findMany({ where: { id: { in: sourceIds } }, select: { id: true, recordType: true, recordId: true, originalName: true, versionNo: true } }))
+  const reachable = new Map<string, (typeof sources)[number]>()
+  for (const source of sources) if (await officeReachesRecord(caller, source)) reachable.set(source.id, source)
+  return views.map((view) => {
+    if (!view.sourceFileId) return view
+    const source = reachable.get(view.sourceFileId)
+    return { ...view, origin: source ? { fileId: source.id, recordType: source.recordType, recordId: source.recordId, originalName: source.originalName, versionNo: source.versionNo } : null }
+  })
 }
 
 /** files.delete: refused while retained or on legal hold; then the object is removed from the store (best effort). */

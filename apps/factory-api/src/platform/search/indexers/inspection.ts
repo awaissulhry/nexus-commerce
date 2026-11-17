@@ -23,13 +23,17 @@ export default defineIndexer({
       where: idWhere(filter),
       orderBy: { id: 'asc' },
       take,
-      select: { id: true, companyId: true, siteId: true, number: true, status: true, workOrder: { select: { number: true, batchNumber: true, style: { select: { code: true, name: true } } } } },
+      select: { id: true, companyId: true, siteId: true, number: true, status: true, workOrder: { select: { number: true, batchNumber: true, partyId: true, style: { select: { code: true, name: true, brandPartyId: true } } } } },
     })
     return rows.map((row) => ({
       recordId: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      partyId: null,
+      // B-TH-030 (WALL-G12): an inspection is its work order's customer's (WorkOrder.partyId, B-PR-01: one customer per work
+      // order), else its private-label style's brand (a sample of no customer, or a mixed work order made before the rule:
+      // its `everyParty` marker is the production lane's indexer plumbing, B-PR-08a part 2). Read here, never through the
+      // work order's own entry, which the production lane owns.
+      partyId: row.workOrder.partyId ?? row.workOrder.style.brandPartyId,
       number: row.number,
       title: row.workOrder.style.name,
       subtitle: row.workOrder.number,

@@ -224,6 +224,9 @@
     "NO_PERMISSION": "Escalating it needs the right to follow up NCRs at its site.",
     "NO_CAPA": "The complaint names no CAPA or 8D.",
     "NO_REPORT": "The 8D has no version kept yet.",
+    "OTHER_CUSTOMER": "This 8D is written for another customer: it goes only to that customer.",
+    "OTHER_CUSTOMERS_COMPLAINTS": "This 8D also answers complaints of another customer: write this customer's own 8D, or take those complaints off first.",
+    "REPORT_OUTDATED": "The kept 8D report still names a complaint of another customer: keep a new version first.",
     "other": "Not possible in its present state."
   },
   "problem": {

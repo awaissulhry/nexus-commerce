@@ -12,7 +12,9 @@ import { placeholderProblems } from './placeholders'
  */
 
 /** The records a saved reply may be for (null: any record), and the placeholders each fills. */
-export const REPLY_RECORD_TYPES = ['SalesOrder', 'Quote', 'PurchaseOrder', 'ServiceCase', 'Shipment', 'Party'] as const
+// B-TH-046 (threads plan TH-3, N5): Inquiry — the requests of Sales › Incoming (number, what it is about, the wanted date, the
+// customer's contact who wrote it).
+export const REPLY_RECORD_TYPES = ['SalesOrder', 'Quote', 'PurchaseOrder', 'ServiceCase', 'Shipment', 'Party', 'Inquiry'] as const
 export type ReplyRecordType = (typeof REPLY_RECORD_TYPES)[number]
 
 export const isReplyRecordType = (value: unknown): value is ReplyRecordType => typeof value === 'string' && (REPLY_RECORD_TYPES as readonly string[]).includes(value)
@@ -27,6 +29,8 @@ export const REPLY_PLACEHOLDERS: Readonly<Record<ReplyRecordType, readonly strin
   ServiceCase: [...COMMON_REPLY_PLACEHOLDERS, 'case.number'],
   Shipment: [...COMMON_REPLY_PLACEHOLDERS, 'shipment.number', 'order.number'],
   Party: COMMON_REPLY_PLACEHOLDERS,
+  // B-TH-046: `inquiry.subject` is what the request is about (the subject of the mail it came by, else its first line).
+  Inquiry: [...COMMON_REPLY_PLACEHOLDERS, 'inquiry.number', 'inquiry.subject', 'inquiry.wantedDate'],
 })
 
 /** The placeholders a saved reply for this record type (null: any record) may use. */
@@ -47,7 +51,7 @@ export function replyProblems(words: ReplyWords): Issue[] {
   const name = words.name.trim()
   if (name === '' || name.length > REPLY_LIMITS.name || /[\r\n]/.test(name)) problems.push({ path: 'body/name', message: `One line of 1 to ${REPLY_LIMITS.name} characters.` })
   if (!isTemplateLanguage(words.language)) problems.push({ path: 'body/language', message: 'Saved replies are written in Italian or English.' })
-  if (words.recordType !== null && !isReplyRecordType(words.recordType)) problems.push({ path: 'body/recordType', message: 'Saved replies are for an order, a quote, a purchase order, a service case, a shipment, a customer or supplier, or any record.' })
+  if (words.recordType !== null && !isReplyRecordType(words.recordType)) problems.push({ path: 'body/recordType', message: 'Saved replies are for an order, a quote, a purchase order, a service case, a shipment, a customer or supplier, a request, or any record.' })
   const body = words.body.trim()
   if (body === '' || body.length > REPLY_LIMITS.body) problems.push({ path: 'body/body', message: `1 to ${REPLY_LIMITS.body} characters.` })
   else problems.push(...placeholderProblems(body, 'body/body', replyPlaceholdersOf(words.recordType)))
