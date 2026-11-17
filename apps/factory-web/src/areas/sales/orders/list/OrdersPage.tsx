@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { findCustomers, getParty } from '../../quotes/api'
-import { getBoard, listOrders, nextOrderNumber, type OrderBoard } from '../api'
-import { downloadText, useCoalesced, useLive } from '../hooks'
-import { abilitiesOf, boardLanes, laneQuery, layoutFromAddress, listAddress, listTouches, ordersCsv, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type RowView } from '../model'
+import { getBoard, getOrderPicture, listOrderCustomers, listOrders, nextOrderNumber, type OrderBoard, type OrderCustomer } from '../api'
+import { useCoalesced, useLive } from '../hooks'
+import { abilitiesOf, boardLanes, brandFromAddress, companyFromAddress, laneQuery, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
 import { newOrderAddress } from '../new/new-model'
 import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
@@ -18,6 +18,9 @@ import { useListDepth } from '../list-depth/use-list-depth'
 import { usePromiseWeek } from '../week/use-promise-week'
 import { useOrdersImport } from '../import/use-orders-import'
 import { NAMESPACE as DEPTH } from '../depth/model'
+// ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
+import { brandName, NAMESPACE as SHEET } from './sheet/model'
+import type { PictureLoader } from './sheet/parts'
 
 /**
  * `/w/<company>/sales/orders` (SCR-038): reads the orders of the saved rows view and the search from the address (the
@@ -31,14 +34,13 @@ import { NAMESPACE as DEPTH } from '../depth/model'
  */
 export function OrdersPage() {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */]}>
       <OrdersContainer />
     </WithMessages>
   )
 }
 
 function OrdersContainer() {
-  const t = useT('orders')
   const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -51,6 +53,10 @@ function OrdersContainer() {
   const layout = layoutFromAddress(params)
   const q = params?.get('q') ?? ''
   const party = partyFromAddress(params) // B-TH-201: one customer's orders (Sales › Reports' drill)
+  // B-TH-225: the label on the garment and the company narrow every read too (the address keeps them).
+  const brand = brandFromAddress(params)
+  const company = companyFromAddress(params)
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company }), [brand, company])
 
   const [list, setList] = useState<OrdersListModel['list']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -66,17 +72,27 @@ function OrdersContainer() {
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, layout: next.layout ?? layout, party: next.party === undefined ? party : next.party })),
-    [router, pathname, rows, q, layout, party],
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null }) =>
+      router.replace(
+        listAddress(pathname, {
+          rows: next.rows ?? rows,
+          q: next.q ?? q,
+          layout: next.layout ?? layout,
+          party: next.party === undefined ? party : next.party,
+          brand: next.brand === undefined ? brand : next.brand, // B-TH-225
+          company: next.company === undefined ? company : next.company, // B-TH-225
+        }),
+      ),
+    [router, pathname, rows, q, layout, party, brand, company],
   )
 
   const readBoard = useCallback(
     (id: number) => {
-      getBoard(api, q, undefined, party)
+      getBoard(api, q, undefined, party, narrow)
         .then((answer) => id === readId.current && setBoard(answer))
         .catch(() => id === readId.current && setBoard(null))
     },
-    [api, q, party],
+    [api, q, party, narrow],
   )
 
   const load = useCallback(async (silent = false) => {
@@ -96,7 +112,7 @@ function OrdersContainer() {
       await Promise.all(
         shown.map(async (status) => {
           try {
-            const page = await listOrders(api, laneQuery(status, rows, q, party))
+            const page = await listOrders(api, laneQuery(status, rows, q, party, narrow))
             if (id !== readId.current) return
             setLanes((current) => current.map((lane) => (lane.status === status ? { status, items: page.orders, more: page.nextCursor !== null, problem: null } : lane)))
           } catch (error) {
@@ -113,7 +129,7 @@ function OrdersContainer() {
     }
     setList((current) => ({ ...current, problem: null }))
     try {
-      const page = await listOrders(api, rowsQuery(rows, q, null, party))
+      const page = await listOrders(api, rowsQuery(rows, q, null, party, narrow))
       if (id !== readId.current) return
       setList({ items: page.orders, more: page.nextCursor !== null, problem: null })
       setCursor(page.nextCursor)
@@ -123,7 +139,7 @@ function OrdersContainer() {
       if (id !== readId.current) return
       setList({ items: null, more: false, problem: readProblem(error) })
     }
-  }, [api, rows, q, party, layout, readBoard])
+  }, [api, rows, q, party, narrow, layout, readBoard])
 
   useEffect(() => {
     setList({ items: null, more: false, problem: null })
@@ -133,13 +149,33 @@ function OrdersContainer() {
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listOrders(api, rowsQuery(rows, q, cursor, party))
+      const page = await listOrders(api, rowsQuery(rows, q, cursor, party, narrow))
       setList((current) => ({ items: [...(current.items ?? []), ...page.orders.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null }))
       setCursor(page.nextCursor)
     } catch (error) {
       setNotice({ tone: 'danger', words: { key: readProblem(error) } })
     }
-  }, [api, cursor, rows, q, party])
+  }, [api, cursor, rows, q, party, narrow])
+
+  // ── B-TH-226: the Customer switcher — the reader's customers with their open and late orders (GET /sales/orders/customers);
+  // its search reads the API again (after 250 ms); the chosen customer's name comes from it first. ──
+  const [customers, setCustomers] = useState<{ customers: OrderCustomer[] | null; total: number; limited: boolean; problem: string | null }>({ customers: null, total: 0, limited: false, problem: null })
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [searched, setSearched] = useState('')
+  const [customersTick, setCustomersTick] = useState(0)
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(customerQuery.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [customerQuery])
+  useEffect(() => {
+    const abort = new AbortController()
+    setCustomers((current) => ({ ...current, customers: searched ? null : current.customers, problem: null }))
+    listOrderCustomers(api, { q: searched || undefined, companyId: company, limit: 50 }, abort.signal)
+      .then((answer) => !abort.signal.aborted && setCustomers({ customers: answer.customers, total: answer.total, limited: answer.limited, problem: null }))
+      .catch((error: unknown) => !abort.signal.aborted && setCustomers({ customers: [], total: 0, limited: false, problem: readProblem(error) }))
+    return () => abort.abort()
+  }, [api, searched, company, customersTick])
+  // ── end B-TH-226 (the switcher's read) ──
 
   // ── B-TH-201: the customer's name for the chip — from the rows read, else the customer's record (404 when the person may
   // not open it: then the chip names no one). ──
@@ -150,7 +186,7 @@ function OrdersContainer() {
   }, [party, list.items, lanes])
   const [looked, setLooked] = useState<{ id: string; name: string | null } | null>(null)
   useEffect(() => {
-    if (!party || nameInRows || looked?.id === party) return
+    if (!party || nameInRows || looked?.id === party || customers.customers === null || customers.customers.some((entry) => entry.id === party)) return
     let gone = false
     getParty(api, party)
       .then((found) => !gone && setLooked({ id: party, name: found.legalName }))
@@ -158,9 +194,21 @@ function OrdersContainer() {
     return () => {
       gone = true
     }
-  }, [api, party, nameInRows, looked?.id])
-  const customer = party ? { id: party, name: nameInRows ?? (looked?.id === party ? looked.name : undefined) } : null
+  }, [api, party, nameInRows, looked?.id, customers.customers])
   // ── end B-TH-201 ──
+
+  const nameInSwitcher = party ? (customers.customers?.find((entry) => entry.id === party)?.name ?? null) : null
+  const customer = party ? { id: party, name: nameInSwitcher ?? nameInRows ?? (looked?.id === party ? looked.name : undefined) } : null
+  // ── end B-TH-226 ──
+
+  // ── B-TH-225: the label's and the company's names for their chips; the pictures' small previews; a row opens its order ──
+  const brandNamed = brand ? { value: brand, name: brandName([...(list.items ?? []), ...lanes.flatMap((lane) => lane.items ?? [])], brand).name } : null
+  const companyNamed = company ? { id: company, name: session.companies.find((entry) => entry.id === company)?.name ?? company } : null
+  const loadPicture = useCallback<PictureLoader>(async (orderId) => {
+    const picture = await getOrderPicture(api, orderId)
+    return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null
+  }, [api])
+  // ── end B-TH-225 ──
 
   // Live: an order event (a new order, a move, a deposit paid…) → "N updates · Show"; the tiles follow at once. The
   // board reads its lanes again by itself (B-W2a-50: a board left open on a second screen).
@@ -207,17 +255,6 @@ function OrdersContainer() {
     readNumber(openedCompany)
   }, [opened, openedCompany, searchCustomers, readNumber])
 
-  const exportRows = useCallback(
-    (ids: string[]) => {
-      const picked = (list.items ?? []).filter((row) => ids.includes(row.id))
-      downloadText(
-        `orders-${romeToday()}.csv`,
-        ordersCsv(picked, can.price, { header: (column) => t(`csv.${column}`), status: (status) => t(`status.${status}`), deposit: (state) => t(`deposit.${state}`) }, locale),
-      )
-    },
-    [list.items, can.price, t, locale],
-  )
-
   // B-W2a-72: the Margin % column (margin grain): the margins of the orders on screen.
   const margins = useListMargins(api, layout === 'board' ? null : list.items, q, session.permissions, asOf)
 
@@ -231,6 +268,11 @@ function OrdersContainer() {
   const model: OrdersListModel = {
     prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins,
     customer, // B-TH-201
+    // ---- B-TH-225 / B-TH-226 ----
+    brand: brandNamed,
+    company: companyNamed,
+    companies: session.companies.map((entry) => ({ id: entry.id, name: entry.name })),
+    switcher: { ...customers, query: customerQuery, searching: customerQuery.trim() !== searched || (searched !== '' && customers.customers === null) },
     depth: listDepth.model,
     week: { state: week.state, sites: week.sites, siteId: week.siteId },
     importer: { held: importer.held, sheet: importer.model },
@@ -244,11 +286,26 @@ function OrdersContainer() {
         onLayout: (next) => go({ layout: next }),
         onSearch: (next) => go({ q: next }),
         onClearCustomer: () => go({ party: null }), // B-TH-201
+        // ---- B-TH-225 / B-TH-226 ----
+        onCustomer: (next) => {
+          setCustomerQuery('')
+          go({ party: next })
+        },
+        onCustomerSearch: setCustomerQuery,
+        onCustomerRetry: () => setCustomersTick((tick) => tick + 1),
+        onBrand: (next) => go({ brand: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+        onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+        onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null }),
+        loadPicture,
+        onOpenRow: (id, newTab) => {
+          const href = `${prefix}/sales/orders/${id}`
+          if (newTab) window.open(href, '_blank', 'noopener')
+          else router.push(href)
+        },
         onMore: () => void more(),
         onRetry: () => void load(),
         onShowUpdates: () => void load(),
         onOpen: (id) => router.push(`${prefix}/sales/orders/${id}`),
-        onExport: exportRows,
         onDismissNotice: () => setNotice(null),
         onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId) : null),
         onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current)),

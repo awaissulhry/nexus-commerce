@@ -490,3 +490,14 @@ export function writeProblemOf(error: unknown): Phrase & { reload: boolean } {
   if (['signed_out', 'forbidden', 'not_found', 'rate_limited', 'unavailable', 'step_up'].includes(error.kind)) return { key: `problem.write.${error.kind}`, reload: error.kind === 'not_found' }
   return { key: 'problem.write.internal', reload: false }
 }
+
+// ── TH-0 follow-up (B-TH-004 on screen): the confirmation's send, with the "Send outside this customer" tick ──
+/**
+ * The order confirmation's send body: the recipient, the copies, the words and the language; `sendOutside` only when the person
+ * ticked "Send outside this customer" after the API named an address of another customer (the quote's send does the same).
+ */
+export function confirmationSendBody(input: { to: string; cc: string; subject: string; message: string; language: 'it' | 'en'; outsideTicked: boolean }) {
+  const cc = input.cc.split(/[;,\s]+/).map((part) => part.trim()).filter(Boolean)
+  return { to: [input.to], ...(cc.length > 0 ? { cc } : {}), subject: input.subject.trim() || null, message: input.message.trim() || null, language: input.language, ...(input.outsideTicked ? { sendOutside: true } : {}) }
+}
+// ── end TH-0 follow-up ──

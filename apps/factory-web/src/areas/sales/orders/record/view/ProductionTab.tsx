@@ -10,7 +10,9 @@ import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money } from '../../../quotes/model'
 import type { Order, OrderWorkOrder } from '../../api'
+import { productionWordsFor } from '../../../../../lib/production/words'
 import { dayInstant, depositGate, linesNotInProduction, nextStep } from '../../model'
+import { productionProgress } from '../production'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
 
@@ -124,7 +126,9 @@ function WorkOrdersTable({ rows, href }: { rows: OrderWorkOrder[]; href: (row: {
       label={t('production.title')}
       columns={[t('production.col.number'), t('production.col.style'), t('production.col.pieces'), t('production.col.status'), t('production.col.progress'), t('production.col.due'), t('production.col.site')]}
       rows={rows.map((row) => {
-        const finished = row.progress?.finished ?? null
+        // One figure (the bar shows what its words name); a step the site does not scan says "—", never 0.
+        const { figure, notCounted } = productionProgress(row)
+        const words = productionWordsFor(locale)(figure.words.key, figure.words.params)
         return {
           id: row.id,
           cells: [
@@ -138,8 +142,13 @@ function WorkOrdersTable({ rows, href }: { rows: OrderWorkOrder[]; href: (row: {
             String(row.pieces),
             <Pill key="s" tone={WO_TONE[row.status]}>{t(`woStatus.${row.status}`)}</Pill>,
             <span key="p" className="fw-so-progress">
-              <ProgressBar value={row.status === 'DRAFT' || finished === null || row.pieces === 0 ? null : Math.round((finished / row.pieces) * 100)} ariaLabel={t('production.progressLabel', { number: row.number })} height={6} />
-              <span className="fw-so-cell-sub">{row.progress ? t('production.progress', { cut: row.progress.cut ?? 0, sewn: row.progress.sewn ?? 0, finished: row.progress.finished ?? 0, pieces: row.pieces }) : t('production.notReleased')}</span>
+              <ProgressBar value={figure.percent} ariaLabel={t('production.progressLabel', { number: row.number, figure: words })} height={6} />
+              <span className="fw-so-cell-sub">{row.progress ? words : t('production.notReleased')}</span>
+              {notCounted.map((step) => (
+                <span key={step} className="fw-so-cell-sub" title={t(`production.notCounted.${step}`)} aria-label={`${t(`production.step.${step}`)}: ${t(`production.notCounted.${step}`)}`}>
+                  {t(`production.step.${step}`)} —
+                </span>
+              ))}
             </span>,
             row.dueDate ? (
               <span key="d" className="fw-so-inline">

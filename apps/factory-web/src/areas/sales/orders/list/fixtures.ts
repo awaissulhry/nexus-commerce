@@ -10,6 +10,8 @@ import { LIST_MARGINS } from './margin/fixtures'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { demoOrdersImport, listDepth, weekModel } from '../depth/demo/fixtures'
 import { LIST_ROWS as ALL_ROWS } from '../_demo/fixtures'
+// ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
+import type { OrderCustomer } from '../api'
 
 /**
  * SCR-038 — Orders (design sales.orders) with made-up data only: every state of the list (loading, error, empty, nothing
@@ -69,6 +71,32 @@ const newOrder = (over: Partial<NewOrderDialogModel> = {}): NewOrderDialogModel 
 function OrdersDesign({ model }: { model: ListCase }) {
   return inShell('/sales/orders', createElement(OrdersListView, { model: model.list }), model.role)
 }
+
+// ── B-TH-225 / B-TH-226: the sheet's design data (made up) ──
+/** A small made-up garment drawing as each row's picture (the page reads the store's small previews). */
+const garment = (fill: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#eef1f5"/><path fill="${fill}" d="M30 18 L42 12 Q50 19 58 12 L70 18 L85 35 L77 45 L70 40 L70 87 L30 87 L30 40 L23 45 L15 35 Z"/><path stroke="#ffffff" stroke-opacity=".5" d="M50 17 V87"/></svg>`)}`
+const PICTURES: Readonly<Record<string, string>> = Object.fromEntries(ALL_ROWS.filter((entry) => entry.picture?.small).map((entry, index) => [entry.id, garment(['#36506b', '#8a5a2b', '#2f6b4f'][index % 3]!)]))
+
+const CUSTOMERS: OrderCustomer[] = [...new Map(ALL_ROWS.map((entry) => [entry.partyId, entry.partyName])).entries()].map(([id, name], index) => ({
+  id,
+  code: `C-${index + 1}`,
+  name,
+  archived: false,
+  orders: ALL_ROWS.filter((entry) => entry.partyId === id).length,
+  open: OPEN_ROWS.filter((entry) => entry.partyId === id).length,
+  late: OPEN_ROWS.filter((entry) => entry.partyId === id && (entry.daysLate ?? 0) > 0).length,
+  lastOrderDate: '2026-10-28',
+}))
+
+function switcherOf(customers: OrderCustomer[], over: Partial<NonNullable<OrdersListModel['switcher']>> = {}): NonNullable<OrdersListModel['switcher']> {
+  return { customers, total: customers.length, limited: false, problem: null, query: '', searching: false, ...over }
+}
+
+function sheet(role: Role, over: Partial<OrdersListModel> = {}): ListCase {
+  return base(role, { demoPictures: PICTURES, switcher: switcherOf(CUSTOMERS), companies: DEMO_COMPANIES.slice(0, 1).map((entry) => ({ id: entry.id, name: entry.name })), ...over })
+}
+// ── end B-TH-225 / B-TH-226 ──
 
 export const designScreen = defineDesignScreen<ListCase>({
   screen: 'SCR-038',
@@ -143,5 +171,28 @@ export const designScreen = defineDesignScreen<ListCase>({
       model: base('sales', { rows: 'all', customer: { id: '0190f0e2-6666-7000-8000-00000000ffff', name: null }, list: { items: [], more: false, problem: null } }),
     },
     // ── end B-TH-201 ──
+    // ── B-TH-225 / B-TH-226 (threads plan TH-1a, pictures 23 + 24): the sheet, every cell a door; the Customer switcher ──
+    { id: 'th-225-sheet', label: 'TH-1a · Sales · The Orders sheet: Picture, Brand, Invoiced; every value opens its thing', model: sheet('sales'), note: 'Click a number, a customer, Pieces, Promised, Shipped, Invoiced or a quote: a real link (⌘-click: a new tab). Brand and Status narrow the sheet (the funnel). Rest a moment on a number or a customer: the peek card. o opens the focused cell.' },
+    { id: 'th-225-wide', label: 'TH-1a · Owner · At 1920 the sheet uses the width: Ordered, Margin %, Priority, Season, From quote', model: sheet('owner', { wide: true, margins: LIST_MARGINS, depth: listDepth('owner') }), note: 'Open it with the Wide 1920 frame: no empty band on the right.' },
+    { id: 'th-225-manager', label: 'TH-1a · Production manager · Invoiced as a word (no link, the reason on hover), no money columns', model: sheet('manager') },
+    { id: 'th-225-selected', label: 'TH-1a · Sales · Three picked: Export 3 goes through the export job (the screen’s columns, those rows)', model: sheet('sales', { selected: OPEN_ROWS.slice(0, 3).map((entry) => entry.id), depth: listDepth('sales') }) },
+    { id: 'th-225-viewer', label: 'TH-1a · Sales · The picture large: Open style; an order of 3 styles leads to its lines', model: sheet('sales', { viewerOpen: OPEN_ROWS.find((entry) => entry.styleCount > 1 && entry.picture)?.id ?? null }) },
+    { id: 'th-225-filtered', label: 'TH-1a · Sales · Brand and Status narrow the sheet: two chips and Clear all', model: sheet('sales', { rows: 'IN_PRODUCTION', brand: { value: OPEN_ROWS[0]!.partyId, name: OPEN_ROWS[0]!.brands[0]?.name ?? null }, list: { items: rowsFor('sales', OPEN_ROWS.filter((entry) => entry.status === 'IN_PRODUCTION')), more: false, problem: null } }) },
+    { id: 'th-225-companies', label: 'TH-1a · Owner · Two companies: the Company column (a funnel) and its chip', model: sheet('owner', { companies: DEMO_COMPANIES.map((entry) => ({ id: entry.id, name: entry.name })), company: { id: DEMO_COMPANIES[0].id, name: DEMO_COMPANIES[0].name } }) },
+    { id: 'th-225-more', label: 'TH-1a · Sales · The honest count: 7 of 42 loaded, Show more', model: sheet('sales', { list: { items: rowsFor('sales'), more: true, problem: null }, board: { ...BOARD, byStatus: BOARD.byStatus.map((entry) => (entry.status === 'CONFIRMED' ? { ...entry, count: 38 } : entry)) } }) },
+    { id: 'th-225-empty', label: 'TH-1a · No orders yet (where orders come from)', model: sheet('sales', { list: { items: [], more: false, problem: null }, switcher: switcherOf([], { total: 0 }) }) },
+    { id: 'th-226-switcher', label: 'TH-1a · Sales · Customer ▾ open: search, All customers, recent first, open and late per customer', model: sheet('sales', { switcherOpen: true }) },
+    {
+      id: 'th-226-customer',
+      label: 'TH-1a · Sales · One customer chosen: the title, the tiles, the rows, the export follow; the chip returns to all',
+      model: sheet('sales', { customer: { id: CUSTOMERS[0]!.id, name: CUSTOMERS[0]!.name }, rows: 'all', list: { items: rowsFor('sales', LIST_ROWS.filter((entry) => entry.partyId === CUSTOMERS[0]!.id)), more: false, problem: null } }),
+    },
+    { id: 'th-226-from-report', label: 'TH-1a · From Sales › Reports: Open the list lands here with that customer and its late orders', model: sheet('sales', { customer: { id: LIST_ROWS[4]!.partyId, name: LIST_ROWS[4]!.partyName }, rows: 'late', list: { items: rowsFor('sales', LIST_ROWS.filter((entry) => entry.partyId === LIST_ROWS[4]!.partyId && (entry.daysLate ?? 0) > 0)), more: false, problem: null } }) },
+    { id: 'th-226-limited', label: 'TH-1a · A person limited to some customers: “All my customers (2)”, never the others', model: sheet('sales', { switcher: switcherOf(CUSTOMERS.slice(0, 2), { limited: true }), switcherOpen: true, list: { items: rowsFor('sales', OPEN_ROWS.filter((entry) => CUSTOMERS.slice(0, 2).some((customer) => customer.id === entry.partyId))), more: false, problem: null } }) },
+    { id: 'th-226-single', label: 'TH-1a · A person limited to one customer: a fixed label, no menu', model: sheet('sales', { switcher: switcherOf(CUSTOMERS.slice(1, 2), { limited: true }), list: { items: rowsFor('sales', OPEN_ROWS.filter((entry) => entry.partyId === CUSTOMERS[1]!.id)), more: false, problem: null } }) },
+    { id: 'th-226-unavailable', label: 'TH-1a · A link to a customer the reader may not open: “not available”, no name, no row (W27)', model: sheet('sales', { customer: { id: '0190f0e2-6666-7000-8000-00000000ffff', name: null }, rows: 'all', list: { items: [], more: false, problem: null } }) },
+    { id: 'th-226-reading', label: 'TH-1a · Customer ▾ while the customers are read: — never 0', model: sheet('sales', { switcher: { ...switcherOf(CUSTOMERS), customers: null }, switcherOpen: true }) },
+    // ── end B-TH-225 / B-TH-226 ──
   ],
 })
+

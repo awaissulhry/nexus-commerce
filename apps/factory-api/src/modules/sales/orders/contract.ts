@@ -188,6 +188,10 @@ const filterFields = {
   promiseTo: businessDate().optional(),
   /** Number or customer reference, case-insensitive. */
   q: z.string().trim().min(1).max(100).optional(),
+  // ── B-TH-225 (threads plan TH-1a, picture 23: Brand narrows the sheet) ──
+  /** The label on the garment: orders with a line of a style of this brand party, or `own` (our own collection). */
+  brand: z.union([id(), z.literal('own')]).optional(),
+  // ── end B-TH-225 ──
 }
 
 export const listOrdersContract = defineContract({
@@ -349,6 +353,8 @@ export const customersContract = defineContract({
       ),
       /** How many customers match (the picker says "type to find" beyond the first `limit`): a count, not money. */
       total: notMoney(z.number().int()),
+      // ── B-TH-226: every grant of the reader's orders.view names its customers ("All my customers (3)", a fixed label for one) ──
+      limited: z.boolean(),
       asOf: instant(),
     }),
   },

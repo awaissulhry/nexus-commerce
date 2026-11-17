@@ -491,8 +491,7 @@
     "print": "Print confirmation",
     "setPriority_one": "Set priority for {count}",
     "setPriority_other": "Set priority for {count}",
-    "more": "More actions",
-    "keys": "Keyboard shortcuts"
+    "more": "More actions"
   },
   "import": {
     "action": "Import orders…",

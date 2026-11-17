@@ -8,6 +8,9 @@ import type { WizardActions } from '../../../admin/import/view/ImportWizard'
 import type { ListDepthActions, ListDepthModel } from '../list-depth/use-list-depth'
 import type { OrdersImportModel } from '../import/view/OrdersImportView'
 import type { WeekModel } from '../week/use-promise-week'
+// ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
+import type { PictureLoader } from './sheet/parts'
+import type { SwitcherState } from './sheet/model'
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -63,6 +66,21 @@ export interface OrdersListModel {
    * up; null when the person may not open that customer: the chip names no one); null/absent: every customer.
    */
   customer?: { id: string; name: string | null | undefined } | null
+  // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
+  /** The label on the garment the address narrows the sheet to (`?brand=<party>|own`), and its name once known. */
+  brand?: { value: string; name: string | null } | null
+  /** The company the address narrows the sheet to (`?company=`): its id and name. */
+  company?: { id: string; name: string } | null
+  /** The companies the reader sees: the Company column and its funnel only from two on. */
+  companies?: ReadonlyArray<{ id: string; name: string }>
+  /** The Customer switcher: the reader's customers, their counts, a limited reader (null: not drawn). */
+  switcher?: (SwitcherState & { query: string; searching: boolean }) | null
+  /** Design cases: each row's picture as an address (the page loads the small previews through `actions.loadPicture`). */
+  demoPictures?: Readonly<Record<string, string>>
+  /** Design cases: the viewer open on a row, the switcher open, the widths that show the wide columns. */
+  viewerOpen?: string | null
+  switcherOpen?: boolean
+  wide?: boolean
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -73,13 +91,24 @@ export interface OrdersListActions {
   onRows?: (rows: RowView) => void
   onLayout?: (layout: Layout) => void
   onSearch?: (q: string) => void
-  /** B-TH-201: the customer chip's ✕ (every customer again). */
+  /** B-TH-201: the customer chip's ✕ (every customer again). B-TH-226: the switcher's pick (null: every customer). */
   onClearCustomer?: () => void
+  onCustomer?: (party: string | null) => void
+  /** B-TH-225: Clear all / Clear filters — the search, the view, the customer, the label and the company at once. */
+  onClearAll?: () => void
+  onCustomerSearch?: (query: string) => void
+  onCustomerRetry?: () => void
+  /** B-TH-225: the funnels (Brand, Status, Company) and their chips' ✕; null clears. */
+  onBrand?: (brand: string | null) => void
+  onCompany?: (company: string | null) => void
+  /** B-TH-225: the small preview of a row's picture (null: the placeholder). */
+  loadPicture?: PictureLoader
+  /** B-TH-225: the rest of a row opens the order (⌘ / Ctrl: a new tab). */
+  onOpenRow?: (id: string, newTab: boolean) => void
   onMore?: () => void
   onRetry?: () => void
   onShowUpdates?: () => void
   onOpen?: (id: string) => void
-  onExport?: (ids: string[]) => void
   onDismissNotice?: () => void
   // B-W2a-50: New order (the dialog makes a draft on the screen; the order is made by "Confirm order").
   onNewOrder?: (open: boolean) => void

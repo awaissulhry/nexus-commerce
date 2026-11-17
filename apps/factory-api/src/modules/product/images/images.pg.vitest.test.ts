@@ -221,6 +221,11 @@ describe('Sketches and pictures (PRD-016)', () => {
     const back = before.find((picture: Json) => picture.caption === 'Back flat')
     const view = (await ok('maker', 'POST', `${pictures(jkt01)}/${back.id}/main`, { version: back.version })).pictures
     expect(view.pictures.filter((picture: Json) => picture.isMain).map((picture: Json) => picture.id)).toEqual([back.id])
+    // B-TH-102: asked again for the picture that is already the main one: the same pictures, no event, never a 500.
+    const events = (await eventsOf('style.pictures_changed')).length
+    const again = view.pictures.find((picture: Json) => picture.id === back.id)
+    expect((await ok('maker', 'POST', `${pictures(jkt01)}/${back.id}/main`, { version: again.version })).pictures.pictures.filter((picture: Json) => picture.isMain).map((picture: Json) => picture.id)).toEqual([back.id])
+    expect((await eventsOf('style.pictures_changed')).length).toBe(events)
     const row = (await ok('maker', 'GET', '/product/styles?status=ALL&q=SEED-JKT-01')).styles.find((item: Json) => item.code === 'SEED-JKT-01')
     expect(row.thumbnail).toEqual({ fileId: back.file.id, name: 'back flat.png', contentType: 'image/png' })
     expect((await eventsOf('style.pictures_changed')).at(-1)).toMatchObject({ change: 'MAIN', pictureIds: [back.id, seed.imageIds.colourway] })
@@ -231,6 +236,8 @@ describe('Sketches and pictures (PRD-016)', () => {
     const reversed = [...before].reverse()
     const view = (await ok('maker', 'PUT', `${pictures(jkt01)}/order`, { ids: reversed })).pictures
     expect(view.pictures.map((picture: Json) => picture.id)).toEqual(reversed)
+    // B-TH-102: the same order again moves nothing and answers the gallery (never a 500).
+    expect((await ok('maker', 'PUT', `${pictures(jkt01)}/order`, { ids: reversed })).pictures.pictures.map((picture: Json) => picture.id)).toEqual(reversed)
     expect((await refused('maker', 'PUT', `${pictures(jkt01)}/order`, { ids: reversed.slice(1) }, 409)).message).toMatch(/missing from the order/)
   })
 
