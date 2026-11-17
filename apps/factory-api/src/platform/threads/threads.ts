@@ -31,6 +31,7 @@ import { audienceSees, type FileAudience, type Viewer } from '../files/rules'
 import type { AttachmentView, MessageView, ThreadView } from './contract'
 import { followInCommand } from './followers'
 import { mayOnThread, resolveRecord, type RecordScope } from './records'
+import { mayShare, notShareableRefusal } from './records' // B-PR-08a
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -237,6 +238,9 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
   if (!office && context.audience !== 'partner' && context.audience !== 'link') throw new ForbiddenError()
   // A link opens one record: any other is not found.
   if (context.audience === 'link' && (context.record.type !== record.type || context.record.id !== record.id)) throw new NotFoundError('Record not found.')
+  // ---- B-PR-08a: a portal or a link reads nothing of a work order's, hold's or NCR's thread — as "none", not even that it exists.
+  if (!office && !mayShare(record.type)) return EMPTY
+  // ---- end B-PR-08a
 
   return caller.withClient(async (client) => {
     let thread: SeenThread | null
@@ -280,7 +284,11 @@ export type ThreadTools = Pick<CommandTools, 'tx' | 'context' | 'now' | 'audit' 
  */
 export async function ensureThread(tools: ThreadTools, record: RecordRef, createdById: string | null): Promise<{ thread: ThreadRow; created: boolean }> {
   const { tx, now } = tools
-  const scope: RecordScope | null = await resolveRecord(tx, record.type, record.id)
+  // ---- B-PR-08a: a work order's, hold's or NCR's party is a wall party, never the thread's share party (records.ts NOT_SHAREABLE):
+  // its thread is made, and stays, without one.
+  const resolved: RecordScope | null = await resolveRecord(tx, record.type, record.id)
+  const scope: RecordScope | null = resolved && !mayShare(record.type) ? { ...resolved, partyId: null } : resolved
+  // ---- end B-PR-08a
   let thread = await tx.thread.findFirst({ where: recordWhere(record), select: THREAD_OFFICE })
   if (!thread) {
     if (!scope) throw new NotFoundError('Record not found.')
@@ -351,6 +359,9 @@ export interface MessageInput {
  */
 export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input: MessageInput): Promise<Prisma.MessageGetPayload<{ select: typeof MESSAGE_OFFICE }>> {
   const audience = audienceOf(input.direction)
+  // ---- B-PR-08a: nothing is shared on a work order, a quality hold or a nonconformance (409 refusal/NOT_SHAREABLE, in words).
+  if (audience === 'PARTNER' && !mayShare(thread.recordType)) throw notShareableRefusal()
+  // ---- end B-PR-08a
   if (audience === 'PARTNER' && thread.partyId === null) throw new ConflictError('This record has no customer or supplier to share a message with.')
   const mentions = uniqueIds(input.mentions)
   const attachments = uniqueIds(input.attachments)
