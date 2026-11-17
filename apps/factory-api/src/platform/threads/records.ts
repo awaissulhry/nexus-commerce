@@ -1,4 +1,5 @@
 import type { FactoryClient } from '@nexus/factory-db'
+import { DomainError } from '@nexus/factory-domain/core/errors' // B-PR-08a
 import { can, type Actor, type Permission, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import type { CommandTx } from '../../core/command'
 
@@ -310,6 +311,27 @@ export function mayOnThread(actor: Actor, permission: Permission, recordType: st
   const gate = recordType && Object.hasOwn(THREAD_GATES, recordType) ? THREAD_GATES[recordType] : undefined
   return gate === undefined || can(actor, gate, scope)
 }
+
+// ---- B-PR-08a (production plan R-02, §2 "work order, hold and NCR threads stay internal"; threads lead T2, 2026-11-17): a work
+// order, a quality hold and a nonconformance are NEVER shared with a customer or supplier. Their resolvers may name a party (the
+// brand a work order is made for: B-PR-08a part 2): that is a WALL party — who in the office may read the thread — never the
+// thread's share party. threads.ts never sets it as the thread's party (ensureThread), refuses a shared message on them
+// (writeMessage: 409 refusal/NOT_SHAREABLE in words) and gives a portal or a link reader nothing (readThread: empty).
+export const NOT_SHAREABLE: ReadonlySet<string> = new Set(['WorkOrder', 'QualityHold', 'Nonconformance'])
+
+/** Whether a record type's thread may take a party and carry shared messages (every type but NOT_SHAREABLE's). */
+export const mayShare = (recordType: string): boolean => !NOT_SHAREABLE.has(recordType)
+
+/** Why a shared message on such a record is refused, for the office (it names no customer). */
+export const NOT_SHAREABLE_REFUSAL = Object.freeze({
+  it: 'La conversazione di un ordine di lavoro, di un blocco qualità o di una non conformità resta interna alla fabbrica: non si condivide mai con un cliente o un fornitore. Scrivi una nota interna.',
+  en: 'The thread of a work order, a quality hold or a nonconformance stays inside the factory: it is never shared with a customer or supplier. Write an internal note instead.',
+})
+
+/** The 409 of a shared message on such a record: the words at `refusal/NOT_SHAREABLE`. */
+export const notShareableRefusal = (): DomainError =>
+  new DomainError('conflict', NOT_SHAREABLE_REFUSAL.en, [{ path: 'refusal/NOT_SHAREABLE', message: NOT_SHAREABLE_REFUSAL.en }])
+// ---- end B-PR-08a
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
 
