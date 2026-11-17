@@ -90,14 +90,17 @@ export async function customerWall(db: Reader, actor: Actor): Promise<Prisma.App
   const ofParty = { company: 'companyId', party: 'partyId' } as const
   const ids = (rows: readonly { readonly id: string }[]) => rows.map((row) => row.id)
   // The subjects that are a customer's, of the customers the person reaches (one query each; a person limited to some customers
-  // reaches few): a sales order, a quote's version and a credit check are their customer's, a private-label style its brand's,
-  // an ask-to-buy its work order's customer's (none: no customer).
+  // reaches few): a sales order, a quote's version, a credit check and a return line are their customer's, a private-label style
+  // its brand's, an ask-to-buy and a substitute their work order's customer's (an ask-to-buy of no work order: no customer).
   const reached: Record<string, string[]> = {
     SalesOrder: ids(await db.salesOrder.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, ofParty) as Prisma.SalesOrderWhereInput, select: { id: true } })),
     QuoteVersion: ids(await db.quoteVersion.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: 'partyId' }) as Prisma.QuoteVersionWhereInput, select: { id: true } })),
     CreditCheck: ids(await db.creditCheck.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: 'partyId' }) as Prisma.CreditCheckWhereInput, select: { id: true } })),
     Style: ids(await db.style.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput, select: { id: true } })),
     PurchaseRequest: ids(await db.purchaseRequest.findMany({ where: { OR: [{ workOrderId: null }, { workOrder: { is: work } }] }, select: { id: true } })),
+    // A return's line is its customer's; a substitute its work order's customer's.
+    ReturnLine: ids(await db.returnLine.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: 'partyId' }) as Prisma.ReturnLineWhereInput, select: { id: true } })),
+    MaterialSubstitution: ids(await db.materialSubstitution.findMany({ where: { workOrder: { is: work } }, select: { id: true } })),
   }
   return { OR: [{ recordType: { notIn: Object.keys(reached) } }, ...Object.entries(reached).map(([recordType, recordIds]) => ({ recordType, recordId: { in: recordIds } }))] }
 }
