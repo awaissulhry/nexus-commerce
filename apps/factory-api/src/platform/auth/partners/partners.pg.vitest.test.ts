@@ -128,8 +128,8 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
     expect(people.find((user) => user.id === ownerUser.id)).toMatchObject({ audience: 'OFFICE', partyId: null, partnerKind: null, accessUntil: null })
     expect((await bea.get('/portal/me')).body.permissions).toEqual([])
     await acknowledge(bea)
-    // B-PR-13: the Buyer also sees production and marks orders urgent.
-    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', 'portal.orderRequests.manage', 'portal.production.urgency', 'portal.production.view', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'portal.upload', 'threads.read'])
+    // B-PR-13: the Buyer also sees production and marks orders urgent. B-TH-066 (#1575): + the projects it is added to.
+    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', 'portal.orderRequests.manage', 'portal.production.urgency', 'portal.production.view', 'portal.projects.view', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'portal.upload', 'threads.read'])
     const access = await bea.get('/portal/access')
     expect(access.body).toMatchObject({ kind: 'CUSTOMER', role: { key: 'customer-buyer', name: 'Buyer', seesPrices: true, admin: false }, capabilities: ['comment', 'upload', 'approve'], admins: [], preview: false })
     const team = await bea.get('/portal/colleagues')
@@ -242,8 +242,8 @@ describe('preview as the partner (read-only, every preview audited)', { timeout:
     expect(opened.status, JSON.stringify(opened.body)).toBe(200)
     expect(opened.body).toMatchObject({ party: { id: world.partyId, name: 'Brand Alpha' }, company: { code: 'C1' } })
     const me = await owner.get('/portal/me')
-    // B-PR-13: + portal.production.view (a preview reads production, never the urgency mark).
-    expect(me.body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'] })
+    // B-PR-13: + portal.production.view (a preview reads production, never the urgency mark). B-TH-066 (#1575): + portal.projects.view.
+    expect(me.body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', 'portal.projects.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'] })
     expect((await owner.get('/portal/colleagues')).body).toMatchObject({ canManage: false })
     const write = await owner.post('/portal/colleagues', { email: 'x@brand-alpha.example', displayName: 'X', roleKey: 'customer-viewer' })
     expect(write.status).toBe(403)
