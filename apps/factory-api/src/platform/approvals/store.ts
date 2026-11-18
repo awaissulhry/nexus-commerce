@@ -104,7 +104,25 @@ export async function customerWall(db: Reader, actor: Actor): Promise<Prisma.App
     // B-PR-38: a decision for a customer (BRAND_OVERRIDE) is about that customer's own approval request.
     ApprovalRequest: ids(await db.approvalRequest.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, ofParty) as Prisma.ApprovalRequestWhereInput, select: { id: true } })),
   }
-  return { OR: [{ recordType: { notIn: Object.keys(reached) } }, ...Object.entries(reached).map(([recordType, recordIds]) => ({ recordType, recordId: { in: recordIds } }))] }
+  const wall: Prisma.ApprovalTaskWhereInput = { OR: [{ recordType: { notIn: Object.keys(reached) } }, ...Object.entries(reached).map(([recordType, recordIds]) => ({ recordType, recordId: { in: recordIds } }))] }
+  // ── fix-pr-3 ──
+  // A customer may also be a supplier (a brand that supplies its own branded parts: the seeds' PO2 to P1). A request on what we
+  // buy from it, on what it delivered, or on its bank details names that customer (the row's label and summary carry its name),
+  // and a cost sheet names its style's brand: such requests are hidden from a person who does not reach that customer. A
+  // plain supplier's stay, as above; the brand-wall sweep (B-PR-10) found GET /approvals/tasks naming A's legal name and PO.
+  const reachedParties = scopeWhere(actor, APPROVALS_VIEW, { party: 'id' }) as Prisma.PartyWhereInput
+  if (Object.keys(reachedParties).length === 0) return wall // every customer (a grant limited by company or site only)
+  const others = ids(await db.party.findMany({ where: { AND: [{ roles: { hasSome: ['CUSTOMER', 'BRAND'] } }, { NOT: reachedParties }] }, select: { id: true } }))
+  if (others.length === 0) return wall
+  const hidden: Record<string, string[]> = {
+    PurchaseOrder: ids(await db.purchaseOrder.findMany({ where: { partyId: { in: others } }, select: { id: true } })),
+    GoodsReceiptLine: ids(await db.goodsReceiptLine.findMany({ where: { receipt: { is: { supplierId: { in: others } } } }, select: { id: true } })),
+    SupplierBankAccount: ids(await db.supplierBankAccount.findMany({ where: { partyId: { in: others } }, select: { id: true } })),
+    CostSheet: ids(await db.costSheet.findMany({ where: { style: { is: { brandPartyId: { in: others } } } }, select: { id: true } })),
+  }
+  const named = Object.entries(hidden).filter(([, recordIds]) => recordIds.length > 0)
+  return named.length === 0 ? wall : { AND: [wall, { NOT: { OR: named.map(([recordType, recordIds]) => ({ recordType, recordId: { in: recordIds } })) } }] }
+  // ── end fix-pr-3 ──
 }
 // ── end B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 

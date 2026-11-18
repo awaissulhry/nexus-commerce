@@ -874,6 +874,24 @@ describe('B-PR-10 the brand-wall sweep', () => {
     }
   })
 
+  // ── fix-pr-3 ──
+  it('approvals: a request on what we buy from customer A (A also supplies) is neither listed nor found by brand B; the production unit reads it', async () => {
+    // The seeds' PO2 is a draft purchase order to the brand P1 (= A) for its own branded protectors, waiting for a yes.
+    const tasks = await admin<{ id: string }>(`SELECT t.id FROM "ApprovalTask" t JOIN "PurchaseOrder" p ON p.id = t."recordId" WHERE t."recordType" = 'PurchaseOrder' AND p."partyId" = $1 AND t."tenantId" = $2`, [ids.a, ids.tenantId])
+    expect(tasks.length, 'the seeds hold a request on a purchase order to A').toBeGreaterThan(0)
+    const limited = await as('office.p2', 'GET', '/approvals/tasks?status=ALL&limit=200')
+    const all = await as('office.all', 'GET', '/approvals/tasks?status=ALL&limit=200')
+    expect([limited.status, all.status]).toEqual([200, 200])
+    expect(scanForA(JSON.stringify(limited.body))).toEqual([])
+    for (const { id } of tasks) {
+      expect(idsIn(limited.body).has(id), `request ${id} listed to brand B`).toBe(false)
+      expect(idsIn(all.body).has(id), `request ${id} listed to the production unit`).toBe(true)
+      expect((await as('office.p2', 'GET', `/approvals/tasks/${id}`)).status).toBe(404)
+      expect((await as('office.all', 'GET', `/approvals/tasks/${id}`)).status).toBe(200)
+    }
+  })
+  // ── end fix-pr-3 ──
+
   it('the MPS screen, planning allocation, what-ifs, day sheets and the run log need every customer; the change list shows only reached work orders', async () => {
     await everyCustomerOnly(`/planning/strategy?siteId=${w.siteId}`)
     await everyCustomerOnly(`/planning/allocation?siteId=${w.siteId}`)
