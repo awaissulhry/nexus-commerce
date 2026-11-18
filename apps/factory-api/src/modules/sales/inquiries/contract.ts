@@ -30,7 +30,6 @@ import {
   orderBody,
   styleDraftAnswer,
   styleDraftBody,
-  inquiryPictureView,
   // B-TH-042
   customerCheckView,
   makeCustomerAnswer,
@@ -67,8 +66,6 @@ export const sourceContract = defineContract({ querystring: sourceQuery, respons
 export const orderInquiryContract = defineContract({ params: inquiryParams, body: orderBody, response: { 201: orderAnswer } })
 export const styleDraftContract = defineContract({ params: inquiryParams, body: styleDraftBody, response: { 201: styleDraftAnswer } })
 export const assigneesContract = defineContract({ querystring: input({ companyId: id(), partyId: id().optional() }), response: { 200: assigneesView } })
-// B-TH-216 (Sales › Incoming): the Picture cell's small preview.
-export const inquiryPictureContract = defineContract({ params: inquiryParams, response: { 200: inquiryPictureView } })
 // B-SA-011 (sales page plan N8): the small pictures of a page of requests in ONE read (modules/product/images/small-pictures.ts).
 export const inquiryPicturesReadContract = defineContract({ body: input({ inquiryIds: pictureIds() }), response: { 200: smallPicturesView } })
 // B-TH-042: answer a new customer — the check, and the customer made or matched.

@@ -20,8 +20,6 @@ export const manifest = defineManifest({
   'GET /sales/inquiries/:inquiryId': view,
   // B-SA-011: the small pictures of a page of requests (scopeWhere like the list in one query; each file with files.read).
   'POST /sales/inquiries/pictures': view,
-  // B-TH-216 (Sales › Incoming): the Picture cell's small preview (the file also needs files.read over its company).
-  'GET /sales/inquiries/:inquiryId/picture': view,
   'POST /sales/inquiries': manage,
   'PATCH /sales/inquiries/:inquiryId': manage,
   'POST /sales/inquiries/:inquiryId/assign': manage,

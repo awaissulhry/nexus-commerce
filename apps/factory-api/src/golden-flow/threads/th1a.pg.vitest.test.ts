@@ -30,11 +30,11 @@ import { admin, call, ok, person, putBytes, QUIET, sha256, startWorld, stepped, 
  *       jacket) and P3 into Brand Beta (customer B); the production manager makes Beta's private-label jacket BX-200 with a main
  *       picture whose small preview the worker's files.stripPictures job makes (B-TH-063), and an own-collection vest; sales types
  *       two orders of Beta's; finance invoices one in part (TD01 of 1 of 4 pieces) and the other in full.
- *   T17 the factory's sheet holds both customers' orders: Picture (the small preview, ≤ 320 px, behind the order's picture route),
+ *   T17 the factory's sheet holds both customers' orders: Picture (the small preview, ≤ 320 px, behind the batch picture read),
  *       Brand (the label on the garment: Beta's name, our own collection, A's own label), Invoiced None / Part / All; the
  *       Customer switcher's counts equal the list's and the board's; Brand narrows the sheet.
  *   T30 an office person limited to customer A (a sales rep: RoleAssignment partyIds, given by the admin through the route):
- *       the sheet, the board, the switcher ("limited", A only), Brand B asked → nothing; Beta's picture → not found.
+ *       the sheet, the board, the switcher ("limited", A only), Brand B asked → nothing; Beta's picture → absent (B-SA-013).
  *   T19 the rep's saved view of A, its export file and its Pin to Today count hold only customer A's orders.
  *   T00 the name scan: every answer and file the rep got holds nothing of Brand Beta.
  *   Z   no route answered 500 during the flow.
@@ -261,9 +261,10 @@ describe('B-TH-102 golden flow TH-1a: the orders sheet of two customers, the swi
     // Picture: the first line's style, its main picture with its small preview; "+1" for the vest.
     expect(part.picture).toEqual({ styleId: G.betaStyle.id, styleCode: 'BX-200', styleName: G.betaStyle.name, fileId: G.pictureFile, contentType: 'image/jpeg', small: true })
     expect(part.styleCount).toBe(2)
-    const served = await ok(P.owner, 'GET', `/sales/orders/${G.betaPart.id}/picture`)
-    expect(served.picture).toMatchObject({ fileId: G.pictureFile, small: { method: 'GET' } })
-    const bytes = await w.h.app.inject({ method: 'GET', url: served.picture.small.url, headers: served.picture.small.headers })
+    // B-SA-013: the page's pictures in one read (POST /sales/orders/pictures, B-SA-011).
+    const served = (await ok(P.owner, 'POST', '/sales/orders/pictures', { orderIds: [G.betaPart.id] })).pictures[0]
+    expect(served).toMatchObject({ id: G.betaPart.id, fileId: G.pictureFile, styleCount: 2, small: { url: expect.any(String), expiresAt: expect.any(String) } })
+    const bytes = await w.h.app.inject({ method: 'GET', url: served.small.url })
     expect(bytes.statusCode).toBe(200)
     const small = decodeJpeg(new Uint8Array(bytes.rawPayload))
     expect(Math.max(small.width, small.height)).toBeLessThanOrEqual(SMALL_EDGE)
@@ -324,7 +325,8 @@ describe('B-TH-102 golden flow TH-1a: the orders sheet of two customers, the swi
     expect((await sheet('rep', `brand=${P3()}`)).size).toBe(0)
     expect((await sheet('rep', `partyId=${P3()}`)).size).toBe(0)
     expect(await asRep('GET', `/sales/orders/board?partyId=${P3()}`)).toMatchObject({ tiles: expect.any(Array) })
-    await asRep('GET', `/sales/orders/${G.betaPart.id}/picture`, undefined, 404)
+    // B-SA-013: Beta's picture is simply absent from the rep's batch read (no 404 per id, nothing that says it exists).
+    expect((await asRep('POST', '/sales/orders/pictures', { orderIds: [G.betaPart.id] })).pictures).toEqual([])
     await asRep('GET', `/sales/orders/${G.betaPart.id}`, undefined, 404)
     G.ordersA = ordersA
   })

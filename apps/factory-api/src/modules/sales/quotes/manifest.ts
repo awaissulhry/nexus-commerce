@@ -11,8 +11,6 @@ import { defineManifest } from '../../../core/manifest'
 export const manifest = defineManifest({
   'GET /sales/quotes': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
   'GET /sales/quotes/:quoteId': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
-  // TH-6 part B (B-TH-257 follow-up): the list's Picture cell's small preview (the file also needs files.read over its company).
-  'GET /sales/quotes/:quoteId/picture': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
   // B-SA-011: the small pictures of a page of quotes (scopeWhere like the list in one query; each file with files.read).
   'POST /sales/quotes/pictures': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
   'POST /sales/quotes': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },

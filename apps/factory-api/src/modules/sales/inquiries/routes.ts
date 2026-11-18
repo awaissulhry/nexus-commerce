@@ -9,7 +9,6 @@ import {
   createInquiryContract,
   declineInquiryContract,
   fromMailContract,
-  inquiryPictureContract,
   listInquiriesContract,
   loseInquiryContract,
   mailDraftContract,
@@ -41,8 +40,6 @@ import { inquirySource, quoteInquiry } from './quote'
 // B-TH-025 / B-TH-026: Make order, Make style draft.
 import { orderInquiry } from './order'
 import { styleDraftOf } from './style-draft'
-// B-TH-216 (Sales › Incoming): the Picture cell's small preview.
-import { inquiryPicture } from './row-extras'
 // B-SA-011: the small pictures of a page of requests in one read.
 import { inquiryPicturesReadContract } from './contract'
 import { recordPictures } from '../../product/images/small-pictures'
@@ -79,7 +76,6 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   // B-SA-011: the small pictures of a page of requests (the ids the reader may not see are left out).
   app.post('/sales/inquiries/pictures', { schema: inquiryPicturesReadContract }, async (request) => recordPictures(request, 'request', request.body.inquiryIds))
   app.get('/sales/inquiries/:inquiryId', { schema: readInquiryContract }, async (request) => ({ inquiry: await readInquiry(request, request.params.inquiryId) }))
-  app.get('/sales/inquiries/:inquiryId/picture', { schema: inquiryPictureContract }, async (request) => inquiryPicture(request, request.params.inquiryId)) // B-TH-216
   app.post('/sales/inquiries', { schema: createInquiryContract }, async (request, reply) => reply.code(201).send(await createInquiry(request, request.body, idempotencyKeyFrom(request))))
   app.patch('/sales/inquiries/:inquiryId', { schema: updateInquiryContract }, async (request) => updateInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/assign', { schema: assignInquiryContract }, async (request) => assignInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))

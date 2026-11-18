@@ -274,7 +274,7 @@ export const listOrdersContract = defineContract({
           // ── B-TH-017 (threads plan TH-1a, pictures 23 + 24): the sheet's columns and the ids its doors open ─────────────
           /**
            * The main picture of the first line's style: its file only with files.read (null: the placeholder); `small`: its
-           * ~320 px preview exists (GET /sales/orders/:orderId/picture serves it; the sheet never loads the original).
+           * ~320 px preview exists (POST /sales/orders/pictures serves it, B-SA-011; the sheet never loads the original).
            */
           picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
           /** The order's distinct styles ("+2" beside the picture). */
@@ -373,23 +373,6 @@ export const closeContract = defineContract({
   body: input({ version, reason: z.string().trim().max(MAX_REASON).nullish() }),
   response: { 200: one },
 })
-
-// ── B-TH-017 / B-TH-063: the Picture cell's small preview ─────────────────────────────────────────────────────────────
-export const orderPictureContract = defineContract({
-  params: orderParams,
-  response: {
-    200: output({
-      picture: output({
-        fileId: id(),
-        styleId: id(),
-        contentType: z.string(),
-        /** A presigned GET of the ~320 px preview (60 seconds); null until it exists (the cell's placeholder). */
-        small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
-      }),
-    }),
-  },
-})
-// ── end B-TH-017 / B-TH-063 ───────────────────────────────────────────────────────────────────────────────────────────
 
 // ── B-SA-011 (sales page plan N8): the small pictures of a page of orders in ONE read (modules/product/images/small-pictures.ts) ──
 export const orderPicturesReadContract = defineContract({ body: input({ orderIds: pictureIds() }), response: { 200: smallPicturesView } })

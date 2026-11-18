@@ -32,7 +32,7 @@ import { localKeyProvider } from '../../../platform/secrets/local'
 
 /**
  * What a Sales › Orders row carries beside the order (B-TH-017; threads plan TH-1a, pictures 23 + 24; wall check W27) and
- * the Picture cell's small preview (GET /sales/orders/:orderId/picture, with B-TH-063), on a throwaway PostgreSQL 17
+ * whether the Picture cell's small preview exists (B-TH-063; B-SA-013: it is served by POST /sales/orders/pictures, ./pictures.pg), on a throwaway PostgreSQL 17
  * database from the migrations (the runtime login: row-level security and the money guards are real) with the factory-db
  * seeds up to money and the styles' pictures: SEED-SO-0001 (customer SEED-C1: its quote, its deposit invoice TD02 issued),
  * SEED-SO-0002 (SEED-C1: shipment SH-0001 with DDT 143 cancelled and DDT 144 live, a DRAFT TD24 of 2 of its 7 jackets),
@@ -119,7 +119,6 @@ const issueDraftTd24Sql = (): string => `
       WHERE id = inv.id;
   END
   $issue$;`
-const orderId = async (number: string): Promise<string> => (await admin<{ id: string }>('SELECT id FROM "SalesOrder" WHERE number = $1', [number]))[0]!.id
 
 beforeAll(async () => {
   db = await migratedDatabase('orders_row_extras')
@@ -229,12 +228,13 @@ describe('the brand wall (W27): a person limited to one customer', () => {
   })
 })
 
-describe('the Picture cell reads the small preview, never the original (B-TH-017 with B-TH-063)', () => {
-  it('names no preview until the stripped copy exists, then a presigned address of the small one', async () => {
-    const order = await orderId('SEED-SO-0001')
-    const before = await ok('all', `/sales/orders/${order}/picture`)
-    expect(before.picture).toMatchObject({ contentType: 'image/jpeg', small: null })
-    const fileId = before.picture.fileId as string
+// B-SA-013: the Picture cell's one-row route went (POST /sales/orders/pictures reads a page's: B-SA-011, its cases in ./pictures.pg —
+// the presigned small address, never the original, the wall, files.read, an order without a main picture, a malformed id).
+describe('the Picture cell names the small preview, never the original (B-TH-017 with B-TH-063)', () => {
+  it('names no preview until the stripped copy exists, then says it exists', async () => {
+    const before = (await rowOf('all', 'SEED-SO-0001'))!.picture
+    expect(before).toMatchObject({ contentType: 'image/jpeg', small: false })
+    const fileId = before.fileId as string
     // The strip job's result, as it records it: the copy's key; its small preview under the derived key.
     const file = (await admin<{ storageKey: string; storeAccountId: string }>('SELECT "storageKey", "storeAccountId" FROM "StoredFile" WHERE id = $1', [fileId]))[0]!
     const thumbnailKey = file.storageKey.replace(/[0-9a-f-]{36}$/, newId())
@@ -244,23 +244,6 @@ describe('the Picture cell reads the small preview, never the original (B-TH-017
     await processFiles().storage.put(caller, file.storeAccountId, { key: smallKeyOf(thumbnailKey), contentType: 'image/jpeg', body: small, sha256: createHash('sha256').update(small).digest('hex') })
 
     expect((await rowOf('all', 'SEED-SO-0001'))!.picture.small).toBe(true)
-    const after = await ok('all', `/sales/orders/${order}/picture`)
-    expect(after.picture).toMatchObject({ fileId, contentType: 'image/jpeg', small: { method: 'GET', url: expect.any(String), expiresAt: expect.any(String) } })
-    const fetched = await app.inject({ method: 'GET', url: after.picture.small.url })
-    expect(fetched.statusCode).toBe(200)
-    expect(fetched.rawPayload.equals(small)).toBe(true)
-  })
-
-  it('only to a reader of the order and of its file; an order without a main picture has none to show', async () => {
-    const order = await orderId('SEED-SO-0001')
-    expect((await call('noFiles', `/sales/orders/${order}/picture`)).statusCode).toBe(404)
-    // A person limited to the other customer: the order is not found, as anywhere else.
-    expect((await call('onlyR1', `/sales/orders/${order}/picture`)).statusCode).toBe(404)
-    expect((await call('partner', `/sales/orders/${order}/picture`)).statusCode).toBe(403)
-    const none = await call('all', `/sales/orders/${await orderId('TEST-SO-R1')}/picture`)
-    expect(none.statusCode).toBe(404)
-    expect(none.json().error.message).toBe('This order has no picture to show.')
-    expect((await call('all', '/sales/orders/not-an-id/picture')).statusCode).toBe(400)
   })
 })
 

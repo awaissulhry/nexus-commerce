@@ -20,7 +20,7 @@ import { waitsOfOrders } from '../orders-depth/approval'
  *
  *   picture   the main picture of the first line's style (modules/product/images/main-picture.ts: the style's one main
  *             picture, AVAILABLE, a browser type), its file only with files.read over the file's company; `small` says its
- *             ~320 px preview exists (platform/files/thumbs/small.ts), which GET /sales/orders/:orderId/picture serves:
+ *             ~320 px preview exists (platform/files/thumbs/small.ts), which POST /sales/orders/pictures serves (B-SA-011):
  *             the sheet never loads the original. None yet: a placeholder. `styleCount`: the order's styles ("+2").
  *   brands    the label on the garment (Style.brandPartyId: the private-label customer; null = our own collection), one
  *             entry per label across the lines; the label's name only when it is the order's own customer or a party the
