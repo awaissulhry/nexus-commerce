@@ -15,6 +15,11 @@ import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
 import { MERGED_TERMS } from '../../../parties/_shared/model'
+// ---- F-SA-279: the dock follows the row (the address term `dock=`, the summary read that checks a docked record) ----
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { CUSTOMER_FEED_TYPES } from '@nexus/factory-domain/sales/customer-feed/kinds'
+import { readRecordSummary } from '../../../_shared/record-summary/api'
+// ---- end F-SA-279
 
 /**
  * F-SA-276 (sales page plan N5, picks R5, R9, P10, P17; 11-customer-page §3.2, §3.4, §3.10, §3.11): the customer's Work tab beside
@@ -325,3 +330,218 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
   }
   return { reads, live, marks, retry, reload: readAll, attention: workAttention(reads) }
 }
+
+// ---- F-SA-279 (sales page plan N5, N4, N6; picks R5, R9, P9, P11; 11-customer-page §3.7, §9.1; review C-13) ---------------------
+// A row of Work or Quotes & incoming drives the page's dock: a click picks the row at once, the keys (↑ / ↓, j / k) after 300 ms of
+// rest (a fast run of keys never reads ten conversations); the address keeps what the dock shows (`dock=<Type>.<id>`, `dock=all`)
+// by a replace (no history entry per row: Back leaves the page). ONE conversation at a time; writing always into the one shown.
+
+/** The address term of the customer page's dock. */
+export const DOCK_PARAM = 'dock'
+/** The keys' rest before the dock follows the focused row. */
+export const DOCK_FOLLOW_MS = 300
+/** The tabs whose rows drive the dock (leaving them drops a record's dock: the other tabs are about the account). */
+export const DOCK_TABS: readonly string[] = Object.freeze(['work', 'quotes'])
+
+/**
+ * The records the customer page may dock beside the customer's own conversation: the customer-side conversations (the merged feed's
+ * own list, B-SA-060), the general one being the page's own. NEVER a work order, a quality hold or an NCR (office notes, mixed walls:
+ * Production › Work orders holds them), never a supplier's record, never a change request (its talk lives in its order's thread).
+ */
+export const dockable = (type: string): boolean => type !== 'Party' && Object.hasOwn(CUSTOMER_FEED_TYPES, type)
+
+/** What the dock shows: the customer's general conversation (no term), every conversation read only, or ONE record's. */
+export type DockTerm = { readonly kind: 'general' } | { readonly kind: 'all' } | { readonly kind: 'record'; readonly type: string; readonly id: string }
+export const GENERAL_DOCK: DockTerm = Object.freeze({ kind: 'general' })
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The term of an address (`dock=SalesOrder.<id>`, `dock=all`); anything else — a work order, a made-up type or id — is the general one. */
+export function dockTermOf(value: string | null | undefined): DockTerm {
+  if (!value) return GENERAL_DOCK
+  if (value === 'all') return { kind: 'all' }
+  const dot = value.indexOf('.')
+  if (dot <= 0) return GENERAL_DOCK
+  const type = value.slice(0, dot)
+  const id = value.slice(dot + 1)
+  return dockable(type) && UUID.test(id) ? { kind: 'record', type, id } : GENERAL_DOCK
+}
+
+/** The address value of a term (null: no term, the general conversation). */
+export const dockValueOf = (term: DockTerm): string | null => (term.kind === 'all' ? 'all' : term.kind === 'record' ? `${term.type}.${term.id}` : null)
+
+/**
+ * The page's address with the dock's term set (or dropped for the general conversation) and the message a line of All of <customer>
+ * opens its conversation at (`message=`, the thread's own anchor; dropped on any other move); every other term kept.
+ */
+export function dockAddress(pathname: string, search: string, term: DockTerm, messageId: string | null = null): string {
+  const query = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+  const value = dockValueOf(term)
+  if (value) query.set(DOCK_PARAM, value)
+  else query.delete(DOCK_PARAM)
+  if (messageId) query.set('message', messageId)
+  else query.delete('message')
+  const text = query.toString()
+  return `${pathname}${text ? `?${text}` : ''}`
+}
+
+/** On a tab: a record's dock lives on Work and Quotes & incoming only; All of <customer> and the general one on every tab. */
+export const dockOnTab = (tab: string, term: DockTerm): DockTerm => (term.kind === 'record' && !DOCK_TABS.includes(tab) ? GENERAL_DOCK : term)
+
+/** One record's key (`SalesOrder.<id>`). */
+export const dockKeyOf = (record: { readonly type: string; readonly id: string }): string => `${record.type}.${record.id}`
+
+/**
+ * A docked record the address names, checked against the summary read (threads.read over the record, a neutral 404 outside the
+ * reader's scope): only a record of THIS customer docks; anything else falls back to the general conversation, with no word that it
+ * existed.
+ */
+export function pickOfSummary(term: DockTerm, summary: { readonly label: string | null; readonly party?: { readonly id: string } | null | undefined } | null, partyId: string): DockPick | null {
+  if (term.kind !== 'record' || !summary || summary.party?.id !== partyId) return null
+  return { type: term.type, id: term.id, label: summary.label ?? term.type, companyId: null }
+}
+
+/** What the dock shows of the picks: 'record' only while a record is picked and the term names it. */
+export function scopeOf(term: DockTerm, pick: DockPick | null): 'general' | 'record' | 'all' {
+  if (term.kind === 'all') return 'all'
+  if (term.kind === 'record' && pick && pick.type === term.type && pick.id === term.id) return 'record'
+  return 'general'
+}
+
+/**
+ * The follower: a click picks at once; the keys' focus picks after the rest (each new focus starts the wait again, so only the row
+ * the keys stop on is read). `cancel` drops a wait (the tab left, the page gone).
+ */
+export function dockFollower<P>(apply: (pick: P) => void, wait: number = DOCK_FOLLOW_MS) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const clear = () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+  }
+  return {
+    now: (pick: P) => {
+      clear()
+      apply(pick)
+    },
+    soon: (pick: P) => {
+      clear()
+      timer = setTimeout(() => {
+        timer = null
+        apply(pick)
+      }, wait)
+    },
+    cancel: clear,
+  }
+}
+
+/** "Draft kept on SO-…": the newest record left with a draft (its words kept), unless the dock shows it now. */
+export function draftKeptOf(drafts: ReadonlyMap<string, string>, shown: string | null): string | null {
+  const entries = [...drafts.entries()].filter(([key]) => key !== shown)
+  return entries.length > 0 ? entries[entries.length - 1]![1] : null
+}
+
+/**
+ * The customer page's dock (F-SA-279): the address term, the record picked (a row, a line of All of <customer>, a strip window's row),
+ * the follower, the summary check of an address's record, the drafts left on records, and the message a line of All of <customer>
+ * opens its conversation at. Leaving Work or Quotes & incoming drops a record's dock.
+ */
+export function useCustomerDock(partyId: string, tab: string) {
+  const api = useOfficeApi()
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const term = dockOnTab(tab, dockTermOf(params?.get(DOCK_PARAM)))
+  const [pick, setPick] = useState<DockPick | null>(null)
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map())
+  const known = useRef(new Map<string, DockPick>())
+  // A replace, never a push: Back leaves the page.
+  const write = useCallback(
+    (next: DockTerm, messageId: string | null = null) => {
+      const search = window.location.search
+      const address = dockAddress(pathname, search, next, messageId)
+      if (address !== `${pathname}${search}`) router.replace(address, { scroll: false })
+    },
+    [router, pathname],
+  )
+  // A record picked: its conversation docks; anything the page may not dock (a work order, a change request) docks nothing.
+  const apply = useCallback(
+    (next: DockPick, messageId: string | null = null) => {
+      if (!dockable(next.type)) return
+      known.current.set(dockKeyOf(next), next)
+      setPick(next)
+      write({ kind: 'record', type: next.type, id: next.id }, messageId)
+    },
+    [write],
+  )
+  const applyRef = useRef(apply)
+  applyRef.current = apply
+  const follower = useMemo(() => dockFollower<DockPick>((next) => applyRef.current(next)), [])
+  useEffect(() => () => follower.cancel(), [follower])
+  // Leaving the rows' tabs: the wait goes, the picked record goes, the address drops a record's term.
+  const rawTerm = params?.get(DOCK_PARAM) ?? null
+  useEffect(() => {
+    if (DOCK_TABS.includes(tab)) return
+    follower.cancel()
+    setPick(null)
+    if (dockTermOf(rawTerm).kind === 'record') write(GENERAL_DOCK)
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  // An address that names a record (arrival, Back, a link): known from the rows, else checked by the summary read.
+  const termKey = term.kind === 'record' ? dockKeyOf(term) : null
+  useEffect(() => {
+    if (term.kind !== 'record' || !termKey) return
+    if (pick && dockKeyOf(pick) === termKey) return
+    const seen = known.current.get(termKey)
+    if (seen) return setPick(seen)
+    const controller = new AbortController()
+    readRecordSummary(api, { type: term.type, id: term.id }, controller.signal)
+      .then((summary) => {
+        const checked = pickOfSummary(term, summary, partyId)
+        if (!checked) return write(GENERAL_DOCK)
+        known.current.set(termKey, checked)
+        setPick(checked)
+      })
+      .catch(() => !controller.signal.aborted && write(GENERAL_DOCK))
+    return () => controller.abort()
+  }, [termKey, partyId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const scope = scopeOf(term, pick)
+  const shownKey = scope === 'record' && pick ? dockKeyOf(pick) : null
+  return {
+    term,
+    pick,
+    scope,
+    /** The record docked now (marked on its row); null: the general conversation or All of <customer>. */
+    shown: scope === 'record' ? pick : null,
+    /** "Draft kept on SO-…" under the pick. */
+    draftKept: draftKeptOf(drafts, shownKey),
+    /** A click (or a window's row): at once. */
+    onRow: (next: DockPick) => follower.now(next),
+    /** The keys' focus: after the rest. */
+    onFocus: (next: DockPick) => follower.soon(next),
+    /** The pick at the dock's top. */
+    onScope: (next: 'general' | 'record' | 'all') => {
+      follower.cancel()
+      if (next === 'record' && pick) write({ kind: 'record', type: pick.type, id: pick.id })
+      else write(next === 'all' ? { kind: 'all' } : GENERAL_DOCK)
+    },
+    /**
+     * A line of All of <customer>: its ONE conversation, opened at that message (`message=`: the conversation mounts after the address
+     * says so and reads it as its own link's anchor); the customer's own: the general one.
+     */
+    onAnswer: (record: DockPick, messageId: string) => {
+      follower.cancel()
+      if (record.type === 'Party') return write(GENERAL_DOCK, messageId)
+      apply(record, messageId)
+    },
+    /** A docked conversation says whether its box holds a draft (kept on its record when the dock moves on). */
+    onDraft: (record: DockPick, kept: boolean) =>
+      setDrafts((now) => {
+        const key = dockKeyOf(record)
+        if (kept === now.has(key)) return now
+        const next = new Map(now)
+        if (kept) next.set(key, record.label)
+        else next.delete(key)
+        return next
+      }),
+  }
+}
+// ---- end F-SA-279

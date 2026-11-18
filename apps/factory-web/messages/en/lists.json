@@ -20,7 +20,8 @@
     "range": "Select every row up to this one",
     "help": "All shortcuts",
     "edit": "Edit the cell (or start typing; Enter saves, Esc leaves it)",
-    "paste": "Paste a column of values from a sheet"
+    "paste": "Paste a column of values from a sheet",
+    "openNewTab": "Open the row in a new tab"
   },
   "lab": {
     "title": "List frame",

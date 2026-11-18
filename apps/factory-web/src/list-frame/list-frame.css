@@ -189,3 +189,10 @@
   flex-wrap: wrap;
   padding: var(--nds-space-6) var(--nds-space-8);
 }
+
+/* F-SA-279: the row a dock beside the list shows — the grid's selected tint and its accent rule at the row's start, kept while the
+   focus moves on (the focused cell keeps its own ring). Tokens only. */
+.fw-list .ag-row.fw-list-row-active {
+  background-color: var(--nds-grid-selected-bg);
+  box-shadow: inset 3px 0 0 var(--nds-grid-accent);
+}

@@ -489,6 +489,17 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           onOpen={(row) => actions?.onOpen?.(row.id)}
           state={state}
           focusRow={model.focusRow}
+          // F-SA-279: on the customer page the row drives the dock (marked; the keys' row reported; ⌘↵ a new tab; a phone card's door).
+          active={
+            model.active
+              ? {
+                  id: model.active.id,
+                  onFocusRow: (row) => actions?.onFocusRow?.(row),
+                  onOpenNewTab: (row) => actions?.onOpenRow?.(row.id, true),
+                  cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions.onCardThread?.(row) } : null,
+                }
+              : null
+          }
         />
       )}
       {model.rows !== 'open' && model.rows !== model.defaultRows /* F-SA-276 */ && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}

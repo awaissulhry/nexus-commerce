@@ -163,6 +163,10 @@ export interface OrdersListModel {
   task?: { readonly mode: 'one' | 'many'; readonly records: readonly BatchRecord[]; readonly people: PanelRead<readonly Assignable[]>; readonly busy: boolean } | null
   me?: string | null
   // ---- end F-SA-281
+  // ---- F-SA-279 (the customer page: a row drives the dock) ----
+  /** The order the page's dock shows (marked; null: none), and the words of a phone card's door to its conversation; absent: not a dock list. */
+  active?: { readonly id: string | null; readonly cardDoor?: string | null } | null
+  // ---- end F-SA-279
 }
 
 export interface OrdersListActions {
@@ -240,4 +244,8 @@ export interface OrdersListActions {
   onNote?: (ids: readonly string[]) => void
   note?: NoteDialogActions
   // ---- end F-SA-280
+  // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
+  onFocusRow?: (row: OrderRow) => void
+  onCardThread?: (row: OrderRow) => void
+  // ---- end F-SA-279
 }

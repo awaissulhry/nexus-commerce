@@ -46,6 +46,7 @@ export function CustomerRecordView({
   work,
   workCount,
   quotesIncoming,
+  threadButton,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -74,11 +75,13 @@ export function CustomerRecordView({
   workCount?: { readonly count: number | null; readonly attention: boolean } | null
   /** F-SA-277: Quotes & incoming (the customer's quotes, then its incoming requests: each its own list, drawn by the container). */
   quotesIncoming?: ReactNode
+  /** F-SA-279: below 1280 px the band's button names the record the dock holds ("Thread · SO-…"); null: "Thread". */
+  threadButton?: string | null
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -102,6 +105,7 @@ interface CustomerProps {
   work?: ReactNode // F-SA-276
   workCount?: { readonly count: number | null; readonly attention: boolean } | null | undefined
   quotesIncoming?: ReactNode // F-SA-277
+  threadButton?: string | null // F-SA-279
 }
 
 function Customer(props: CustomerProps) {
@@ -139,7 +143,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -190,6 +194,11 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
         printThread={printThread}
         fields={fields /* B-TH-280: the custom fields, on the Overview only */}
         band={band}
+        // F-SA-279 (11-customer-page §2.5, P11): Work's dock a third at every width, every other tab 40 %; a width the person picks is
+        // kept for that tab, "hidden" for every customer (the record type is Party, even while the dock shows an order).
+        defaultWidth={tab === 'work' ? 'third' : undefined}
+        dockTab={tab}
+        threadButton={threadButton ?? null}
       >
         <div className="fw-pty">
           {model.threadOnArrival && <ShowThreadOnArrival />}

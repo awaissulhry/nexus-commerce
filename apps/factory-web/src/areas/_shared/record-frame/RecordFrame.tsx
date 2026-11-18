@@ -79,6 +79,10 @@ export interface RecordFrameProps {
   // of the body column — the page passes it on its first tab only; absent: nothing. The print view prints it after the body.
   readonly fields?: ReactNode
   // ---- end B-TH-280
+  // ---- F-SA-279 (11-customer-page §3.7): below 1280 px the band's button names the conversation the dock holds now ("Thread · SO-…",
+  // in the page's words) — a row of the customer's Work tab picked it; absent: "Thread" (or "Thread · 2 new").
+  readonly threadButton?: string | null
+  // ---- end F-SA-279
 }
 
 // B-TH-264 follow-up: the body's files in the thread's ONE viewer (the types live in model.ts).
@@ -187,7 +191,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */ }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */, threadButton: namedButton /* F-SA-279 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -392,8 +396,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       onClick={toggle}
       title={t(mode === 'docked' ? 'thread.hintDocked' : 'thread.hintView')}
     >
-      {/* B-TH-229: "Thread · 2 new" (99+ above 99), the same number as the thread's Head. */}
-      <MessageSquare size={14} aria-hidden /> <span>{t(buttonWords.key, buttonWords.count === undefined ? undefined : { count: buttonWords.count })}</span>
+      {/* B-TH-229: "Thread · 2 new" (99+ above 99), the same number as the thread's Head. F-SA-279: narrower, the page's name of the
+          conversation it holds ("Thread · SO-…"). */}
+      <MessageSquare size={14} aria-hidden /> <span>{mode === 'stacked' && namedButton ? namedButton : t(buttonWords.key, buttonWords.count === undefined ? undefined : { count: buttonWords.count })}</span>
       <span className="fw-rcf-keys" aria-hidden>
         <Kbd>⌘</Kbd>
         <Kbd>J</Kbd>

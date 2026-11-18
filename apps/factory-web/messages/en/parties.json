@@ -192,8 +192,13 @@
       "dock": {
         "label": "Which thread",
         "general": "{customer} (general)",
-        "generalLine": "{customer}'s general thread is shared with {customer}: what you send there reaches the customer.",
-        "recordLine": "{record}'s thread is shared with {customer}: what you send there reaches the customer."
+        "generalLine": "{customer}'s general thread: what you reply reaches {customer}; office notes stay here.",
+        "recordLine": "{record}'s thread is shared with {customer}: what you send there reaches the customer.",
+        "all": "All of {customer}",
+        "readOnly": "Read only",
+        "draftKept": "Draft kept on {record}",
+        "button": "Thread · {record}",
+        "cardDoor": "Thread"
       },
       "window": {
         "customerTitle": "Waiting for {customer}",

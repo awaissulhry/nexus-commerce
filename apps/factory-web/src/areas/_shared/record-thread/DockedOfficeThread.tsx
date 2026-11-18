@@ -95,6 +95,9 @@ export interface DockedHost extends RecordThreadHost {
   printHref?: string
   /** TH-5 follow-up (B-TH-249): the record reopens its thread with itself (a closed project): neither the head nor the box offers Reopen. */
   reopenWithRecord?: boolean
+  // ---- F-SA-279: the box holds a draft (words or files) — the host keeps "Draft kept on SO-…" when its dock moves on.
+  onDraft?: (kept: boolean) => void
+  // ---- end F-SA-279
 }
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork']
@@ -617,6 +620,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       setOwning({ busy: false, problem: th(`owner.problem.${kind === 'forbidden' || kind === 'step_up' ? 'forbidden' : kind === 'invalid' ? 'invalid' : kind === 'not_found' ? 'notFound' : kind === 'network' || kind === 'unavailable' ? 'network' : 'failed'}`) })
     }
   }
+  // ---- F-SA-279: whether the box holds a draft, told to a host that keeps it in words when its dock moves on.
+  const draftKept = model.composer.draft.body.trim() !== '' || model.composer.files.length > 0
+  const onDraft = host.onDraft
+  useEffect(() => onDraft?.(draftKept), [onDraft, draftKept])
+  // ---- end F-SA-279
   const reportNew = frame?.reportNew
   useEffect(() => reportNew?.(base.newCount), [reportNew, base.newCount])
   useEffect(() => () => reportNew?.(0), [reportNew])

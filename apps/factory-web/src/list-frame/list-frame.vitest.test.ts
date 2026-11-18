@@ -10,6 +10,7 @@ import { labRowReason } from './lab/ListFrameLab'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, FRAME_KEYS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, rangeIds, sameIds, selectAllState, toggleAll, toggleId } from './model'
 import { clickedColumn, type ClickTarget } from './model' // end check (B-TH-245)
+import { ACTIVE_KEYS, ACTIVE_ROW_CLASS, focusReported, isNewTabKey, POINTER_FOCUS_MS } from './model' // F-SA-279
 
 /**
  * The list frame (Owner rule 2026-10-29): the selection rules every Office list shares, the keys its footer icon lists,
@@ -274,3 +275,58 @@ describe('end check: the cell a row click was on, also when the double click mad
   })
 })
 // ---- end B-TH-245
+
+// ---- F-SA-279 (sales page plan N5, N4; picks R5, P9; 11-customer-page §3.7): a list that drives a dock — the opt-in `active`
+describe('F-SA-279: a list that drives a dock (opt-in active)', () => {
+  it('only the keys’ focus moves are reported: never a pointer’s, a pinned row or the header', () => {
+    expect(focusReported({ rowIndex: 3, pinned: null, sincePointer: POINTER_FOCUS_MS })).toBe(true)
+    expect(focusReported({ rowIndex: 0, pinned: undefined, sincePointer: 10_000 })).toBe(true)
+    // A click moved the focus: the row click decides (a link or a button keeps its own click).
+    expect(focusReported({ rowIndex: 3, pinned: null, sincePointer: POINTER_FOCUS_MS - 1 })).toBe(false)
+    expect(focusReported({ rowIndex: 3, pinned: 'bottom', sincePointer: 10_000 })).toBe(false)
+    expect(focusReported({ rowIndex: null, pinned: null, sincePointer: 10_000 })).toBe(false)
+    expect(focusReported({ rowIndex: -1, pinned: null, sincePointer: 10_000 })).toBe(false)
+  })
+
+  it('⌘↵ (Ctrl ↵) opens a row in a new tab; Enter alone opens it here', () => {
+    expect(isNewTabKey({ key: 'Enter', metaKey: true, ctrlKey: false })).toBe(true)
+    expect(isNewTabKey({ key: 'Enter', metaKey: false, ctrlKey: true })).toBe(true)
+    expect(isNewTabKey({ key: 'Enter', metaKey: false, ctrlKey: false })).toBe(false)
+    expect(isNewTabKey({ key: 'j', metaKey: true, ctrlKey: false })).toBe(false)
+  })
+
+  it('the footer’s keys say ⌘↵ in both languages (keys only in the footer’s info icon)', () => {
+    expect(ACTIVE_KEYS).toEqual([{ keys: ['⌘', '↵'], does: 'keys.openNewTab' }])
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['lists']).lists as { keys: Record<string, string> }
+      expect(words.keys.openNewTab, locale).toBeTruthy()
+    }
+    expect(listKeys([...ACTIVE_KEYS], true)[0]).toEqual({ keys: ['⌘', '↵'], does: 'keys.openNewTab' })
+  })
+
+  it('the frame marks the docked row and reports the keys’ row only for a list that opts in (the source)', () => {
+    const frame = readFileSync(new URL('./ListFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('{...(active && !printing ? { rowClassRules, onCellFocused } : {}) /* F-SA-279 */}')
+    expect(frame).toContain("{...(active ? { onPointerDownCapture: () => (pointerAt.current = Date.now()) } : {})}")
+    expect(frame).toContain('[ACTIVE_ROW_CLASS]: (params: { data?: T }) => activeId !== null')
+    // The row's mark never reaches a group's line; a design case's focus and an old list keep their behaviour.
+    expect(frame).toContain('!isGroupMarker(params.data) && rowId(params.data) === activeId')
+    const css = readFileSync(new URL('./list-frame.css', import.meta.url), 'utf8')
+    const rule = css.slice(css.indexOf('.fw-list .ag-row.fw-list-row-active'))
+    expect(rule).toContain('var(--nds-grid-selected-bg)')
+    expect(rule).toContain('var(--nds-grid-accent)')
+    expect(rule.slice(0, rule.indexOf('}'))).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i)
+    expect(ACTIVE_ROW_CLASS).toBe('fw-list-row-active')
+  })
+
+  it('the three customer lists pass it through (Orders sheet, Quotes, Incoming)', () => {
+    const orders = readFileSync(new URL('../areas/sales/orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(orders).toContain('onFocusRow: (row) => actions?.onFocusRow?.(row)')
+    expect(orders).toContain('onOpenNewTab: (row) => actions?.onOpenRow?.(row.id, true)')
+    const quotes = readFileSync(new URL('../areas/sales/quotes/list/view/QuotesListView.tsx', import.meta.url), 'utf8')
+    expect(quotes).toContain('active={model.active ? { id: model.active.id, onFocusRow: (row) => actions?.onFocusRow?.(row)')
+    const incoming = readFileSync(new URL('../areas/sales/inquiries/view/InquiriesView.tsx', import.meta.url), 'utf8')
+    expect(incoming).toContain('THREAD_TYPE[row.kind] === model.active?.pick?.type && row.id === model.active?.pick?.id)?.key ?? null')
+  })
+})
+// ---- end F-SA-279
