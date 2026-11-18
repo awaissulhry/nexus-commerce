@@ -80,6 +80,7 @@ import { SUPERVISOR_NS } from '../../../_shared/production-supervisor/model'
 import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
 import { NOTES_NS } from '../../../production/_shared/notes/model'
 // ---- end F-SA-230
+import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -243,7 +244,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const knownRef = useRef(known)
   knownRef.current = known
   // B-TH-214: the tab's live state shows in the shell's band (beside the record's band); here only the re-reads.
-  useLive(
+  // F-SA-232: the stream's state for Overview's freshness line ("Live · as of 10:42" only when pushed).
+  const liveState = useLive(
     (change) => {
       if (!knownRef.current || !liveTouches(change, knownRef.current)) return
       const open = dialogRef.current
@@ -432,6 +434,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
     note: note.model,
   }
   // ---- end F-SA-230
+  // ---- F-SA-232: the production read (every part on arrival: the band's health and Overview need it), the line sizes' window ----
+  const production = useOrderProduction(api, order.status === 'ready' ? order.value.id : null)
+  const [overviewLine, setOverviewLine] = useState<string | null>(null)
+  // ---- end F-SA-232
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -451,6 +457,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
     people, // F-SA-230
+    production: production.state, // F-SA-232
+    overviewLine,
+    liveState,
     changed,
     notice,
     busy,
@@ -525,6 +534,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
         links: links.actions, // B-TH-256
+        // ---- F-SA-232 ----
+        onRetryProduction: () => production.again(),
+        onOpenLine: setOverviewLine,
         // ---- F-SA-230: the ⋯ People (the production lane's dialogs) ----
         people: {
           onAssign: () => {

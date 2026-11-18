@@ -447,11 +447,12 @@ export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): n
  * Shipments (left to ship, shipments, deliveries, complaints & returns). Overview and Files join with F-SA-232 / F-SA-237. The thread is
  * docked beside every tab (B-TH-214); Margin is a section of Money (#margin), only with the margin grain.
  */
-export const RECORD_TABS = ['lines', 'production', 'changes', 'money', 'shipments'] as const
+// F-SA-232: + Overview, the new first tab ("where is it now"); no address → Overview.
+export const RECORD_TABS = ['overview', 'lines', 'production', 'changes', 'money', 'shipments'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
-/** The tab with no address (until Overview lands: Lines). */
-export const FIRST_TAB: RecordTab = 'lines'
+/** The tab with no address: Overview (F-SA-232). */
+export const FIRST_TAB: RecordTab = 'overview'
 
 /**
  * Every old `?tab=` keeps working (R-8): the tab it now lives in and the section to scroll to (`#anchor`). Margin's anchor only with the

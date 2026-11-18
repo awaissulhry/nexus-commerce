@@ -11,7 +11,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
-import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, isWideTab, lateDaysOf, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
+import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, isWideTab, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
@@ -33,12 +33,15 @@ import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { DeclineDialog, GateNotices, LinksSaid, RePromiseNotices } from '../links/view/OrderLinks'
 import '../../orders.css'
 // ---- F-SA-230: the band's health (Late / At risk only), the ⋯ People (the production lane's dialogs, reused in place) ----
-import { HealthPill } from '../../../../../lib/production/view/HealthPill'
 import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
 import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
 import { NoteDialog } from '../../../../production/_shared/notes/view/NoteDialog'
 import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/notes/model'
 // ---- end F-SA-230
+// ---- F-SA-232: Overview, the first tab; the band's health and the customer's urgency from the production read ----
+import { BandHealth, BandUrgency, OverviewTab } from './OverviewTab'
+import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
+// ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
 
@@ -152,11 +155,19 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
 
   const openDeposits = order.chain.depositRequests.filter((request) => request.status === 'OPEN').length
   // F-SA-230: the tabs re-cut (Lines · Production · Changes · Money · Shipments), each counting what it lists; Money's dot: a deposit open.
+  // F-SA-232: Overview carries a mark while the order is late or at risk (the band's same chip, the same read).
+  const production = readOf(model.production)
+  const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
   const tabs: TabItem[] = recordTabs(model.can).map((tab) => ({
     id: tab,
     href: `${recordHref}?tab=${tab}`,
     label:
-      tab === 'money' && openDeposits > 0 ? (
+      tab === 'overview' && attention ? (
+        <span className="fw-so-tablabel">
+          {t(`tab.${tab}`)}
+          <span className="fw-so-dot" aria-label={t('tab.attention')} role="img" />
+        </span>
+      ) : tab === 'money' && openDeposits > 0 ? (
         <span className="fw-so-tablabel">
           {t(`tab.${tab}`)}
           <span className="fw-so-dot" aria-label={t('tab.depositOpen')} role="img" />
@@ -246,7 +257,6 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const more: MenuItemDef[] = groupedMenu(groups, cancelItem, (group) => t(`menu.group.${group}`))
   // ---- end F-SA-230
 
-  const lateDays = lateDaysOf(order) // F-SA-230: the band's health chip (Late · N d); At risk comes with the production read
   const depositRequest = gate.request
   const depositOverdue = gate.state === 'WAITING' && !!depositRequest && depositRequest.dueDate < model.today
   const toMoney = (
@@ -275,8 +285,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           status: <Pill tone={STATUS_TONE[order.status]}>{t(`status.${order.status}`)}</Pill>,
           meta: (
             <>
-              {/* F-SA-230: health only when it matters (Late · N d; At risk with the production read), never "On track". */}
-              {lateDays !== null && <HealthPill face="office" computed="LATE" daysLate={lateDays} promise={order.promiseDate} />}
+              {/* F-SA-230 / F-SA-232: health only when it matters (Late · N d, At risk, from the production read; the order read's
+                  lateness until it comes), never "On track"; the customer's own urgency. */}
+              <BandHealth order={order} model={model} />
+              <BandUrgency model={model} />
               {order.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: order.customerRef })}</Tag>}
               {/* B-TH-228: an order made straight from a request names it (office only), else "Typed by the office". */}
               {!order.chain.quote && model.madeFrom && (
@@ -365,6 +377,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         </RecordNotices>
 
         <div className="fw-so-main">
+          {model.tab === 'overview' && <OverviewTab order={order} model={model} actions={actions} />}
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
           {/* F-SA-230: Production — the work orders, then the dates (#dates), then the tech pack in force. */}
           {model.tab === 'production' && (

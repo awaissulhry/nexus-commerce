@@ -623,3 +623,41 @@ fieldset.fw-so-colours {
 .fw-so-anchor {
   scroll-margin-top: var(--nds-space-4);
 }
+
+/* ── F-SA-232: Overview — "Where it is now" (one sentence, the facts, the five stages) and "Progress by line" ── */
+.fw-so-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-so-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-so-headline {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-medium);
+}
+/* A line's first cell is the button that opens its sizes: the picture beside its name and stage. */
+.fw-so-lineopen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-so-lineopen:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-sm);
+}

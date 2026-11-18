@@ -238,7 +238,9 @@
     "shipments": "Spedizioni",
     "money": "Importi",
     "depositOpen": "C'è un acconto aperto",
-    "changes": "Modifiche"
+    "changes": "Modifiche",
+    "overview": "Panoramica",
+    "attention": "Richiede attenzione: in ritardo o a rischio"
   },
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
@@ -1327,5 +1329,56 @@
     },
     "assignSupervisor": "Assegna supervisore…",
     "askSupervisor": "Chiedi al supervisore…"
+  },
+  "overview": {
+    "where": "A che punto è",
+    "progress": "Avanzamento per riga",
+    "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
+    "ahead_one": "{count} riga avanti",
+    "ahead_other": "{count} righe avanti",
+    "bundles_one": "Fasci in lavorazione: {count} a {stage}",
+    "bundles_other": "Fasci in lavorazione: {count} a {stage}",
+    "notInWorkOrders": "Non ancora negli ordini di lavoro",
+    "afterDeposit": "Gli ordini di lavoro si fanno dopo l'acconto",
+    "exFactory": "Franco fabbrica {date}",
+    "exFactoryMovedOnly": "Franco fabbrica {date} · spostata {count} volte",
+    "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
+    "piecesAsOf": "Pezzi alle {time}",
+    "headline": {
+      "waitingDeposit": "Confermato · in attesa dell'acconto",
+      "shipped": "Spedito il {shipped}",
+      "delivered": "Spedito il {shipped} · consegnato il {delivered}"
+    },
+    "fact": {
+      "who": "Chi deve agire",
+      "exFactory": "Franco fabbrica",
+      "health": "Stato",
+      "customer": "Cliente",
+      "inWork": "In lavorazione"
+    },
+    "col": {
+      "line": "Riga"
+    },
+    "lineName": "Riga {seq} · {stage}",
+    "lineNoStage": "Riga {seq}",
+    "lineOpen": "Apri le taglie della riga {seq} · {name}",
+    "total_one": "Totale · {count} riga",
+    "total_other": "Totale · {count} righe",
+    "madeExtra_one": "{count} pezzo fatto in più",
+    "madeExtra_other": "{count} pezzi fatti in più",
+    "sizes": {
+      "label": "Spediti e fine prevista per taglia",
+      "size": "Taglia",
+      "finish": "Fine prevista",
+      "noForecast": "—",
+      "extra": "Fatti in più",
+      "units": "Su misura: un ordine di lavoro per unità — la fase di ogni unità è in Produzione › Ordini di lavoro.",
+      "openLines": "Apri in Righe",
+      "noun": "riga"
+    }
+  },
+  "mtm": {
+    "units_one": "Su misura · {count} unità",
+    "units_other": "Su misura · {count} unità"
   }
 }

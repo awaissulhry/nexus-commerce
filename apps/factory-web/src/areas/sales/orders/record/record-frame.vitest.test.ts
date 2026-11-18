@@ -40,12 +40,13 @@ describe('the order on RecordFrame', () => {
   it('F-SA-230: the tabs Lines · Production · Changes · Money · Shipments, the same for every role (Margin is a section of Money)', () => {
     for (const locale of ['en', 'it'] as const) {
       const text = textOf(draw('thread-docked', locale))
-      const words = locale === 'en' ? ['Lines', 'Production', 'Changes', 'Money', 'Shipments'] : ['Righe', 'Produzione', 'Modifiche', 'Importi', 'Spedizioni']
+      const words = locale === 'en' ? ['Overview', 'Lines', 'Production', 'Changes', 'Money', 'Shipments'] : ['Panoramica', 'Righe', 'Produzione', 'Modifiche', 'Importi', 'Spedizioni']
       for (const tab of words) expect(text, tab).toContain(tab)
       expect(text).not.toContain(locale === 'en' ? 'Shipments & invoices' : 'Spedizioni e fatture')
     }
-    expect(recordTabs(canOf('sales'))).toEqual(['lines', 'production', 'changes', 'money', 'shipments'])
-    expect(recordTabs(canOf('manager'))).toEqual(['lines', 'production', 'changes', 'money', 'shipments'])
+    // F-SA-232: Overview first.
+    expect(recordTabs(canOf('sales'))).toEqual(['overview', 'lines', 'production', 'changes', 'money', 'shipments'])
+    expect(recordTabs(canOf('manager'))).toEqual(['overview', 'lines', 'production', 'changes', 'money', 'shipments'])
   })
 
   it('F-SA-230: Production hosts the work orders, then the dates (#dates), then the tech pack in force', () => {
@@ -108,10 +109,11 @@ describe('the order on RecordFrame', () => {
     expect(landingOf('documents')).toEqual({ tab: 'changes', anchor: 'confirmation', moved: true })
     expect(landingOf('confirmation')).toEqual({ tab: 'changes', anchor: 'confirmation', moved: true })
     // Activity stays in the address (the frame opens the thread from it) and shows the first tab.
-    expect(landingOf('activity')).toEqual({ tab: 'lines', anchor: null, moved: false })
-    for (const tab of ['lines', 'production', 'changes', 'money', 'shipments']) expect(landingOf(tab)).toEqual({ tab, anchor: null, moved: false })
-    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'nope', '']) expect(landingOf(name), name).toEqual({ tab: 'lines', anchor: null, moved: false })
-    expect(tabOf(null)).toBe('lines')
+    // F-SA-232: no address (or an unknown one) → Overview; Activity → Overview with the thread.
+    expect(landingOf('activity')).toEqual({ tab: 'overview', anchor: null, moved: false })
+    for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments']) expect(landingOf(tab)).toEqual({ tab, anchor: null, moved: false })
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'nope', '']) expect(landingOf(name), name).toEqual({ tab: 'overview', anchor: null, moved: false })
+    expect(tabOf(null)).toBe('overview')
     // The page writes the new address (Back keeps it): OrderRecord replaces an old id with its tab and #section.
     const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
     expect(container).toContain("router.replace(`${pathname}?${next.toString()}${landing.anchor ? `#${landing.anchor}` : ''}`, { scroll: false })")

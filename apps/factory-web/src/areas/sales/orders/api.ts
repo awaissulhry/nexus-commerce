@@ -395,6 +395,11 @@ export const orderLineSchema = z.object({
   version: z.number(),
   sizes: z.array(z.object({ size: z.string().nullable(), quantity: z.number(), unitPrice: z.string().nullable().optional(), progress: progressSchema })),
   progress: progressSchema,
+  // ── B-SA-035 / F-SA-232: the colour line's picture (the colourway's, else the style's main picture; files.read) with its small
+  // preview's address (60 s), and the artwork files the reader may open. Absent in an older answer or a design case: no picture.
+  picture: z.object({ fileId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }).nullable().optional(),
+  artworkCount: z.number().optional(),
+  // ── end B-SA-035 / F-SA-232
 })
 export type OrderLine = z.infer<typeof orderLineSchema>
 

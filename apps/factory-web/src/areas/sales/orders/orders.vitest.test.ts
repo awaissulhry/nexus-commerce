@@ -225,12 +225,13 @@ describe('the record: the next step by state, held with its reason', () => {
   it('tabs from the address; the chain’s ids for live events', () => {
     // F-SA-230: the tabs re-cut — an old tab lands on its new tab (and section); the five stay as they are.
     expect(tabOf('money')).toBe('money')
-    expect(tabOf('activity')).toBe('lines')
-    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('lines') // TH-6 part B: never a name of Object's own
-    for (const tab of ['lines', 'production', 'changes', 'money', 'shipments'] as const) expect(tabOf(tab)).toBe(tab)
-    expect(tabOf('nope')).toBe('lines')
+    // F-SA-232: Overview is the first tab (no address, an unknown one, Activity with the thread).
+    expect(tabOf('activity')).toBe('overview')
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('overview') // TH-6 part B: never a name of Object's own
+    for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments'] as const) expect(tabOf(tab)).toBe(tab)
+    expect(tabOf('nope')).toBe('overview')
     // B-TH-301 + F-SA-230: every address the old nine tabs (and the five) had lands on its tab today.
-    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'money', invoices: 'money', changes: 'changes', documents: 'changes', confirmation: 'changes', margin: 'money', activity: 'lines' }
+    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'money', invoices: 'money', changes: 'changes', documents: 'changes', confirmation: 'changes', margin: 'money', activity: 'overview' }
     for (const [old, merged] of Object.entries(OLD)) expect(tabOf(old), old).toBe(merged)
     const ids = knownIds(order('SHIPPED'))
     expect(ids.has(order('SHIPPED').id)).toBe(true)

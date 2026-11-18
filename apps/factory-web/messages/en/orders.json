@@ -238,7 +238,9 @@
     "shipments": "Shipments",
     "money": "Money",
     "depositOpen": "A deposit is open",
-    "changes": "Changes"
+    "changes": "Changes",
+    "overview": "Overview",
+    "attention": "Needs attention: late or at risk"
   },
   "step": {
     "makeWorkOrders": "Make work orders",
@@ -1327,5 +1329,56 @@
     },
     "assignSupervisor": "Assign supervisor…",
     "askSupervisor": "Ask the supervisor…"
+  },
+  "overview": {
+    "where": "Where it is now",
+    "progress": "Progress by line",
+    "progressHint": "This order's own pieces · a line opens its sizes",
+    "ahead_one": "{count} line ahead",
+    "ahead_other": "{count} lines ahead",
+    "bundles_one": "Bundles in work: {count} at {stage}",
+    "bundles_other": "Bundles in work: {count} at {stage}",
+    "notInWorkOrders": "Not in work orders yet",
+    "afterDeposit": "Work orders are made after the deposit",
+    "exFactory": "Ex-factory {date}",
+    "exFactoryMovedOnly": "Ex-factory {date} · moved {count}×",
+    "exFactoryMoved": "Ex-factory {date} · moved {count}× · {days} d since first promised",
+    "piecesAsOf": "Pieces as of {time}",
+    "headline": {
+      "waitingDeposit": "Confirmed · waiting for the deposit",
+      "shipped": "Shipped {shipped}",
+      "delivered": "Shipped {shipped} · delivered {delivered}"
+    },
+    "fact": {
+      "who": "Who acts next",
+      "exFactory": "Ex-factory",
+      "health": "Health",
+      "customer": "Customer",
+      "inWork": "In work"
+    },
+    "col": {
+      "line": "Line"
+    },
+    "lineName": "Line {seq} · {stage}",
+    "lineNoStage": "Line {seq}",
+    "lineOpen": "Open the sizes of line {seq} · {name}",
+    "total_one": "Total · {count} line",
+    "total_other": "Total · {count} lines",
+    "madeExtra_one": "{count} piece made extra",
+    "madeExtra_other": "{count} pieces made extra",
+    "sizes": {
+      "label": "Shipped and the finish forecast by size",
+      "size": "Size",
+      "finish": "Finish forecast",
+      "noForecast": "—",
+      "extra": "Made extra",
+      "units": "Made to measure: one work order per unit — each unit's stage is on Production › Work orders.",
+      "openLines": "Open in Lines",
+      "noun": "line"
+    }
+  },
+  "mtm": {
+    "units_one": "Made to measure · {count} unit",
+    "units_other": "Made to measure · {count} units"
   }
 }

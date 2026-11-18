@@ -11,6 +11,9 @@ import type { LinksActions, LinksModel } from './links/model' // B-TH-256
 // F-SA-230: the ⋯ menu's People (the production lane's dialogs, reused in place).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
 import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model'
+// F-SA-232: Overview's production read (the order's own pieces) and the live stream's state.
+import type { ProductionState } from './overview/model'
+import type { LiveState } from '../hooks'
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -138,6 +141,12 @@ export interface OrderRecordModel {
   links?: LinksModel | null
   /** F-SA-230: ⋯ People — Assign supervisor… (production.brand.manage) and Ask the supervisor… (threads.post), with their open dialogs. */
   people?: { readonly mayAssign: boolean; readonly mayNote: boolean; readonly assign: AssignSupervisorModel | null; readonly note: NoteDialogModel | null }
+  /** F-SA-232: the order's production read (OR1: stage, health, waiting, own pieces per line …); absent: not read here (a design case). */
+  production?: ProductionState | null
+  /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
+  overviewLine?: string | null
+  /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
+  liveState?: LiveState
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -192,6 +201,9 @@ export interface OrderRecordActions {
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
   links?: LinksActions
+  /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
+  onRetryProduction?: () => void
+  onOpenLine?: (rowId: string | null) => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
 }

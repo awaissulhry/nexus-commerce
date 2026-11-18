@@ -62,6 +62,8 @@ import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 // B-W2b-380 (XF6:02): cost changed since priced on the lines.
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
+// F-SA-232: Overview's made-up production reads.
+import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, ready } from './overview/fixtures'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
@@ -441,6 +443,12 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-margin-no-grain', label: 'W2a · Production manager · Money: no margin grain, no Margin section', model: base('manager', production, { tab: 'money', margin: marginAs('manager', null) }) },
     { id: 'w2a-margin-loading', label: 'W2a · Margin reading', model: base('finance', production, { tab: 'money', margin: marginAs('finance', { value: null, problem: null }) }) },
     { id: 'w2a-margin-error', label: "W2a · Margin couldn't load: Try again (the rest of the order stays usable)", model: base('finance', production, { tab: 'money', margin: marginAs('finance', { value: null, problem: 'problem.unavailable' }) }) },
+    // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
+    { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
+    { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · waiting for the deposit; Preparing — work orders are made after the deposit', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
+    { id: 'overview-sizes', label: 'F-SA-232 · Sales · Overview: line 10’s sizes in the centred window (PiecesGrid, shipped, the finish forecast)', model: base('sales', production, { tab: 'overview', production: ready(), overviewLine: LINE_BLK, liveState: 'live' }) },
+    { id: 'overview-loading', label: 'F-SA-232 · Overview reading (skeletons, never a 0)', model: base('sales', production, { tab: 'overview', production: LOADING_STATE, liveState: 'connecting' }) },
+    { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
   ],
