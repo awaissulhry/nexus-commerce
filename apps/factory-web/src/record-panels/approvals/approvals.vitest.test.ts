@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../lib/api/errors'
-import { renderView, textOf } from '../../lib/record-thread/parts/testing' // B-PR-30a
+import { createElement } from 'react' // B-PR-30a
+import { render, textOf } from '../../lib/record-thread/parts/testing' // B-PR-30a
+import { ApprovalsPanel } from './view/ApprovalsPanel' // B-PR-30a
 import { recordRequestsSchema } from './api'
 import { designScreen } from './fixtures'
 import { askDraftProblems, askedNotice, askFilesOf, askHeld, askRefusal, defaultDueAt, newDraft, statusTone, takesApprovals, withdrawHeld, withdrawRefusal } from './model'
@@ -120,11 +122,12 @@ describe('B-PR-30a — an answer decided by us for the customer', () => {
     const decided = { ...read.requests[2]!, status: 'APPROVED' as const, answer: { at: '2026-11-06T15:05:00.000Z', typedName: 'Marco Manager', words: 'Deciso da noi per voi: il colore è quello del campione approvato.', via: 'OFFICE' as const, personName: 'Marco Manager', markup: null } }
     const parsed = recordRequestsSchema.parse({ record: { type: 'SalesOrder', id: 'x', words: { it: 'SO', en: 'SO' } }, kinds: read.kinds, held: null, requests: [decided] })
     expect(parsed.requests[0]!.answer!.via).toBe('OFFICE')
-    const model = { ...list, approvals: { ...list.approvals, read: { ...read, requests: [decided] } } }
-    const en = textOf(renderView(designScreen.view, model, 'en'))
+    // The panel itself (the window around it opens over the docked thread in the browser only).
+    const panel = (locale: 'it' | 'en') => textOf(render(createElement(ApprovalsPanel, { model: { ...list.approvals, read: { ...read, requests: [decided] } }, title: 'SO-2026-0042' }), locale))
+    const en = panel('en')
     expect(en).toContain('Decided by us for the customer: Marco Manager')
     expect(en).not.toContain('account of Marco Manager')
     expect(en).not.toContain('Signed by Marco Manager in the portal')
-    expect(textOf(renderView(designScreen.view, model, 'it'))).toContain('Deciso da noi per il cliente: Marco Manager')
+    expect(panel('it')).toContain('Deciso da noi per il cliente: Marco Manager')
   })
 })
