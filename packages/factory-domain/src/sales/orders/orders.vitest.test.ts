@@ -288,4 +288,13 @@ describe('what a person may do next', () => {
     expect(orderActions('SHIPPED', { settlement: unsettled }).find((action) => action.action === 'close')).toMatchObject({ needsReason: true, held: expect.stringMatching(/^Not settled: A balance/) })
     expect(orderActions('CLOSED', {})).toEqual([])
   })
+  // F-SA-201: a delivered order offers Close order as a shipped one does (settled: no reason; not settled: held, a reason).
+  it('a delivered order is closed like a shipped one', () => {
+    expect(orderActions('DELIVERED', { settlement: settled })).toEqual([
+      { action: 'changePromise', allowed: true, needsReason: true, held: null },
+      { action: 'close', allowed: true, needsReason: false, held: null },
+    ])
+    expect(orderActions('DELIVERED', { settlement: unsettled }).find((action) => action.action === 'close')).toMatchObject({ needsReason: true, held: expect.stringMatching(/^Not settled: A balance/) })
+    expect(canTransition(salesOrderMachine, 'DELIVERED', 'CLOSED', { settlement: settled, reason: null }).ok).toBe(true)
+  })
 })

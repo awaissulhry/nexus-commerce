@@ -97,7 +97,7 @@ const lockRow = (tx: CommandTx, orderId: string) => tx.$queryRaw`SELECT 1 FROM "
 export async function approvedInCommand(tools: CommandTools, task: TaskRef): Promise<void> {
   const { tx, now } = tools
   await lockRow(tx, task.recordId)
-  const order = await tx.salesOrder.findUnique({ where: { id: task.recordId }, select: { id: true, number: true, status: true, companyId: true } })
+  const order = await tx.salesOrder.findUnique({ where: { id: task.recordId }, select: { id: true, number: true, status: true, companyId: true, /* B-SA-001 */ partyId: true } })
   if (!order || order.status !== 'PENDING_APPROVAL') throw new InvalidStateError('The order this yes is about does not wait any more: nothing to let go on.')
   const hold = await creditHoldOf(tx, order.id)
   if (hold) {
@@ -112,7 +112,7 @@ export async function approvedInCommand(tools: CommandTools, task: TaskRef): Pro
   await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CONFIRMED', version: { increment: 1 }, updatedAt: now }, select: { id: true } })
   tools.audit({ action: 'orders.approvalYes', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: 'PENDING_APPROVAL' }, after: { status: 'CONFIRMED', taskId: task.id, decidedById: task.decidedById } })
   // B-W2b-294: the schedule of an order that waited follows this event (worker handler sales.orderSchedule).
-  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person' } })
+  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person', partyId: order.partyId /* B-SA-001 */ } })
 }
 
 /** SALES_ORDER's no (onRejected), in the approver's command: the waiting order is cancelled with the reason. */

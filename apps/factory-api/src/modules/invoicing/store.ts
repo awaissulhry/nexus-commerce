@@ -110,6 +110,13 @@ export const LINE_COLUMNS = {
 export type LineRow = Prisma.InvoiceLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
 /** The invoice's header, or null (missing, or out of the caller's tenant). */
+// ── B-SA-004 (Sales page plan P17'): the customer an invoice's live events name (the office's live wall) ──────────────────────
+/** The invoice's buyer, read on the server (null: no such invoice), for the `partyId` of its invoice.* events. */
+export async function invoiceLiveParty(db: Reader, invoiceId: string): Promise<string | null> {
+  return (await db.invoice.findUnique({ where: { id: invoiceId }, select: { buyerPartyId: true } }))?.buyerPartyId ?? null
+}
+// ── end B-SA-004 ──
+
 export async function readInvoice(db: Reader, invoiceId: string): Promise<InvoiceRow | null> {
   if (!isUuid(invoiceId)) return null
   return db.invoice.findUnique({ where: { id: invoiceId }, select: INVOICE_COLUMNS })

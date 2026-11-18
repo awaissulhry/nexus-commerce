@@ -354,3 +354,20 @@ describe('a late supplier date replans what it feeds (PLN-200)', { timeout: 300_
     expect(row).toEqual({ status: 'RESOLVED', resolution: 'CLEARED' })
   })
 })
+
+// ── B-SA-004 (Sales page plan P17'): every re-promise event names its order's own customer (the office's live wall) ─────────────
+describe('live: re-promises name the order’s customer (B-SA-004)', () => {
+  it('each order_promise.* row the commands above wrote (proposed, decided, recorded) carries partyId = the order row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, o."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "SalesOrder" o ON o.id = (e.payload->>'orderId')::uuid
+        WHERE e."tenantId" = $1 AND e.type LIKE 'order_promise.%'
+        ORDER BY e.type, e.id`,
+      [tenant],
+    )
+    // The planner's proposal, the sales decisions (accepted, declined, withdrawn), the rows of an accept, W1's typed change, B-W2b-301's record.
+    expect([...new Set(rows.map((row) => row.type))].sort()).toEqual(['order_promise.decided', 'order_promise.proposed', 'order_promise.recorded'])
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004 ──

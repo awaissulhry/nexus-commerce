@@ -281,7 +281,7 @@ export async function sendDocumentLinks(request: SendRequest): Promise<SendResul
           subject: current.id,
           companyId: current.companyId,
           siteId: current.siteId,
-          payload: { shipmentId: current.id, number: current.number, links: links.length, reason: request.reason },
+          payload: { shipmentId: current.id, number: current.number, links: links.length, reason: request.reason, partyId: current.partyId /* B-SA-004 */ },
         })
         return { links, skipped: skippedNow }
       },

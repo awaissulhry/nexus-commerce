@@ -45,6 +45,7 @@ import {
 import type { FilesRuntime } from '../service'
 import { walledForOutside } from '../content-wall' // fix-wall-1
 import { seriesOf, supersedeEarlierVersions } from './supersede'
+import { fileLivePartyId } from '../record-scope' // B-SA-002
 
 /**
  * File versions (COL-046, PLT-216; B-W2b-160): a new version is a new file of the same series, so a new object in the
@@ -331,7 +332,7 @@ export async function restoreVersion(runtime: FilesRuntime, caller: CommandCalle
       companyId: row.companyId,
       after: { ...audited(row), seriesId: root, versionNo, restoredFrom: old.id, restoredVersionNo: old.versionNo },
     })
-    tools.emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+    tools.emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind, partyId: await fileLivePartyId(tools.tx, tenantOf(tools.context), row) /* B-SA-002 */ } })
     await supersedeEarlierVersions(tools, id)
     return viewOf(row)
   })

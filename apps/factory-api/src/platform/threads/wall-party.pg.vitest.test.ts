@@ -26,6 +26,12 @@ import { indexNewTenants, rebuildIndex, WALL_REREAD } from '../search/indexing'
 import type { SearchIndexer } from '../search/indexer'
 import { loadIndexers } from '../search/registry'
 import { NOT_SHAREABLE_REFUSAL, resolveRecord } from './records'
+// B-SA-002: the live wall of thread, follower and file events.
+import type { Actor } from '@nexus/factory-domain/core/permissions'
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { liveMessageFor, liveViewFor } from '@nexus/factory-domain/events/live'
+import { fileLivePartyId } from '../files/record-scope'
 import { ensureThread, writeMessage } from './threads'
 
 /**
@@ -411,6 +417,79 @@ describe('B-PR-08a part 2: search honours the brand (R-39)', { timeout: 120_000 
     expect(await entry('WorkOrder', w.a.workOrderId)).toEqual({ partyId: w.a.partyId, everyParty: false })
   })
 })
+
+// ── B-SA-002 (Sales page plan P17'; 13-backend B13a) ─────────────────────────────────────────────────────────────────────────
+/**
+ * thread.message_posted, thread.followers_changed and file.available name the record's customer for the office's live wall
+ * (events/live.ts): the thread's party (an order's customer), or a work order's, hold's or NCR's WALL party; none for several
+ * customers or none (the mixed work order, the hold of both) — then only people of every customer are sent the message. Before,
+ * none named a party, so an office person limited to some customers got no live hint at all on their own customers' threads.
+ */
+describe('B-SA-002: thread, follower and file events name the record’s customer for the live wall', { timeout: 60_000 }, () => {
+  type Row = { id: string; type: string; version: number; context: string; tenantId: string; companyId: string | null; siteId: string | null; subject: string; correlationId: string; causationId: string | null; source: string; occurredAt: Date; payload: Json }
+  const outbox = (type: string, recordType: string, recordId: string) =>
+    admin<Row>(`SELECT * FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2 AND payload->>'recordType' = $3 AND payload->>'recordId' = $4 ORDER BY "occurredAt", id`, [w.tenantId, type, recordType, recordId])
+  /** The parties every such event of the record named, each once (the earlier tests of this file wrote some too). */
+  const partiesOf = async (type: string, recordType: string, recordId: string) => [...new Set((await outbox(type, recordType, recordId)).map((row) => row.payload.partyId ?? null))]
+  const envelopeOf = (row: Row): EventEnvelope => ({ eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload })
+  const viewer = (parties: Grant['parties']): Actor => ({ audience: 'office', tenantId: w.tenantId, grants: [grantOf(PERMISSIONS, parties)] })
+  const sent = (row: Row, parties: Grant['parties']) => liveViewFor(liveMessageFor(envelopeOf(row), EVENT_CATALOGUE.get(row.type, row.version))!, viewer(parties), EVENT_CATALOGUE) !== null
+
+  it("a message on Alpha's order thread carries Alpha; A's work order, hold and NCR their wall party; the mixed work order and the hold of both none", async () => {
+    await note('office.all', 'SalesOrder', w.a.salesOrderId, 'Made-up note on the order of brand A')
+    expect(await partiesOf('thread.message_posted', 'SalesOrder', w.a.salesOrderId)).toEqual([w.a.partyId])
+    for (const [type, id] of [['WorkOrder', w.a.workOrderId], ['QualityHold', rows.holdA], ['Nonconformance', rows.ncrA]] as const) expect(await partiesOf('thread.message_posted', type, id), type).toEqual([w.a.partyId])
+    expect(await partiesOf('thread.message_posted', 'WorkOrder', w.b.workOrderId)).toEqual([w.b.partyId])
+    // A legacy mixed work order (no customer) and a hold of both brands: no party, never the every-party marker.
+    for (const [type, id] of [['WorkOrder', w.mixed.workOrderId], ['QualityHold', rows.holdBoth]] as const) expect(await partiesOf('thread.message_posted', type, id), type).toEqual([null])
+  })
+
+  it("a person limited to Beta is sent no live message of Alpha's threads; Alpha's person and the factory are; a party-less one reaches every-customer readers only", async () => {
+    for (const [type, id] of [['SalesOrder', w.a.salesOrderId], ['WorkOrder', w.a.workOrderId], ['QualityHold', rows.holdA], ['Nonconformance', rows.ncrA]] as const) {
+      const [row] = await outbox('thread.message_posted', type, id)
+      expect([sent(row!, [ids.b]), sent(row!, [ids.a]), sent(row!, 'all')], type).toEqual([false, true, true])
+    }
+    const [beta] = await outbox('thread.message_posted', 'WorkOrder', w.b.workOrderId)
+    expect([sent(beta!, [ids.b]), sent(beta!, [ids.a])]).toEqual([true, false])
+    for (const [type, id] of [['WorkOrder', w.mixed.workOrderId], ['QualityHold', rows.holdBoth]] as const) {
+      const [row] = await outbox('thread.message_posted', type, id)
+      expect([sent(row!, [ids.a]), sent(row!, [ids.b]), sent(row!, [ids.a, ids.b]), sent(row!, 'all')], type).toEqual([false, false, false, true])
+    }
+    // The party never reaches the browser: the view carries the live fields only.
+    const [order] = await outbox('thread.message_posted', 'SalesOrder', w.a.salesOrderId)
+    const view = liveViewFor(liveMessageFor(envelopeOf(order!), EVENT_CATALOGUE.get(order!.type, order!.version))!, viewer([ids.a]), EVENT_CATALOGUE)!
+    expect(view).not.toHaveProperty('partyIds')
+    expect(view.fields).not.toHaveProperty('partyId')
+  })
+
+  it("a follow names the record's customer: Alpha's order and work order carry Alpha, the mixed work order none", async () => {
+    // Muted, then not: two changes whatever the person's follow was before (each writes the event).
+    const follow = async (session: string, type: string, id: string) => {
+      await ok(session, 'PUT', `/threads/${type}/${id}/followers/me`, { following: true, muted: true })
+      await ok(session, 'PUT', `/threads/${type}/${id}/followers/me`, { following: true, muted: false })
+    }
+    await follow('office.p1', 'SalesOrder', w.a.salesOrderId)
+    await follow('office.p1', 'WorkOrder', w.a.workOrderId)
+    await follow('office.all', 'WorkOrder', w.mixed.workOrderId)
+    expect(await partiesOf('thread.followers_changed', 'SalesOrder', w.a.salesOrderId)).toEqual([w.a.partyId])
+    expect(await partiesOf('thread.followers_changed', 'WorkOrder', w.a.workOrderId)).toEqual([w.a.partyId])
+    expect(await partiesOf('thread.followers_changed', 'WorkOrder', w.mixed.workOrderId)).toEqual([null])
+    const [row] = (await outbox('thread.followers_changed', 'SalesOrder', w.a.salesOrderId)).slice(-1)
+    expect([sent(row!, [ids.b]), sent(row!, [ids.a])]).toEqual([false, true])
+  })
+
+  it("a file's event names its record's customer as the office's file reads judge it (an order line: its order's)", async () => {
+    const party = (recordType: string, recordId: string) => system().withClient((client) => fileLivePartyId(client, w.tenantId, { recordType, recordId }))
+    expect(await party('SalesOrder', w.a.salesOrderId)).toBe(w.a.partyId)
+    expect(await party('SalesOrderLine', w.a.salesOrderLineId)).toBe(w.a.partyId)
+    expect(await party('WorkOrder', w.a.workOrderId)).toBe(w.a.partyId)
+    expect(await party('WorkOrder', w.b.workOrderId)).toBe(w.b.partyId)
+    expect(await party('WorkOrder', w.mixed.workOrderId)).toBeNull()
+    expect(await party('QualityHold', rows.holdBoth)).toBeNull()
+    expect(await party('SalesOrder', newId())).toBeNull()
+  })
+})
+// ── end B-SA-002 ──
 
 describe('T00: nothing of A in any answer B’s person got', () => {
   it('scans every answer office.p2 got for A’s names, codes, numbers, ids and thread words', () => {

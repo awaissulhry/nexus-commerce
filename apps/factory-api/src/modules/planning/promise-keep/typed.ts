@@ -92,7 +92,8 @@ export async function typedPromiseRowsInCommand(tools: CommandTools, change: Typ
       type: 'order_promise.recorded',
       subject: change.order.id,
       companyId: change.order.companyId,
-      payload: { orderId: change.order.id, orderLineId: line.id, siteId: null, rows: planned.map((row) => ({ size: row.size, promisedDate: row.promisedDate, kind: row.kind })) },
+      // B-SA-004: the order's own customer (the order row read under its lock), for the office's live wall.
+      payload: { orderId: change.order.id, orderLineId: line.id, siteId: null, rows: planned.map((row) => ({ size: row.size, promisedDate: row.promisedDate, kind: row.kind })), partyId: change.order.partyId },
     })
   }
   return written

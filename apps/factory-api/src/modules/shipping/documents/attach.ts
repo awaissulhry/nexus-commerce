@@ -118,7 +118,7 @@ export async function attachDocuments(
           subject: current.id,
           companyId: current.companyId,
           siteId: current.siteId,
-          payload: { shipmentId: current.id, number: current.number, attached: copies.length, missing: after.counts.missing },
+          payload: { shipmentId: current.id, number: current.number, attached: copies.length, missing: after.counts.missing, partyId: current.partyId /* B-SA-004 */ },
         })
       }
       return { attached: copies.length, retained: retained.length, copies }

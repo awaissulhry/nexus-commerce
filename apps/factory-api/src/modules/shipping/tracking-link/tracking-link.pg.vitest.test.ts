@@ -166,7 +166,9 @@ describe('the tracking link when the goods leave (B-W2b-170)', { timeout: SLOW_T
     for (const table of ['AuditLog', 'OutboxEvent', 'EmailOutbound', 'IdempotencyReceipt', 'OneOffLink']) {
       expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "${table}" WHERE row_to_json("${table}")::text LIKE $1`, [`%${secret}%`])).n, table).toBe(0)
     }
-    expect((await events('shipment.tracking_link_made')).at(-1)).toEqual({ shipmentId: SH1, number: 'SEED-SH-0001', links: 1, via: 'SHIPPED', mailed: 1 })
+    // B-SA-004: the event names the shipment's own customer (for the office's live wall).
+    const { partyId } = await one<{ partyId: string }>(`SELECT "partyId" FROM "Shipment" WHERE id = $1`, [SH1])
+    expect((await events('shipment.tracking_link_made')).at(-1)).toEqual({ shipmentId: SH1, number: 'SEED-SH-0001', links: 1, via: 'SHIPPED', mailed: 1, partyId })
     // A repeated job answers from its receipt; another event of the same move mails nothing (the address has its link).
     await shippedEvent(eventId)
     await shippedEvent()

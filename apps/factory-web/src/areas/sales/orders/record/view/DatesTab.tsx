@@ -6,7 +6,7 @@ import { Button, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Order } from '../../api'
-import { dayInstant, daysUntil, isFinal, nextStep, promiseHeld } from '../../model'
+import { dayInstant, daysUntil, isFinal, isShippedInFull, nextStep, promiseHeld } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { ForecastCell, ForecastNote, MilestonesCard } from '../../depth/view/DatesDepth'
@@ -30,7 +30,7 @@ export function DatesTab({ order, model, actions }: { order: Order; model: Order
     return line ? `${line.style?.code ?? '—'} ${line.colourway?.code ?? ''}`.trim() : '—'
   }
   const lateness = (promise: string | null) => {
-    if (!promise || isFinal(order) || order.status === 'SHIPPED') return null
+    if (!promise || isFinal(order) || isShippedInFull(order)) return null // F-SA-201: a Delivered order is not late either
     const days = daysUntil(promise, model.today)
     return days < 0 ? <Tag tone="danger">{t('dates.late', { count: -days })}</Tag> : <Tag tone="neutral">{t('dates.left', { count: days })}</Tag>
   }

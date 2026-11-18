@@ -14,6 +14,7 @@ import { heldRoles } from '../auth/roles/access'
 import { contextOf, officeRecord, type RecordRef } from './threads'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
 import { mayOnThread } from './records'
+import { livePartyOf, resolveRecord, type WallScope } from './records' // B-SA-002
 
 /**
  * Followers of a record (B-W2a-20; COL-011; design shell.panels popup followers, the band's Follow toggle,
@@ -38,7 +39,18 @@ export type FollowTools = Pick<CommandTools, 'tx' | 'now' | 'audit' | 'emit'>
 export interface FollowedRecord extends RecordRef {
   readonly companyId: string | null
   readonly siteId: string | null
+  /**
+   * B-SA-002: the customer the live message names (records.ts livePartyOf of the record's office scope), when the caller read it
+   * already; left out, it is read from the record (its resolver) in the command, never taken from a request.
+   */
+  readonly livePartyId?: string | null
 }
+
+// ---- B-SA-002 (Sales page plan P17'): thread.followers_changed names the record's customer for the office's live wall.
+async function livePartyOfRecord(tools: FollowTools, record: FollowedRecord): Promise<string | null> {
+  return record.livePartyId !== undefined ? record.livePartyId : livePartyOf(await resolveRecord(tools.tx, record.type, record.id))
+}
+// ---- end B-SA-002
 
 /**
  * Inside a command: the person follows the record for this reason, unless they have a follow row already (muted or not).
@@ -54,7 +66,7 @@ export async function followInCommand(tools: FollowTools, record: FollowedRecord
   })
   if (count === 0) return false
   tools.audit({ action: 'threads.follow', recordType: 'RecordFollower', recordId: id, companyId: record.companyId, siteId: record.siteId, after: { recordType: record.type, recordId: record.id, userId, reason, ...(partyId ? { partyId } : {}) } })
-  tools.emit(eventFor(followersChanged, { subject: record.id, companyId: record.companyId, siteId: record.siteId, payload: { recordType: record.type, recordId: record.id } }))
+  tools.emit(eventFor(followersChanged, { subject: record.id, companyId: record.companyId, siteId: record.siteId, payload: { recordType: record.type, recordId: record.id, partyId: await livePartyOfRecord(tools, record) /* B-SA-002 */ } }))
   return true
 }
 
@@ -84,7 +96,7 @@ export async function unfollowInCommand(tools: FollowTools, record: FollowedReco
     before: { reason: row.reason, muted: row.muted },
     after: { following: false, recordType: record.type, recordId: record.id, userId },
   })
-  tools.emit(eventFor(followersChanged, { subject: record.id, companyId: record.companyId, siteId: record.siteId, payload: { recordType: record.type, recordId: record.id } }))
+  tools.emit(eventFor(followersChanged, { subject: record.id, companyId: record.companyId, siteId: record.siteId, payload: { recordType: record.type, recordId: record.id, partyId: await livePartyOfRecord(tools, record) /* B-SA-002 */ } }))
   return true
 }
 // ---- end B-PR-08a (T5)
@@ -105,7 +117,8 @@ export async function personReads(client: FactoryClient | CommandTx, tenantId: s
   return mayOnThread(reader, THREADS_READ, recordType, scope)
 }
 
-const recordOf = (record: RecordRef, scope: ScopedRecord): FollowedRecord => ({ ...record, companyId: scope.companyId ?? null, siteId: scope.siteId ?? null })
+// B-SA-002: the office scope read by officeRecord names the live party too (a work order's, hold's or NCR's wall party).
+const recordOf = (record: RecordRef, scope: WallScope): FollowedRecord => ({ ...record, companyId: scope.companyId ?? null, siteId: scope.siteId ?? null, livePartyId: livePartyOf(scope) })
 
 /** GET /threads/<type>/<id>/followers. */
 export async function listFollowers(caller: CommandCaller, record: RecordRef) {
@@ -172,7 +185,7 @@ export async function setMyFollow(caller: CommandCaller, record: RecordRef, body
       await tx.recordFollower.update({ where: { id: existing!.id }, data: { muted: change === 'MUTE', version: existing!.version + 1, updatedAt: now }, select: { id: true } })
       audit(change === 'MUTE' ? 'threads.mute' : 'threads.unmute', existing!.id, { muted: change === 'MUTE' }, { muted: existing!.muted })
     }
-    tools.emit(eventFor(followersChanged, { subject: record.id, companyId: followed.companyId, siteId: followed.siteId, payload: { recordType: record.type, recordId: record.id } }))
+    tools.emit(eventFor(followersChanged, { subject: record.id, companyId: followed.companyId, siteId: followed.siteId, payload: { recordType: record.type, recordId: record.id, partyId: followed.livePartyId ?? null /* B-SA-002 */ } }))
     return null
   })
   return listFollowers(caller, record)

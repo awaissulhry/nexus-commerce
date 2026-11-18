@@ -47,7 +47,7 @@ export async function nameDeclaration(caller: CommandCaller, invoiceId: string, 
       await refreshDraft(tools, current, lines, current.priceBasis, storedSourceOf(current.paymentTerms))
       await tools.tx.invoice.update({ where: { id: current.id }, data: { declarationOfIntentId: body.declarationOfIntentId }, select: { id: true } })
       tools.audit({ recordType: 'Invoice', recordId: current.id, companyId: current.companyId, before: { declarationOfIntentId: before }, after: { declarationOfIntentId: body.declarationOfIntentId } })
-      tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
+      tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false, partyId: current.buyerPartyId /* B-SA-004 */ } })
       return { invoice: await invoiceDetail(tools.tx, (await readInvoice(tools.tx, current.id))!), declarationOfIntentId: body.declarationOfIntentId }
     }),
   )

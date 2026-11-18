@@ -417,7 +417,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
           subject: current.recordId,
           companyId: current.companyId,
           siteId: current.siteId,
-          payload: { threadId: current.id, messageId: id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER' },
+          // B-SA-002: the thread row's own party (a partner writes only on a shareable record of its party: checked above).
+          payload: { threadId: current.id, messageId: id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', partyId: current.partyId },
         }),
       )
       // ---- B-TH-027: the person's own post is read by them (their mark moves to it; a preview writes none).

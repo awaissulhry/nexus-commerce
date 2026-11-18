@@ -40,8 +40,9 @@ function invalid(issues: Issue[]): ValidationError {
 export const shortLinesOf = (facts: OrderFacts): ShortLine[] =>
   facts.lines.map((line) => ({ id: line.id, seq: line.seq, quantity: line.quantity, shipped: facts.progress.lines.find((entry) => entry.lineId === line.id)?.shipped ?? 0, closedShort: line.closedShortQuantity !== null }))
 
-function statusChanged(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId'>, from: string, to: string): void {
-  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: from as never, to: to as never, by: 'person' } })
+// B-SA-001: the payloads name the order's customer, the order row's own (read on the server), never a caller's value.
+function statusChanged(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId'>, from: string, to: string): void {
+  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: from as never, to: to as never, by: 'person', partyId: order.partyId } })
 }
 
 export interface LinesBody {
@@ -132,7 +133,7 @@ export async function closeLinesInCommand(
     after: { status, lines: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })), reducesDone, reasonCode },
     reason,
   })
-  tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds } })
+  tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds, partyId: order.partyId /* B-SA-001 */ } })
   return {
     closed: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })),
     reducesDone,
@@ -173,7 +174,7 @@ export async function reopenLines(caller: CommandCaller, orderId: string, body: 
       await tx.salesOrderLine.update({ where: { id: lineId }, data: { closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     }
     tools.audit({ action: 'orders.reopenLines', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: locked.status, lines: before }, after: { status, lines: plan.reopen.map((lineId) => ({ lineId, closedShortQuantity: null })) }, reason })
-    tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REOPENED', lineIds: [...plan.reopen] } })
+    tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REOPENED', lineIds: [...plan.reopen], partyId: order.partyId /* B-SA-001 */ } })
     return { reopened: [...plan.reopen] }
   })
   return { order: await recordAfter(caller, order.id), ...result }

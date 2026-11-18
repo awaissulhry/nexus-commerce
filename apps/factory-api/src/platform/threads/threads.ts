@@ -33,6 +33,7 @@ import { followInCommand } from './followers'
 import { mayOnThread, resolveRecord, type RecordScope } from './records'
 import { mayShare, notShareableRefusal } from './records' // B-PR-08a
 import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
+import { livePartyOf } from './records' // B-SA-002
 // ---- B-TH-027 / B-TH-028: the reader's own read mark; the office's head (who answers, what waits).
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
@@ -665,7 +666,9 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   // B-TH-045: the batch rides on both events (absent for a message of its own).
   const about = { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId, ...(input.batchId ? { batchId: input.batchId } : {}) }
   const where = { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }
-  tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience } }))
+  // B-SA-002: the record's customer for the office's live wall (the thread's party, a work order's, hold's or NCR's wall party).
+  const liveParty = livePartyOf(await wallScopeOf(tools.tx, thread))
+  tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience, partyId: liveParty } }))
   // B-W2a-20 (COL-006, COL-011): each person the note mentions (not its author) gets a mention row with the note (where
   // was I mentioned), follows the record unless they have a follow row (muted stays muted), and is told (the event).
   const told = mentions.filter((userId) => userId !== input.author.id)
@@ -674,7 +677,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
     await tools.tx.messageMention.createMany({
       data: told.map((userId) => ({ id: newId(), messageId: id, threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, userId, authorId, at, createdAt: tools.now })),
     })
-    for (const userId of told) await followInCommand(tools, { type: thread.recordType, id: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }, userId, 'MENTIONED', input.author.id)
+    for (const userId of told) await followInCommand(tools, { type: thread.recordType, id: thread.recordId, companyId: thread.companyId, siteId: thread.siteId, livePartyId: liveParty /* B-SA-002 */ }, userId, 'MENTIONED', input.author.id)
   }
   for (const userId of told) tools.emit(eventFor(userMentioned, { ...where, payload: { ...about, userId, authorId: input.author.id } }))
   return row

@@ -347,7 +347,9 @@ describe('a work order', () => {
     expect(await run(office(), `UPDATE "WorkOrder" SET priority = 2, note = 'rush', "dueDate" = '2026-12-01' WHERE id = $1::uuid`, wo)).toBe(1)
 
     await expect(run(office(), 'UPDATE "WorkOrderSize" SET quantity = 5 WHERE id = $1::uuid', seeded.cellIds['BLK-50'])).rejects.toThrow(/size quantities are frozen \(MES-005\)/)
-    await expect(run(office(), 'DELETE FROM "WorkOrderSize" WHERE id = $1::uuid', seeded.cellIds['RED-54'])).rejects.toThrow(/size quantities are frozen/)
+    // B-SA-005 (R1, "Lower to the order"): a RELEASED or IN_PROGRESS cell may now go down or go, never below what is already cut,
+    // bundled or on a cut order (order-apply.pg holds the rule both ways); BLK-52 is bundled, so it stays.
+    await expect(run(office(), 'DELETE FROM "WorkOrderSize" WHERE id = $1::uuid', seeded.cellIds['BLK-52'])).rejects.toThrow(/goes down only to what is already cut, bundled or on a cut order/)
     await expect(
       insert(office(), 'WorkOrderSize', { id: randomUUID(), siteId: A.siteA, workOrderId: wo, styleId: seeded.styleId, colourwayId: A.colourwayBLK, size: '56', quantity: 1, salesOrderLineId: A.lineBLK, partyId: A.P1 }),
     ).rejects.toThrow(/size quantities are frozen/)

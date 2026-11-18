@@ -343,7 +343,7 @@ export async function proposeInCommand(tools: CommandTools, checked: ProposalChe
     after: { proposalId, orderLineId: line.id, siteId: site.id, planVersionId: checked.planVersionId, sizes, reasonCode: checked.reasonCode, reason: checked.reason, message: checked.message, recipients: checked.recipients, assigneeId },
     ...(checked.reason ? { reason: checked.reason } : {}),
   })
-  tools.emit({ type: 'order_promise.proposed', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId, siteId: site.id, sizes } })
+  tools.emit({ type: 'order_promise.proposed', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId, siteId: site.id, sizes, partyId: line.partyId /* B-SA-004: the order line's own customer */ } })
   return { proposalId, sizes }
 }
 
@@ -588,7 +588,7 @@ export async function acceptRepromise(caller: CommandCaller, proposalId: string,
       written.push({ id, size: row.size, promisedDate: row.promisedDate, kind: row.kind, reasonCode: row.reasonCode, backfill: row.backfill, words: promiseRowWords(row, today) })
     }
     if (written.length > 0) {
-      tools.emit({ type: 'order_promise.recorded', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, siteId: working ? site.id : null, rows: written.map((row) => ({ size: row.size, promisedDate: row.promisedDate, kind: row.kind })) } })
+      tools.emit({ type: 'order_promise.recorded', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, siteId: working ? site.id : null, rows: written.map((row) => ({ size: row.size, promisedDate: row.promisedDate, kind: row.kind })), partyId: line.partyId /* B-SA-004 */ } })
     }
     // The line's date (W1) follows its latest open size: the portal, the order and every W1 reader see the new promise.
     const after = [...rows, ...written.map((row) => ({ id: row.id, size: row.size, promisedDate: row.promisedDate, kind: row.kind, promisedAt: row.backfill ? line.order.createdAt : at }))]
@@ -644,7 +644,7 @@ export async function acceptRepromise(caller: CommandCaller, proposalId: string,
       before: { sizes: fresh.sizes.map((entry) => ({ size: entry.size, current: entry.from })) },
       after: { proposalId: fresh.id, decision: 'ACCEPTED', told: body.tell, outboundId, rows: written.length, lineDate: followed, /* B-PR-28 */ askedCustomer: asked?.requestId ?? null },
     })
-    tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'ACCEPTED', told: body.tell } })
+    tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'ACCEPTED', told: body.tell, partyId: line.partyId /* B-SA-004 */ } })
     return { written, told: body.tell, outboundId, lineDate: followed, brandRequestId: asked?.requestId ?? null }
   })
   // B-PR-28: the link of the customer's question, once (a replay never hands it again: the token is not kept).
@@ -662,7 +662,7 @@ export async function declineRepromise(caller: CommandCaller, proposalId: string
     const fresh = await stillWaiting(tools, context, proposal)
     await closeTask(tools, context, fresh, 'CANCELLED')
     tools.audit({ action: DECISION_ACTIONS.DECLINED, recordType: 'SalesOrder', recordId: line.orderId, companyId: line.companyId, siteId: site.id, after: { proposalId: fresh.id, decision: 'DECLINED' }, reason })
-    tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'DECLINED', told: false } })
+    tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'DECLINED', told: false, partyId: line.partyId /* B-SA-004 */ } })
     return { proposalId: fresh.id }
   })
   return { replayed: outcome.replayed, proposal: await proposalAfter(caller, proposalId) }
@@ -675,7 +675,7 @@ export async function withdrawRepromise(caller: CommandCaller, proposalId: strin
     const fresh = await stillWaiting(tools, context, proposal)
     await closeTask(tools, context, fresh, 'CANCELLED')
     tools.audit({ action: DECISION_ACTIONS.WITHDRAWN, recordType: 'SalesOrder', recordId: line.orderId, companyId: line.companyId, siteId: site.id, after: { proposalId: fresh.id, decision: 'WITHDRAWN' } })
-    tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'WITHDRAWN', told: false } })
+    tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'WITHDRAWN', told: false, partyId: line.partyId /* B-SA-004 */ } })
     return { proposalId: fresh.id }
   })
   return { replayed: outcome.replayed, proposal: await proposalAfter(caller, proposalId) }

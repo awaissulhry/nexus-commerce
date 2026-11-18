@@ -107,7 +107,7 @@ async function setPodInCommand(tools: CommandTools, shipmentId: string, given: {
     siteId: current.siteId,
     after: { via, signedBy: data.podSignedBy !== undefined, signedAt: data.podAt ? toUtcIso(data.podAt) : null, fileId: data.podFileId ?? null },
   })
-  tools.emit(eventFor(podEvent, { subject: shipmentId, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId, number: current.number, via, image: (data.podFileId ?? current.podFileId) !== null } }))
+  tools.emit(eventFor(podEvent, { subject: shipmentId, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId, number: current.number, via, image: (data.podFileId ?? current.podFileId) !== null, partyId: current.partyId /* B-SA-004 */ } }))
   return { current, set: Object.keys(data) }
 }
 

@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/order-apply.prisma (rules: src/ownership.ts; roles: src/roles.ts). B-SA-005 (sales page plan, schema wave \"sales page 1/1\"; lead picks P6', R1, R10; 13-backend B4b): the office (factory_runtime) proposes, applies, declines and makes stale the changes an accepted change of a sales order leaves to do in its work orders, through apps/factory-api's modules/production/work-order-changes, always with command() (B-SA-041); the API keeps staff to the companies and customers their grants reach (the office role is walled by tenant only; partyId is the order's customer, the brand wall's filter). Portal and link sessions read nothing here (a customer reads its order, never the work orders behind it), nor does the floor (it is told by a note on its work order, B-SA-053). No money column, no personal data (the proposer and the decider are office people). Never deleted (the …_order_apply_guards triggers, for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "WorkOrderChange": {
+      "about": "The office proposes a change of one work order of an order (LOWER_TO_ORDER or MAKE_MORE, its cells and the extra pieces' outcome, written once), records a failed apply's words while it waits, and decides it once: APPLIED, DECLINED (left as is, in words) or STALE (what it carries out was put back). It reads every change of the tenant (the API scopes it by company, site and customer). Office only: no portal, floor or link grant.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

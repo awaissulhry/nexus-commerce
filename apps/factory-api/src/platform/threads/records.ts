@@ -440,6 +440,19 @@ export async function wallScopeOf(client: FactoryClient | CommandTx, thread: Thr
 }
 // ---- end B-PR-08a
 
+// ---- B-SA-002 (Sales page plan P17'): the customer a live message about a record's thread, followers or files names
+/**
+ * The party a live event about this scope's record names (events/live.ts reachesParties): its wall party (a work order's, hold's
+ * or NCR's customer) or its party; none for the every-party marker (several customers, or customer work of none) and for a record
+ * of no customer — then only people who reach every customer receive the message (fails closed). Always the record's own, read
+ * on the server (a thread row, a resolver, wallScopeOf), never a caller's value.
+ */
+export function livePartyOf(scope: WallScope | null | undefined): string | null {
+  const party = wallPartyOf(scope)
+  return party === EVERY_PARTY_MARKER ? null : party
+}
+// ---- end B-SA-002
+
 let extra: Readonly<Record<string, RecordResolver>> = {}
 
 /**
