@@ -511,6 +511,24 @@ describe('B-PR-18 the list’s file and the urgency switch', { timeout: SLOW_TES
     expect(italian.response.body).toContain('Urgenza')
   })
 
+  // ---- F-PR-23a: the bulk bar's Export — only the picked own rows; an id of A among them is neither written nor named (PW-12).
+  it('F-PR-23a: ?orderIds= writes only the picked own rows; an id of A among them matches nothing', async () => {
+    const file = await browsers.beta.get(`/portal/production?format=csv&orderIds=${beta2.orderId},${w.a.salesOrderId}`)
+    seenByB.push({ url: 'csv picked', body: file.response.body })
+    expect(file.status).toBe(200)
+    const content = file.response.body
+    expect(content).toContain(beta2.customerRef)
+    expect(content).not.toContain('SEED-B-PO-1')
+    expect(findMarkers(content, aMarkers)).toEqual([])
+    // A's order alone: an empty file of B's (no row), never A's.
+    const alone = await browsers.beta.get(`/portal/production?format=csv&orderIds=${w.a.salesOrderId}`)
+    seenByB.push({ url: 'csv A alone', body: alone.response.body })
+    expect(alone.status).toBe(200)
+    expect(findMarkers(alone.response.body, aMarkers)).toEqual([])
+    expect(alone.response.body).not.toContain(beta2.customerRef)
+  })
+  // ---- end F-PR-23a
+
   it('urgency off (R-46): no urgency in the read, no urgency chip, the list by the day sent; the marks stay kept', async () => {
     await setLimits(ids.a, 'PROGRESS', false, 3)
     try {

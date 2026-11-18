@@ -220,6 +220,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   progress (OrderPage: portal.comment + production; StatusTab F-PR-24 block: the chip and "Order files (n)" from the order's
   documents read, "All in Documents (n)") and from a My production row's ⋯ (the row's chip in the Waiting on cell). F-PR-23a opens
   the same hook with N orders.
+- F-PR-23a `src/portal/customer/production/bulk/` — the bulk bar on My production: `model.ts` (pure: picked rows, the bar — at
+  most five actions, More ▾, ≤ 50 —, the review before Send of Mark urgent / Mark regular / Move to top as the API decides them,
+  results per row, the Done line, Undo words, the zip's words and name), `api.ts` (B-PR-46a withdraw of an asked batch, B-PR-46b
+  files zip), `useBulk.ts` (THE container: selection, review, one key per body, Undo = urgency undo + asks withdrawn, Download
+  files, Export = `GET /portal/production?format=csv&orderIds=`), `../view/BulkBar.tsx` (the frame's selection actions; a phone
+  keeps two), `../view/BulkReview.tsx` (DS ReviewChangesModal: names each order, Now → New + why, result per row, Undo). A single
+  row's Mark urgent that becomes "Urgent – asked" (B-PR-46a) reads so with Undo of the ask (`markedNotice` `undoAsks`).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every

@@ -130,3 +130,16 @@
   flex-direction: column;
   min-width: 0;
 }
+
+/* ---- F-PR-23a: the review before Send of a bulk mark or move — the line under the title, a send that did not go, the need-by day */
+.fw-pprod-bulk-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pprod-bulk-lead > p {
+  margin: 0;
+}
+/* ---- end F-PR-23a */

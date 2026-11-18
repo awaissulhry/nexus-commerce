@@ -117,6 +117,8 @@ export interface ListQuery {
   readonly chip: ProductionChip
   readonly q?: string | undefined
   readonly locale?: ExportLocale | undefined
+  /** F-PR-23a: the file ("Export") of these own rows only (the bulk bar's selection); the JSON list ignores it. */
+  readonly orderIds?: readonly string[] | undefined
 }
 
 /** What a production read is from: the partner's own rows first, then the office's facts of exactly those orders. */
@@ -435,7 +437,10 @@ const ROWS_WORDS = (count: number): Words => ({ it: `${count} ${count === 1 ? 'o
 /** GET /portal/production?format=csv: every row of the chip and search as a CSV file in the person's language. */
 export async function productionCsv(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date): Promise<{ bytes: Uint8Array; fileName: string; contentType: string }> {
   const read = await readProduction(app, request, now)
-  const { items } = await listRows(read, query, now)
+  const listed = (await listRows(read, query, now)).items
+  // F-PR-23a: the bulk bar's Export names its picked rows; only its own rows are listed, so another's id matches none.
+  const picked = query.orderIds
+  const items = picked ? listed.filter((row) => picked.includes(row.id)) : listed
   const locale: ExportLocale = query.locale ?? (read.reader.session.person.locale === 'it' ? 'it' : 'en')
   const say = (words: Words) => words[locale]
   const urgencyOn = read.settings.urgencyOn

@@ -22,6 +22,11 @@ import '../production.css'
 import { problemChipOf } from '../problem/model'
 import { ReportProblemDialog, type ReportProblemActions, type ReportProblemModel } from '../problem/view/ReportProblemDialog'
 // ---- end F-PR-24
+// ---- F-PR-23a: the bulk bar (box, x, Shift-click; Select on a phone's cards) and its review before Send
+import type { BulkBar } from '../bulk/model'
+import { BulkBarButtons, type BulkBarActions } from './BulkBar'
+import { BulkReview, type BulkReviewActions, type BulkReviewModel } from './BulkReview'
+// ---- end F-PR-23a
 
 /**
  * F-PR-11 — Portal › Production › My production (production plan §5; 06-tree B.1; 09-design (d); 17-web-r2 §1.4): every order
@@ -71,6 +76,14 @@ export interface ProductionListModel {
   /** The Report a problem dialog, open. */
   problem?: ReportProblemModel | null
   // ---- end F-PR-24
+  // ---- F-PR-23a
+  /** The picked rows' ids (absent: the list has no boxes). */
+  selected?: readonly string[]
+  /** The bulk bar of the picked rows (null: nothing picked). */
+  bulk?: BulkBar | null
+  /** The review before Send of a bulk mark or move, open. */
+  review?: BulkReviewModel | null
+  // ---- end F-PR-23a
 }
 
 export interface ProductionListActions {
@@ -90,6 +103,12 @@ export interface ProductionListActions {
   // F-PR-24
   onReport?: (row: ProductionRow) => void
   problem?: ReportProblemActions
+  // F-PR-23a
+  onSelect?: (ids: string[]) => void
+  bulk?: BulkBarActions
+  review?: BulkReviewActions
+  /** Undo of what a single Mark urgent asked of us ("Urgent – asked"). */
+  onUndoAsks?: (batchId: string) => void
 }
 
 export function ProductionListView({ model, actions }: { model: ProductionListModel; actions?: ProductionListActions }) {
@@ -310,6 +329,11 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
                 <Button size="sm" heldReason={model.undoHeld ?? null} onClick={() => actions?.onUndo?.(notice.undo!)}>
                   {t('notice.undo')}
                 </Button>
+              ) : notice.undoAsks ? (
+                // F-PR-23a: a single mark asked of us: Undo withdraws the "Urgent – asked".
+                <Button size="sm" heldReason={model.undoHeld ?? null} onClick={() => actions?.onUndoAsks?.(notice.undoAsks!)}>
+                  {t('notice.undo')}
+                </Button>
               ) : null}
               <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
                 {t('notice.hide')}
@@ -383,7 +407,11 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
         cards={{ hrefOf: (row) => rowHref(model.prefix, row), fields: { order: { role: 'title' }, ...(urgencyOn ? { urgency: { role: 'subtitle' as const } } : {}), actions: { role: 'actions' } } }}
         groups={groups}
         keysOpen={model.keysOpen}
+        /* F-PR-23a: the boxes and the bar on the first pick (the frame draws "3 selected" and Clear) */
+        {...(model.selected ? { selection: { selected: model.selected, onChange: (ids: string[]) => actions?.onSelect?.(ids), actions: model.bulk ? <BulkBarButtons bar={model.bulk} actions={actions?.bulk} /> : null } } : {})}
       />
+      {/* F-PR-23a */}
+      {model.review ? <BulkReview model={model.review} actions={actions?.review} /> : null}
       {model.dialog ? <UrgentOrderDialog model={model.dialog} rows={read?.items ?? []} actions={actions?.dialog} /> : null}
       {/* F-PR-24 */}
       {model.problem ? <ReportProblemDialog model={model.problem} actions={actions?.problem} /> : null}
