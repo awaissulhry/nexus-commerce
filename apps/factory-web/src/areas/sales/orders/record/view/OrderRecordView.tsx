@@ -15,7 +15,6 @@ import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, i
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
-import { DocumentsTab } from './DocumentsTab'
 import { LinesTab } from './LinesTab'
 import { MoneyTab } from './MoneyTab'
 import { ProductionTab } from './ProductionTab'
@@ -384,15 +383,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
               <ProductionTab order={order} model={model} actions={actions} />
             </div>
           )}
-          {/* F-SA-230: Changes — the confirmation and the customer's yes (#confirmation), then the amendments. */}
-          {model.tab === 'changes' && (
-            <div className="fw-so-merged">
-              <section id="confirmation" className="fw-so-anchor" aria-label={t('docs.acceptedTitle')}>
-                <DocumentsTab order={order} model={model} actions={actions} />
-              </section>
-              <ChangesTab order={order} model={model} actions={actions} />
-            </div>
-          )}
+          {/* F-SA-230 / F-SA-236: Changes — one newest-first story: waiting on us / on the customer, the confirmation and the customer's
+              yes (#confirmation), the history, what can still change. */}
+          {model.tab === 'changes' && <ChangesTab order={order} model={model} actions={actions} />}
           {/* F-SA-230: Money — totals, deposit, payment schedule, invoices & credit notes (#invoices), the margin (#margin, by its grain). */}
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
           {/* F-SA-230: Shipments — left to ship, shipments, deliveries, complaints & returns; the money is on Money. */}

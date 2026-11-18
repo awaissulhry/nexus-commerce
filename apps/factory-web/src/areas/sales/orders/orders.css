@@ -712,3 +712,12 @@ a.fw-so-countbtn:focus-visible {
 .fw-so-countbtn.is-plain {
   border-style: dashed;
 }
+/* F-SA-236: the confirmation is a row (it opens in the thread's viewer), never a tall PDF block on the page. */
+.fw-so-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}

@@ -16,6 +16,8 @@ import type { ProductionState } from './overview/model'
 import type { LiveState } from '../hooks'
 import type { ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234
 import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: the one HealthCard
+import type { BrandRequest } from '../../../home/approvals/requests/api' // F-SA-236
+import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-SA-236
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -147,6 +149,10 @@ export interface OrderRecordModel {
   production?: ProductionState | null
   /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
   readiness?: Part<ReadinessRow[]> | null
+  /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
+  requests?: Part<BrandRequest[]> | null
+  /** F-SA-236: the approvals we asked the customer on this order (partners.approvals.view); null: not read (no right, or not here). */
+  askedOfCustomer?: Part<OfficeRequest[]> | null
   /** F-SA-235: the order's health on Production (the work order record's HealthCard; workorders.view); absent: not read. */
   health?: HealthModel | null
   /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
@@ -171,7 +177,7 @@ export interface OrderRecordActions {
   /** B-W2a-80: the schedule card's verbs. */
   scheduleSteps?: ScheduleStepsActions
   onRetry?: () => void
-  onRetryPart?: (part: 'workOrders' | 'settlement' | 'sdi' | 'versions' | 'schedule' | 'amendments' | 'cancelCheck') => void
+  onRetryPart?: (part: 'workOrders' | 'settlement' | 'sdi' | 'versions' | 'schedule' | 'amendments' | 'cancelCheck' | 'requests') => void
   onReload?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void

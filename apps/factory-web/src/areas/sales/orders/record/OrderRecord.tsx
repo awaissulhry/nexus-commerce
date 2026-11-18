@@ -83,6 +83,9 @@ import { NOTES_NS } from '../../../production/_shared/notes/model'
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
 import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
 import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: the one HealthCard (moved to lib)
+// F-SA-236: this order's customer requests and the approvals we asked it (Changes).
+import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
+import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -198,24 +201,32 @@ function RecordContainer({ orderId }: { orderId: string }) {
       getSchedule(api, value.id)
         .then((answer) => setSchedule(part(answer)))
         .catch((error: unknown) => setSchedule({ value: null, problem: readProblem(error) }))
-      if (value.amendments.count === 0) setAmendments(part({ orderId: value.id, number: value.number, reapprovalNeededAt: value.reapprovalNeededAt, amendments: [] }))
-      else {
-        setAmendments((known) => known ?? PART_LOADING)
-        listAmendments(api, value.id)
-          .then((answer) => {
-            setAmendments(part(answer))
-            // A line the order no longer holds is named by its style (codes): read the styles it does not hold.
-            const own = new Set(value.lines.map((line) => line.styleId))
-            const missing = [...new Set(answer.amendments.flatMap((entry) => entry.diff.lines.map((line) => line.styleId)))].filter((styleId) => !own.has(styleId))
-            for (const styleId of missing)
-              getStyle(api, styleId)
-                .then((style) => setChangeStyles((known) => ({ ...known, [styleId]: style })))
-                .catch(() => setChangeStyles((known) => ({ ...known, [styleId]: null })))
-          })
-          .catch((error: unknown) => setAmendments({ value: null, problem: readProblem(error) }))
-      }
+      // F-SA-236: the amendments (with their frozen snapshots) are read when "Before → after" opens, no longer on every read: Changes'
+      // history comes from the ONE `…/changes` read (the depth's).
+      setAmendments(null)
     },
     [api, can.viewWorkOrders, can.viewInvoices, can.viewQuotes],
+  )
+
+  // F-SA-236: the amendments' snapshots for "Before → after" (read when the dialog opens; a line the order no longer holds is named
+  // by its style: those styles are read too).
+  const readAmendments = useCallback(
+    (value: Order) => {
+      if (value.amendments.count === 0) return setAmendments(part({ orderId: value.id, number: value.number, reapprovalNeededAt: value.reapprovalNeededAt, amendments: [] }))
+      setAmendments((known) => known ?? PART_LOADING)
+      listAmendments(api, value.id)
+        .then((answer) => {
+          setAmendments(part(answer))
+          const own = new Set(value.lines.map((line) => line.styleId))
+          const missing = [...new Set(answer.amendments.flatMap((entry) => entry.diff.lines.map((line) => line.styleId)))].filter((styleId) => !own.has(styleId))
+          for (const styleId of missing)
+            getStyle(api, styleId)
+              .then((style) => setChangeStyles((known) => ({ ...known, [styleId]: style })))
+              .catch(() => setChangeStyles((known) => ({ ...known, [styleId]: null })))
+        })
+        .catch((error: unknown) => setAmendments({ value: null, problem: readProblem(error) }))
+    },
+    [api],
   )
 
   const setValue = useCallback((next: Order) => {
@@ -461,6 +472,28 @@ function RecordContainer({ orderId }: { orderId: string }) {
   )
   const health = useBrandHealth(api, healthOwner, session.permissions, (words) => setNotice({ tone: 'success', words: { key: words.key === 'health.clearedNotice' ? 'notice.healthCleared' : 'notice.healthRaised' } }))
   // ---- end F-SA-235
+  // ---- F-SA-236: the order's customer requests (every state; the API's wall) and the approvals we asked it (partners.approvals.view),
+  // read while Changes shows, again after each change of the order.
+  const [requests, setRequests] = useState<Part<BrandRequest[]> | null>(null)
+  const [askedOfCustomer, setAskedOfCustomer] = useState<Part<OfficeRequest[]> | null>(null)
+  const mayAsked = session.permissions.includes('partners.approvals.view')
+  const readyId = order.status === 'ready' ? order.value.id : null
+  const readyVersion = order.status === 'ready' ? order.value.version : null
+  const readRequests = useCallback(() => {
+    if (!readyId) return
+    setRequests((known) => known ?? PART_LOADING)
+    listOrderRequests(api, readyId)
+      .then((rows) => setRequests(part(rows)))
+      .catch((error: unknown) => setRequests({ value: null, problem: readProblem(error) }))
+    if (!mayAsked) return
+    readRecordRequests(api, { type: 'SalesOrder', id: readyId })
+      .then((answer) => setAskedOfCustomer(part(answer.requests)))
+      .catch((error: unknown) => setAskedOfCustomer({ value: null, problem: readProblem(error) }))
+  }, [api, readyId, mayAsked])
+  useEffect(() => {
+    if (tab === 'changes') readRequests()
+  }, [tab, readRequests, readyVersion])
+  // ---- end F-SA-236
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -483,6 +516,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     production: production.state, // F-SA-232
     readiness, // F-SA-234
     health: healthOwner ? health.model : null, // F-SA-235
+    requests, // F-SA-236
+    askedOfCustomer,
     overviewLine,
     liveState,
     changed,
@@ -596,6 +631,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
               .catch((error: unknown) => setCancelCheck({ value: null, problem: readProblem(error) }))
             return
           }
+          if (which === 'amendments' && value) return readAmendments(value)
+          if (which === 'requests') return readRequests()
           if (value) loadParts(value)
         },
         onReload: () => void load(),
@@ -607,6 +644,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
           setRecorded(null)
           setClosedLines(null)
           setCopied(null)
+          // F-SA-236: Before → after reads the amendments' snapshots as it opens.
+          if (next?.kind === 'compare' && current.current && !amendments?.value) readAmendments(current.current)
           if (next?.kind === 'cancel') {
             setCancelCheck(PART_LOADING)
             getCancelCheck(api, orderId)

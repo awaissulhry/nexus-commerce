@@ -134,6 +134,13 @@ export function listWaitingRequests(api: ApiClient, signal?: AbortSignal): Promi
   return api.get('/production/brand-requests', { query: { status: 'WAITING', limit: REQUEST_READ_LIMIT }, schema: listSchema, signal })
 }
 
+// ---- F-SA-236 (sales page plan N2, N3, P5): one order's requests, every state — the sales order page's Changes tab (waiting ones on
+// top, the rest in its history). The same walled read (the API decides whose requests come back); `orderId` only narrows it.
+export async function listOrderRequests(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<BrandRequest[]> {
+  return (await api.get('/production/brand-requests', { query: { orderId, status: 'ALL', limit: REQUEST_READ_LIMIT }, schema: listSchema, signal })).items
+}
+// ---- end F-SA-236
+
 /** One batch's requests, every state (the batch window lists them all, the answered ones with their state). */
 export async function listBatch(api: ApiClient, batchId: string, signal?: AbortSignal): Promise<BrandRequest[]> {
   return (await api.get('/production/brand-requests', { query: { batchId, status: 'ALL', limit: REQUEST_READ_LIMIT }, schema: listSchema, signal })).items

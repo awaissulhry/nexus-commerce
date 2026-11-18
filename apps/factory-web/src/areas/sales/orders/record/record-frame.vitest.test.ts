@@ -73,6 +73,17 @@ describe('the order on RecordFrame', () => {
     expect(shipments).not.toContain('Invoices and credit notes')
   })
 
+  it('F-SA-236: Changes — waiting on us / on the customer, the confirmation as a row at #confirmation, the history, what can still change', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('w2b-323-documents', locale)
+      expect(html).toContain('id="confirmation"')
+      const text = textOf(html)
+      for (const words of locale === 'en' ? ['Waiting on us', 'Waiting on the customer', "Confirmation & the customer's yes", 'Order confirmation v2', 'How the customer said yes', 'History', 'What can still change'] : ['Tocca a noi', 'Tocca al cliente', 'Conferma e sì del cliente', "Conferma d'ordine v2", 'Cronologia', 'Cosa si può ancora cambiare']) expect(text, words).toContain(words)
+    }
+    expect(draw('w2b-323-documents')).not.toMatch(/min\(70vh/)
+    expect(landingOf('documents')).toMatchObject({ tab: 'changes', anchor: 'confirmation' })
+  })
+
   it('F-SA-230: the band — the health chip only when Late (never "On track"), no "Late N days" banner; Made to measure on an MTM order', () => {
     const late = draw('dates')
     const band = late.slice(0, late.indexOf('class="fw-rcf-body"'))

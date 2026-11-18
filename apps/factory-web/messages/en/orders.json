@@ -731,16 +731,11 @@
     "acceptedTitle": "Accepted quote",
     "openQuote": "Open quote {number}",
     "noQuote": {
-      "title": "Typed by the office — no quote",
-      "body": "This order did not come from an accepted quote."
+      "title": "Typed by the office — no quote"
     },
     "noQuoteRight": "From quote {number} v{revision}. Its evidence is shown to people who see quotes.",
     "noEvidence": "Quote {number} v{revision} has no acceptance evidence on record.",
-    "version": "Version",
     "versionValue": "{number} v{revision}",
-    "signer": "Signed by",
-    "acceptedAt": "Accepted",
-    "channel": "How",
     "channelValue": {
       "LINK": "On the customer's link",
       "OFFICE": "Recorded by the office"
@@ -1098,23 +1093,12 @@
     }
   },
   "changes": {
-    "title": "Amendments",
-    "subtitle": "Each change to the confirmed order, numbered, with the order before and after.",
-    "tableLabel": "Amendments of this order",
     "empty": {
       "title": "No changes since confirmation",
       "body": "An amendment appears here once it is applied (Lines › Amend order).",
       "final": "The order never changed after its confirmation."
     },
-    "waiting": "Waiting for the customer to accept the changed order (since {date}). The acceptance link is not there yet: tell the customer yourself.",
     "col": {
-      "revision": "Revision",
-      "madeBy": "Made by",
-      "reason": "Reason",
-      "lines": "Lines",
-      "money": "Money change",
-      "reacceptance": "Customer",
-      "open": "Snapshot",
       "line": "Line",
       "change": "Change",
       "sizes": "Sizes old → new",
@@ -1158,7 +1142,41 @@
     "byAt": "{name}, {date}",
     "reason": "Reason",
     "money": "Net",
-    "reacceptance": "Customer re-acceptance"
+    "reacceptance": "Customer re-acceptance",
+    "onUs": {
+      "title": "Waiting on us",
+      "approvals": "Open Approvals ›",
+      "nothing": "Nothing waits on us",
+      "countered": "Counter-offer sent · waits for the customer",
+      "answer": "Answer in Approvals ›"
+    },
+    "onCustomer": {
+      "title": "Waiting on the customer",
+      "nothing": "Nothing waits on the customer",
+      "reaccept": "The changed order waits for the customer's new yes",
+      "since": "since {date}",
+      "due": "due {date}"
+    },
+    "confirmation": {
+      "title": "Confirmation & the customer's yes",
+      "yes": "How the customer said yes"
+    },
+    "history": {
+      "title": "History",
+      "chipsLabel": "Show in the history",
+      "chips": {
+        "all": "All",
+        "requests": "Requests",
+        "amendments": "Amendments",
+        "confirmations": "Confirmations"
+      },
+      "asked": "Request asked · {kind}",
+      "by": "by {name}",
+      "priced": "Priced change",
+      "made": "Confirmation v{version} made",
+      "sent": "Confirmation v{version} sent",
+      "noneHere": "Nothing of this kind yet"
+    }
   },
   "compare": {
     "title": "Revision {revision} of {number}: before → after",

@@ -61,6 +61,7 @@ import { confirmHeld, draftKey, headerFromAddress, manualBody, newOrderAddress, 
 import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
 import { isMadeToMeasure, lateDaysOf, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
+import { HISTORY_CHIPS, historyFor, historyOf, waitingOnCustomerOf, waitingOnUsOf } from './record/changes/model' // F-SA-236
 import { designScreen as listScreen } from './list/fixtures'
 // B-TH-201
 import { getBoard, listOrders } from './api'
@@ -813,3 +814,53 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
   })
 })
 // ---- end F-SA-230
+
+// ---- F-SA-236: Changes, one newest-first story — what waits, the history and its chips ---------------------------------------------
+describe('F-SA-236: Changes — waiting on us, waiting on the customer, the history chips', () => {
+  const request = (id: string, status: string, askedAt: string, extra: Record<string, unknown> = {}) => ({ id, status, askedAt, kind: 'CHANGE', answeredAt: null, withdrawnAt: null, counter: null, note: null, askedBy: 'Dora Esempio', answeredBy: null, ...extra }) as never
+  const change = (id: string, revision: number, at: string, priced = false) => ({ id, revision, reason: 'r', createdAt: at, createdBy: 'Bea Esempio', priced, diff: { lines: [{ change: 'CHANGED', piecesBefore: 8, piecesAfter: 9 }] }, changeAmount: 4500, feeAmount: null, deposit: null, yes: { state: 'NOT_ASKED', taskId: null, reason: null }, customer: { decision: priced ? 'REFUSED' : 'NOT_NEEDED', requestId: null, answeredAt: null }, putBack: { may: true } }) as never
+
+  it('waiting on us: open and countered requests, oldest first; on the customer: the new yes, our counters, open approvals we asked', () => {
+    const requests = [request('b', 'OPEN', '2026-11-18T09:00:00Z'), request('a', 'COUNTERED', '2026-11-17T09:00:00Z', { counter: { at: '2026-11-17T12:00:00Z' } }), request('c', 'ACCEPTED', '2026-11-10T09:00:00Z', { answeredAt: '2026-11-11T09:00:00Z' })]
+    expect(waitingOnUsOf(requests).map((entry) => entry.id)).toEqual(['a', 'b'])
+    const approvals = [{ id: 'x', kind: 'ARTWORK', status: 'OPEN', question: 'Approve the label artwork', createdAt: '2026-11-15T09:00:00Z', dueAt: '2026-11-20T18:00:00Z' }, { id: 'y', kind: 'ARTWORK', status: 'APPROVED', question: 'old', createdAt: '2026-11-01T09:00:00Z', dueAt: '2026-11-02T18:00:00Z' }] as never
+    const waits = waitingOnCustomerOf(requests, approvals, { id: 'o', reapprovalNeededAt: '2026-11-16T10:00:00Z' })
+    expect(waits.map((entry) => entry.kind)).toEqual(['reaccept', 'counter', 'approval'])
+    expect(waits[2]).toMatchObject({ question: 'Approve the label artwork', status: 'OPEN' })
+  })
+
+  it('the history: requests asked and answered, amendments (the changes read; priced with Put back), confirmations — newest first; chips filter', () => {
+    const entries = historyOf({
+      requests: [request('c', 'ACCEPTED', '2026-11-10T09:00:00Z', { answeredAt: '2026-11-11T09:00:00Z' })],
+      changes: [change('ch1', 1, '2026-11-12T16:48:00Z'), change('ch2', 2, '2026-11-14T10:00:00Z', true)],
+      amendments: null,
+      confirmation: { versions: [{ id: 'v1', version: 1, createdAt: '2026-11-03T11:20:00Z', createdBy: null }], sentAt: '2026-11-03T11:30:00Z', sentVersion: 1 } as never,
+    })
+    expect(entries.map((entry) => entry.kind)).toEqual(['amendment', 'amendment', 'requestAnswered', 'requestAsked', 'confirmationSent', 'confirmationMade'])
+    const priced = entries[0]!
+    expect(priced.kind === 'amendment' && priced.putBack).toBe(true)
+    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'confirmations'])
+    expect(historyFor(entries, 'requests').map((entry) => entry.kind)).toEqual(['requestAnswered', 'requestAsked'])
+    expect(historyFor(entries, 'amendments')).toHaveLength(2)
+    expect(historyFor(entries, 'confirmations')).toHaveLength(2)
+    expect(historyFor(entries, 'all')).toHaveLength(entries.length)
+    // No changes read here (a design case): the amendments read stands in; never both.
+    const fallback = historyOf({ requests: [], changes: null, amendments: AMENDMENTS.amendments, confirmation: null })
+    expect(fallback.filter((entry) => entry.kind === 'amendment')).toHaveLength(AMENDMENTS.amendments.length)
+  })
+
+  it('one changes read: the page reads the amendments only when Before → after opens; the confirmation is a row, never the 70vh PDF', () => {
+    const container = readFileSync(new URL('./record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("if (next?.kind === 'compare' && current.current && !amendments?.value) readAmendments(current.current)")
+    const loadParts = container.slice(container.indexOf('const loadParts = useCallback('), container.indexOf('const readAmendments = useCallback('))
+    expect(loadParts).not.toContain('listAmendments(')
+    const card = readFileSync(new URL('./confirmation/view/ConfirmationCard.tsx', import.meta.url), 'utf8')
+    expect(card).not.toContain('PdfViewer')
+    expect(card).toContain('frame.openFiles')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['changes.onUs.title', 'changes.onUs.nothing', 'changes.onUs.countered', 'changes.onCustomer.title', 'changes.onCustomer.reaccept', 'changes.confirmation.title', 'changes.confirmation.yes', 'changes.history.title', 'changes.history.priced', ...HISTORY_CHIPS.map((chip) => `changes.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-SA-236

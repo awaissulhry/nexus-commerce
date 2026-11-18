@@ -731,16 +731,11 @@
     "acceptedTitle": "Preventivo accettato",
     "openQuote": "Apri il preventivo {number}",
     "noQuote": {
-      "title": "Inserito dall'ufficio — nessun preventivo",
-      "body": "Questo ordine non viene da un preventivo accettato."
+      "title": "Inserito dall'ufficio — nessun preventivo"
     },
     "noQuoteRight": "Dal preventivo {number} v{revision}. Le sue prove sono visibili a chi vede i preventivi.",
     "noEvidence": "Il preventivo {number} v{revision} non ha prove di accettazione registrate.",
-    "version": "Versione",
     "versionValue": "{number} v{revision}",
-    "signer": "Firmato da",
-    "acceptedAt": "Accettato",
-    "channel": "Come",
     "channelValue": {
       "LINK": "Dal link del cliente",
       "OFFICE": "Registrato dall'ufficio"
@@ -1098,23 +1093,12 @@
     }
   },
   "changes": {
-    "title": "Modifiche",
-    "subtitle": "Ogni cambiamento all'ordine confermato, numerato, con l'ordine prima e dopo.",
-    "tableLabel": "Modifiche di questo ordine",
     "empty": {
       "title": "Nessuna modifica dalla conferma",
       "body": "Una modifica compare qui appena applicata (Righe › Modifica ordine).",
       "final": "L'ordine non è mai cambiato dopo la conferma."
     },
-    "waiting": "In attesa che il cliente accetti l'ordine modificato (dal {date}). Il link di accettazione non c'è ancora: avvisa tu il cliente.",
     "col": {
-      "revision": "Revisione",
-      "madeBy": "Fatta da",
-      "reason": "Motivo",
-      "lines": "Righe",
-      "money": "Variazione",
-      "reacceptance": "Cliente",
-      "open": "Istantanea",
       "line": "Riga",
       "change": "Cambiamento",
       "sizes": "Taglie prima → dopo",
@@ -1158,7 +1142,41 @@
     "byAt": "{name}, {date}",
     "reason": "Motivo",
     "money": "Imponibile",
-    "reacceptance": "Nuova accettazione del cliente"
+    "reacceptance": "Nuova accettazione del cliente",
+    "onUs": {
+      "title": "Tocca a noi",
+      "approvals": "Apri Approvazioni ›",
+      "nothing": "Niente aspetta noi",
+      "countered": "Controproposta inviata · aspetta il cliente",
+      "answer": "Rispondi in Approvazioni ›"
+    },
+    "onCustomer": {
+      "title": "Tocca al cliente",
+      "nothing": "Niente aspetta il cliente",
+      "reaccept": "L'ordine modificato aspetta il nuovo sì del cliente",
+      "since": "dal {date}",
+      "due": "entro il {date}"
+    },
+    "confirmation": {
+      "title": "Conferma e sì del cliente",
+      "yes": "Come ha detto sì il cliente"
+    },
+    "history": {
+      "title": "Cronologia",
+      "chipsLabel": "Mostra nella cronologia",
+      "chips": {
+        "all": "Tutto",
+        "requests": "Richieste",
+        "amendments": "Modifiche",
+        "confirmations": "Conferme"
+      },
+      "asked": "Richiesta · {kind}",
+      "by": "di {name}",
+      "priced": "Modifica a pagamento",
+      "made": "Conferma v{version} fatta",
+      "sent": "Conferma v{version} inviata",
+      "noneHere": "Ancora niente di questo tipo"
+    }
   },
   "compare": {
     "title": "Revisione {revision} di {number}: prima → dopo",
