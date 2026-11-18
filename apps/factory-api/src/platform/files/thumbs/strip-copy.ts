@@ -25,7 +25,8 @@ import { makeSmallPreview, smallKeyOf } from './small'
  *      how the small preview was made (RESIZED or COPIED, its size).
  *
  * Who runs it: the worker after `file.available` (thumbs/handler.ts) for every picture, and a portal's or a link's own
- * preview or download when the worker has not got to it yet (thumbs/outside.ts). Two at once: the first command wins, the
+ * preview or download when the worker has not got to it yet (thumbs/outside.ts), and the seeded files' bytes for each seeded
+ * picture (seed-bytes/seed-bytes.ts: the seed writes its rows without `file.available`). Two at once: the first command wins, the
  * other's object is removed. A HEIC picture (or a damaged one) gets no copy, so it is never shown outside the office.
  */
 
@@ -36,8 +37,25 @@ const SELECT = { id: true, companyId: true, contentType: true, sizeBytes: true, 
 
 const storeDown = (error: unknown): boolean => error instanceof GatewayRefusal || error instanceof GatewayCallFailed
 
+// fix-thumbs-1 (B-TH-063 for the seed): how each store call is made.
+export interface StripCopyOptions {
+  /**
+   * Makes one call to the store (default: once). The seeded files' bytes (seed-bytes/seed-bytes.ts) wait out the store
+   * account's rate limit with it, as their own puts do, so a refused call is not taken for a store that does not answer.
+   */
+  readonly storeCall?: <T>(call: () => Promise<T>) => Promise<T>
+}
+
+const once = <T>(call: () => Promise<T>): Promise<T> => call()
+
 /** Makes the picture's stripped copy unless it has one; returns what happened and the copy's key (null: none). */
-export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCaller, fileId: string): Promise<{ readonly outcome: StripOutcome; readonly key: string | null }> {
+export async function makeStrippedCopy(
+  runtime: FilesRuntime,
+  caller: CommandCaller,
+  fileId: string,
+  options: StripCopyOptions = {},
+): Promise<{ readonly outcome: StripOutcome; readonly key: string | null }> {
+  const storeCall = options.storeCall ?? once
   if (!isUuid(fileId)) throw new NotFoundError('File not found.')
   const row = await caller.withClient((client) => client.storedFile.findUnique({ where: { id: fileId }, select: SELECT }))
   if (!row) throw new NotFoundError('File not found.')
@@ -47,7 +65,7 @@ export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCal
   if (!isStrippable(row.contentType)) return { outcome: 'unsupported', key: null }
   let bytes: Buffer | null
   try {
-    bytes = await runtime.storage.read(caller, row.storeAccountId, row.storageKey, row.sizeBytes)
+    bytes = await storeCall(() => runtime.storage.read(caller, row.storeAccountId, row.storageKey, row.sizeBytes))
   } catch (error) {
     if (storeDown(error)) return { outcome: 'store_unavailable', key: null }
     throw error
@@ -61,7 +79,7 @@ export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCal
   // A PHOTO's key: never under `legal/` (a fiscal archive file is never a picture anyway).
   const key = storageKeyFor({ tenantId: tenantOf(contextOf(caller)), companyId: row.companyId, kind: 'PHOTO', now, random: randomUUID() })
   try {
-    await runtime.storage.put(caller, row.storeAccountId, { key, contentType: row.contentType, body, sha256 })
+    await storeCall(() => runtime.storage.put(caller, row.storeAccountId, { key, contentType: row.contentType, body, sha256 }))
   } catch (error) {
     if (storeDown(error)) return { outcome: 'store_unavailable', key: null }
     throw error
@@ -71,9 +89,9 @@ export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCal
   const small = makeSmallPreview(stripped.bytes, row.contentType)
   const smallBody = Buffer.from(small.bytes.buffer, small.bytes.byteOffset, small.bytes.byteLength)
   const smallKey = smallKeyOf(key)
-  const removeObject = (objectKey: string) => runtime.storage.remove(caller, row.storeAccountId, { key: objectKey, legalHold: false, retainUntil: null }, now).catch(() => {})
+  const removeObject = (objectKey: string) => storeCall(() => runtime.storage.remove(caller, row.storeAccountId, { key: objectKey, legalHold: false, retainUntil: null }, now)).catch(() => {})
   try {
-    await runtime.storage.put(caller, row.storeAccountId, { key: smallKey, contentType: row.contentType, body: smallBody, sha256: createHash('sha256').update(smallBody).digest('hex') })
+    await storeCall(() => runtime.storage.put(caller, row.storeAccountId, { key: smallKey, contentType: row.contentType, body: smallBody, sha256: createHash('sha256').update(smallBody).digest('hex') }))
   } catch (error) {
     await removeObject(key)
     if (storeDown(error)) return { outcome: 'store_unavailable', key: null }
