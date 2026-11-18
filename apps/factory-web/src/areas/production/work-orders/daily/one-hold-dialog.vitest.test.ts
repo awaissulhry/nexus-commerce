@@ -131,6 +131,17 @@ describe('F-PR-05b — on screen', () => {
     expect(textOf(draw('hold-customer-pause'))).toContain('Paused at the customer’s request')
   })
 
+  // ---- F-PR-16 (the browser walk): Enter sends only from the send button
+  it('Enter in a one-line field sends nothing: the fields of Put on hold and Release the hold sit in no form (the button and ⌘↵ send)', () => {
+    for (const id of ['hold-dialog-production', 'hold-lift']) {
+      const html = draw(id)
+      expect(html, id).toContain('<div class="fw-pr-dialog"')
+      expect(html, id).not.toMatch(/<form[^>]*fw-pr-dialog/)
+      expect(html, id).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
+    }
+  })
+  // ---- end F-PR-16
+
   it('the lift dialog says a standing quality hold keeps it held; without the right Release waits in words', () => {
     expect(textOf(draw('hold-lift'))).toContain('1 quality hold still stands')
     expect(draw('hold-lift-no-right')).toContain('production hold right')

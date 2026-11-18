@@ -140,7 +140,8 @@ export function HoldDialog({ numbers, workOrderIds, daily, actions }: { numbers:
         </Footer>
       }
     >
-      <form className="fw-pr-dialog" onSubmit={(event) => (event.preventDefault(), go?.())} onKeyDown={submitKeys(go)}>
+      {/* F-PR-16: no <form> — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
+      <div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>
         <Problem daily={daily} />
         <p>{kind === 'PRODUCTION' ? t('hold.bodyProduction') : t('hold.body')}</p>
         {numbers.length > 1 && <p className="fw-pr-hint">{numbers.join(' · ')}</p>}
@@ -191,7 +192,7 @@ export function HoldDialog({ numbers, workOrderIds, daily, actions }: { numbers:
           <li>{t('hold.floor')}</li>
           <li>{kind === 'PRODUCTION' ? t('hold.liftBy') : t('hold.releaseBy')}</li>
         </ul>
-      </form>
+      </div>
     </Modal>
   )
 }
@@ -219,7 +220,8 @@ function LiftHoldDialog({ holdId, daily, actions }: { holdId: string; daily: Dai
         </Footer>
       }
     >
-      <form className="fw-pr-dialog" onSubmit={(event) => (event.preventDefault(), go?.())} onKeyDown={submitKeys(go)}>
+      {/* F-PR-16: no <form> — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
+      <div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>
         <Problem daily={daily} />
         {!hold ? (
           daily.productionHolds?.problem ? (
@@ -241,7 +243,7 @@ function LiftHoldDialog({ holdId, daily, actions }: { holdId: string; daily: Dai
             {daily.productionHolds?.value && daily.productionHolds.value.qualityHoldsActive > 0 && <p className="fw-pr-hint">{t('liftHold.qualityStays', { count: daily.productionHolds.value.qualityHoldsActive })}</p>}
           </>
         )}
-      </form>
+      </div>
     </Modal>
   )
 }

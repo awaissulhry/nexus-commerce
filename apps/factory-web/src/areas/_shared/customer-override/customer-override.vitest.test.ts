@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs'
-import { createElement } from 'react'
+import { createElement, type ComponentType } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { APPROVAL_KINDS, KIND_RULES } from '@nexus/factory-domain/approvals-out/kinds'
 import { createApiClient } from '../../../lib/api/client'
 import { ApiError } from '../../../lib/api/errors'
 import { LOCALES } from '../../../lib/i18n/locales'
+import { leftKeys, renderView, textOf } from '../../../lib/record-thread/parts/testing' // F-PR-16
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
@@ -37,6 +38,7 @@ import {
   taskHref,
 } from './model'
 import { CustomerOverrideContext, CustomerOverrideSlot } from './slot'
+import { designScreen } from './fixtures' // F-PR-16
 
 /**
  * F-PR-09 — "Decide for <customer>" and "Reverse" on approvals asked of a customer (production plan §3 "No silent decisions",
@@ -312,3 +314,29 @@ describe('F-PR-09 — words (it, en) and where the part is mounted', () => {
     expect(source('./slot.tsx')).not.toMatch(/lib\/api|lib\/session/)
   })
 })
+
+// ---- F-PR-16 (the browser walk): Enter sends only from the send button; the dialogs have a design case
+describe('F-PR-16 — Decide for and Reverse on screen', () => {
+  const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(designScreen.view as ComponentType<{ model: unknown }>, designScreen.cases.find((item) => item.id === id)!.model, locale)
+
+  it('every case draws in both languages with no key left, and names nothing of another customer', () => {
+    for (const item of designScreen.cases)
+      for (const locale of LOCALES) {
+        const html = draw(item.id, locale)
+        expect(leftKeys(html, ['act', 'decide', 'decision', 'reverse', 'held', 'common', 'status']), `${item.id} ${locale}`).toEqual([])
+        expect(scanText(html, BRAND_ALPHA), `${item.id} ${locale}`).toEqual([])
+      }
+  })
+
+  it('Enter in the typed name sends nothing: the fields sit in no form (the send button and ⌘↵ send)', () => {
+    for (const id of ['decide', 'decide-refused', 'reverse']) {
+      const html = draw(id)
+      expect(html, id).toContain('<div class="fw-cov-form"')
+      expect(html, id).not.toContain('<form')
+      expect(html, id).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
+    }
+    expect(textOf(draw('decide'))).toContain('Decide for Brand Beta')
+    expect(textOf(draw('decide-closed'))).not.toContain('Why we decide')
+  })
+})
+// ---- end F-PR-16

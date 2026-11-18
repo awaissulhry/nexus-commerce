@@ -253,6 +253,16 @@ describe('F-PR-05b — the card on screen', () => {
     expect(text).toContain('1 more order was not changed.')
   })
 
+  // ---- F-PR-16 (the browser walk): Enter sends only from the send button
+  it('Enter in the reason field sends nothing: the dialog’s field sits in no form (Lock… and ⌘↵ send)', () => {
+    for (const id of ['customer-card-lock', 'customer-card-regular']) {
+      const html = draw(id)
+      expect(html, id).toContain('<div class="fw-pr-dialog"')
+      expect(html, id).not.toMatch(/<form[^>]*fw-pr-dialog/)
+    }
+  })
+  // ---- end F-PR-16
+
   it('a part that failed says so with Try again; one being read is a skeleton', () => {
     const text = textOf(draw('customer-card-failed'))
     expect(text).toContain('could not be read')
