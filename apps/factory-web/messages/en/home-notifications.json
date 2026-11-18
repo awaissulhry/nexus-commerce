@@ -336,6 +336,7 @@
         "customerAskedChange": "{customer} asks to change order {record}: answer in Approvals",
         "customerAskedSplit": "{customer} asks to ship what is ready of order {record}: answer in Approvals",
         "customerAskedSampleRound": "{customer} asks for another sample round on order {record}: answer in Approvals",
+        "customerAskedDesign": "{customer} asks to change the design of order {record}: answer in Approvals",
         "customerAskedRushMany": "{customer} asks to make {count} orders urgent, among them {record}: answer in Approvals",
         "customerAskedHoldMany": "{customer} asks to pause {count} orders, among them {record}: answer in Approvals",
         "customerAskedResumeMany": "{customer} asks to resume {count} orders, among them {record}: answer in Approvals",

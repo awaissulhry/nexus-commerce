@@ -44,7 +44,8 @@ export const INCOMING_KINDS = ['REQUEST', 'CATALOGUE_ORDER', 'CHANGE_REQUEST'] a
 export type IncomingKind = (typeof INCOMING_KINDS)[number]
 
 /** The kinds of change request Incoming lists (agreement T3): every other kind is answered in Home › Approvals alone. */
-export const INCOMING_CHANGE_KINDS = ['CHANGE', 'CANCEL'] as const
+// B-SA-046 (sales page plan P7, N1): + DESIGN — Sales answers it, so Incoming lists it and its "waiting on us" counts it.
+export const INCOMING_CHANGE_KINDS = ['CHANGE', 'CANCEL', 'DESIGN'] as const
 export type IncomingChangeKind = (typeof INCOMING_CHANGE_KINDS)[number]
 
 export const INCOMING_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE', 'OPEN', 'QUOTED', 'ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'LOST', 'ALL'] as const

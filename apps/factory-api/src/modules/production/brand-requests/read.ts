@@ -46,7 +46,8 @@ import { OFFICE_BATCH_NOT_FOUND } from '@nexus/factory-domain/production-brand/b
 const READ_CAP = 200
 const REQUEST_SCOPE: ScopeColumns = { company: 'companyId', party: 'partyId' }
 /** The kinds whose accept is Sales' (/sales/change-requests/:id/accept); the others' is production's (B-PR-27a/b). */
-const SALES_ACCEPTS: readonly OrderRequestKind[] = Object.freeze(['CHANGE', 'CANCEL', 'SPLIT_SHIPMENT'])
+// B-SA-046: + DESIGN (a design change: Sales accepts it, raising the style change).
+const SALES_ACCEPTS: readonly OrderRequestKind[] = Object.freeze(['CHANGE', 'CANCEL', 'DESIGN', 'SPLIT_SHIPMENT'])
 const LIVE = { events: [...LIVE_EVENTS, 'approval_request.answered', 'approval_request.expired', 'approval_request.withdrawn'] }
 
 const isNone = (where: WhereClause): boolean => where === NO_ROWS

@@ -8,14 +8,16 @@ import {
   changeCellsOf,
   changeProblems,
   NO_WITHDRAWAL_WORDS,
-  REQUEST_KINDS,
   rulesOf,
   VERDICT_CODES,
   WAITING_REQUEST_STATUSES,
   type AskedCell,
-  type RequestKind,
   type RuleOrder,
 } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046 (sales page plan P7, R3; review C-10): the design change, and the kinds that keep one request waiting between them.
+import { CHANGE_OR_CANCEL, DESIGN_KIND, designCellsOf, designProblems, designVerdict, isDesignOpen } from '@nexus/factory-domain/sales/change-requests/rules'
+import { DESIGN_ASK_WORDS } from '@nexus/factory-domain/production-brand/words'
+import { contentWalledFor } from '../../../platform/files/content-wall'
 import { cancelFeeFor } from '@nexus/factory-domain/sales/change-requests/fee'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTools } from '../../../core/command'
@@ -77,6 +79,7 @@ import {
   type AddressRow,
   type CancelReason,
   type LineCatalogue,
+  type Reader, // B-SA-046
   type RequestRow,
 } from './store'
 
@@ -165,12 +168,14 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
   const order = await partnerOrder(request, reader, orderId)
   const lines = await request.withClient((client) => readLines(client, [order.id]))
   // B-PR-23: the change or cancel that waits (OPEN, or COUNTERED for the customer's answer); a production ask never holds them.
-  const open = await request.withClient((client) => client.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: [...REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }))
+  // B-SA-046: a design change waits on its own (one per order), never holding a change or a cancel.
+  const open = await request.withClient((client) => client.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: [...CHANGE_OR_CANCEL] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }))
   const addresses = await request.withClient((client) => readShipTos(client, order.partyId))
   // B-PR-25: the production asks' own facts in the customer's scope: the one of each kind that waits, an accepted pause, the
   // order's urgency and stage (BrandOrderProduction's partner columns), whether it ships complete.
   const own = await request.withClient(async (client) => ({
-    waiting: await client.orderChangeRequest.findMany({ where: { orderId: order.id, kind: { in: [...PRODUCTION_REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, kind: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    // B-SA-046: + the design change that waits.
+    waiting: await client.orderChangeRequest.findMany({ where: { orderId: order.id, kind: { in: [...PRODUCTION_REQUEST_KINDS, DESIGN_KIND] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, kind: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
     pausesAccepted: await client.orderChangeRequest.count({ where: { orderId: order.id, kind: 'HOLD', status: 'ACCEPTED' } }),
     production: await client.brandOrderProduction.findFirst({ where: { salesOrderId: order.id }, select: { stage: true, urgency: true, urgencyLocked: true, urgencyLockReason: true } }),
     shipping: await client.salesOrder.findUnique({ where: { id: order.id }, select: { shipComplete: true } }),
@@ -285,6 +290,8 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
     openRequestId: facts.openRequestId,
     // B-PR-25: the production asks the customer's limits open (a closed one is listed, not open: the screen does not draw it).
     asks: PRODUCTION_REQUEST_KINDS.map((kind) => ({ kind, words: ORDER_REQUEST_KIND_WORDS[kind], open: isAskOpen(kind, facts.production.limits), verdict: askVerdict(kind, verdictFactsOf(facts, kind)), waitingRequestId: facts.production.waiting.get(kind)?.id ?? null })),
+    // B-SA-046: the design change (open while the customer's ask-kinds switch lists it).
+    design: { words: DESIGN_ASK_WORDS, open: isDesignOpen(facts.production.limits), verdict: designVerdict(designFactsOf(facts)), waitingRequestId: facts.production.waiting.get(DESIGN_KIND)?.id ?? null },
     frozen: { deliveryDate: freezeOf(freeze.rules, 'DELIVERY_DATE', freeze.stages.order.stage), shipTo: freezeOf(freeze.rules, 'SHIP_TO', freeze.stages.order.stage) },
     live: { events: [...LIVE_EVENTS] },
   }
@@ -304,6 +311,8 @@ export interface AskBody {
   readonly sampleKind?: AskSampleKind | null | undefined
   /** B-PR-27a: a change: lines in another colourway of their style. */
   readonly colourways?: readonly { readonly lineId: string; readonly colourwayId: string }[] | undefined
+  /** B-SA-046: a design change: files of the order or its lines, shared with the customer (uploaded first). */
+  readonly fileIds?: readonly string[] | undefined
 }
 
 // B-PR-25: a production ask's refusal by the order's state names its code too (body/NOT_OPEN, body/WAITING, …).
@@ -324,6 +333,16 @@ function shapeProblems(body: AskBody): Issue[] {
   // B-PR-25: a production ask names no lines to cancel and no address (its own fields are its rules': productionAskProblems).
   // B-PR-27a: another colourway only on a change.
   if (body.kind !== 'CHANGE' && (body.colourways ?? []).length > 0) issues.push({ path: 'body/colourways', message: 'Only a change asks another colourway.' })
+  // B-SA-046: files only on a design change; a design change names lines and its words, nothing else.
+  if (body.kind !== DESIGN_KIND && (body.fileIds ?? []).length > 0) issues.push({ path: 'body/fileIds', message: 'Only a design change sends files.' })
+  if (body.kind === DESIGN_KIND) {
+    if ((body.cells ?? []).length > 0) issues.push({ path: 'body/cells', message: 'A design change names lines, not sizes.' })
+    if ((body.requestedDate ?? null) !== null || (body.shipToAddressId ?? null) !== null) issues.push({ path: 'body', message: 'A design change asks no date and no address.' })
+    if (body.reasonCode !== undefined) issues.push({ path: 'body/reasonCode', message: 'A design change has no reason code: say it in your words.' })
+    if ((body.lineId ?? null) !== null) issues.push({ path: 'body/lineId', message: 'Only a sample round names one line.' })
+    if ((body.sampleKind ?? null) !== null) issues.push({ path: 'body/sampleKind', message: 'Only a sample round names the kind of sample.' })
+    return issues
+  }
   if (isProductionKind(body.kind)) {
     if (body.lineIds !== undefined) issues.push({ path: 'body/lineIds', message: 'Only a cancel names lines to cancel.' })
     if ((body.shipToAddressId ?? null) !== null) issues.push({ path: 'body/shipToAddressId', message: 'Only a change asks another delivery address.' })
@@ -350,19 +369,31 @@ interface PreparedAsk {
   readonly reasonCode: string | null
   readonly reason: string | null
   readonly sampleKind: AskSampleKind | null
+  /** B-SA-046: a design change's files (none on any other kind). */
+  readonly fileIds: readonly string[]
 }
+
+/** B-SA-046: a design change's facts as the domain's rules read them. */
+const designFactsOf = (facts: AskFacts) => ({ order: facts.rule, limits: facts.production.limits, waitingDay: facts.production.waiting.get(DESIGN_KIND)?.day ?? null })
 
 /** B-PR-25: the ask checked by its kind's rules (else refused in words) and what it writes. */
 function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
+  // B-SA-046: a design change — their words, the lines (one row each), up to 10 files (checked against the order's own in the command).
+  if (body.kind === DESIGN_KIND) {
+    const ask = { note: body.note, lineIds: body.lineIds, fileIds: body.fileIds }
+    const problems = designProblems(ask, designFactsOf(facts))
+    if (problems.length > 0) throw refused(problems)
+    return { cells: designCellsOf(ask, facts.rule), requestedDate: null, shipToAddressId: null, reasonCode: null, reason: blankToNull(body.note), sampleKind: null, fileIds: [...(body.fileIds ?? [])] }
+  }
   if (isProductionKind(body.kind)) {
     const ask = { kind: body.kind, requestedDate: body.requestedDate ?? null, reasonCode: body.reasonCode ?? null, note: body.note, cells: body.cells, lineId: body.lineId ?? null, sampleKind: body.sampleKind ?? null }
     // No pause reason list is offered yet: a pause says why in its words.
     const problems = productionAskProblems(ask, { ...verdictFactsOf(facts, body.kind), today: facts.today })
     if (problems.length > 0) throw refused(problems)
     const columns = productionColumnsOf(ask)
-    return { cells: productionCellsOf(ask, facts.rule), requestedDate: columns.requestedDate, shipToAddressId: null, reasonCode: columns.reasonCode, reason: columns.reason, sampleKind: columns.sampleKind }
+    return { cells: productionCellsOf(ask, facts.rule), requestedDate: columns.requestedDate, shipToAddressId: null, reasonCode: columns.reasonCode, reason: columns.reason, sampleKind: columns.sampleKind, fileIds: [] }
   }
-  const cells = askedCells(body as AskBody & { readonly kind: RequestKind }, facts)
+  const cells = askedCells(body as AskBody & { readonly kind: 'CHANGE' | 'CANCEL' }, facts)
   return {
     cells,
     requestedDate: body.kind === 'CHANGE' ? (body.requestedDate ?? null) : null,
@@ -370,6 +401,7 @@ function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
     reasonCode: body.kind === 'CANCEL' ? body.reasonCode! : null,
     reason: blankToNull(body.note),
     sampleKind: null,
+    fileIds: [],
   }
 }
 
@@ -390,7 +422,7 @@ async function impactOfAsk(reader: PortalReader, facts: AskFacts, kind: OrderReq
 }
 
 /** The cells asked, once the cut-off rules let them through (else the refusal in words). */
-function askedCells(body: AskBody & { readonly kind: RequestKind }, facts: AskFacts): AskedCell[] {
+function askedCells(body: AskBody & { readonly kind: 'CHANGE' | 'CANCEL' }, facts: AskFacts): AskedCell[] {
   if (body.kind === 'CHANGE') {
     // B-PR-27a: and the lines asked in another colourway (checked against the other colourways of their style).
     const ask = { cells: body.cells ?? [], requestedDate: body.requestedDate ?? null, shipToAddressId: body.shipToAddressId ?? null, note: body.note, colourways: body.colourways ?? [] }
@@ -441,6 +473,9 @@ async function askOne(app: FastifyInstance, request: FastifyRequest, reader: Por
     const impact = await impactOfAsk(reader, facts, body.kind, prepared, tools.now, tools.context.requestId)
     const blocked = blockedProblems(impact)
     if (blocked.length > 0) throw new DomainError('invalid_state', blocked[0]!.message, blocked)
+    // B-SA-046: a design change's files are its order's own, AVAILABLE, shared with the customer and not behind the content wall.
+    const files = await designFileProblems(tools.tx, reader, facts.order, prepared.fileIds)
+    if (files.length > 0) throw new DomainError('not_found', 'File not found.', files)
     await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId, batchId })
     return { requestId }
   })
@@ -481,6 +516,31 @@ export async function askInBatch(app: FastifyInstance, request: FastifyRequest, 
 // ── end B-PR-46a ──
 
 /**
+ * B-SA-046 (13-backend B5 "Files of the ask"): the problems of a design change's files, by path — each must be an AVAILABLE file
+ * of THIS order or one of its lines, shared with the customer (its partner visibility, its party), and not behind the content
+ * wall for it (a copy whose content is another customer's). Read as the customer (row-level security shows it only its own
+ * party's shared files), the wall as the tenant. Anything else is "File not found." at `body/fileIds/<n>`, the words of an
+ * unknown id (never that another customer's file exists). The database checks the same at insert.
+ */
+async function designFileProblems(tx: Reader, reader: PortalReader, order: PortalOrderRow, fileIds: readonly string[]): Promise<Issue[]> {
+  if (fileIds.length === 0) return []
+  const lineIds = new Set((await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id))
+  const rows = await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: { id: true, status: true, recordType: true, recordId: true, partyId: true, visibility: true } })
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const walled = await reader.inTenant((client) => contentWalledFor(client, order.partyId, fileIds))
+  return fileIds.flatMap((fileId, index) => {
+    const row = byId.get(fileId)
+    const own =
+      row !== undefined &&
+      row.status === 'AVAILABLE' &&
+      row.partyId === order.partyId &&
+      row.visibility.includes('PARTNER') &&
+      ((row.recordType === 'SalesOrder' && row.recordId === order.id) || (row.recordType === 'SalesOrderLine' && lineIds.has(row.recordId)))
+    return own && !walled.has(fileId) ? [] : [{ path: `body/fileIds/${index}`, message: 'File not found.' }]
+  })
+}
+
+/**
  * The request written (the customer's scope): serialised per order, one that waits at a time (B-PR-25: per kind; a change and a
  * cancel keep one between them), the order still askable for its kind.
  */
@@ -492,9 +552,11 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
   // B-PR-23: one change or cancel that waits per order (OPEN, or COUNTERED); a production ask of the order never blocks it.
   // B-PR-25 (R-14): one production ask that waits per order and kind.
   const production = isProductionKind(body.kind)
-  const kinds: OrderRequestKind[] = production ? [body.kind] : [...REQUEST_KINDS]
+  // B-SA-046: a design change waits on its own, one per order (as a production ask of one kind).
+  const ownLane = production || body.kind === DESIGN_KIND
+  const kinds: OrderRequestKind[] = ownLane ? [body.kind] : [...CHANGE_OR_CANCEL]
   const open = await tx.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: kinds }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true } })
-  if (open) throw new DomainError('invalid_state', production ? 'This ask waits for our answer already: withdraw it first, or wait for the answer.' : 'A request on this order waits for our answer: withdraw it first, or wait for the answer.', [{ path: production ? 'body/WAITING' : 'body/OPEN_REQUEST', message: 'A request waits.' }])
+  if (open) throw new DomainError('invalid_state', ownLane ? 'This ask waits for our answer already: withdraw it first, or wait for the answer.' : 'A request on this order waits for our answer: withdraw it first, or wait for the answer.', [{ path: ownLane ? 'body/WAITING' : 'body/OPEN_REQUEST', message: 'A request waits.' }])
   const current = await tx.salesOrder.findUnique({ where: { id: order.id }, select: { status: true } })
   // B-PR-26: each kind's own statuses (a cancel of what is still to ship is asked of a PARTLY_SHIPPED order too).
   const statuses: readonly string[] = ASK_RULES[body.kind].statuses
@@ -517,6 +579,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
       ...(kept ? { impact: kept } : {}),
       // B-PR-46a: the batch of a bulk ask (one customer, one kind: the database checks it).
       ...(input.batchId ? { batchId: input.batchId } : {}),
+      // B-SA-046: a design change's files (the database checks each is the order's own, shared with the customer).
+      ...(prepared.fileIds.length > 0 ? { fileIds: [...prepared.fileIds] } : {}),
       createdAt: now,
       updatedAt: now,
       createdById: input.partnerUserId,
@@ -554,6 +618,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
     impactKept: kept !== undefined,
     // B-PR-46a
     ...(input.batchId ? { batchId: input.batchId } : {}),
+    // B-SA-046
+    ...(prepared.fileIds.length > 0 ? { fileIds: [...prepared.fileIds] } : {}),
   }
   tools.audit({ action: 'portal.askOrderChange', recordType: 'OrderChangeRequest', recordId: input.requestId, companyId: order.companyId, after: { orderId: order.id, status: 'OPEN', ...asked } })
   // The order's timeline (its Activity) shows what the customer asked.
@@ -572,6 +638,9 @@ export async function askImpact(app: FastifyInstance, request: FastifyRequest, o
   if (shape.length > 0) throw refused(shape)
   const facts = await askFacts(request, reader, orderId, now)
   const prepared = preparedAsk(body, facts)
+  // B-SA-046: the same file check as Send.
+  const files = await request.withClient((client) => designFileProblems(client, reader, facts.order, prepared.fileIds))
+  if (files.length > 0) throw new DomainError('not_found', 'File not found.', files)
   const impact = await impactOfAsk(reader, facts, body.kind, prepared, now, newId())
   const fee = body.kind === 'CANCEL' && reader.seesPrices ? feeView(cancelFeeFor(feeLinesOf(facts.lines), prepared.cells.map((cell) => cell.orderLineId), facts.cancelFeePct, facts.order.currency)) : null
   return {

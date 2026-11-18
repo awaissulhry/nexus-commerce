@@ -706,3 +706,126 @@ describe('B-SA-042: Accept runs the change at once; the gap goes to the work ord
   })
 })
 // ── end B-SA-042 ──
+
+// ── B-SA-046 (sales page plan P7, R3; 13-backend B5; review C-10): a design change asked from the portal ──
+/** Rows written whole, the database's rules off for them (as an import would). */
+async function plantedRows(rows: readonly { sql: string; values: unknown[] }[]): Promise<void> {
+  await h.db.admin.query('BEGIN')
+  try {
+    await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+    for (const row of rows) await h.db.admin.query(row.sql, row.values)
+    await h.db.admin.query('COMMIT')
+  } catch (error) {
+    await h.db.admin.query('ROLLBACK')
+    throw error
+  }
+}
+const copyOf = (table: string, from: string, over: Json) => ({ sql: `INSERT INTO "${table}" SELECT * FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM "${table}" r WHERE r.id = $2::uuid))`, values: [JSON.stringify(over), from] })
+/** The customer's ask-kinds switch (PortalSettings.productionAskKinds) set as the limits card would (its guard off for DESIGN: see the step's notes). */
+const designSwitch = (kinds: string[]) => plantedRows([{ sql: 'UPDATE "PortalSettings" SET "productionAskKinds" = $1::"OrderChangeRequestKind"[] WHERE id = $2', values: [`{${kinds.join(',')}}`, P1] }])
+let designMade = 0
+/**
+ * An order of Brand Alpha (P1) in production, as an import writes it: line 10 of style SEED-JKT-02 (P1's private label), 4 of size 52,
+ * made by a released work order of which `cut` are bundled; line 20 of SEED-JKT-01 (also P1's) or, `ownCollection`, of a copy of it
+ * that is our own collection (no brand); a file on the order shared with P1, and one shared with another customer.
+ */
+async function designWorld(options: { readonly cut?: number; readonly ownCollection?: boolean } = {}) {
+  const so2 = await orderOf('SEED-SO-0002')
+  const so1 = await orderOf('SEED-SO-0001')
+  const [jkt2] = await admin<{ id: string; colourwayId: string; styleId: string }>('SELECT id::text AS id, "colourwayId"::text AS "colourwayId", "styleId"::text AS "styleId" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [so2.id])
+  const [jkt1] = await admin<{ id: string; styleId: string }>('SELECT id::text AS id, "styleId"::text AS "styleId" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [so1.id])
+  const [cell] = await admin<{ id: string; workOrderId: string }>('SELECT id::text AS id, "workOrderId"::text AS "workOrderId" FROM "WorkOrderSize" WHERE "salesOrderLineId" = $1 LIMIT 1', [jkt2!.id])
+  const [store] = await admin<{ id: string }>('SELECT id::text AS id FROM "IntegrationAccount" WHERE "tenantId" = $1 LIMIT 1', [T])
+  const ids = { order: newId(), line10: newId(), line20: newId(), workOrder: newId(), cell: newId(), style: options.ownCollection ? newId() : jkt1!.styleId, file: newId(), betaFile: newId() }
+  const tag = `T-SA046-${++designMade}-${ids.order.slice(-4)}`
+  const file = (id: string, partyId: string) => ({
+    sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility, "partyId") VALUES ($1, $2, 'SalesOrder', $3, 'ATTACHMENT', 'sleeve-sketch.pdf', 'application/pdf', 1200, $4, $5, 'AVAILABLE', '{OFFICE,PARTNER}', $6)`,
+    values: [id, T, ids.order, store!.id, `test/${id}`, partyId],
+  })
+  await plantedRows([
+    copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+    copyOf('SalesOrderLine', jkt2!.id, { id: ids.line10, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
+    { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line10, P1] },
+    ...(options.ownCollection ? [copyOf('Style', jkt1!.styleId, { id: ids.style, code: `${tag}-OWN`, brandPartyId: null })] : []),
+    copyOf('SalesOrderLine', jkt1!.id, { id: ids.line20, orderId: ids.order, seq: 20, styleId: ids.style, quantity: 2, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
+    { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 2)`, values: [newId(), T, ids.line20, P1] },
+    copyOf('WorkOrder', cell!.workOrderId, { id: ids.workOrder, number: `${tag}-WO`, batchNumber: `${tag}-BT`, status: 'IN_PROGRESS', version: 1 }),
+    copyOf('WorkOrderSize', cell!.id, { id: ids.cell, workOrderId: ids.workOrder, salesOrderLineId: ids.line10, colourwayId: jkt2!.colourwayId, size: '52', quantity: 4, version: 1 }),
+    ...((options.cut ?? 0) > 0 ? [{ sql: `INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) SELECT $1, "tenantId", "siteId", $2, $3, $4, $5 FROM "WorkOrderSize" WHERE id = $3::uuid`, values: [newId(), ids.workOrder, ids.cell, `${tag}-BN`, options.cut] }] : []),
+    file(ids.file, P1),
+    file(ids.betaFile, world.partyId),
+  ])
+  return { ...ids, number: tag }
+}
+const designAsk = (order: string, body: Json, key = `design-${newId()}`) => browsers.buyer.post(`/portal/sales-orders/${order}/change-requests`, { kind: 'DESIGN', ...body }, { headers: { 'idempotency-key': key } })
+
+describe('B-SA-046: a design change of some lines, asked from the portal while the customer\'s switch lists it', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('is refused in the neutral words of a closed ask while the switch does not list it; the rules say so before the click', async () => {
+    await designSwitch([])
+    const design = await designWorld()
+    const rules = await ok(browsers.buyer, `/portal/sales-orders/${design.order}/change-requests/rules`)
+    expect(rules.design).toMatchObject({ open: false, verdict: { possible: false, code: 'NOT_OPEN' }, words: { en: 'Design change', it: 'Modifica del design' } })
+    const refused = await designAsk(design.order, { note: 'Move the logo to the left sleeve.', lineIds: [design.line10] })
+    expect(refused.status).toBe(409)
+    expect(refused.body.error.issues).toEqual([{ path: 'body/NOT_OPEN', message: "This ask is not open for your orders. Write to us in the order's thread." }])
+  })
+
+  it('the impact names how far each line is made — cutting started on line 10, line 20 not in production — and a price may apply', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ cut: 2 })
+    const answer = await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests/impact`, { kind: 'DESIGN', note: 'Move the logo to the left sleeve.', lineIds: [design.line10, design.line20] })
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+    expect(answer.body.impact).toMatchObject({ kind: 'DESIGN', priced: true, blocked: false, frozen: [] })
+    expect(answer.body.impact.notes.map((note: Json) => note.en)).toEqual(['Cutting has started on line 10: the change may cost extra or apply to the next order', 'Line 20 is not in production yet'])
+  })
+
+  it('takes their words, the lines (one row each, no size) and a file of the order; one waits per order; Approvals and the office read it', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    // Words are required; a line of another order and a file of another customer read as unknown ones.
+    expect((await designAsk(design.order, { note: ' ', lineIds: [design.line10] })).body.error.issues[0].path).toBe('body/note')
+    const otherLine = await designAsk(design.order, { note: 'Move the logo.', lineIds: [newId()] })
+    expect(otherLine.body.error.issues).toEqual([{ path: 'body/lineIds/0', message: 'Not a line of this order.' }])
+    const beta = await designAsk(design.order, { note: 'Move the logo.', lineIds: [design.line10], fileIds: [design.betaFile] })
+    const unknown = await designAsk(design.order, { note: 'Move the logo.', lineIds: [design.line10], fileIds: [newId()] })
+    expect(beta.status).toBe(404)
+    expect(beta.body.error.issues).toEqual([{ path: 'body/fileIds/0', message: 'File not found.' }])
+    expect(beta.body.error.issues).toEqual(unknown.body.error.issues)
+    // Only a design change sends files.
+    expect((await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME', fileIds: [design.file] })).body.error.issues[0].path).toBe('body/fileIds')
+
+    const asked = await designAsk(design.order, { note: 'Move the logo to the left sleeve.', lineIds: [design.line10, design.line20], fileIds: [design.file] })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    expect(asked.body.request).toMatchObject({ kind: 'DESIGN', status: 'OPEN', note: 'Move the logo to the left sleeve.', fileIds: [design.file], kindWords: { en: 'Design change request' } })
+    expect(asked.body.request.cells.map((cell: Json) => [cell.seq, cell.size, cell.before === cell.asked])).toEqual([
+      [10, null, true],
+      [20, null, true],
+    ])
+    const stored = await one('SELECT kind::text AS kind, "fileIds"::text[] AS files, reason FROM "OrderChangeRequest" WHERE id = $1', [asked.body.request.id])
+    expect(stored).toEqual({ kind: 'DESIGN', files: [design.file], reason: 'Move the logo to the left sleeve.' })
+    // One design change waits per order; a change or a cancel of the order is not held by it.
+    const second = await designAsk(design.order, { note: 'And the collar.', lineIds: [design.line10] })
+    expect(second.status).toBe(409)
+    expect(second.body.error.issues[0].path).toBe('body/WAITING')
+    expect((await outbox('order_change_request.asked')).filter((row) => row.payload.orderId === design.order).map((row) => row.payload)).toEqual([{ requestId: asked.body.request.id, orderId: design.order, partyId: P1, kind: 'DESIGN', lines: 2, wholeOrder: false }])
+
+    // Home › Approvals lists it for who answers it (orders.manage), in words; the office's list and record read it.
+    const approvals = await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 100 })
+    expect(approvals.items.some((item: Json) => item.record.label === design.number && JSON.stringify(item).includes('asks to change the design of order'))).toBe(true)
+    const record = await officeRecord(office(), asked.body.request.id, h.clock.now())
+    expect(record.request).toMatchObject({ kind: 'DESIGN', mayAnswer: true, fileIds: [design.file] })
+  })
+
+  it('the customer is told it was received, by its own order number; another customer\'s people are not', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const asked = await designAsk(design.order, { note: 'A reflective stripe on the back.', lineIds: [design.line10] })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const event = (await outbox('order_change_request.asked')).find((row) => row.payload.requestId === asked.body.request.id)!
+    await partnerFanOut(callerFor(h.database, systemContext(T, `test-${newId()}`)), { eventId: event.id, type: event.type, tenantId: T, companyId: event.companyId, siteId: null, payload: event.payload } as never, { clock: h.clock, unsubscribeKey: unsubscribeKeyOf(h.auth.secrets) })
+    const told = await admin('SELECT "partyId"::text AS party, "messageKey", anchor FROM "Notification" WHERE "eventId" = $1', [event.id])
+    expect(told.length).toBeGreaterThan(0)
+    expect(told.every((row) => row.party === P1 && row.messageKey === 'portal.order.design_received' && row.anchor === `change-request:${asked.body.request.id}`)).toBe(true)
+  })
+})
+// ── end B-SA-046 ──

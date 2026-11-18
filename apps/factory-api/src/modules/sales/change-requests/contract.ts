@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { MAX_ANSWER, MAX_NOTE, ORDER_REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES, CUTOFF_STATUSES, MAX_CUTOFF_DAYS } from '@nexus/factory-domain/sales/change-requests/rules'
+import { MAX_ANSWER, ORDER_REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES, CUTOFF_STATUSES, MAX_CUTOFF_DAYS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_SIZE_QUANTITY, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
@@ -8,7 +8,7 @@ import { diffView, extraPiecesView, impactView } from '../orders/daily-contract'
 // B-SA-042 (P6', R1): Accept runs the change at once; the extra pieces' outcome, the work-order changes it proposed.
 import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS } from '@nexus/factory-domain/order-apply/rules'
 // B-PR-25: the production asks from the portal, the impact before Send.
-import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
+import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES, MAX_DESIGN_FILES, MAX_DESIGN_WORDS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 // B-PR-26: our counter-offer on a request.
@@ -150,6 +150,8 @@ export const requestFields = {
   // B-PR-26: the batch it was asked in (a bulk ask: one customer, one kind; null: asked alone) and our counter-offer (null: none).
   batchId: id().nullable(),
   counter: counterOut.nullable(),
+  /** B-SA-046: the files a design change sent (of the order or its lines, shared with the customer; none on any other kind). */
+  fileIds: z.array(id()),
   version: z.number().int(),
 }
 
@@ -209,6 +211,8 @@ export const rulesContract = defineContract({
       // B-PR-25: the production asks, each open or not by the customer's limits (RUSH exactly while its urgency switch is on,
       // the others while its list names them: R-50), what the rules say of it now and the one that waits (one per kind).
       asks: z.array(output({ kind: z.enum(PRODUCTION_REQUEST_KINDS), words, open: z.boolean(), verdict: askVerdictOut, waitingRequestId: id().nullable() })),
+      /** B-SA-046: the design change — open while the customer's ask-kinds switch lists it; one that waits per order. */
+      design: output({ words, open: z.boolean(), verdict: askVerdictOut, waitingRequestId: id().nullable() }),
       /** B-PR-25: what the freeze rules hold of the order's date and delivery address now. */
       frozen: output({ deliveryDate: freezeOut, shipTo: freezeOut }),
       live,
@@ -225,11 +229,14 @@ const askBody = input({
   requestedDate: day.nullable().optional(),
   /** A change: one of their delivery addresses. */
   shipToAddressId: id().nullable().optional(),
-  /** A cancel: the lines (none: the whole order). */
+  /** A cancel: the lines (none: the whole order). B-SA-046: a design change: the lines it is for (at least one). */
   lineIds: z.array(id()).max(200).optional(),
   /** A cancel: a code of the reasons offered (a pause: one of its list, when one is offered). */
   reasonCode: z.string().trim().min(1).max(40).optional(),
-  note: z.string().max(MAX_NOTE).nullable().optional(),
+  /** Their words: up to 2000 characters (the rules say it in words); B-SA-046: a design change's up to 4000, required. */
+  note: z.string().max(MAX_DESIGN_WORDS).nullable().optional(),
+  /** B-SA-046: a design change: up to 10 files of the order or its lines, shared with the customer (uploaded first). */
+  fileIds: z.array(id()).max(MAX_DESIGN_FILES).optional(),
   /** B-PR-25: a sample round: the line the sample is of, and the kind of round. */
   lineId: id().nullable().optional(),
   sampleKind: z.enum(ASK_SAMPLE_KINDS).nullable().optional(),

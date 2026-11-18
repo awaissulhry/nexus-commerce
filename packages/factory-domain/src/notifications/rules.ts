@@ -175,6 +175,8 @@ export const MESSAGE_TEMPLATES = {
   'notifications.production.customerAskedChange': { en: '{customer} asks to change order {record}: answer in Approvals', it: '{customer} chiede di modificare l’ordine {record}: rispondi in Approvazioni' },
   'notifications.production.customerAskedSplit': { en: '{customer} asks to ship what is ready of order {record}: answer in Approvals', it: '{customer} chiede di spedire ciò che è pronto dell’ordine {record}: rispondi in Approvazioni' },
   'notifications.production.customerAskedSampleRound': { en: '{customer} asks for another sample round on order {record}: answer in Approvals', it: '{customer} chiede un altro giro di campioni sull’ordine {record}: rispondi in Approvazioni' },
+  // B-SA-046: a design change of some lines.
+  'notifications.production.customerAskedDesign': { en: '{customer} asks to change the design of order {record}: answer in Approvals', it: '{customer} chiede di modificare il design dell’ordine {record}: rispondi in Approvazioni' },
   'notifications.production.customerAskedRushMany': { en: '{customer} asks to make {count} orders urgent, among them {record}: answer in Approvals', it: '{customer} chiede di rendere urgenti {count} ordini, tra cui {record}: rispondi in Approvazioni' },
   'notifications.production.customerAskedHoldMany': { en: '{customer} asks to pause {count} orders, among them {record}: answer in Approvals', it: '{customer} chiede di mettere in pausa {count} ordini, tra cui {record}: rispondi in Approvazioni' },
   'notifications.production.customerAskedResumeMany': { en: '{customer} asks to resume {count} orders, among them {record}: answer in Approvals', it: '{customer} chiede di riprendere {count} ordini, tra cui {record}: rispondi in Approvazioni' },

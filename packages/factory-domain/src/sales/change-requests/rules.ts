@@ -43,8 +43,13 @@ export interface Words {
   readonly en: string
 }
 
-export const REQUEST_KINDS = ['CHANGE', 'CANCEL'] as const
+// B-SA-046 (sales page plan P7, R3; review C-10): + DESIGN, a change to the design of some lines (their words, the lines, files),
+// asked while the customer's ask-kinds switch lists it (PortalSettings.productionAskKinds) and answered by Sales (orders.manage).
+export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'DESIGN'] as const
 export type RequestKind = (typeof REQUEST_KINDS)[number]
+
+/** B-SA-046: the kinds that keep ONE request waiting between them per order (today's rule); a design change waits on its own. */
+export const CHANGE_OR_CANCEL = ['CHANGE', 'CANCEL'] as const satisfies readonly RequestKind[]
 
 // B-PR-23 (production plan, schema wave 4/5): COUNTERED, the office's counter-offer waiting for the customer's answer.
 export const REQUEST_STATUSES = ['OPEN', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'COUNTERED'] as const
@@ -53,6 +58,8 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number]
 export const KIND_WORDS: Readonly<Record<RequestKind, Words>> = Object.freeze({
   CHANGE: { it: 'Richiesta di modifica', en: 'Change request' },
   CANCEL: { it: 'Richiesta di annullamento', en: 'Cancel request' },
+  // B-SA-046
+  DESIGN: { it: 'Richiesta di modifica del design', en: 'Design change request' },
 })
 
 /** The request's state in the customer's words (the office never shows who decided). */
@@ -75,7 +82,7 @@ export const REQUEST_STATUS_WORDS: Readonly<Record<RequestStatus, Words>> = Obje
 export const ORDER_REQUEST_KINDS = [...REQUEST_KINDS, ...PRODUCTION_REQUEST_KINDS] as const
 export type OrderRequestKind = (typeof ORDER_REQUEST_KINDS)[number]
 
-/** A kind Sales answers (and the portal's own ask route takes, until B-PR-25): CHANGE or CANCEL. */
+/** A kind Sales answers (and the portal's own ask route takes, until B-PR-25): CHANGE or CANCEL (B-SA-046: or DESIGN). */
 export const isSalesRequestKind = (kind: string): kind is RequestKind => (REQUEST_KINDS as readonly string[]).includes(kind)
 
 /** Every request in words, as an order's list of requests names it (the customer's and the office's). */
@@ -229,6 +236,8 @@ const verdict = (code: VerdictCode, words: Words, day: BusinessDate | null = nul
 const FREE_WORDS: Readonly<Record<RequestKind, Words>> = Object.freeze({
   CHANGE: { it: 'Modificabile', en: 'Can change' },
   CANCEL: { it: 'Senza costi', en: 'Free' },
+  // B-SA-046
+  DESIGN: { it: 'Potete chiederlo: decidiamo noi e vi rispondiamo', en: 'You can ask: we decide and answer you' },
 })
 
 function statusCutoffWords(status: SalesOrderStatus, cutoff: CutoffStatus): Words {
@@ -662,7 +671,8 @@ export function askedSummary(kind: OrderRequestKind, cells: readonly AskedCell[]
  */
 
 /** What accepting a request does, one step each (B-PR-27a/b carry them out in the accept's one command). */
-export const ACCEPT_ACTIONS = ['AMEND', 'CANCEL_AND_REMAKE', 'CLOSE_SHORT', 'CANCEL_ORDER', 'MARK_URGENT', 'RUSH_FLOOR', 'REPROMISE', 'BRAND_HOLD', 'LIFT_BRAND_HOLDS', 'SHIP_AS_READY', 'SAMPLE_ROUND'] as const
+// B-SA-046: + STYLE_CHANGE (a design change accepted raises a product change request per style of the customer's own label).
+export const ACCEPT_ACTIONS = ['AMEND', 'CANCEL_AND_REMAKE', 'CLOSE_SHORT', 'CANCEL_ORDER', 'MARK_URGENT', 'RUSH_FLOOR', 'REPROMISE', 'BRAND_HOLD', 'LIFT_BRAND_HOLDS', 'SHIP_AS_READY', 'SAMPLE_ROUND', 'STYLE_CHANGE'] as const
 export type AcceptAction = (typeof ACCEPT_ACTIONS)[number]
 
 /** The kinds of sample round a customer may ask for (the database's four). */
@@ -722,6 +732,22 @@ export const ASK_RULES: Readonly<Record<OrderRequestKind, AskRule>> = Object.fre
     answeredWith: ORDERS_MANAGE,
     accept: ['CANCEL_ORDER', 'CLOSE_SHORT'],
     acceptWords: { it: "Annulliamo l'ordine, o chiudiamo le righe richieste: non ne produciamo né spediamo altro.", en: 'We cancel the order, or close the lines asked short: nothing more of them is made or shipped.' },
+    counter: true,
+  }),
+  // B-SA-046 (R3): a design change of some lines, answered by Sales; accepted only for a style of the customer's own label.
+  DESIGN: askRule({
+    kind: 'DESIGN',
+    statuses: ASKABLE_STATUSES,
+    lines: 'SOME',
+    date: false,
+    reasonCode: 'NONE',
+    sampleKind: false,
+    answeredWith: ORDERS_MANAGE,
+    accept: ['STYLE_CHANGE'],
+    acceptWords: {
+      it: 'Portiamo la modifica al prodotto per il vostro modello: sui capi già tagliati può costare di più, oppure vale per il prossimo ordine.',
+      en: 'We take the change to product for your style: on pieces already cut it may cost extra, or it applies to the next order.',
+    },
     counter: true,
   }),
   RUSH: askRule({
@@ -1021,6 +1047,99 @@ export function productionColumnsOf(ask: ProductionAsk): { readonly requestedDat
     sampleKind: rule.sampleKind && isAskSampleKind(ask.sampleKind) ? ask.sampleKind : null,
   }
 }
+
+// ── B-SA-046 (sales page plan P7, R3; 13-backend B5; 14-change-flow §2.4; review C-10): a design change, asked from the portal ──
+
+/** The kind (the schema's OrderChangeRequestKind DESIGN). */
+export const DESIGN_KIND = 'DESIGN' as const
+/** Their words: 1 to 4000 characters (the database's). */
+export const MAX_DESIGN_WORDS = 4000
+/** Files of the order it may send (the database's). */
+export const MAX_DESIGN_FILES = 10
+
+/**
+ * Is a design change open to the customer: exactly while its ask-kinds switch lists it (PortalSettings.productionAskKinds, review
+ * C-10: the factory opens it per customer). A closed one is refused in the same neutral words as a closed production ask.
+ */
+export const isDesignOpen = (limits: AskLimits): boolean => limits.productionAskKinds.includes(DESIGN_KIND)
+
+/** A design change as the customer sends it (one order). */
+export interface DesignAsk {
+  /** What should change, in their words (required). */
+  readonly note?: string | null | undefined
+  /** The lines of the order it is for (at least one; each once). */
+  readonly lineIds?: readonly string[] | undefined
+  /** Files of the order (0 to 10, each once): checked against the order's own files by the API. */
+  readonly fileIds?: readonly string[] | undefined
+}
+
+export interface DesignFacts {
+  readonly order: Pick<RuleOrder, 'status' | 'lines'>
+  readonly limits: AskLimits
+  /** The day the design change of the order that waits (OPEN or COUNTERED) was asked; null: none waits. */
+  readonly waitingDay: BusinessDate | null
+}
+
+/** The lines a design change may name: the goods lines (a fee is made by nobody). */
+const DESIGN_LINE_KINDS: readonly SalesLineKind[] = ['SIZE_GRID', 'MADE_TO_MEASURE']
+
+/** Whether the order takes a design change now, before what it names: open to the customer, an order in work, none waiting. */
+export function designVerdict(facts: DesignFacts): AskVerdict {
+  if (!isDesignOpen(facts.limits)) return askVerdict_('NOT_OPEN', ASK_NOT_OPEN_WORDS)
+  const status = facts.order.status
+  if (!ASK_RULES.DESIGN.statuses.includes(status)) {
+    const name = STATUS_NAMES[status]
+    return askVerdict_('NOT_ASKABLE', { it: `Non possibile: l'ordine è già ${name.it}`, en: `Not possible: the order is already ${name.en}` })
+  }
+  if (facts.waitingDay !== null) {
+    const day = facts.waitingDay
+    return askVerdict_('WAITING', { it: `La vostra richiesta del ${dayWords(day, 'it')} attende la nostra risposta`, en: `Your request of ${dayWords(day, 'en')} waits for our answer` }, day)
+  }
+  return askVerdict_('FREE', FREE_ASK_WORDS)
+}
+
+/** The problems of a design change, in words, by path: one that waits per order, their words, at least one line, ≤ 10 files. */
+export function designProblems(ask: DesignAsk, facts: DesignFacts): Issue[] {
+  const whole = designVerdict(facts)
+  if (!whole.possible) return [askRefusalOf('body', whole)]
+  const issues: Issue[] = []
+  const words = typeof ask.note === 'string' ? ask.note.trim() : ''
+  if (words === '') issues.push({ path: 'body/note', message: 'Say in your words what should change in the design.' })
+  else if (words.length > MAX_DESIGN_WORDS) issues.push({ path: 'body/note', message: `At most ${MAX_DESIGN_WORDS} characters.` })
+  const lineIds = ask.lineIds ?? []
+  if (lineIds.length === 0) issues.push({ path: 'body/lineIds', message: 'Pick at least one line the change is for.' })
+  const lines = new Map(facts.order.lines.map((line) => [line.id, line]))
+  const seen = new Set<string>()
+  lineIds.forEach((lineId, index) => {
+    const at = `body/lineIds/${index}`
+    const line = lines.get(lineId)
+    // A line of another order reads as one that is not there (neutral words: never that another order exists).
+    if (!line) {
+      issues.push({ path: at, message: 'Not a line of this order.' })
+      return
+    }
+    if (!DESIGN_LINE_KINDS.includes(line.kind)) issues.push({ path: at, message: `Line ${line.seq} takes no design change.` })
+    else if (line.closedShort) issues.push(askRefusalOf(at, askVerdict_('CLOSED_SHORT', { it: 'Non possibile: questa riga è chiusa', en: 'Not possible: this line is closed' })))
+    if (seen.has(lineId)) issues.push({ path: at, message: `Line ${line.seq} is named twice.` })
+    seen.add(lineId)
+  })
+  const fileIds = ask.fileIds ?? []
+  if (fileIds.length > MAX_DESIGN_FILES) issues.push({ path: 'body/fileIds', message: `At most ${MAX_DESIGN_FILES} files.` })
+  else if (new Set(fileIds).size !== fileIds.length) issues.push({ path: 'body/fileIds', message: 'A file is named twice.' })
+  return issues
+}
+
+/** The rows a design change stores (OrderChangeRequestLine): one per line, as a whole (no size), the pieces as they are. */
+export function designCellsOf(ask: DesignAsk, order: Pick<RuleOrder, 'lines'>): AskedCell[] {
+  const lines = new Map(order.lines.map((line) => [line.id, line]))
+  return [...new Set(ask.lineIds ?? [])].flatMap((lineId) => {
+    const line = lines.get(lineId)
+    if (!line) return []
+    const pieces = line.sizes.reduce((total, size) => total + size.quantity, 0)
+    return [{ orderLineId: lineId, size: null, quantityBefore: pieces, quantity: pieces }]
+  })
+}
+// ── end B-SA-046 ──
 
 // ---- after release: a change of a line in production (R-12) ---------------------------------------------------------------
 

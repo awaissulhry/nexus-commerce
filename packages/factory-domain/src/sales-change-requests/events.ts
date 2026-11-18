@@ -19,7 +19,7 @@ import { BATCH_ASK_KINDS } from '../production-brand/bulk'
  *                                    e-mail (platform/portal/notifications/rules/change-requests.ts)
  *
  * Reach the office's order screens and Today (orders.view over the order's company and customer): ids, kinds and states
- * only; never a name, a quantity or an amount.
+ * only; never a name, a quantity or an amount. B-SA-046: the kinds include DESIGN (a design change of some lines, Sales'). 
  *
  * B-PR-24 (production plan §3, 08-backend §4.2 and §6): the kind is every kind of request — CHANGE and CANCEL, and the
  * production asks RUSH ("Urgent – asked"), HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND — on asked, withdrawn and answered.
@@ -47,7 +47,7 @@ export const events = [
   defineEvent({
     type: 'order_change_request.asked',
     context: 'sales-change-requests',
-    description: "A customer asked, from the portal, to change an order (sizes, date, delivery address) or to cancel it (the whole order or some lines), or made a production ask (urgent, pause, resume, ship what is ready, another sample).",
+    description: "A customer asked, from the portal, to change an order (sizes, date, delivery address) or to cancel it (the whole order or some lines), to change the design of some lines (B-SA-046), or made a production ask (urgent, pause, resume, ship what is ready, another sample).",
     payload: z.strictObject({
       requestId: z.uuid(),
       orderId: z.uuid(),

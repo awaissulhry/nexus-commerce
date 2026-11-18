@@ -33,7 +33,9 @@ import {
 } from './rules'
 // B-PR-24: the production asks, the impact, the counter-offer, the one date-only helper.
 import { DATE_ONLY_KEYS, dateOnly } from '../../planning/promise/date-only'
-import { ASK_NOT_OPEN_WORDS } from '../../production-brand/words'
+import { ASK_NOT_OPEN_WORDS, DESIGN_ASK_WORDS } from '../../production-brand/words'
+// B-SA-046: a design change.
+import { designCellsOf, designProblems, designVerdict, isDesignOpen, MAX_DESIGN_FILES, MAX_DESIGN_WORDS, type DesignAsk, type DesignFacts } from './rules'
 import { suggestedAnswer } from '../inquiries/production-answer'
 import type { FreezeRuleFacts } from '../order-changes/freeze'
 import { acceptedWithCounter, counterAnswerHeld, counterAnswerOf, counteredWords, counterForReader, counterOutcome, counterPriced, counterProblems, counterQuestion, isCounterable } from './counter'
@@ -226,7 +228,8 @@ describe('the office’s answer', () => {
 // ---- B-PR-23 (production plan, schema wave 4/5): every kind of request said in words, the counter-offer's state --------------
 describe('B-PR-23: every kind of request on an order, and a countered one', () => {
   it('the kinds are the portal’s and the production asks, each said in Italian and English; Sales answers CHANGE and CANCEL', () => {
-    expect(ORDER_REQUEST_KINDS).toEqual(['CHANGE', 'CANCEL', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'])
+    // B-SA-046: + DESIGN, a Sales kind beside change and cancel.
+    expect(ORDER_REQUEST_KINDS).toEqual(['CHANGE', 'CANCEL', 'DESIGN', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'])
     for (const kind of ORDER_REQUEST_KINDS) {
       const words = ORDER_REQUEST_KIND_WORDS[kind]
       expect(words.it.trim(), kind).not.toBe('')
@@ -237,7 +240,8 @@ describe('B-PR-23: every kind of request on an order, and a countered one', () =
     expect(ORDER_REQUEST_KIND_WORDS.CANCEL).toEqual(KIND_WORDS.CANCEL)
     // The plan's own words for a customer's urgent ask (17-web-r2 §5).
     expect(ORDER_REQUEST_KIND_WORDS.RUSH).toEqual({ it: 'Urgente – richiesto', en: 'Urgent – asked' })
-    expect(ORDER_REQUEST_KINDS.filter((kind) => isSalesRequestKind(kind))).toEqual(['CHANGE', 'CANCEL'])
+    expect(ORDER_REQUEST_KINDS.filter((kind) => isSalesRequestKind(kind))).toEqual(['CHANGE', 'CANCEL', 'DESIGN'])
+    expect(ORDER_REQUEST_KIND_WORDS.DESIGN).toEqual({ it: 'Richiesta di modifica del design', en: 'Design change request' })
     expect(isSalesRequestKind('RUSH')).toBe(false)
   })
 
@@ -274,7 +278,7 @@ describe('B-PR-24: what each production ask needs, when it is asked, what accept
   it('one rule per kind: the database\'s columns, who answers it (plan §3), what accepting it does; a resume is never countered', () => {
     expect(Object.keys(ASK_RULES)).toEqual([...ORDER_REQUEST_KINDS])
     const by = (test: (kind: (typeof ORDER_REQUEST_KINDS)[number]) => boolean) => ORDER_REQUEST_KINDS.filter(test)
-    expect(by((kind) => ASK_RULES[kind].answeredWith === 'orders.manage')).toEqual(['CHANGE', 'CANCEL', 'SPLIT_SHIPMENT'])
+    expect(by((kind) => ASK_RULES[kind].answeredWith === 'orders.manage')).toEqual(['CHANGE', 'CANCEL', 'DESIGN', 'SPLIT_SHIPMENT'])
     expect(by((kind) => ASK_RULES[kind].answeredWith === 'production.brand.manage')).toEqual(['RUSH', 'HOLD', 'RESUME'])
     expect(by((kind) => ASK_RULES[kind].answeredWith === 'sales.samples.manage')).toEqual(['SAMPLE_ROUND'])
     // R-35: a partly shipped order may still ask a cancel (its unshipped lines), a rush, a pause and a resume.
@@ -289,6 +293,8 @@ describe('B-PR-24: what each production ask needs, when it is asked, what accept
     expect(ASK_RULES.RESUME.accept).toEqual(['LIFT_BRAND_HOLDS'])
     expect(ASK_RULES.SPLIT_SHIPMENT.accept).toEqual(['SHIP_AS_READY', 'REPROMISE'])
     expect(ASK_RULES.CHANGE.accept).toEqual(['AMEND', 'CANCEL_AND_REMAKE', 'CLOSE_SHORT'])
+    // B-SA-046: a design change names some lines, no date, no code; accepting it raises the style change.
+    expect(ASK_RULES.DESIGN).toMatchObject({ lines: 'SOME', date: false, reasonCode: 'NONE', sampleKind: false, accept: ['STYLE_CHANGE'], counter: true })
     expect(by((kind) => !isCounterable(kind))).toEqual(['RESUME'])
     for (const kind of ORDER_REQUEST_KINDS) expect(ASK_RULES[kind].acceptWords.it, kind).not.toBe(ASK_RULES[kind].acceptWords.en)
   })
@@ -703,3 +709,69 @@ describe('B-PR-27a: a change asks a line in another colourway', () => {
     expect(colourCutWords('Black', 40)).toEqual({ en: 'Already cut in Black: 40 pieces. Suggest something else or refuse.', it: 'Già tagliati in Black: 40 pezzi. Proponi altro o rifiuta.' })
   })
 })
+
+// ── B-SA-046 (sales page plan P7, R3; review C-10): a design change asked from the portal ──
+describe('B-SA-046: a design change of some lines, open while the customer\'s ask-kinds switch lists it', () => {
+  const OPEN = { productionUrgencyOn: false, productionAskKinds: ['DESIGN'] }
+  const designFacts = (overrides: Partial<DesignFacts> = {}): DesignFacts => ({ order: order({ status: 'IN_PRODUCTION' }), limits: OPEN, waitingDay: null, ...overrides })
+  const ask = (overrides: Partial<DesignAsk> = {}): DesignAsk => ({ note: 'Move the logo to the left sleeve.', lineIds: [L1], fileIds: [], ...overrides })
+  const paths = (issues: readonly { path: string }[]) => issues.map((issue) => issue.path)
+
+  it('is closed until the switch lists it, in the neutral words of a closed ask; one waits per order; the order must be in work', () => {
+    expect(designVerdict(designFacts({ limits: { productionUrgencyOn: true, productionAskKinds: ['HOLD'] } }))).toMatchObject({ possible: false, code: 'NOT_OPEN', words: ASK_NOT_OPEN_WORDS })
+    expect(isDesignOpen(OPEN)).toBe(true)
+    expect(designVerdict(designFacts()).possible).toBe(true)
+    expect(designVerdict(designFacts({ waitingDay: '2026-11-02' }))).toMatchObject({ possible: false, code: 'WAITING', day: '2026-11-02' })
+    expect(designVerdict(designFacts({ order: order({ status: 'SHIPPED' }) })).code).toBe('NOT_ASKABLE')
+    expect(paths(designProblems(ask(), designFacts({ waitingDay: '2026-11-02' })))).toEqual(['body/WAITING'])
+  })
+
+  it('needs their words (1 to 4000), at least one line of the order (each once, not closed), at most 10 files (each once)', () => {
+    expect(designProblems(ask(), designFacts())).toEqual([])
+    expect(paths(designProblems(ask({ note: '   ' }), designFacts()))).toEqual(['body/note'])
+    expect(paths(designProblems(ask({ note: 'x'.repeat(MAX_DESIGN_WORDS + 1) }), designFacts()))).toEqual(['body/note'])
+    expect(designProblems(ask({ note: 'x'.repeat(MAX_DESIGN_WORDS) }), designFacts())).toEqual([])
+    expect(paths(designProblems(ask({ lineIds: [] }), designFacts()))).toEqual(['body/lineIds'])
+    // A line of another order reads as one that is not there: never that another order exists.
+    expect(designProblems(ask({ lineIds: ['00000000-0000-4000-8000-0000000000ff'] }), designFacts())).toEqual([{ path: 'body/lineIds/0', message: 'Not a line of this order.' }])
+    expect(paths(designProblems(ask({ lineIds: [L1, L1] }), designFacts()))).toEqual(['body/lineIds/1'])
+    const files = Array.from({ length: MAX_DESIGN_FILES + 1 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`)
+    expect(paths(designProblems(ask({ fileIds: files }), designFacts()))).toEqual(['body/fileIds'])
+    expect(paths(designProblems(ask({ fileIds: [files[0]!, files[0]!] }), designFacts()))).toEqual(['body/fileIds'])
+    expect(designProblems(ask({ fileIds: files.slice(0, MAX_DESIGN_FILES) }), designFacts())).toEqual([])
+  })
+
+  it('stores one row per line, as a whole (no size), the pieces as they are', () => {
+    const rows = designCellsOf(ask({ lineIds: [L1, L2, L1] }), designFacts().order)
+    expect(rows.map((row) => [row.orderLineId, row.size, row.quantityBefore === row.quantity])).toEqual([
+      [L1, null, true],
+      [L2, null, true],
+    ])
+  })
+
+  it('the impact says per line how far it is made, a price may apply once cutting started; never a number in it', () => {
+    const lines = [
+      { id: L1, seq: 10, closedShort: false, stage: 'CUT' as const },
+      { id: L2, seq: 20, closedShort: false, stage: null },
+    ]
+    const impact = impactOf({ kind: 'DESIGN', cells: [{ lineId: L1, size: null }, { lineId: L2, size: null }] }, { lines, orderStage: 'CUT', rules: [], cancelFeePct: null, earliest: null })
+    expect(impact.notes).toEqual([
+      { en: 'Cutting has started on line 10: the change may cost extra or apply to the next order', it: 'Il taglio della riga 10 è iniziato: la modifica può costare di più o valere per il prossimo ordine' },
+      { en: 'Line 20 is not in production yet', it: 'La riga 20 non è ancora in produzione' },
+    ])
+    expect(impact).toMatchObject({ priced: true, blocked: false, frozen: [] })
+    expect(impactKeepable(impact)).toBe(true)
+    const uncut = impactOf({ kind: 'DESIGN', cells: [{ lineId: L2, size: null }] }, { lines, orderStage: null, rules: [], cancelFeePct: null, earliest: null })
+    expect(uncut).toMatchObject({ priced: false, words: { en: 'Nothing of the lines is cut yet' } })
+  })
+
+  it('the customer is told it was received, and of our answer, by its own order number', () => {
+    for (const key of ['portal.order.design_received', 'portal.order.design_accepted', 'portal.order.design_refused'] as const) {
+      expect(PARTNER_MESSAGE_TEMPLATES[key].topic).toBe('ORDERS')
+      expect(partnerSentence({ messageKey: key, recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }, 'en', 'Demo')).not.toMatch(/SO-|#12/)
+    }
+    expect(partnerSentence({ messageKey: 'portal.order.design_received', recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }, 'it', 'Demo')).toBe('La vostra richiesta di modifica del design per il vostro ordine 12 è arrivata')
+    expect(DESIGN_ASK_WORDS).toEqual({ it: 'Modifica del design', en: 'Design change' })
+  })
+})
+// ── end B-SA-046 ──
