@@ -298,7 +298,8 @@ export const nothingCut = (colourways: readonly PiecesColourway[]): boolean => c
 // ---- a customer request (09-design §1.6) -------------------------------------------------------------------------------------
 
 /** Today's change and cancel, and the kinds the plan adds (B-PR-23: RUSH = "Urgent – asked", HOLD = pause, …). */
-export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] as const
+// F-SA-246 (sa-8's B-SA-046): + DESIGN, a design change of some lines (its kind word `parts.request.kind.DESIGN`), the domain's order.
+export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'DESIGN', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] as const
 export type RequestKind = (typeof REQUEST_KINDS)[number]
 export const REQUEST_STATES = ['OPEN', 'COUNTERED', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const
 export type RequestState = (typeof REQUEST_STATES)[number]

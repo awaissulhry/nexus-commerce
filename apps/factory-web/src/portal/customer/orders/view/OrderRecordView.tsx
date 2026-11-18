@@ -120,6 +120,8 @@ export interface OrderRecordViewModel {
   /** The Report a problem dialog, open. */
   report?: ReportProblemModel | null
   // ---- end F-PR-24
+  /** F-SA-246: "Ask for a change" above the order's conversation (the Ask dialog), held with why; absent or null: not offered. */
+  askDoor?: { readonly held: string | null } | null
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -149,6 +151,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onAsk?: () => void
   // F-PR-24: Report a problem on this order; its dialog.
   onReportProblem?: () => void
+  /** F-SA-246: the conversation's "Ask for a change" (the Ask dialog). */
+  onAskChange?: () => void
   report?: ReportProblemActions
   dialog?: {
     change?: ChangeDialogActions
@@ -192,7 +196,13 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
   const record = model.record
   const dialog = model.dialog
   return (
-    <PortalRecordFrame thread={children ?? null} threadLabel={t('messages.label', { name: orderNameOf(record.order, locale, t) })} design={model.frame}>
+    <PortalRecordFrame
+      thread={children ?? null}
+      threadLabel={t('messages.label', { name: orderNameOf(record.order, locale, t) })}
+      design={model.frame}
+      // F-SA-246: the order's ask beside its conversation (the same Ask dialog as the band's "Ask us…").
+      door={model.askDoor ? { label: t('band.change'), held: model.askDoor.held, onOpen: () => actions?.onAskChange?.() } : null}
+    >
       <div className="fw-pord">
         {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
         {model.notice ? (
