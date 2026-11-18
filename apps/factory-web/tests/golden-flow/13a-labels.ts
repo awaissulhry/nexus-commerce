@@ -3,7 +3,7 @@ import { CERTIFICATE } from './03-certificate'
 import { STYLE } from './02-style'
 import { quiet, scanUntil, signIn, tablet, tile, worker } from './_harness/floor'
 import { defineStage } from './_harness/stages'
-import { answerOf, dialog, pickDate, press } from './_harness/ui'
+import { answerOf, chooseFromMenu, dialog, pickDate, press } from './_harness/ui'
 
 export default defineStage({
   proves:
@@ -45,8 +45,10 @@ export default defineStage({
       const inspector = await flow.desk('inspector')
       const { page } = inspector
       await inspector.go(`/compliance/certificates/${certificateId}`)
-      await page.getByRole('button', { name: 'More actions' }).first().click()
-      await page.getByRole('menuitem', { name: 'Mark suspended…' }).click()
+      // B-TH-267: the band (with its "⋯") stands while the certificate is read, its menu then holds only Keyboard; the actions
+      // come with the record, so the menu is opened once the record shows (and again until the item is there).
+      await expect(page.getByRole('tab', { name: /^Coverage/ }).or(page.getByRole('link', { name: /^Coverage/ })).first()).toBeVisible()
+      await chooseFromMenu(page.getByRole('button', { name: 'More actions' }).first(), page.getByRole('menuitem', { name: 'Mark suspended…' }))
       const form = dialog(page)
       await form.getByRole('textbox', { name: "The notified body's words" }).or(form.getByRole('textbox', { name: 'The notified body’s words' })).first().fill('Suspended for a check of the test house (made up)')
       await answerOf(page, 'POST', /\/suspend$/, () => press(form.getByRole('button', { name: 'Mark suspended' })))

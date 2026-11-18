@@ -235,17 +235,7 @@ function Ready({ invoice, model, actions, thread, printThread, depth }: { invoic
 
         {/* B-TH-268: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
         <RecordNotices>
-          {model.changed && (
-            <Banner
-              tone="info"
-              title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
-              action={
-                <Button size="sm" onClick={() => actions?.onReload?.()}>
-                  {t('record.reload')}
-                </Button>
-              }
-            />
-          )}
+          {/* End check (B-TH-268): the answer to the person's own action first, as on every other record; the rest behind "N more notices". */}
           {model.notice && (
             <Banner
               tone={model.notice.tone}
@@ -256,6 +246,17 @@ function Ready({ invoice, model, actions, thread, printThread, depth }: { invoic
                     {t('common.dismiss')}
                   </Button>
                 ) : undefined
+              }
+            />
+          )}
+          {model.changed && (
+            <Banner
+              tone="info"
+              title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
+              action={
+                <Button size="sm" onClick={() => actions?.onReload?.()}>
+                  {t('record.reload')}
+                </Button>
               }
             />
           )}

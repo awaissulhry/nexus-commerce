@@ -4,7 +4,7 @@ import { expectNothingOf, pageWords } from './_harness/brand-scan'
 import { seen, type Desk, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
-import { day, pickDate } from './_harness/ui'
+import { chooseFromMenu, day, pickDate } from './_harness/ui'
 import { words } from './_harness/words'
 
 /**
@@ -261,8 +261,8 @@ export default defineStage({
     await flow.step('sales closes it (Done, told to Brand Alpha); an admin sees Reopen on the band and none in the thread’s head; A reads the outcome', async () => {
       const { page } = sales
       await sales.go(`/products/projects/${run.id}`)
-      await page.getByRole('button', { name: RECORD('band.moreLabel') }).first().click()
-      await page.getByRole('menuitem', { name: RECORD('band.more.close') }).click()
+      // The band's "⋯" stands while the project is read (its menu then without the record's actions): opened again until Close is there.
+      await chooseFromMenu(page.getByRole('button', { name: RECORD('band.moreLabel') }).first(), page.getByRole('menuitem', { name: RECORD('band.more.close') }))
       const close = page.getByRole('dialog', { name: RECORD('close.title', { number: run.number }) })
       await seen(close, 60_000)
       await close.getByRole('radio', { name: new RegExp(`^${escape(PROJECTS('outcome.DONE'))}`) }).check()

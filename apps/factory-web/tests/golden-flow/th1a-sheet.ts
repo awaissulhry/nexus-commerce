@@ -50,11 +50,15 @@ export default defineStage({
     const betaId = await flow.seedId('party:P1')
     const alphaOrder = flow.state.order as { id: string; number: string }
 
-    await flow.step('the two customers become Brand Alpha and Brand Beta (made-up names)', async () => {
+    // End check (fix-browser-1): their own names are kept, and given back at the end of this stage (the last step).
+    const ownNames = await flow.step('the two customers become Brand Alpha and Brand Beta (made-up names)', async () => {
+      const names: Record<string, { legalName: string; tradeName: string | null }> = {}
       for (const [id, brand] of [[alphaId, BRAND_ALPHA], [betaId, BRAND_BETA]] as const) {
         const party = (await flow.read(page, `/parties/${id}`)).party
+        names[id] = { legalName: party.legalName as string, tradeName: (party.tradeName ?? null) as string | null }
         await flow.write(page, 'PATCH', `/parties/${id}`, { version: party.version, legalName: brand.legalName, tradeName: brand.tradeName })
       }
+      return names
     })
 
     await flow.step('sales: the sheet of every customer — Picture, Brand, Invoiced; every number is a link', async () => {
@@ -107,5 +111,15 @@ export default defineStage({
       expect(brandMarkersIn(await pageWords(beta.page), BRAND_ALPHA)).toEqual([])
       await flow.shot(beta.page, 'sheet-beta-only')
     })
+
+    // ---- End check (fix-browser-1): TH-1b makes its own two brands of P1 and P3 (and TH-7, TH-4, TH-5, TH-6 work on them): the W1
+    // customer would otherwise stay a second "Brand Alpha S.r.l." beside P1, two customers of one name in a picker or a switcher.
+    await flow.step('the two customers take back their own names (the next stages make their own Brand Alpha and Brand Beta)', async () => {
+      for (const [id, name] of Object.entries(ownNames ?? {})) {
+        const party = (await flow.read(page, `/parties/${id}`)).party
+        await flow.write(page, 'PATCH', `/parties/${id}`, { version: party.version, legalName: name.legalName, tradeName: name.tradeName })
+      }
+    })
+    // ---- end fix-browser-1
   },
 })

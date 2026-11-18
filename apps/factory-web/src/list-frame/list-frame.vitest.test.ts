@@ -9,6 +9,7 @@ import { designScreen, LAB_ROWS } from './fixtures'
 import { labRowReason } from './lab/ListFrameLab'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, FRAME_KEYS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, rangeIds, sameIds, selectAllState, toggleAll, toggleId } from './model'
+import { clickedColumn, type ClickTarget } from './model' // end check (B-TH-245)
 
 /**
  * The list frame (Owner rule 2026-10-29): the selection rules every Office list shares, the keys its footer icon lists,
@@ -254,3 +255,22 @@ describe('group rows (B-TH-241)', () => {
   })
 })
 // ── end B-TH-241 ──
+
+// ---- End check (B-TH-245): a double click on a cell that edits opens its editor, never the record
+describe('end check: the cell a row click was on, also when the double click made it the editor', () => {
+  const inCell = (colId: string | null, isConnected = true): ClickTarget => ({ isConnected, closest: (selector) => (selector === '.ag-cell' && colId ? { getAttribute: (name) => (name === 'col-id' ? colId : null) } : null) })
+  it('reads the clicked cell while it is on the page, else the grid’s focused cell', () => {
+    expect(clickedColumn(inCell('cf:lining'), null)).toBe('cf:lining')
+    expect(clickedColumn(inCell(null), 'number')).toBeNull()
+    // The editor replaced the clicked text before the grid reported the clicks: the focused cell, never "no cell".
+    expect(clickedColumn(inCell(null, false), 'cf:lining')).toBe('cf:lining')
+    expect(clickedColumn(null, 'cf:lining')).toBeNull()
+  })
+  it('the row click keeps a cell that is editing and reads the focused cell (the frame’s source)', () => {
+    const frame = readFileSync(new URL('./ListFrame.tsx', import.meta.url), 'utf8')
+    const click = frame.slice(frame.indexOf('const onRowClicked = useCallback'), frame.indexOf('rowClickRef.current(event.data, click)'))
+    expect(click).toContain('api.getEditingCells().length > 0) return')
+    expect(click).toContain('clickedColumn(target, api?.getFocusedCell()?.column.getColId() ?? null)')
+  })
+})
+// ---- end B-TH-245
