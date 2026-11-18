@@ -248,6 +248,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/shipments/manifest',
   '/warehouse/shipments/customs-paper',
   '/warehouse/shipping',
+  // F-PR-04: Production › Overview, the area's first page (`/production` opens it).
+  '/production/overview',
   '/production/floor',
   // B-W2b-66: the Office's preview of a line TV (SCR-173 display.preview), a window page.
   '/production/floor/display',

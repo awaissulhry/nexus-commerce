@@ -1,9 +1,9 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { counterBrandRequest, refuseBrandRequest } from './answer'
-import { acceptBrandRequest } from './accept' // B-PR-27a
-import { acceptContract, counterContract, impactContract, listContract, recordContract, refuseContract } from './contract'
+import { counterBrandRequest, refuseBatch /* B-PR-46a */, refuseBrandRequest } from './answer'
+import { acceptBatch /* B-PR-46a */, acceptBrandRequest } from './accept' // B-PR-27a
+import { acceptContract, batchAcceptContract, batchRefuseContract, counterContract, impactContract, listContract, recordContract, refuseContract } from './contract'
 import { manifest } from './manifest'
 import { brandRequestImpact, brandRequestRecord, listBrandRequests } from './read'
 
@@ -26,4 +26,9 @@ export default defineRoutes('production.brand-requests', manifest, async (app) =
 
   // B-PR-27a/b: accepting a production ask carries it out in ONE command (./accept.ts).
   app.post('/production/brand-requests/:requestId/accept', { schema: acceptContract }, async (request) => acceptBrandRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))
+
+  // B-PR-46a: a customer's batch answered as one group (accept all / refuse all; each request its own command and key).
+  app.post('/production/brand-requests/batches/:batchId/accept', { schema: batchAcceptContract }, async (request) => acceptBatch(request, request.params.batchId, request.body, idempotencyKeyFrom(request), appClock(app)))
+
+  app.post('/production/brand-requests/batches/:batchId/refuse', { schema: batchRefuseContract }, async (request) => refuseBatch(request, request.params.batchId, request.body, idempotencyKeyFrom(request), appClock(app)))
 })

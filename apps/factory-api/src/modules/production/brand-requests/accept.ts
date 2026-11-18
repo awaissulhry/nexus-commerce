@@ -40,6 +40,12 @@ import { readWorkOrder, type Reader } from '../work-orders/store'
 import { priorityEvent } from '../work-orders/work-orders'
 import { newId } from '@nexus/factory-domain/core/ids'
 // ── end B-PR-27b ──
+// ── B-PR-46a: a customer's batch accepted as one group ──
+import { BATCH_ANSWER_WORDS, BATCH_RUSH_FLOOR_ONLY } from '@nexus/factory-domain/production-brand/bulk'
+import { acceptRequest } from '../../sales/change-requests/office'
+import { answerEach, type BatchItem } from './answer'
+import { readableBatch } from './read'
+// ── end B-PR-46a ──
 
 /**
  * B-PR-27a — accepting a customer's production ask does the work (production plan §3 "Brand asks, we decide", "Who answers /
@@ -328,3 +334,39 @@ export async function acceptBrandRequest(caller: CommandCaller, requestId: strin
   ).catch((error: unknown) => (kind === 'SAMPLE_ROUND' ? databaseRefusal(error) : Promise.reject(error)))
   return { request: await viewAfter(caller, requestId), done: result }
 }
+
+// ── B-PR-46a: a customer's batch accepted as one group (Home › Approvals "Accept all") ─────────────────────────────────────────
+
+export interface BatchAcceptBody {
+  readonly items: readonly BatchItem[]
+  /** Our words to the customer, the same on every request (optional on an accept). */
+  readonly answer?: string | null | undefined
+  /** A batch of "Urgent – asked" only: "Accept and rush the floor" (true) or "Accept as urgent" (false, left out). */
+  readonly rushFloor?: boolean | undefined
+}
+
+/**
+ * POST /production/brand-requests/batches/:batchId/accept — every request named accepted through ITS kind's own accept, one by
+ * one, each its own command and key (./answer.ts answerEach): a pause, a resume, an "Urgent – asked" (as urgent, or with a rush of
+ * the floor) or another sample round here (acceptBrandRequest), a cancel, a change or ship what is ready through Sales' accept
+ * (sales/change-requests acceptRequest). Each is re-checked at the version the office read; one refused is that row's result.
+ */
+export async function acceptBatch(caller: CommandCaller, batchId: string, body: BatchAcceptBody, idempotencyKey: string | undefined, clock: Clock) {
+  const actor = actorOf(officeContextOf(caller))
+  if (!brandRequestWhere(actor)) throw new ForbiddenError()
+  const rows = await caller.withClient((client) => readableBatch(client, actor, batchId))
+  // One kind per batch (the database keeps it so).
+  const kind = rows[0]!.kind as OrderRequestKind
+  if (body.rushFloor !== undefined && kind !== 'RUSH') throw new ValidationError(BATCH_RUSH_FLOOR_ONLY, [{ path: 'body/rushFloor', message: BATCH_RUSH_FLOOR_ONLY }])
+  const problems = answerProblems('ACCEPTED', body.answer)
+  if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+  return answerEach(caller, { batchId, rows, items: body.items, keyName: 'batch-accept' }, idempotencyKey, async (row, version, key) => {
+    if (isProductionAccept(row.kind as OrderRequestKind)) {
+      const accepted = await acceptBrandRequest(caller, row.id, { version, answer: body.answer, ...(body.rushFloor !== undefined ? { rushFloor: body.rushFloor } : {}) }, key, clock)
+      return accepted.done.words
+    }
+    await acceptRequest(caller, row.id, { version, answer: body.answer }, key, clock)
+    return BATCH_ANSWER_WORDS.ACCEPTED
+  })
+}
+// ── end B-PR-46a ──

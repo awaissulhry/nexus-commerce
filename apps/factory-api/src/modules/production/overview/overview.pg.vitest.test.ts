@@ -171,6 +171,8 @@ describe('B-PR-33: the all-customers overview', { timeout: SLOW_TEST_TIMEOUT_MS 
       for (const block of ['HOLD', 'CUSTOMER', 'MATERIAL'] as const) expect((await listIds(session, `&blockedBy=${block}`)).length, `${session} ${block}`).toBe(overall.blockedBy[block])
       expect((await listIds(session, '&gate=true&open=true')).length, session).toBe(overall.blockedBy.GATE)
       expect((await listIds(session, '&mixed=true&open=true')).length, session).toBe(overall.blockedBy.NEEDS_SPLIT)
+      // F-PR-04: the "No customer" row (the work of no customer) opens the list's noCustomer filter.
+      expect((await listIds(session, '&noCustomer=true&open=true')).length, session).toBe(answer.noCustomer?.inProduction.workOrders ?? 0)
       // Customer urgency: the list's F-PR-18 filter (Urgent counts only while the customer's switch is on).
       expect((await listIds(session, '&customerUrgency=URGENT&open=true')).length, session).toBe(overall.customerUrgent)
       expect((await listIds(session, `&open=true&partyId=${world.ids.b}`)).length, session).toBe(rowOf(answer, world.ids.b)!.inProduction.workOrders)
@@ -186,11 +188,15 @@ describe('B-PR-33: the all-customers overview', { timeout: SLOW_TEST_TIMEOUT_MS 
     expect(await listIds('office.all', '&gate=true')).toEqual(expect.arrayContaining([B.hB, world.w.mixed.workOrderId]))
     expect(await listIds('office.all', '&mixed=true')).toEqual([world.w.mixed.workOrderId])
     expect(await listIds('office.p2', '&mixed=true')).toEqual([])
+    // F-PR-04: the work of no customer never reaches a person limited to some customers; the mixed one is not "no customer".
+    expect(await listIds('office.p2', '&noCustomer=true')).toEqual([])
+    expect(await listIds('office.all', '&noCustomer=true')).not.toContain(world.w.mixed.workOrderId)
     // The export follows the screen.
     const sessions = twoBrandSessions(world.ids.tenantId, world.ids.a, world.ids.b, ['workorders.view'])
     const exported = async (session: Session, address: string) => (await workOrderExport.read(callerFor(world.h.database, { ...sessions[session], requestId: newId() } as never), workOrderExport.query(new URLSearchParams(address)), null, 200)).rows.map((row) => (row as Json).id as string)
     expect(await exported('office.all', 'view=all&mixed=true')).toEqual([world.w.mixed.workOrderId])
     expect(await exported('office.p2', 'view=all&gate=true')).toEqual([B.hB])
+    expect(await exported('office.p2', 'view=all&noCustomer=true')).toEqual([]) // F-PR-04
   })
 
   it('Most urgent pages in the list’s risk sort with the count of all; a cursor of another list is refused in words', async () => {

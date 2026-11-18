@@ -131,6 +131,7 @@
     "production": {
       "area": "Produzione",
       "main": "Principali",
+      "overview": "Panoramica",
       "floor": "Reparto ora",
       "workOrders": "Ordini di produzione",
       "dispatch": "Assegnazione lavoro",

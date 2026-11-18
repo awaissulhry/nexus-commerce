@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { isPartnerMessageKey, PARTNER_MESSAGE_KEYS, PARTNER_MESSAGE_TEMPLATES, partnerSentence, productionWordsOf, topicOfNotice } from '../portal/notifications/messages'
 import { defaultFrequencyOf, frequencyOf, isTransactional, NON_ESSENTIAL_TOPICS, PARTNER_EMAIL_TOPICS, TOPIC_WORDS, type PartnerEmailFrequency, type PartnerEmailTopic } from '../portal/notifications/topics'
 import { HEALTH_NOTICE_KEYS, HOLD_CAUSE_OF_EVENT, healthNoticeKey, holdNoticeKey, problemNotice, STAGE_NOTICE_KEYS, stageNoticeKey, URGENCY_NOTICE_KEYS, urgencyNoticeKey } from './notices'
+// B-PR-31 (F-PR-15's ask): a gate passed or started before, a final inspection's result — each at the level that shares it.
+import { GATE_NOTICE_KEYS, gateNoticeKey, QUALITY_NOTICE_KEYS, qualityNoticeKey } from './notices'
+import { BRAND_GATE_KINDS } from './portal-read'
+import { PRODUCTION_SHARE_LEVELS } from './levels'
 
 /**
  * B-PR-31 — which notice a customer is told of its own production, and its words (production plan §6 "Notifications" L15; review
@@ -132,7 +136,7 @@ describe('B-PR-31 the words: Italian in "voi", the customer\'s own number, never
         }
       }
     }
-    expect(productionWordsOf({ more: 1.5, inSeq: 0 }, 'en')).toEqual({ inYours: 'another of your orders', more: '' })
+    expect(productionWordsOf({ more: 1.5, inSeq: 0 }, 'en')).toEqual({ inYours: 'another of your orders', more: '', gate: '' })
   })
 
   it('topic PRODUCTION: non-essential, a daily summary until changed; a change or cancel countered is order news (at once)', () => {
@@ -151,5 +155,70 @@ describe('B-PR-31 the words: Italian in "voi", the customer\'s own number, never
     expect(topicOfNotice({ messageKey: 'portal.order.countered', recordLabel: '#12', params: {} }, () => null)).toBe('ORDERS')
     // Every key a decision gives is a production notice.
     for (const key of [...Object.values(STAGE_NOTICE_KEYS), ...Object.values(HEALTH_NOTICE_KEYS), ...Object.values(URGENCY_NOTICE_KEYS)]) expect(PRODUCTION_KEYS).toContain(key)
+  })
+})
+
+describe('B-PR-31 (F-PR-15\'s ask): a gate passed or started before at + Gates & dates, a final inspection\'s result at + Quality & photos', () => {
+  const passed = { passed: true, startedBefore: false }
+  const ahead = { passed: false, startedBefore: true }
+  it('a gate: only its real gates, only from + Gates & dates, only while the gate still reads so; any other change is the page\'s', () => {
+    expect(gateNoticeKey({ change: 'PASSED', kind: 'PP_SAMPLE' }, passed, 'GATES')).toBe('portal.production.gate_passed')
+    expect(gateNoticeKey({ change: 'PASSED', kind: 'SIZE_SET' }, passed, 'QUALITY')).toBe('portal.production.gate_passed')
+    expect(gateNoticeKey({ change: 'STARTED_BEFORE', kind: 'LEATHER_APPROVED' }, ahead, 'GATES')).toBe('portal.production.gate_started_before')
+    // Below + Gates & dates the customer never reads its gates: no notice of them either.
+    for (const level of ['STATUS', 'PROGRESS'] as const) {
+      expect(gateNoticeKey({ change: 'PASSED', kind: 'PP_SAMPLE' }, passed, level)).toBeNull()
+      expect(gateNoticeKey({ change: 'STARTED_BEFORE', kind: 'PP_SAMPLE' }, ahead, level)).toBeNull()
+    }
+    expect(gateNoticeKey({ change: 'PASSED', kind: 'PP_SAMPLE' }, passed, null)).toBeNull()
+    // A gate in the office's own words never reaches a customer.
+    expect(gateNoticeKey({ change: 'PASSED', kind: 'OTHER' }, passed, 'QUALITY')).toBeNull()
+    // Stale: passed no more (removed, or no gate at all); a start before passed since is told as passed, not as missed.
+    expect(gateNoticeKey({ change: 'PASSED', kind: 'PP_SAMPLE' }, { passed: false, startedBefore: false }, 'GATES')).toBeNull()
+    expect(gateNoticeKey({ change: 'PASSED', kind: 'PP_SAMPLE' }, null, 'GATES')).toBeNull()
+    expect(gateNoticeKey({ change: 'STARTED_BEFORE', kind: 'PP_SAMPLE' }, { passed: true, startedBefore: true }, 'GATES')).toBeNull()
+    for (const change of ['ADDED', 'EDITED', 'REMOVED']) expect(gateNoticeKey({ change, kind: 'PP_SAMPLE' }, passed, 'QUALITY')).toBeNull()
+    // Every real gate kind is told at the levels that share gates.
+    for (const kind of BRAND_GATE_KINDS) for (const level of PRODUCTION_SHARE_LEVELS) expect(gateNoticeKey({ change: 'PASSED', kind }, passed, level) !== null).toBe(level === 'GATES' || level === 'QUALITY')
+  })
+
+  it('a final inspection: told only of work made for the customer alone at + Quality & photos, while it still reads that result', () => {
+    expect(qualityNoticeKey({ status: 'PASSED' }, 'PASSED', true)).toBe('portal.production.qc_passed')
+    expect(qualityNoticeKey({ status: 'FAILED' }, 'FAILED', true)).toBe('portal.production.qc_failed')
+    // A shared work order (or a level below Quality & photos: workOrderAlone says false), or a row that reads otherwise: nothing.
+    expect(qualityNoticeKey({ status: 'PASSED' }, 'PASSED', false)).toBeNull()
+    expect(qualityNoticeKey({ status: 'PASSED' }, 'FAILED', true)).toBeNull()
+    expect(qualityNoticeKey({ status: 'FAILED' }, 'CANCELLED', true)).toBeNull()
+    expect(qualityNoticeKey({ status: 'PASSED' }, null, true)).toBeNull()
+  })
+
+  it('their words: the gate in the customer\'s words (never a reason), "and 2 more" of its own orders, Italian in "voi"; topic PRODUCTION', () => {
+    const en = (messageKey: string, params: Record<string, unknown>) => partnerSentence({ messageKey, recordLabel: '#12', params }, 'en', 'Factory Spa')
+    const it_ = (messageKey: string, params: Record<string, unknown>) => partnerSentence({ messageKey, recordLabel: '#12', params }, 'it', 'Factory Spa')
+    const pp = { ...order12.params, gate: 'PP_SAMPLE' }
+    expect([en('portal.production.gate_passed', pp), it_('portal.production.gate_passed', pp)]).toEqual(['A gate of your order 12 is passed: PP sample', 'Una tappa per il vostro ordine 12 è superata: Campione di pre-produzione'])
+    expect([en('portal.production.gate_started_before', pp), it_('portal.production.gate_started_before', pp)]).toEqual([
+      'We started work on your order 12 before a gate was passed: PP sample',
+      'Abbiamo avviato la lavorazione per il vostro ordine 12 prima che una tappa fosse superata: Campione di pre-produzione',
+    ])
+    // A kind the customer does not read (the office's OTHER) or none: the sentence names no gate.
+    expect(en('portal.production.gate_passed', { ...order12.params, gate: 'OTHER' })).toBe('A gate of your order 12 is passed')
+    expect(en('portal.production.gate_passed', order12.params)).toBe('A gate of your order 12 is passed')
+    const two = { ...order12.params, more: 2 }
+    expect([en('portal.production.qc_passed', two), it_('portal.production.qc_passed', two)]).toEqual(['The final inspection of your order 12 and 2 more passed', "L'ispezione finale per il vostro ordine 12 e altri 2 è superata"])
+    expect([en('portal.production.qc_failed', order12.params), it_('portal.production.qc_failed', order12.params)]).toEqual(['The final inspection of your order 12 did not pass', "L'ispezione finale per il vostro ordine 12 non è superata"])
+    expect(productionWordsOf({ gate: 'LAB_PASSED' }, 'it').gate).toBe(': Test di laboratorio')
+    expect(productionWordsOf({ gate: 42 }, 'en').gate).toBe('')
+    for (const key of [...Object.values(GATE_NOTICE_KEYS), ...Object.values(QUALITY_NOTICE_KEYS)]) {
+      expect(PRODUCTION_KEYS).toContain(key)
+      expect(topicOfNotice({ messageKey: key, recordLabel: '#12', params: {} }, () => null)).toBe('PRODUCTION')
+      for (const locale of ['it', 'en'] as const) {
+        for (const params of [order12.params, {}, { gate: 'TRIMS_IN', more: 1 }]) {
+          const words = partnerSentence({ messageKey: key, recordLabel: '#12', params }, locale, 'Factory Spa')
+          expect(words).not.toMatch(/[{}]|SO-|WO-|INS-/)
+          if (locale === 'it') expect(words, key).not.toMatch(/\b(tu|ti|tuo|tua|tuoi|tue)\b/i)
+        }
+      }
+    }
   })
 })

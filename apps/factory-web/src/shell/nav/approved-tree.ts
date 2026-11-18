@@ -338,6 +338,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Principali',
         hideLabel: true,
         pages: [
+          // Production plan F-PR-04 (2026-11-16, the Owner's yes 11-17): Overview, the area's new first page (06-tree A.1).
+          { id: 'production.overview', title: 'Overview', titleIt: 'Panoramica', wave: 'W2b', href: '/production/overview' },
           { id: 'production.floor', title: 'Floor now', titleIt: 'Reparto ora', wave: 'W1', href: '/production/floor' },
           { id: 'production.workorders', title: 'Work orders', titleIt: 'Ordini di produzione', wave: 'W1', href: '/production/work-orders' },
           // W2b: B-W2b-56 Dispatch (SCR-138).

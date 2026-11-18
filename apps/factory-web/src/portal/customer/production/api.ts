@@ -99,6 +99,18 @@ const next = z.object({
 
 const count = z.object({ done: z.number(), of: z.number(), words })
 
+// ---- F-PR-24: the state of the problems it reported on the order (B-PR-18's `problem`, R-42/R-43). Its words are drawn by the web
+// (the customer's own number for "Answered in your order 13"; the API's words name the office's series): only the facts are kept.
+const problemState = z.object({
+  state: z.enum(['WAITING_ON_US', 'ANSWERED', 'ANSWERED_IN']),
+  since: z.string().nullable(),
+  on: z.string().nullable(),
+  /** ANSWERED_IN: its own order whose thread holds our answer (its PO and its own number are drawn, the office's never). */
+  inOrder: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), yourNumber }).nullable(),
+})
+export type ProblemState = z.infer<typeof problemState>
+// ---- end F-PR-24
+
 export const productionRowSchema = z.object({
   id: z.string(),
   customerRef: z.string().nullable(),
@@ -118,6 +130,7 @@ export const productionRowSchema = z.object({
   urgency: urgency.nullable(),
   next: next.nullable(),
   count: count.nullable(),
+  problem: problemState.nullable().optional(), // F-PR-24
 })
 export type ProductionRow = z.infer<typeof productionRowSchema>
 
@@ -229,6 +242,7 @@ export const productionOrderSchema = z.object({
     .nullable(),
   /** + Gates & dates (F-PR-12b); null or absent: its level does not share them (not drawn). The states are drawn in the web's words. */
   gates: gatesSection.nullable().optional(),
+  problem: problemState.nullable().optional(), // F-PR-24
   live,
 })
 export type ProductionOrder = z.infer<typeof productionOrderSchema>

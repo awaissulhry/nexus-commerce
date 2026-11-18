@@ -356,6 +356,10 @@ function WorkOrdersContainer() {
     assign: assign.model,
     // F-PR-18
     customerUrgency: terms.customerUrgency,
+    // F-PR-04: the Overview's flags.
+    gate: terms.gate,
+    mixed: terms.mixed,
+    noCustomer: terms.noCustomer,
     // F-PR-22
     noteCan,
     note: note.model,

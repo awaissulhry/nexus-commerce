@@ -27,6 +27,13 @@ import type { ProductionGates } from '../../production/api'
 import { APPROVAL_STATE_TONE, GATE_STATE_TONE, gatesEmpty, gatesWaitOnYou, piecesOf, productionOwnsProgress } from '../../production/model'
 // ---- end F-PR-12b
 import { ProductionQualityCard } from './QualityCard' // F-PR-12c: + Quality & photos
+// ---- F-PR-24: the problems it reported on this order (chip + Report a problem) and the order's files (the newest three we shared)
+import { Download, Eye } from 'lucide-react'
+import { FileRow } from '../../../../lib/i18n/ds-parts'
+import { recordHref } from '../model'
+import { orderFilesOf } from '../../production/problem/model'
+import '../../production/problem/problem.css'
+// ---- end F-PR-24
 
 /**
  * Order › Status & progress (design rec "Order" tab status): "Please re-confirm" when a revised version waits (SAL-222), where
@@ -62,7 +69,11 @@ export function StatusTab({ model, record, actions }: { model: OrderRecordViewMo
       {/* B-TH-275 */}
       <StateLine model={model} record={record} />
       <Tracker model={model} record={record} actions={actions} />
+      {/* F-PR-24: "Problem reported · Waiting on us since 16 Nov" (then "Answered 17 Nov") and Report a problem, while production is drawn. */}
+      {production ? <ProductionProblem model={model} actions={actions} /> : null}
       <Requests model={model} actions={actions} />
+      {/* F-PR-24: Order files (3) — the newest files we shared on this order and its lines; none: not drawn. */}
+      {production ? <OrderFiles model={model} record={record} actions={actions} /> : null}
       {/* F-PR-12b: gates & dates, then the pieces, each only at the level that shares it (null: not drawn). */}
       {production?.gates ? <ProductionGatesCard gates={production.gates} href={model.waitingHref ?? null} /> : null}
       {production?.progress ? <ProductionProgress progress={production.progress} offline={model.offlineSince !== null} /> : null}
@@ -395,6 +406,93 @@ function ProductionProgress({ progress, offline }: { progress: NonNullable<Produ
   )
 }
 // ---- end F-PR-12b
+
+// ---- F-PR-24 ------------------------------------------------------------------------------------------------------------------
+/** The problems it reported on this order in one line (never who answers: whoever does signs in the thread) and Report a problem. */
+function ProductionProblem({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
+  const { t } = useOrderWords()
+  const problem = model.problem
+  if (!problem || (!problem.chip && !problem.report)) return null
+  return (
+    <section className="fw-pprob-row" aria-label={t('reported.label')}>
+      {problem.chip ? <Pill tone={problem.chip.tone}>{problem.chip.text}</Pill> : null}
+      {problem.report ? (
+        <Button size="sm" className="fw-pord-push" heldReason={problem.report.held} onClick={() => actions?.onReportProblem?.()}>
+          {t('reported.report')}
+        </Button>
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * "Order files (3)": the newest three files we shared on this order and its lines (its documents read: confirmations only for a
+ * role that sees prices — the API's own rule), each opened in place (a PDF) or downloaded, both logged; "All in Documents (7)"
+ * opens the Documents tab (one home for files). Reading: its place; could not be read: said with Try again; none: not drawn.
+ */
+function OrderFiles({ model, record, actions }: { model: OrderRecordViewModel; record: OrderRecord; actions?: OrderRecordActions }) {
+  const { t, locale, day } = useOrderWords()
+  const documents = model.documents
+  if (documents.state === 'noAccess') return null
+  if (documents.state === 'loading') {
+    return (
+      <Card header={t('orderFiles.label')} headingLevel={2}>
+        <Loading rows={2} height={44} />
+      </Card>
+    )
+  }
+  if (documents.state === 'error' || !documents.read) {
+    return (
+      <Card header={t('orderFiles.label')} headingLevel={2}>
+        <ReadFailed title={t('orderFiles.failed')} onRetry={actions?.onRetryDocuments} />
+      </Card>
+    )
+  }
+  const files = orderFilesOf(documents.read.items)
+  if (files.count === 0) return null
+  return (
+    <Card
+      header={t('orderFiles.title', { count: files.count })}
+      headingLevel={2}
+      headerAction={
+        <Button asChild size="sm" variant="quiet">
+          <a href={recordHref(model.prefix, record.order.id, 'documents')}>{t('orderFiles.all', { count: files.count })}</a>
+        </Button>
+      }
+    >
+      <div className="fw-pord-stack" role="list" aria-label={t('orderFiles.label')}>
+        {files.shown.map((doc) => {
+          const title = doc.title[locale]
+          const pdf = doc.files.find((file) => file.format === 'PDF') ?? null
+          const first = doc.files[0] ?? null
+          return (
+            <div role="listitem" key={doc.id}>
+              <FileRow
+                name={title}
+                status={<span className="fw-pord-docline">{[doc.kindWords[locale], day(doc.date.slice(0, 10))].join(' · ')}</span>}
+                actions={
+                  <>
+                    {pdf ? (
+                      <Button size="sm" variant="quiet" heldReason={model.fileHeld} aria-label={t('orderFiles.openOf', { name: title })} onClick={() => actions?.onPreview?.({ fileId: pdf.fileId, title })}>
+                        <Eye size={13} aria-hidden /> {t('orderFiles.open')}
+                      </Button>
+                    ) : null}
+                    {first ? (
+                      <Button size="sm" variant="quiet" heldReason={model.fileHeld} aria-label={t('orderFiles.downloadOf', { name: title })} onClick={() => actions?.onDownload?.({ fileId: (pdf ?? first).fileId, name: (pdf ?? first).name })}>
+                        <Download size={13} aria-hidden /> {t('orderFiles.download')}
+                      </Button>
+                    ) : null}
+                  </>
+                }
+              />
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+// ---- end F-PR-24
 
 function Requests({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
   const words = useOrderWords()

@@ -887,5 +887,19 @@
       "failedHeld": "Prima leggete cosa comporta: riprovate qui sopra.",
       "blockedHeld": "Una parte di ciò che chiedete non si può più cambiare: tornate indietro e cambiate la richiesta."
     }
+  },
+  "orderFiles": {
+    "title": "File dell'ordine ({count})",
+    "label": "I file più recenti che vi abbiamo condiviso su questo ordine e sulle sue righe",
+    "all": "Tutti in Documenti ({count})",
+    "open": "Apri",
+    "openOf": "Apri {name}",
+    "download": "Scarica",
+    "downloadOf": "Scarica {name}",
+    "failed": "Impossibile leggere i file dell'ordine."
+  },
+  "reported": {
+    "label": "I problemi che avete segnalato su questo ordine",
+    "report": "Segnala un problema"
   }
 }

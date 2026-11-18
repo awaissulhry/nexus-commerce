@@ -57,7 +57,10 @@
     "complaints": "Open complaints",
     "complaintsHint": "Complaints not closed",
     "unknown": "Could not be counted",
-    "failed": "The numbers could not be read."
+    "failed": "The numbers could not be read.",
+    "productionWaiting": "{count} waiting on you",
+    "productionAtRisk": "{count} at risk",
+    "productionOnHold": "{count} on hold"
   },
   "orders": {
     "title": "Your next deliveries",
@@ -333,5 +336,8 @@
     "noRight": "Only the buyers of your company send orders.",
     "noRightAsk": "Your admin can give you the right: {names}.",
     "noRightAskUs": "Ask us to add a buyer for your company."
+  },
+  "waiting": {
+    "all": "All {count} waiting"
   }
 }

@@ -95,6 +95,12 @@ import { askBodyOf, askChoicesOf, askHeld, askProblem, EMPTY_ASK, impactHeld, im
 import { useOrderWords } from './words'
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
+// ---- F-PR-24: Report a problem (the dialog My production opens too), the chip of the problems reported, the order's files card
+import { NS as PRODUCTION_NS, rowName } from '../production/model'
+import { problemChipOf } from '../production/problem/model'
+import { useReportProblem } from '../production/problem/useReportProblem'
+import { useProductionPageWords } from '../production/words'
+// ---- end F-PR-24
 
 /**
  * `/p/<party>/orders/<id>?tab=status|lines|shipments|documents&line=` for a customer (B-W2b-191; design portal.customer.orders rec
@@ -107,7 +113,7 @@ import { PortalLineOptions } from './options/PortalLineOptions'
  */
 export function CustomerOrderPage({ id }: { id: string }) {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists']}>
+    <WithMessages namespaces={[NS, 'ds-words', 'lists', PRODUCTION_NS /* F-PR-24: Report a problem */]}>
       <Suspense fallback={null}>
         <OrderRoute id={id} />
       </Suspense>
@@ -298,6 +304,31 @@ function OrderContainer({ id }: { id: string }) {
       return null
     }
   }, [api, id, readsDocuments])
+
+  // ---- F-PR-24: Report a problem on this order (in production, for a person who writes in its conversation: portal.comment); after it
+  // the order's production is read again (its chip: "Waiting on us since …"). The Status tab's "Order files (3)" reads the order's
+  // documents too (the newest we shared on it and its lines).
+  const productionWords = useProductionPageWords()
+  const mayReport = can('portal.comment') && seesProduction
+  const problemDialog = useReportProblem({
+    api,
+    locale,
+    t: productionWords.t,
+    writers: productionWords,
+    facts: { preview, offline, mayWrite: mayReport, seesFiles: readsDocuments, seesMessages: can('threads.read') },
+    onSent: () => void loadProduction(),
+  })
+  const inProduction = production.state === 'ready' && (production.read?.inProduction ?? false)
+  const reportFacts = mayReport && inProduction ? { held: preview ? productionWords.t('problem.held.preview') : offline ? productionWords.t('problem.held.offline') : null } : null
+  const openProblem = () => {
+    const read = production.read
+    if (read && reportFacts && reportFacts.held === null) problemDialog.open([{ id: read.order.id, name: rowName(read.order, locale, productionWords.t) }])
+  }
+  const productionReady = production.state === 'ready'
+  useEffect(() => {
+    if (tab === 'status' && productionReady && readsDocuments) void loadDocuments()
+  }, [tab, productionReady, readsDocuments, loadDocuments])
+  // ---- end F-PR-24
 
   const loadOpenItems = useCallback(async () => {
     if (!readsPayments) return
@@ -826,6 +857,7 @@ function OrderContainer({ id }: { id: string }) {
             pay: firstPay ? { held: firstPay[1].held } : null,
             // F-PR-13: "Ask us…" opens the Ask dialog (held like a change: a preview, no right to ask, offline).
             ask: { held: askHeldWords(null) },
+            problem: reportFacts, // F-PR-24
           },
           onChange: () => openChange(),
           onCancel: openCancel,
@@ -837,6 +869,7 @@ function OrderContainer({ id }: { id: string }) {
           onConfirmation: () => void openConfirmation(),
           onPay: () => (firstPay ? openPay(firstPay[0]) : undefined),
           onAsk: () => openAsk(), // F-PR-13
+          onProblem: openProblem, // F-PR-24
         })
       : { title: state === 'missing' ? t('record.missing') : t('list.title'), back: { href: `${frame.prefix}/orders`, label: t('list.title') } },
   )
@@ -959,6 +992,9 @@ function OrderContainer({ id }: { id: string }) {
         waitingHref: waitingHrefOf(frame.prefix),
         // F-PR-12c: + Quality & photos (hidden: not drawn).
         quality: seesProduction ? quality : { state: 'hidden', read: null },
+        // F-PR-24: the problems reported on this order (never who answers) and Report a problem; its dialog.
+        problem: productionReady && production.read ? { chip: problemChipOf(production.read.problem, productionWords.t, productionWords.day), report: reportFacts } : null,
+        report: problemDialog.model,
       }}
       actions={{
         onRetry: () => {
@@ -1004,6 +1040,10 @@ function OrderContainer({ id }: { id: string }) {
         onReport: openReport,
         onPhoto: showPhoto,
         // ---- end F-PR-12c
+        // ---- F-PR-24
+        onReportProblem: openProblem,
+        report: problemDialog.actions,
+        // ---- end F-PR-24
         dialog: {
           change: {
             onCells: (lineId, sizes) => setDialog((current) => (current?.kind === 'change' ? { ...current, problem: null, draft: { ...current.draft, cells: { ...current.draft.cells, [lineId]: sizes } } } : current)),
