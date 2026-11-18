@@ -144,7 +144,9 @@ describe('the messages on my work orders', () => {
     const [message, ...rest] = await messages()
     expect(rest).toEqual([])
     expect(message).toMatchObject({ workOrder: { id: workOrder, number: 'SEED-WO-0001' }, from: 'OFFICE', text: 'Use the reinforced thread on this order.', cut: false, at: NOW.toISOString() })
-    expect(Object.keys(message!).sort()).toEqual(['at', 'cut', 'from', 'id', 'text', 'workOrder'])
+    // B-SA-053: + kind (a plain note) and check (null: only an order change's note opens before Start).
+    expect(Object.keys(message!).sort()).toEqual(['at', 'check', 'cut', 'from', 'id', 'kind', 'text', 'workOrder'])
+    expect(message).toMatchObject({ kind: 'NOTE', check: null })
     expect(JSON.stringify(message)).not.toContain('Made-up Office Person')
   })
 
@@ -266,5 +268,67 @@ describe('a note reaches the tablets only when a person ticks for the floor (B-W
   it('keeps a message append-only: the tick cannot be set or taken off afterwards, by anyone', async () => {
     await expect(admin(`UPDATE "Message" SET "forFloor" = false WHERE "tenantId" = $1 AND "forFloor"`, [T])).rejects.toThrow(/append-only/)
     await expect(admin(`UPDATE "Message" SET "forFloor" = true WHERE "tenantId" = $1 AND NOT "forFloor"`, [T])).rejects.toThrow(/append-only/)
+  })
+})
+
+// ---- B-SA-053 (sales page plan P8', R2; 14-change-flow §5.3): an order change's note for the floor -------------------------------
+describe('an order change reaches the floor as its own kind, the newest of each work order, STOP while held, else CHECK (B-SA-053)', () => {
+  /** The system's own floor note, as modules/sales/orders/change-notes.ts writes it (SYSTEM, no name, for the floor). */
+  async function orderChange(text: string, at: Date): Promise<string> {
+    const threadId = (await admin<{ id: string }>(`SELECT id FROM "Thread" WHERE "tenantId" = $1 AND "recordType" = 'WorkOrder' AND "recordId" = $2`, [T, workOrder]))[0]!.id
+    const id = newId()
+    await admin(
+      `INSERT INTO "Message" (id, "tenantId", "threadId", direction, audience, channel, "authorKind", "authorId", "authorName", "bodyText", at, "forFloor") VALUES ($1, $2, $3, 'INTERNAL_NOTE', 'OFFICE', 'APP', 'SYSTEM', NULL, NULL, $4, $5, true)`,
+      [id, T, threadId, text, at],
+    )
+    return id
+  }
+  /** The work order's state, set as a hold would leave it (the database's rules off for the set-up only). */
+  async function statusOf(status: string): Promise<void> {
+    await db.admin.query('BEGIN')
+    try {
+      await db.admin.query("SET LOCAL session_replication_role = 'replica'")
+      await db.admin.query(`UPDATE "WorkOrder" SET status = $2::"WorkOrderStatus" WHERE id = $1`, [workOrder, status])
+      await db.admin.query('COMMIT')
+    } catch (error) {
+      await db.admin.query('ROLLBACK')
+      throw error
+    }
+  }
+
+  it("lists only the newest order-change note of the work order, from the office, as CHECK; a plain note and a station's comment stay notes", async () => {
+    const older = await orderChange("Modifica d'ordine su SEED-WO-0001 (P1): taglia 52 ora 3 (erano 4).", new Date(NOW.getTime() + 10_000))
+    const newer = await orderChange('SEED-WO-0001 cambiato: taglia 52 3.', new Date(NOW.getTime() + 20_000))
+    await writeRaw(workOrder, { kind: 'SYSTEM', authorName: 'SEW-02', text: 'A station said this after the change.', at: new Date(NOW.getTime() + 30_000) })
+    const list = await messages()
+    expect(list.map((message) => message.id)).not.toContain(older)
+    const shown = list.find((message) => message.id === newer)
+    expect(shown).toMatchObject({ kind: 'ORDER_CHANGE', check: 'CHECK', from: 'OFFICE', workOrder: { id: workOrder, number: 'SEED-WO-0001' } })
+    expect(list.filter((message) => message.kind === 'ORDER_CHANGE')).toHaveLength(1)
+    expect(list.find((message) => message.text === 'A station said this after the change.')).toMatchObject({ kind: 'NOTE', check: null, from: 'FLOOR' })
+  })
+
+  it('reads STOP while the work order is held, and CHECK again once it is not (never stored)', async () => {
+    const [before] = await admin<{ status: string }>(`SELECT status::text AS status FROM "WorkOrder" WHERE id = $1`, [workOrder])
+    await statusOf('ON_HOLD')
+    try {
+      expect((await messages()).find((message) => message.kind === 'ORDER_CHANGE')).toMatchObject({ check: 'STOP' })
+    } finally {
+      await statusOf(before!.status)
+    }
+    expect((await messages()).find((message) => message.kind === 'ORDER_CHANGE')).toMatchObject({ check: 'CHECK' })
+  })
+
+  it('records nothing about who or which station saw it (R2): the read writes no row and no route takes a "seen"', async () => {
+    const count = async () => Number((await admin<{ n: string }>(`SELECT (SELECT count(*) FROM "AuditLog" WHERE "tenantId" = $1) + (SELECT count(*) FROM "OutboxEvent" WHERE "tenantId" = $1) AS n`, [T]))[0]!.n)
+    const rows = await count()
+    await messages()
+    await messages('otherStation')
+    expect(await count()).toBe(rows)
+    const id = (await messages()).find((message) => message.kind === 'ORDER_CHANGE')!.id
+    for (const url of [`/production/dispatch/mine/messages/${id}/seen`, `/production/dispatch/mine/messages/seen`]) {
+      expect([404, 405], url).toContain((await call('operatorTablet', 'POST', url, { messageId: id })).statusCode)
+    }
+    expect(JSON.stringify(await messages())).not.toMatch(/seen|shown|offline/i)
   })
 })

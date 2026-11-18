@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { PRODUCTION_ASK_KINDS } from '@nexus/factory-domain/production-brand/kinds'
+import { LIMITS_ASK_KINDS, PRODUCTION_ASK_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
@@ -21,7 +21,8 @@ import { MIGRATIONS_DIR } from './tools'
  *   - PW-S01 (DB part): the limits hold for every login: the level alone shares production progress (B-PR-40 dropped the old
  *     switch B-PR-12 kept in step with it), from PROGRESS on only for a customer or a brand, the urgent quota 0 to 20, the
  *     supervisor with since when, the backup only beside a supervisor and never the same person, office people only; the
- *     production asks HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND only (RUSH follows the urgency switch); the named approver
+ *     production asks HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND and (B-SA-005b) the design change DESIGN only (RUSH follows
+ *     the urgency switch); the named approver
  *     a person of the customer itself (a refusal names no other customer); limits only for a customer or a brand;
  *   - freeze rules per customer: one active rule per company, customer (or none), field and stage; a customer's set and the
  *     company's are never compared; the customer is fixed;
@@ -220,15 +221,27 @@ describe("a customer's production limits (PW-S01, DB part)", () => {
     expect(await update('PortalSettings', id, { productionSupervisorId: null, productionSupervisorSetAt: null })).toBe(1)
   })
 
-  it('opens HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND only, each once: RUSH follows the urgency switch', async () => {
+  // B-SA-005b (sales page 2/2, …_order_apply_design_asks_guards): + the design change DESIGN, the API's LIMITS_ASK_KINDS.
+  it('opens HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND and the design change DESIGN only, each once: RUSH follows the urgency switch', async () => {
     const id = seeded.settingsIds.p1
     expect(await update('PortalSettings', id, { productionAskKinds: [...PRODUCTION_ASK_KINDS] })).toBe(1)
     expect((await settingsOf(id))!.askKinds).toEqual([...PRODUCTION_ASK_KINDS])
-    const others = Object.values(OrderChangeRequestKind).filter((kind) => !(PRODUCTION_ASK_KINDS as readonly string[]).includes(kind))
+    expect(LIMITS_ASK_KINDS).toEqual([...PRODUCTION_ASK_KINDS, 'DESIGN'])
+    expect(await update('PortalSettings', id, { productionAskKinds: [...LIMITS_ASK_KINDS] })).toBe(1)
+    expect((await settingsOf(id))!.askKinds).toEqual([...LIMITS_ASK_KINDS])
+    expect(await update('PortalSettings', id, { productionAskKinds: ['DESIGN'] })).toBe(1)
+    expect((await settingsOf(id))!.askKinds).toEqual(['DESIGN'])
+    const others = Object.values(OrderChangeRequestKind).filter((kind) => !(LIMITS_ASK_KINDS as readonly string[]).includes(kind))
     expect(others.sort()).toEqual(['CANCEL', 'CHANGE', 'RUSH'])
+    const words = /open the production asks HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND and the design change DESIGN only, each once/
     for (const kind of others) {
-      await expect(update('PortalSettings', id, { productionAskKinds: ['HOLD', kind] }), kind).rejects.toThrow(/open the production asks HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND only, each once/)
+      await expect(update('PortalSettings', id, { productionAskKinds: ['HOLD', kind] }), kind).rejects.toThrow(words)
     }
+    await expect(update('PortalSettings', id, { productionAskKinds: ['DESIGN', 'DESIGN'] })).rejects.toThrow(words)
+    // The owner too (the guard is the last word for every login); the words name no customer.
+    const owner = await refusal(admin(`UPDATE "PortalSettings" SET "productionAskKinds" = ARRAY['DESIGN', 'CHANGE']::"OrderChangeRequestKind"[] WHERE id = $1`, [id]))
+    expect(owner).toMatch(words)
+    expect(owner).not.toContain(P.p1)
     await expect(update('PortalSettings', id, { productionAskKinds: ['HOLD', 'HOLD'] })).rejects.toThrow(/each once/)
     await expect(admin(`UPDATE "PortalSettings" SET "productionAskKinds" = NULL WHERE id = $1`, [id])).rejects.toThrow(/each once/)
     expect(await update('PortalSettings', id, { productionAskKinds: [] })).toBe(1)
