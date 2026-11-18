@@ -432,5 +432,13 @@
       "line": "One line, without line breaks.",
       "long": "At most {count} characters."
     }
+  },
+  "changes": {
+    "notice_one": "A work order change waits: {cells} for order {order}.",
+    "notice_other": "{count} work order changes wait — the first: {cells} for order {order}.",
+    "open": "Open",
+    "applied": "The work order change is applied: {number} now makes what the order wants.",
+    "declined": "The work order change is left as is.",
+    "appliedReprint": "The work order change is applied: print the traveller again, its quantities changed."
   }
 }

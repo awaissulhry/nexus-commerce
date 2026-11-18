@@ -50,6 +50,9 @@ import { AssignSupervisorDialog } from '../../../../_shared/production-superviso
 // F-PR-22: Ask the supervisor (the band's ⋯ and the supervisor fact's Ask) — THE note dialog.
 import { NOTES_NS, openHeld } from '../../../_shared/notes/model'
 import { NoteDialog } from '../../../_shared/notes/view/NoteDialog'
+// F-SA-245: the work-order changes waiting on it — ONE band notice, and the ONE decide window (Home › Approvals' too).
+import { bandNoticeOf } from '../../../../home/approvals/work-order-changes/model'
+import { WorkOrderChangeReview } from '../../../../home/approvals/work-order-changes/view/WorkOrderChangeReview'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
@@ -148,7 +151,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign || /* F-PR-22 */ model.note?.dialog || /* F-PR-05b */ model.customerCard?.dialog) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog || model.orderFiles?.open || model.health?.dialog || model.daily?.dialog || model.supervisor?.assign || /* F-PR-22 */ model.note?.dialog || /* F-PR-05b */ model.customerCard?.dialog || /* F-SA-245 */ model.changes?.review) return
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || typing) return
       // F-PR-05a: ⌘↵ takes the band's primary — Report finished while released garments wait, else the next step.
       if (reportPrimary) {
@@ -283,6 +286,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   const holdWords = workOrder.hold ? (recordWords ?? workOrder.hold.reason ?? '—') : null
 
   const colourways = [...new Set(workOrder.cells.map((cell) => cell.colourwayCode))]
+  // F-SA-245: the changes waiting on it, the oldest first (null: none, or not read).
+  const changeBand = bandNoticeOf(model.changes?.waiting ?? null)
   // F-PR-05a: Report finished (moved out of the Bundles tab) while released garments wait; else the next step.
   const reportButton = reportPrimary ? (
     <Button size="sm" variant="primary" heldReason={finishWait} onClick={() => actions?.daily?.onDialog?.({ kind: 'finish' })} aria-keyshortcuts="Meta+Enter Control+Enter">
@@ -376,6 +381,22 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
               {tw('holds.floorRefuses')}
             </Banner>
           )}
+          {/* F-SA-245: the work-order change(s) an accepted change of its orders proposed — Open: the decide window on this page. */}
+          {changeBand && (
+            <Banner
+              tone="warning"
+              title={tw('changes.notice', { count: changeBand.count, cells: changeBand.first.words.cells, order: changeBand.first.salesOrder.number })}
+              action={
+                model.changes?.firstHref ? (
+                  <Button size="sm" asChild>
+                    <Link href={model.changes.firstHref} scroll={false}>
+                      {tw('changes.open')}
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
           {model.changed && (
             <Banner
               tone="info"
@@ -431,6 +452,10 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       {model.supervisor?.assign && <AssignSupervisorDialog model={model.supervisor.assign} actions={actions?.supervisor} />}
       {/* F-PR-22 */}
       {model.note?.dialog && <NoteDialog model={model.note.dialog} actions={actions?.note} />}
+      {/* F-SA-245: the decide window; its ‹ › walk the changes waiting on this work order. */}
+      {model.changes?.review && (
+        <WorkOrderChangeReview review={model.changes.review} prefix={model.prefix} offline={model.live === 'offline'} busy={model.changes.busy} nav={{ ids: (model.changes.waiting ?? []).filter((change) => change.status === 'PROPOSED').map((change) => change.id), onOpen: actions?.changes?.onOpen }} actions={actions?.changes} />
+      )}
     </RecordFrame>
   )
 }

@@ -30,9 +30,13 @@ import { recordAddress } from '../../../lib/records/record-links'
 import { listWaitingRequests, type BrandRequestList } from './requests/api'
 import { requestGroupsOf, type FollowUp } from './requests/model'
 import { clearRush, liftCustomerPause, probeOpen, useRequestReview, type RequestNotice } from './requests/use-request-review'
+// F-SA-245: a work-order change's row "Work order change · WO-…" opens its decide window here.
+import { useWorkOrderChangeReview } from './work-order-changes/use-work-order-change'
+import type { ChangeNotice } from './work-order-changes/model'
 
 // F-PR-08: a customer's request asked, answered, countered or withdrawn reads the inbox again too.
-const isApprovalChange = (type: string) => type.startsWith('approval.') || type.startsWith('quote.') || type === 'change_order.changed' || type === 'smv_version.changed' || type.startsWith('inspection_plan.') || type.startsWith('order_change_request.')
+// F-SA-245: and a work-order change proposed, applied, declined or made stale.
+const isApprovalChange = (type: string) => type.startsWith('approval.') || type.startsWith('quote.') || type === 'change_order.changed' || type === 'smv_version.changed' || type.startsWith('inspection_plan.') || type.startsWith('order_change_request.') || type.startsWith('work_order_change.')
 
 /**
  * `/w/<company>/home/approvals` (SCR-030; B-W2b-307, PLT-085): ONE inbox of every request that needs a yes, from three
@@ -62,7 +66,8 @@ export function Approvals() {
   const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
   const quoteCan = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
   // F-PR-08: `requests` — the customer requests (GET /production/brand-requests: orders.view or workorders.view; the API walls them).
-  const can = useMemo(() => ({ quotes: quoteCan, tasks: held.has('approvals.view'), decide: held.has('approvals.decide') || quoteCan.approve, today: held.has('home.view'), rules: held.has('approvals.view'), requests: held.has('orders.view') || held.has('workorders.view'), lift: held.has('workorders.hold'), rush: held.has('workorders.manage') }), [quoteCan, held])
+  // F-SA-245: `changes` — a work-order change opened by its id (orders.view or workorders.view; the API walls each change).
+  const can = useMemo(() => ({ quotes: quoteCan, tasks: held.has('approvals.view'), decide: held.has('approvals.decide') || quoteCan.approve, today: held.has('home.view'), rules: held.has('approvals.view'), requests: held.has('orders.view') || held.has('workorders.view'), lift: held.has('workorders.hold'), rush: held.has('workorders.manage'), changes: held.has('orders.view') || held.has('workorders.view') }), [quoteCan, held])
   const companies = useMemo(() => Object.fromEntries(session.companies.map((company) => [company.id, company.name])), [session.companies])
 
   const [tasks, setTasks] = useState<TaskList | null>(null)
@@ -81,7 +86,7 @@ export function Approvals() {
   const rowsRef = useRef<InboxRow[]>([])
   // F-PR-08: the customer requests read; what an id no listed row names turned out to be; Lift the hold's why.
   const [requests, setRequests] = useState<BrandRequestList | null>(null)
-  const [probed, setProbed] = useState<{ id: string; as: 'task' | 'request' | 'batch' | 'none' } | null>(null)
+  const [probed, setProbed] = useState<{ id: string; as: 'task' | 'request' | 'batch' | 'change' | 'none' } | null>(null)
   const [followUpDialog, setFollowUpDialog] = useState<InboxViewModel['followUpDialog']>(null)
 
   const go = useCallback((next: Partial<InboxControls>) => router.replace(`${pathname}${inboxAddress({ ...controlsRef.current, ...next })}`, { scroll: false }), [router, pathname])
@@ -152,13 +157,13 @@ export function Approvals() {
   useEffect(() => {
     if (!openId || rows === null || listed !== null || probed?.id === openId) return
     let gone = false
-    void probeOpen(api, openId, { tasks: can.tasks, requests: can.requests }).then((as) => {
+    void probeOpen(api, openId, { tasks: can.tasks, requests: can.requests, changes: can.changes }).then((as) => {
       if (!gone) setProbed({ id: openId, as })
     })
     return () => {
       gone = true
     }
-  }, [api, openId, rows === null, listed, probed?.id, can.tasks, can.requests])
+  }, [api, openId, rows === null, listed, probed?.id, can.tasks, can.requests, can.changes])
   const isTask = target === 'task' || target === 'none'
   const readTask = useCallback(async () => {
     if (!openId || target !== 'task') return
@@ -204,6 +209,8 @@ export function Approvals() {
           if (quoteId) void readQuote()
           // F-PR-08: the open customer request read again (its words typed are kept).
           if (requestTarget && !requestReview.model?.dialog) requestReview.refresh()
+          // F-SA-245: the open work-order change read again (its words typed are kept).
+          if (target === 'change' && !changeReview.model?.dialog) changeReview.refresh()
         }
         if (type.startsWith('approval.')) history.refresh()
       },
@@ -223,6 +230,9 @@ export function Approvals() {
     go({ open: next && next !== answered.id ? next : null })
   }
   const requestTarget = target === 'request' || target === 'batch' ? target : null
+  // F-SA-240: this page is one of the window's four doors — its host is the inbox (the window's ‹ › walk its rows, InboxView passes
+  // the window's own props); the order page, the order's thread and the customer's Work tab open the same window through
+  // requests/use-request-review-door.ts.
   const requestReview = useRequestReview({
     api,
     openId: requestTarget ? openId : null,
@@ -270,6 +280,25 @@ export function Approvals() {
     }
   }
   // ---- end F-PR-08
+
+  // ---- F-SA-245: a work-order change in its decide window (Apply = Lower to the order, Leave as is… with words); after a decision
+  // the notice names it and the next request opens, as after any decision here.
+  const afterChange = async (decided: { readonly id: string; readonly notice: ChangeNotice }) => {
+    setNotice(decided.notice)
+    const before = rowsRef.current
+    await load()
+    const next = nextReview(before, decided.id)
+    go({ open: next && next !== decided.id ? next : null })
+  }
+  const changeReview = useWorkOrderChangeReview({
+    api,
+    openId: target === 'change' ? openId : null,
+    offline,
+    permissions: session.permissions,
+    onDecided: (decided) => void afterChange(decided),
+    onReload: () => void load(),
+  })
+  // ---- end F-SA-245
 
   // ---- deciding a request of the engine ------------------------------------------------------------------------------------
   const afterDecision = async (decided: TaskDetail, key: string) => {
@@ -415,7 +444,7 @@ export function Approvals() {
     companies,
     asOf: tasks?.asOf ?? today?.asOf ?? quotes?.at ?? null,
     offline,
-    busy: busy || requestReview.busy,
+    busy: busy || requestReview.busy || /* F-SA-245 */ changeReview.busy,
     notice,
     quoteReview: openId && quoteRow ? (quoteReview && quoteReview.id === openId ? quoteReview : { id: openId, quote: { status: 'loading' } }) : null,
     quoteRejecting,
@@ -424,6 +453,8 @@ export function Approvals() {
     dialog,
     requestReview: requestReview.model,
     followUpDialog,
+    // F-SA-245
+    changeReview: changeReview.model,
   }
 
   const page = (
@@ -469,6 +500,8 @@ export function Approvals() {
         request: { ...requestReview.actions, onLift: (followUp) => setFollowUpDialog({ followUp, busy: false, problem: null }) },
         onFollowUp: (followUp) => void followUpNow(followUp),
         onLiftConfirm: (reason) => void liftNow(reason),
+        // F-SA-245: the work-order change's decide window.
+        change: changeReview.actions,
         quote: {
           onRetryReview: () => void readQuote(),
           onApprove: (note) => decideQuote((current) => approveQuote(api, current, note || null), 'notice.approved'),
