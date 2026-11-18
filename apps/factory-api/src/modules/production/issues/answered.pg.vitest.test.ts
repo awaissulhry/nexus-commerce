@@ -66,7 +66,7 @@ const ns = 'pr2l-issues'
 const ids = twoBrandIds(ns)
 const people = supervisorPeopleIds(ns)
 const actorId = seedUuid(ns, 'actor')
-const PERMISSIONS: Permission[] = ['workorders.view', 'production.brand.manage', 'threads.read', 'threads.post', 'threads.manage', 'home.view', 'tasks.manage']
+const PERMISSIONS: Permission[] = ['workorders.view', 'production.brand.manage', 'threads.read', 'threads.post', 'threads.manage', 'home.view', 'tasks.manage', 'workorders.manage' /* fix-pr-3: the harness makes its work orders as office.all */]
 const grant = (permissions: Permission[], parties: 'all' | string[]) => ({ permissions, companies: 'all' as const, sites: 'all' as const, parties })
 const SESSIONS: Record<string, SessionContext> = twoBrandSessions(ids.tenantId, ids.a, ids.b, PERMISSIONS)
 

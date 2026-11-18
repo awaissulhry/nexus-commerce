@@ -43,7 +43,7 @@ import { SUPERVISOR_TAGGER } from './threads-hooks'
 const ns = 'pr2l-threads-hooks'
 const ids = twoBrandIds(ns)
 const people = supervisorPeopleIds(ns)
-const PERMISSIONS: Permission[] = ['workorders.view', 'production.brand.manage', 'threads.read', 'threads.post']
+const PERMISSIONS: Permission[] = ['workorders.view', 'production.brand.manage', 'threads.read', 'threads.post', 'workorders.manage' /* fix-pr-3: the harness makes its work orders as office.all */]
 const grant = (permissions: Permission[], parties: 'all' | string[]) => ({ permissions, companies: 'all' as const, sites: 'all' as const, parties })
 const SESSIONS: Record<string, SessionContext> = {
   ...twoBrandSessions(ids.tenantId, ids.a, ids.b, PERMISSIONS),
