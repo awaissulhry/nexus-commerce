@@ -20,6 +20,8 @@ import { ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS, ORDER_FREEZE_STAGES } from '
  */
 
 const order = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
+// B-SA-001: the order events name the order's customer (`partyId`, livePartyId(): the order row's own, read on the server), so
+// people limited to some customers get their customers' live messages; never in the live fields (sales/events.ts).
 
 export const FREEZE_RULE_CHANGES = ['MADE', 'CHANGED'] as const
 export const CHANGE_DECISIONS = ['APPROVED', 'REJECTED'] as const
@@ -55,6 +57,7 @@ export const events = [
       hasFee: z.boolean(),
       depositRequestId: z.uuid().nullable(),
       reapprovalTaskId: z.uuid().nullable(),
+      partyId: livePartyId(), // B-SA-001
     }),
     live: order,
   }),
@@ -62,14 +65,14 @@ export const events = [
     type: 'sales_order.change_decided',
     context: 'order-changes',
     description: 'The yes asked again after a sales order was changed was given or refused.',
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), amendmentId: z.uuid().nullable(), revision: z.number().int().min(1).nullable(), taskId: z.uuid(), decision: z.enum(CHANGE_DECISIONS) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), amendmentId: z.uuid().nullable(), revision: z.number().int().min(1).nullable(), taskId: z.uuid(), decision: z.enum(CHANGE_DECISIONS), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
   defineEvent({
     type: 'customer_material.changed',
     context: 'order-changes',
     description: "A sales order's customer-supplied materials were planned from the BOM, or counted again from the customer's own stock.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(MATERIAL_CHANGES), rows: z.number().int().min(0) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(MATERIAL_CHANGES), rows: z.number().int().min(0), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
 ] as const

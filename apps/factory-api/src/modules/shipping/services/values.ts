@@ -86,7 +86,7 @@ export async function setParcelValue(caller: CommandCaller, shipmentId: string, 
       if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
       await tx.parcel.update({ where: { id: parcelId }, data: { declaredValue: declared, insuredValue: insured, version: { increment: 1 } }, select: { id: true } })
       tools.audit({ recordType: 'Parcel', recordId: parcelId, companyId: current.companyId, siteId: current.siteId, before: valuesOf(parcel.declaredValue, parcel.insuredValue), after: { ...valuesOf(declared, insured), byRule: body.insuredValue === undefined } })
-      tools.emit(eventFor(valuesChanged, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelIds: [parcelId], byRule: body.insuredValue === undefined } }))
+      tools.emit(eventFor(valuesChanged, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelIds: [parcelId], byRule: body.insuredValue === undefined, partyId: current.partyId /* B-SA-004 */ } }))
       return { parcelId }
     }),
   )
@@ -125,7 +125,7 @@ export async function valuesByRule(caller: CommandCaller, shipmentId: string, bo
         changed.push(parcel.id)
       }
       tools.audit({ action: 'shipping.parcelValuesByRule', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { parcelIds: changed } })
-      if (changed.length > 0) tools.emit(eventFor(valuesChanged, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelIds: changed, byRule: true } }))
+      if (changed.length > 0) tools.emit(eventFor(valuesChanged, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelIds: changed, byRule: true, partyId: current.partyId /* B-SA-004 */ } }))
       return { changed }
     }),
   )

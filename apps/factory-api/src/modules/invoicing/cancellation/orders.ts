@@ -118,7 +118,7 @@ export async function decideOrder(caller: CommandCaller, orderId: string, body: 
         companyId: order!.companyId,
         after: { cancelledBy: body.cancelledBy, deposits: deposits.map((entry) => ({ depositRequestId: entry.request.id, refundRule: entry.outcome.refundRule, source: entry.outcome.source, ruleId: entry.rule?.id ?? null, decided: entry.decided })), creditNoteIds },
       })
-      tools.emit({ type: 'deposit_cancellation.decided', subject: order!.id, companyId: order!.companyId, payload: { orderId: order!.id, cancelledBy: body.cancelledBy, creditNoteIds } })
+      tools.emit({ type: 'deposit_cancellation.decided', subject: order!.id, companyId: order!.companyId, payload: { orderId: order!.id, cancelledBy: body.cancelledBy, creditNoteIds, partyId: order!.partyId /* B-SA-004: the order row's own customer */ } })
       const after = await outcomesOf(tx, order!, body.cancelledBy)
       const creditNotes = []
       for (const id of creditNoteIds) creditNotes.push(await invoiceDetail(tx, (await readInvoice(tx, id))!))

@@ -9,6 +9,7 @@ import type { CommandTools } from '../../../core/command'
 import type { SendResult } from './runtime'
 import { noteOrders, ordersOfInvoices, settleNoted } from '../from-shipment/settlement'
 import { lockInvoice, readSend, readSends, type SendRow } from './store'
+import { invoiceLiveParty } from '../store' // B-SA-004
 
 /**
  * Recording what SDI and the provider said, inside a command (B-W1-50; the rules: factory-domain invoicing/sdi/states).
@@ -54,7 +55,7 @@ export async function afterSendMove(tools: Tools, send: Pick<SendRow, 'id' | 'in
     type: 'invoice.sdi_status_changed',
     subject: send.invoiceId,
     companyId,
-    payload: { invoiceId: send.invoiceId, submissionId: send.id, attempt: send.attempt, sendStatus, invoiceStatus: to, previousStatus: from },
+    payload: { invoiceId: send.invoiceId, submissionId: send.id, attempt: send.attempt, sendStatus, invoiceStatus: to, previousStatus: from, partyId: await invoiceLiveParty(tools.tx, send.invoiceId) /* B-SA-004 */ },
   })
   return to
 }
@@ -155,7 +156,7 @@ export async function applyMessages(tools: Tools, submissionId: string, messages
     })
     const conflict = contradicts(message)
     tools.audit({ action: 'invoices.sdiNotification', recordType: 'SdiNotification', recordId: id, companyId, after: { submissionId: send.id, type: message.type, source: source.inboundWebhookId ? 'webhook' : 'poll', ...(conflict ? { conflict: `the send is ${send.status} already` } : {}) } })
-    tools.emit({ type: 'invoice.sdi_notification_received', subject: send.invoiceId, companyId, payload: { invoiceId: send.invoiceId, submissionId: send.id, notificationId: id, type: message.type, conflict } })
+    tools.emit({ type: 'invoice.sdi_notification_received', subject: send.invoiceId, companyId, payload: { invoiceId: send.invoiceId, submissionId: send.id, notificationId: id, type: message.type, conflict, partyId: await invoiceLiveParty(tools.tx, send.invoiceId) /* B-SA-004 */ } })
   }
 
   const named: Prisma.SdiSubmissionUncheckedUpdateInput = {}

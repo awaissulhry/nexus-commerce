@@ -188,12 +188,13 @@ function intoStock(move: { readonly fromLocationId: string | null; readonly toLo
  * Received, used and returned of every row of the customer for the materials named (item|colour keys; none: every material
  * of its rows), from the moves of its own lots. Returns the rows that changed.
  */
-export async function recountInCommand(tools: CommandTools, partyId: string, materials?: readonly { readonly itemId: string; readonly itemColourId: string | null }[]): Promise<{ changed: number; orders: { id: string; number: string; companyId: string; rows: number }[] }> {
+// B-SA-001: each order changed names its customer, read from the order row (its customer_material.changed carries it).
+export async function recountInCommand(tools: CommandTools, partyId: string, materials?: readonly { readonly itemId: string; readonly itemColourId: string | null }[]): Promise<{ changed: number; orders: { id: string; number: string; companyId: string; partyId: string; rows: number }[] }> {
   const { tx, now } = tools
   const itemIds = materials ? [...new Set(materials.map((entry) => entry.itemId))] : undefined
   const rows = await tx.customerMaterial.findMany({
     where: { partyId, ...(itemIds ? { itemId: { in: itemIds } } : {}) },
-    select: { ...MATERIAL_COLUMNS, order: { select: { number: true, createdAt: true, companyId: true } }, orderLine: { select: { seq: true } } },
+    select: { ...MATERIAL_COLUMNS, order: { select: { number: true, createdAt: true, companyId: true, /* B-SA-001 */ partyId: true } }, orderLine: { select: { seq: true } } },
     orderBy: [{ order: { createdAt: 'asc' } }, { orderId: 'asc' }, { orderLine: { seq: 'asc' } }, { id: 'asc' }],
   })
   if (rows.length === 0) return { changed: 0, orders: [] }
@@ -236,14 +237,14 @@ export async function recountInCommand(tools: CommandTools, partyId: string, mat
   const totals = new Map([...received.entries()].map(([material, value]) => [material, (value.lt(0) ? new Dec(0) : value).toFixed(4)]))
   const shared = shareReceived(counted, totals)
   let changedRows = 0
-  const orders = new Map<string, { id: string; number: string; companyId: string; rows: number }>()
+  const orders = new Map<string, { id: string; number: string; companyId: string; partyId: string; rows: number }>()
   for (const row of rows) {
     if (wantedKeys && !wantedKeys.has(key(row.itemId, row.itemColourId))) continue
     const next = { receivedQuantity: shared.received.get(row.id) ?? '0.0000', usedQuantity: counted.find((entry) => entry.id === row.id)!.used, returnedQuantity: counted.find((entry) => entry.id === row.id)!.returned }
     if (q(row.receivedQuantity) === next.receivedQuantity && q(row.usedQuantity) === next.usedQuantity && q(row.returnedQuantity) === next.returnedQuantity) continue
     await tx.customerMaterial.update({ where: { id: row.id }, data: { ...next, updatedById: actorOf(tools), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     changedRows += 1
-    const entry = orders.get(row.orderId) ?? { id: row.orderId, number: row.order.number, companyId: row.order.companyId, rows: 0 }
+    const entry = orders.get(row.orderId) ?? { id: row.orderId, number: row.order.number, companyId: row.order.companyId, partyId: row.order.partyId /* B-SA-001 */, rows: 0 }
     entry.rows += 1
     orders.set(row.orderId, entry)
   }

@@ -387,7 +387,8 @@ describe('mentions (COL-006) and events', () => {
     )
     // The author mentioning themself is not told.
     expect(events).toEqual([
-      { type: 'thread.message_posted', companyId: companyOne, subject: companyOne, payload: { threadId: row.id, messageId: message.id, recordType: 'Company', recordId: companyOne, direction: 'INTERNAL_NOTE', audience: 'OFFICE' } },
+      // B-SA-002: a company's thread names no customer (every-customer viewers only).
+      { type: 'thread.message_posted', companyId: companyOne, subject: companyOne, payload: { threadId: row.id, messageId: message.id, recordType: 'Company', recordId: companyOne, direction: 'INTERNAL_NOTE', audience: 'OFFICE', partyId: null } },
       { type: 'thread.user_mentioned', companyId: companyOne, subject: companyOne, payload: { threadId: row.id, messageId: message.id, recordType: 'Company', recordId: companyOne, userId: colleague, authorId: author } },
     ])
   })

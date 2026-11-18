@@ -256,7 +256,7 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
       { reacceptance: false },
     )
     const revision = (await tx.salesOrderAmendment.findUniqueOrThrow({ where: { id: amendment.amendmentId }, select: { revision: true } })).revision
-    tools.emit({ type: 'sales_order.split', subject: fresh.id, companyId: fresh.companyId, payload: { orderId: fresh.id, number: fresh.number, newOrderIds: made.map((entry) => entry.id), newNumbers: made.map((entry) => entry.number), amendmentId: amendment.amendmentId, revision } })
+    tools.emit({ type: 'sales_order.split', subject: fresh.id, companyId: fresh.companyId, payload: { orderId: fresh.id, number: fresh.number, newOrderIds: made.map((entry) => entry.id), newNumbers: made.map((entry) => entry.number), amendmentId: amendment.amendmentId, revision, partyId: fresh.partyId /* B-SA-001: the order row read under the lock; the parts keep its customer */ } })
     return { orderId: fresh.id, amendmentId: amendment.amendmentId, revision, made }
   })
   const view = await recordAfter(caller, result.orderId)

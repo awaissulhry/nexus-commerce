@@ -132,8 +132,8 @@ export async function carryInCommand(tools: CommandTools, depositRequestId: stri
       after: { paymentId: step.paymentId, depositRequestId, reversalOfId: step.allocationId, reversalId, invoiceId: step.invoiceId, invoiceNumber: invoice.number, orderId: request.orderId, amount: markMoney('price', step.amount) },
       reason: note,
     })
-    tools.emit({ type: 'payment.allocation_reversed', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId: reversalId, reversalOfId: step.allocationId, target: 'DEPOSIT_REQUEST', targetId: depositRequestId } })
-    tools.emit({ type: 'payment.allocated', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId, target: 'INVOICE', targetId: step.invoiceId } })
+    tools.emit({ type: 'payment.allocation_reversed', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId: reversalId, reversalOfId: step.allocationId, target: 'DEPOSIT_REQUEST', targetId: depositRequestId, partyId: request.partyId /* B-SA-004: the request's (and payment's) customer */ } })
+    tools.emit({ type: 'payment.allocated', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId, target: 'INVOICE', targetId: step.invoiceId, partyId: request.partyId /* B-SA-004 */ } })
     carried.push({ paymentId: step.paymentId, reversalId, allocationId, invoiceId: step.invoiceId, invoiceNumber: invoice.number, amount: step.amount })
   }
   const invoiceIds = [...new Set(carried.map((row) => row.invoiceId))].sort()

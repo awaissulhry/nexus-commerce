@@ -252,8 +252,8 @@ async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accou
     })
   }
   tools.audit({ action: 'shipping.buyLabels', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { labelled: parcels, surplus: surplus.length, ...(etaMoved ? { expectedDeliveryAt: eta ? eta.toISOString() : null } : {}) } })
-  tools.emit({ type: 'shipment.labels_bought', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, bought: parcels.length, failed: bought.length - parcels.length } })
-  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'parcels' } })
+  tools.emit({ type: 'shipment.labels_bought', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, bought: parcels.length, failed: bought.length - parcels.length, partyId: shipment.partyId /* B-SA-004 */ } })
+  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'parcels', partyId: shipment.partyId /* B-SA-004 */ } })
   return { parcels, surplus }
 }
 
@@ -333,8 +333,8 @@ export async function voidLabel(carrier: CarrierRuntime, caller: CommandCaller, 
         after: { trackingNumber: null, carrier: outcome },
         reason: body.reason,
       })
-      tools.emit({ type: 'shipment.label_voided', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: parcel.id, seq: parcel.seq, queued: outcome === 'QUEUED' } })
-      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels' } })
+      tools.emit({ type: 'shipment.label_voided', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: parcel.id, seq: parcel.seq, queued: outcome === 'QUEUED', partyId: current.partyId /* B-SA-004 */ } })
+      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels', partyId: current.partyId /* B-SA-004 */ } })
       return { voided: parcel.id, carrier: outcome }
     },
   )
@@ -406,11 +406,11 @@ export async function voidAllLabels(carrier: CarrierRuntime, caller: CommandCall
           after: { trackingNumber: null, carrier: entry.carrier, all: true },
           reason: body.reason,
         })
-        tools.emit({ type: 'shipment.label_voided', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: entry.parcelId, seq: entry.seq, queued: entry.carrier === 'QUEUED' } })
+        tools.emit({ type: 'shipment.label_voided', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: entry.parcelId, seq: entry.seq, queued: entry.carrier === 'QUEUED', partyId: current.partyId /* B-SA-004 */ } })
       }
       await forgetEtaWithoutLabels(tools, current.id)
       tools.audit({ action: 'shipping.voidLabels', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { voided: cancelled.map((entry) => entry.seq), kept: outcomes.filter((outcome) => !outcome.ok).map((outcome) => outcome.seq) }, reason: body.reason })
-      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels' } })
+      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels', partyId: current.partyId /* B-SA-004 */ } })
       return { voided: cancelled.length }
     },
   )

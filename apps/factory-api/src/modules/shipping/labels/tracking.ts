@@ -105,10 +105,10 @@ export async function recordTracking(tools: CommandTools, shipmentId: string, in
       select: { id: true },
     })
     tools.audit({ action: 'shipping.trackingMove', recordType: 'Shipment', recordId: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: shipment.status }, after: { status: move.to, at: toUtcIso(at), source } })
-    tools.emit({ type: 'shipment.status_changed', subject: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId, number: shipment.number, from: shipment.status, to: move.to } })
+    tools.emit({ type: 'shipment.status_changed', subject: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId, number: shipment.number, from: shipment.status, to: move.to, partyId: shipment.partyId /* B-SA-004 */ } })
   }
   if (recorded > 0 && lastStatus !== null) {
-    tools.emit({ type: 'shipment.tracking_recorded', subject: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId, number: shipment.number, events: recorded, status: lastStatus, source } })
+    tools.emit({ type: 'shipment.tracking_recorded', subject: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId, number: shipment.number, events: recorded, status: lastStatus, source, partyId: shipment.partyId /* B-SA-004 */ } })
   }
   // B-W2b-F14: the carrier moved its expected delivery (not once the goods arrived or came back).
   const eta = options.expectedDeliveryAt ?? null

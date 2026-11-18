@@ -99,7 +99,7 @@ export async function placeHoldInCommand(tools: CommandTools, shipment: LockedSh
     select: { id: true },
   })
   tools.audit({ action: 'shipping.holdPlaced', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { holdId: id, reason: input.reason, words, bySystem: input.bySystem } })
-  tools.emit({ type: 'shipment.hold_placed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, holdId: id, reason: input.reason, bySystem: input.bySystem } })
+  tools.emit({ type: 'shipment.hold_placed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, holdId: id, reason: input.reason, bySystem: input.bySystem, partyId: shipment.partyId /* B-SA-004 */ } })
   return id
 }
 
@@ -128,7 +128,7 @@ export async function releaseHoldInCommand(tools: CommandTools, shipment: Locked
     subject: shipment.id,
     companyId: shipment.companyId,
     siteId: shipment.siteId,
-    payload: { shipmentId: shipment.id, number: shipment.number, holdId: hold.id, reason: hold.reason as ShipmentHoldReason, bySystem: input.bySystem, stillHeld: still > 0 },
+    payload: { shipmentId: shipment.id, number: shipment.number, holdId: hold.id, reason: hold.reason as ShipmentHoldReason, bySystem: input.bySystem, stillHeld: still > 0, partyId: shipment.partyId /* B-SA-004 */ },
   })
 }
 
@@ -175,7 +175,7 @@ export async function carryHoldsInCommand(tools: CommandTools, from: LockedShipm
     const words = storedWords(row.words)
     await tools.tx.shipmentHold.create({ data: { id, siteId: to.siteId, partyId: to.partyId, shipmentId: to.id, reason: row.reason, words, placedAt, placedById: row.placedById, createdById: actorIdOf(tools) }, select: { id: true } })
     tools.audit({ action: 'shipping.holdPlaced', recordType: 'Shipment', recordId: to.id, companyId: to.companyId, siteId: to.siteId, after: { holdId: id, reason: row.reason, words, bySystem: row.placedById === null, carriedFrom: { shipmentId: from.id, holdId: row.id } } })
-    tools.emit({ type: 'shipment.hold_placed', subject: to.id, companyId: to.companyId, siteId: to.siteId, payload: { shipmentId: to.id, number: to.number, holdId: id, reason: row.reason as ShipmentHoldReason, bySystem: row.placedById === null } })
+    tools.emit({ type: 'shipment.hold_placed', subject: to.id, companyId: to.companyId, siteId: to.siteId, payload: { shipmentId: to.id, number: to.number, holdId: id, reason: row.reason as ShipmentHoldReason, bySystem: row.placedById === null, partyId: to.partyId /* B-SA-004 */ } })
   }
   const inForce = new Set(live.map((row) => row.reason))
   const letGo = new Map<string, HoldRow>()

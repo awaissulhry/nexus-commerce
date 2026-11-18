@@ -186,7 +186,7 @@ export async function afterAmendment(tools: CommandTools, order: OrderRow, input
       type: 'sales_order.change_priced',
       subject: order.id,
       companyId: order.companyId,
-      payload: { orderId: order.id, number: order.number, amendmentId: input.amendmentId, revision: input.revision, hasFee: input.extras.feeAmount !== null, depositRequestId: input.extras.depositRequestId, reapprovalTaskId: input.extras.reapprovalTaskId },
+      payload: { orderId: order.id, number: order.number, amendmentId: input.amendmentId, revision: input.revision, hasFee: input.extras.feeAmount !== null, depositRequestId: input.extras.depositRequestId, reapprovalTaskId: input.extras.reapprovalTaskId, partyId: order.partyId /* B-SA-001: the order row's own */ },
     })
   }
   // The customer's materials follow the sizes, when the order keeps them.

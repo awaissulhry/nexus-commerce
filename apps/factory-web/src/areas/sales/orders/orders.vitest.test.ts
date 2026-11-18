@@ -194,6 +194,17 @@ describe('the record: the next step by state, held with its reason', () => {
     expect(settlementWords(order('SHIPPED'))).toEqual(['settlement.BALANCE_DUE', 'settlement.AT_SDI'])
     expect(settlementWords({ settlement: { settled: false, missing: [{ code: 'SOMETHING_NEW', message: 'x' }], source: 'x' } })).toEqual(['settlement.OTHER'])
   })
+  // F-SA-201 (P22): a Delivered order's primary is Close order, as a Shipped one's (it was "Change promise date").
+  it('Delivered → Close order: free when settled, held in words when not (orders.close may close it with a reason)', () => {
+    expect(nextStep(order('DELIVERED', { settled: true }), canOf('sales'))).toEqual({ kind: 'close', held: null })
+    expect(nextStep(order('DELIVERED'), canOf('sales'))).toEqual({ kind: 'close', held: { key: 'held.notSettled' } })
+    expect(nextStep(order('DELIVERED'), canOf('finance'))).toEqual({ kind: 'close', held: null })
+    expect(closeHeld(order('DELIVERED', { settled: true }), canOf('manager'))?.key).toBe('held.noClose')
+    expect(settlementWords(order('DELIVERED'))).toEqual(['settlement.BALANCE_DUE', 'settlement.AT_SDI'])
+    // Only a shipped (or delivered) order is closed; the API's own actions say the same.
+    for (const status of ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const) expect(closeHeld(order(status, { settled: true }), canOf('owner'))?.key, status).toBe('held.closeState')
+    expect(order('DELIVERED').actions.map((entry) => entry.action)).toEqual(['changePromise', 'close'])
+  })
   it('a promise change: a day from today, a reason, a line when lines are chosen', () => {
     expect(promiseProblems({ date: '', reason: 'x', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.date' })
     expect(promiseProblems({ date: '2026-10-28', reason: 'x', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.past' })

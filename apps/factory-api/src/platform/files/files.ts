@@ -49,6 +49,7 @@ import { MissingFileError } from './missing'
 import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
 // B-PR-44: a file's record read through its own resolver, its parent's, its work order's or its party (fail closed for limited people).
 import { fileRecordScope, reachesFileRecord } from './record-scope'
+import { fileLivePartyId } from './record-scope' // B-SA-002
 // B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
 import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
 // fix-wall-1: a portal or link reader is never shown a file whose content is another customer's (an old copy of a mixed lot's photo).
@@ -648,7 +649,8 @@ export async function recordGeneratedFile(
     select: SELECT_FOR.office,
   })
   tools.audit({ ...(options.action ? { action: options.action } : {}), recordType: 'StoredFile', recordId: id, companyId: prepared.companyId, after: { ...audited(row), ...(options.details ?? {}) } })
-  tools.emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+  // B-SA-002: the record's customer for the office's live wall (read here, from the record).
+  tools.emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind, partyId: await fileLivePartyId(tx, tenantOf(inside), row) } })
   return viewOf(row)
 }
 
@@ -761,7 +763,7 @@ export async function completeUpload(runtime: FilesRuntime, caller: CommandCalle
   const { result } = await command(
     caller,
     { name: 'files.completeUpload', idempotencyKey, input: { fileId }, record: { type: 'StoredFile', id: fileId, expectedVersion: before.version } },
-    async ({ tx, audit, emit, now }) => {
+    async ({ tx, audit, emit, now, context: inside /* B-SA-002 */ }) => {
       const current = await tx.storedFile.findUniqueOrThrow({ where: { id: fileId }, select: SELECT_FOR.office })
       // With a scanner, a matching upload waits QUARANTINED (`scan_pending`) until its scan says CLEAN (B-W2a-42).
       const to = reason === null && !scanner ? 'AVAILABLE' : 'QUARANTINED'
@@ -773,7 +775,7 @@ export async function completeUpload(runtime: FilesRuntime, caller: CommandCalle
       })
       audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { status: current.status }, after: { status: row.status, quarantineReason: row.quarantineReason, ...(scanner ? { scanStatus: row.scanStatus } : {}) } })
       if (row.status === 'AVAILABLE') {
-        emit({ type: 'file.available', subject: fileId, companyId: row.companyId, payload: { fileId, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+        emit({ type: 'file.available', subject: fileId, companyId: row.companyId, payload: { fileId, recordType: row.recordType, recordId: row.recordId, kind: row.kind, partyId: await fileLivePartyId(tx, tenantOf(inside), row) /* B-SA-002 */ } })
         // B-W2b-160 (COL-046): a later version that became AVAILABLE supersedes the earlier ones in this transaction.
         await supersedeEarlierVersions({ tx, audit, now }, fileId)
       }

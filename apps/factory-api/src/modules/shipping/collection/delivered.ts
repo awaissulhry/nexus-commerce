@@ -43,8 +43,8 @@ export function collectionDeliveredHandler(): EventHandler {
         })
         await tools.tx.shipment.update({ where: { id: shipment.id }, data: { status: 'DELIVERED', deliveredAt: at }, select: { id: true } })
         tools.audit({ action: 'shipping.collectionDelivered', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: 'SHIPPED' }, after: { moved: true, status: 'DELIVERED', at: toUtcIso(at), trackingEventId: eventId } })
-        tools.emit({ type: 'shipment.tracking_recorded', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, events: 1, status: 'DELIVERED', source: 'MANUAL' } })
-        tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'SHIPPED', to: 'DELIVERED' } })
+        tools.emit({ type: 'shipment.tracking_recorded', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, events: 1, status: 'DELIVERED', source: 'MANUAL', partyId: shipment.partyId /* B-SA-004 */ } })
+        tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'SHIPPED', to: 'DELIVERED', partyId: shipment.partyId /* B-SA-004 */ } })
         return { moved: true }
       })
     },

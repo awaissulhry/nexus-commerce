@@ -3,6 +3,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { ConflictError } from '@nexus/factory-domain/core/errors'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import type { Reader } from '../store'
+import { invoiceLiveParty } from '../store' // B-SA-004
 
 /**
  * The SDI part of the invoicing module's reads and writes (factory-db money.prisma SdiSubmission, SdiNotification): the
@@ -96,5 +97,5 @@ export async function readArchive(db: Reader, invoiceId: string): Promise<Archiv
 export async function writeArchive(tools: Pick<CommandTools, 'tx' | 'audit' | 'emit'>, invoice: { id: string; companyId: string }, record: ArchiveRecord): Promise<void> {
   await tools.tx.sdiSubmission.update({ where: { id: record.submissionId }, data: { archivedAt: new Date(record.archivedAt), archiveRef: record.archiveRef, version: { increment: 1 } }, select: { id: true } })
   tools.audit({ action: ARCHIVE_ACTION, recordType: 'Invoice', recordId: invoice.id, companyId: invoice.companyId, after: { ...record } })
-  tools.emit({ type: 'invoice.sdi_archived', subject: invoice.id, companyId: invoice.companyId, payload: { invoiceId: invoice.id, submissionId: record.submissionId } })
+  tools.emit({ type: 'invoice.sdi_archived', subject: invoice.id, companyId: invoice.companyId, payload: { invoiceId: invoice.id, submissionId: record.submissionId, partyId: await invoiceLiveParty(tools.tx, invoice.id) /* B-SA-004 */ } })
 }

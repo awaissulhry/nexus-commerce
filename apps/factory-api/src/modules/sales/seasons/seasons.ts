@@ -238,7 +238,7 @@ export async function setOrderSeason(caller: CommandCaller, orderId: string, bod
     const before = (await tools.tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { seasonId: true } })).seasonId
     if (before !== (season?.id ?? null)) await tools.tx.salesOrder.update({ where: { id: order.id }, data: { seasonId: season?.id ?? null, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'orders.season', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { seasonId: before }, after: { seasonId: season?.id ?? null } })
-    tools.emit({ type: 'sales_order.season_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, seasonId: season?.id ?? null, code: season?.code ?? null } })
+    tools.emit({ type: 'sales_order.season_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, seasonId: season?.id ?? null, code: season?.code ?? null, partyId: order.partyId /* B-SA-001: the order row's own */ } })
     return { orderId: order.id, seasonId: season?.id ?? null, code: season?.code ?? null }
   })
   const fresh = await caller.withClient((db) => readOrder(db, order.id))

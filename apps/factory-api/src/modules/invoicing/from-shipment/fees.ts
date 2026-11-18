@@ -347,7 +347,7 @@ export async function creditFee(caller: CommandCaller, lineId: string, body: { b
     }
     const state = issued ? ('NAMED' as const) : ('CREDITED' as const)
     tools.audit({ action: 'invoices.creditFee', recordType: 'SalesOrderLine', recordId: line!.id, companyId: line!.companyId, before: { feeCreditOrderId: fresh.feeCreditOrderId }, after: { feeCreditOrderId: bulk.id, state, creditNoteId, invoiceId: issued?.invoiceId ?? null } })
-    tools.emit({ type: 'fee_credit.changed', subject: line!.id, companyId: line!.companyId, payload: { salesOrderLineId: line!.id, orderId: line!.orderId, bulkOrderId: bulk.id, action: state, creditNoteId } })
+    tools.emit({ type: 'fee_credit.changed', subject: line!.id, companyId: line!.companyId, payload: { salesOrderLineId: line!.id, orderId: line!.orderId, bulkOrderId: bulk.id, action: state, creditNoteId, partyId: line!.partyId /* B-SA-004: the order line's own customer */ } })
     return {
       salesOrderLineId: line!.id,
       bulkOrderId: bulk.id,
@@ -369,10 +369,10 @@ export async function feeCreditsAtIssue(tools: CommandTools, invoice: Pick<Invoi
   if (invoice.docType !== 'TD04') return
   const ids = lines.filter((line) => line.kind === 'SERVICE' && line.salesOrderLineId !== null).map((line) => line.salesOrderLineId!)
   if (ids.length === 0) return
-  const fees = await tools.tx.salesOrderLine.findMany({ where: { id: { in: ids }, kind: 'FEE', feeCreditOrderId: { not: null }, feeCreditedAt: null }, select: { id: true, orderId: true, feeCreditOrderId: true } })
+  const fees = await tools.tx.salesOrderLine.findMany({ where: { id: { in: ids }, kind: 'FEE', feeCreditOrderId: { not: null }, feeCreditedAt: null }, select: { id: true, orderId: true, feeCreditOrderId: true, /* B-SA-004 */ partyId: true } })
   for (const fee of fees) {
     await tools.tx.salesOrderLine.update({ where: { id: fee.id }, data: { feeCreditedAt: tools.now, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'invoices.feeCredited', recordType: 'SalesOrderLine', recordId: fee.id, companyId: invoice.companyId, after: { feeCreditOrderId: fee.feeCreditOrderId, creditNoteId: invoice.id } })
-    tools.emit({ type: 'fee_credit.changed', subject: fee.id, companyId: invoice.companyId, payload: { salesOrderLineId: fee.id, orderId: fee.orderId, bulkOrderId: fee.feeCreditOrderId!, action: 'CREDITED', creditNoteId: invoice.id } })
+    tools.emit({ type: 'fee_credit.changed', subject: fee.id, companyId: invoice.companyId, payload: { salesOrderLineId: fee.id, orderId: fee.orderId, bulkOrderId: fee.feeCreditOrderId!, action: 'CREDITED', creditNoteId: invoice.id, partyId: fee.partyId /* B-SA-004 */ } })
   }
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 
 /**
  * The events of invoicing in depth (B-W2b-396; FIN-068, FIN-080 and the fee follow-ups; apps/factory-api
@@ -37,14 +37,14 @@ export const events = [
     type: 'deposit_cancellation.decided',
     context: 'invoicing-depth',
     description: 'The paid deposits of a cancelled order were decided by the rules: the credit notes of their deposit invoices were drafted for what is paid back.',
-    payload: z.strictObject({ orderId: z.uuid(), cancelledBy: z.enum(['CUSTOMER', 'COMPANY']), creditNoteIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ orderId: z.uuid(), cancelledBy: z.enum(['CUSTOMER', 'COMPANY']), creditNoteIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'invoices.view', fields: ['orderId', 'cancelledBy', 'creditNoteIds'] },
   }),
   defineEvent({
     type: 'fee_credit.changed',
     context: 'invoicing-depth',
     description: "An order's fee (development, sample, tooling) was named against the customer's bulk order with its credit note drafted, or credited: that credit note issued, or the fee credited before any invoice billed it.",
-    payload: z.strictObject({ salesOrderLineId: z.uuid(), orderId: z.uuid(), bulkOrderId: z.uuid(), action: z.enum(FEE_CREDIT_ACTIONS), creditNoteId: z.uuid().nullable() }),
+    payload: z.strictObject({ salesOrderLineId: z.uuid(), orderId: z.uuid(), bulkOrderId: z.uuid(), action: z.enum(FEE_CREDIT_ACTIONS), creditNoteId: z.uuid().nullable(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'invoices.view', fields: ['salesOrderLineId', 'orderId', 'bulkOrderId', 'action', 'creditNoteId'] },
   }),
 ] as const

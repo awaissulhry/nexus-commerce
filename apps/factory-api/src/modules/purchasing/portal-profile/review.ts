@@ -16,6 +16,7 @@ import { contextOf, prepareFileCopy, readOffice, SELECT_FOR, type OfficeRow } fr
 import { processFiles } from '../../../platform/files/service'
 import { seriesOf, supersedeEarlierVersions } from '../../../platform/files/versions/supersede'
 import { lockSeries } from '../../../platform/files/versions/versions'
+import { fileLivePartyId } from '../../../platform/files/record-scope' // B-SA-002
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { closeOne, openTaskInCommand, TASK_COLUMNS } from '../../../platform/portal/tasks/store'
 import { ACTIONS, iso, LOOK_BACK_DAYS, partyUploads, recentUploads, uploadOfFile, type UploadRecord } from './store'
@@ -255,7 +256,7 @@ export async function acceptDocument(app: FastifyInstance, caller: CommandCaller
         })
         document = { recordType: row.recordType, recordId: row.recordId, companyId: row.companyId }
         tools.audit({ action: 'files.requestVersion', recordType: 'StoredFile', recordId: documentFileId, companyId: row.companyId, after: { seriesId: root, versionNo: row.versionNo, sourceFileId: file.id, category, expiresOn, sharedWith: upload.partyId, bySupplier: true } })
-        tools.emit({ type: 'file.available', subject: documentFileId, companyId: row.companyId, payload: { fileId: documentFileId, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+        tools.emit({ type: 'file.available', subject: documentFileId, companyId: row.companyId, payload: { fileId: documentFileId, recordType: row.recordType, recordId: row.recordId, kind: row.kind, partyId: await fileLivePartyId(tx, context.tenantId, row) /* B-SA-002 */ } })
         await supersedeEarlierVersions(tools, documentFileId)
       } else {
         await tx.storedFile.update({

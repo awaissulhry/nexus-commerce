@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-001 */ livePartyId } from '../events/define'
 import { PARTY_TAX_MODES } from '../parties/tax'
 import { SALES_ORDER_STATUSES } from './orders/orders'
 import { LINK_QUOTE_STATES } from './quotes/acceptance'
@@ -84,6 +84,10 @@ import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
+// B-SA-001: every sales_order.* payload names the order's customer (`partyId`, the B-PR-09 livePartyId(): set by the emitter from
+// the order row read on the server, never from the caller), so an office person limited to some customers is sent the live
+// message of their own customers' orders (events/live.ts reachesParties). Never in the live `fields`: party ids never reach
+// the browser. Optional, so an event written before still parses (it names no customer: every-customer viewers only).
 const orderStatus = z.enum(SALES_ORDER_STATUSES)
 // B-W2a-43: customer returns.
 const returnLive = { permission: 'sales.returns.view', fields: ['returnId', 'number'] } as const
@@ -240,14 +244,14 @@ export const events = [
     type: 'sales_order.status_changed',
     context: 'sales',
     description: 'A sales order moved: production started, ready, partly shipped, shipped, closed or cancelled.',
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), from: orderStatus, to: orderStatus, by: z.enum(['person', 'system']) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), from: orderStatus, to: orderStatus, by: z.enum(['person', 'system']), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'from', 'to'] },
   }),
   defineEvent({
     type: 'sales_order.promise_changed',
     context: 'sales',
     description: "A sales order's promise date (or some of its lines') changed; its first promise stays.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), promiseDate: z.iso.date(), previous: z.iso.date().nullable(), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), promiseDate: z.iso.date(), previous: z.iso.date().nullable(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: orderLive,
   }),
   // B-W2a-19: the payment terms library and the price lists (ids, codes and what changed; never a price).
@@ -284,21 +288,21 @@ export const events = [
     type: 'sales_order.amended',
     context: 'sales',
     description: 'A confirmed sales order was amended (its lines, sizes or prices): the amendment keeps the order before and after; the customer accepts again when the net total changed.',
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), amendmentId: z.uuid(), revision: z.number().int(), reacceptanceNeeded: z.boolean(), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), amendmentId: z.uuid(), revision: z.number().int(), reacceptanceNeeded: z.boolean(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'revision', 'reacceptanceNeeded'] },
   }),
   defineEvent({
     type: 'sales_order.lines_closed',
     context: 'sales',
     description: "Lines of a sales order were closed short (what is left of them will not be made or shipped), or reopened.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['CLOSED', 'REOPENED']), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['CLOSED', 'REOPENED']), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
   }),
   defineEvent({
     type: 'sales_order.schedule_changed',
     context: 'sales',
     description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, a before-shipping step's deposit request made when the office opened the step, or a step waived by the owner.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED', 'WAIVED']), milestoneIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED', 'WAIVED']), milestoneIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
   }),
   // B-W2a-43: customer returns (ids, numbers and what changed; never an amount, a price or a credit value).
@@ -362,7 +366,7 @@ export const events = [
     type: 'return.replacement_ordered',
     context: 'sales',
     description: "The replacement order of a customer return was made (a sales order of the same customer) for its lines decided Replace.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004: the return's customer (the RMA row's own) */ }),
     live: { ...returnLive, fields: ['returnId', 'number', 'orderId', 'orderNumber'] },
   }),
   defineEvent({

@@ -189,7 +189,7 @@ export async function askChangeYes(tools: CommandTools, order: { readonly id: st
 export const pendingChangeYes = (db: Reader, orderId: string) => db.approvalTask.findFirst({ where: { kind: 'SALES_ORDER_CHANGE', recordType: 'SalesOrder', recordId: orderId, status: 'PENDING' }, select: { id: true, requestedAt: true } })
 
 async function decided(tools: CommandTools, task: TaskRef, decision: 'APPROVED' | 'REJECTED'): Promise<void> {
-  const order = await tools.tx.salesOrder.findUnique({ where: { id: task.recordId }, select: { id: true, number: true, companyId: true } })
+  const order = await tools.tx.salesOrder.findUnique({ where: { id: task.recordId }, select: { id: true, number: true, companyId: true, /* B-SA-001 */ partyId: true } })
   if (!order) return
   const change = await tools.tx.salesOrderAmendment.findFirst({ where: { orderId: order.id }, orderBy: { revision: 'desc' }, select: { id: true, revision: true } })
   const row = decision === 'REJECTED' ? await tools.tx.approvalTask.findUnique({ where: { id: task.id }, select: { rejectReason: true } }) : null
@@ -200,7 +200,7 @@ async function decided(tools: CommandTools, task: TaskRef, decision: 'APPROVED' 
     companyId: order.companyId,
     after: { taskId: task.id, amendmentId: change?.id ?? null, revision: change?.revision ?? null, decidedById: task.decidedById, ...(row ? { reason: row.rejectReason, putBack: 'POST /sales/orders/:orderId/changes/:amendmentId/put-back' } : {}) },
   })
-  tools.emit({ type: 'sales_order.change_decided', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId: change?.id ?? null, revision: change?.revision ?? null, taskId: task.id, decision } })
+  tools.emit({ type: 'sales_order.change_decided', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId: change?.id ?? null, revision: change?.revision ?? null, taskId: task.id, decision, partyId: order.partyId /* B-SA-001 */ } })
 }
 
 /** The yes (onApproved), in the approver's command: kept on the order. */

@@ -196,7 +196,7 @@ export async function makeScheduleInCommand(
   if (steps.length === 0) return []
   const ids = await insertSteps(tools, order, steps)
   tools.audit({ action: 'orders.schedule', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { change: 'MADE', paymentTermsId: order.paymentTermsId, steps: stepAudit(steps) } })
-  tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'MADE', milestoneIds: ids } })
+  tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'MADE', milestoneIds: ids, partyId: order.partyId /* B-SA-001: the order row's own */ } })
   return ids
 }
 
@@ -231,17 +231,17 @@ export async function remakeScheduleInCommand(tools: CommandTools, order: Pick<O
   }
   const inserted = await insertSteps(tools, order, plan.insert)
   tools.audit({ action: 'orders.schedule', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { change: 'REMADE', revision, cancelled: plan.cancel, cancelledDepositRequestIds: cancelledRequests, steps: stepAudit(plan.insert), overpaid: markMoney('price', plan.overpaid) } })
-  tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REMADE', milestoneIds: [...plan.cancel, ...inserted] } })
+  tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REMADE', milestoneIds: [...plan.cancel, ...inserted], partyId: order.partyId /* B-SA-001 */ } })
   return { cancelled: [...plan.cancel], inserted, overpaid: plan.overpaid }
 }
 
 /** Inside the cancel's command: the OPEN steps cancelled with the order (statusNote says why). */
-export async function cancelScheduleInCommand(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId'>, reason: string): Promise<string[]> {
+export async function cancelScheduleInCommand(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId' | /* B-SA-001 */ 'partyId'>, reason: string): Promise<string[]> {
   const open = await tools.tx.salesOrderMilestone.findMany({ where: { orderId: order.id, status: 'OPEN' }, select: { id: true }, orderBy: { seq: 'asc' } })
   if (open.length === 0) return []
   await tools.tx.salesOrderMilestone.updateMany({ where: { id: { in: open.map((row) => row.id) }, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: `Order ${order.number} cancelled: ${reason}`, updatedAt: tools.now, version: { increment: 1 } } })
   const ids = open.map((row) => row.id)
-  tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CANCELLED', milestoneIds: ids } })
+  tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CANCELLED', milestoneIds: ids, partyId: order.partyId /* B-SA-001 */ } })
   return ids
 }
 
@@ -259,9 +259,9 @@ export async function followDepositInCommand(tools: CommandTools, depositRequest
     const { count } = await tools.tx.salesOrderMilestone.updateMany({ where: { id: step.id, status: 'OPEN' }, data: { status: 'PAID', paidAt: request.paidAt, updatedAt: tools.now, version: { increment: 1 } } })
     if (count !== 1) continue
     paid.push(step.id)
-    const order = await tools.tx.salesOrder.findUniqueOrThrow({ where: { id: step.orderId }, select: { number: true } })
+    const order = await tools.tx.salesOrder.findUniqueOrThrow({ where: { id: step.orderId }, select: { number: true, /* B-SA-001 */ partyId: true } })
     tools.audit({ action: 'orders.schedulePaid', recordType: 'SalesOrder', recordId: step.orderId, companyId: step.companyId, before: { milestoneId: step.id, status: 'OPEN' }, after: { milestoneId: step.id, status: 'PAID', paidAt: toUtcIso(request.paidAt), depositRequestId } })
-    tools.emit({ type: 'sales_order.schedule_changed', subject: step.orderId, companyId: step.companyId, payload: { orderId: step.orderId, number: order.number, change: 'PAID', milestoneIds: [step.id] } })
+    tools.emit({ type: 'sales_order.schedule_changed', subject: step.orderId, companyId: step.companyId, payload: { orderId: step.orderId, number: order.number, change: 'PAID', milestoneIds: [step.id], partyId: order.partyId /* B-SA-001 */ } })
   }
   return paid
 }
@@ -369,7 +369,7 @@ export async function requestStep(caller: CommandCaller, orderId: string, milest
       before: { milestoneId: step.id, depositRequestId: null, dueDate: dayOrNull(step.dueDate) },
       after: { milestoneId: step.id, depositRequestId: requestId, dueDate },
     })
-    tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REQUESTED', milestoneIds: [step.id] } })
+    tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REQUESTED', milestoneIds: [step.id], partyId: order.partyId /* B-SA-001 */ } })
     return { requestId }
   })
   return { ...(await getSchedule(caller, order.id)), depositRequestId: result.requestId }
@@ -459,7 +459,7 @@ export async function waiveDeposit(
       after: { steps: steps.map((entry) => ({ milestoneId: entry.id, kind: entry.kind, status: 'WAIVED', amount: markMoney('price', entry.amount) })), depositRequestId: waivedRequest },
       reason,
     })
-    if (steps.length > 0) tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'WAIVED', milestoneIds: steps.map((entry) => entry.id) } })
+    if (steps.length > 0) tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'WAIVED', milestoneIds: steps.map((entry) => entry.id), partyId: order.partyId /* B-SA-001 */ } })
     return { milestoneIds: steps.map((entry) => entry.id), depositRequestId: waivedRequest }
   })
   return { ...(await getSchedule(caller, order.id)), waived: result }

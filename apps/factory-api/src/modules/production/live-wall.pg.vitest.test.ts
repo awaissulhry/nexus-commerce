@@ -32,6 +32,9 @@ import { ncrs as ncrExport } from '../../platform/exports/sources/ncrs'
 import { reportListKey, reportSourceOf } from '../../platform/exports/sources/reports'
 import { scheduleBoard } from '../../platform/exports/sources/schedule-board'
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from './testing/two-brands'
+// B-SA-003: the scan's event, built from the work order's row as every scan command reads it.
+import { scanEvent } from './scans/scans'
+import { readHeader, readScan } from './scans/store'
 
 /**
  * B-PR-09 (production plan §2, the brand wall; wall test PW-04: "an office person limited to brand B gets no live message about
@@ -365,6 +368,49 @@ describe('exports follow their walled lists (PW-04)', { timeout: 120_000 }, () =
     expect((await daily.read(callerOf('office.all'), daily.query(new URLSearchParams('')), null, 500, { locale: 'en' })).rows.length).toBeGreaterThan(0)
   })
 })
+
+// ── B-SA-003 (Sales page plan P17', R7; review BW-7) ───────────────────────────────────────────────────────────────────────
+/**
+ * production.scan_recorded names its work order's customer (WorkOrder.partyId, read by readHeader in every scan command: the
+ * report, the undo, an approved correction, an outside workshop's receipt), so an office person limited to some customers gets
+ * the live progress of their own customers' work orders and never another's; a legacy mixed work order names none (every
+ * customer only). The party is for the server's filter only: the view a browser gets carries no party id.
+ */
+describe('a scan names its work order’s customer (B-SA-003)', { timeout: 60_000 }, () => {
+  it("a scan on A's work order carries A, on B's B, on the legacy mixed one none; office.p2 is sent B's only, the factory all", async () => {
+    const reader = callerOf('office.all')
+    // A seeded scan's row (the production seed reports WO-0001's bundles), as readScan gives it to every scan command.
+    const [seeded] = await admin<{ id: string }>(`SELECT id FROM "OperationScan" WHERE "tenantId" = $1 ORDER BY "serverTime", id LIMIT 1`, [ids.tenantId])
+    expect(seeded, 'the production seed holds a scan').toBeDefined()
+    const row = (await reader.withClient((client) => readScan(client, seeded!.id)))!
+    const received = (envelope: EventEnvelope, session: string) => {
+      const message = liveMessageFor(envelope, EVENT_CATALOGUE.get(envelope.type, envelope.version))!
+      return liveViewFor(message, actorOf(session), EVENT_CATALOGUE)
+    }
+    const seen: [boolean, boolean, boolean][] = []
+    for (const [workOrderId, party] of [[w.a.workOrderId, w.a.partyId], [w.b.workOrderId, w.b.partyId], [w.mixed.workOrderId, null]] as const) {
+      const header = (await reader.withClient((client) => readHeader(client, workOrderId)))!
+      // A fresh scan and bundle id each (the seeded scan is A's: B's view must hold nothing of A).
+      const event = scanEvent(header, { ...row, id: newId(), bundleId: newId(), correctsId: null }, 10, 'FLOOR')
+      expect(event.payload.partyId, workOrderId).toBe(party)
+      // The catalogue takes it (an id or null) and keeps it.
+      expect(EVENT_CATALOGUE.parse('production.scan_recorded', 1, event.payload)).toMatchObject({ partyId: party })
+      const envelope: EventEnvelope = { eventId: newId(), type: event.type, version: 1, context: 'production', tenantId: ids.tenantId, companyId: event.companyId, siteId: event.siteId, subject: event.subject, correlationId: `b-sa-003-${newId()}`, causationId: null, source: 'production.reportScan', occurredAt: new Date().toISOString(), payload: event.payload }
+      seen.push([received(envelope, 'office.p2') !== null, received(envelope, 'office.p1') !== null, received(envelope, 'office.all') !== null])
+      const view = received(envelope, 'office.all')!
+      expect(view).not.toHaveProperty('partyIds')
+      expect(view.fields).not.toHaveProperty('partyId')
+      if (workOrderId === w.b.workOrderId) seenByB.push(received(envelope, 'office.p2'))
+    }
+    // [office.p2 (B), office.p1 (A), office.all]: A's reaches A and the factory; B's reaches B and the factory; the mixed one the factory only.
+    expect(seen).toEqual([
+      [false, true, true],
+      [true, false, true],
+      [false, false, true],
+    ])
+  })
+})
+// ── end B-SA-003 ──
 
 describe('nothing brand B’s person received names brand A', { timeout: 60_000 }, () => {
   it('no live view and no file row office.p2 got holds A’s names, codes, numbers or ids', () => {
