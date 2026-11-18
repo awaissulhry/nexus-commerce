@@ -356,8 +356,10 @@ describe('exports follow their walled lists (PW-04)', { timeout: 120_000 }, () =
   it('capacity, the material plan, the master schedule and the daily production report need every customer: refused to office.p2 in words', async () => {
     const daily = reportSourceOf(reportListKey('production.daily'))!
     for (const source of [capacityLoad, mrp, mps, daily]) {
-      expect(source.refusal!(actorOf('office.p2')), source.listKey).toBe(EVERY_PARTY_WORDS.en)
-      expect(source.refusal!(actorOf('office.all')), source.listKey).toBeNull()
+      // B-SA-021: a refusal reads the view's query too — the source's own, as the export job passes it.
+      const query = source.query(new URLSearchParams(`site=${site}`))
+      expect(source.refusal!(actorOf('office.p2'), query), source.listKey).toBe(EVERY_PARTY_WORDS.en)
+      expect(source.refusal!(actorOf('office.all'), query), source.listKey).toBeNull()
     }
     // The request is refused before a job is queued, in the same words; the production unit's is queued.
     const body = (listKey: string) => ({ listKey, format: 'CSV', query: `site=${site}`, columns: [{ key: 'lane', label: 'Line' }], title: 'Capacity & load', locale: 'en' })
