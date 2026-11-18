@@ -6,7 +6,7 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { EVERY_PARTY_WORDS, type Grant, type Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedAccounting, type AccountingSeed } from '../../../../../../packages/factory-db/seed/accounting'
@@ -65,6 +65,8 @@ const SESSIONS: Record<string, SessionContext> = {
   production: office([grain(['workorders.view', 'inventory.issue', 'inventory.stock.view', 'costing.view', 'costing.ledger.manage'])]),
   companyB: office([grain(['inventory.stock.view', 'costing.view', 'money.cost', 'money.price', 'money.margin'], [companyB])]),
   otherParty: office([grain(['costing.view', 'money.cost', 'money.price', 'money.margin'], 'all', [newId()])]),
+  // fix-pg-2 (B-PR-10): the stock view of one customer only: the report adds up every customer's stock.
+  stockOneParty: office([grain(['inventory.stock.view'], 'all', [newId()])]),
   otherTenant: { audience: 'office', tenantId: newId(), actorId: newId(), grants: [grain(['inventory.stock.view', 'costing.view', 'money.cost'])] },
 }
 
@@ -172,6 +174,12 @@ describe('stock valuation at any date (FIN-039)', () => {
       expect(keysOf(answer).filter((name) => VALUE.test(name))).toEqual([])
     }
     await refused('sales', '/costing/valuation', 403)
+    // fix-pg-2 (B-PR-10): the stock view limited to one customer is refused in words that name none, for every report — the layers
+    // too: an issue's move names its work order.
+    const lot = await lotOf('SEED-LOT-LEA-01')
+    for (const url of ['/costing/valuation', '/costing/valuation/leather', `/costing/valuation/layers?siteId=${lot.siteId}&itemId=${lot.itemId}&lotId=${lot.id}`]) {
+      expect((await refused('stockOneParty', url, 403)).message, url).toBe(EVERY_PARTY_WORDS.en)
+    }
   })
 })
 

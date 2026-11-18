@@ -32,7 +32,6 @@ import { methodInForce } from '../method/method'
 import { withLanded } from '../landed/lot-cost'
 import { markCustomerOwned } from './customer-owned'
 import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
-import { COSTING_VIEW } from '@nexus/factory-domain/costing/permissions' // B-PR-10
 
 /**
  * Stock valuation at any date (B-W2a-29; FIN-039; design finance.reports "Stock valuation"): value on hand by category,
@@ -280,7 +279,9 @@ export async function valueStockAsOf(db: Reader, filters: StockValuationFilters,
 export async function visibleSites(caller: CommandCaller, db: Reader, filters: { readonly companyId?: string | undefined; readonly siteId?: string | undefined }): Promise<string[]> {
   const context = officeContextOf(caller)
   // B-PR-10 (the warehouse decision): the stock's value adds up every customer's stock and work: every customer only.
-  assertEveryParty(actorOf(context), COSTING_VIEW)
+  // fix-pg-2: judged with the permission these reports are read with (the manifest's inventory.stock.view, as the stock itself):
+  // the warehouse and the planner see the quantities without costing.view.
+  assertEveryParty(actorOf(context), INVENTORY_STOCK_VIEW)
   const sites = await db.site.findMany({
     where: { AND: [scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SITE_SCOPE) as Prisma.SiteWhereInput, filters.companyId ? { companyId: filters.companyId } : {}, filters.siteId ? { id: filters.siteId } : {}] },
     select: { id: true },
