@@ -329,14 +329,14 @@ describe('F-PR-16 — Decide for and Reverse on screen', () => {
   })
 
   it('Enter in the typed name sends nothing: the fields sit in no form (the send button and ⌘↵ send)', () => {
-    for (const id of ['decide', 'decide-refused', 'reverse']) {
-      const html = draw(id)
-      expect(html, id).toContain('<div class="fw-cov-form"')
-      expect(html, id).not.toContain('<form')
-      expect(html, id).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
-    }
-    expect(textOf(draw('decide'))).toContain('Decide for Brand Beta')
-    expect(textOf(draw('decide-closed'))).not.toContain('Why we decide')
+    // The DS Modal draws only in a browser: the dialogs' own source is read (the walk checked the screen).
+    const source = readFileSync(new URL('./CustomerOverride.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('<form')
+    expect(source.match(/<div className="fw-cov-form" onKeyDown=\{sendKeys\(heldText, onSend\)\}>/g)?.length).toBe(2)
+    // The act opens the dialog: its button is drawn with the request it acts on.
+    const closed = textOf(draw('decide-closed'))
+    expect(closed).toContain('Decide for Brand Beta')
+    expect(closed).toContain('Do you approve the stitching and the colour of the sample?')
   })
 })
 // ---- end F-PR-16

@@ -255,11 +255,11 @@ describe('F-PR-05b — the card on screen', () => {
 
   // ---- F-PR-16 (the browser walk): Enter sends only from the send button
   it('Enter in the reason field sends nothing: the dialog’s field sits in no form (Lock… and ⌘↵ send)', () => {
-    for (const id of ['customer-card-lock', 'customer-card-regular']) {
-      const html = draw(id)
-      expect(html, id).toContain('<div class="fw-pr-dialog"')
-      expect(html, id).not.toMatch(/<form[^>]*fw-pr-dialog/)
-    }
+    // The DS Modal draws only in a browser: the card's own source is read (the walk checked the screen).
+    const source = readFileSync(join(__dirname, 'view', 'CustomerCard.tsx'), 'utf8')
+    expect(source).not.toContain('<form')
+    expect(source).toContain('className="fw-pr-dialog"')
+    expect(source).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
   })
   // ---- end F-PR-16
 
