@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { Gavel, Undo2 } from 'lucide-react'
+import { KIND_RULES } from '@nexus/factory-domain/approvals-out/kinds'
+import { Card } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
-import { useT } from '../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import type { OverrideRequest } from './api'
 import { DecideDialog, ReverseDialog, type Dialog } from './CustomerOverride'
@@ -33,11 +35,15 @@ export function OverrideCase({ model }: { model: OverrideCaseModel }) {
 
 function CaseState({ model }: { model: OverrideCaseModel }) {
   const t = useT(NS)
+  const locale = useLocale()
   const [open, setOpen] = useState(model.open)
   const [dialog, setDialog] = useState<Dialog>(model.dialog)
   const close = () => setOpen(false)
   return (
-    <div>
+    // Where the part is mounted (a round's Approval tab, a gate, a new date): the request it acts on, then the act.
+    <Card padded>
+      <p className="fw-cov-text">{`${KIND_RULES[model.request.kind].name[locale]} · ${model.request.record.words[locale]}`}</p>
+      <p className="fw-cov-hint">{model.request.question}</p>
       <Button size="sm" onClick={() => setOpen(true)}>
         {dialog.act === 'decide' ? <Gavel size={13} aria-hidden /> : <Undo2 size={13} aria-hidden />} {dialog.act === 'decide' ? t('act.decide', { customer: model.customer }) : t('act.reverse')}
       </Button>
@@ -63,6 +69,6 @@ function CaseState({ model }: { model: OverrideCaseModel }) {
           onClose={close}
         />
       )}
-    </div>
+    </Card>
   )
 }

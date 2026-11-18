@@ -45,6 +45,7 @@ function CaseState({ built }: { built: WaitingCaseModel }) {
         model={{ ...built.page, dialog: shown }}
         actions={{
           ...(opens.dialog ? { onOpen: () => setDialog(opens.dialog ?? null) } : {}),
+          onRetry: () => undefined,
           dialog: { onClose: () => setDialog(null) },
         }}
       />

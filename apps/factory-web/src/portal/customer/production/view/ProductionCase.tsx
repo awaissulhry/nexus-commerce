@@ -78,6 +78,7 @@ function CaseState({ built }: { built: ProductionCaseModel }) {
         model={list}
         actions={{
           ...(built.barOf ? { onSelect: pick } : {}),
+          onRetry: () => undefined,
           bulk: { onSelectAll: () => pick(rows.map((row) => row.id)), onAction },
           ...(opens.problem ? { onReport: () => set({ problem: opens.problem ?? null }) } : {}),
           review: { onClose: () => set({ review: null }) },
