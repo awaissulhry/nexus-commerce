@@ -15,14 +15,18 @@
  *            once, m the same in all), and checks every part the check expects (the floor file's section --check, only
  *            the --groups selected): a result exists, it exited 0, nothing failed, and ran >= its floor. Prints one
  *            table (also to the job summary), the failing tests, and this run's counts as floors. Exit 1 on a problem.
+ *   affected the quick check's unit parts may run only the tests a push can affect (`vitest --changed <base>`; record
+ *            --scope affected). A floor counts only in a full run: an affected part reports its count and fails only on a
+ *            failed test. Instead the summary (--sources <n>: the changed factory source files) fails when n > 0 and the
+ *            affected parts together ran no test at all: the import graph found nothing, so nothing was measured.
  *
  * Node built-ins only: the summary job installs nothing.
  *
  * Run:
  *   node scripts/factory/ci-report.mjs record --part <name> --kind <kind> --input <report or log> --exit-file <file>
- *        --out <dir> [--shard <n>/<m>]
+ *        --out <dir> [--shard <n>/<m>] [--scope full|affected]
  *   node scripts/factory/ci-report.mjs summary --check endCheck|quickCheck --results <dir> [--groups all|fast,pg,…]
- *        [--floor .github/factory-test-floor.json]
+ *        [--floor .github/factory-test-floor.json] [--sources <n>] [--note <text>]
  */
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -138,9 +142,13 @@ function record(options) {
     if (!match || Number(match[1]) < 1 || Number(match[1]) > Number(match[2])) throw new Error(`--shard must be <n>/<m> with 1 <= n <= m, not ${options.shard}`)
     shard = { n: Number(match[1]), m: Number(match[2]) }
   }
+  const scope = options.scope ?? 'full'
+  if (!['full', 'affected'].includes(scope)) throw new Error(`--scope must be full or affected, not ${JSON.stringify(scope)}`)
   const exit = readExit(options['exit-file'])
   const text = readText(input)
-  const read = { vitest: fromVitest, golden: fromGolden, browser: fromBrowser, guards: fromGuards, exit: fromExit }[kind](text)
+  let read = { vitest: fromVitest, golden: fromGolden, browser: fromBrowser, guards: fromGuards, exit: fromExit }[kind](text)
+  // `vitest --changed` with no related test exits 0 without writing a report: that is 0 tests, not a lost report.
+  if (kind === 'vitest' && scope === 'affected' && exit === 0 && text === undefined) read = { passed: 0, failed: 0, skipped: 0, todo: 0, files: 0, failedFiles: 0 }
   const counted = kind !== 'exit'
   const passed = read.passed ?? 0
   const failed = read.failed ?? 0
@@ -149,6 +157,7 @@ function record(options) {
     part,
     shard,
     kind,
+    scope,
     exit,
     ran: counted ? passed + failed : null,
     passed: counted ? passed : null,
@@ -164,7 +173,7 @@ function record(options) {
   const file = join(out, `${part}${shard ? `-${shard.n}-of-${shard.m}` : ''}.json`)
   writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`)
   const counts = counted ? `, ran ${result.ran} (${passed} passed, ${failed} failed, ${result.skipped} skipped, ${result.todo} todo)` : ''
-  console.log(`ci-report: ${part}${shard ? ` ${shard.n}/${shard.m}` : ''} — exit ${exit ?? 'none'}${counts}${result.note ? ` — ${result.note}` : ''}`)
+  console.log(`ci-report: ${part}${shard ? ` ${shard.n}/${shard.m}` : ''}${scope === 'affected' ? ' (affected tests only)' : ''} — exit ${exit ?? 'none'}${counts}${result.note ? ` — ${result.note}` : ''}`)
   for (const failure of result.failures) console.log(`  FAILED  ${failure}`)
   if (result.moreFailures > 0) console.log(`  … and ${result.moreFailures} more`)
 }
@@ -228,15 +237,17 @@ function summary(options) {
     }
     const counted = results.some((result) => result.ran !== null)
     const sum = (field) => (counted ? results.reduce((total, result) => total + (result[field] ?? 0), 0) : null)
-    const row = { name, ran: sum('ran'), passed: sum('passed'), failed: sum('failed'), skipped: sum('skipped'), todo: sum('todo'), floor: spec?.min ?? null }
+    const affected = results.some((result) => result.scope === 'affected')
+    const row = { name, ran: sum('ran'), passed: sum('passed'), failed: sum('failed'), skipped: sum('skipped'), todo: sum('todo'), floor: spec?.min ?? null, affected }
     const exits = results.map((result) => result.exit)
     if (exits.includes(null)) why.push('a command did not run to its end')
     const bad = exits.filter((exit) => exit !== null && exit !== 0)
     if (bad.length > 0) why.push(`exit ${[...new Set(bad)].join(', ')}`)
     if (row.failed) why.push(`${row.failed} failed`)
-    if (spec?.min !== undefined && (row.ran ?? 0) < spec.min) why.push(`ran ${row.ran ?? 0} < floor ${spec.min}`)
+    // A floor counts in a full run only: an affected run runs the tests a change can reach, however few.
+    if (spec?.min !== undefined && !affected && (row.ran ?? 0) < spec.min) why.push(`ran ${row.ran ?? 0} < floor ${spec.min}`)
     for (const result of results) if (result.note) why.push(result.shard ? `shard ${result.shard.n}: ${result.note}` : result.note)
-    if (counted && why.length === 0) measured[name] = row.ran
+    if (counted && !affected && why.length === 0) measured[name] = row.ran
     row.ok = why.length === 0
     row.why = why.join('; ')
     row.failures = results.flatMap((result) => [
@@ -247,14 +258,25 @@ function summary(options) {
     if (!row.ok) problems.push(`${name}: ${row.why}`)
   }
   for (const line of unreadable) problems.push(`unreadable result ${line}`)
+  // The affected run's one count rule: changed factory sources, yet not one related unit test ran anywhere.
+  const affectedRows = rows.filter((row) => row.affected)
+  const sources = Number(options.sources ?? 0)
+  let zero = null
+  if (affectedRows.length > 0) {
+    const ran = affectedRows.reduce((total, row) => total + (row.ran ?? 0), 0)
+    zero = { ran, parts: affectedRows.length, sources }
+    if (sources > 0 && ran === 0) problems.push(`affected unit tests: ${sources} factory source file(s) changed, yet the ${affectedRows.length} affected part(s) ran no test at all (the import graph found nothing: could not measure)`)
+  }
 
   const lines = []
   lines.push(`### Factory ${checkName === 'quickCheck' ? 'quick check' : 'end check'} — ${rows.filter((row) => row.ok).length} of ${rows.length} parts green (groups: ${groups.join(', ')})`)
+  if (options.note) lines.push('', options.note)
+  if (zero) lines.push('', `Affected unit run: ${zero.ran} test(s) ran in ${zero.parts} part(s) for ${zero.sources} changed factory source file(s); floors apply to a full run only${zero.sources > 0 && zero.ran === 0 ? ' — **FAIL: no related test ran**' : ''}.`)
   lines.push('')
   lines.push('| Part | Result | Ran | Passed | Failed | Skipped | Todo | Floor | Why |')
   lines.push('|---|---|---:|---:|---:|---:|---:|---:|---|')
   for (const row of rows) {
-    lines.push(`| ${row.name} | ${row.ok ? 'pass' : '**FAIL**'} | ${number(row.ran)} | ${number(row.passed)} | ${number(row.failed)} | ${number(row.skipped)} | ${number(row.todo)} | ${number(row.floor)} | ${row.why.replace(/\|/g, '/')} |`)
+    lines.push(`| ${row.name} | ${row.ok ? 'pass' : '**FAIL**'} | ${number(row.ran)} | ${number(row.passed)} | ${number(row.failed)} | ${number(row.skipped)} | ${number(row.todo)} | ${row.affected && row.floor !== null ? `(${row.floor})` : number(row.floor)} | ${row.why.replace(/\|/g, '/')} |`)
   }
   const failing = rows.filter((row) => row.failures.length > 0)
   if (failing.length > 0) {
@@ -278,7 +300,7 @@ function summary(options) {
     for (const problem of problems) console.log(`  ${problem}`)
     process.exit(1)
   }
-  console.log(`\nci-report: every part passed and ran at least its floor`)
+  console.log(`\nci-report: every part passed${zero ? ' (an affected unit run: its floors count in a full run only)' : ' and ran at least its floor'}`)
 }
 
 const [command, ...rest] = process.argv.slice(2)

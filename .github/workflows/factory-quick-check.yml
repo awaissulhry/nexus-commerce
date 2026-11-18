@@ -7,10 +7,18 @@
 #   setup      npm ci (Commerce's node_modules cache entry), shared + events built, the factory-db Prisma client
 #   typecheck  factory-db, factory-domain, factory-api, factory-web
 #   guards     run-guards, check-i18n, check-event-contract
+#   changes    decides the unit run (in parallel with setup): AFFECTED = only the unit tests the push can reach through
+#              the import graph (`vitest --changed <the push's before commit>`), or FULL = every unit test — when started
+#              by hand, when the push names no usable earlier commit, or when it changed a file imports do not reach
+#              (the lockfile, patches, a package.json, a vitest or tsconfig file, the Prisma schema and migrations,
+#              factory-api's global setup, this check's own files)
 #   units      factory-db (without *.pg), factory-domain, factory-api (without *.pg and *.redis: no database, no Redis;
 #              its test-database guard reads a loopback factory_test… URL that nothing connects to), factory-web
-#   summary    one table; red when a part failed or ran fewer tests than its floor (.github/factory-test-floor.json,
-#              section quickCheck), so "every unit test skipped" shows red too
+#   summary    one table; red when a part failed. A FULL run is also red below its floor (.github/factory-test-floor.json,
+#              section quickCheck: "every unit test skipped" shows red). An AFFECTED run reports its counts and is red
+#              only when a test failed, or when factory source files changed and not one related unit test ran at all
+# Typecheck and guards always run whole: they need the whole program and are fast. Tests that read a file as text (not
+# by import) are reached only by a full run here; the end check always runs everything.
 # A newer push to main cancels the older run. Target: under ~8 minutes.
 
 name: Factory quick check
@@ -96,6 +104,56 @@ jobs:
             packages/factory-db/src/generated
           key: factory-built-${{ github.run_id }}
 
+  changes:
+    name: Changes — affected or full unit run
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mode: ${{ steps.decide.outputs.mode }}
+      base: ${{ steps.decide.outputs.base }}
+      sources: ${{ steps.decide.outputs.sources }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      # The whole history without file contents: `before...HEAD` needs the merge base, git diff --name-only only trees.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          # Changed files the import graph does not follow: any one of them makes the run full.
+          TRIGGERS: '^(package-lock\.json$|patches/|(.*/)?package\.json$|(.*/)?vitest\.config\.[a-z]+$|(.*/)?tsconfig[^/]*\.json$|packages/factory-db/prisma/|apps/factory-api/src/testing/global-setup\.ts$|\.github/workflows/factory-quick-check\.yml$|\.github/actions/factory-setup/|\.github/factory-test-floor\.json$|scripts/factory/ci-report\.mjs$)'
+          # Factory source the unit tests import (for the "not one related test ran" rule).
+          SOURCES: '^(apps/factory-(api|web)|packages/(factory-db|factory-domain|db-kit))/src/.+\.tsx?$'
+        run: |
+          mode=full; base=; sources=0
+          if [ "$EVENT" != push ]; then
+            reason="started by hand"
+          elif [ -z "$BEFORE" ] || [[ "$BEFORE" =~ ^0+$ ]]; then
+            reason="the push names no earlier commit"
+          elif ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            reason="the push's earlier commit ${BEFORE:0:10} is not in the history"
+          elif ! git merge-base --is-ancestor "$BEFORE" HEAD; then
+            reason="the push's earlier commit ${BEFORE:0:10} is not an ancestor of it (a rewritten history)"
+          else
+            git diff --name-only "$BEFORE...HEAD" > "$RUNNER_TEMP/changed.txt"
+            changed=$(grep -c . "$RUNNER_TEMP/changed.txt" || true)
+            sources=$(grep -E "$SOURCES" "$RUNNER_TEMP/changed.txt" | grep -vE '\.(pg|redis)\.vitest\.test\.ts$|^packages/factory-db/src/generated/' | grep -c . || true)
+            triggers=$(grep -E "$TRIGGERS" "$RUNNER_TEMP/changed.txt" | head -3 | paste -sd ' ' - || true)
+            if [ -n "$triggers" ]; then
+              reason="the push changed files the import graph does not follow ($triggers)"
+            else
+              mode=affected; base=$BEFORE
+              reason="the unit tests the import graph links to the $changed file(s) changed since ${BEFORE:0:10} ($sources factory source file(s))"
+            fi
+          fi
+          echo "$mode — $reason"
+          { echo "mode=$mode"; echo "base=$base"; echo "sources=${sources:-0}"; echo "reason=$reason"; } >> "$GITHUB_OUTPUT"
+          echo "Unit run: **$mode** — $reason" >> "$GITHUB_STEP_SUMMARY"
+
   typecheck:
     name: Typecheck — ${{ matrix.workspace }}
     needs: setup
@@ -156,8 +214,8 @@ jobs:
           retention-days: 7
 
   units:
-    name: Unit tests (no database) — ${{ matrix.part }}
-    needs: setup
+    name: Unit tests (no database, ${{ needs.changes.outputs.mode }}) — ${{ matrix.part }}
+    needs: [setup, changes]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -181,22 +239,32 @@ jobs:
             args: ''
             heap: '8192'
     steps:
+      # An affected run needs the history for vitest's `git diff <base>...HEAD`; a full run one commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ needs.changes.outputs.mode == 'affected' && '0' || '1' }}
+          filter: ${{ needs.changes.outputs.mode == 'affected' && 'blob:none' || '' }}
       - uses: ./.github/actions/factory-setup
-      - name: vitest run (${{ matrix.dir }})
+      - name: vitest run (${{ matrix.dir }}, ${{ needs.changes.outputs.mode }})
         working-directory: ${{ matrix.dir }}
         env:
           DATABASE_URL_FOR_GUARD: ${{ matrix.database-url }}
           HEAP: ${{ matrix.heap }}
+          MODE: ${{ needs.changes.outputs.mode }}
+          BASE: ${{ needs.changes.outputs.base }}
         run: |
           [ -n "$DATABASE_URL_FOR_GUARD" ] && export FACTORY_DATABASE_URL="$DATABASE_URL_FOR_GUARD"
           [ -n "$HEAP" ] && export NODE_OPTIONS="--max-old-space-size=$HEAP"
+          changed=()
+          [ "$MODE" = affected ] && changed=(--changed "$BASE")
           set +e
-          npx vitest run ${{ matrix.args }} --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/report.json"
+          npx vitest run ${{ matrix.args }} "${changed[@]}" --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/report.json"
           rc=$?; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
       - name: Record
         if: always()
-        run: node scripts/factory/ci-report.mjs record --part "${{ matrix.part }}" --kind vitest --input "$RUNNER_TEMP/report.json" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+        env:
+          MODE: ${{ needs.changes.outputs.mode }}
+        run: node scripts/factory/ci-report.mjs record --part "${{ matrix.part }}" --kind vitest --scope "${MODE:-full}" --input "$RUNNER_TEMP/report.json" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -208,7 +276,7 @@ jobs:
 
   summary:
     name: Summary — every part passed and ran at least its floor
-    needs: [setup, typecheck, guards, units]
+    needs: [setup, changes, typecheck, guards, units]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -227,9 +295,13 @@ jobs:
           pattern: factory-result-*
           merge-multiple: true
           path: ${{ runner.temp }}/results
-      - name: One table; red when a part failed or ran fewer tests than its floor
+      - name: One table; red when a part failed, a full run fell below a floor, or an affected run found no related test
         env:
           SETUP: ${{ needs.setup.result }}
+          MODE: ${{ needs.changes.outputs.mode }}
+          REASON: ${{ needs.changes.outputs.reason }}
+          SOURCES: ${{ needs.changes.outputs.sources }}
         run: |
-          echo "setup: $SETUP"
-          node scripts/factory/ci-report.mjs summary --check quickCheck --results "$RUNNER_TEMP/results"
+          echo "setup: $SETUP · unit run: ${MODE:-unknown} — $REASON"
+          node scripts/factory/ci-report.mjs summary --check quickCheck --results "$RUNNER_TEMP/results" \
+            --sources "${SOURCES:-0}" --note "Unit run: ${MODE:-unknown} — ${REASON:-the changes job did not decide}"

@@ -2,7 +2,7 @@
   "$comment": [
     "The fewest tests each part of a Factory CI run must RUN (passed + failed; skipped and todo do not count), read by scripts/factory/ci-report.mjs summary.",
     "A run whose suites were skipped (a syntax error that stops every file from loading, a set-up that never started, a shard that never reported) falls below its floor and fails, even when every command exited 0.",
-    "endCheck = .github/workflows/factory-end-check.yml (group = its `parts` input); quickCheck = .github/workflows/factory-quick-check.yml (every part, no database).",
+    "endCheck = .github/workflows/factory-end-check.yml (group = its `parts` input); quickCheck = .github/workflows/factory-quick-check.yml (every part, no database; its unit floors count in a FULL run only: an affected run, `vitest --changed`, reports its counts and fails only on a failed test or when no related test ran for changed factory source).",
     "A part without `min` only has to exit 0. Every part a workflow records needs an entry here, and every entry of a selected group needs a result.",
     "Set from the Mac end check's counts of 2026-11-18, about 3% below them; the golden steps and the browser stages exactly (every step must run). After a green run, raise a floor to the counts its summary prints. Never lower one to make a run pass: fix the tests that stopped running."
   ],
