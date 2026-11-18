@@ -168,7 +168,7 @@ describe('the seeded files get their bytes (B-W2b-F59)', () => {
     expect(answer.statusCode, answer.body).toBe(200)
     const [picture] = (answer.json() as Json).pictures as Json[]
     expect(picture).toMatchObject({ id: order!.id, fileId: order!.fileId, contentType: 'image/jpeg', small: { url: expect.any(String), expiresAt: expect.any(String) } })
-    const fetched = await h.app.inject({ method: 'GET', url: picture.small.url })
+    const fetched = await h.app.inject({ method: 'GET', url: picture!.small.url })
     expect(fetched.statusCode).toBe(200)
     const [file] = await admin<{ thumbnailKey: string }>(`SELECT "thumbnailKey" FROM "StoredFile" WHERE id = $1`, [order!.fileId])
     expect(fetched.rawPayload.equals((await h.files.storage.read(system(), T.store, smallKeyOf(file!.thumbnailKey), 50_000_000))!)).toBe(true)

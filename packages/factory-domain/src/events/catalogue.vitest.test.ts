@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue' // B-SA-004c
 import { ROLE_TEMPLATES } from '../auth/roles/templates'
 import { createCatalogue, EVENT_CATALOGUE, EVENT_DEFINITIONS, EventPayloadError, UndeclaredEventError } from './catalogue'
-import { defineEvent, /* B-SA-004c */ isFloorPermission } from './define'
+import { defineEvent, /* B-SA-004c */ isFloorPermission, /* S7 end check: the helpers below take a catalogue's get() too */ type EventDefinition } from './define'
 import { LIVE_PARTY_KEYS } from './live' // B-SA-004
 
 const v1 = defineEvent({ type: 'lot.released', context: 'quality', description: 'A lot was released.', payload: z.strictObject({ lotId: z.string() }) })
@@ -93,9 +93,9 @@ describe('EVENT_CATALOGUE', () => {
 describe('order events declare their customer (B-SA-004)', () => {
   /** Records of the company that no customer owns: their live message reaches people of every customer only, by design. */
   const NO_CUSTOMER: Readonly<Record<string, string>> = { 'season.changed': "a season is the company's own, of no customer" }
-  const keysOf = (definition: (typeof EVENT_DEFINITIONS)[number]): string[] => Object.keys(definition.payload.shape)
-  const namesAnOrder = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => key === 'orderId' || key === 'salesOrderId')
-  const namesAParty = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))
+  const keysOf = (definition: EventDefinition): string[] => Object.keys(definition.payload.shape)
+  const namesAnOrder = (definition: EventDefinition): boolean => keysOf(definition).some((key) => key === 'orderId' || key === 'salesOrderId')
+  const namesAParty = (definition: EventDefinition): boolean => keysOf(definition).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))
   const FAMILIES = /^(shipment|order_promise|deposit_request|payment|invoice)\./
 
   it('every event shown to orders.view, or that names an order, declares a party key', () => {
@@ -162,10 +162,10 @@ describe('quote, return, repair and order events declare their customer (B-SA-00
   const RULES = new Set(['quotes.view', 'sales.returns.view', 'sales.repairs.view', 'orders.view'])
   const NAMES = ['quoteId', 'returnId', 'repairId', 'orderId', 'salesOrderId', 'orderIds']
   const FAMILY = /^(quote|return|repair|repair_estimate)\./
-  const keysOf = (definition: (typeof EVENT_DEFINITIONS)[number]): string[] => Object.keys(definition.payload.shape)
-  const namesARecord = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => NAMES.includes(key))
-  const namesAParty = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))
-  const ruled = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => RULES.has(definition.live?.permission ?? '') || namesARecord(definition)
+  const keysOf = (definition: EventDefinition): string[] => Object.keys(definition.payload.shape)
+  const namesARecord = (definition: EventDefinition): boolean => keysOf(definition).some((key) => NAMES.includes(key))
+  const namesAParty = (definition: EventDefinition): boolean => keysOf(definition).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))
+  const ruled = (definition: EventDefinition): boolean => RULES.has(definition.live?.permission ?? '') || namesARecord(definition)
 
   it('every event shown to quotes.view, sales.returns.view, sales.repairs.view or orders.view, or that names a quote, a return, a repair or orders, declares a party key', () => {
     const missing = EVENT_DEFINITIONS.filter((definition) => ruled(definition) && !Object.hasOwn(NO_CUSTOMER, definition.type) && !namesAParty(definition)).map((definition) => definition.type)

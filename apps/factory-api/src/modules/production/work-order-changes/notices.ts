@@ -45,11 +45,11 @@ export const WORK_ORDER_CHANGE_RULES: readonly FanOutRule[] = Object.freeze([
       const candidates = new Set<string>()
       if (workOrder) {
         const supervisor = await supervisorOfWorkOrder(context.tx, workOrder.id)
-        if (supervisor?.supervisorId) candidates.add(supervisor.supervisorId)
+        if (supervisor?.userId) candidates.add(supervisor.userId)
         for (const userId of await followersOf(context.tx, { type: WORK_ORDER, id: workOrder.id })) candidates.add(userId)
       } else {
         const supervisor = await supervisorOfOrder(context.tx, order.id)
-        if (supervisor?.supervisorId) candidates.add(supervisor.supervisorId)
+        if (supervisor?.userId) candidates.add(supervisor.userId)
       }
       const drafts: Draft[] = []
       for (const userId of candidates) {

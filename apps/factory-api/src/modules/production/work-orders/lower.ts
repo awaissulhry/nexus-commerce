@@ -96,11 +96,13 @@ export class LowerRefusedError extends ConflictError {
   override name = 'LowerRefusedError'
   override readonly issues: readonly Issue[]
   constructor(
-    readonly code: LowerRefusal,
+    // S7 end check: the refusal's code is `refusal` (as the other …RefusedError), never `code` — that one is DomainError's
+    // 'conflict', which mapError turns into the 409.
+    readonly refusal: LowerRefusal,
     readonly words: Words,
   ) {
     super(words.en)
-    this.issues = [{ path: `refusal/${code}`, message: words.en }]
+    this.issues = [{ path: `refusal/${refusal}`, message: words.en }]
   }
 }
 

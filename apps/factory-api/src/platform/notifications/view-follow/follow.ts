@@ -30,11 +30,17 @@ const STATE = (value: Prisma.JsonValue) => {
   return parsed.success ? parsed.data : { query: '' }
 }
 
-/** Why a person may not follow (or have counted) a list's view, in words; null: they may. */
-export function followRefusal(source: AnyExportSource | undefined, actor: Actor, companyId: string | null): string | null {
+/** The view's query, as the list's own export reads it (the view's saved address). */
+const viewQueryOf = (source: AnyExportSource, state: Prisma.JsonValue): unknown => source.query(new URLSearchParams(STATE(state).query))
+
+/**
+ * Why a person may not follow (or have counted) a list's view, in words; null: they may. S7 end check (B-SA-021): the list's
+ * refusal reads the view's query too (Sales › Orders' rider term only for a reader of measurements), as the export does.
+ */
+export function followRefusal(source: AnyExportSource | undefined, actor: Actor, companyId: string | null, state: Prisma.JsonValue): string | null {
   if (!source) return 'This list cannot be followed yet: a view is counted through the list’s export, and this list has none.'
   if (!can(actor, source.permission, companyId ? { companyId } : {})) return 'You may not see this list, so you cannot follow its view.'
-  return source.refusal?.(actor) ?? null
+  return source.refusal?.(actor, viewQueryOf(source, state)) ?? null
 }
 
 /**
@@ -42,7 +48,7 @@ export function followRefusal(source: AnyExportSource | undefined, actor: Actor,
  * when there are more.
  */
 export async function viewIds(reader: CommandCaller, source: AnyExportSource, state: Prisma.JsonValue): Promise<{ readonly ids: string[]; readonly capped: boolean }> {
-  const query = source.query(new URLSearchParams(STATE(state).query))
+  const query = viewQueryOf(source, state)
   const ids: string[] = []
   let cursor: string | null = null
   do {
@@ -91,7 +97,7 @@ export async function followView(caller: CommandCaller, viewId: string, idempote
   const actor = actorOf(context)
   const view = await caller.withClient(async (client) => readVisible(client, viewId, await readerOf(client, context)))
   const source = exportSourceOf(view.listKey)
-  const refusal = followRefusal(source, actor, view.companyId)
+  const refusal = followRefusal(source, actor, view.companyId, view.state)
   if (refusal) throw source ? new ForbiddenError(refusal) : new DomainError('conflict', refusal, [{ path: 'views/NOT_FOLLOWABLE', message: refusal }])
   // Counted BEFORE the command, as me (the list's read is its own; the follow row then starts from what I see now).
   const counted = await viewIds(caller, source!, view.state)

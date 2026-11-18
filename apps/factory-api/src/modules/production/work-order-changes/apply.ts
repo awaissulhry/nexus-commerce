@@ -67,7 +67,7 @@ async function cutOf(tools: CommandTools, tenantId: string, cells: readonly Chan
 /** Should a refusal be kept on the change as `lastError`? A rule's refusal yes; a stale version, an unknown record or a decided one no. */
 function failureWords(error: unknown): string | null {
   if (error instanceof StaleVersionError || error instanceof IdempotencyKeyReusedError || error instanceof NotFoundError || error instanceof ForbiddenError) return null
-  if (error instanceof ChangeRefusedError && error.code === 'DECIDED') return null
+  if (error instanceof ChangeRefusedError && error.refusal === 'DECIDED') return null
   if (error instanceof DomainError) return error.message
   // The database's own refusal (check_violation): its words name no other customer (…_order_apply_guards and the rest).
   const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause

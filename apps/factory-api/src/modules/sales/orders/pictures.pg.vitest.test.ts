@@ -172,9 +172,9 @@ describe('one read for a page of records, one answer shape (B-SA-011)', () => {
       const [one, ...rest] = await pictures('all', route, [recordId])
       expect(rest, route).toEqual([])
       expect(one, route).toMatchObject({ id: recordId, styleId: expect.any(String), styleCode: 'SEED-JKT-01', styleName: expect.any(String), fileId: expect.any(String), contentType: expect.stringMatching(/^image\//), small: null })
-      expect(one.styleCount, route).toBeGreaterThanOrEqual(1)
+      expect(one!.styleCount, route).toBeGreaterThanOrEqual(1)
       // The one shape: nothing else on a picture.
-      expect(Object.keys(one).sort(), route).toEqual(['contentType', 'fileId', 'id', 'small', 'styleCode', 'styleCount', 'styleId', 'styleName'])
+      expect(Object.keys(one!).sort(), route).toEqual(['contentType', 'fileId', 'id', 'small', 'styleCode', 'styleCount', 'styleId', 'styleName'])
     }
   })
 

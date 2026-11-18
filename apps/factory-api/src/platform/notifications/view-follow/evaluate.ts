@@ -125,7 +125,7 @@ export async function runViewFollows(options: ViewFollowRunOptions): Promise<Vie
           const roleIds = [...new Set(held.map((entry) => entry.roleId))]
           const seen = viewSeenBy({ ownerId: follow.view.ownerId, audience: follow.view.audience as ViewAudience, roleId: follow.view.roleId, roleDefault: follow.view.roleDefault }, { userId: follow.userId, roleIds, save: false, manage: false })
           const source = exportSourceOf(follow.view.listKey)
-          if (!seen || followRefusal(source, actor, follow.view.companyId) !== null) {
+          if (!seen || followRefusal(source, actor, follow.view.companyId, follow.view.state) !== null) {
             result.skipped += 1
             continue
           }

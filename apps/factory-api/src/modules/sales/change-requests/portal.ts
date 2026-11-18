@@ -69,7 +69,7 @@ import { systemContext } from '../../../platform/outbox/system'
 import { stillToDoOf } from '../orders/still-to-do'
 // B-SA-046d: the lines' small pictures, the portal's own walled read (never an office route).
 import { linePictureKey, portalLinePictureFiles, smallAddresses } from '../../product/images/small-pictures'
-import { systemCallerOf } from '../../../platform/files/files'
+// (systemCallerOf: imported once above, B-SA-048 — S7 end check)
 import { readLines, type PortalLine, type PortalOrderRow } from '../portal-orders/store'
 import {
   addressesOf,
