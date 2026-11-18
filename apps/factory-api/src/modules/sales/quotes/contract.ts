@@ -283,16 +283,16 @@ export const listQuotesContract = defineContract({
           picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
           styleCount: z.number().int(),
           // ---- end TH-6 part B
-
-// ---- B-SA-011 (sales page plan N8): the small pictures of a page of quotes in ONE read (modules/product/images/small-pictures.ts)
-export const quotePicturesReadContract = defineContract({ body: input({ quoteIds: pictureIds() }), response: { 200: smallPicturesView } })
-// ---- end B-SA-011
         }),
       ),
       nextCursor: id().nullable(),
     }),
   },
 })
+
+// ---- B-SA-011 (sales page plan N8): the small pictures of a page of quotes in ONE read (modules/product/images/small-pictures.ts)
+export const quotePicturesReadContract = defineContract({ body: input({ quoteIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ---- end B-SA-011
 
 export const getQuoteContract = defineContract({ params: quoteParams, response: { 200: one } })
 
