@@ -204,3 +204,44 @@ describe('B-SA-071 POST /tasks/batch: one task per record, one command, one batc
   })
 })
 // ── end B-SA-071 ──
+
+// ── B-SA-072 ──
+describe("B-SA-072 GET /tasks?scope=PARTY: the open tasks on a customer's records the reader may read", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let made: Json[]
+  beforeAll(async () => {
+    made = (await ok('owner', 'POST', '/tasks/batch', { title: 'Party scope', records: [order(order1), order(orderB), { type: 'Party', id: partyA }], assignee: { userId: PEOPLE.owner } })).made as Json[]
+  })
+
+  it("every open task on A's records (orders and the account) for a reader of them, with its record chip and assignee", async () => {
+    const answer = await ok('sales', 'GET', `/tasks?scope=PARTY&partyId=${partyA}&limit=200`)
+    const ids = (answer.items as Json[]).map((item) => item.id)
+    for (const entry of made.filter((row) => row.record.id !== orderB)) expect(ids).toContain(entry.task.id)
+    expect(ids).not.toContain(made.find((row) => row.record.id === orderB)!.task.id)
+    for (const item of answer.items as Json[]) expect([order1, order2, partyA]).toContain(item.record.id)
+    expect((answer.items as Json[]).every((item) => item.status === 'OPEN')).toBe(true)
+    expect((answer.items as Json[]).find((item) => item.record.id === order1)).toMatchObject({ record: { type: 'SalesOrder', label: 'SEED-SO-0001' }, assignee: { id: expect.any(String) } })
+    // A done task leaves the open list.
+    const task = made.find((row) => row.record.id === order1)!.task
+    await ok('owner', 'POST', `/tasks/${task.id}/status`, { version: task.version, status: 'DONE' })
+    expect(((await ok('sales', 'GET', `/tasks?scope=PARTY&partyId=${partyA}&limit=200`)).items as Json[]).map((item) => item.id)).not.toContain(task.id)
+  })
+
+  it('wall: a person limited to customer B reads nothing of A — the same answer as an unknown customer', async () => {
+    await ok('owner', 'POST', '/tasks/batch', { title: 'Another on A', records: [order(order2)], assignee: { userId: PEOPLE.owner } })
+    const theirs = await ok('onlyB', 'GET', `/tasks?scope=PARTY&partyId=${partyA}`)
+    const unknown = await ok('onlyB', 'GET', `/tasks?scope=PARTY&partyId=${newId()}`)
+    expect(theirs.items).toEqual([])
+    expect(theirs.total).toBe(0)
+    expect({ ...theirs, asOf: null }).toEqual({ ...unknown, asOf: null })
+    expect(JSON.stringify(theirs)).not.toContain('SEED-SO-')
+    // Its own customer: its own tasks.
+    expect(((await ok('onlyB', 'GET', `/tasks?scope=PARTY&partyId=${partyB}`)).items as Json[]).map((item) => item.record.id)).toEqual([orderB])
+  })
+
+  it('without the customer named: refused in words', async () => {
+    const answer = await call('sales', 'GET', '/tasks?scope=PARTY')
+    expect(answer.status).toBe(400)
+    expect(JSON.stringify(answer.body)).toContain('Name the customer.')
+  })
+})
+// ── end B-SA-072 ──

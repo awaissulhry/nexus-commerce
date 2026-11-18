@@ -249,9 +249,12 @@ export async function getTask(caller: CommandCaller, id: string) {
 // ---- the list -------------------------------------------------------------------------------------------------------------
 
 export interface ListQuery {
-  readonly scope: 'MINE' | 'CREATED' | 'RECORD'
+  /** B-SA-072: + PARTY — the open tasks on one customer's records that the reader may read (the customer page's "Open tasks"). */
+  readonly scope: 'MINE' | 'CREATED' | 'RECORD' | 'PARTY'
   readonly recordType?: string | undefined
   readonly recordId?: string | undefined
+  /** B-SA-072: the customer of scope=PARTY. */
+  readonly partyId?: string | undefined
   readonly tile?: TaskTile | undefined
   readonly status?: TaskStatus | 'ALL' | undefined
   readonly q?: string | undefined
@@ -278,7 +281,18 @@ function afterCursor(cursor: string | undefined): readonly string[] | null {
   throw new ValidationError('The cursor is not one this list gave.', [{ path: 'querystring/cursor', message: 'Send back nextCursor as it came.' }])
 }
 
+// ── B-SA-072 ──
+/**
+ * The most tasks of one customer's records GET /tasks?scope=PARTY reads before it pages (Task.partyId has no index of its own: the
+ * schema wave allows none, R10; measured at the end check).
+ */
+export const PARTY_LIST_LIMIT = 200
+// ── end B-SA-072 ──
+
 /** GET /tasks: one page, ordered by due day (none last), then time and age; tiles over the whole scope. */
+// B-SA-072: scope=PARTY — the tasks on the customer's records, each only when the reader may read its record (never by being its
+// maker or assignee alone: a customer-limited person naming another customer gets nothing, the same answer as an unknown customer).
+
 export async function listTasks(caller: CommandCaller, query: ListQuery) {
   const context = officeOf(caller)
   const actor = actorOf(context)
@@ -292,6 +306,10 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
       const scope = await resolveRecord(client, query.recordType, query.recordId)
       if (!scope || !mayOnThread(actor, THREADS_READ, query.recordType, scope)) throw new NotFoundError('Record not found.')
       where = { recordType: query.recordType, recordId: query.recordId }
+    } else if (query.scope === 'PARTY') {
+      // B-SA-072
+      if (!query.partyId) throw new ValidationError('Name the customer.', [{ path: 'querystring/partyId', message: 'A customer list needs partyId.' }])
+      where = { partyId: query.partyId, recordType: { not: null }, recordId: { not: null } }
     } else {
       where = query.scope === 'MINE' ? { assigneeId: context.actorId } : { createdById: context.actorId }
     }
@@ -300,10 +318,10 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
       await client.task.findMany({
         where: { AND: [where, text ? { title: { contains: text, mode: 'insensitive' } } : {}] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: LIST_LIMIT,
+        take: query.scope === 'PARTY' ? PARTY_LIST_LIMIT : LIST_LIMIT, // B-SA-072
         select: TASK_COLUMNS,
       })
-    ).filter((row) => accessOf(actor, context.actorId, row).relation !== null)
+    ).filter((row) => (query.scope === 'PARTY' ? mayOnThread(actor, THREADS_READ, row.recordType, scopeOf(row)) /* B-SA-072 */ : accessOf(actor, context.actorId, row).relation !== null))
     const tileOfRow = (row: TaskRow) => tileOf({ status: row.status as TaskStatus, dueDate: dayOf(row.dueDate), closedAt: row.closedAt }, today, now)
     const tiles = TASK_TILES.map((tile) => ({ tile, count: rows.filter((row) => tileOfRow(row) === tile).length }))
     const status = query.status ?? (query.tile === 'DONE_7D' ? 'DONE' : 'OPEN')
@@ -318,7 +336,7 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
       today,
       tiles,
       total: shown.length,
-      complete: rows.length < LIST_LIMIT,
+      complete: rows.length < (query.scope === 'PARTY' ? PARTY_LIST_LIMIT : LIST_LIMIT), // B-SA-072
       items: page.map((row) => taskView(row, names, context, now)),
       nextCursor: fromCursor.length > query.limit ? cursorOf(page[page.length - 1]!) : null,
       live: { events: taskEvents.map((event) => event.type) },

@@ -66,9 +66,12 @@ const fields = {
 export const listTasksContract = defineContract({
   querystring: input({
     /** MINE: assigned to me (My tasks); CREATED: made by me; RECORD: the tasks of one record (its side panel). */
-    scope: z.enum(['MINE', 'CREATED', 'RECORD']).default('MINE'),
+    // B-SA-072: PARTY — the tasks on one customer's records the reader may read (the customer page's "Open tasks"; 200 read at most).
+    scope: z.enum(['MINE', 'CREATED', 'RECORD', 'PARTY']).default('MINE'),
     recordType: z.string().regex(RECORD_TYPE).optional(),
     recordId: id().optional(),
+    /** B-SA-072: the customer of scope=PARTY. */
+    partyId: id().optional(),
     /** A tile pressed (Overdue · Today · This week · No date · Done in 7 days). */
     tile: z.enum(TASK_TILES).optional(),
     /** Default OPEN (DONE for the Done tile). */
@@ -84,7 +87,7 @@ export const listTasksContract = defineContract({
       /** The tiles over the whole scope (never the tile or status filter): each count is its rows. */
       tiles: z.array(output({ tile: z.enum(TASK_TILES), count: z.number().int() })),
       total: notMoney(z.number().int()),
-      /** False: the scope holds more than 500 tasks and only the newest were read. */
+      /** False: the scope holds more than 500 tasks (scope=PARTY: 200) and only the newest were read. */
       complete: z.boolean(),
       items: z.array(taskView),
       nextCursor: z.string().nullable(),
