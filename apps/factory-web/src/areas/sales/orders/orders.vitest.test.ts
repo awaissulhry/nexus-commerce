@@ -771,7 +771,7 @@ describe('the board\'s Waiting for approval lane, its reasons with doors, Delive
   })
   it('the board holds live re-reads while a card has the focus or its picture is open, and draws the reasons on the waiting cards', () => {
     const view = readFileSync(new URL('./list/view/OrdersBoard.tsx', import.meta.url), 'utf8')
-    const page = readFileSync(new URL('./list/OrdersPage.tsx', import.meta.url), 'utf8')
+    const page = readFileSync(new URL('./list/use-orders-sheet.ts', import.meta.url), 'utf8') // F-SA-220: the sheet's body moved there
     expect(view).toContain('onBoardHold')
     expect(view).toContain('waitDoorsOf(row')
     expect(view).toContain("t('lane.none')")

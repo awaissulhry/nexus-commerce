@@ -117,6 +117,13 @@ export interface OrdersListModel {
   collapsed?: readonly string[]
   /** "Invoice shipped goods for N" (finance only): the drafts it would open in Finance; null: closed. */
   invoiceDrafts?: InvoiceDraftsState | null
+  // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
+  /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
+  listKey?: string
+  /** No own band and no tiles: the host draws them (OrdersLayoutSwitch, OrdersTiles). */
+  embedded?: boolean
+  /** The terms the host holds (in every read and in the address): no switcher or chip ✕ for them, Clear all keeps them. */
+  locked?: { readonly party: boolean; readonly kind: boolean }
 }
 
 export interface OrdersListActions {

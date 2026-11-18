@@ -124,7 +124,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         event.preventDefault()
         actions?.onLayout?.(model.layout === 'list' ? 'board' : 'list')
       }
-      if (event.key === 'c' && model.can.manage) {
+      if (event.key === 'c' && model.can.manage && !model.embedded /* F-SA-220: New order is the Orders page's band */) {
         event.preventDefault()
         actions?.onNewOrder?.(true)
       }
@@ -136,7 +136,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
   const ownKeys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
-    ...(model.can.manage ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
+    ...(model.can.manage && !model.embedded ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
     // B-TH-225: the doors' keys (the footer's information icon holds every key; none above the table).
     { keys: ['o'], does: s('keys.door') },
     { keys: ['⌘', 'Enter'], does: s('keys.doorTab') },
@@ -195,7 +195,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // ── B-TH-225 / B-TH-226: every narrowing is a chip (grid-F25); the switcher names the customer ──
   const statusView = (ORDER_STATUSES as readonly string[]).includes(model.rows) ? (model.rows as OrderStatus) : null
   const chips: SheetChip[] = [
-    ...(model.customer ? [{ id: 'party', label: model.customer.name === null ? s('switcher.unknown') : s('chips.customer', { name: model.customer.name ?? '…' }), onClear: () => actions?.onCustomer?.(null) }] : []),
+    // F-SA-220: a customer the host locks is the page's own (no chip: the page names it).
+    ...(model.customer && !model.locked?.party ? [{ id: 'party', label: model.customer.name === null ? s('switcher.unknown') : s('chips.customer', { name: model.customer.name ?? '…' }), onClear: () => actions?.onCustomer?.(null) }] : []),
     ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
     ...(statusView ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
@@ -260,7 +261,6 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     )
   ) : undefined
 
-  const pressed = TILES.find((tile) => tile.rows === model.rows)?.key ?? null
   // ── B-TH-245 (threads plan TH-4, SHEET-G09; SHEET.brand-fields-F03, -F08): the sheet's cells that edit ──
   const cellHeld = (row: OrderRow): string | null => heldCell(row, t, s)
   const orderEdit = orderEditOf(model, s, cellHeld, (id, after, version) => actions?.onCellSaved?.(id, after, version))
@@ -269,52 +269,44 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
   return (
     <div className="fw-so">
-      <div className="fw-so-head">
-        {/* B-TH-225 (band-F01, F10): the title follows the customer; the honest count of the view; as of. */}
-        <div className="fw-sheet-band">
-          <h2 className="fw-sheet-title">{title}</h2>
-          {count !== null && <span className="fw-sheet-count">{s('count', { count })}</span>}
-          <span className="fw-so-status" role="status">
-            {model.asOf ? t('list.updated', { time: formatTime(model.asOf, { locale }) }) : t('list.notYet')}
-            {' · '}
-            {t(`live.${model.live}`)}
+      {/* F-SA-220: an embedding host draws its own band and the tiles (OrdersLayoutSwitch, OrdersTiles). */}
+      {!model.embedded && (
+        <div className="fw-so-head">
+          {/* B-TH-225 (band-F01, F10): the title follows the customer; the honest count of the view; as of. */}
+          <div className="fw-sheet-band">
+            <h2 className="fw-sheet-title">{title}</h2>
+            {count !== null && <span className="fw-sheet-count">{s('count', { count })}</span>}
+            <span className="fw-so-status" role="status">
+              {model.asOf ? t('list.updated', { time: formatTime(model.asOf, { locale }) }) : t('list.notYet')}
+              {' · '}
+              {t(`live.${model.live}`)}
+            </span>
+          </div>
+          <span className="fw-so-actions">
+            <LayoutSwitchFor model={model} actions={actions} held={null} /* F-SA-220: the one layout switch (a host's band draws it too) */ />
+            <Button size="sm" variant="quiet" asChild>
+              <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}${model.brand ? `&brand=${encodeURIComponent(model.brand.value)}` : ''}${model.company ? `&company=${encodeURIComponent(model.company.id)}` : '' /* B-TH-225 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
+                <ExternalLink size={14} aria-hidden /> <span>{t('board.newTab')}</span>
+              </a>
+            </Button>
+            <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)} aria-keyshortcuts="c">
+              <Plus size={14} aria-hidden /> {t('list.new')}
+            </Button>
+            {/* B-W2b-323: the band's ⋯ — Import orders (dry run first). */}
+            {model.importer !== undefined && (
+              <Menu
+                label={<MoreHorizontal size={16} aria-hidden />}
+                align="right"
+                triggerProps={{ 'aria-label': d('list.more') }}
+                items={[
+                  { id: 'import', label: d('import.action'), disabled: !!model.importer?.held, description: model.importer?.held ? d(model.importer.held) : d('import.hint'), onSelect: () => actions?.onImport?.() },
+                  // B-TH-225 (band-F08, Owner rule 2026-10-29): the keys live in the table footer's information icon only.
+                ]}
+              />
+            )}
           </span>
         </div>
-        <span className="fw-so-actions">
-          <SegmentedControl
-            size="sm"
-            ariaLabel={t('list.layoutLabel')}
-            value={model.layout}
-            onChange={(value) => actions?.onLayout?.(value as Layout)}
-            options={[
-              { value: 'list', label: t('layout.list') },
-              { value: 'board', label: t('layout.board') },
-              // B-W2b-323: By promise week.
-              ...(model.week !== undefined ? [{ value: 'week', label: t('layout.week') }] : []),
-            ]}
-          />
-          <Button size="sm" variant="quiet" asChild>
-            <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}${model.brand ? `&brand=${encodeURIComponent(model.brand.value)}` : ''}${model.company ? `&company=${encodeURIComponent(model.company.id)}` : '' /* B-TH-225 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
-              <ExternalLink size={14} aria-hidden /> <span>{t('board.newTab')}</span>
-            </a>
-          </Button>
-          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)} aria-keyshortcuts="c">
-            <Plus size={14} aria-hidden /> {t('list.new')}
-          </Button>
-          {/* B-W2b-323: the band's ⋯ — Import orders (dry run first). */}
-          {model.importer !== undefined && (
-            <Menu
-              label={<MoreHorizontal size={16} aria-hidden />}
-              align="right"
-              triggerProps={{ 'aria-label': d('list.more') }}
-              items={[
-                { id: 'import', label: d('import.action'), disabled: !!model.importer?.held, description: model.importer?.held ? d(model.importer.held) : d('import.hint'), onSelect: () => actions?.onImport?.() },
-                // B-TH-225 (band-F08, Owner rule 2026-10-29): the keys live in the table footer's information icon only.
-              ]}
-            />
-          )}
-        </span>
-      </div>
+      )}
 
       {model.notice && (
         <Banner
@@ -330,18 +322,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         />
       )}
 
-      <MetricStrip
-        metrics={TILES.map((tile) => {
-          const count = tileCount(model.board, tile.key)
-          return {
-            label: customerName ? s('tile', { label: t(`tile.${tile.key}`), name: customerName }) : t(`tile.${tile.key}`), // B-TH-226: the tiles count that customer
-            value: count === null ? '—' : String(count),
-            hint: count === null && model.board === null && model.asOf !== null ? t('tile.unknown') : undefined,
-            onClick: () => actions?.onRows?.(model.rows === tile.rows ? 'open' : tile.rows),
-            active: pressed === tile.key,
-          }
-        })}
-      />
+      {!model.embedded && <TilesStrip model={model} actions={actions} t={t} s={s} />}
 
       {/* B-TH-225 / B-TH-226: a link to a customer the reader may not open (W27: the words name no one) */}
       {unavailable && (
@@ -366,6 +347,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         <OrdersBoard model={model} actions={actions} search={searchField} rowsSelect={rowsSelect} onHelp={() => setHelp(true)} />
       ) : (
         <ListFrame<OrderRow>
+          listKey={model.listKey /* F-SA-220: 'sales.orders' on every host (its export, its saved views) */}
           label={t('list.tableLabel')}
           rows={state ? [] : items}
           rowId={(row) => row.id}
@@ -448,6 +430,73 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     </div>
   )
 }
+
+// ── F-SA-220: the parts of the band an embedding host draws itself (the sheet draws none of them then) ──
+/** The tiles (each a saved rows view, its count the board's under the same narrowing); a customer's sheet names the customer. */
+function TilesStrip({ model, actions, t, s }: { model: OrdersListModel; actions?: OrdersListActions; t: Translate; s: Translate }) {
+  const customerName = model.customer?.name ?? null
+  const pressed = TILES.find((tile) => tile.rows === model.rows)?.key ?? null
+  return (
+    <MetricStrip
+      metrics={TILES.map((tile) => {
+        const count = tileCount(model.board, tile.key)
+        return {
+          label: customerName ? s('tile', { label: t(`tile.${tile.key}`), name: customerName }) : t(`tile.${tile.key}`), // B-TH-226: the tiles count that customer
+          value: count === null ? '—' : String(count),
+          hint: count === null && model.board === null && model.asOf !== null ? t('tile.unknown') : undefined,
+          onClick: () => actions?.onRows?.(model.rows === tile.rows ? 'open' : tile.rows),
+          active: pressed === tile.key,
+        }
+      })}
+    />
+  )
+}
+
+/** The sheet's tiles, for a host that embeds the sheet (its own band above them). */
+export function OrdersTiles({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
+  return (
+    <WithMessages namespaces={['orders', SHEET]}>
+      <TilesFor model={model} actions={actions} />
+    </WithMessages>
+  )
+}
+function TilesFor({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
+  return <TilesStrip model={model} actions={actions} t={useT('orders')} s={useT(SHEET)} />
+}
+
+/** List · Board (· By promise week) for a host's band; `held` names a layout the host cannot show, with why (held, not hidden). */
+export function OrdersLayoutSwitch({ model, actions, held }: { model: OrdersListModel; actions?: OrdersListActions; held?: { readonly layout: Layout; readonly why: string } | null }) {
+  return (
+    <WithMessages namespaces={['orders']}>
+      <LayoutSwitchFor model={model} actions={actions} held={held ?? null} />
+    </WithMessages>
+  )
+}
+function LayoutSwitchFor({ model, actions, held }: { model: OrdersListModel; actions?: OrdersListActions; held: { readonly layout: Layout; readonly why: string } | null }) {
+  const t = useT('orders')
+  return (
+    <>
+      <SegmentedControl
+        size="sm"
+        ariaLabel={t('list.layoutLabel')}
+        value={model.layout}
+        onChange={(value) => actions?.onLayout?.(value as Layout)}
+        options={[
+          { value: 'list', label: t('layout.list') },
+          { value: 'board', label: t('layout.board') },
+          // B-W2b-323: By promise week (F-SA-220: held with why where the host cannot show it).
+          ...(model.week !== undefined && held?.layout !== 'week' ? [{ value: 'week', label: t('layout.week') }] : []),
+        ]}
+      />
+      {held && (
+        <Button size="sm" variant="quiet" heldReason={held.why}>
+          {t(`layout.${held.layout}`)}
+        </Button>
+      )}
+    </>
+  )
+}
+// ── end F-SA-220 ──
 
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
