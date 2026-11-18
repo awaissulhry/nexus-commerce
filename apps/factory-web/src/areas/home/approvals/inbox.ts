@@ -1,6 +1,8 @@
 import type { ApprovalRow } from '../../sales/quotes/api'
 import type { TodayItem } from '../today/model'
 import type { TaskRow } from './api'
+// F-PR-08: a customer's requests, a source of their own (one row per request, one per batch).
+import { leadOf, namesGroup, REQUEST_INBOX_KIND, type RequestGroup } from './requests/model'
 
 /**
  * Home › Approvals in depth (B-W2b-307; PLT-085; design home.approvals): ONE inbox for every request that needs a yes, in
@@ -12,6 +14,9 @@ import type { TaskRow } from './api'
  *   attention   every other kind of approval Today knows (`GET /home/today?category=APPROVAL`): change orders, SMV changes,
  *               inspection plan versions, NCR decisions, portal requests, suppliers' changes … — decided on their own page
  *               (the row opens it)
+ *   request     F-PR-08: a customer's requests (`GET /production/brand-requests?status=WAITING`, B-PR-26): answered in the review
+ *               window here (`?open=<request id>`; a customer's batch is one row, `?open=<batch id>`); Today's rows of that kind
+ *               give way to them once read
  *
  * The tiles: Waiting for me · Overdue (past its time) · Asked by me · Decided in the last 7 days. The filters: kind and
  * words, kept in the address (`?view=&kind=&q=&changed=1&open=`). Pure, so the tests hold it.
@@ -25,7 +30,8 @@ export const inboxViewOf = (asked: string | null | undefined): InboxView => ((IN
 /** The attention kinds read from another source here (the quotes' own route, the engine's own list). */
 export const OWN_SOURCES: ReadonlySet<string> = new Set(['QUOTE_APPROVAL', 'APPROVAL_TASK'])
 
-export type InboxSource = 'task' | 'quote' | 'attention'
+// F-PR-08: `request` — a customer's request (or a batch of them), answered in the review window here.
+export type InboxSource = 'task' | 'quote' | 'attention' | 'request'
 
 export interface InboxRow {
   /** Unique in the list: `task:<id>`, `quote:<id>`, or Today's row key. */
@@ -44,6 +50,8 @@ export interface InboxRow {
   readonly task?: TaskRow
   readonly quote?: ApprovalRow
   readonly item?: TodayItem
+  /** F-PR-08: a customer's request, or the waiting requests of one batch (one customer, one kind). */
+  readonly request?: RequestGroup
 }
 
 export const taskRow = (task: TaskRow): InboxRow => ({ key: `task:${task.id}`, source: 'task', kind: task.kind, since: task.requestedAt, due: task.dueAt, overdue: task.status === 'PENDING' && task.overdue, companyId: task.companyId, task })
@@ -61,13 +69,42 @@ export const attentionRow = (item: TodayItem): InboxRow => ({
   item,
 })
 
-/** The id the address opens (`?open=`): a request's or a quote approval's id; Today's rows open their own page. */
-export const openIdOf = (row: InboxRow): string | null => row.task?.id ?? row.quote?.id ?? null
+// ---- F-PR-08 (production plan §5 "Home › Approvals: the one place brand requests are answered"): the customer request source ----
+/**
+ * A customer's request as an inbox row: since its oldest request was asked; no due time (the customer waits from the ask); the kind
+ * of every customer request is Today's ORDER_CHANGE_REQUEST, so the Overview tile's `?kind=ORDER_CHANGE_REQUEST` filters to them.
+ */
+export const requestRow = (group: RequestGroup): InboxRow => {
+  const lead = leadOf(group)
+  return { key: `request:${group.openId}`, source: 'request', kind: REQUEST_INBOX_KIND, since: lead.askedAt, due: null, overdue: false, companyId: lead.companyId, request: group }
+}
 
-/** The rows of a view, oldest first for the queue (waiting, overdue), newest first for my requests and the decided. */
-export function rowsOf(view: InboxView, sources: { readonly tasks: readonly TaskRow[]; readonly quotes: readonly ApprovalRow[]; readonly items: readonly TodayItem[] }): InboxRow[] {
-  const items = view === 'waiting' || view === 'overdue' ? sources.items.filter((item) => !OWN_SOURCES.has(item.kind)).map(attentionRow) : []
-  const rows = [...sources.tasks.map(taskRow), ...sources.quotes.map(quoteRow), ...items].filter((row) => view !== 'overdue' || row.overdue)
+/** What a listed row the address names opens as (a request of a batch's group opens alone), or null when no row names it. */
+export function listedTarget(rows: readonly InboxRow[], openId: string): 'quote' | 'task' | 'request' | 'batch' | null {
+  for (const row of rows) {
+    if (row.quote?.id === openId) return 'quote'
+    if (row.task?.id === openId) return 'task'
+    const named = row.request ? namesGroup(row.request, openId) : null
+    if (named) return named
+  }
+  return null
+}
+// ---- end F-PR-08
+
+/** The id the address opens (`?open=`): a request's or a quote approval's id; Today's rows open their own page. */
+// F-PR-08: a customer's request its id, a batch's group the batch's id.
+export const openIdOf = (row: InboxRow): string | null => row.task?.id ?? row.quote?.id ?? row.request?.openId ?? null
+
+/**
+ * The rows of a view, oldest first for the queue (waiting, overdue), newest first for my requests and the decided.
+ * F-PR-08: `requests` — the customer requests read (null: not read; Today's customer request rows then stay, opening their order);
+ * once read, Today's rows of that kind are theirs (never listed twice). They wait for me: listed in the waiting view only.
+ */
+export function rowsOf(view: InboxView, sources: { readonly tasks: readonly TaskRow[]; readonly quotes: readonly ApprovalRow[]; readonly items: readonly TodayItem[]; readonly requests?: readonly RequestGroup[] | null }): InboxRow[] {
+  const read = sources.requests ?? null
+  const items = view === 'waiting' || view === 'overdue' ? sources.items.filter((item) => !OWN_SOURCES.has(item.kind) && (read === null || item.kind !== REQUEST_INBOX_KIND)).map(attentionRow) : []
+  const requests = view === 'waiting' && read ? read.map(requestRow) : []
+  const rows = [...sources.tasks.map(taskRow), ...sources.quotes.map(quoteRow), ...items, ...requests].filter((row) => view !== 'overdue' || row.overdue)
   const oldest = view === 'waiting' || view === 'overdue'
   return rows.sort((a, b) => (oldest ? a.since.localeCompare(b.since) : b.since.localeCompare(a.since)) || (a.key < b.key ? -1 : 1))
 }
@@ -103,6 +140,7 @@ export function kindsOf(rows: readonly InboxRow[]): { readonly kind: string; rea
  */
 export function heldOf(row: InboxRow, state: { readonly offline: boolean; readonly busy: boolean }): string | null {
   if (row.source === 'attention') return 'inbox.held.ownPage'
+  // F-PR-08: a customer's request is answered in its window, each answer held there with its own reason (requests/model answerHeld).
   if (row.task) {
     const task = row.task
     if (task.status !== 'PENDING') return 'inbox.held.notWaiting'
@@ -132,6 +170,8 @@ export function selectHeld(row: InboxRow, state: { readonly offline: boolean; re
   if (held) return held
   if (row.task && row.task.signatureMeaning !== null) return 'inbox.held.signedOneByOne'
   if (row.task && row.task.requireStepUp) return 'inbox.held.codeOneByOne'
+  // F-PR-08: never ticked for Approve N: a customer's request is answered in its window (a batch there: Accept all, each re-checked).
+  if (row.request) return 'inbox.held.answerAlone'
   return state.offline ? 'inbox.held.offline' : null
 }
 
@@ -166,18 +206,28 @@ export function countsOf(sources: {
   readonly tasks: Readonly<Record<'WAITING_FOR_ME' | 'OVERDUE' | 'ASKED_BY_ME' | 'DECIDED_7_DAYS', number>> | null
   readonly quotes: { readonly waiting: number; readonly mine: number; readonly decided: number } | null
   readonly today: { readonly items: readonly Pick<TodayItem, 'kind' | 'due'>[] } | null
+  /** F-PR-08: the customer requests waiting for me, as rows (a batch one); null: not read yet. */
+  readonly requests?: { readonly rows: number } | null
   /** Which sources this person reads at all (a source they may not read counts 0). */
-  readonly reads: { readonly tasks: boolean; readonly quotes: boolean; readonly today: boolean }
+  readonly reads: { readonly tasks: boolean; readonly quotes: boolean; readonly today: boolean; readonly requests?: boolean }
 }): InboxCounts {
   const part = <T,>(reads: boolean, value: T | null, pick: (value: T) => number): number | null => (!reads ? 0 : value === null ? null : pick(value))
   const sum = (...parts: (number | null)[]) => (parts.some((value) => value === null) ? null : parts.reduce<number>((total, value) => total + (value ?? 0), 0))
+  // F-PR-08: once the customer requests are read (their own source), Today's rows of that kind are not counted again.
+  const requestsRead = (sources.reads.requests ?? false) && sources.requests !== null && sources.requests !== undefined
+  const other = (kind: string) => !OWN_SOURCES.has(kind) && (!requestsRead || kind !== REQUEST_INBOX_KIND)
   // Today's approvals of the other kinds, as read (`category=APPROVAL`; its tiles' byKind counts every category).
-  const others = (items: readonly Pick<TodayItem, 'kind'>[]) => items.filter((item) => !OWN_SOURCES.has(item.kind)).length
+  const others = (items: readonly Pick<TodayItem, 'kind'>[]) => items.filter((item) => other(item.kind)).length
   return {
-    waiting: sum(part(sources.reads.tasks, sources.tasks, (tiles) => tiles.WAITING_FOR_ME), part(sources.reads.quotes, sources.quotes, (counts) => counts.waiting), part(sources.reads.today, sources.today, (today) => others(today.items))),
+    waiting: sum(
+      part(sources.reads.tasks, sources.tasks, (tiles) => tiles.WAITING_FOR_ME),
+      part(sources.reads.quotes, sources.quotes, (counts) => counts.waiting),
+      part(sources.reads.today, sources.today, (today) => others(today.items)),
+      part(sources.reads.requests ?? false, sources.requests ?? null, (requests) => requests.rows),
+    ),
     overdue: sum(
       part(sources.reads.tasks, sources.tasks, (tiles) => tiles.OVERDUE),
-      part(sources.reads.today, sources.today, (today) => today.items.filter((item) => !OWN_SOURCES.has(item.kind) && item.due !== null && item.due.days < 0).length),
+      part(sources.reads.today, sources.today, (today) => today.items.filter((item) => other(item.kind) && item.due !== null && item.due.days < 0).length),
     ),
     mine: sum(part(sources.reads.tasks, sources.tasks, (tiles) => tiles.ASKED_BY_ME), part(sources.reads.quotes, sources.quotes, (counts) => counts.mine)),
     decided: sum(part(sources.reads.tasks, sources.tasks, (tiles) => tiles.DECIDED_7_DAYS), part(sources.reads.quotes, sources.quotes, (counts) => counts.decided)),

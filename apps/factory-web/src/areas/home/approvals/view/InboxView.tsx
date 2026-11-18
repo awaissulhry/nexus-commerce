@@ -21,6 +21,10 @@ import { QuoteReview } from './ApprovalsView'
 import { BulkApproveDialog } from './BulkApprove'
 import { TaskReview } from './TaskReview'
 import { requestWords, saidIn } from '../words/request-words'
+// F-PR-08: a customer's requests — their rows, their review window, the follow-up after an accept.
+import { useProductionWords } from '../../../../lib/production/words'
+import { isBatchGroup, leadOf, said, teamOf } from '../requests/model'
+import { FollowUpButton, LiftDialog, RequestReview } from '../requests/view/RequestReview'
 import '../approvals.css'
 
 export type { InboxViewModel, InboxActions } from '../model'
@@ -51,6 +55,7 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
   const home = useT('home')
   const lists = useT('lists')
   const locale = useLocale()
+  const production = useProductionWords()
   const controls = model.controls
   const state = { offline: model.offline, busy: model.busy }
   const [ownHelp, setOwnHelp] = useState(model.dialog?.kind === 'help')
@@ -62,6 +67,7 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
   const kindWords = (row: InboxRow): string => {
     if (row.task) return saidIn(row.task.kindLabel, locale)
     if (row.source === 'quote') return t('kind.QUOTE_APPROVAL')
+    if (row.request) return t('kind.ORDER_CHANGE_REQUEST')
     return home(`today.kind.${row.kind}`)
   }
   const sentenceOf = (row: InboxRow): string => {
@@ -72,16 +78,28 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
       if (quote.reasons.includes('MARGIN_FLOOR') && quote.marginPct !== undefined && quote.marginFloorPct !== undefined) return w1('sentence.margin', { number: quote.number, customer: quote.partyName, pct: percent(quote.marginPct, locale), floor: percent(quote.marginFloorPct, locale) })
       return w1('sentence.reasons', { number: quote.number, customer: quote.partyName, reasons: quote.reasons.map((reason) => sales(`reason.${reason}`)).join(' · ') })
     }
+    // F-PR-08: "Urgent – asked: SO-2026-0042 · Brand Alpha", a batch "Cancel · 6 orders · Brand Alpha".
+    if (row.request) {
+      const lead = leadOf(row.request)
+      const kind = production.t(`parts.request.kind.${lead.kind}`)
+      return isBatchGroup(row.request) ? t('row.batch', { kind, count: row.request.requests.length, customer: lead.party.name }) : t('row.request', { kind, order: lead.orderNumber, customer: lead.party.name })
+    }
     return row.item ? phraseText(row.item.words.sentence, home, locale) : ''
   }
   const recordOf = (row: InboxRow): { label: string; href: string | null } => {
     if (row.task) return { label: t('row.openRecord'), href: row.href ?? null }
     if (row.quote) return { label: row.quote.number, href: row.href ?? null }
+    if (row.request) return isBatchGroup(row.request) ? { label: t('row.orders', { count: row.request.requests.length }), href: null } : { label: leadOf(row.request).orderNumber, href: row.href ?? null }
     return { label: row.item?.record.label ?? '', href: row.href ?? null }
   }
   const askedBy = (row: InboxRow): string => {
     if (row.task) return row.task.requester.me ? t('you') : row.task.requester.kind === 'WORKER' ? t('aWorker') : row.task.requester.name
     if (row.quote) return row.quote.askedBy ? (row.quote.askedBy.you ? t('you') : (row.quote.askedBy.name ?? t('colleague'))) : '—'
+    // F-PR-08: the customer's person who asked, with the customer (office words: "Customer").
+    if (row.request) {
+      const lead = leadOf(row.request)
+      return lead.askedBy ? t('row.requestAsker', { who: lead.askedBy, customer: lead.party.name }) : lead.party.name
+    }
     return '—'
   }
   const searchText = (row: InboxRow) => [kindWords(row), sentenceOf(row), recordOf(row).label, askedBy(row)].join(' ')
@@ -131,7 +149,25 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
           )}
           {recheck === 'CHANGED' && <span className="fw-apv-sub is-warning">{t('recheck.changedShort')}</span>}
           {data.source === 'attention' && <span className="fw-apv-sub">{t('row.ownPage')}</span>}
+          {data.request && <RequestChips row={data} />}
         </span>
+      )
+    }
+    // F-PR-08: where a customer request stands when not simply asked (our counter answered), and its impact kept at Send in chips.
+    const RequestChips = ({ row }: { row: InboxRow }) => {
+      const lead = leadOf(row.request!)
+      const impact = lead.impact
+      return (
+        <>
+          {lead.status === 'COUNTERED' && <span className="fw-apv-sub is-warning">{said(lead.standing, locale)}</span>}
+          {impact && (impact.frozen.length > 0 || impact.priced || impact.earliest?.date) && (
+            <span className="fw-apv-tags">
+              {impact.frozen.length > 0 && <Tag tone="warning">{t('row.chip.frozen', { count: impact.frozen.length })}</Tag>}
+              {impact.priced && <Tag tone="neutral">{t('row.chip.priced')}</Tag>}
+              {impact.earliest?.date && <Tag tone="neutral">{t('row.chip.earliest', { date: production.day(impact.earliest.date) })}</Tag>}
+            </span>
+          )}
+        </>
       )
     }
     const RecordCell = ({ data }: ICellRendererParams<InboxRow>) => {
@@ -164,6 +200,8 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
         )
       }
       if (data.quote) return <span className="fw-apv-sub">{t('rule.quote')}</span>
+      // F-PR-08: who answers the kind (Sales; production's manager or planner; sampling) — its own permission, plan §3.
+      if (data.request) return <span className="fw-apv-sub">{t(`rule.team.${teamOf(leadOf(data.request).answeredWith)}`)}</span>
       return <span className="fw-apv-sub">{data.item ? phraseText(data.item.words.why, home, locale) : '—'}</span>
     }
     const DueCell = ({ data }: ICellRendererParams<InboxRow>) => {
@@ -201,7 +239,7 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
       ...(multiCompany ? ([{ colId: 'company', headerName: t('col.company'), flex: 1, minWidth: 130, valueGetter: (params) => (params.data?.companyId ? (model.companies[params.data.companyId] ?? '') : '') }] satisfies ColDef<InboxRow>[]) : []),
     ]
     // The cells read the words, the language, the view and the grains through the closure: a change rebuilds them.
-  }, [t, w1, sales, home, locale, model.prefix, controls.view, model.grains.price, model.can.rules, multiCompany, model.companies])
+  }, [t, w1, sales, home, locale, production, model.prefix, controls.view, model.grains.price, model.can.rules, multiCompany, model.companies])
 
   // ---- the tiles -----------------------------------------------------------------------------------------------------------
   const metrics: Metric[] = INBOX_VIEWS.map((view) => {
@@ -303,13 +341,21 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
           tone={model.notice.tone}
           title={words(model.notice.key, model.notice.request ? { ...model.notice.params, request: requestWords(model.notice.request, locale, t) } : model.notice.params)}
           action={
-            actions?.onDismissNotice ? (
-              <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                {t('dismiss')}
-              </Button>
+            // F-PR-08 (R-23): after an accepted pause "Lift the hold", after a rush of the floor "Clear rush" — never a generic undo.
+            model.notice.followUp || actions?.onDismissNotice ? (
+              <span className="fw-apv-tags">
+                {model.notice.followUp && <FollowUpButton followUp={model.notice.followUp} offline={model.offline} busy={model.busy} may={model.notice.followUp.kind === 'lift' ? model.can.lift !== false : model.can.rush !== false} actions={actions} />}
+                {actions?.onDismissNotice && (
+                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                    {t('dismiss')}
+                  </Button>
+                )}
+              </span>
             ) : undefined
           }
-        />
+        >
+          {model.notice.lines && model.notice.lines.length > 0 ? model.notice.lines.map((line) => said(line, locale)).join(' ') : undefined}
+        </Banner>
       )}
       <MetricStrip metrics={metrics} minTileWidth={170} />
       {model.changedSinceAsked > 0 && !controls.changed && (
@@ -381,6 +427,9 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
         />
       )}
       {model.taskReview && <TaskReview model={model} actions={actions} thread={thread} kindWords={kindWords} />}
+      {/* F-PR-08: a customer's request or batch in the review window; Lift the hold's why. */}
+      {model.requestReview && <RequestReview model={model} actions={actions} />}
+      {model.followUpDialog && <LiftDialog followUp={model.followUpDialog.followUp} busy={model.followUpDialog.busy} problem={model.followUpDialog.problem} actions={actions} />}
       {/* The rules link for a phone: the band's ⋯ holds it too. */}
       {model.can.rules && controls.view === 'waiting' && shown && shown.length === 0 && !filtered && (
         <Button size="sm" variant="quiet" asChild>

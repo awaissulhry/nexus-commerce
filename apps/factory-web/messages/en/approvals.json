@@ -133,5 +133,203 @@
     "approved": "{number} approved. The next request is open.",
     "rejected": "{number} rejected with your reason.",
     "forbidden": "Not decided: you may not decide this request (your own, or a margin request without margin rights)."
+  },
+  "customerRequest": {
+    "words": {
+      "label": "Words the customer reads",
+      "hint": "Needed to refuse; optional when you accept. Never an office note.",
+      "hintBatch": "The same words on every order: needed to refuse all, optional when you accept all.",
+      "preview": "The customer reads: “{words}”",
+      "none": "No words yet: the customer reads only the answer."
+    },
+    "held": {
+      "reading": "Reading the request…",
+      "withdrawn": "The customer withdrew this request.",
+      "answered": "This request is answered already.",
+      "waitsOnCustomer": "Our counter-offer waits for the customer’s answer: they answer it first.",
+      "team": {
+        "sales": "Sales answers changes, cancels and ship what is ready.",
+        "production": "The production manager or the planner answers urgent asks, pauses and resumes.",
+        "samples": "Sampling answers another sample round.",
+        "other": "Another team answers this kind of request."
+      },
+      "counterLapsed": "Our counter-offer lapsed: refuse the request with words; it cannot be accepted without the customer’s yes.",
+      "noAccept": "It cannot be accepted now.",
+      "counterAgreed": "The customer said yes to our counter-offer: accept the request to carry it out.",
+      "noRefuse": "It cannot be refused now.",
+      "noCounterResume": "A resume is accepted or refused: the pause is the customer’s to end.",
+      "counteredOnce": "A request is countered once: answer it now.",
+      "noCounter": "It cannot be countered now.",
+      "words": "Write the words the customer reads first.",
+      "long": "At most 2000 characters.",
+      "offline": "Offline — answer when back online.",
+      "busy": "Working…",
+      "noneWaiting": "None of these requests waits for an answer.",
+      "noneCurrent": "None of them can be answered so now: see why under each."
+    },
+    "refuse": "Refuse",
+    "accept": "Accept",
+    "acceptUrgent": "Accept as urgent",
+    "acceptRush": "Accept and rush the floor",
+    "back": "Back",
+    "counter": {
+      "open": "Suggest something else",
+      "title": "Suggest something else · {order}",
+      "send": "Send the counter-offer",
+      "body": "The customer answers it in their portal: yes carries the request out with what you offer, no withdraws it. Give a date, a fee, words — at least one.",
+      "date": "The date we offer",
+      "dateHint": "From today on.",
+      "fee": "A fee",
+      "feeHint": "In the order’s currency; 0 says it is free. Only the customer’s buyer sees the amount.",
+      "noFee": "A fee is set only by someone who sees prices.",
+      "note": "Our words to the customer",
+      "preview": "The customer reads: our counter-offer · {date} · {priced}",
+      "priced": "a price applies",
+      "notPriced": "no price",
+      "theirWords": "Their words: “{words}”",
+      "held": {
+        "empty": "Give a date, a fee or words first.",
+        "past": "The date is in the past: from today on.",
+        "fee": "The fee is not an amount: write it like 25 or 12,50.",
+        "long": "At most 2000 characters."
+      }
+    },
+    "review": {
+      "title": "{kind} · {order}",
+      "titleUnknown": "Customer request",
+      "po": "PO {ref}",
+      "notFound": "This request is not there any more.",
+      "forbidden": "This request is outside your rights.",
+      "inBatch": "One of {count} asked together",
+      "asked": "{customer} asked on {at} · {who}",
+      "why": "Their reason: {reason}",
+      "batchLine": "Asked together with other orders: {count} in all, {waiting} still waiting.",
+      "openBatch": "Answer them together",
+      "openOrder": "Open {order}"
+    },
+    "impact": {
+      "blocked": "Some part asked cannot change any more: refuse it, or suggest something else.",
+      "notRead": "The impact could not be read now: the request shows what the customer saw when asking."
+    },
+    "does": {
+      "title": "What accepting does",
+      "urgent": "Accept as urgent: the order becomes Urgent at the end of the customer’s own urgent list; it moves only among that customer’s own orders.",
+      "rushFloor": "Accept and rush the floor: the same, and its work orders go first on every tablet."
+    },
+    "team": {
+      "sales": "Sales answers it (changes, cancels, ship what is ready).",
+      "production": "The production manager or the planner answers it (urgent asks, pauses, resumes).",
+      "samples": "Sampling answers it (another sample round).",
+      "other": "Another team answers it."
+    },
+    "workOrders": {
+      "title": "The order’s work orders",
+      "held": "on hold",
+      "mixed": "made before the one-customer rule",
+      "notShown": "Other work orders of the order you do not reach: {count}"
+    },
+    "followUp": {
+      "lift": "Lift the hold",
+      "clearRush": "Clear rush",
+      "held": {
+        "lift": "Lifting a customer’s pause needs the right to hold work orders.",
+        "clearRush": "Clearing a rush needs the right to manage work orders."
+      }
+    },
+    "lift": {
+      "title": "Lift the customer’s pause",
+      "body": "The pause this request placed is lifted on {orders}. A work order still held by another hold stays held.",
+      "reason": "Why we lift it",
+      "reasonHint": "One line, for the office: the customer sees the work going on.",
+      "held": {
+        "reason": "Say why first.",
+        "long": "One line of at most 500 characters."
+      }
+    },
+    "batch": {
+      "title": "{kind} · {count} orders",
+      "waiting": "{count} of {total} waiting",
+      "refuseAll": "Refuse all {count}",
+      "acceptAll": "Accept all {count}",
+      "acceptAllUrgent": "Accept all {count} as urgent",
+      "acceptAllRush": "Accept all {count} and rush the floor",
+      "asked": "{customer} asked this of {count} orders at once: {kind}",
+      "orders": "The orders of the batch",
+      "col": {
+        "order": "Order",
+        "po": "Their PO",
+        "state": "Where it stands",
+        "asked": "Asked",
+        "answer": "Answer"
+      },
+      "answerAlone": "Answer alone",
+      "recheck": "Accept all and Refuse all read the batch again first: each request is checked, the current ones are answered one by one.",
+      "now": "Waiting",
+      "nextAccepted": "Accepted",
+      "nextRush": "Accepted · rushed on the floor",
+      "nextRefused": "Refused",
+      "leftOut": "Left out ({count})",
+      "acceptTitle": "Accept {count} · {kind}",
+      "refuseTitle": "Refuse {count} · {kind}",
+      "acceptSave": "Accept {count}",
+      "refuseSave": "Refuse {count}",
+      "ack": "Each is answered with its own checks; one that moved meanwhile is left as it is and said.",
+      "doneAccepted": "accepted",
+      "doneRefused": "refused"
+    },
+    "change": {
+      "cell": "Line {line} · {style} · {size}",
+      "wholeLine": "the whole line",
+      "inColour": "{pieces} in {colour}",
+      "wholeOrder": "The whole order",
+      "open": "Open",
+      "cancelled": "Cancelled",
+      "neededBy": "Needed by",
+      "firstPart": "The first part’s date",
+      "date": "Wanted by",
+      "shipTo": "Ship to",
+      "sample": "Sample round"
+    },
+    "sample": {
+      "PRE_PRODUCTION": "Pre-production sample",
+      "SIZE_SET": "Size set",
+      "TOP_OF_PRODUCTION": "Top of production (the first pieces)",
+      "BRAND": "A sample for their brand"
+    },
+    "refusal": {
+      "NO_WORK": "The order has no open work order yet: nothing to pause. Refuse with words, or accept once its work orders are made.",
+      "MIXED": "A work order of the order was made before the one-customer rule and makes other customers’ pieces too: answer by hand.",
+      "SHARED": "A work order of the order also makes another order: a pause would stop that one too. Answer by hand.",
+      "NOTHING_TO_RUSH": "No work order of the order can be rushed now: accept it as urgent instead.",
+      "NO_LINE": "The sample round asked names no line of the order any more: refuse it with words.",
+      "SALES_ASK": "Sales accepts this kind of request.",
+      "PRODUCTION_ASK": "Production answers this kind of request here.",
+      "RESUME": "A resume is accepted or refused: the pause is the customer’s to end.",
+      "WITHDRAWN": "The customer withdrew this request.",
+      "ACCEPTED": "This request is answered already.",
+      "REFUSED": "This request is answered already.",
+      "COUNTER_WAITING": "Our counter-offer waits for the customer’s answer.",
+      "COUNTER_AGREED": "The customer said yes to our counter-offer: accept the request to carry it out.",
+      "COUNTER_REFUSED": "The customer said no to our counter-offer: the request is withdrawn.",
+      "COUNTER_LAPSED": "Our counter-offer lapsed: refuse the request with words.",
+      "COLOUR_IN_WORK": "A work order makes the line in its colour now: answer the colour change by hand (cancel and remake).",
+      "ADDRESS_GONE": "The delivery address asked is no longer in use: refuse, or ask the customer for another address.",
+      "SHIPMENT_PREPARED": "A shipment is being prepared for the order’s address: change it there first, or refuse.",
+      "NOT_KEPT": "The customer’s production record is not there yet: try again in a moment.",
+      "NOT_OPEN": "The order is not in production any more.",
+      "URGENCY_OFF": "The customer’s urgent orders are switched off: switch them on in their limits card, or refuse.",
+      "LOCKED": "We locked this order at Regular: unlock it on the work order first, or refuse.",
+      "other": "It was refused as it stands: open the order to see why.",
+      "moved": "It changed since you read it: it was read again.",
+      "gone": "This request is not there any more."
+    },
+    "problem": {
+      "forbidden": "You may not answer this kind of request.",
+      "invalid": "It was refused as it is: check what you wrote.",
+      "unavailable": "The server did not answer. Try again in a moment.",
+      "rate_limited": "Too many tries: wait a moment.",
+      "signed_out": "Your session ended: sign in again.",
+      "internal": "Something went wrong. Try again."
+    }
   }
 }

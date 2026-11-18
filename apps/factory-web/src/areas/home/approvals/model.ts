@@ -6,6 +6,9 @@ import type { ApprovalHistoryActions, ApprovalHistoryModel } from '../../../shel
 import type { RejectReason, TaskDetail } from './api'
 import type { InboxControls, InboxCounts, InboxRow } from './inbox'
 import type { RequestFacts } from './words/request-words'
+// F-PR-08: a customer's request, its review window and the follow-up after an accept.
+import type { Words } from './requests/api'
+import type { FollowUp, RequestActions, RequestReviewModel } from './requests/model'
 
 /**
  * Home › Approvals (SCR-030; design home.approvals, W1: quote approvals only): the queue of requests that wait for MY
@@ -127,7 +130,9 @@ export interface InboxViewModel {
   me: string
   grains: Grains
   /** quotes (W1), the engine's requests (approvals.view, approvals.decide), Today's approvals (home.view), the rules page. */
-  can: { quotes: QuoteAbilities; tasks: boolean; decide: boolean; today: boolean; rules: boolean }
+  // F-PR-08: `requests` — the customer requests (orders.view or workorders.view; the API walls them by customer).
+  // `lift` / `rush`: the follow-ups after an accept — lift a customer's pause (workorders.hold), clear a rush (workorders.manage).
+  can: { quotes: QuoteAbilities; tasks: boolean; decide: boolean; today: boolean; rules: boolean; requests?: boolean; lift?: boolean; rush?: boolean }
   controls: InboxControls
   /** The view's rows from every source (the view filters them); null while the first read runs. */
   rows: { items: readonly InboxRow[] | null; problem: string | null }
@@ -142,12 +147,17 @@ export interface InboxViewModel {
   offline: boolean
   busy: boolean
   /** B-W2b-382: `request` — the decided request, said in words as the notice's `{request}`. */
-  notice: { key: string; tone: Tone; params?: Record<string, string | number>; request?: RequestFacts } | null
+  // F-PR-08: `lines` — what a customer request's answer said beside; `followUp` — "Lift the hold" / "Clear rush" (R-23).
+  notice: { key: string; tone: Tone; params?: Record<string, string | number>; request?: RequestFacts; lines?: readonly Words[]; followUp?: FollowUp } | null
   /** W1's quote review (`?open=<quote approval id>`) and its reject dialog. */
   quoteReview: { id: string; quote: Loaded<QuoteDetail> } | null
   quoteRejecting: boolean
   taskReview: TaskReviewModel | null
   dialog: InboxDialog | null
+  /** F-PR-08: a customer's request (`?open=<request id>`) or batch (`?open=<batch id>`) in its review window. */
+  requestReview?: RequestReviewModel | null
+  /** F-PR-08: "Lift the hold" — why, before the customer's pause is lifted. */
+  followUpDialog?: { readonly followUp: FollowUp; readonly busy: boolean; readonly problem: string | null } | null
   /** Design cases: the rows ticked, the row that has the focus. */
   selected?: readonly string[]
   focusRow?: number
@@ -176,4 +186,8 @@ export interface InboxActions {
   /** W1's quote review. */
   quote?: ApprovalsActions
   history?: ApprovalHistoryActions
+  /** F-PR-08: a customer request's window; after an accept, the notice's follow-up (Clear rush at once, Lift the hold with why). */
+  request?: RequestActions
+  onFollowUp?: (followUp: FollowUp) => void
+  onLiftConfirm?: (reason: string) => void
 }

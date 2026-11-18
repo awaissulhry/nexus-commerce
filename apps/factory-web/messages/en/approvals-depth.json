@@ -112,7 +112,18 @@
     "signed": "Signed and approved: {request}",
     "rejected": "Rejected: {request}",
     "quoteApproved": "Quote {number} approved.",
-    "quoteRejected": "Quote {number} rejected."
+    "quoteRejected": "Quote {number} rejected.",
+    "requestAccepted": "Accepted: {request}",
+    "requestRushed": "Accepted and rushed on the floor: {request}",
+    "requestRefused": "Refused: {request} — the customer reads your words.",
+    "requestCountered": "Counter-offer sent: {request} — it waits for the customer’s answer.",
+    "batchAccepted": "{request}: {done} of {count} accepted.",
+    "batchRefused": "{request}: {done} of {count} refused.",
+    "holdLifted": "Pause lifted on {orders}: the work goes on.",
+    "holdNotLifted": "Not lifted on {orders}: open the work order to lift it.",
+    "holdNothing": "Nothing of this pause is held any more.",
+    "rushCleared": "Rush cleared on {orders}.",
+    "rushNotCleared": "Rush not cleared on {orders}: open the work order to clear it."
   },
   "table": {
     "waiting": "Requests waiting for me",
@@ -146,12 +157,22 @@
     "company": "Company"
   },
   "kind": {
-    "QUOTE_APPROVAL": "Quote"
+    "QUOTE_APPROVAL": "Quote",
+    "ORDER_CHANGE_REQUEST": "Customer request"
   },
   "row": {
     "task": "{kind}: {label}",
     "openRecord": "Open the record",
-    "ownPage": "Decided on its own page"
+    "ownPage": "Decided on its own page",
+    "request": "{kind}: {order} · {customer}",
+    "batch": "{kind} · {count} orders · {customer}",
+    "orders": "{count} orders",
+    "requestAsker": "{who} · {customer}",
+    "chip": {
+      "frozen": "Already fixed: {count}",
+      "priced": "A price may apply",
+      "earliest": "Earliest {date}"
+    }
   },
   "recheck": {
     "changedShort": "Changed since asked",
@@ -161,7 +182,13 @@
     "gone": "Its record is gone or out of your reach."
   },
   "rule": {
-    "quote": "Sales › Settings: margin floor and discount limit"
+    "quote": "Sales › Settings: margin floor and discount limit",
+    "team": {
+      "sales": "Answered by Sales",
+      "production": "Answered by the production manager or planner",
+      "samples": "Answered by sampling",
+      "other": "Answered by another team"
+    }
   },
   "since": "Since {when}",
   "due": "Due {when}",
@@ -238,7 +265,8 @@
       "codeOneByOne": "An approval that asks a code is approved one by one.",
       "pickSome": "Tick the requests to approve first.",
       "oneKind": "Approve several only for requests of one kind.",
-      "reading": "Reading the request…"
+      "reading": "Reading the request…",
+      "answerAlone": "A customer’s request is answered in its window: open it."
     }
   },
   "refusal": {
