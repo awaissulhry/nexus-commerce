@@ -87,7 +87,7 @@ let p3Request: string
 let p1Quoted: string
 
 beforeAll(async () => {
-  h = await startHarness('th094_production_answer')
+  h = await startHarness('th094_prod_answer')
   await seedCore({ db: h.database, namespace: NS })
   await seedAuth({ db: h.database, namespace: NS })
   await seedRoles({ db: h.database, namespace: NS })
