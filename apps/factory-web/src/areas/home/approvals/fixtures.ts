@@ -10,6 +10,8 @@ import { InboxView } from './view/InboxView'
 // B-TH-270 (PL6): the request's thread docked in the review window, in the design cases (notes only: an approval has no party).
 import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { requestName } from './words/request-words'
+// F-PR-08: a customer's requests in the inbox and their review window.
+import { REQUEST_CASES } from './requests/fixtures'
 
 /**
  * SCR-030 Approvals — made-up data only (PLAN §3.1). Each case is one state the Owner reviews, per role: Finance
@@ -64,6 +66,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
   view: DesignView,
   cases: [
     ...DEPTH_CASES.map((entry) => ({ ...entry, model: { depth: entry.model } })),
+    ...REQUEST_CASES.map((entry) => ({ ...entry, model: { depth: entry.model } })),
     { id: 'finance-queue', label: 'Finance · waiting for me', model: model(), note: 'Each row says what is asked and why ("margin 18.9 % under the 20 % floor"), who asked, the net and since when.' },
     { id: 'selected', label: 'Finance · two requests selected', model: model({ rows: { items: [...WAITING, own], problem: null }, counts: { waiting: 3, mine: 1, decided: 3, capped: false }, selected: WAITING.map((row) => row.id), focusRow: 0 }), note: 'Approve 2 in the toolbar. Finance\'s own request cannot be ticked: its box is disabled and says why (four eyes); the header box and x skip it.' },
     { id: 'finance-review', label: 'Finance · the review (A approve, R reject, J / K)', model: model({ open: review }), note: 'Still current · checked 10:42; the numbers behind the rule; the lines under the floor; the note; Open full quote.' },

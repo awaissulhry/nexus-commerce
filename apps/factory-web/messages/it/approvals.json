@@ -133,5 +133,203 @@
     "approved": "{number} approvato. È aperta la richiesta successiva.",
     "rejected": "{number} rifiutato con il tuo motivo.",
     "forbidden": "Non decisa: non puoi decidere questa richiesta (tua, o sul margine senza visibilità sui margini)."
+  },
+  "customerRequest": {
+    "words": {
+      "label": "Parole che il cliente legge",
+      "hint": "Servono per rifiutare; facoltative se accetti. Mai una nota interna.",
+      "hintBatch": "Le stesse parole su ogni ordine: servono per rifiutare tutte, facoltative se accetti tutte.",
+      "preview": "Il cliente legge: «{words}»",
+      "none": "Ancora nessuna parola: il cliente legge solo la risposta."
+    },
+    "held": {
+      "reading": "Lettura della richiesta…",
+      "withdrawn": "Il cliente ha ritirato questa richiesta.",
+      "answered": "Questa richiesta ha già una risposta.",
+      "waitsOnCustomer": "La nostra controproposta aspetta la risposta del cliente: risponde prima lui.",
+      "team": {
+        "sales": "Alle modifiche, agli annullamenti e a «spedire ciò che è pronto» risponde l’ufficio vendite.",
+        "production": "A urgenze, pause e riprese rispondono il responsabile di produzione o il pianificatore.",
+        "samples": "A un altro giro di campioni risponde la campionatura.",
+        "other": "A questo tipo di richiesta risponde un altro gruppo."
+      },
+      "counterLapsed": "La nostra controproposta è scaduta: rifiuta la richiesta con delle parole; non si accetta senza il sì del cliente.",
+      "noAccept": "Ora non si può accettare.",
+      "counterAgreed": "Il cliente ha detto sì alla nostra controproposta: accetta la richiesta per eseguirla.",
+      "noRefuse": "Ora non si può rifiutare.",
+      "noCounterResume": "Una ripresa si accetta o si rifiuta: tocca al cliente finire la pausa.",
+      "counteredOnce": "Una richiesta ha una sola controproposta: ora rispondi.",
+      "noCounter": "Ora non si può fare una controproposta.",
+      "words": "Prima scrivi le parole che il cliente legge.",
+      "long": "Al massimo 2000 caratteri.",
+      "offline": "Non in linea: rispondi quando torni in linea.",
+      "busy": "In corso…",
+      "noneWaiting": "Nessuna di queste richieste aspetta una risposta.",
+      "noneCurrent": "Nessuna si può rispondere così ora: il motivo è sotto ognuna."
+    },
+    "refuse": "Rifiuta",
+    "accept": "Accetta",
+    "acceptUrgent": "Accetta come urgente (cliente)",
+    "acceptRush": "Accetta e segna urgente in reparto",
+    "back": "Indietro",
+    "counter": {
+      "open": "Proponi altro",
+      "title": "Proponi altro · {order}",
+      "send": "Invia la controproposta",
+      "body": "Il cliente risponde nel suo portale: con il sì la richiesta si esegue con quello che proponi, con il no si ritira. Indica una data, un costo, delle parole: almeno uno.",
+      "date": "La data che proponiamo",
+      "dateHint": "Da oggi in poi.",
+      "fee": "Un costo",
+      "feeHint": "Nella valuta dell’ordine; 0 dice che è gratis. L’importo lo vede solo il buyer del cliente.",
+      "noFee": "Un costo lo indica solo chi vede i prezzi.",
+      "note": "Le nostre parole al cliente",
+      "preview": "Il cliente legge: la nostra controproposta · {date} · {priced}",
+      "priced": "si applica un costo",
+      "notPriced": "nessun costo",
+      "theirWords": "Le loro parole: «{words}»",
+      "held": {
+        "empty": "Prima indica una data, un costo o delle parole.",
+        "past": "La data è passata: da oggi in poi.",
+        "fee": "Il costo non è un importo: scrivilo come 25 o 12,50.",
+        "long": "Al massimo 2000 caratteri."
+      }
+    },
+    "review": {
+      "title": "{kind} · {order}",
+      "titleUnknown": "Richiesta del cliente",
+      "po": "Ordine cliente {ref}",
+      "notFound": "Questa richiesta non c’è più.",
+      "forbidden": "Questa richiesta è fuori dai tuoi permessi.",
+      "inBatch": "Una di {count} chieste insieme",
+      "asked": "{customer} l’ha chiesta il {at} · {who}",
+      "why": "Il loro motivo: {reason}",
+      "batchLine": "Chiesta insieme ad altri ordini: {count} in tutto, {waiting} ancora in attesa.",
+      "openBatch": "Rispondi a tutte insieme",
+      "openOrder": "Apri {order}"
+    },
+    "impact": {
+      "blocked": "Una parte richiesta non può più cambiare: rifiutala, o proponi altro.",
+      "notRead": "Ora non è stato possibile leggere l’impatto: la richiesta mostra cosa ha visto il cliente quando l’ha chiesta."
+    },
+    "does": {
+      "title": "Cosa fa accettare",
+      "urgent": "Accetta come urgente (cliente): l’ordine diventa urgente in fondo alla lista urgente del cliente; si sposta solo tra gli ordini di quel cliente.",
+      "rushFloor": "Accetta e segna urgente in reparto: lo stesso, e i suoi ordini di lavoro vanno per primi su ogni tablet."
+    },
+    "team": {
+      "sales": "Risponde l’ufficio vendite (modifiche, annullamenti, spedire ciò che è pronto).",
+      "production": "Rispondono il responsabile di produzione o il pianificatore (urgenze, pause, riprese).",
+      "samples": "Risponde la campionatura (un altro giro di campioni).",
+      "other": "Risponde un altro gruppo."
+    },
+    "workOrders": {
+      "title": "Gli ordini di lavoro dell’ordine",
+      "held": "fermo",
+      "mixed": "fatto prima della regola di un solo cliente",
+      "notShown": "Altri ordini di lavoro dell’ordine fuori dalla tua portata: {count}"
+    },
+    "followUp": {
+      "lift": "Togli la pausa",
+      "clearRush": "Togli l’urgenza in reparto",
+      "held": {
+        "lift": "Per togliere la pausa di un cliente serve il permesso di fermare gli ordini di lavoro.",
+        "clearRush": "Per togliere un’urgenza in reparto serve il permesso di gestire gli ordini di lavoro."
+      }
+    },
+    "lift": {
+      "title": "Togli la pausa del cliente",
+      "body": "La pausa messa da questa richiesta si toglie su {orders}. Un ordine di lavoro fermo per un’altra sospensione resta fermo.",
+      "reason": "Perché la togliamo",
+      "reasonHint": "Una riga, per l’ufficio: il cliente vede che il lavoro riprende.",
+      "held": {
+        "reason": "Prima scrivi perché.",
+        "long": "Una riga di al massimo 500 caratteri."
+      }
+    },
+    "batch": {
+      "title": "{kind} · {count} ordini",
+      "waiting": "{count} su {total} in attesa",
+      "refuseAll": "Rifiuta tutte e {count}",
+      "acceptAll": "Accetta tutte e {count}",
+      "acceptAllUrgent": "Accetta tutte e {count} come urgenti (cliente)",
+      "acceptAllRush": "Accetta tutte e {count} e segna urgente in reparto",
+      "asked": "{customer} l’ha chiesto per {count} ordini insieme: {kind}",
+      "orders": "Gli ordini del gruppo",
+      "col": {
+        "order": "Ordine",
+        "po": "Loro ordine",
+        "state": "Dove si trova",
+        "asked": "Chiesta",
+        "answer": "Risposta"
+      },
+      "answerAlone": "Rispondi a questa sola",
+      "recheck": "«Accetta tutte» e «Rifiuta tutte» rileggono prima il gruppo: ogni richiesta si controlla, a quelle attuali si risponde una per una.",
+      "now": "In attesa",
+      "nextAccepted": "Accettata",
+      "nextRush": "Accettata · urgente in reparto",
+      "nextRefused": "Rifiutata",
+      "leftOut": "Escluse ({count})",
+      "acceptTitle": "Accetta {count} · {kind}",
+      "refuseTitle": "Rifiuta {count} · {kind}",
+      "acceptSave": "Accetta {count}",
+      "refuseSave": "Rifiuta {count}",
+      "ack": "A ognuna si risponde con i suoi controlli; una che è cambiata nel frattempo resta com’è e viene detto.",
+      "doneAccepted": "accettate",
+      "doneRefused": "rifiutate"
+    },
+    "change": {
+      "cell": "Riga {line} · {style} · {size}",
+      "wholeLine": "tutta la riga",
+      "inColour": "{pieces} in {colour}",
+      "wholeOrder": "Tutto l’ordine",
+      "open": "Aperto",
+      "cancelled": "Annullato",
+      "neededBy": "Serve entro",
+      "firstPart": "Data della prima parte",
+      "date": "Voluto entro",
+      "shipTo": "Spedire a",
+      "sample": "Giro di campioni"
+    },
+    "sample": {
+      "PRE_PRODUCTION": "Campione di pre-produzione",
+      "SIZE_SET": "Set taglie",
+      "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)",
+      "BRAND": "Un campione per il loro marchio"
+    },
+    "refusal": {
+      "NO_WORK": "L’ordine non ha ancora ordini di lavoro aperti: niente da mettere in pausa. Rifiuta con delle parole, o accetta quando ci sono.",
+      "MIXED": "Un ordine di lavoro dell’ordine è stato fatto prima della regola di un solo cliente e fa anche capi di altri clienti: rispondi a mano.",
+      "SHARED": "Un ordine di lavoro dell’ordine fa anche un altro ordine: una pausa fermerebbe anche quello. Rispondi a mano.",
+      "NOTHING_TO_RUSH": "Nessun ordine di lavoro dell’ordine si può segnare urgente ora: accetta come urgente (cliente).",
+      "NO_LINE": "Il giro di campioni richiesto non indica più una riga dell’ordine: rifiutalo con delle parole.",
+      "SALES_ASK": "Questo tipo di richiesta lo accetta l’ufficio vendite.",
+      "PRODUCTION_ASK": "A questo tipo di richiesta risponde qui la produzione.",
+      "RESUME": "Una ripresa si accetta o si rifiuta: tocca al cliente finire la pausa.",
+      "WITHDRAWN": "Il cliente ha ritirato questa richiesta.",
+      "ACCEPTED": "Questa richiesta ha già una risposta.",
+      "REFUSED": "Questa richiesta ha già una risposta.",
+      "COUNTER_WAITING": "La nostra controproposta aspetta la risposta del cliente.",
+      "COUNTER_AGREED": "Il cliente ha detto sì alla nostra controproposta: accetta la richiesta per eseguirla.",
+      "COUNTER_REFUSED": "Il cliente ha detto no alla nostra controproposta: la richiesta è ritirata.",
+      "COUNTER_LAPSED": "La nostra controproposta è scaduta: rifiuta la richiesta con delle parole.",
+      "COLOUR_IN_WORK": "Un ordine di lavoro fa ora la riga nel suo colore: rispondi a mano al cambio di colore (annulla e rifai).",
+      "ADDRESS_GONE": "L’indirizzo di consegna richiesto non è più in uso: rifiuta, o chiedi al cliente un altro indirizzo.",
+      "SHIPMENT_PREPARED": "Si sta preparando una spedizione per l’indirizzo dell’ordine: cambialo prima lì, o rifiuta.",
+      "NOT_KEPT": "La scheda di produzione del cliente non c’è ancora: riprova tra poco.",
+      "NOT_OPEN": "L’ordine non è più in produzione.",
+      "URGENCY_OFF": "Gli ordini urgenti del cliente sono spenti: accendili nella sua scheda dei limiti, o rifiuta.",
+      "LOCKED": "Abbiamo bloccato questo ordine come normale: prima sbloccalo sull’ordine di lavoro, o rifiuta.",
+      "other": "È stata rifiutata così com’è: apri l’ordine per vedere perché.",
+      "moved": "È cambiata da quando l’hai letta: è stata riletta.",
+      "gone": "Questa richiesta non c’è più."
+    },
+    "problem": {
+      "forbidden": "Non puoi rispondere a questo tipo di richiesta.",
+      "invalid": "È stata rifiutata così com’è: controlla cosa hai scritto.",
+      "unavailable": "Il server non ha risposto. Riprova tra poco.",
+      "rate_limited": "Troppi tentativi: aspetta un momento.",
+      "signed_out": "La sessione è terminata: accedi di nuovo.",
+      "internal": "Qualcosa è andato storto. Riprova."
+    }
   }
 }

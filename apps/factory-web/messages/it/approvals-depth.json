@@ -112,7 +112,18 @@
     "signed": "Firmata e approvata: {request}",
     "rejected": "Rifiutata: {request}",
     "quoteApproved": "Preventivo {number} approvato.",
-    "quoteRejected": "Preventivo {number} rifiutato."
+    "quoteRejected": "Preventivo {number} rifiutato.",
+    "requestAccepted": "Accettata: {request}",
+    "requestRushed": "Accettata e segnata urgente in reparto: {request}",
+    "requestRefused": "Rifiutata: {request}. Il cliente legge le tue parole.",
+    "requestCountered": "Controproposta inviata: {request}. Aspetta la risposta del cliente.",
+    "batchAccepted": "{request}: accettate {done} su {count}.",
+    "batchRefused": "{request}: rifiutate {done} su {count}.",
+    "holdLifted": "Pausa tolta su {orders}: il lavoro riprende.",
+    "holdNotLifted": "Non tolta su {orders}: apri l’ordine di lavoro per toglierla.",
+    "holdNothing": "Di questa pausa non è più fermo niente.",
+    "rushCleared": "Urgenza in reparto tolta su {orders}.",
+    "rushNotCleared": "Urgenza in reparto non tolta su {orders}: apri l’ordine di lavoro per toglierla."
   },
   "table": {
     "waiting": "Richieste in attesa di me",
@@ -146,12 +157,22 @@
     "company": "Azienda"
   },
   "kind": {
-    "QUOTE_APPROVAL": "Preventivo"
+    "QUOTE_APPROVAL": "Preventivo",
+    "ORDER_CHANGE_REQUEST": "Richiesta del cliente"
   },
   "row": {
     "task": "{kind}: {label}",
     "openRecord": "Apri il record",
-    "ownPage": "Si decide sulla sua pagina"
+    "ownPage": "Si decide sulla sua pagina",
+    "request": "{kind}: {order} · {customer}",
+    "batch": "{kind} · {count} ordini · {customer}",
+    "orders": "{count} ordini",
+    "requestAsker": "{who} · {customer}",
+    "chip": {
+      "frozen": "Già fissati: {count}",
+      "priced": "Può esserci un costo",
+      "earliest": "Al più presto {date}"
+    }
   },
   "recheck": {
     "changedShort": "Cambiata dopo la richiesta",
@@ -161,7 +182,13 @@
     "gone": "Il suo record non c’è più o è fuori dalla tua portata."
   },
   "rule": {
-    "quote": "Vendite › Impostazioni: margine minimo e limite di sconto"
+    "quote": "Vendite › Impostazioni: margine minimo e limite di sconto",
+    "team": {
+      "sales": "Risponde l’ufficio vendite",
+      "production": "Rispondono il responsabile di produzione o il pianificatore",
+      "samples": "Risponde la campionatura",
+      "other": "Risponde un altro gruppo"
+    }
   },
   "since": "Dal {when}",
   "due": "Entro {when}",
@@ -238,7 +265,8 @@
       "codeOneByOne": "Un’approvazione che chiede un codice si approva una per una.",
       "pickSome": "Prima spunta le richieste da approvare.",
       "oneKind": "Si approvano insieme solo richieste dello stesso tipo.",
-      "reading": "Lettura della richiesta…"
+      "reading": "Lettura della richiesta…",
+      "answerAlone": "A una richiesta del cliente si risponde nella sua finestra: aprila."
     }
   },
   "refusal": {

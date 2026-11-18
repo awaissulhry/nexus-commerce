@@ -592,6 +592,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   and the list's Hold N — the picked reason's list decides a quality hold (`/quality/holds`) or a plain production hold (B-PR-21's
   `/production/work-orders/…/holds`, workorders.hold, the customer's words); the holds card shows both kinds; Release the hold opens what
   the work order is held under (`releaseTargetOf`).
+- F-PR-08 `src/areas/home/approvals/requests/` (catalogue `approvals` `customerRequest.*`; the inbox's words `approvals-depth`) — a
+  customer's requests in Home › Approvals, THE place they are answered: the source `GET /production/brand-requests?status=WAITING` (no
+  customer filter: the API's wall, PW-H01; inbox kind ORDER_CHANGE_REQUEST, so the Overview's `?kind=` filters to them; Today's rows of
+  that kind give way), one row per request, one per batch ("Cancel · 6 orders", PW-12); `?open=<request id|batch id>` opens the review
+  window (`view/RequestReview.tsx` on today's DetailModal: the shared RequestCard, impact now, the counter, what accepting does, the
+  words the customer reads); an id no row names is asked (`use-request-review.ts probeOpen`: engine task → request → batch → the neutral
+  "not there any more", PW-H01b). Accept / Refuse go to Sales' `/sales/change-requests/:id/accept|refuse` for CHANGE, CANCEL,
+  SPLIT_SHIPMENT and to `/production/brand-requests/:id/accept|refuse` for the others (RUSH: Accept as urgent / Accept and rush the
+  floor); Suggest something else `…/counter`; a batch's Accept all / Refuse all re-read first (`batches/:batchId/accept|refuse`); the
+  notice after an accept offers Lift the hold (workorders.hold, why) / Clear rush (PATCH rush false), never a generic undo.
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per
