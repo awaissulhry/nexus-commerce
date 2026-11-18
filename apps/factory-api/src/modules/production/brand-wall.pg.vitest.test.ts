@@ -238,6 +238,13 @@ describe('B-PR-10 the brand-wall sweep', () => {
     expect(sweeper.scanForA(JSON.stringify(changes))).toEqual([])
   })
 
+  // fix-pr-7 (found by the B-PR-36 golden flow's sweep: a person limited to B read the sign-in and order mails of A's people, their
+  // records and addresses): the mail log and the blocked addresses are every customer's mail.
+  it('fix-pr-7: the mail log and the blocked addresses need every customer', async () => {
+    await everyCustomerOnly('/email/delivery')
+    await everyCustomerOnly('/email/blocked')
+  })
+
   it('the warehouse is one stock for every customer: its ledger, stock and their exports need every customer; a work order’s own kit stays its customer’s', async () => {
     await everyCustomerOnly(`/inventory/ledger?siteId=${w.siteId}`)
     await everyCustomerOnly(`/inventory/stock?siteId=${w.siteId}`)
@@ -248,6 +255,11 @@ describe('B-PR-10 the brand-wall sweep', () => {
       const refused = await as('office.p2', 'POST', '/exports', body(listKey))
       expect([refused.status, refused.body.error?.message], listKey).toEqual([403, EVERY_PARTY_WORDS.en])
     }
+    // fix-pr-7 (found by the B-PR-36 golden flow's sweep): a figure's explanation, the stock card, is the warehouse's too — the
+    // issue of a hide to A's work order named A's work order number and the move to a person limited to B.
+    const issued = (await admin<{ siteId: string; itemId: string }>(`SELECT m."siteId"::text AS "siteId", m."itemId"::text AS "itemId" FROM "StockMove" m JOIN "WorkOrder" o ON o.id = m."workOrderId" WHERE o."partyId" = $1 ORDER BY m.id LIMIT 1`, [ids.a]))[0]
+    expect(issued, 'the seeds issue a hide to a work order of A').toBeDefined()
+    await everyCustomerOnly(`/inventory/stock/card?siteId=${issued!.siteId}&itemId=${issued!.itemId}`)
     // B's own work order (the seeds' SEED-WO-B001, brand two's): its kit and pick list stay B's to work.
     const own = (await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "partyId" = $1 AND status = 'IN_PROGRESS' LIMIT 1`, [ids.b]))[0]
     if (own) expect((await as('office.p2', 'GET', `/inventory/kits/${own.id}`)).status).toBe(200)

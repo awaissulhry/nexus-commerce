@@ -252,7 +252,9 @@ export interface CardQuery {
  * first, each with its effect and the balance after it; at most `limit`, the latest ones, from the balance before them.
  */
 export async function stockCardOf(caller: CommandCaller, query: CardQuery) {
-  officeContextOf(caller)
+  // fix-pr-7 (B-PR-10): a figure's explanation is the warehouse's — its moves name every customer's work orders (the move's
+  // reference, the move itself): every customer only, as the ledger, the overview and the reconciliation.
+  assertWholeWarehouse(officeContextOf(caller))
   const site = await siteFor(caller, query.siteId, INVENTORY_STOCK_VIEW, 'query/siteId')
   const where: Prisma.StockMoveWhereInput = {
     siteId: site.id,

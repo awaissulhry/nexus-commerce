@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { ErrorReport } from '@nexus/factory-domain/observability/report'
+import { NOTE_WORDS } from '@nexus/factory-domain/production-brand/notes'
 import { SUPERVISOR_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/words'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCalendar } from '../../../../../packages/factory-db/seed/calendar'
@@ -16,6 +17,7 @@ import { buildApp } from '../../core/app'
 import { routesFiles } from '../../core/autoload'
 import { callerFor } from '../../core/command'
 import { testAuthenticator } from '../../core/context'
+import { useServerClock } from '../../core/time'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { gateHandlers } from '../../modules/planning/milestones/follow'
 import { brandKeeperHandler, keepOrder } from '../../modules/production/brand/keeper'
@@ -327,7 +329,7 @@ let sweepFiles: string | undefined
 
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
-  world = await urgencyWorld('pr36_golden_production', NS)
+  world = await urgencyWorld('pr36_golden_prod', NS)
   await seedCalendar({ db: world.h.database, namespace: NS })
   worker = { h: world.h, tenant: world.tenant, retried: [] as string[] } as unknown as World
   handlers = [...gateHandlers(), brandKeeperHandler(), supervisorFollowsHandler(), issueAnsweredHandler(), notificationsHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET, clock: world.h.clock })]
@@ -348,7 +350,9 @@ beforeAll(async () => {
   const people = [owner, adminPerson, planner, supervisor, backup, orderSupervisor, buyerA, productionA, productionB].map((person) => person.id)
   await world.replica([{ sql: `UPDATE "RoleAssignment" SET "validFrom" = now() - interval '1 day' WHERE "userId" = ANY($1::uuid[])`, values: [people] }])
 
-  for (const name of ['u1', 'u2', 'u3', 'n1', 'p1', 'p2', 'p3', 'q1', 'q2', 'g1'] as const) A[name] = await world.addOrder(world.ids.a, `PR36-${name.toUpperCase()}`, '2026-10-01')
+  // fix-pr-7: q2 is never promised (its computed health NO_DATE, so a person may raise it At risk in K): promised and planned by
+  // nobody, an order's computed health is already At risk ("nothing says when"), and a raise is refused.
+  for (const name of ['u1', 'u2', 'u3', 'n1', 'p1', 'p2', 'p3', 'q1', 'q2', 'g1'] as const) A[name] = await world.addOrder(world.ids.a, `PR36-${name.toUpperCase()}`, '2026-10-01', name === 'q2' ? { promiseDate: null } : {})
   for (const name of ['b1', 'b2'] as const) B[name] = await world.addOrder(world.ids.b, `PR36-${name.toUpperCase()}`, '2026-10-02')
   // What the set-up wrote is the worker's first job; what it tells nobody is this flow's news.
   await settle()
@@ -360,6 +364,7 @@ beforeEach(() => {
 })
 
 afterAll(async () => {
+  useServerClock(undefined) // fix-pr-7 (P: the reply on the portal's clock)
   useErrorTracker(undefined)
   await sweepApp?.close()
   useFiles(undefined)
@@ -513,11 +518,19 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     const check = await ok(planner, 'POST', '/production/notes/check', { records, body: NOTE_BODY, askSupervisor: true })
     expect(check.held).toBe(false)
     expect((check.records as Json[]).map((record) => [record.id, record.canWrite, record.supervisor])).toEqual(records.map((record) => [record.id, true, 'SOMEONE_ELSE']))
-    // PW-13: a person limited to B checks nothing of A's (not found, never named).
-    await session('office.p2', 'POST', '/production/notes/check', { records, body: NOTE_BODY, askSupervisor: true }, 404)
+    // PW-13: a person limited to B checks nothing of A's: A's records are only counted, never named (the check is read only, as
+    // the module's PW-13 test reads it); the note itself is refused as not found and writes nothing.
+    const blind = await session('office.p2', 'POST', '/production/notes/check', { records, body: NOTE_BODY, askSupervisor: true })
+    expect(blind).toMatchObject({ records: [], unknown: records.length, customers: 0, people: [], noSupervisor: [], namesOtherCustomer: [], held: false })
+    const notes = async () => (await one<{ n: number }>(`SELECT count(*)::int AS n FROM "Message" WHERE "tenantId" = $1 AND direction = 'INTERNAL_NOTE'`, [T()])).n
+    const before = await notes()
+    expect((await session('office.p2', 'POST', '/production/notes', { records, body: NOTE_BODY, askSupervisor: true }, 404)).error.message).toBe(NOTE_WORDS.NONE_FOUND.en)
+    expect(await notes()).toBe(before)
 
     const batch = await ok(planner, 'POST', '/production/notes', { records, body: NOTE_BODY, askSupervisor: true })
-    expect((batch.written as Json[]).map((row) => [row.id, row.supervisorAsked])).toEqual(records.map((record) => [record.id, true]))
+    // fix-pr-7: written in the write's own order (threads locked in record id order, B-PR-43a), not the order they were picked in.
+    const byId = (rows: readonly (readonly [string, boolean])[]) => [...rows].sort(([x], [y]) => x.localeCompare(y))
+    expect(byId((batch.written as Json[]).map((row): [string, boolean] => [row.id as string, row.supervisorAsked as boolean]))).toEqual(byId(records.map((record): [string, boolean] => [record.id, true])))
     for (const row of batch.written as Json[]) {
       expect(await one('SELECT direction::text AS direction, audience::text AS audience, "partyId" FROM "Message" WHERE id = $1', [row.messageId]), row.id).toEqual({ direction: 'INTERNAL_NOTE', audience: 'OFFICE', partyId: null })
     }
@@ -616,6 +629,10 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
       ['HOLD', 'OPEN'],
     ])
     expect((await outbox('order_change_request.batch_asked')).map((row) => row.payload).filter((payload) => payload.batchId === G.holdBatch)).toEqual([{ batchId: G.holdBatch, partyId: world.ids.a, kind: 'HOLD', count: 3 }])
+    // fix-pr-7: the worker's job right after the ask, as it runs (seconds, before any answer): the supervisor is told of the batch
+    // ask while it waits ("asks to pause 3 orders"); a batch already answered tells nobody of the ask (brand-production rules).
+    await settle()
+    expect(keysOf(await bellOf(supervisor))).toContain('notifications.production.customerAskedHoldMany')
 
     // Home › Approvals: ONE row for the batch; a person limited to B reaches none of it.
     const today = await ok(planner, 'GET', '/home/today?kind=ORDER_CHANGE_REQUEST&limit=200')
@@ -633,10 +650,9 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     for (const workOrder of [WO.p1, WO.p2, WO.p3]) expect(await workOrderStatus(workOrder.id)).toBe('ON_HOLD')
 
     await settle()
-    // A reads its pause; its supervisor was told of the batch ask.
+    // A reads its pause.
     expect(rowIn(await listOfA(), A.p1.orderId).marks).toMatchObject({ paused: true })
     expect((rowIn(await listOfA(), A.p1.orderId).marks.words as Json[]).map((words) => words.en)).toContain('Paused at your request')
-    expect(keysOf(await bellOf(supervisor)).some((key) => key.startsWith('notifications.production.customerAsked'))).toBe(true)
     expect((await fresh(buyerA)).some((notice) => notice.messageKey === 'portal.production.hold_accepted')).toBe(true)
     expect(await fresh(productionB)).toEqual([])
   })
@@ -706,7 +722,18 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
 
     // "Answer N" of one customer's orders is not built (threads T11): we answer in the first order's conversation, as the plan's
     // fallback; it answers every problem of the batch.
-    const reply = await ok(planner, 'POST', `/threads/SalesOrder/${A.q1.orderId}/replies`, { body: REPLY_BODY }, 201)
+    // fix-pr-7: our reply is dated on the portal's clock. The portal dates its commands by the harness clock (B-W2b-167), which the
+    // flow's sign-ins and two-factor acts moved some minutes ahead of the server's; our reply on the server's clock was dated before
+    // the problem it answers and answered nothing (a shared message at or after the raise answers it). On one clock it comes after,
+    // as in production, where both clocks are the server's. One clock for the whole flow is not possible: by here the harness clock
+    // runs more than the database's 5 minutes ahead (factory_recall_not_future), and the portal post's read mark would be refused.
+    useServerClock(world.h.clock)
+    let reply: Json
+    try {
+      reply = await ok(planner, 'POST', `/threads/SalesOrder/${A.q1.orderId}/replies`, { body: REPLY_BODY }, 201)
+    } finally {
+      useServerClock(undefined)
+    }
     expect(reply.message).toBeDefined()
     await settle()
     expect((await admin<{ status: string }>('SELECT status::text AS status FROM "ProductionIssue" WHERE id = ANY($1::uuid[]) ORDER BY "raisedAt", id', [issues.map((issue) => issue.id)])).map((row) => row.status)).toEqual(['ANSWERED', 'ANSWERED'])
@@ -823,8 +850,10 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect(refused.error.message).toMatch(/Cutting started on|Il taglio è iniziato il/)
 
     // At risk, raised by a person with a reason code: A reads the chip and the reason, never our note.
+    // fix-pr-7: the keeper's nightly look keeps q2's health first (the flow does not lean on whichever event kept it before).
+    await keepOrder(system(), A.q2.orderId, { what: 'nightly' })
     const health = await ok(planner, 'GET', `/production/brand-orders/${A.q2.orderId}/health`)
-    expect(['ON_TRACK', 'NO_DATE']).toContain(health.health.computed)
+    expect(health.health.computed).toBe('NO_DATE') // fix-pr-7: never promised (the set-up)
     const raised = await ok(planner, 'PUT', `/production/brand-orders/${A.q2.orderId}/health`, { reasonCode: 'MATERIAL_LATE', note: HEALTH_NOTE })
     expect(raised.health).toMatchObject({ orderId: A.q2.orderId, health: 'AT_RISK', reasonCode: 'MATERIAL_LATE' })
     await settle()
