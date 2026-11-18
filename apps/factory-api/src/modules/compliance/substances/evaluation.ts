@@ -299,7 +299,7 @@ export async function styleEvaluation(request: FastifyRequest, styleId: string, 
   const now = substancesClock().now()
   return request.withClient(async (db) => {
     const style = isUuid(styleId) ? await db.style.findUnique({ where: { id: styleId }, select: { id: true, code: true, name: true, productType: true, ppeCategory: true, brandPartyId: true, companyId: true } }) : null
-    if (!style || !can(actor, SUBSTANCES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+    if (!style || !can(actor, SUBSTANCES_VIEW, { companyId: style.companyId }) || !can(actor, SUBSTANCES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.') // fix-pr-8: by brand too
     const revisions = await db.styleRevision.findMany({ where: { styleId }, select: { id: true, revision: true, status: true }, orderBy: { revision: 'desc' } })
     let revision = revisions.find((row) => row.status === 'RELEASED') ?? revisions.find((row) => row.status === 'DRAFT') ?? revisions[0] ?? null
     if (query.revisionId !== undefined) {

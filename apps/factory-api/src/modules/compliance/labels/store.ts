@@ -183,7 +183,7 @@ export async function findStyle(client: Reader, styleId: string | null): Promise
 /** A style the caller may view here (LABELS_VIEW over its company), or not found. */
 export async function readVisibleStyle(client: Reader, context: RequestContext, styleId: string): Promise<StyleRow> {
   const style = isUuid(styleId) ? await findStyle(client, styleId) : null
-  if (!style || !can(actorOf(context), LABELS_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+  if (!style || !can(actorOf(context), LABELS_VIEW, { companyId: style.companyId }) || !can(actorOf(context), LABELS_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.') // fix-pr-8: by brand too
   return style
 }
 

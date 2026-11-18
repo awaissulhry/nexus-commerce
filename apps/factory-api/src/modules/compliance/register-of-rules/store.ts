@@ -13,6 +13,7 @@ import {
 } from '@nexus/factory-domain/compliance/register-of-rules/rules'
 import { scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { styleBrandWhere } from '../../product/styles/store'
 import type { ChangeView, EntryView } from './contract'
 import { namesFor, type Reader } from './common'
 
@@ -120,10 +121,12 @@ export async function entryViews(db: Reader, rows: readonly EntryRow[], actor: A
 }
 
 /** The styles each certificate covers (ACTIVE coverage of a style), by certificate. */
-export async function stylesCovered(db: Reader, certificateIds: readonly string[]): Promise<Map<string, { id: string; code: string; name: string }[]>> {
+export async function stylesCovered(db: Reader, certificateIds: readonly string[], actor?: Actor): Promise<Map<string, { id: string; code: string; name: string }[]>> {
   if (certificateIds.length === 0) return new Map()
+  // fix-pr-8 (the brand wall): for a person, only the styles of customers it reaches (and our own collection).
+  const brand = actor ? styleBrandWhere(actor, CERTIFICATES_VIEW) : {}
   const rows = await db.certificateCoverage.findMany({
-    where: { certificateId: { in: [...certificateIds] }, styleId: { not: null }, status: 'ACTIVE' },
+    where: { certificateId: { in: [...certificateIds] }, styleId: { not: null }, status: 'ACTIVE', ...(Object.keys(brand).length > 0 ? { style: { is: brand } } : {}) },
     select: { certificateId: true, style: { select: { id: true, code: true, name: true } } },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
@@ -137,7 +140,8 @@ export async function stylesCovered(db: Reader, certificateIds: readonly string[
   return out
 }
 
-export async function changeViews(db: Reader, rows: readonly ChangeRow[], today: BusinessDate): Promise<ChangeView[]> {
+/** The changes as a person reads them (`actor`: fix-pr-8, the styles and reviews of customers it reaches only). */
+export async function changeViews(db: Reader, rows: readonly ChangeRow[], today: BusinessDate, actor?: Actor): Promise<ChangeView[]> {
   if (rows.length === 0) return []
   const entryIds = [...new Set(rows.flatMap((row) => [row.standardId, row.newStandardId]).filter((value): value is string => value !== null))]
   const entries = await db.regulationOrStandard.findMany({ where: { id: { in: entryIds } }, select: { id: true, code: true, edition: true, status: true } })
@@ -145,11 +149,11 @@ export async function changeViews(db: Reader, rows: readonly ChangeRow[], today:
   const certificateIds = [...new Set(rows.flatMap((row) => row.certificateIds))]
   const certificates = certificateIds.length > 0 ? await db.certificate.findMany({ where: { id: { in: certificateIds } }, select: CERTIFICATE_REF }) : []
   const certificateOf = new Map(certificates.map((row) => [row.id, row]))
-  const styles = await stylesCovered(db, certificateIds)
+  const styles = await stylesCovered(db, certificateIds, actor)
   const reviewIds = [...new Set(rows.flatMap((row) => row.typeChangeReviewIds))]
   const reviews =
     reviewIds.length > 0
-      ? await db.typeChangeReview.findMany({ where: { id: { in: reviewIds } }, select: { id: true, status: true, certificateId: true, styleId: true, style: { select: { code: true } }, revision: { select: { revision: true } } } })
+      ? await db.typeChangeReview.findMany({ where: { id: { in: reviewIds }, ...(actor && Object.keys(styleBrandWhere(actor, CERTIFICATES_VIEW)).length > 0 ? { style: { is: styleBrandWhere(actor, CERTIFICATES_VIEW) } } : {}) }, select: { id: true, status: true, certificateId: true, styleId: true, style: { select: { code: true } }, revision: { select: { revision: true } } } })
       : []
   const reviewOf = new Map(reviews.map((row) => [row.id, row]))
   const taskIds = [...new Set(rows.map((row) => row.taskId).filter((value): value is string => value !== null))]

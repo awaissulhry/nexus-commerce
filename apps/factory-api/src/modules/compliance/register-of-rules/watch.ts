@@ -16,7 +16,9 @@ import { ConflictError, DomainError, NotFoundError, ValidationError } from '@nex
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandTools } from '../../../core/command'
+import { actorOf } from '../../../core/context'
 import { createTask } from '../../../platform/tasks/tasks'
+import { assertEveryParty } from '../../production/work-orders/scope'
 import { assertMayKeep, officeOf, rulesClock, rulesGuarded } from './common'
 import type { ChangeView } from './contract'
 import { CHANGE_SELECT, changeViews, stylesCovered, todayOf, touchedCertificates, type ChangeRow } from './store'
@@ -95,7 +97,7 @@ export async function raiseChangeInCommand(tools: CommandTools, entry: { readonl
 
 /** GET /compliance/rules/standard-changes */
 export async function listChanges(request: FastifyRequest, query: { readonly status?: StandardChangeStatus | undefined; readonly standardId?: string | undefined; readonly open?: 'true' | 'false' | undefined }) {
-  officeOf(request)
+  const actor = actorOf(officeOf(request))
   const now = rulesClock().now()
   const filters: Prisma.StandardChangeWhereInput[] = []
   if (query.status) filters.push({ status: query.status })
@@ -104,7 +106,7 @@ export async function listChanges(request: FastifyRequest, query: { readonly sta
   if (query.open === 'false') filters.push({ status: 'CLOSED' })
   const changes = await request.withClient(async (db) => {
     const rows = await db.standardChange.findMany({ where: { AND: filters }, select: CHANGE_SELECT, orderBy: [{ noticedAt: 'desc' }, { id: 'desc' }], take: 500 })
-    return changeViews(db, rows, todayOf(now))
+    return changeViews(db, rows, todayOf(now), actor) // fix-pr-8
   })
   // Open first, the transition ending soonest first; then the closed ones, newest first.
   const rank = (change: ChangeView) => (change.status === 'CLOSED' ? 1 : 0)
@@ -114,12 +116,12 @@ export async function listChanges(request: FastifyRequest, query: { readonly sta
 
 /** GET /compliance/rules/standard-changes/:changeId */
 export async function getChange(request: FastifyRequest, changeId: string) {
-  officeOf(request)
+  const actor = actorOf(officeOf(request))
   const now = rulesClock().now()
   return request.withClient(async (db) => {
     const row = await db.standardChange.findUnique({ where: { id: changeId }, select: CHANGE_SELECT })
     if (!row) throw new NotFoundError('There is no such change in the watch.')
-    return { change: (await changeViews(db, [row], todayOf(now)))[0]!, asOf: toUtcIso(now) }
+    return { change: (await changeViews(db, [row], todayOf(now), actor))[0]!, asOf: toUtcIso(now) } // fix-pr-8
   })
 }
 
@@ -156,7 +158,7 @@ export async function recordChange(caller: CommandCaller, standardId: string, bo
           newStandardId: body.newStandardId ?? null,
           raisedBy: 'PERSON',
         })
-        return { change: (await changeViews(tools.tx, [row], todayOf(tools.now)))[0]! }
+        return { change: (await changeViews(tools.tx, [row], todayOf(tools.now), actorOf(context)))[0]! }
       },
       settings(),
     ),
@@ -191,6 +193,7 @@ export interface AssessBody {
 export async function assessChange(caller: CommandCaller, changeId: string, body: AssessBody, key: string | null | undefined): Promise<{ change: ChangeView }> {
   const context = officeOf(caller)
   assertMayKeep(context, RULES_MANAGE, null, WHAT)
+  assertEveryParty(actorOf(context), RULES_MANAGE) // fix-pr-8: it acts on every style the certificates cover, every customer's
   const reviewFor = [...new Set(body.reviewCertificateIds ?? [])]
   const { result } = await rulesGuarded(() =>
     runCommand(
@@ -249,7 +252,7 @@ export async function assessChange(caller: CommandCaller, changeId: string, body
         })
         audit({ recordType: 'StandardChange', recordId: changeId, companyId: null, before: { status: row.status }, after: { status: 'ASSESSED', impact: body.impact, typeChangeReviewIds: next.typeChangeReviewIds }, reason: body.assessment })
         moved(tools, next, 'ASSESSED')
-        return { change: (await changeViews(tx, [next], todayOf(now)))[0]! }
+        return { change: (await changeViews(tx, [next], todayOf(now), actorOf(context)))[0]! }
       },
       settings(),
     ),
@@ -275,7 +278,7 @@ export async function addCertificates(caller: CommandCaller, changeId: string, b
         const next = await tx.standardChange.update({ where: { id: changeId }, data: { certificateIds: [...row.certificateIds, ...fresh], updatedAt: now }, select: CHANGE_SELECT })
         audit({ recordType: 'StandardChange', recordId: changeId, companyId: null, before: { certificateIds: row.certificateIds }, after: { certificateIds: next.certificateIds } })
         moved(tools, next, 'CERTIFICATES')
-        return { change: (await changeViews(tx, [next], todayOf(now)))[0]! }
+        return { change: (await changeViews(tx, [next], todayOf(now), actorOf(context)))[0]! }
       },
       settings(),
     ),
@@ -287,6 +290,7 @@ export async function addCertificates(caller: CommandCaller, changeId: string, b
 export async function openImpactTask(caller: CommandCaller, changeId: string, body: { readonly version: number; readonly assigneeId?: string | null | undefined; readonly language?: Locale | undefined }, key: string | null | undefined): Promise<{ change: ChangeView }> {
   const context = officeOf(caller)
   assertMayKeep(context, RULES_MANAGE, null, WHAT)
+  assertEveryParty(actorOf(context), RULES_MANAGE) // fix-pr-8: it acts on every style the certificates cover, every customer's
   // The task's words from the change as read now; the command below checks the version and that no task is named yet.
   const words = await caller.withClient(async (db) => {
     const row = await db.standardChange.findUnique({ where: { id: changeId }, select: CHANGE_SELECT })
@@ -329,7 +333,7 @@ export async function openImpactTask(caller: CommandCaller, changeId: string, bo
         const next = await tx.standardChange.update({ where: { id: changeId }, data: { taskId: task.id, updatedAt: now }, select: CHANGE_SELECT })
         audit({ recordType: 'StandardChange', recordId: changeId, companyId: null, after: { taskId: task.id } })
         moved(tools, next, 'TASK')
-        return { change: (await changeViews(tx, [next], todayOf(now)))[0]! }
+        return { change: (await changeViews(tx, [next], todayOf(now), actorOf(context)))[0]! }
       },
       settings(),
     ),
@@ -352,7 +356,7 @@ export async function closeChange(caller: CommandCaller, changeId: string, body:
         const next = await tx.standardChange.update({ where: { id: changeId }, data: { status: 'CLOSED', closedAt: now, closedById: context.actorId, updatedAt: now }, select: CHANGE_SELECT })
         audit({ recordType: 'StandardChange', recordId: changeId, companyId: null, before: { status: 'ASSESSED' }, after: { status: 'CLOSED' } })
         moved(tools, next, 'CLOSED')
-        return { change: (await changeViews(tx, [next], todayOf(now)))[0]! }
+        return { change: (await changeViews(tx, [next], todayOf(now), actorOf(context)))[0]! }
       },
       settings(),
     ),

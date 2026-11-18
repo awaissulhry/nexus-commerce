@@ -16,6 +16,7 @@ import { substancesClock, substancesGuarded, substancesSettings } from '../subst
 import { declarationsOf, usesOf, type Reader } from '../substances/store'
 import { profileFactsOf, PROFILE_RECORD_TYPE } from './facts'
 import { reevaluateInCommand } from './reevaluate'
+import { reachedUses } from '../wall'
 
 /**
  * Material profiles (B-W2b-256; PRD-303, PRD-314; design compliance.tests › Material profiles and the material record's
@@ -88,11 +89,11 @@ async function declarationKinds(db: Reader, ids: readonly string[], today: Busin
 }
 
 /** The list rows (design ts-profiles): material, kind, composition, tannage, origin, supplier, required tests, declarations present / missing, innocuousness, status. */
-async function rowsOf(db: Reader, items: readonly ItemRow[], now: Date) {
+async function rowsOf(db: Reader, actor: Actor, items: readonly ItemRow[], now: Date) {
   const today = businessDate(now)
   const ids = items.map((item) => item.id)
   const profiles = new Map((ids.length === 0 ? [] : await db.materialComplianceProfile.findMany({ where: { id: { in: ids } }, select: PROFILE_COLUMNS })).map((row) => [row.id, row]))
-  const uses = await usesOf(db, ids)
+  const uses = reachedUses(await usesOf(db, ids), actor, SUBSTANCES_VIEW) // fix-pr-8: the styles of customers the person reaches
   const facts = await profileFactsOf(db, items, uses, today)
   const declarations = await declarationKinds(db, ids, today)
   const supplierIds = [...new Set(items.flatMap((item) => (item.defaultSupplierId ? [item.defaultSupplierId] : [])))]
@@ -149,7 +150,7 @@ export async function listProfiles(request: FastifyRequest, query: ListQuery) {
       ],
     }
     const items = await db.item.findMany({ where, select: ITEM_SELECT, orderBy: [{ code: 'asc' }], take: PROFILE_LIST_LIMIT + 1 })
-    const rows = await rowsOf(db, items.slice(0, PROFILE_LIST_LIMIT), now)
+    const rows = await rowsOf(db, actor, items.slice(0, PROFILE_LIST_LIMIT), now)
     const counted = await db.item.findMany({ where: base, select: { complianceProfiles: { select: { state: true } } } })
     const counts = { materials: counted.length, none: 0, incomplete: 0, complete: 0, blocked: 0 }
     for (const item of counted) {
@@ -172,9 +173,9 @@ async function readItem(db: Reader, actor: Actor, itemId: string): Promise<ItemR
 /** The material record's Compliance tab: the profile with its confirmations, innocuousness evidence, declarations, lab results and evidence files. */
 async function profileRecord(db: Reader, actor: Actor, item: ItemRow, now: Date) {
   const today = businessDate(now)
-  const [row] = await rowsOf(db, [item], now)
+  const [row] = await rowsOf(db, actor, [item], now)
   const profile = await db.materialComplianceProfile.findUnique({ where: { id: item.id }, select: PROFILE_COLUMNS })
-  const facts = (await profileFactsOf(db, [item], await usesOf(db, [item.id]), today)).get(item.id)!
+  const facts = (await profileFactsOf(db, [item], reachedUses(await usesOf(db, [item.id]), actor, SUBSTANCES_VIEW), today)).get(item.id)! // fix-pr-8
   const name = await namesFor(db, [profile?.compositionConfirmedById, profile?.tannageConfirmedById])
   const declarations = (await declarationKinds(db, [item.id], today)).get(item.id)!
   const results = await db.labResult.findMany({

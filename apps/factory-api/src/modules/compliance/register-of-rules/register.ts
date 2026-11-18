@@ -58,7 +58,7 @@ export async function getEntry(request: FastifyRequest, standardId: string) {
     if (!row) throw new NotFoundError('There is no such entry in the register.')
     const [entry] = await entryViews(db, [row], actor)
     const certificates = citing(await visibleCertificates(db, actor), row)
-    const styles = await stylesCovered(db, certificates.map((certificate) => certificate.id))
+    const styles = await stylesCovered(db, certificates.map((certificate) => certificate.id), actor) // fix-pr-8
     const supersedes = await db.regulationOrStandard.findMany({ where: { supersededById: standardId }, select: { id: true, code: true, edition: true }, orderBy: [{ code: 'asc' }, { edition: 'asc' }] })
     const changes = await db.standardChange.findMany({ where: { OR: [{ standardId }, { newStandardId: standardId }] }, select: CHANGE_SELECT, orderBy: [{ noticedAt: 'desc' }, { id: 'desc' }] })
     return {
@@ -74,7 +74,7 @@ export async function getEntry(request: FastifyRequest, standardId: string) {
         styles: styles.get(certificate.id)?.length ?? 0,
       })),
       supersedes: supersedes.map((other) => ({ id: other.id, label: standardLabel(other.code, other.edition) })),
-      changes: await changeViews(db, changes, todayOf(now)),
+      changes: await changeViews(db, changes, todayOf(now), actor), // fix-pr-8
       asOf: toUtcIso(now),
     }
   })
@@ -236,7 +236,7 @@ export async function editEntry(caller: CommandCaller, standardId: string, body:
             newStandardId: supersededById,
             raisedBy: 'REGISTER',
           })
-          raised = (await changeViews(tx, [change], todayOf(now)))[0]!
+          raised = (await changeViews(tx, [change], todayOf(now), actorOf(context)))[0]!
         }
         return { entry: (await entryViews(tx, [row], actorOf(context)))[0]!, raised }
       },
