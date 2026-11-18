@@ -143,8 +143,8 @@ const GATE_AND_QUALITY_RULES: readonly PartnerRule[] = [
       const inspection = await context.tx.inspection.findUnique({ where: { id: event.inspectionId }, select: { workOrderId: true, status: true } })
       if (!inspection || inspection.workOrderId !== event.workOrderId) return []
       const workOrder = await context.tx.workOrder.findUnique({ where: { id: inspection.workOrderId }, select: { partyId: true, kind: true, status: true } })
-      if (!workOrder?.partyId || workOrder.kind === 'REPAIR' || workOrder.status === 'CANCELLED') return []
-      const partyId = workOrder.partyId
+      if (!workOrder || workOrder.partyId === null || workOrder.kind === 'REPAIR' || workOrder.status === 'CANCELLED') return []
+      const partyId: string = workOrder.partyId
       const cells = await context.tx.workOrderSize.findMany({ where: { workOrderId: inspection.workOrderId }, select: { partyId: true, salesOrderLineId: true } })
       const level = await levelOf(context.tx, partyId)
       // Its ALONE (every cell that names a customer names it) and at + Quality & photos: else its result judges other goods too.
