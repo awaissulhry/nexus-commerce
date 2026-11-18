@@ -358,14 +358,15 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   const problems = answerProblems('ACCEPTED', body.answer)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   // B-PR-27b: ship what is ready — the first part's date (asked, or our counter's) proposed to sales for its sizes promised later,
-  // read before the command (planning/promise-keep acceptProposals).
+  // read before the command (planning/promise-keep acceptProposals). fix-pr-5 (lead decision): the accept is the decision, so the
+  // proposal is made in its command under the accepter's orders.manage (asserted above), not planning.promise.manage (byAccept).
   const asked = await caller.withClient((client) => client.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS }))
   const splitProposals: AcceptProposals | null =
     asked?.kind === 'SPLIT_SHIPMENT'
       ? await caller.withClient(async (client) => {
           const only = new Map<string, Set<string>>()
           for (const cell of (await readCells(client, [requestId])).get(requestId) ?? []) if (cell.size !== null) only.set(cell.orderLineId, (only.get(cell.orderLineId) ?? new Set<string>()).add(cell.size))
-          return acceptProposals(client, context, { orderId: asked.orderId, date: agreedDateOf(asked), only, now: clock.now() })
+          return acceptProposals(client, context, { orderId: asked.orderId, date: agreedDateOf(asked), only, now: clock.now(), byAccept: true })
         })
       : null
   const { result } = await runCommand(caller, { name: 'orders.acceptChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {

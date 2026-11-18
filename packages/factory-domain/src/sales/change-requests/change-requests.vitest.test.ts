@@ -685,7 +685,7 @@ describe('B-PR-27a: a change asks a line in another colourway', () => {
     expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, cut)[0]!.path).toBe('body/colourways/0/LEATHER_CUT')
     expect(changeProblems({ cells: [{ lineId: L1, size: '50', quantity: 0 }, { lineId: L1, size: '52', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: RED }] }, facts()).some((issue) => /asked away/.test(issue.message))).toBe(true)
     const tailored = facts({ order: order({ lines: [line(L1, 10, { kind: 'MADE_TO_MEASURE' }), line(L2, 20)] }) })
-    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, tailored)[0]!.message).toMatch(/made to measure/)
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, tailored)[0]!.message).toMatch(/made-to-measure/) // fix-pr-5: the house spelling (rules.ts MADE_TO_MEASURE)
     expect(changeProblems({ cells: [], colourways: [{ lineId: '00000000-0000-4000-8000-0000000000ff', colourwayId: RED }] }, facts())[0]!.path).toBe('body/colourways/0/lineId')
   })
 

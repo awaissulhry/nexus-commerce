@@ -99,6 +99,9 @@ export const JOB_CATALOGUE: readonly JobEntry[] = Object.freeze([
   // B-PR-17: every kept order's customer stage, health and waiting-on computed again (an early run changes nothing the next
   // would not: it moves on facts, and a stage is told once per order).
   job('production.brandKeeper', '35 0 * * *', 'check'),
+  // B-PR-45 (fix-pr-5): an unanswered customer issue goes to the backup after 1 working day, to the Owner and the Admin after 2,
+  // at 08:00 company time (an early run escalates only the steps already due: nothing the next tick would not).
+  job('production.issueEscalation', '*/15 * * * *', 'check'),
 ])
 
 export function jobEntryOf(key: string): JobEntry | null {

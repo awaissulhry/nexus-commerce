@@ -25,7 +25,9 @@ import { STAGE_WORDS } from './words'
  *               with its planned start
  *   problem     the state of the problems it reported on an order: "Waiting on us since 16 Nov" until we write to it in the
  *               order's thread, then "Answered 17 Nov"; for the other orders of a batch answered in one order's thread,
- *               "Answered in SO-…" (R-43, the fallback of threads ask T11). Never the issue, its task or who answers (R-41)
+ *               "Answered in your order 13" (R-43, the fallback of threads ask T11; fix-pr-5, lead decision: the customer's own
+ *               number as the bell names it, else its PO, never the office's SO-… series). Never the issue, its task or who
+ *               answers (R-41)
  *   keys        the keys no customer read may hold (PW-15, PW-P03): a supervisor, an office person, a note, a place in our
  *               queue, a line, a lane, a load, a lot size, a work order or another customer
  */
@@ -273,10 +275,25 @@ export function problemStateOf(orderId: string, partyId: string, problems: reado
   return { state: 'ANSWERED', on }
 }
 
-/** The problem's state in words; `inOrder` names the order that holds the answer (its number, "SO-…"). */
-export function problemWords(problem: ProblemState, inOrder: string | null = null): Words {
+/** fix-pr-5: the customer's own facts of the order that holds the answer: its own number (customerSeq) and its PO. */
+export interface AnsweredInOrder {
+  readonly seq: number | null
+  readonly customerRef: string | null
+}
+
+/**
+ * The problem's state in words; `inOrder` is the order that holds the answer, named as the customer knows it (fix-pr-5, lead
+ * decision: "Answered in your order 13" by its own number, as the bell; else its PO; never the office's SO-… series; neither:
+ * the day it was answered).
+ */
+export function problemWords(problem: ProblemState, inOrder: AnsweredInOrder | null = null): Words {
   if (problem.state === 'WAITING_ON_US') return { it: `In attesa di una nostra risposta dal ${dayWords(problem.since, 'it')}`, en: `Waiting on us since ${dayWords(problem.since, 'en')}` }
-  if (problem.state === 'ANSWERED_IN' && inOrder !== null) return { it: `Risposto in ${inOrder}`, en: `Answered in ${inOrder}` }
+  if (problem.state === 'ANSWERED_IN' && inOrder !== null) {
+    const seq = inOrder.seq !== null && Number.isInteger(inOrder.seq) && inOrder.seq > 0 ? inOrder.seq : null
+    if (seq !== null) return { it: `Risposto nel vostro ordine ${seq}`, en: `Answered in your order ${seq}` }
+    const ref = inOrder.customerRef?.trim()
+    if (ref) return { it: `Risposto in ${ref}`, en: `Answered in ${ref}` }
+  }
   return problem.on ? { it: `Risposto il ${dayWords(problem.on, 'it')}`, en: `Answered ${dayWords(problem.on, 'en')}` } : { it: 'Risposto', en: 'Answered' }
 }
 
