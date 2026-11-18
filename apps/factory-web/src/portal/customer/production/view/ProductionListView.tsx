@@ -18,6 +18,10 @@ import { groupOf, groupsOf, healthInputOf, markActionOf, plainStageOf, rowHref, 
 import { useProductionPageWords } from '../words'
 import { UrgentOrderDialog, type UrgentOrderDialogActions, type UrgentOrderDialogModel } from './UrgentOrderDialog'
 import '../production.css'
+// ---- F-PR-24: "Report a problem" on a row and the chip of the problems the customer reported
+import { problemChipOf } from '../problem/model'
+import { ReportProblemDialog, type ReportProblemActions, type ReportProblemModel } from '../problem/view/ReportProblemDialog'
+// ---- end F-PR-24
 
 /**
  * F-PR-11 — Portal › Production › My production (production plan §5; 06-tree B.1; 09-design (d); 17-web-r2 §1.4): every order
@@ -61,6 +65,12 @@ export interface ProductionListModel {
   now: number
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
+  // ---- F-PR-24
+  /** "Report a problem" on a row's ⋯: why it waits (a preview, offline) or null; absent: not offered (the role writes nothing). */
+  report?: { readonly held: string | null } | null
+  /** The Report a problem dialog, open. */
+  problem?: ReportProblemModel | null
+  // ---- end F-PR-24
 }
 
 export interface ProductionListActions {
@@ -77,6 +87,9 @@ export interface ProductionListActions {
   onToggleGroup?: (key: string) => void
   onHelp?: () => void
   dialog?: UrgentOrderDialogActions
+  // F-PR-24
+  onReport?: (row: ProductionRow) => void
+  problem?: ReportProblemActions
 }
 
 export function ProductionListView({ model, actions }: { model: ProductionListModel; actions?: ProductionListActions }) {
@@ -167,6 +180,7 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
     }
     const WaitingCell = ({ data }: ICellRendererParams<ProductionRow>) => {
       if (!data) return null
+      const problem = problemChipOf(data.problem, t, day) // F-PR-24
       return (
         <span className="fw-pprod-stack">
           <WaitingOnPill face="customer" now={now()} {...waitingInputOf(data.waiting)} />
@@ -175,6 +189,12 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
             <Button asChild size="sm" variant="quiet">
               <a href={rowHref(latest.current.model.prefix, data)}>{t('cell.seeWhat')}</a>
             </Button>
+          ) : null}
+          {/* F-PR-24: a problem it reported — "Waiting on us since 16 Nov", then "Answered 17 Nov" (never who). */}
+          {problem ? (
+            <Pill tone={problem.tone} truncate>
+              {problem.text}
+            </Pill>
           ) : null}
         </span>
       )
@@ -198,6 +218,8 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
         ...(mark
           ? [{ id: 'mark', label: t(mark.urgency === 'URGENT' ? 'row.markUrgent' : 'row.markRegular'), disabled: mark.held !== null, description: mark.held ?? undefined, onSelect: () => current.actions?.onMark?.(data, mark.urgency) }]
           : []),
+        // F-PR-24: one message in the order's thread; we answer there.
+        ...(current.model.report ? [{ id: 'problem', label: t('row.report'), disabled: current.model.report.held !== null, description: current.model.report.held ?? undefined, onSelect: () => current.actions?.onReport?.(data) }] : []),
       ]
       return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { name: rowName(data, locale, t) }) }} items={items} />
     }
@@ -363,6 +385,8 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
         keysOpen={model.keysOpen}
       />
       {model.dialog ? <UrgentOrderDialog model={model.dialog} rows={read?.items ?? []} actions={actions?.dialog} /> : null}
+      {/* F-PR-24 */}
+      {model.problem ? <ReportProblemDialog model={model.problem} actions={actions?.problem} /> : null}
     </div>
   )
 }

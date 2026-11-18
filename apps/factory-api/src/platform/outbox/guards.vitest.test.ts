@@ -146,7 +146,10 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-PR-26 (#1615): no event and four literal emits (the factory answers a customer's ask: order_change_request.answered,
     // .countered, .counter_answered; approval_request.asked): 1519 → 1523.
     // The guard counts 970 and 1523 on main 368044503c; with the planted event and emit: 971, 1524.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(971 declared event version\(s\), 1524 literal emit/) })
+    // B-PR-46a: one event (order_change_request.batch_asked) and one literal emit (a customer's batch told once); the single
+    // withdraw's emit moved into withdrawOpenInCommand (still one): +1, +1 over the count of the tree it lands on (the lead
+    // recounts at the end check: #1620, #1623 and #1626 landed after the 368044503c count without changing it).
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(972 declared event version\(s\), 1525 literal emit/) })
     // ---- end END CHECK
   })
 

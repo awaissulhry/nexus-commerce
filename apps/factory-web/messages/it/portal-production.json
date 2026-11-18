@@ -72,7 +72,8 @@
     "open": "Apri l'ordine",
     "markUrgent": "Segna urgente",
     "markRegular": "Segna normale",
-    "noName": "il vostro ordine"
+    "noName": "il vostro ordine",
+    "report": "Segnala un problema"
   },
   "group": {
     "URGENT": "Urgente",
@@ -136,5 +137,76 @@
     "loadTheirs": "Usate il nuovo elenco",
     "keepMine": "Tenete il vostro ordine",
     "failed": "Impossibile salvare l'ordine. Riprovate tra un momento."
+  },
+  "problem": {
+    "title": "Segnala un problema",
+    "aboutOne": "Per {name}",
+    "aboutMany": "Per {count} dei vostri ordini",
+    "ordersLabel": "Gli ordini di questa segnalazione",
+    "what": "Che cosa non va?",
+    "whatHint": "Scrivetelo come lo scrivereste a noi: la conversazione di ogni ordine riceve questo messaggio.",
+    "pointer": {
+      "label": "Riguarda (facoltativo)",
+      "hint": "Un file che vi abbiamo condiviso su questo ordine, o un messaggio della sua conversazione.",
+      "none": "Niente in particolare",
+      "files": "File condivisi da noi",
+      "messages": "Messaggi",
+      "fileOption": "{name} · {date}",
+      "mineOption": "Il vostro messaggio del {when}: {excerpt}",
+      "oursOption": "Il nostro messaggio del {when}: {excerpt}",
+      "loading": "Lettura dei file e dei messaggi dell'ordine…",
+      "failed": "Impossibile leggere i file e i messaggi dell'ordine.",
+      "empty": "Su questo ordine non c'è ancora un file o un messaggio da indicare.",
+      "pickOne": "Scegliete un solo ordine per indicare un file o un messaggio."
+    },
+    "about": {
+      "file": "Riguarda il file: {name}",
+      "message": "Riguarda il messaggio del {when}: «{excerpt}»"
+    },
+    "answerOne": "Rispondiamo nei messaggi di questo ordine.",
+    "answerMany": "Rispondiamo nei messaggi degli ordini.",
+    "send": "Invia",
+    "sending": "Invio…",
+    "retry": "Riprova",
+    "tryAgain": "Riprova",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "kept": "Il vostro testo è conservato: non è andato perso nulla.",
+    "unsaved": "Un problema non ancora inviato",
+    "held": {
+      "preview": "Un'anteprima è di sola lettura: da qui non si invia nulla.",
+      "mayWrite": "Il vostro ruolo non ci scrive: chiedete a un collega che può farlo.",
+      "none": "Scegliete almeno uno dei vostri ordini.",
+      "tooMany": "Ne avete scelti {count}. Al massimo {max} alla volta.",
+      "sending": "Invio…",
+      "offline": "Nessuna connessione: riprovate quando siete di nuovo online.",
+      "empty": "Scrivete prima che cosa non va.",
+      "long": "Al massimo {max} caratteri."
+    },
+    "failed": {
+      "unavailable": "Il messaggio non è stato inviato: non siamo raggiungibili.",
+      "notFound": "Non troviamo gli ordini che avete scelto.",
+      "forbidden": "Il vostro ruolo non può scriverci su questi ordini.",
+      "refused": "Non possiamo ricevere questo messaggio su questi ordini: scrivete nella conversazione di ciascun ordine.",
+      "invalid": "Il messaggio non è stato inviato: controllate il testo e riprovate."
+    },
+    "result": {
+      "sent_one": "Inviato su {count} ordine",
+      "sent_other": "Inviato su {count} ordini",
+      "where": "La conversazione di ogni ordine ha il vostro messaggio: rispondiamo lì.",
+      "label": "Ogni ordine",
+      "notSent": "Non inviato",
+      "notSentWhy": "Non inviato: {words}",
+      "notFound_one": "{count} degli ordini che avete scelto non è stato trovato.",
+      "notFound_other": "{count} degli ordini che avete scelto non sono stati trovati."
+    },
+    "chip": {
+      "waiting": "Problema segnalato · Tocca a noi dal {date}",
+      "waitingNoDate": "Problema segnalato · Tocca a noi",
+      "answered": "Risposto il {date}",
+      "answeredNoDate": "Risposto",
+      "answeredIn": "Risposto nel vostro ordine {seq}",
+      "answeredInRef": "Risposto in {ref}"
+    }
   }
 }

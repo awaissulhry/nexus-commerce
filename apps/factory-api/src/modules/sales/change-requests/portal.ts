@@ -44,6 +44,8 @@ import { readWork, workOf } from '../../production/brand-portal/access'
 // B-PR-26: a partly shipped order's lines shipped in full (the cancel of what is still to ship).
 import type { FactoryClient } from '@nexus/factory-db'
 import { shortLinesOf } from '../orders/close-lines'
+// B-PR-46a: a batch's refusal of one order, in the customer's languages.
+import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 import { readOrder as readOfficeOrder, readOrderFacts } from '../orders/store'
 import { earliestAskOf, earliestOf, freezeOf, impactAskOf, impactFrom, impactLinesOf, readImpactFacts } from './impact'
 import { feeView, impactOut } from './store'
@@ -411,30 +413,78 @@ export async function askRequest(app: FastifyInstance, request: FastifyRequest, 
   if (reader.session.preview) throw new ForbiddenError('A preview reads only.')
   const shape = shapeProblems(body)
   if (shape.length > 0) throw refused(shape)
+  // B-PR-46a: the one ask's command is shared with a batch's (askInBatch).
+  const { requestId } = await askOne(app, request, reader, orderId, body, idempotencyKey, null)
+  const order = await partnerOrder(request, reader, orderId)
+  return { request: await partnerRequestView(request, reader, order, requestId) }
+}
+
+/**
+ * One order's ask in ONE command in the customer's own scope (the single ask, and B-PR-46a one order of a batch). The rules are
+ * read and checked inside the command's work: a repeated Idempotency-Key answers from its receipt before any of it runs (the
+ * request it made would otherwise be "another one waiting"). B-PR-46a: in a batch, the order's whole verdict for the kind first
+ * (a refusal with its code and words, it + en: BatchAskRefused), and the request names the batch.
+ */
+async function askOne(app: FastifyInstance, request: FastifyRequest, reader: PortalReader, orderId: string, body: AskBody, idempotencyKey: string | undefined, batchId: string | null): Promise<{ readonly requestId: string; readonly replayed: boolean }> {
   const session = reader.session
   const requestId = newId()
-  // The rules are read and checked inside the command's work: a repeated Idempotency-Key answers from its receipt
-  // before any of it runs (the request it made would otherwise be "another one waiting").
-  const { result } = await commandOn(app, request, { name: 'portal.askOrderChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+  const { result, replayed } = await commandOn(app, request, { name: 'portal.askOrderChange', idempotencyKey, input: { orderId, ...body, ...(batchId ? { batchId } : {}) } }, async (tools) => {
     const facts = await askFacts(request, reader, orderId, tools.now)
+    // B-PR-46a: in a batch, the order's own verdict for the kind (the customer reads it in its language beside the order).
+    if (batchId) {
+      const verdict = batchVerdictOf(facts, body.kind)
+      if (verdict && !verdict.possible) throw new BatchAskRefused(verdict.code, verdict.words)
+    }
     // B-PR-25: the ask by its kind's rules, its impact as the customer saw it before Send; a part that cannot change any more
     // is refused in words (409, the field in the path).
     const prepared = preparedAsk(body, facts)
     const impact = await impactOfAsk(reader, facts, body.kind, prepared, tools.now, tools.context.requestId)
     const blocked = blockedProblems(impact)
     if (blocked.length > 0) throw new DomainError('invalid_state', blocked[0]!.message, blocked)
-    await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId })
+    await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId, batchId })
     return { requestId }
   })
-  const order = await partnerOrder(request, reader, orderId)
-  return { request: await partnerRequestView(request, reader, order, result.requestId) }
+  return { requestId: result.requestId, replayed }
 }
+
+// ── B-PR-46a: one order's ask of a customer's batch (production/brand-portal/bulk.ts) ─────────────────────────────────────────
+
+/** One order of a batch refused before anything was written: its code and its words in the customer's languages. */
+export class BatchAskRefused extends DomainError {
+  override name = 'BatchAskRefused'
+  constructor(
+    readonly refusal: string,
+    readonly words: Words,
+  ) {
+    super('invalid_state', words.en, [{ path: `body/${refusal}`, message: words.en }])
+  }
+}
+
+/** The order's whole verdict for a batch's kind (a production ask: askVerdict; a cancel or change: the cut-off rules). */
+function batchVerdictOf(facts: AskFacts, kind: OrderRequestKind): { readonly possible: boolean; readonly code: string; readonly words: Words } | null {
+  if (isProductionKind(kind)) return askVerdict(kind, verdictFactsOf(facts, kind))
+  const rules = rulesOf(facts.rule, facts.cutoffs, facts.today)
+  return kind === 'CANCEL' ? rules.cancel : kind === 'CHANGE' ? rules.change : null
+}
+
+/**
+ * B-PR-46a: one order's ask of a customer's batch (one kind, one batch: the database checks both) — the single ask's own path
+ * (askOne: its rules, impact and writes, in its own command with its own Idempotency-Key), the request naming the batch. A refusal
+ * of the order throws (BatchAskRefused with words; another rule's DomainError with its message); nothing is written for it.
+ */
+export async function askInBatch(app: FastifyInstance, request: FastifyRequest, reader: PortalReader, input: { readonly orderId: string; readonly batchId: string; readonly body: AskBody }, idempotencyKey: string | undefined): Promise<{ readonly requestId: string; readonly replayed: boolean }> {
+  if (reader.session.preview) throw new ForbiddenError('A preview reads only.')
+  const shape = shapeProblems(input.body)
+  if (shape.length > 0) throw refused(shape)
+  return askOne(app, request, reader, input.orderId, input.body, idempotencyKey, input.batchId)
+}
+// ── end B-PR-46a ──
 
 /**
  * The request written (the customer's scope): serialised per order, one that waits at a time (B-PR-25: per kind; a change and a
  * cancel keep one between them), the order still askable for its kind.
  */
-async function askInCommand(tools: CommandTools, input: { readonly requestId: string; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly impact: Impact; readonly partnerUserId: string }) {
+async function askInCommand(tools: CommandTools, input: { readonly requestId: string; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly impact: Impact; readonly partnerUserId: string; /** B-PR-46a */ readonly batchId: string | null }) {
   const { tx, now } = tools
   const { order, body, prepared } = input
   const cells = prepared.cells
@@ -465,6 +515,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
       // B-PR-25
       sampleKind: prepared.sampleKind,
       ...(kept ? { impact: kept } : {}),
+      // B-PR-46a: the batch of a bulk ask (one customer, one kind: the database checks it).
+      ...(input.batchId ? { batchId: input.batchId } : {}),
       createdAt: now,
       updatedAt: now,
       createdById: input.partnerUserId,
@@ -500,11 +552,13 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
     // B-PR-25
     ...(production ? { sampleKind: prepared.sampleKind } : {}),
     impactKept: kept !== undefined,
+    // B-PR-46a
+    ...(input.batchId ? { batchId: input.batchId } : {}),
   }
   tools.audit({ action: 'portal.askOrderChange', recordType: 'OrderChangeRequest', recordId: input.requestId, companyId: order.companyId, after: { orderId: order.id, status: 'OPEN', ...asked } })
   // The order's timeline (its Activity) shows what the customer asked.
   tools.audit({ action: 'orders.changeRequestAsked', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId: input.requestId, ...asked } })
-  tools.emit({ type: 'order_change_request.asked', subject: input.requestId, companyId: order.companyId, payload: { requestId: input.requestId, orderId: order.id, partyId: order.partyId, kind: body.kind, lines: new Set(cells.map((cell) => cell.orderLineId)).size, wholeOrder: whole } })
+  tools.emit({ type: 'order_change_request.asked', subject: input.requestId, companyId: order.companyId, payload: { requestId: input.requestId, orderId: order.id, partyId: order.partyId, kind: body.kind, lines: new Set(cells.map((cell) => cell.orderLineId)).size, wholeOrder: whole, ...(input.batchId ? { batchId: input.batchId } : {}) /* B-PR-46a */ } })
 }
 
 /**
@@ -592,7 +646,7 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
   if (reader.session.preview) throw new ForbiddenError('A preview reads only.')
   const order = await partnerOrder(request, reader, orderId)
   await commandOn(app, request, { name: 'portal.withdrawOrderChange', idempotencyKey, input: { orderId, requestId, version } }, async (tools) => {
-    const { tx, now } = tools
+    const { tx } = tools
     await lockRequest(tx, requestId)
     const row = await tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS })
     if (!row || row.orderId !== order.id) throw new NotFoundError('Request not found.')
@@ -601,11 +655,21 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
     if (row.status === 'COUNTERED') throw new InvalidStateError('We sent you a counter-offer on this request: answer it in Waiting for you (no withdraws the request).')
     if (row.status !== 'OPEN') throw new InvalidStateError(row.status === 'WITHDRAWN' ? 'This request was already withdrawn.' : 'We already answered this request: it can no longer be withdrawn.')
     if (row.version !== version) throw new ConflictError(`This request changed since you read it (now version ${row.version}). Read it again.`)
-    await tx.orderChangeRequest.update({ where: { id: requestId }, data: { status: 'WITHDRAWN', withdrawnAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
-    tools.audit({ action: 'portal.withdrawOrderChange', recordType: 'OrderChangeRequest', recordId: requestId, companyId: order.companyId, before: { status: 'OPEN' }, after: { status: 'WITHDRAWN', withdrawnAt: toUtcIso(now) } })
-    tools.audit({ action: 'orders.changeRequestWithdrawn', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind } })
-    tools.emit({ type: 'order_change_request.withdrawn', subject: requestId, companyId: order.companyId, payload: { requestId, orderId: order.id, partyId: order.partyId, kind: row.kind } })
+    await withdrawOpenInCommand(tools, { id: requestId, orderId: order.id, companyId: order.companyId, partyId: order.partyId, kind: row.kind as OrderRequestKind })
     return null
   })
   return { request: await partnerRequestView(request, reader, order, requestId) }
+}
+
+/**
+ * The withdrawal's writes, for a request the caller locked (lockRequest) and read OPEN in the customer's scope: WITHDRAWN, an
+ * audit row on the request and one on the order (its timeline), `order_change_request.withdrawn`. B-PR-46a: shared with Undo of
+ * a customer's batch (production/brand-portal/bulk.ts).
+ */
+export async function withdrawOpenInCommand(tools: CommandTools, row: { readonly id: string; readonly orderId: string; readonly companyId: string; readonly partyId: string; readonly kind: OrderRequestKind; readonly batchId?: string | null }): Promise<void> {
+  const { tx, now } = tools
+  await tx.orderChangeRequest.update({ where: { id: row.id }, data: { status: 'WITHDRAWN', withdrawnAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+  tools.audit({ action: 'portal.withdrawOrderChange', recordType: 'OrderChangeRequest', recordId: row.id, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'WITHDRAWN', withdrawnAt: toUtcIso(now), ...(row.batchId ? { batchId: row.batchId } : {}) } })
+  tools.audit({ action: 'orders.changeRequestWithdrawn', recordType: 'SalesOrder', recordId: row.orderId, companyId: row.companyId, after: { requestId: row.id, kind: row.kind } })
+  tools.emit({ type: 'order_change_request.withdrawn', subject: row.id, companyId: row.companyId, payload: { requestId: row.id, orderId: row.orderId, partyId: row.partyId, kind: row.kind } })
 }

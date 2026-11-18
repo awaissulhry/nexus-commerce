@@ -3,6 +3,8 @@ import { defineEvent } from '../events/define'
 // B-PR-24: every kind of request (the production asks beside change and cancel) and the customer's answer to our counter-offer.
 import { COUNTER_ANSWERS } from '../sales/change-requests/counter'
 import { ORDER_REQUEST_KINDS } from '../sales/change-requests/rules'
+// B-PR-46a: a customer's bulk asks (one batch, one kind).
+import { BATCH_ASK_KINDS } from '../production-brand/bulk'
 
 /**
  * Change and cancel requests from the portal (B-W2b-183; SAL-077, SAL-078). apps/factory-api's modules/sales/change-requests
@@ -28,6 +30,15 @@ import { ORDER_REQUEST_KINDS } from '../sales/change-requests/rules'
  *   order_change_request.counter_answered the customer said yes (ACCEPTED: the request is carried out with the counter) or no
  *                                         (REFUSED: the request is withdrawn) to our counter-offer
  * Never the counter's date, fee or words: ids, kinds and the answer only.
+ *
+ * B-PR-46a (production plan §3 "Bulk asks"; R-51): a customer's bulk ask from My production (Ask N; Mark urgent's rows over the
+ * quota or from Cutting) is one request per order, all of ONE batch (one customer, one kind: the database checks it). Each
+ * request's `asked` names its batch; the batch itself is told once, for the office's notice (B-PR-32: it notifies on this one
+ * and skips the per-request notices that carry a batchId):
+ *
+ *   order_change_request.batch_asked      a customer asked one kind of many of its orders at once: the batch, the customer, the
+ *                                         kind and how many requests it holds — OFFICE ONLY (no partner live entry, no portal
+ *                                         notice: the customer reads its own answer)
  */
 
 const live = (fields: readonly string[]) => ({ permission: 'orders.view', fields }) as const
@@ -37,7 +48,16 @@ export const events = [
     type: 'order_change_request.asked',
     context: 'sales-change-requests',
     description: "A customer asked, from the portal, to change an order (sizes, date, delivery address) or to cancel it (the whole order or some lines), or made a production ask (urgent, pause, resume, ship what is ready, another sample).",
-    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(ORDER_REQUEST_KINDS), lines: z.number().int().min(0), wholeOrder: z.boolean() }),
+    payload: z.strictObject({
+      requestId: z.uuid(),
+      orderId: z.uuid(),
+      partyId: z.uuid(),
+      kind: z.enum(ORDER_REQUEST_KINDS),
+      lines: z.number().int().min(0),
+      wholeOrder: z.boolean(),
+      /** B-PR-46a: the batch of a bulk ask the request belongs to (left out: asked alone). */
+      batchId: z.uuid().optional(),
+    }),
     live: live(['requestId', 'orderId', 'kind']),
   }),
   defineEvent({
@@ -78,5 +98,21 @@ export const events = [
     description: "The customer said yes (the request is carried out with the counter-offer) or no (the request is withdrawn) to our counter-offer.",
     payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(ORDER_REQUEST_KINDS), answer: z.enum(COUNTER_ANSWERS) }),
     live: live(['requestId', 'orderId', 'kind', 'answer']),
+  }),
+  // ---- B-PR-46a: a customer's bulk ask, told once per batch (office only) -----------------------------------------------------
+  defineEvent({
+    type: 'order_change_request.batch_asked',
+    context: 'sales-change-requests',
+    description: 'A customer asked one kind (urgent, pause, resume, cancel) of many of its orders at once: one request per order, all of one batch.',
+    payload: z.strictObject({
+      batchId: z.uuid(),
+      /** The one customer of the batch. */
+      partyId: z.uuid(),
+      kind: z.enum(BATCH_ASK_KINDS),
+      /** The requests the batch holds (each order once). */
+      count: z.number().int().min(1),
+    }),
+    // Office only: no partner live entry (the customer's own answer shows its results).
+    live: live(['batchId', 'kind', 'count']),
   }),
 ] as const

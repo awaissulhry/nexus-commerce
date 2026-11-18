@@ -57,7 +57,10 @@
     "complaints": "Reclami aperti",
     "complaintsHint": "Reclami non chiusi",
     "unknown": "Non è stato possibile contarli",
-    "failed": "Non è stato possibile leggere i numeri."
+    "failed": "Non è stato possibile leggere i numeri.",
+    "productionWaiting": "{count} in attesa di voi",
+    "productionAtRisk": "{count} a rischio",
+    "productionOnHold": "{count} in sospeso"
   },
   "orders": {
     "title": "Le vostre prossime consegne",
@@ -333,5 +336,8 @@
     "noRight": "Solo i buyer della vostra azienda inviano ordini.",
     "noRightAsk": "Il vostro amministratore può darvi il permesso: {names}.",
     "noRightAskUs": "Chiedeteci di aggiungere un buyer per la vostra azienda."
+  },
+  "waiting": {
+    "all": "Tutto ciò che vi aspetta ({count})"
   }
 }

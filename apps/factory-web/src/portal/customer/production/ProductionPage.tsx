@@ -15,6 +15,9 @@ import { chipOf, keepMine, listQuery, markedNotice, markRefusal, NS, orderChange
 import { useProductionPageWords } from './words'
 import { ProductionListView } from './view/ProductionListView'
 import type { UrgentOrderDialogModel } from './view/UrgentOrderDialog'
+// ---- F-PR-24: "Report a problem" on a row (the same dialog as the order page's)
+import { useReportProblem } from './problem/useReportProblem'
+// ---- end F-PR-24
 
 /**
  * F-PR-11 — `/p/<party>/production` for a customer: My production (production plan §5; 06-tree B.1; 17-web-r2 §1.4). Reads GET
@@ -113,6 +116,20 @@ function ProductionContainer() {
   const rowsNow = read?.items ?? []
   const urgent = urgentRowsOf(rowsNow)
   const writeHeld = preview ? t('held.preview') : offline ? t('held.offline') : null
+
+  // ---- F-PR-24: Report a problem — offered to a person who writes in its orders' conversations (portal.comment); after it the list
+  // reads again (the row's chip says "Waiting on us since …").
+  const problemWords = useProductionPageWords()
+  const mayReport = frame.me.permissions.includes('portal.comment')
+  const problemDialog = useReportProblem({
+    api,
+    locale,
+    t: problemWords.t,
+    writers: problemWords,
+    facts: { preview, offline, mayWrite: mayReport, seesFiles: frame.me.permissions.includes('portal.customerDocuments.view'), seesMessages: frame.me.permissions.includes('threads.read') },
+    onSent: () => void load(),
+  })
+  // ---- end F-PR-24
 
   // ── Mark urgent / Mark regular (one order; the bulk bar comes with F-PR-23a) ──────────────────────────────────────────
   const mark = async (row: ProductionRow, urgency: BrandUrgencyCode) => {
@@ -231,6 +248,9 @@ function ProductionContainer() {
         collapsed,
         dialog: dialog ? { items: dialog.items, busy: dialog.busy, problem: dialog.problem, held: dialog.busy ? t('held.busy') : (writeHeld ?? (orderChanged(dialog.items, rowsNow) ? null : t('dialog.unmoved'))) } : null,
         now: read ? Date.parse(read.asOf) : Date.now(),
+        // F-PR-24
+        report: mayReport ? { held: preview ? t('problem.held.preview') : offline ? t('problem.held.offline') : null } : null,
+        problem: problemDialog.model,
       }}
       actions={{
         onChip: (next) => go(next === 'ALL' ? null : next, q),
@@ -247,6 +267,9 @@ function ProductionContainer() {
         onDismissNotice: () => setNotice(null),
         onRetryExport: () => void exportRows(),
         onToggleGroup: (key) => setCollapsed((current) => toggleGroup(current, key)),
+        // F-PR-24
+        onReport: (row) => problemDialog.open([{ id: row.id, name: rowName(row, locale, t) }]),
+        problem: problemDialog.actions,
         dialog: {
           onChange: (items) => setDialog((current) => (current && !current.busy ? { ...current, items, problem: current.problem?.conflict ? current.problem : null } : current)),
           onTop: (id) => setDialog((current) => (current && !current.busy ? { ...current, items: toTop(current.items, id) } : current)),

@@ -4,6 +4,9 @@ import { healthRank, type BrandHealth } from './health'
 import type { IssueSource } from './issues'
 import { movedForward, type BrandStage } from './stages'
 import type { UrgencyActor } from './urgency'
+// B-PR-31 (F-PR-15's ask): a gate passed or started before (+ Gates & dates), a final inspection's result (+ Quality & photos).
+import { shares, type ProductionShareLevel } from './levels'
+import { isBrandGate } from './portal-read'
 
 /**
  * B-PR-31 (production plan §6 "Notifications" L15, 06-tree B.4 P-NOTIF; review fixes R-41, R-51; walls PW-P07, PW-15, PW-18; the
@@ -105,3 +108,37 @@ export function problemNotice(event: { readonly source: IssueSource; readonly sa
   if (event.answeredInOrderId !== null && event.answeredInOrderId !== event.salesOrderId) return { key: 'portal.production.problem_answered_in', inOrderId: event.answeredInOrderId }
   return { key: 'portal.production.problem_answered', inOrderId: null }
 }
+
+// ---- B-PR-31 (F-PR-15's ask; 06-tree §0.5 "Notifications: + gate passed or missed at + Gates & dates, + QC result at + Quality &
+// photos", 07-control §5 "Gate passed / started before (order_gate.changed): level ≥ Gates"): each only at the level that shares it.
+/**
+ * A gate of the customer's order (only its real gates: PP sample, size set, sample, leather, trims, lab — never one in the office's
+ * own words) passed, or "missed": we started its work before the gate was passed (the customer's page reads "Started before
+ * approval"; never our reason). Told only while the customer's level shares its gates (+ Gates & dates or more) and only while the
+ * gate still reads so when the worker tells it (`now`, the gate's own row; null: no gate): a gate passed after a start before is
+ * told as passed; a start before that was passed since is not told any more. Any other change (added, edited, removed) is the
+ * page's, never news.
+ */
+export const GATE_NOTICE_KEYS = Object.freeze({ PASSED: 'portal.production.gate_passed', STARTED_BEFORE: 'portal.production.gate_started_before' } as const satisfies Readonly<Record<string, PartnerMessageKey>>)
+
+export function gateNoticeKey(event: { readonly change: string; readonly kind: string }, now: { readonly passed: boolean; readonly startedBefore: boolean } | null, level: ProductionShareLevel | null): PartnerMessageKey | null {
+  if (level === null || !shares(level, 'gates') || !isBrandGate(event.kind) || now === null) return null
+  if (event.change === 'PASSED') return now.passed ? GATE_NOTICE_KEYS.PASSED : null
+  if (event.change === 'STARTED_BEFORE') return now.startedBefore && !now.passed ? GATE_NOTICE_KEYS.STARTED_BEFORE : null
+  return null
+}
+
+/**
+ * A final inspection of the customer's goods signed: passed or not. Told only of a work order that is the customer's ALONE at the
+ * level + Quality & photos (`alone`: production-brand/quality-read workOrderAlone — a shared lot judges other goods too, so its
+ * result never reaches a customer) and only while the inspection still reads that result (`now`: its own row's status). A first
+ * piece, a cutting or an end-of-line check is the page's (they come several a day), never a notice; a roving check never reaches a
+ * customer at all.
+ */
+export const QUALITY_NOTICE_KEYS = Object.freeze({ PASSED: 'portal.production.qc_passed', FAILED: 'portal.production.qc_failed' } as const satisfies Readonly<Record<string, PartnerMessageKey>>)
+
+export function qualityNoticeKey(event: { readonly status: 'PASSED' | 'FAILED' }, now: string | null, alone: boolean): PartnerMessageKey | null {
+  if (!alone || now !== event.status) return null
+  return QUALITY_NOTICE_KEYS[event.status]
+}
+// ---- end B-PR-31 (gates and QC)
