@@ -20,7 +20,8 @@ import { REQUEST_SELECT, type RequestRow } from './store'
 
 export async function readRequest(db: Reader, actor: Actor, requestId: string): Promise<RequestRow> {
   const row = isUuid(requestId) ? await db.supplierDeclarationRequest.findUnique({ where: { id: requestId }, select: REQUEST_SELECT }) : null
-  if (!row || !can(actor, SUPPLIER_DECLARATIONS_VIEW, { companyId: row.companyId })) throw new NotFoundError('Declaration request not found.')
+  // fix-pr-8 (the brand wall): a request to a party the person is not given (a customer that also supplies) is not found.
+  if (!row || !can(actor, SUPPLIER_DECLARATIONS_VIEW, { companyId: row.companyId, partyId: row.partyId })) throw new NotFoundError('Declaration request not found.')
   return row
 }
 

@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import type { Prisma } from '@nexus/factory-db'
 import { SUPPLIER_DECLARATIONS_MANAGE, SUPPLIER_DECLARATIONS_VIEW } from '@nexus/factory-domain/compliance/declarations-asked/permissions'
-import { holds } from '@nexus/factory-domain/core/permissions'
+import { holds, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { OPEN, type ShownStatus } from '@nexus/factory-domain/compliance/declarations-asked/rules'
 import type { DeclarationKind } from '@nexus/factory-domain/compliance/substances/rules'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
@@ -33,7 +33,8 @@ export async function listRequests(request: FastifyRequest, query: ListQuery) {
   const now = substancesClock().now()
   const today = businessDate(now)
   return request.withClient(async (db) => {
-    const reach = companyReach(actor, SUPPLIER_DECLARATIONS_VIEW) as Prisma.SupplierDeclarationRequestWhereInput
+    // fix-pr-8 (the brand wall): only the parties the person is given (a customer that also supplies is a customer).
+    const reach = { AND: [companyReach(actor, SUPPLIER_DECLARATIONS_VIEW), scopeWhere(actor, SUPPLIER_DECLARATIONS_VIEW, { party: 'partyId' })] } as Prisma.SupplierDeclarationRequestWhereInput
     const statuses = query.status ? query.status.split(',').filter(Boolean) : null
     const where: Prisma.SupplierDeclarationRequestWhereInput = {
       AND: [
