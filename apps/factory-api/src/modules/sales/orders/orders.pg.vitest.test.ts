@@ -596,6 +596,22 @@ describe('cancel (a reason, only before any work order is released)', () => {
   })
 })
 
+// ---- B-SA-070b (sales page plan R7; #1652's own numbers): the office order read and its Orders row carry the customer's own number,
+// so the Discuss chip and Reply to N's preview read "Your order 12" (the portal's count), never the office series.
+describe('B-SA-070b: the order and its row carry the customer\'s own number (the database gives it)', () => {
+  it('the record and the Orders row name the same customerSeq as the database', async () => {
+    const [own] = await admin<{ id: string; customerSeq: number | null }>(`SELECT id::text AS id, "customerSeq" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0001'`, [T.a])
+    expect(own!.customerSeq).toEqual(expect.any(Number))
+    const { order: record } = await ok('a.sales', 'GET', orderUrl(own!.id))
+    expect(record.customerSeq).toBe(own!.customerSeq)
+    const list = await ok('a.sales', 'GET', `/sales/orders?ids=${own!.id}`)
+    expect(list.orders).toEqual([expect.objectContaining({ id: own!.id, customerSeq: own!.customerSeq })])
+    // Every row says it (null only for a row made before the number was given).
+    for (const row of (await ok('a.sales', 'GET', '/sales/orders?limit=200')).orders) expect(row).toHaveProperty('customerSeq')
+  })
+})
+// ---- end B-SA-070b
+
 describe('the list, the board and the tiles (SAL-214: counts that match the list)', () => {
   it('each tile and state count is the list total under the same filter', async () => {
     // SEED-SO-0001 (the sales seed's) promised in the past: late.

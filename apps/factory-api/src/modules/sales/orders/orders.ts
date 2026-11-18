@@ -320,7 +320,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
     const viewed = await viewWhere(client, context, query, today) // B-TH-058 / B-TH-059: the view's one filter
     const scoped: Prisma.SalesOrderWhereInput = only ? { AND: [viewed, { id: { in: only } }] } : viewed // B-SA-070: the rows in view
     // B-TH-059: + the office's priority and the order note (the later columns).
-    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true, priority: true, priorityLevel: true, urgentReason: true, internalNote: true } as const
+    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, customerSeq: true /* B-SA-070b */, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true, priority: true, priorityLevel: true, urgentReason: true, internalNote: true } as const
     let page: Prisma.SalesOrderGetPayload<{ select: typeof select }>[]
     let nextCursor: string | null
     if (query.sort) {
@@ -387,6 +387,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           partyId: row.partyId,
           partyName: parties.get(row.partyId) ?? '',
           customerRef: row.customerRef,
+          customerSeq: row.customerSeq ?? null, // B-SA-070b
           status: row.status,
           deposit: { state, dueDate: open ? dayOf(open.dueDate) : null },
           lineCount: count?._count._all ?? 0,

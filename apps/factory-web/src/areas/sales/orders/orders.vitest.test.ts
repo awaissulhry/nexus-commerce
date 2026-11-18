@@ -1009,3 +1009,26 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
   })
 })
 // ---- end F-SA-266
+
+// ---- B-SA-070b (sales page plan R7; #1652's own numbers): the Discuss chip in a reply reads the customer's own order number
+describe('B-SA-070b: the Discuss chip to the customer reads "your order 12", the office note keeps SO-…', () => {
+  it('the chip\'s words with the order\'s own number; without one (made before it was given): "your order", as before', async () => {
+    const { discussAboutOf } = await import('./record/dock/discuss')
+    const say = (locale: 'en' | 'it') => createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+    for (const [locale, words] of [['en', 'your order 12 · line 2 · JKT-01 Black'], ['it', 'il vostro ordine 12 · line 2 · JKT-01 Black']] as const) {
+      const t = say(locale)
+      const about = discussAboutOf({ number: 'SO-2026-0142' }, { yourOrder: t('discuss.yourOrderSeq', { seq: 12 }), firstLine: (thing) => t('discuss.firstLine', { thing }) }, { part: 'line 2 · JKT-01 Black', target: { kind: 'SalesOrderLine', id: 'l2' } })
+      expect(about.customer).toBe(words)
+      expect(about.office).toBe('SO-2026-0142 · line 2 · JKT-01 Black')
+    }
+    const door = readFileSync(new URL('./record/view/Discuss.tsx', import.meta.url), 'utf8')
+    expect(door).toContain("const yourOrder = order.customerSeq ? t('discuss.yourOrderSeq', { seq: order.customerSeq }) : t('discuss.yourOrder')")
+  })
+  it('the order read and the list row parse the number (absent from an older answer: none)', async () => {
+    const { orderRowSchema, orderSchema } = await import('./api')
+    expect(orderRowSchema.shape.customerSeq.parse(12)).toBe(12)
+    expect(orderRowSchema.shape.customerSeq.parse(undefined)).toBeUndefined()
+    expect(orderSchema.shape.customerSeq.parse(null)).toBeNull()
+  })
+})
+// ---- end B-SA-070b

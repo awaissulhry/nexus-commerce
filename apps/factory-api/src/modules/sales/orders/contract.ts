@@ -159,6 +159,8 @@ export const orderView = output({
   partyId: id(),
   party: output({ code: z.string(), legalName: z.string() }).nullable(),
   customerRef: z.string().nullable(),
+  /** B-SA-070b: the customer's own number of the order ("Your order 12", the portal's own count; null: none given yet). Office only. */
+  customerSeq: z.number().int().nullable(),
   status,
   orderDate: z.string(),
   currency: z.string(),
@@ -317,6 +319,8 @@ export const listOrdersContract = defineContract({
           partyId: id(),
           partyName: z.string(),
           customerRef: z.string().nullable(),
+          /** B-SA-070b: the customer's own number of the order (the Discuss chip, Reply to N's preview: "Your order 12"). */
+          customerSeq: z.number().int().nullable(),
           status,
           /** Not needed, missing (needed, no request), open (with its due date), paid or waived. */
           deposit: output({ state: z.enum(['NOT_NEEDED', 'MISSING', 'OPEN', 'PAID', 'WAIVED']), dueDate: z.string().nullable() }),

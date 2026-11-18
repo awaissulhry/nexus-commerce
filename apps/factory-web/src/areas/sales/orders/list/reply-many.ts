@@ -23,10 +23,12 @@ export interface ReplyTarget {
   readonly customerRef: string | null
   readonly partyId: string
   readonly partyName: string
+  /** B-SA-070b: the customer's own number of the order ("Your order 12"; null: none given yet). */
+  readonly customerSeq?: number | null
 }
 
-export const replyTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'>[]): ReplyTarget[] =>
-  rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName }))
+export const replyTargetsOf = (rows: readonly (Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'> & Partial<Pick<OrderRow, 'customerSeq'>>)[]): ReplyTarget[] =>
+  rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName, customerSeq: row.customerSeq ?? null /* B-SA-070b */ }))
 
 /**
  * Why the bar's Reply to N… is held, in words before the click, or null: a ticked order of another customer than the page's (the
@@ -107,6 +109,12 @@ export const sentOf = (targets: readonly ReplyTarget[], results: Readonly<Record
 
 /** An order as the preview and the results name it: the office number, and the customer's PO when it gave one. */
 export const targetLabel = (target: Pick<ReplyTarget, 'number' | 'customerRef'>): string => (target.customerRef ? `${target.number} (${target.customerRef})` : target.number)
+
+// ---- B-SA-070b: the preview "Brand Alpha will read this on 6 orders:" names each order as the customer reads it — its own number
+// ("Your order 12", the portal's count), the office number beside it for the writer; an order with no number of its own yet: as before.
+export const previewLabel = (target: Pick<ReplyTarget, 'number' | 'customerRef' | 'customerSeq'>, say: (key: string, params: Record<string, string | number>) => string): string =>
+  target.customerSeq ? say('reply.yourOrder', { seq: target.customerSeq, number: target.number }) : targetLabel(target)
+// ---- end B-SA-070b
 
 /** The Idempotency-Key of one order's reply, and the words and tick it was made for. */
 export interface ReplyKey {

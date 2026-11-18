@@ -27,6 +27,8 @@ export const ORDER_COLUMNS = {
   number: true,
   quoteVersionId: true,
   customerRef: true,
+  // B-SA-070b: the customer's own running number of its orders ("Your order 12"; null: made before it was given).
+  customerSeq: true,
   status: true,
   orderDate: true,
   currency: true,

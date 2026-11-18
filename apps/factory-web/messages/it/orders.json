@@ -1556,7 +1556,8 @@
     "hold": "sospensione su {number}",
     "quality": "qualità su {number}",
     "revision": "revisione {revision}",
-    "step": "rata {seq}"
+    "step": "rata {seq}",
+    "yourOrderSeq": "il vostro ordine {seq}"
   },
   "told": {
     "title": "Chi è stato avvisato",

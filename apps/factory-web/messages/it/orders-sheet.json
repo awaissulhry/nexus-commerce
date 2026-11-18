@@ -345,6 +345,7 @@
       "notFound": "Questo ordine non si può più aprire.",
       "forbidden": "Il tuo ruolo non scrive nella conversazione di questo ordine.",
       "failed": "Non è arrivato: riprova."
-    }
+    },
+    "yourOrder": "Il vostro ordine {seq} ({number})"
   }
 }

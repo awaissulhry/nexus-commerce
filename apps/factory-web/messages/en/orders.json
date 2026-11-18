@@ -1556,7 +1556,8 @@
     "hold": "hold on {number}",
     "quality": "quality on {number}",
     "revision": "revision {revision}",
-    "step": "payment step {seq}"
+    "step": "payment step {seq}",
+    "yourOrderSeq": "your order {seq}"
   },
   "told": {
     "title": "Who was told",
