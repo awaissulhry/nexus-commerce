@@ -67,6 +67,9 @@ import { partnerOrder, portalReader, type PortalReader } from '../portal-orders/
 import { followUpOf, type RequestFollowUp } from '@nexus/factory-domain/sales/change-requests/rules'
 import { systemContext } from '../../../platform/outbox/system'
 import { stillToDoOf } from '../orders/still-to-do'
+// B-SA-046d: the lines' small pictures, the portal's own walled read (never an office route).
+import { linePictureKey, portalLinePictureFiles, smallAddresses } from '../../product/images/small-pictures'
+import { systemCallerOf } from '../../../platform/files/files'
 import { readLines, type PortalLine, type PortalOrderRow } from '../portal-orders/store'
 import {
   addressesOf,
@@ -253,6 +256,15 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
   const feeLines = feeLinesOf(facts.lines)
   const fees = new Map(cancelFeeFor(feeLines, facts.lines.map((line) => line.id), facts.cancelFeePct, facts.order.currency).lines.map((line) => [line.lineId, line.fee]))
   const whole = cancelFeeFor(feeLines, null, facts.cancelFeePct, facts.order.currency)
+  // B-SA-046d: each goods line's small picture — read in the tenant's scope after the partner read found the order, through the
+  // content wall (product/images/small-pictures portalLinePictureFiles); the small previews presigned after the read, as the system.
+  const goods = facts.lines.filter((line) => line.kind !== 'FEE')
+  const pictureFiles = await reader.inTenant((client) => portalLinePictureFiles(client, reader.session.partyId, goods))
+  const pictureAddresses = pictureFiles.size > 0 ? await smallAddresses(systemCallerOf(request)(reader.session.tenantId), [...pictureFiles.values()]) : new Map<string, { url: string; expiresAt: string }>()
+  const pictureOf = (line: { readonly kind: string; readonly styleId: string; readonly colourwayId: string }) => {
+    const file = line.kind === 'FEE' ? undefined : pictureFiles.get(linePictureKey(line))
+    return file ? { small: pictureAddresses.get(file.id) ?? null } : null
+  }
   return {
     asOf: toUtcIso(now),
     order: {
@@ -294,6 +306,7 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
         samples: ASK_SAMPLE_KINDS.map((sampleKind) => ({ sampleKind, verdict: askLineVerdict('SAMPLE_ROUND', ruleLine, verdictFactsOf(facts, 'SAMPLE_ROUND'), sampleKind) })),
         // B-PR-27a: the other colourways of its style a change may ask it in (a made-to-measure line: none).
         colourways: line.kind === 'SIZE_GRID' ? (facts.colourways.get(line.id) ?? []).map((entry) => ({ id: entry.id, code: entry.code, name: entry.name, sizes: [...entry.sizes] })) : [],
+        picture: pictureOf(line), // B-SA-046d
       }
     }),
     // B-PR-25: no fee at all for a reader without prices (the Production role): neither the amounts nor the percent.

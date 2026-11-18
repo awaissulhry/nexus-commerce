@@ -934,6 +934,64 @@ describe('B-SA-046c: an accepted request says on the portal whether we are still
 })
 // ── end B-SA-046c ──
 
+// ── B-SA-046d (14-change-flow §2.4 "which lines (with picture)"): the portal's rules read carries each line's small picture, walled ──
+describe("B-SA-046d: the portal's ask names each line with its picture — the portal's own read, through the content wall", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const store = { id: '' }
+  /** A picture of a style's colourway as the office keeps it (a Style file, office only); `source`: the file it was copied from. */
+  async function stylePicture(lineId: string, source: string | null = null) {
+    if (!store.id) store.id = (await one<{ id: string }>('SELECT id::text AS id FROM "IntegrationAccount" WHERE "tenantId" = $1 LIMIT 1', [T])).id
+    const line = await one<{ styleId: string; colourwayId: string }>('SELECT "styleId"::text AS "styleId", "colourwayId"::text AS "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [lineId])
+    const fileId = newId()
+    await plantedRows([
+      {
+        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility, "sourceFileId") VALUES ($1, $2, 'Style', $3, 'PHOTO', 'front.jpg', 'image/jpeg', 2400, $4, $5, 'AVAILABLE', '{OFFICE}', $6)`,
+        values: [fileId, T, line.styleId, store.id, `test/${fileId}`, source],
+      },
+      { sql: `INSERT INTO "StyleImage" (id, "tenantId", "styleId", "colourwayId", "fileId", kind, seq, "isMain") VALUES ($1, $2, $3, $4, $5, 'PHOTO', 0, false)`, values: [newId(), T, line.styleId, line.colourwayId, fileId] },
+    ])
+    return fileId
+  }
+  const linesOf = async (orderId: string): Promise<Json[]> => (await ok(browsers.buyer, `/portal/sales-orders/${orderId}/change-requests/rules`)).lines
+
+  it("a line of the customer's own style shows its picture — only the small preview's address, never a file id or the original", async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const fileId = await stylePicture(design.line10)
+    const line10 = (await linesOf(design.order)).find((line) => line.lineId === design.line10)!
+    // No small preview made yet: the picture is there, its address not (the part draws the placeholder until it exists).
+    expect(line10.picture).toEqual({ small: null })
+    expect(JSON.stringify(line10)).not.toContain(fileId)
+    expect(JSON.stringify(line10)).not.toMatch(/front\.jpg|storageKey|test\//)
+  })
+
+  it('a picture whose content was copied from another customer is left out (the content wall), uncounted, in the same shape', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const betaFile = newId()
+    await plantedRows([
+      {
+        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility) VALUES ($1, $2, 'Party', $3, 'PHOTO', 'beta-sample.jpg', 'image/jpeg', 2400, (SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $2 LIMIT 1), $4, 'AVAILABLE', '{OFFICE}')`,
+        values: [betaFile, T, world.partyId, `test/${betaFile}`],
+      },
+    ])
+    await stylePicture(design.line20, betaFile)
+    const lines = await linesOf(design.order)
+    const line20 = lines.find((line) => line.lineId === design.line20)!
+    expect(line20.picture).toBeNull()
+    expect(JSON.stringify(lines)).not.toMatch(/beta-sample|Brand Beta/)
+  })
+
+  it('the rules read stays the portal\'s own: the office picture routes refuse a portal session', async () => {
+    const design = await designWorld()
+    for (const [url, body] of [['/sales/orders/pictures', { orderIds: [design.order] }], ['/production/work-orders/pictures', { workOrderIds: [design.workOrder] }]] as const) {
+      const answer = await browsers.buyer.post(url, body)
+      expect(answer.status, url).not.toBe(200)
+      expect(answer.status, url).toBeGreaterThanOrEqual(400)
+    }
+  })
+})
+// ── end B-SA-046d ──
+
 // ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): accepting a design change ──
 describe('B-SA-047: a design change is accepted only for the customer\'s own private label, as a product change request per style', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const askedDesign = async (design: Awaited<ReturnType<typeof designWorld>>, note = 'Move the logo to the left sleeve.') => {

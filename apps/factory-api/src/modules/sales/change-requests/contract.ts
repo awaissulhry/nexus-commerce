@@ -206,6 +206,11 @@ export const rulesContract = defineContract({
           samples: z.array(output({ sampleKind: z.enum(ASK_SAMPLE_KINDS), verdict: askVerdictOut })),
           /** B-PR-27a: the other colourways of the line's style a change may ask it in, each with the sizes it is made in. */
           colourways: z.array(output({ id: id(), code: z.string(), name: z.string(), sizes: z.array(z.string()) })),
+          /**
+           * B-SA-046d: the line's small picture (its colourway's, else its style's main), through the portal's own walled read and the
+           * content wall: only the small preview's address (60 seconds; null until it exists); null: none the customer may see.
+           */
+          picture: output({ small: output({ url: z.string(), expiresAt: instant() }).nullable() }).nullable(),
         }),
       ),
       /**

@@ -17,6 +17,9 @@ import { MAX_NOTE } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
 import { AskImpact, type AskImpactModel } from './AskImpact'
 import { Loading, ReadFailed } from './parts'
+// B-SA-046d: the line's picture, the ONE picture part (src/lib), drawn from the address the portal's own read holds.
+import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
+import type { RowPicture } from '../../../../lib/record-picture/model'
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3, §5; 06-tree B.2 P-ORD-ask; design: a DS Modal, a full-screen sheet on a
@@ -219,6 +222,24 @@ function useSplitCopy(t: OrderWords['t']): Partial<SizeGridCopy> {
 
 const lineName = (line: ChangeRules['lines'][number], t: OrderWords['t']) => t('change.line', { seq: line.seq, style: line.style?.code ?? '—', colour: line.colourway?.name ?? '' })
 
+// ── B-SA-046d (14-change-flow §2.4 "which lines (with picture)"): a line named with its small picture ──
+/** The line's picture as the one picture part reads it (no file id: the portal holds only the small preview's address). */
+export function linePictureOf(line: Pick<ChangeRules['lines'][number], 'style' | 'picture'>): RowPicture | null {
+  if (!line.picture) return null
+  return { styleId: '', styleCode: line.style?.code ?? '', styleName: line.style?.name ?? '', fileId: null, small: line.picture.small !== null }
+}
+
+function LineTitle({ line, t }: { line: ChangeRules['lines'][number]; t: OrderWords['t'] }) {
+  const name = lineName(line, t)
+  return (
+    <span className="fw-pord-line-title">
+      <RecordPicture source="order" recordId={line.lineId} number={name} picture={linePictureOf(line)} held={line.picture?.small ?? null} size="line" />
+      <span>{name}</span>
+    </span>
+  )
+}
+// ── end B-SA-046d ──
+
 // ── step 2: the details of a production ask ─────────────────────────────────────────────────────────────────────────────
 function AskDetails({ model, rules, kind, actions, words }: { model: AskDialogModel; rules: ChangeRules; kind: ProductionAskKind; actions?: AskDialogActions; words: OrderWords }) {
   const { t, locale, day } = words
@@ -347,7 +368,7 @@ function DesignDetails({ model, rules, actions, words }: { model: AskDialogModel
               checked={on}
               selected={on}
               onChange={(event) => set({ lineIds: pick(draft.lineIds, line.lineId, event.target.checked) })}
-              title={lineName(line, t)}
+              title={<LineTitle line={line} t={t} /> /* B-SA-046d */}
               description={t('ask.design.linePieces', { count: line.sizes.reduce((sum, size) => sum + size.quantity, 0) })}
             />
           )

@@ -344,6 +344,8 @@ export const rulesSchema = z.object({
       samples: z.array(z.object({ sampleKind: z.enum(ASK_SAMPLE_KINDS), verdict: askVerdict })).optional(),
       // F-PR-23b (B-PR-27a #1626): the other colourways of the line's style a change may ask it in, each with the sizes it is made in.
       colourways: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), sizes: z.array(z.string()) })).optional(),
+      // B-SA-046d: the line's small picture (the portal's own walled read: only the small preview's address; null: none to show).
+      picture: z.object({ small: z.object({ url: z.string(), expiresAt: z.string() }).nullable() }).nullable().optional(),
     }),
   ),
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), wholeOrderFee: price }).optional(),

@@ -23,6 +23,9 @@ import type { DesignAskModel } from './view/AskDialog'
 // B-SA-046b: which pieces a design change is for.
 import { appliesToOf, APPLIES_TO_CHOICES } from './ask-model'
 import { askImpactSchema, changeRequestSchema } from './api'
+// B-SA-046d: each line named with its small picture.
+import { rulesSchema } from './api'
+import { linePictureOf } from './view/AskDialog'
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3 "Brand asks, we decide", §5; 06-tree B.2 P-ORD-ask; wall PW-P06): step 1
@@ -441,3 +444,40 @@ describe('B-SA-046b: which pieces the design change is for', () => {
   })
 })
 // ── end B-SA-046b ──
+
+// ── B-SA-046d (14-change-flow §2.4 "which lines (with picture)"): the design change's lines with their small pictures ──
+describe('B-SA-046d: the design change names each line with its picture', () => {
+  const SMALL = { url: 'https://files.example.com/small/line-1.jpg?sig=demo', expiresAt: at(1) }
+  const withPictures = (): ChangeRules => {
+    const base = designRules()
+    return { ...base, lines: base.lines.map((line, index) => ({ ...line, picture: index === 0 ? { small: SMALL } : null })) }
+  }
+
+  it('reads only the small preview’s address of the portal’s own read (a file id or anything else is dropped)', () => {
+    const read = rulesOf()
+    const parsed = rulesSchema.parse({ ...read, lines: read.lines.map((line, index) => ({ ...line, picture: index === 0 ? { small: SMALL, fileId: 'f-1', originalName: 'front.jpg' } : null })) })
+    expect(parsed.lines[0]!.picture).toEqual({ small: SMALL })
+    expect(parsed.lines[1]!.picture).toBeNull()
+    // An older answer without pictures still reads.
+    expect(rulesSchema.parse(read).lines[0]!.picture).toBeUndefined()
+  })
+
+  it('the one picture part draws it beside the line’s name; a line without one shows the placeholder, never a broken image', () => {
+    const read = withPictures()
+    expect(linePictureOf(read.lines[0]!)).toMatchObject({ fileId: null, small: true, styleCode: read.lines[0]!.style?.code ?? '' })
+    expect(linePictureOf(read.lines[1]!)).toBeNull()
+    for (const locale of ['en', 'it'] as const) {
+      const html = drawWhat({ rules: read, step: 'details', kind: 'DESIGN', draft: { ...EMPTY_ASK, lineIds: [lineOne()] }, design: designModel() }, locale)
+      expect(html, locale).toContain('src="https://files.example.com/small/line-1.jpg?sig=demo"')
+      expect((html.match(/<img /g) ?? []).length, locale).toBe(1)
+      expect(html, locale).toContain('fw-pord-line-title')
+    }
+  })
+
+  it("Brand Beta's lines with pictures hold nothing of Brand Alpha", () => {
+    const base = withPictures()
+    const beta: ChangeRules = { ...base, lines: base.lines.map((line) => ({ ...line, style: { code: BRAND_BETA.numbers.style, name: 'Beta jacket' }, colourway: { code: 'BK', name: 'Black' } })) }
+    for (const locale of ['en', 'it'] as const) expect(scanText(drawWhat({ rules: beta, choices: askChoicesOf(beta, NO_REQUESTS), step: 'details', kind: 'DESIGN', draft: EMPTY_ASK, design: designModel() }, locale), BRAND_ALPHA), locale).toEqual([])
+  })
+})
+// ── end B-SA-046d ──
