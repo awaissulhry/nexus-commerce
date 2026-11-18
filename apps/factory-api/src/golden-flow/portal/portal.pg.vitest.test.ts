@@ -930,7 +930,8 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     expect(made.links).toEqual([expect.objectContaining({ email: 'buyer.p1@example.com', delivery: 'SENT' })])
     const token = tokenOf('shipping.tracking_link', 'buyer.p1@example.com')
     const page = await viaLink(token, 'GET', '/link/tracking')
-    expect(page).toMatchObject({ shipment: { number: 'SEED-SH-0001', status: 'SHIPPED' }, order: { customerRef: 'SEED-PO-78', number: 'SEED-SO-0002' }, link: { via: expect.any(String) } })
+    // fix-portal-numbers-1 (B-TH-303): the page names the order by the customer's own number ("#N"), never the office's SEED-SO-0002.
+    expect(page).toMatchObject({ shipment: { number: 'SEED-SH-0001', status: 'SHIPPED' }, order: { customerRef: 'SEED-PO-78', number: expect.stringMatching(/^#\d+$/) }, link: { via: expect.any(String) } })
     expect(JSON.stringify(page)).not.toMatch(/"(price|unitPrice|amount|total|netValue|freightCharge|freightCost|value)"/)
     const found = await anyone('POST', '/tracking/search', { tenant: w.tenant.slug, company: 'SCA', reference: ' seed-po-78 ', postcode: '000 00' })
     expect(found.shipments).toEqual([expect.objectContaining({ number: 'SEED-SH-0001', token: expect.any(String) })])

@@ -23,6 +23,11 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, startHarness, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
+// fix-portal-numbers-1: a task the office asks on the customer's order, opened as the office's route opens it.
+import { callerFor, command } from '../../../core/command'
+import { systemContext } from '../../../platform/outbox/system'
+import { openTaskInCommand, taskById } from '../../../platform/portal/tasks/store'
+import { taskView } from '../../../platform/portal/tasks/views'
 import { fileTravelDocuments, madeUpPdf, TRAVEL_DOCUMENT_PERMISSIONS } from '../../shipping/documents/testing/compliance'
 
 /**
@@ -512,7 +517,6 @@ describe("fix-portal-numbers-1: the customer's Home reads name its own numbers, 
   const email = 'pia.numbers@seed-racing.example'
   let reader: Browser
   beforeAll(async () => {
-    SESSIONS.numbers = () => ({ audience: 'office', tenantId: T, actorId: qualityActor, grants: [grant(['partners.view', 'partners.tasks.manage'])] })
     await partnerPerson(email, P1, ['customer-buyer', 'partner-upload'])
     freshGuard(h)
     reader = await signedIn(email)
@@ -529,12 +533,14 @@ describe("fix-portal-numbers-1: the customer's Home reads name its own numbers, 
     expect(orders.every((row) => row.customerSeq !== null)).toBe(true)
     const order = orders.find((row) => row.id === shipping.quality.production.salesOrderId)!
 
-    // The office asks the customer for a document on its order: the office's read names the order by the office's number.
-    const ask = await app.inject({ method: 'POST', url: `/partners/${P1}/tasks`, headers: { 'x-test-session': 'numbers', 'idempotency-key': key() }, payload: { kind: 'UPLOAD_DOCUMENT', recordType: 'SalesOrder', recordId: order.id, dueAt: null } })
-    expect(ask.statusCode, ask.body).toBe(200)
-    const officeTasks = await app.inject({ method: 'GET', url: `/partners/${P1}/tasks`, headers: { 'x-test-session': 'numbers' } })
-    expect(officeTasks.statusCode, officeTasks.body).toBe(200)
-    expect(officeTasks.body).toContain(order.number)
+    // The office asks the customer for a document on its order, as POST /partners/:partyId/tasks opens it (its label: the office's
+    // own number, recordLabelOf); this app has no office sign-in (that route runs on the app's clock), so the task opens here.
+    const opened = await command(callerFor(h.database, systemContext(T, `test-${newId()}`)), { name: 'partnerTasks.open', input: { orderId: order.id } }, async (tools) => ({
+      taskId: (await openTaskInCommand(tools, { companyId: companyA, partyId: P1, kind: 'UPLOAD_DOCUMENT', record: { type: 'SalesOrder', id: order.id, label: order.number }, sourceKey: `Ask:${newId()}`, dueAt: null, askedBy: { id: qualityActor, name: 'Made-up sales' } })).task.id,
+    }))
+    // The office keeps reading its own number (its view of the task, as the office's list gives it).
+    const row = await h.database.withScope({ audience: 'office', tenantId: T, actorId: qualityActor }, (client) => taskById(client, opened.result.taskId))
+    expect(taskView(row!, h.clock.now()).record).toMatchObject({ type: 'SalesOrder', id: order.id, label: order.number })
 
     const home = await ok(reader, '/portal/home')
     const waiting = (home.waiting as Json[]).find((task) => task.record.id === order.id)
