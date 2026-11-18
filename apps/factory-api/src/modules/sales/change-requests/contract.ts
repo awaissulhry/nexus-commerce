@@ -13,6 +13,8 @@ import { FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS } from '@nexus
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 // B-PR-26: our counter-offer on a request.
 import { COUNTER_STATES } from '@nexus/factory-domain/sales/change-requests/counter'
+// B-SA-045: the apply plan's steps, states and teams.
+import { APPLY_STEP_KINDS, APPLY_STEP_STATES, APPLY_TEAMS, FLOOR_STAGES, OUTCOME_NEEDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 
 /**
  * Change and cancel requests from the portal (B-W2b-183; SAL-077, SAL-078; design portal.customer.orders "Ask for a
@@ -411,3 +413,76 @@ export const saveSettingsContract = defineContract({
   }),
   response: { 200: settingsAnswer },
 })
+
+// ── B-SA-045 (sales page plan P5, P6', R1, R8; 13-backend B4a): the review window's apply plan, before and after Accept ──
+
+const stepPerson = output({ id: id(), name: z.string() })
+
+export const applyPlanContract = defineContract({
+  params: input({ requestId: id() }),
+  response: {
+    200: output({
+      asOf: instant(),
+      request: output({ id: id(), kind: z.enum(ORDER_REQUEST_KINDS), status: z.enum(REQUEST_STATUSES), version: z.number().int(), orderId: id(), orderNumber: z.string() }),
+      /** Why there are no steps (refused, withdrawn, a production ask answered in Home › Approvals); null: the steps say it. */
+      words: words.nullable(),
+      /** "On the floor now" (workorders.view over the order's customer; else null and named in `withheld`): the order's OWN cells. */
+      floor: output({
+        cells: z.array(
+          output({
+            lineId: id(),
+            seq: z.number().int(),
+            /** null: the line as a whole (a cancel or a design change names lines). */
+            size: z.string().nullable(),
+            ordered: z.number().int(),
+            /** The pieces asked (null: a line as a whole). */
+            asked: z.number().int().nullable(),
+            inWorkOrders: z.number().int(),
+            /** null: the step is not counted there (never a made-up 0). */
+            cut: z.number().int().nullable(),
+            sewn: z.number().int().nullable(),
+            packed: z.number().int(),
+          }),
+        ),
+        /** "In work now: 3 bundles at Sewing" — counts only, never a person or a station. */
+        inWork: output({ bundles: z.number().int(), stage: z.enum(FLOOR_STAGES).nullable(), words: words.nullable() }),
+        /** Work orders of these lines the reader does not reach: counted, never named. */
+        workOrdersLeftOut: z.number().int(),
+      }).nullable(),
+      withheld: z.array(z.enum(['floor'])),
+      /** Pieces already cut beyond the new figure, with the three outcomes and what each needs (R1; Round 4: none picked). */
+      extra: output({
+        pieces: z.array(output({ lineId: id(), seq: z.number().int(), size: z.string(), count: z.number().int(), words })),
+        total: z.number().int(),
+        outcomes: z.array(output({ outcome: z.enum(EXTRA_OUTCOMES), words, needs: z.enum(OUTCOME_NEEDS).nullable(), needsWords: words.nullable(), mayChoose: z.boolean() })),
+        /** The outcome Accept recorded (null: none yet, or no extra piece). */
+        chosen: z.enum(EXTRA_OUTCOMES).nullable(),
+        /** Accept stays held until one is chosen. */
+        needsOutcome: z.boolean(),
+        words: words.nullable(),
+      }),
+      /** What happens next, numbered (AMEND first). */
+      next: z.array(
+        output({
+          seq: z.number().int(),
+          kind: z.enum(APPLY_STEP_KINDS),
+          state: z.enum(APPLY_STEP_STATES),
+          team: z.enum(APPLY_TEAMS),
+          /** The named person who acts (office only; a work order's supervisor). */
+          person: stepPerson.nullable(),
+          words,
+          why: words.nullable(),
+          mayDoNow: z.boolean(),
+          /** The record the step is (a work-order change, the amendment, a style change request…); null: none yet. */
+          ref: output({ type: z.string(), id: id(), number: z.string().nullable() }).nullable(),
+          /** The work order, when the reader reaches it (null: a new one, or one not shown). */
+          workOrder: output({ id: id(), number: z.string() }).nullable(),
+          cells: z.array(output({ seq: z.number().int(), size: z.string(), from: z.number().int(), to: z.number().int() })),
+          extra: z.number().int(),
+        }),
+      ),
+      live,
+    }),
+  },
+})
+// ── end B-SA-045 ──

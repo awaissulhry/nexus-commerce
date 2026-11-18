@@ -19,6 +19,8 @@ export const manifest = defineManifest({
   'GET /sales/change-requests/settings': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'PUT /sales/change-requests/settings': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
   'GET /sales/change-requests/:requestId': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-SA-045: the review window's apply plan (before and after Accept).
+  'GET /sales/change-requests/:requestId/apply-plan': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'POST /sales/change-requests/:requestId/accept': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/change-requests/:requestId/refuse': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
 })
