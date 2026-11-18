@@ -20,4 +20,8 @@ export const manifest = defineManifest({
   // B-PR-27a/b: accepting carries the ask out (HOLD, RESUME, RUSH: production.brand.manage; SAMPLE_ROUND: sales.samples.manage —
   // the handler, can(); a Sales kind is refused in words).
   'POST /production/brand-requests/:requestId/accept': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
+  // B-PR-46a: a customer's batch answered as one group — each request through its kind's own accept or the refuse, one by one
+  // (the kind's permission over the customer: the handler, can()).
+  'POST /production/brand-requests/batches/:batchId/accept': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
+  'POST /production/brand-requests/batches/:batchId/refuse': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
 })

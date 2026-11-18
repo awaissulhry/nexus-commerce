@@ -11,6 +11,7 @@ import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progr
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { PROBLEM_ORDERS_MAX } from '@nexus/factory-domain/production-brand/issues' // B-PR-45
 import { MAX_BODY_LENGTH } from '@nexus/factory-domain/threads/rules' // B-PR-45
+import { BULK_ASK_KINDS, BULK_ASK_MAX, BULK_REASON_MAX, WITHDRAW_OUTCOMES } from '@nexus/factory-domain/production-brand/bulk' // B-PR-46a
 
 /**
  * B-PR-18: the customer's own production in its portal (see ./read.ts). Every state comes with its words in Italian and English
@@ -263,10 +264,28 @@ const urgencyAnswer = output({
 
 const orderIds = (max: number) => z.array(id()).min(1).max(max)
 
-export const markUrgencyContract = defineContract({
-  body: input({ orderIds: orderIds(URGENCY_BATCH_MAX), urgency: z.enum(BRAND_URGENCIES) }),
-  response: { 200: urgencyAnswer },
+// ── B-PR-46a: a mark over the quota or from Cutting becomes "Urgent – asked" (./bulk.ts) ──
+const markAnswer = urgencyAnswer.extend({
+  results: z.array(
+    urgencyResult.extend({
+      /** The "Urgent – asked" (a RUSH request we answer) this order became: over the quota or from Cutting; null: not asked. */
+      asked: output({ requestId: id(), words }).nullable(),
+    }),
+  ),
+  /** The batch of the "Urgent – asked" requests this mark made (Undo: POST /portal/production/asks/:batchId/withdraw); null: none. */
+  askBatchId: id().nullable(),
 })
+
+export const markUrgencyContract = defineContract({
+  body: input({
+    orderIds: orderIds(URGENCY_BATCH_MAX),
+    urgency: z.enum(BRAND_URGENCIES),
+    /** B-PR-46a: the need-by date of the orders that become "Urgent – asked" (from today on; earlier than the promise). */
+    requestedDate: day.optional(),
+  }),
+  response: { 200: markAnswer },
+})
+// ── end B-PR-46a ──
 
 export const urgentOrderContract = defineContract({
   body: input({
@@ -413,3 +432,71 @@ export const reportProblemContract = defineContract({
   },
 })
 // ── end B-PR-45 ──
+
+// ── B-PR-46a ──
+/**
+ * B-PR-46a: Ask N and its Undo (./bulk.ts). One result per OWN order (asked, or why not: its code when the rule names one, and
+ * its words); an id that is not one of its own orders is only counted (`notFound`), never named. Nothing asked at all: 409 with
+ * each order's words at `body/orderIds/<index>/<code>`. Undo: each request of the batch withdrawn now, or left as it is with why
+ * (answered, countered, withdrawn already); nothing withdrawn: 409; another customer's batch or none: 404. Takes an
+ * Idempotency-Key (a retry joins the same batch and asks no order twice).
+ */
+export const askManyContract = defineContract({
+  body: input({
+    orderIds: orderIds(BULK_ASK_MAX),
+    /** One kind for every order (urgent is asked only through Mark urgent). */
+    kind: z.enum(BULK_ASK_KINDS),
+    /** CANCEL: a code of the cancel reasons (required); a pause and a resume take none. */
+    reasonCode: z.string().trim().min(1).max(64).optional(),
+    /** Their words (a pause: why, required). */
+    reason: z.string().max(BULK_REASON_MAX).optional(),
+  }),
+  response: {
+    200: output({
+      /** The batch the requests share (Undo; our Home › Approvals reads it as one group). */
+      batchId: id(),
+      kind: z.enum(BULK_ASK_KINDS),
+      results: z.array(
+        output({
+          orderId: id(),
+          number: z.string(),
+          customerRef: z.string().nullable(),
+          done: z.boolean(),
+          /** The request it became (null: not asked). */
+          requestId: id().nullable(),
+          /** Why not, as a code (WAITING, NOT_OPEN, NOT_PAUSED, PAUSED, READY, NOT_ASKABLE, …); null: asked, or no code. */
+          code: z.string().nullable(),
+          words,
+        }),
+      ),
+      /** Ids named that are not its own orders: counted, never named. */
+      notFound: z.number().int(),
+      replayed: z.boolean(),
+    }),
+  },
+})
+
+export const withdrawAskBatchContract = defineContract({
+  params: input({ batchId: id() }),
+  body: input({}).optional(),
+  response: {
+    200: output({
+      batchId: id(),
+      results: z.array(
+        output({
+          requestId: id(),
+          orderId: id(),
+          number: z.string(),
+          customerRef: z.string().nullable(),
+          kind: z.string(),
+          /** Withdrawn now. */
+          done: z.boolean(),
+          outcome: z.enum(WITHDRAW_OUTCOMES),
+          words,
+        }),
+      ),
+      replayed: z.boolean(),
+    }),
+  },
+})
+// ── end B-PR-46a ──

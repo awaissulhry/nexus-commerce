@@ -17,6 +17,7 @@ import { dayOrNull, feeLinesOf, feeView, impactOut, keptImpactOf, LIVE_EVENTS, O
 import { readLines, readOrder } from '../../sales/orders/store'
 import { officeContextOf } from '../work-orders/access'
 import { workOrderWhere } from '../work-orders/scope'
+import { OFFICE_BATCH_NOT_FOUND } from '@nexus/factory-domain/production-brand/bulk' // B-PR-46a
 
 /**
  * B-PR-26 — the office's ONE read of every customer request (production plan §5 Home › Approvals "the one place brand requests
@@ -38,6 +39,8 @@ import { workOrderWhere } from '../work-orders/scope'
  * Each request: the customer's own view of it (sales/change-requests requestView, our counter-offer where it stands) plus who
  * answers its kind (ASK_RULES answeredWith), where its accept goes, what accepting does, who it waits on, what this reader may
  * answer now (factory-domain officeAnswersOf + the kind's permission over the order), its batch's size.
+ * B-PR-46a: a customer's batch is ONE group — `?batchId` lists it, each row carries `batch` {id, count, waiting}, the record its
+ * other requests; `readableBatch` is what the batch answers (./answer.ts refuseBatch, ./accept.ts acceptBatch) act on.
  */
 
 const READ_CAP = 200
@@ -177,6 +180,20 @@ export async function brandRequestRecord(caller: CommandCaller, requestId: strin
     }
   })
 }
+
+// ── B-PR-46a: a customer's batch (Ask N, Mark urgent's "Urgent – asked") as the reader reaches it ─────────────────────────────
+
+/**
+ * The requests of a batch the reader reaches (one customer and one kind: the database keeps it so), oldest first; none — another
+ * customer's batch, or no such batch — "not found" in words that name nobody (PW-12).
+ */
+export async function readableBatch(db: Reader, actor: Actor, batchId: string): Promise<OfficeRequestRow[]> {
+  const reach = brandRequestWhere(actor)
+  const rows = reach && isUuid(batchId) ? await db.orderChangeRequest.findMany({ where: { AND: [reach, { batchId }] }, select: OFFICE_REQUEST_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: READ_CAP }) : []
+  if (rows.length === 0) throw new NotFoundError(OFFICE_BATCH_NOT_FOUND)
+  return rows
+}
+// ── end B-PR-46a ──
 
 /** The office impact: what the customer saw at Send and the same read now; the order's work orders; a cancel's fee by grain. */
 export async function brandRequestImpact(caller: CommandCaller, requestId: string, now: Date) {

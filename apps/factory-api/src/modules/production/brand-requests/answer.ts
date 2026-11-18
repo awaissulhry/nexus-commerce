@@ -1,6 +1,6 @@
 import { dueAtFor } from '@nexus/factory-domain/approvals-out/rules'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
-import { DomainError, ForbiddenError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, isDomainError /* B-PR-46a */, NotFoundError /* B-PR-46a */, ValidationError, type Issue /* B-PR-46a */ } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -14,7 +14,11 @@ import { localeOf } from '../../../platform/approvals-out/store'
 import { answerableIn, counterInCommand, counterStateIn } from '../../sales/change-requests/counter'
 import type { OfficeRequestRow } from '../../sales/change-requests/store'
 import { officeContextOf } from '../work-orders/access'
-import { brandRequestViews, brandRequestWhere, readableRequest } from './read'
+import { brandRequestViews, brandRequestWhere, readableBatch /* B-PR-46a */, readableRequest } from './read'
+// B-PR-46a: a customer's batch answered as one group.
+import { createHash } from 'node:crypto'
+import { BATCH_ANSWER_WORDS, OFFICE_BATCH_NOT_FOUND, refusalCodeOf } from '@nexus/factory-domain/production-brand/bulk'
+import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 
 /**
  * B-PR-26 — the office answers a customer's request with words it reads (production plan §3 "We accept, counter or refuse with
@@ -32,7 +36,8 @@ import { brandRequestViews, brandRequestWhere, readableRequest } from './read'
  * Who: the request read through the brand wall (./read: workorders.view or orders.view over its company and customer, else
  * "Change request not found."), then the kind's permission over the order (ASK_RULES answeredWith: CHANGE, CANCEL,
  * SPLIT_SHIPMENT orders.manage; RUSH, HOLD, RESUME production.brand.manage; SAMPLE_ROUND sales.samples.manage), else 403 in
- * words. A batch is answered request by request (B-PR-46a loops these per row).
+ * words. A batch is answered request by request (B-PR-46a: refuseBatch here and acceptBatch in ./accept.ts loop the single path
+ * per row, each its own command and key — answerEach).
  */
 
 /** The kind's permission over the order, or 403 in words (the request was found through the wall already). B-PR-27a: the accept's too. */
@@ -136,3 +141,95 @@ export async function counterBrandRequest(caller: CommandCaller, requestId: stri
   }, { ...COMMAND_SETTINGS, clock })
   return { request: await viewAfter(caller, requestId), approvalRequestId: result.approvalRequestId }
 }
+
+// ── B-PR-46a: a customer's batch answered as one group (Home › Approvals "Accept all" / "Refuse all") ──────────────────────────
+
+/** One request of the batch as the office saw it (its version: each is re-checked at it). */
+export interface BatchItem {
+  readonly requestId: string
+  readonly version: number
+}
+
+/** What a batch answer did to one request: done (and what it did, in words), or why not (the office's real reason). */
+export interface BatchRowResult {
+  readonly requestId: string
+  readonly orderId: string
+  readonly orderNumber: string
+  readonly done: boolean
+  readonly words: Words | null
+  readonly problem: { readonly code: string; readonly message: string } | null
+}
+
+const sha = (text: string): string => createHash('sha256').update(text).digest('hex')
+
+/** One request's own Idempotency-Key, derived from the batch call's (a retry answers each request once). */
+const rowKeyOf = (key: string | undefined, what: string, requestId: string): string | undefined => (key ? `${what}-${sha(`${key}|${requestId}`).slice(0, 48)}` : undefined)
+
+/** The requests named twice (400: the window sends each once). */
+function twiceProblems(items: readonly BatchItem[]): Issue[] {
+  const seen = new Set<string>()
+  return items.flatMap((item, index) => {
+    const twice = seen.has(item.requestId)
+    seen.add(item.requestId)
+    return twice ? [{ path: `body/items/${index}`, message: 'This request is named twice.' }] : []
+  })
+}
+
+/**
+ * A batch answered request by request through the single path of each (each its own command and key: answerOne), at the version
+ * the office read. The batch is read through the wall first (./read readableBatch: another customer's, or none, "not found"); the
+ * kind's permission over the customer is asked once (all of one customer and one kind), else 403 in words. A request named that
+ * is not of this batch (or not reached) is only counted (`notFound`), never named; none of the batch: "not found". A request
+ * refused is that row's result (the reason, the office's words); nothing done at all: 409 with each row's reason at
+ * `body/items/<index>/<code>`. The answer: one result per row, and the batch as it stands now.
+ */
+export async function answerEach(caller: CommandCaller, input: { readonly batchId: string; readonly rows: readonly OfficeRequestRow[]; readonly items: readonly BatchItem[]; readonly keyName: string }, idempotencyKey: string | undefined, answerOne: (row: OfficeRequestRow, version: number, key: string | undefined) => Promise<Words>) {
+  const context = officeContextOf(caller)
+  const actor = actorOf(context)
+  const twice = twiceProblems(input.items)
+  if (twice.length > 0) throw new ValidationError('Name each request once.', twice)
+  const byId = new Map(input.rows.map((row) => [row.id, row]))
+  const named = input.items.flatMap((item, index) => {
+    const row = byId.get(item.requestId)
+    return row ? [{ row, version: item.version, index }] : []
+  })
+  if (named.length === 0) throw new NotFoundError(OFFICE_BATCH_NOT_FOUND)
+  assertAnswers(actor, named[0]!.row)
+  const numbers = new Map((await caller.withClient((client) => client.salesOrder.findMany({ where: { id: { in: [...new Set(named.map((entry) => entry.row.orderId))] } }, select: { id: true, number: true } }))).map((order) => [order.id, order.number]))
+  const results: BatchRowResult[] = []
+  const issues: Issue[] = []
+  for (const { row, version, index } of named) {
+    const base = { requestId: row.id, orderId: row.orderId, orderNumber: numbers.get(row.orderId) ?? '' }
+    try {
+      const words = await answerOne(row, version, rowKeyOf(idempotencyKey, input.keyName, row.id))
+      results.push({ ...base, done: true, words, problem: null })
+    } catch (error) {
+      if (!isDomainError(error)) throw error
+      const code = refusalCodeOf(error.issues) ?? error.code
+      results.push({ ...base, done: false, words: null, problem: { code, message: error.message } })
+      issues.push({ path: `body/items/${index}/${code}`, message: error.message })
+    }
+  }
+  if (!results.some((result) => result.done)) throw new DomainError('conflict', issues.length === 1 ? issues[0]!.message : 'Nothing was answered: see each request.', issues)
+  const requests = await caller.withClient(async (client) => brandRequestViews(client, context, await readableBatch(client, actor, input.batchId)))
+  return { batchId: input.batchId, results, notFound: input.items.length - named.length, requests }
+}
+
+export interface BatchRefuseBody {
+  readonly items: readonly BatchItem[]
+  readonly answer: string
+}
+
+/** POST /production/brand-requests/batches/:batchId/refuse — every request named refused with the same words (each its own path). */
+export async function refuseBatch(caller: CommandCaller, batchId: string, body: BatchRefuseBody, idempotencyKey: string | undefined, clock: Clock) {
+  const actor = actorOf(officeContextOf(caller))
+  if (!brandRequestWhere(actor)) throw new ForbiddenError()
+  const rows = await caller.withClient((client) => readableBatch(client, actor, batchId))
+  const problems = answerProblems('REFUSED', body.answer)
+  if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+  return answerEach(caller, { batchId, rows, items: body.items, keyName: 'batch-refuse' }, idempotencyKey, async (row, version, key) => {
+    await refuseBrandRequest(caller, row.id, { version, answer: body.answer }, key, clock)
+    return BATCH_ANSWER_WORDS.REFUSED
+  })
+}
+// ── end B-PR-46a ──
