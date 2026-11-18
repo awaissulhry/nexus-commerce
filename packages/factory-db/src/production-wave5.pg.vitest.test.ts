@@ -88,11 +88,20 @@ const newOrder = async (): Promise<string> => {
   await plant('SalesOrder', production.urgentAsk.orderId, { id, number: `T-PR40-${id.slice(0, 8)}`, customerSeq: null, status: 'CONFIRMED' })
   return id
 }
+/**
+ * fix-pr-5: nothing of an answer, a withdrawal or a reversal on a new request. The gate test (EXTRA 1) answers and puts back the
+ * seed's SAMPLE request itself, so a later copy carried that answer and the guard refused it as no new request ("a new approval
+ * request is OPEN, unanswered, at version 1"): the test's copy was wrong, not the guard.
+ */
+const ASKED_ONLY = {
+  status: 'OPEN', answer: null, typedName: null, markupFileId: null, answeredAt: null, answeredByUserId: null, answeredViaLinkId: null, answerRequestId: null, answerIpHash: null, answerUserAgent: null,
+  withdrawnAt: null, withdrawnById: null, withdrawReason: null, decidedForPartyById: null, decidedForPartyReason: null, reversedAt: null, reversedById: null, reverseReason: null,
+}
 /** An OPEN approval request of P1 made by the office from the seed's SAMPLE one, with `changes`. */
 async function approval(changes: Record<string, unknown>): Promise<string> {
   const id = randomUUID()
   const at = await serverNow()
-  await copyRow('ApprovalRequest', samples.approvalRequestId, { id, createdAt: at, updatedAt: at, dueAt: `${NEXT_WEEK()}T12:00:00.000Z`, version: 1, ...changes })
+  await copyRow('ApprovalRequest', samples.approvalRequestId, { id, ...ASKED_ONLY, createdAt: at, updatedAt: at, dueAt: `${NEXT_WEEK()}T12:00:00.000Z`, version: 1, ...changes })
   return id
 }
 const answerAs = (id: string, status: 'APPROVED' | 'REFUSED') =>

@@ -12,13 +12,14 @@ import { OVERRIDE_TASK_KIND, overrideChanges, overridePlan, SECOND_PERSON_WORDS,
 import { PRODUCTION_BRAND_OVERRIDE } from '@nexus/factory-domain/production-brand/permissions'
 import type { FactoryClient } from '@nexus/factory-db'
 import { clientAddressOf } from '../../core/client-address'
-import { command, type CommandTools, type CommandTx } from '../../core/command'
+import { COMMAND_SETTINGS, runCommand, type CommandSettings, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../core/context'
 import { askApproval } from '../approvals/engine'
 import { decidersOf } from '../approvals/store'
 import { databaseRefusal } from '../approvals/tasks'
 import { requireStepUp } from '../auth/office/account'
 import { officeAuthOf } from '../auth/sessions/office-auth'
+import { appClock } from '../portal/tasks/clock' // fix-pr-5
 import type { RecordAdapter } from './adapter'
 import { pendingOverrideOf, viewAfterOverride } from './office'
 import { decideForPartyInCommand, fail, refuse, reverseCheckOf, reverseInCommand, type DecideForOrder } from './override-acts'
@@ -124,6 +125,17 @@ async function askSecondPerson(tools: CommandTools, row: OfficeRow, askerId: str
 
 const overrideOf = (outcome: 'DONE' | 'SECOND_PERSON', taskId: string | null) => ({ outcome, taskId, words: outcome === 'SECOND_PERSON' ? SECOND_PERSON_WORDS : null })
 
+// ── fix-pr-5: the clock of the act ───────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The act written at once runs on the app's clock (platform/portal/tasks/clock appClock, B-W2b-167): the one its step-up was
+ * checked on, and the one the customer's own answer (the portal's) and a counter-offer's ask (production/brand-requests) are
+ * written on. On the server clock, an answer decided for the customer could read earlier than the counter-offer it answers, and a
+ * reversal earlier than the answer it puts back: the database refuses both ("APPROVED with the wrong answer", "reversed only once
+ * answered"). A second person's ask stays on the server clock, as the internal approvals engine that decides it.
+ */
+const actSettings = (request: FastifyRequest, outcome: 'AT_ONCE' | 'SECOND_PERSON'): CommandSettings => (outcome === 'AT_ONCE' ? { ...COMMAND_SETTINGS, clock: appClock(request.server) } : COMMAND_SETTINGS)
+// ── end fix-pr-5 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 // ---- B-PR-30a: decide for the customer ----------------------------------------------------------------------------------------
 
 /** POST /approvals-out/:requestId/decide-for-party. */
@@ -145,11 +157,11 @@ export async function decideForParty(request: FastifyRequest, requestId: string,
   const order: DecideForOrder = { act: 'DECIDE_FOR', decision: body.decision, answer: answerWords(body), typedName: typedNameOf(body), reason: body.reason.trim() }
   const plan = overridePlan('DECIDE_FOR', await request.withClient((client) => fourEyesOf(client, row.partyId)))
   const evidence = { ipHash: auth.secrets.ipHash(clientAddressOf(request)), userAgent: userAgentOf(request.headers['user-agent']) }
-  const { result } = await command(request, { name: 'approvalsOut.decideForParty', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
+  const { result } = await runCommand(request, { name: 'approvalsOut.decideForParty', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     if (plan.outcome === 'SECOND_PERSON') return { outcome: 'SECOND_PERSON' as const, taskId: await askSecondPerson(tools, row, context.actorId, order) }
     await decideForPartyInCommand(tools, { requestId, version: body.version, deciderId: context.actorId, order, evidence, grantedById: null })
     return { outcome: 'DONE' as const, taskId: null }
-  }).catch(databaseRefusal)
+  }, actSettings(request, plan.outcome)).catch(databaseRefusal)
   return { ...(await viewAfterOverride(request, requestId)), override: overrideOf(result.outcome, result.taskId) }
 }
 
@@ -178,11 +190,11 @@ export async function reverseAnswer(request: FastifyRequest, requestId: string, 
   const linkId = newId()
   const token = askAgain ? mintLinkToken({ tenantId: context.tenantId, partyId: row.partyId, linkId }) : null
   const ask = token ? { requestId: newId(), linkId, tokenHash: linkTokenHash(token.value) } : null
-  const { result, replayed } = await command(request, { name: 'approvalsOut.reverse', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
+  const { result, replayed } = await runCommand(request, { name: 'approvalsOut.reverse', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     if (plan.outcome === 'SECOND_PERSON') return { outcome: 'SECOND_PERSON' as const, taskId: await askSecondPerson(tools, row, context.actorId, order), effects: [] as ReverseEffect[], askedAgain: null }
     const done = await reverseInCommand(tools, { requestId, version: body.version, reverserId: context.actorId, reason: order.reason, grantedById: null, ask })
     return { outcome: 'DONE' as const, taskId: null, effects: [...done.effects], askedAgain: done.askedAgain }
-  }).catch(databaseRefusal)
+  }, actSettings(request, plan.outcome)).catch(databaseRefusal)
   const asked = result.askedAgain ? { requestId: result.askedAgain, url: !replayed && token && ask?.requestId === result.askedAgain ? auth.link('/l', token.value) : null } : null
   return { ...(await viewAfterOverride(request, requestId)), override: overrideOf(result.outcome, result.taskId), effects: result.effects, asked }
 }

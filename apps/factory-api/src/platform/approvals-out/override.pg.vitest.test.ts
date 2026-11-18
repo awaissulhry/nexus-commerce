@@ -336,7 +336,9 @@ describe('B-PR-30b put the customer\'s answer back', { timeout: SLOW_TEST_TIMEOU
 
   it("A's fabric swatch decided in its portal goes back to undecided, and is asked again; office.p2 cannot reverse it (404)", async () => {
     const sentAt = new Date(Date.now() - 3_600_000).toISOString()
-    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    // fix-pr-5: a swatch of A's round (the world's jacket is shared by every company: a swatch of no round is never asked outside).
+    const round = await roundOf('SIZE_SET', world.ids.a)
+    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, roundId: round.id, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
     const request = await ask('FABRIC', 'SampleSwatch', swatch.id)
     await as(alpha.browser, 'POST', `/portal/approvals/${request.id}/answer`, { decision: 'APPROVED', typedName: 'Paola Production', version: request.version })
     expect(await one('SELECT decision::text, "decidedVia"::text AS via FROM "SampleSwatch" WHERE id = $1', [swatch.id])).toEqual({ decision: 'APPROVED', via: 'PORTAL' })
