@@ -265,7 +265,7 @@ export async function answerQuote(request: FastifyRequest, action: 'accept' | 'd
       await tx.quote.update({ where: { id: quote.id }, data: { status }, select: { id: true } })
       if (action === 'decline') {
         tools.audit({ action: 'quotes.decline', recordType: 'Quote', recordId: quote.id, companyId: quote.companyId, before: { status: 'SENT' }, after: { status, versionId: version.id, revision: version.revision, evidenceId: use.evidenceId, typedName: use.typedName, note } })
-        tools.emit({ type: 'quote.declined', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, revision: version.revision } })
+        tools.emit({ type: 'quote.declined', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, revision: version.revision, partyId: quote.partyId /* B-SA-004b */ } })
         return { quoteId: quote.id, versionId: version.id, status, acceptanceId: null as string | null }
       }
       const acceptanceId = newId()
@@ -343,7 +343,7 @@ export async function askNewLink(request: FastifyRequest, body: { readonly note?
     const status = linkQuoteState(facts.facts)
     const note = body.note?.trim() ? body.note.trim() : null
     tools.audit({ action: 'quotes.askNewLink', recordType: 'Quote', recordId: facts.quote.id, companyId: facts.quote.companyId, after: { linkId: link.id, versionId: facts.version.id, state: status.state, note } })
-    tools.emit({ type: 'quote.link_requested', subject: facts.quote.id, companyId: facts.quote.companyId, payload: { quoteId: facts.quote.id, versionId: facts.version.id, linkId: link.id, state: status.state } })
+    tools.emit({ type: 'quote.link_requested', subject: facts.quote.id, companyId: facts.quote.companyId, payload: { quoteId: facts.quote.id, versionId: facts.version.id, linkId: link.id, state: status.state, partyId: facts.quote.partyId /* B-SA-004b */ } })
     return { asked: true, state: status.state }
   })
   return { asked: result.asked, message: 'We told the sender: a new link will reach you by e-mail.' }
