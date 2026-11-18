@@ -203,6 +203,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   In production tile opens My production for portal.production.view (`tilesFor` + B-PR-20's `production.*` counts in its hint,
   `productionHintOf`). Bell and mail sentences are the API's (B-PR-31 messages.ts, incl. gate and QC notices); topic PRODUCTION
   comes from the API's e-mail settings (daily by default).
+- F-PR-24 `src/portal/customer/production/problem/` (CSS `fw-pprob-`) — THE "Report a problem" dialog: `api.ts` (B-PR-45's POST
+  `/portal/production/problems`; the pointer sources of ONE order: its shared documents and its thread's messages), `model.ts`
+  (pure: orders ≤ 50, the pointer's line, held words, refusals, the result per order, the chip "Waiting on us since …" → "Answered …"
+  → "Answered in your order 13", never who; `orderFilesOf`), `useReportProblem.ts` (the container hook both pages use: one key per
+  body, the text kept on failure and on close), `view/ReportProblemDialog.tsx`. Opened from the order's band ⋯ and Status &
+  progress (OrderPage: portal.comment + production; StatusTab F-PR-24 block: the chip and "Order files (n)" from the order's
+  documents read, "All in Documents (n)") and from a My production row's ⋯ (the row's chip in the Waiting on cell). F-PR-23a opens
+  the same hook with N orders.
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every

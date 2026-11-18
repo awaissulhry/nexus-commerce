@@ -49,6 +49,8 @@ export interface OrderBandFacts {
   confirmation: boolean
   /** An open deposit may be paid here (null: no such deposit). */
   pay: { held: string | null } | null
+  /** F-PR-24: "Report a problem" (the order in production, a person who writes to us): why it waits, or null; absent: not offered. */
+  problem?: { held: string | null } | null
 }
 
 export function orderBandOf(input: {
@@ -63,6 +65,7 @@ export function orderBandOf(input: {
   onHistory?: () => void
   onConfirmation?: () => void
   onPay?: () => void
+  onProblem?: () => void // F-PR-24
 }): PortalBand {
   const { t, locale } = input.words
   const { record, facts } = input
@@ -80,6 +83,8 @@ export function orderBandOf(input: {
     ...(facts.pay ? [{ id: 'pay', label: t('band.pay'), disabled: facts.pay.held !== null, description: facts.pay.held ?? undefined, onSelect: () => input.onPay?.() }] : []),
     ...(facts.moves > 0 ? [{ id: 'history', label: t('band.history'), onSelect: () => input.onHistory?.() }] : []),
     ...(facts.confirmation ? [{ id: 'confirmation', label: t('band.confirmation'), onSelect: () => input.onConfirmation?.() }] : []),
+    // F-PR-24: one message in this order's thread; we answer there.
+    ...(facts.problem ? [{ id: 'problem', label: t('reported.report'), disabled: facts.problem.held !== null, description: facts.problem.held ?? undefined, onSelect: () => input.onProblem?.() }] : []),
   ]
   // ---- B-TH-275 (P-CUS-ORD.band; plan §0.5, B-TH-303): "Your order 12" — the customer's own number, never the office's SO- series;
   // their PO first in the band's references. Four tabs: the conversation docks beside them (no Messages tab, no Ask modal).

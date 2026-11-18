@@ -10,6 +10,10 @@ import { useOrderWords } from '../words'
 import type { ProductionOrder } from '../../production/api' // F-PR-12a
 import type { ProductionQuality } from '../../production/api' // F-PR-12c
 import { QualityPhotoDialog, type QualityCardActions, type QualityPhotoModel } from './QualityCard' // F-PR-12c
+// ---- F-PR-24: Report a problem (the dialog My production opens too) and the chip of the problems reported on the order
+import type { ProblemChip } from '../../production/problem/model'
+import { ReportProblemDialog, type ReportProblemActions, type ReportProblemModel } from '../../production/problem/view/ReportProblemDialog'
+// ---- end F-PR-24
 // ---- B-TH-275: the order docks its conversation (the portal record frame, B-TH-273): no Messages tab, no Ask modal.
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalFrameMode } from '../../../shell/record/model'
@@ -101,6 +105,15 @@ export interface OrderRecordViewModel {
   /** `hidden`: the level does not share it, not in production, not its order or not part of its access: not drawn; absent: the same. */
   quality?: { state: 'loading' | 'error' | 'ready' | 'hidden'; read: ProductionQuality | null }
   // ---- end F-PR-12c
+  // ---- F-PR-24: the problems the customer reported on this order and Report a problem (production drawn only)
+  /**
+   * `chip`: "Problem reported · Waiting on us since 16 Nov", then "Answered 17 Nov" (never who); `report`: Report a problem and why it
+   * waits (null: it may open); absent or null: nothing of it is drawn.
+   */
+  problem?: { readonly chip: ProblemChip | null; readonly report: { readonly held: string | null } | null } | null
+  /** The Report a problem dialog, open. */
+  report?: ReportProblemModel | null
+  // ---- end F-PR-24
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -125,6 +138,9 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void
+  // F-PR-24: Report a problem on this order; its dialog.
+  onReportProblem?: () => void
+  report?: ReportProblemActions
   dialog?: {
     change?: ChangeDialogActions
     cancel?: CancelDialogActions
@@ -190,6 +206,8 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
         {dialog?.kind === 'preview' ? <PreviewDialog model={dialog.model} onClose={actions?.dialog?.preview?.onClose} onDownload={actions?.dialog?.preview?.onDownload} onRetry={actions?.dialog?.preview?.onRetry} /> : null}
         {/* F-PR-12c */}
         {dialog?.kind === 'photo' ? <QualityPhotoDialog model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
+        {/* F-PR-24 */}
+        {model.report ? <ReportProblemDialog model={model.report} actions={actions?.report} /> : null}
       </div>
     </PortalRecordFrame>
   )
