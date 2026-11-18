@@ -71,6 +71,19 @@ describe('what a shared file is', () => {
     expect(groupOf('FISCAL_DOCUMENT')).toBe('FINANCE')
   })
 
+  // fix-pr-4 (pr3m finding; B-PR-46b's rule, PW-12): a proforma, a commercial invoice and a price list's copy carry prices.
+  it('names a proforma, a commercial invoice and a price list by what made them (itself or its source): priced like an order confirmation', () => {
+    const noPrices = { view: true, conformity: true, finance: true, price: false }
+    const prices = { view: true, conformity: false, finance: false, price: true }
+    for (const kind of ['PROFORMA', 'COMMERCIAL_INVOICE', 'PRICE_LIST'] as const) {
+      expect(kindOfFile(file({ generatedKind: kind }))).toBe(kind)
+      expect(kindOfFile(file({ recordType: 'Party', source: { complianceKind: null, generatedKind: kind } }))).toBe(kind)
+      expect(groupOf(kind)).toBe(groupOf('ORDER_CONFIRMATION'))
+      expect(maySee(noPrices, groupOf(kind))).toBe(false)
+      expect(maySee(prices, groupOf(kind))).toBe(true)
+    }
+  })
+
   it('reads the category, then the file kind; a photo, a body photo or the carrier invoice is never a document', () => {
     expect(kindOfFile(file({ category: 'POD' }))).toBe('PROOF_OF_DELIVERY')
     expect(kindOfFile(file({ category: 'TEST_REPORT' }))).toBe('TEST_REPORT')

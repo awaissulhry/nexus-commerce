@@ -137,7 +137,7 @@
   "customerRequest": {
     "words": {
       "label": "Parole che il cliente legge",
-      "hint": "Servono per rifiutare; facoltative se accetti. Mai una nota interna.",
+      "hint": "Servono per rifiutare; facoltative se accetti. Mai una nota d'ufficio.",
       "hintBatch": "Le stesse parole su ogni ordine: servono per rifiutare tutte, facoltative se accetti tutte.",
       "preview": "Il cliente legge: «{words}»",
       "none": "Ancora nessuna parola: il cliente legge solo la risposta."

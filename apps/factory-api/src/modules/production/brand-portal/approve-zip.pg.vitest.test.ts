@@ -118,7 +118,7 @@ async function zipOf(person: Portal, orderIds: readonly string[]): Promise<{ nam
 
 /** A photo of a record (what the office sends with its question). */
 async function photoOf(recordType: string, recordId: string): Promise<string> {
-  return (await storeGeneratedFile(world.h.files, system(), { companyId: world.w.companyId, recordType, recordId, kind: 'PHOTO', originalName: `Made-up ${recordType}.png`, contentType: 'image/png', body: PNG })).id
+  return (await storeGeneratedFile(world.h.files, system(), { companyId: world.w.companyId, recordType, recordId, kind: 'PHOTO', originalName: `Made-up ${recordType} ${recordId.slice(-8)}.png` /* fix-pr-4: each record's own name (A's and B's were one marker) */, contentType: 'image/png', body: PNG })).id
 }
 /** The office asks the customer to approve a record (its photo with it); the request's id. */
 async function ask(kind: string, recordType: string, recordId: string): Promise<string> {

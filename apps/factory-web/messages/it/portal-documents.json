@@ -78,6 +78,9 @@
     "FISCAL_DOCUMENT": "Documento fiscale",
     "ORDER_CONFIRMATION": "Conferma d’ordine",
     "QUOTE": "Preventivo",
+    "PROFORMA": "Fattura proforma",
+    "COMMERCIAL_INVOICE": "Fattura commerciale",
+    "PRICE_LIST": "Listino",
     "PROOF": "Bozza da approvare",
     "OTHER": "Documento"
   },
