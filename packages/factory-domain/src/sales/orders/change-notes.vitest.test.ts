@@ -79,6 +79,25 @@ describe('B-SA-052: the system line, in the company language', () => {
     expect(left).toContain('Fatto: un ordine di lavoro lasciato così (The customer takes them after all).')
   })
 
+  // ---- B-SA-053b: the work order's NEW cells after the apply (Lower to the order keeps what is cut), never the ask's figure; the
+  // extra pieces it keeps, with their outcome, in the office line only — the floor reads the cells to cut and nothing more.
+  it('a work-order change applied: the work order\'s new cells, then the extra pieces it keeps and their outcome (office only)', () => {
+    const kept = systemLineOf({ head: { kind: 'WORK_ORDER', by: 'Carla Prova' }, at: AT, done: [{ kind: 'WORK_ORDER_CHANGED', workOrder: { number: 'WO-0142' }, cells: [{ size: '52', from: 4, to: 3 }], extra: { count: 2, outcome: 'LEFTOVER' } }], next: [], told: null }, 'it', ROME)
+    expect(kept.split('\n')[1]).toBe('Fatto: WO-0142 cambiato: 52 4 → 3 · 2 pezzi in più tenuti come rimanenza del cliente.')
+    const charged = systemLineOf({ head: { kind: 'WORK_ORDER', by: 'Carla Prova' }, at: AT, done: [{ kind: 'WORK_ORDER_CHANGED', workOrder: { number: 'WO-0142' }, cells: [{ size: '52', from: 4, to: 3 }], extra: { count: 1, outcome: 'CHARGE' } }], next: [], told: null }, 'en', ROME)
+    expect(charged.split('\n')[1]).toBe('Done: WO-0142 changed: 52 4 → 3 · 1 extra piece kept and charged to the customer.')
+    expect(noPriceIn(charged)).toBe(true)
+    const scrap = systemLineOf({ head: { kind: 'WORK_ORDER', by: null }, at: AT, done: [{ kind: 'WORK_ORDER_CHANGED', workOrder: { number: 'WO-0142' }, cells: [{ size: '52', from: 4, to: 3 }], extra: { count: 2, outcome: 'SCRAP' } }], next: [], told: null }, 'en', ROME)
+    expect(scrap).toContain('52 4 → 3 · 2 extra pieces to scrap, with their approval')
+    const none = systemLineOf({ head: { kind: 'WORK_ORDER', by: null }, at: AT, done: [{ kind: 'WORK_ORDER_CHANGED', workOrder: { number: 'WO-0142' }, cells: [{ size: '52', from: 4, to: 1 }], extra: null }], next: [], told: null }, 'en', ROME)
+    expect(none).toContain('WO-0142 changed: 52 4 → 1.')
+    // The floor reads the work order's own figure to cut: no extra pieces, no outcome, no customer's name.
+    const floor = floorNoteOf({ workOrder: 'WO-0142', customerCode: 'P1', changes: [{ kind: 'APPLIED', cells: [{ size: '52', quantity: 3 }] }] }, 'it')
+    expect(floor).toBe('WO-0142 cambiato: taglia 52 3.')
+    expect(floor).not.toMatch(/in più|rimanenza|addebit|scart/)
+  })
+  // ---- end B-SA-053b
+
   it('holds no price, whatever it says (a text scan)', () => {
     for (const locale of ['it', 'en'] as const) expect(noPriceIn(systemLineOf(accepted, locale, ROME))).toBe(true)
     expect(noPriceIn('Only for € 40 more.')).toBe(false)

@@ -463,13 +463,26 @@ async function compose(tools: CommandTools, tenantId: string, order: OrderFacts,
       return { head: { kind: 'CHANGED', by: await nameOf(tx, actor) }, causedById: actor, asked: null, answer: null, done, next, floor, closes, requestId: null }
     }
     case 'WORK_ORDER_CHANGE': {
-      const change = await tx.workOrderChange.findUnique({ where: { id: speaker.changeId }, select: { salesOrderId: true, workOrderId: true, kind: true, status: true, cells: true, decidedAt: true, decidedById: true, decisionNote: true, madeWorkOrderId: true, createdAt: true, requestId: true } })
+      const change = await tx.workOrderChange.findUnique({ where: { id: speaker.changeId }, select: { salesOrderId: true, workOrderId: true, kind: true, status: true, cells: true, decidedAt: true, decidedById: true, decisionNote: true, madeWorkOrderId: true, createdAt: true, requestId: true, /* B-SA-053b */ extraOutcome: true } })
       if (!change || change.salesOrderId !== order.id || !sameInstant(change.decidedAt, at)) return null
       const workOrder = change.workOrderId ? (workOrders.get(change.workOrderId) ?? (await tx.workOrder.findUnique({ where: { id: change.workOrderId }, select: { id: true, number: true, status: true, partyId: true, companyId: true, siteId: true, styleId: true, styleRevisionId: true } }))) : null
-      const changeCells = (Array.isArray(change.cells) ? (change.cells as unknown as ChangeCell[]) : []).map((cell) => ({ size: cell.size, from: cell.from, to: cell.to }))
+      // ---- B-SA-053b (14-change-flow S7 "WO-0142 changed: cut 36 M, 24 L"): the work order's OWN cells after the apply, read from
+      // its cells now — never the change's target: Lower to the order keeps what is cut (52 asked 4 → 1, 3 cut: the cell makes 3).
+      // The pieces it keeps beyond the order's new figure are the extra pieces, named with their outcome in the office line only.
+      const changeRows = Array.isArray(change.cells) ? (change.cells as unknown as ChangeCell[]) : []
+      const makes = (cell: ChangeCell): number => {
+        const own = cell.workOrderSizeId ? cells.find((entry) => entry.id === cell.workOrderSizeId) : undefined
+        if (own) return own.quantity
+        // A cell the apply took away (lowered to 0) is gone; a cell not read (a MAKE_MORE one not made here): its target.
+        return cell.workOrderSizeId && cell.to === 0 ? 0 : cell.to
+      }
+      const changeCells = changeRows.map((cell) => ({ size: cell.size, from: cell.from, to: change.status === 'APPLIED' ? makes(cell) : cell.to }))
+      const extraCount = change.status === 'APPLIED' ? changeRows.reduce((sum, cell) => sum + Math.max(0, makes(cell) - cell.to), 0) : 0
+      const extra = extraCount > 0 ? { count: extraCount, outcome: (change.extraOutcome as 'CHARGE' | 'LEFTOVER' | 'SCRAP' | null) ?? null } : null
+      // ---- end B-SA-053b
       if (change.status === 'APPLIED') {
         if (workOrder) {
-          done.push({ kind: 'WORK_ORDER_CHANGED', workOrder: labelOf(order, workOrder), cells: changeCells })
+          done.push({ kind: 'WORK_ORDER_CHANGED', workOrder: labelOf(order, workOrder), cells: changeCells, extra })
           addFloor(floor, workOrder ?? undefined, { kind: 'APPLIED', cells: changeCells.map((cell) => ({ size: cell.size, quantity: cell.to })) })
         } else if (change.madeWorkOrderId) {
           const made = await tx.workOrder.findUnique({ where: { id: change.madeWorkOrderId }, select: { number: true, partyId: true } })
