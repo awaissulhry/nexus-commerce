@@ -10,7 +10,14 @@ import { Dec, HUNDRED } from '@nexus/factory-domain/tax/decimal'
 import { serverClock } from '../../../core/time'
 import { depositViewOf, DEPOSIT_COLUMNS } from '../deposits/deposits'
 import { readCancelFacts } from './impact'
-import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderRow, type Reader } from './store'
+import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderFacts, type OrderRow, type Reader } from './store'
+// B-SA-034 (Sales page plan P17): the order read names its own live watch list and who changed each part last.
+import type { Actor } from '@nexus/factory-domain/core/permissions'
+import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { reachesWorkOrder } from '../../production/work-orders/scope'
+import { LAST_CHANGE_PARTS, type LastChangePart, type OrderPagePart } from './contract'
 
 /**
  * The order record as the office reads it (A2 SCR-039; the design's Order record): the header with its dates (the
@@ -75,7 +82,121 @@ async function depositFacts(db: Reader, requestIds: readonly string[], now: Date
   return { paid: new Map(placed.flatMap((row) => (row.depositRequestId ? [[row.depositRequestId, row._sum.amount ?? 0] as const] : []))), links: latest }
 }
 
-export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer) {
+// ── B-SA-034 (Sales page plan P17; 13-backend B13b) ───────────────────────────────────────────────────────────────────────────
+/**
+ * The order page's live watch list, the server's (the portal pattern, production/brand-portal read.ts LIVE): each declared event
+ * type the page listens to and the parts of the page it re-reads — so a new event (S4's work_order_change.*) joins the list here,
+ * with no change in the browser. Matched by the order's own record ids (`live.ids`); party ids never reach the browser (the live
+ * wall, factory-domain events/live.ts, already sends a person limited to some customers only their own customers' events).
+ */
+const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly parts: readonly OrderPagePart[] }[] = [
+  { match: (type) => ['sales_order.', 'order_change_request.', 'work_order_change.'].some((prefix) => type.startsWith(prefix)), parts: ['order', 'lines', 'changes'] },
+  {
+    match: (type) => ['brand_production.stage_reached', 'brand_production.health_changed', 'brand_production.hold_changed', 'brand_production.urgency_changed', 'brand_production.supervisor_changed'].includes(type),
+    parts: ['headline', 'people'],
+  },
+  { match: (type) => type.startsWith('workorder.') || type.startsWith('work_order_hold.') || type === 'change_order.changed', parts: ['work', 'headline'] },
+  {
+    match: (type) => ['production.cut_logged', 'production.cut_reversed', 'production.bundle_created', 'production.bundle_voided', 'production.bundle_split', 'production.scan_recorded', 'quality.garments_released', 'quality.release_reversed'].includes(type),
+    parts: ['lines', 'headline'],
+  },
+  { match: (type) => type.startsWith('production_issue.'), parts: ['quality'] },
+  { match: (type) => type.startsWith('order_promise.') || type === 'order_gate.changed', parts: ['dates'] },
+  { match: (type) => ['shipment.', 'deposit_request.', 'payment.', 'invoice.'].some((prefix) => type.startsWith(prefix)), parts: ['money', 'shipments'] },
+  { match: (type) => type === 'file.available', parts: ['files'] },
+]
+
+/** Each declared event the order page re-reads on, with its parts (declared types only, sorted). */
+export const ORDER_LIVE_EVENTS: readonly { readonly type: string; readonly parts: readonly OrderPagePart[] }[] = Object.freeze(
+  EVENT_CATALOGUE.types().flatMap((type) => {
+    const parts = [...new Set(LIVE_RULES.filter((rule) => rule.match(type)).flatMap((rule) => rule.parts))]
+    return parts.length > 0 ? [{ type, parts }] : []
+  }),
+)
+
+const FLOOR_WORDS: Words = Object.freeze({ it: 'Il reparto', en: 'The floor' })
+const SYSTEM_WORDS: Words = Object.freeze({ it: 'Nexus', en: 'Nexus' })
+
+/** The records each part's last change is read from (their audit rows). */
+interface PartRecords {
+  readonly order: readonly string[]
+  readonly changes: readonly string[]
+  readonly work: readonly string[]
+  readonly shipments: readonly string[]
+  readonly money: { readonly invoices: readonly string[]; readonly deposits: readonly string[] }
+}
+
+/**
+ * The order's ids the page matches its live messages by, and who changed each part last — from the newest audit row: an office
+ * person by name, the order's OWN customer by name, "the floor" (never a worker: Statuto dei Lavoratori art. 4) or "Nexus" (a job).
+ * A row written by another partner (a workshop on a work order) is passed over: the answer names nobody else. Work orders: only
+ * those the reader reaches (a work order of several customers, made before the rule, only for every-customer readers).
+ */
+async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds: readonly string[], viewer: Actor | null) {
+  const workOrderIds = facts.workOrders.map((row) => row.id)
+  const reach = viewer && workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds }, status: { not: 'CANCELLED' } }, select: { id: true, companyId: true, siteId: true, partyId: true }, orderBy: { id: 'asc' } }) : []
+  const reachedWorkOrders = viewer ? reach.filter((row) => reachesWorkOrder(viewer, WORKORDERS_VIEW, row)).map((row) => row.id) : []
+  const requestIds = (await db.orderChangeRequest.findMany({ where: { orderId: order.id }, select: { id: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map((row) => row.id)
+  const changeIds = (await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { id: true }, orderBy: { revision: 'asc' } })).map((row) => row.id)
+  const ids = {
+    workOrderIds: reachedWorkOrders,
+    shipmentIds: facts.shipments.map((row) => row.id),
+    invoiceIds: facts.invoices.map((row) => row.id),
+    depositRequestIds: [...depositIds],
+    requestIds,
+    changeIds,
+  }
+  const records: PartRecords = { order: [order.id], changes: requestIds, work: reachedWorkOrders, shipments: ids.shipmentIds, money: { invoices: ids.invoiceIds, deposits: ids.depositRequestIds } }
+  return { live: { events: ORDER_LIVE_EVENTS.map((entry) => ({ type: entry.type, parts: [...entry.parts] })), ids }, lastChange: await lastChangeOf(db, order, records) }
+}
+
+async function lastChangeOf(db: Reader, order: OrderRow, records: PartRecords) {
+  const where = (part: LastChangePart): { recordType: string; recordId: { in: string[] } }[] => {
+    switch (part) {
+      case 'order':
+        return [{ recordType: 'SalesOrder', recordId: { in: [...records.order] } }]
+      case 'changes':
+        return records.changes.length > 0 ? [{ recordType: 'OrderChangeRequest', recordId: { in: [...records.changes] } }] : []
+      case 'work':
+        return records.work.length > 0 ? [{ recordType: 'WorkOrder', recordId: { in: [...records.work] } }] : []
+      case 'shipments':
+        return records.shipments.length > 0 ? [{ recordType: 'Shipment', recordId: { in: [...records.shipments] } }] : []
+      case 'money':
+        return [
+          ...(records.money.invoices.length > 0 ? [{ recordType: 'Invoice', recordId: { in: [...records.money.invoices] } }] : []),
+          ...(records.money.deposits.length > 0 ? [{ recordType: 'DepositRequest', recordId: { in: [...records.money.deposits] } }] : []),
+        ]
+    }
+  }
+  // Only who may be named: the office, the floor, a job, or a partner of the order's own customer.
+  const named = { OR: [{ audience: { in: ['OFFICE' as const, 'FLOOR' as const, 'SYSTEM' as const] } }, { audience: { in: ['PARTNER' as const, 'LINK' as const] }, partyId: order.partyId }] }
+  const rows = new Map<LastChangePart, { audience: string; actorId: string; at: Date } | null>()
+  for (const part of LAST_CHANGE_PARTS) {
+    const of = where(part)
+    rows.set(part, of.length === 0 ? null : await db.auditLog.findFirst({ where: { AND: [{ OR: of }, named] }, select: { audience: true, actorId: true, at: true }, orderBy: [{ at: 'desc' }, { id: 'desc' }] }))
+  }
+  const officeIds = [...new Set([...rows.values()].flatMap((row) => (row && row.audience === 'OFFICE' ? [row.actorId] : [])))]
+  const people = new Map((officeIds.length > 0 ? await db.user.findMany({ where: { id: { in: officeIds } }, select: { id: true, displayName: true } }) : []).map((user) => [user.id, user.displayName]))
+  const customer = [...rows.values()].some((row) => row && (row.audience === 'PARTNER' || row.audience === 'LINK')) ? await db.party.findUnique({ where: { id: order.partyId }, select: { legalName: true, tradeName: true } }) : null
+  const customerName = customer ? (customer.tradeName ?? customer.legalName) : ''
+  const byOf = (row: { audience: string; actorId: string }) => {
+    if (row.audience === 'OFFICE') {
+      const name = people.get(row.actorId) ?? ''
+      return { kind: 'OFFICE' as const, name, words: { it: name, en: name } }
+    }
+    if (row.audience === 'PARTNER' || row.audience === 'LINK') return { kind: 'CUSTOMER' as const, name: customerName, words: { it: customerName, en: customerName } }
+    if (row.audience === 'FLOOR') return { kind: 'FLOOR' as const, name: null, words: FLOOR_WORDS }
+    return { kind: 'SYSTEM' as const, name: null, words: SYSTEM_WORDS }
+  }
+  const view = (part: LastChangePart) => {
+    const row = rows.get(part)
+    return row ? { by: byOf(row), at: toUtcIso(row.at) } : null
+  }
+  return { order: view('order'), changes: view('changes'), work: view('work'), shipments: view('shipments'), money: view('money') }
+}
+// ── end B-SA-034 ──
+
+export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */) {
   const facts = await readOrderFacts(db, order)
   const party = await db.party.findUnique({ where: { id: order.partyId }, select: { code: true, legalName: true } })
   const styleIds = [...new Set(facts.lines.map((line) => line.styleId))]
@@ -216,6 +337,8 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     amendments: { count: amendments.length, latestRevision: amendments[0]?.revision ?? null, latestAt: amendments[0] ? toUtcIso(amendments[0].createdAt) : null },
     /** SAL-209: a confirmed order's lines change only through an amendment. */
     locked: true,
+    // B-SA-034: the live watch list (the server's) and who changed each part last.
+    ...(await liveOf(db, order, facts, deposits.map((row) => row.id), viewer)),
   }
 }
 

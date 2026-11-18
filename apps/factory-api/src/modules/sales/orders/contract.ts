@@ -114,6 +114,17 @@ const settlementView = output({
   source: z.string(),
 })
 
+// ── B-SA-034: the parts of the order page a live message re-reads, and those whose last change the order read names ──
+export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files'] as const
+export type OrderPagePart = (typeof ORDER_PAGE_PARTS)[number]
+export const LAST_CHANGE_PARTS = ['order', 'changes', 'work', 'shipments', 'money'] as const
+export type LastChangePart = (typeof LAST_CHANGE_PARTS)[number]
+const lastChangeView = output({
+  by: output({ kind: z.enum(['OFFICE', 'CUSTOMER', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), words: output({ it: z.string(), en: z.string() }) }),
+  at: instant(),
+})
+// ── end B-SA-034 ──
+
 export const orderView = output({
   id: id(),
   number: z.string(),
@@ -181,6 +192,23 @@ export const orderView = output({
   amendments: output({ count: z.number().int(), latestRevision: z.number().int().nullable(), latestAt: instant().nullable() }),
   /** SAL-209: a confirmed order's lines change only through an amendment. */
   locked: z.boolean(),
+  // ── B-SA-034 (Sales page plan P17): the order page's live watch list, the server's, and who changed each part last ──
+  live: output({
+    /** Each declared event type the page listens to, and the parts it re-reads on it (matched by the ids below). */
+    events: z.array(output({ type: z.string(), parts: z.array(z.enum(ORDER_PAGE_PARTS)) })),
+    /** The order's own records (work orders: only those the reader reaches). No party id ever. */
+    ids: output({
+      workOrderIds: z.array(id()),
+      shipmentIds: z.array(id()),
+      invoiceIds: z.array(id()),
+      depositRequestIds: z.array(id()),
+      requestIds: z.array(id()),
+      changeIds: z.array(id()),
+    }),
+  }),
+  /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */
+  lastChange: output({ order: lastChangeView.nullable(), changes: lastChangeView.nullable(), work: lastChangeView.nullable(), shipments: lastChangeView.nullable(), money: lastChangeView.nullable() }),
+  // ── end B-SA-034 ──
 })
 
 const one = output({ order: orderView })

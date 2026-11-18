@@ -7,6 +7,7 @@ import { ORDERS_CLOSE, ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
+import { actorOf } from '../../../core/context' // B-SA-034
 import { lockOrderLines } from '../../production/work-orders/store'
 import { assertMay, mayOn, officeContextOf } from './access'
 import { impactView, readCancelFacts } from './impact'
@@ -55,9 +56,12 @@ export async function officeOrder(caller: CommandCaller, orderId: string, permis
  * answers the record as it is now.
  */
 export async function recordAfter(caller: CommandCaller, orderId: string): Promise<OrderView> {
+  // B-SA-034: the reader, so the live watch list names only the work orders it reaches.
+  const context = caller.factoryContext
+  const viewer = context && context.audience === 'office' ? actorOf(context) : null
   return caller.withClient(async (client) => {
     const order = (await readOrder(client, orderId))!
-    return orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order))
+    return orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer)
   })
 }
 
