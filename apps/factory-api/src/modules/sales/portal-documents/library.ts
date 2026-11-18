@@ -25,6 +25,7 @@ import {
   type PortalDocumentKind,
 } from '@nexus/factory-domain/sales/portal-documents/library'
 import { PORTAL_CUSTOMER_DOCUMENTS_CONFORMITY, PORTAL_CUSTOMER_DOCUMENTS_FINANCE, PORTAL_CUSTOMER_DOCUMENTS_VIEW } from '@nexus/factory-domain/sales/portal-documents/permissions'
+import { contentWalledFor } from '../../../platform/files/content-wall' // fix-pr-4
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import {
   lastVisitOf,
@@ -202,7 +203,10 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
     const invoiceFiles = invoiceFileIds.length > 0 ? await client.storedFile.findMany({ where: { id: { in: invoiceFileIds }, status: 'AVAILABLE' }, select: { id: true, originalName: true, contentType: true, sizeBytes: true, sha256: true } }) : []
     const opened = await openedBy(client, reader.session.userId, DOWNLOAD_ACTION)
     const lastVisitAt = reader.session.preview ? null : await lastVisitOf(client, reader.session.userId, reader.session)
-    return { sources, compliance, generated, creations, byCode, styles, issued, invoiceFiles, opened, lastVisitAt }
+    // fix-pr-4 (the brand wall; the threads lane's one content rule): an old copy whose content is another customer's (its source's
+    // record, a copy of a copy …) is never listed, counted or opened — left out as if it were not there.
+    const walled = await contentWalledFor(client, reader.session.partyId, fileIds)
+    return { sources, compliance, generated, creations, byCode, styles, issued, invoiceFiles, opened, lastVisitAt, walled }
   })
   // The DDTs the shipment copies are of (the partner reads its own DDTs).
   const ddtIds = uniq([...tenant.creations.values()].filter((created) => created.details.documentKind === 'DDT').map((created) => text(created.details.documentId)))
@@ -227,6 +231,7 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
   const seriesRoots = new Set(own.files.flatMap((file) => (file.seriesId ? [file.seriesId] : [])))
   const entries: LibraryEntry[] = []
   for (const file of own.files) {
+    if (tenant.walled.has(file.id)) continue // fix-pr-4
     const source = tenant.sources.get(file.id) ?? null
     const compliance = source?.recordType === 'ComplianceDocument' ? (complianceOf.get(source.recordId) ?? null) : null
     const generated = (source ? generatedOf.get(source.id) : undefined) ?? generatedOf.get(file.id) ?? null
