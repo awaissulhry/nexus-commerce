@@ -52,7 +52,8 @@ const doc = (n: number, over: Partial<CustomerDocument> = {}): CustomerDocument 
   kindWords: { it: 'DDT', en: 'DDT' },
   group: 'DELIVERY',
   title: { it: `Documento ${n}`, en: `Document ${n}` },
-  for: { type: 'Shipment', id: UUID(100 + n), label: `SH-${n}`, order: { id: UUID(200), number: 'SO-1', customerRef: 'PO-1' } },
+  // fix-portal-numbers-1 (B-TH-303): the API's order is its PO and the customer's own number, never the office's series.
+  for: { type: 'Shipment', id: UUID(100 + n), label: `SH-${n}`, order: { id: UUID(200), customerRef: 'PO-1', yourNumber: { seq: 1, words: { it: 'Il vostro ordine 1', en: 'Your order 1' } } } },
   style: null,
   date: `2026-11-0${n}T10:00:00.000Z`,
   version: 1,
@@ -88,16 +89,18 @@ describe('the address', () => {
 describe('all documents', () => {
   it('a row: the order with their PO first, the record beside it, NEW until opened, the newer version named', () => {
     const row = libraryRowOf(doc(1, { replacedBy: { id: UUID(9), title: { it: 'x', en: 'x' }, version: 4 }, current: false }), 'en', new Set())
-    expect(row).toMatchObject({ title: 'Document 1', order: { id: UUID(200), words: 'PO-1 · SO-1' }, forLabel: 'SH-1', isNew: true, previewable: true, replacedBy: { id: UUID(9), version: 4 } })
+    expect(row).toMatchObject({ title: 'Document 1', order: { id: UUID(200), words: 'PO-1 · #1' }, forLabel: 'SH-1', isNew: true, previewable: true, replacedBy: { id: UUID(9), version: 4 } })
     expect(libraryRowOf(doc(1), 'en', new Set([UUID(1)])).isNew).toBe(false)
     // An order's own document names the order only.
-    expect(libraryRowOf(doc(2, { for: { type: 'SalesOrder', id: UUID(200), label: 'SO-1', order: { id: UUID(200), number: 'SO-1', customerRef: null } } }), 'it', new Set())).toMatchObject({ order: { words: 'SO-1' }, forLabel: null })
+    expect(libraryRowOf(doc(2, { for: { type: 'SalesOrder', id: UUID(200), label: '#1', order: { id: UUID(200), customerRef: null, yourNumber: { seq: 1, words: { it: 'Il vostro ordine 1', en: 'Your order 1' } } } } }), 'it', new Set())).toMatchObject({ order: { words: '#1' }, forLabel: null })
+    // fix-portal-numbers-1: an order with neither a PO nor a number of its own yet reads "—", never an office number.
+    expect(libraryRowOf(doc(2, { for: { type: 'SalesOrder', id: UUID(200), label: null, order: { id: UUID(200), customerRef: null, yourNumber: null } } }), 'it', new Set())).toMatchObject({ order: { words: '—' } })
     // An XML alone is downloaded, never previewed.
     expect(libraryRowOf(doc(3, { files: [{ fileId: UUID(3), format: 'XML', name: 'a.xml', contentType: 'application/xml', sizeBytes: 1 }] }), 'it', new Set()).previewable).toBe(false)
   })
 
   it('grouping gathers each order’s (or style’s) documents, the newest group first, the rest last', () => {
-    const other = { id: UUID(201), number: 'SO-2', customerRef: null }
+    const other = { id: UUID(201), customerRef: null, yourNumber: { seq: 2, words: { it: 'Il vostro ordine 2', en: 'Your order 2' } } }
     const rows = [doc(1), doc(2, { for: { type: 'Shipment', id: UUID(5), label: 'SH', order: other } }), doc(3, { for: null }), doc(4)].map((entry) => libraryRowOf(entry, 'it', new Set()))
     expect(groupedRows(rows, 'newest').map((row) => row.id)).toEqual([UUID(1), UUID(2), UUID(3), UUID(4)])
     expect(groupedRows(rows, 'order').map((row) => row.id)).toEqual([UUID(1), UUID(4), UUID(2), UUID(3)])
@@ -198,7 +201,7 @@ describe('conformity per style received', () => {
       standard: 'EN 17092-4',
       ppeClass: 'II',
       received: [
-        { shipment: { id: UUID(10), number: 'SH-2' }, order: { id: UUID(20), number: 'SO-2', customerRef: 'PO-2' }, shippedOn: '2026-11-01', revision: 3, pieces: 10, state: 'COMPLETE', declaration: ref(1), userInformation: ref(2, 'USER_INFORMATION'), certificate: null, reports: [ref(3, 'TEST_REPORT')] },
+        { shipment: { id: UUID(10), number: 'SH-2' }, order: { id: UUID(20), customerRef: 'PO-2', yourNumber: { seq: 2, words: { it: 'Il vostro ordine 2', en: 'Your order 2' } } }, shippedOn: '2026-11-01', revision: 3, pieces: 10, state: 'COMPLETE', declaration: ref(1), userInformation: ref(2, 'USER_INFORMATION'), certificate: null, reports: [ref(3, 'TEST_REPORT')] },
         { shipment: { id: UUID(11), number: 'SH-1' }, order: null, shippedOn: '2026-10-01', revision: 3, pieces: 5, state: 'INCOMPLETE', declaration: ref(1), userInformation: null, certificate: null, reports: [] },
       ],
     },
@@ -209,7 +212,7 @@ describe('conformity per style received', () => {
     expect(style!.received.map((row) => row.documents.map((entry) => entry.id))).toEqual([[UUID(1), UUID(2), UUID(3)], [UUID(1)]])
     expect(style!.documents.map((entry) => entry.id)).toEqual([UUID(1), UUID(2), UUID(3)])
     expect(style!.incomplete).toBe(true)
-    expect(style!.received[0]!.order).toBe('PO-2 · SO-2')
+    expect(style!.received[0]!.order).toBe('PO-2 · #2') // fix-portal-numbers-1
     // Opened in this visit: no longer NEW.
     expect(style!.received[0]!.declaration!.isNew).toBe(false)
   })
@@ -233,7 +236,7 @@ describe('the document pop-up (lifted from Home)', () => {
   it('opens the PDF of an invoice, names its order, and says a withdrawn version in our words', () => {
     const invoice = doc(5, { files: [{ fileId: UUID(51), format: 'XML', name: 'a.xml', contentType: 'application/xml', sizeBytes: 1 }, { fileId: UUID(5), format: 'PDF', name: 'a.pdf', contentType: 'application/pdf', sizeBytes: 1 }] })
     expect(mainFileOf(invoice)?.fileId).toBe(UUID(5))
-    expect(previewRowOf(invoice, 'it')).toMatchObject({ forOrder: 'PO-1 · SO-1', forLabel: null, previewable: true, fileName: 'a.pdf' })
+    expect(previewRowOf(invoice, 'it')).toMatchObject({ forOrder: 'PO-1 · #1', forLabel: null, previewable: true, fileName: 'a.pdf' })
     expect(openRefusal({ kind: 'conflict', issues: [{ path: 'document/WITHDRAWN', message: 'This version was withdrawn' }] })).toEqual({ key: 'preview.problem.withdrawn', withdrawn: true })
     expect(openRefusal({ kind: 'not_found', issues: [] }).key).toBe('preview.problem.gone')
     expect(openRefusal(null).key).toBe('preview.problem.failed')

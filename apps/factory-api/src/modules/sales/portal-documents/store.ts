@@ -91,7 +91,8 @@ export const readShipments = (db: Reader, ids: readonly string[]): Promise<Shipm
 export const readShipmentsThatLeft = (db: Reader, companyId: string): Promise<ShipmentRow[]> =>
   db.shipment.findMany({ where: { companyId, status: { in: ['SHIPPED', 'DELIVERED'] }, shippedAt: { not: null } }, select: SHIPMENT_SELECT, orderBy: [{ shippedAt: 'desc' }, { number: 'desc' }], take: FILES_MAX })
 
-export const ORDER_SELECT = { id: true, companyId: true, number: true, customerRef: true, quoteVersionId: true } as const satisfies Prisma.SalesOrderSelect
+// fix-portal-numbers-1 (B-TH-303): customerSeq — the customer reads its own order number, never the office's series (`number`, only matched).
+export const ORDER_SELECT = { id: true, companyId: true, number: true, customerRef: true, quoteVersionId: true, customerSeq: true } as const satisfies Prisma.SalesOrderSelect
 export type OrderRow = Prisma.SalesOrderGetPayload<{ select: typeof ORDER_SELECT }>
 export const readOrders = (db: Reader, ids: readonly string[]): Promise<OrderRow[]> =>
   ids.length === 0 ? Promise.resolve([]) : db.salesOrder.findMany({ where: { id: { in: [...ids] } }, select: ORDER_SELECT })
@@ -101,7 +102,7 @@ export const readOrdersOfVersions = (db: Reader, versionIds: readonly string[]):
   versionIds.length === 0 ? Promise.resolve([]) : db.salesOrder.findMany({ where: { quoteVersionId: { in: [...versionIds] } }, select: ORDER_SELECT })
 
 export const readQuotes = (db: Reader, ids: readonly string[]) =>
-  ids.length === 0 ? Promise.resolve([]) : db.quote.findMany({ where: { id: { in: [...ids] } }, select: { id: true, companyId: true, number: true, customerRef: true } })
+  ids.length === 0 ? Promise.resolve([]) : db.quote.findMany({ where: { id: { in: [...ids] } }, select: { id: true, companyId: true, number: true, customerRef: true, customerSeq: true /* fix-portal-numbers-1 */ } })
 
 export const QUOTE_VERSION_SELECT = { id: true, quoteId: true, revision: true, status: true, documentSha256: true, language: true } as const satisfies Prisma.QuoteVersionSelect
 export type QuoteVersionRow = Prisma.QuoteVersionGetPayload<{ select: typeof QUOTE_VERSION_SELECT }>

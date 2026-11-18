@@ -116,7 +116,7 @@ const ORDERS: OrdersRead = {
   ],
   count: 7,
   items: [
-    { kind: 'ORDER', id: UUID(1), customerRef: 'PO-1', number: 'SO-1', yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } }, status: 'IN_PRODUCTION', promiseDate: '2026-11-20', originalPromiseDate: '2026-11-13', promiseMoved: true, requestedDate: '2026-11-10', pieces: { ordered: 70, shipped: 0, open: 70 }, nextShipment: null, progressPercent: 45 },
+    { kind: 'ORDER', id: UUID(1), customerRef: 'PO-1', number: null, yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } }, status: 'IN_PRODUCTION', promiseDate: '2026-11-20', originalPromiseDate: '2026-11-13', promiseMoved: true, requestedDate: '2026-11-10', pieces: { ordered: 70, shipped: 0, open: 70 }, nextShipment: null, progressPercent: 45 },
     { kind: 'REQUEST', id: UUID(2), customerRef: 'PO-2', number: 'RQ-1', status: 'REQUESTED', promiseDate: null, originalPromiseDate: null, promiseMoved: false, requestedDate: '2026-12-01', pieces: { ordered: 10, shipped: 0, open: 10 }, nextShipment: null, progressPercent: null },
   ],
   live: { events: [] },
@@ -157,7 +157,7 @@ describe('new documents', () => {
     newCount: 2,
     lastVisitAt: null,
     items: [
-      { id: UUID(10), kind: 'DECLARATION_OF_CONFORMITY', kindWords: { it: 'D', en: 'D' }, group: 'CONFORMITY', title: { it: 'Dichiarazione', en: 'Declaration' }, for: { type: 'Shipment', id: UUID(11), label: 'SH-1', order: { id: UUID(12), number: 'SO-1', customerRef: 'PO-1' } }, date: '2026-11-07T10:00:00.000Z', version: 3, fingerprint: 'abc', language: 'it', current: true, replacedBy: null, new: true, files: [{ fileId: UUID(10), format: 'PDF', name: 'doc.pdf', contentType: 'application/pdf', sizeBytes: 1000 }] },
+      { id: UUID(10), kind: 'DECLARATION_OF_CONFORMITY', kindWords: { it: 'D', en: 'D' }, group: 'CONFORMITY', title: { it: 'Dichiarazione', en: 'Declaration' }, for: { type: 'Shipment', id: UUID(11), label: 'SH-1', order: { id: UUID(12), customerRef: 'PO-1', yourNumber: { seq: 7, words: { it: 'Il vostro ordine 7', en: 'Your order 7' } } } }, date: '2026-11-07T10:00:00.000Z', version: 3, fingerprint: 'abc', language: 'it', current: true, replacedBy: null, new: true, files: [{ fileId: UUID(10), format: 'PDF', name: 'doc.pdf', contentType: 'application/pdf', sizeBytes: 1000 }] },
       { id: UUID(20), kind: 'INVOICE', kindWords: { it: 'F', en: 'I' }, group: 'FINANCE', title: { it: 'Fattura', en: 'Invoice' }, for: { type: 'Invoice', id: UUID(21), label: 'FT-1', order: null }, date: '2026-11-06T10:00:00.000Z', version: 1, fingerprint: 'def', language: null, current: true, replacedBy: null, new: true, files: [{ fileId: UUID(20), format: 'XML', name: 'ft.xml', contentType: 'application/xml', sizeBytes: 900 }] },
     ],
     live: { events: [] },
@@ -165,7 +165,8 @@ describe('new documents', () => {
 
   it('the title in the page’s language, what it is for, NEW, and whether it can be previewed', () => {
     const [declaration, invoice] = documentRows(read, 'it')
-    expect(declaration).toMatchObject({ title: 'Dichiarazione', forWords: { key: 'documents.forOrder', params: { number: 'PO-1 · SO-1' } }, isNew: true, previewable: true, version: 3 })
+    // fix-portal-numbers-1 (B-TH-303): their PO and the customer's own number, never the office's series.
+    expect(declaration).toMatchObject({ title: 'Dichiarazione', forWords: { key: 'documents.forOrder', params: { number: 'PO-1 · #7' } }, isNew: true, previewable: true, version: 3 })
     expect(invoice).toMatchObject({ title: 'Fattura', forWords: { key: 'documents.for', params: { label: 'FT-1' } }, previewable: false })
   })
 
@@ -282,6 +283,25 @@ describe('SCR-183 design cases', () => {
     expect(html).not.toContain('Your next deliveries')
     expect(html).not.toContain('New documents')
   })
+
+  // ---- fix-portal-numbers-1 (B-TH-303, Owner decision PR-06; end check walk F-PR-16 on SCR-183) -------------------------------
+  // A customer reads ITS OWN numbers ("#42") and its PO, never our shared series, so no customer reads another's volume from it:
+  // What waits for you, the new documents and the search name the customer's own numbers; fiscal numbers (invoices, DDTs) stay.
+  // The revised order's pop-up shows the approval page's own words (platform/approvals-out, relabelled by the production lane).
+  it('no case shows an office series (SO-, QT-, INQ-, RQ-) in Italian or English; the customer reads its own numbers', () => {
+    const OFFICE_SERIES = /\b(?:SO|QT|INQ|RQ)-\d{4}-\d{2,}/
+    const APPROVAL_PAGES = new Set(['approve-revised', 'approve-revised-noprices'])
+    const html = (id: string, locale: 'it' | 'en') =>
+      renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: designScreen.cases.find((item) => item.id === id)!.model })))
+    for (const locale of ['it', 'en'] as const) {
+      for (const entry of designScreen.cases.filter((item) => !APPROVAL_PAGES.has(item.id))) expect(html(entry.id, locale).match(OFFICE_SERIES)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
+    }
+    const en = html('buyer', 'en')
+    expect(en).toContain('Upload the document we asked for on #40')
+    expect(en).toContain('Order PO-BA-881 · #41')
+    expect(html('buyer', 'it')).toContain('Ordine PO-BA-881 · #41')
+  })
+  // ---- end fix-portal-numbers-1
 })
 
 // ── B-TH-223: New order on Home (P-HOME.actions) ───────────────────────────────────────────────────────────────────

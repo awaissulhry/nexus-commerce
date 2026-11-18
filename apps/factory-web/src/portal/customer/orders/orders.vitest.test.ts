@@ -430,7 +430,9 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
     }
     // Beta's rows are there to be checked: its own purchase-order codes, ids and parcels.
     expect(BETA_ROWS.filter((row) => row.customerRef !== null).every((row) => row.customerRef!.startsWith('BETA-PO-'))).toBe(true)
-    expect(BETA_ROWS.some((row) => ROWS.some((alpha) => alpha.id === row.id || alpha.number === row.number))).toBe(false)
+    // fix-portal-numbers-1 (B-TH-303): an order's office number is no longer answered (null on both sides): the numbers that are
+    // there (a request's) are compared, every id still is.
+    expect(BETA_ROWS.some((row) => ROWS.some((alpha) => alpha.id === row.id || (alpha.number !== null && alpha.number === row.number)))).toBe(false)
   })
 
   it('every case of the list draws its own numbers, never the office’s order numbers', () => {

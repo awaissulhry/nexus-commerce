@@ -88,7 +88,8 @@ function shell(locale: Locale, over: Partial<PortalShellViewModel> = {}, can = B
 interface FixtureTask {
   id: string
   kind: PartnerTaskKind
-  record: string
+  /** fix-portal-numbers-1 (B-TH-303): the record as the API's partner label names it (tasks/partner-label.ts), per language. */
+  record: string | Readonly<Record<Locale, string>>
   recordType: string
   recordId: string
   due: 'overdue' | 'today' | 'soon' | 'later'
@@ -100,10 +101,11 @@ interface FixtureTask {
 const SAMPLE_ID = id(101)
 const REVISED_ID = id(102)
 const TASKS: readonly FixtureTask[] = [
-  { id: id(1), kind: 'RECONFIRM_ORDER', record: 'SO-2026-0042', recordType: 'ApprovalRequest', recordId: REVISED_ID, due: 'today', dueIn: 5, askedBy: 'Marta Verdi', inline: false },
+  // fix-portal-numbers-1 (B-TH-303): the customer's own numbers ("#42"), as GET /portal/tasks relabels them — never the office's SO-….
+  { id: id(1), kind: 'RECONFIRM_ORDER', record: { it: 'Ordine modificato · #42 · revisione 2', en: 'Revised order · #42 · revision 2' }, recordType: 'ApprovalRequest', recordId: REVISED_ID, due: 'today', dueIn: 5, askedBy: 'Marta Verdi', inline: false },
   { id: id(2), kind: 'APPROVE', record: 'Campione JKT-ESEMPIO-01', recordType: 'ApprovalRequest', recordId: SAMPLE_ID, due: 'soon', dueIn: 52, askedBy: 'Marta Verdi', inline: false },
-  { id: id(3), kind: 'UPLOAD_DOCUMENT', record: 'SO-2026-0040', recordType: 'SalesOrder', recordId: id(40), due: 'overdue', dueIn: -30, askedBy: 'Marta Verdi', inline: true },
-  { id: id(4), kind: 'ANSWER_MESSAGE', record: 'SO-2026-0038', recordType: 'SalesOrder', recordId: id(38), due: 'later', dueIn: 24 * 6, askedBy: null, inline: false },
+  { id: id(3), kind: 'UPLOAD_DOCUMENT', record: '#40', recordType: 'SalesOrder', recordId: id(40), due: 'overdue', dueIn: -30, askedBy: 'Marta Verdi', inline: true },
+  { id: id(4), kind: 'ANSWER_MESSAGE', record: '#38', recordType: 'SalesOrder', recordId: id(38), due: 'later', dueIn: 24 * 6, askedBy: null, inline: false },
 ]
 const PAY: FixtureTask = { id: id(5), kind: 'PAY_INVOICE', record: 'FT-2026-0101', recordType: 'Invoice', recordId: id(60), due: 'overdue', dueIn: -72, askedBy: null, inline: false }
 
@@ -111,12 +113,13 @@ function tasksOf(locale: Locale, list: readonly FixtureTask[] = TASKS, state: Ta
   const groups = new Map<string, TasksViewModel['groups'][number]['rows'][number][]>()
   for (const task of list) {
     const rows = groups.get(task.kind) ?? []
+    const record = typeof task.record === 'string' ? task.record : task.record[locale] // fix-portal-numbers-1
     rows.push({
       id: task.id,
       kind: task.kind,
-      title: taskWords(task.kind, task.record, locale),
+      title: taskWords(task.kind, record, locale),
       verb: KIND_RULES[task.kind].verb[locale],
-      record: task.record,
+      record,
       askedBy: task.askedBy,
       due: { at: at(task.dueIn), state: task.due, text: formatDate(at(task.dueIn), { locale }) },
       act: task.inline ? 'inline' : 'link',
@@ -157,7 +160,7 @@ const row = (n: number, status: OrdersRead['items'][number]['status'], over: Par
   kind: 'ORDER',
   id: id(200 + n),
   customerRef: `PO-BA-${880 + n}`,
-  number: `SO-2026-00${40 + n}`,
+  number: null, // fix-portal-numbers-1 (B-TH-303): GET /portal/sales-orders answers an order's own number only (`yourNumber`)
   // B-TH-303: the customer's own count (a catalogue order still waiting for us has none).
   yourNumber: customerNumberOf('ORDER', 30 + n),
   status,
@@ -194,7 +197,8 @@ const doc = (n: number, kind: string, title: [string, string], over: Partial<Doc
   kindWords: W(title[0], title[1]),
   group: 'CONFORMITY',
   title: W(title[0], title[1]),
-  for: { type: 'Shipment', id: id(301), label: 'SH-2026-0012', order: { id: id(201), number: 'SO-2026-0041', customerRef: 'PO-BA-881' } },
+  // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, as GET /portal/customer-documents answers it.
+  for: { type: 'Shipment', id: id(301), label: 'SH-2026-0012', order: { id: id(201), customerRef: 'PO-BA-881', yourNumber: customerNumberOf('ORDER', 41) } },
   date: at(-6 - n * 5),
   version: 1,
   fingerprint: '3f9a1c2b0d4e',
@@ -317,8 +321,9 @@ const SEARCH_GROUPS = (locale: Locale) => {
       label: portal('search.group.orders'),
       count: 2,
       results: [
-        { key: 'SalesOrder:a', href: `${PREFIX}/open/SalesOrder/${id(203)}`, theirs: 'PO-BA-883', ours: 'SO-2026-0043', subtitle: locale === 'it' ? 'In produzione' : 'In production', when: formatDate(at(-240), { locale }) },
-        { key: 'SalesOrder:b', href: `${PREFIX}/open/SalesOrder/${id(208)}`, theirs: 'PO-BA-838', ours: 'SO-2026-0012', subtitle: locale === 'it' ? 'Consegnato' : 'Delivered', when: formatDate(at(-2000), { locale }) },
+        // fix-portal-numbers-1 (B-TH-303): "ours" is the customer's own number (the partner view's "#43"), never the office's SO-….
+        { key: 'SalesOrder:a', href: `${PREFIX}/open/SalesOrder/${id(203)}`, theirs: 'PO-BA-883', ours: '#43', subtitle: locale === 'it' ? 'In produzione' : 'In production', when: formatDate(at(-240), { locale }) },
+        { key: 'SalesOrder:b', href: `${PREFIX}/open/SalesOrder/${id(208)}`, theirs: 'PO-BA-838', ours: '#12', subtitle: locale === 'it' ? 'Consegnato' : 'Delivered', when: formatDate(at(-2000), { locale }) },
       ],
     },
     {
@@ -551,7 +556,7 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
       model: homeCase((locale) => ({ home: { search: { query: 'PO-BA-8', state: 'ready', groups: SEARCH_GROUPS(locale), found: 3, capped: false, recent: [] } } })),
       note: 'Grouped as the portal shows them, their reference first with the typed words marked; Enter on one match opens it directly; ↓ moves into the results; ⌘-click opens a new tab.',
     },
-    { id: 'search-recent', label: 'Find anything: recent searches', model: homeCase(() => ({ home: { search: { query: '', state: 'idle', groups: [], found: 0, capped: false, recent: ['PO-BA-883', 'JKT-ESEMPIO', 'SO-2026-0041'] } } })), note: 'Kept on this device only, with Clear.' },
+    { id: 'search-recent', label: 'Find anything: recent searches', model: homeCase(() => ({ home: { search: { query: '', state: 'idle', groups: [], found: 0, capped: false, recent: ['PO-BA-883', 'JKT-ESEMPIO', 'FT-2026-0101' /* fix-portal-numbers-1: an invoice's legal number, never an office series */] } } })), note: 'Kept on this device only, with Clear.' },
     { id: 'search-none', label: 'Find anything: nothing found', model: homeCase(() => ({ home: { search: { query: 'ZZ-0000', state: 'ready', groups: [], found: 0, capped: false, recent: [] } } })) },
     { id: 'search-error', label: 'Find anything: search not answering', model: homeCase(() => ({ home: { search: { query: 'PO-BA', state: 'error', groups: [], found: 0, capped: false, recent: [] } } })) },
     { id: 'loading', label: 'Loading', model: homeCase((locale) => ({ home: loadingSections(false), tasks: tasksOf(locale, [], 'loading') })) },

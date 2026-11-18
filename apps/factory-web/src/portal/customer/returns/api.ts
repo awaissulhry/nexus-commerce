@@ -151,7 +151,8 @@ export const complaintRecordSchema = z.object({
     via: z.string(),
     description: z.string(),
     item: z.object({ style: z.object({ code: z.string(), name: z.string() }).nullable(), size: z.string().nullable(), serial: z.string().nullable(), batchNumber: z.string().nullable() }),
-    order: z.object({ id: z.string(), number: z.string(), yourRef: z.string().nullable() }).nullable(),
+    // fix-portal-numbers-1 (B-TH-303): the order by the customer's own number and PO, never the office's series.
+    order: z.object({ id: z.string(), yourNumber: z.object({ seq: z.number(), words }).nullable(), yourRef: z.string().nullable() }).nullable(),
     shipment: z.object({ id: z.string(), number: z.string() }).nullable(),
     photos: z.array(fileSchema),
   }),

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
-import { documentSchema } from './preview/api'
+import { documentSchema, ownOrderSchema /* fix-portal-numbers-1 */ } from './preview/api'
 
 /**
  * What the customer's Documents page reads and sends (B-W2b-195, SCR-186; design portal.customer.documents), every answer
@@ -58,7 +58,7 @@ export type DocRef = z.infer<typeof docRefSchema>
 
 export const receivedSchema = z.object({
   shipment: z.object({ id: z.string(), number: z.string() }),
-  order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() }).nullable(),
+  order: ownOrderSchema.nullable(), // fix-portal-numbers-1 (B-TH-303)
   shippedOn: z.string(),
   revision: z.number().nullable(),
   pieces: z.number(),

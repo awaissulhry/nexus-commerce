@@ -152,11 +152,14 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
     return {
       sortKey: promiseDate ?? '9999-12-31',
       styles: lines.map((line) => line.styleId),
+      // fix-portal-numbers-1 (B-TH-303, plan §0.5): the office's number is only matched (it is printed on the order confirmation)
+      // and sorts; the row answers the customer's own number (`yourNumber`) and never the office's series (as the sheet, B-TH-061).
+      officeNumber: order.number as string | null,
       row: {
         kind: 'ORDER' as const,
         id: order.id,
         customerRef: order.customerRef,
-        number: order.number,
+        number: null as string | null,
         yourNumber: customerNumberOf('ORDER', order.customerSeq),
         orderedOn: dayOf(order.orderDate),
         status,
@@ -177,6 +180,7 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
   const requestRows = read.requests.map((request) => ({
     sortKey: dayOrNull(request.requestedDate) ?? '9999-12-31',
     styles: request.styleIds,
+    officeNumber: request.number as string | null, // fix-portal-numbers-1
     row: {
       kind: 'REQUEST' as const,
       id: request.id,
@@ -198,9 +202,9 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
       progressPercent: null as number | null,
     },
   }))
-  const searched = [...orderRows, ...requestRows].filter((entry) => found([entry.row.customerRef, entry.row.number], entry.styles))
+  const searched = [...orderRows, ...requestRows].filter((entry) => found([entry.row.customerRef, entry.officeNumber /* fix-portal-numbers-1 */], entry.styles))
   const inChipRows = searched.filter((entry) => inChip(query.chip, entry.row.status, entry.row.movedLately))
-  inChipRows.sort((a, b) => a.sortKey.localeCompare(b.sortKey) || (a.row.number ?? '').localeCompare(b.row.number ?? ''))
+  inChipRows.sort((a, b) => a.sortKey.localeCompare(b.sortKey) || (a.officeNumber ?? '').localeCompare(b.officeNumber ?? ''))
   const page = inChipRows.slice(query.offset, query.offset + query.limit).map((entry) => entry.row)
   if (query.progress === 'true' && tenant.shared) {
     for (const row of page.slice(0, PROGRESS_ROWS)) {

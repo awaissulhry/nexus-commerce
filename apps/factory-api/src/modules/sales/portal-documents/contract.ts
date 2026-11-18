@@ -17,6 +17,8 @@ const fileParams = input({ fileId: id() })
 const kind = z.enum(PORTAL_DOCUMENT_KINDS)
 
 const replacement = output({ id: id().nullable(), title: words, version: z.number().int() })
+// fix-portal-numbers-1 (B-TH-303): an order the customer reads — its PO and its own number with words (null: none yet).
+const ownOrder = output({ id: id(), customerRef: z.string().nullable(), yourNumber: output({ seq: z.number().int(), words }).nullable() })
 
 const document = output({
   /** The document's main file (an invoice's PDF, else its XML). */
@@ -30,7 +32,9 @@ const document = output({
     type: z.string(),
     id: id(),
     label: z.string().nullable(),
-    order: output({ id: id(), number: z.string(), customerRef: z.string().nullable() }).nullable(),
+    // fix-portal-numbers-1 (B-TH-303, plan §0.5): the order as the customer reads it — its PO and ITS OWN number ("Your order 12"),
+    // never the office's series (SO-…), which counts every customer's orders; the label names it the same way ("#12").
+    order: ownOrder.nullable(),
   }).nullable(),
   style: output({ code: z.string(), name: z.string() }).nullable(),
   /** When it was issued (stored, or the invoice issued). */
@@ -122,7 +126,7 @@ export const conformityContract = defineContract({
           received: z.array(
             output({
               shipment: output({ id: id(), number: z.string() }),
-              order: output({ id: id(), number: z.string(), customerRef: z.string().nullable() }).nullable(),
+              order: ownOrder.nullable(), // fix-portal-numbers-1
               shippedOn: businessDate(),
               /** The style revision the work orders froze (the declaration's revision). */
               revision: z.number().int().nullable(),

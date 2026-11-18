@@ -27,6 +27,7 @@ import { linkCommand, useLink } from '../../../platform/links/use'
 import { readDocuments } from '../documents/read'
 import { currentPackingListFile } from '../shipments/packing-list'
 import { readShipment, type ShipmentHeader } from '../store'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 
 /**
  * A customer's tracking page by link (B-W2b-170; LOG-062; design links.tracking, SCR-194). The link authenticator opened a
@@ -98,7 +99,8 @@ export async function trackingPage(request: FastifyRequest) {
     const tracked = await trackedOf(db, link, now)
     if (!tracked) return null
     const { shipment, via } = tracked
-    const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true } })
+    // fix-portal-numbers-1 (B-TH-303, plan §0.5): the customer's own order number, never the office's SO-… series.
+    const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { customerSeq: true, customerRef: true } })
     const site = await db.site.findUnique({ where: { id: shipment.siteId }, select: { timezone: true } })
     const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
     const events = await db.trackingEvent.findMany({ where: { shipmentId: shipment.id }, select: { id: true, status: true, location: true, occurredAt: true, parcelId: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200 })
@@ -123,7 +125,7 @@ export async function trackingPage(request: FastifyRequest) {
       returnedAt: iso(shipment.returnedAt),
       expectedDeliveryAt: iso(expectedDeliveryOf(shipment.status, shipment.expectedDeliveryAt)),
     },
-    order: { customerRef: page.order?.customerRef ?? null, number: page.order?.number ?? null },
+    order: { customerRef: page.order?.customerRef ?? null, number: customerRefOf('ORDER', page.order?.customerSeq ?? null) /* fix-portal-numbers-1: "#12" */ },
     pill: tracker.pill,
     problem: tracker.problem,
     steps: tracker.steps.map((step) => ({ code: step.code, state: step.state, at: iso(step.at) })),
