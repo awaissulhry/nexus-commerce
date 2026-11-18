@@ -47,4 +47,8 @@ export const manifest = defineManifest({
   // its own right, named in `withheld` without it), and its dates alone (gates, milestones, the published plan; no action).
   'GET /sales/orders/:orderId/production': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'GET /sales/orders/:orderId/milestones': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-SA-036 (Sales page plan N9, P14): every file of the order by source group (can() on the order; files.read over each file's
+  // record, its group's right, body data with sales.measurements.view), and the walled opening of one (body data recorded).
+  'GET /sales/orders/:orderId/files': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'POST /sales/orders/:orderId/files/:fileId/open': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })
