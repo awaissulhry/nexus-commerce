@@ -13,4 +13,6 @@ export const manifest = defineManifest({
   'GET /portal/sales-orders/:orderId': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'GET /portal/sales-orders/:orderId/progress': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'GET /portal/sales-orders/:orderId/shipments': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
+  // B-SA-037 (Sales page plan N9, P14): the order's files shared with the customer, in the office's groups (the content wall).
+  'GET /portal/sales-orders/:orderId/files': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
 })
