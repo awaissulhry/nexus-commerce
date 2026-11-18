@@ -16,6 +16,7 @@ import {
   PRODUCTION_ZIP,
   PRODUCTION_ZIP_REFUSALS,
   PRODUCTION_ZIP_WORDS,
+  productionZipFolders, // fix-pr-5
   productionZipName,
   productionZipPaths,
   productionZipProblem,
@@ -88,13 +89,21 @@ describe('B-PR-46b Download files of N: the zip', () => {
 
   it('puts each file in its order\'s folder, numbers a repeated name, and names the zip by its order or its count', () => {
     expect(productionZipPaths([
-      { folder: 'SO-0142', name: 'order sheet.pdf' },
-      { folder: 'SO-0142', name: 'Order Sheet.pdf' },
-      { folder: 'SO-0143', name: 'order sheet.pdf' },
-      { folder: 'SO/0144', name: '../artwork.pdf' },
-    ])).toEqual(['SO-0142/order sheet.pdf', 'SO-0142/Order Sheet (2).pdf', 'SO-0143/order sheet.pdf', 'SO_0144/__artwork.pdf'])
-    expect(productionZipName(['SO-0142'], '2026-11-18')).toBe('SO-0142_files.zip')
-    expect(productionZipName(['SO-0142', 'SO-0143'], '2026-11-18')).toBe('files_2_orders_2026-11-18.zip')
+      { folder: 'BETA-PO-0142', name: 'order sheet.pdf' },
+      { folder: 'BETA-PO-0142', name: 'Order Sheet.pdf' },
+      { folder: 'Your order 13', name: 'order sheet.pdf' },
+      { folder: 'BETA/0144', name: '../artwork.pdf' },
+    ])).toEqual(['BETA-PO-0142/order sheet.pdf', 'BETA-PO-0142/Order Sheet (2).pdf', 'Your order 13/order sheet.pdf', 'BETA_0144/__artwork.pdf'])
+    expect(productionZipName(['BETA-PO-0142'], '2026-11-18')).toBe('BETA-PO-0142_files.zip')
+    expect(productionZipName(['BETA-PO-0142', 'Your order 13'], '2026-11-18')).toBe('files_2_orders_2026-11-18.zip')
+  })
+
+  // fix-pr-5 (lead decision): the portal never shows the office's order series; the zip names each order as the customer knows it.
+  it('names each order by its own PO, else "Your order N" (its own number), else its place; a PO picked twice adds the number', () => {
+    expect(productionZipFolders([{ customerRef: 'BETA-PO-0142', customerSeq: 12 }, { customerRef: null, customerSeq: 13 }, { customerRef: '  ', customerSeq: null }], 'en')).toEqual(['BETA-PO-0142', 'Your order 13', 'Order 3'])
+    expect(productionZipFolders([{ customerRef: null, customerSeq: 13 }, { customerRef: null, customerSeq: null }], 'it')).toEqual(['Il vostro ordine 13', 'Ordine 2'])
+    expect(productionZipFolders([{ customerRef: 'PO 7', customerSeq: 4 }, { customerRef: 'po 7', customerSeq: 5 }, { customerRef: 'PO 7', customerSeq: null }], 'en')).toEqual(['PO 7 (Your order 4)', 'po 7 (Your order 5)', 'PO 7 (Order 3)'])
+    expect(productionZipFolders([{ customerRef: 'PO/8', customerSeq: 1 }], 'en')).toEqual(['PO_8'])
   })
 
   it('reads the order confirmation the sales order keeps as an ORDER_CONFIRMATION: only a role that sees prices gets it (R-52)', () => {

@@ -95,6 +95,39 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
     { database: h.database, officeAuth: h.auth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session']) as keyof typeof sessions] ?? null) },
   )
   const w = await productionTwoBrands({ db: h.db, database: h.database, app: officeApp, namespace })
+  // ── fix-pr-5: the copied jacket's certificate ───────────────────────────────────────────────────────────────────────────────
+  // The world's own jacket (T-OWN-JKT-02) is a copy of SEED-JKT-02, a category II PPE garment: the full seed covers that style with
+  // a certificate (seed/quality.ts SEED-CERT-0003, EN 17092-3 class AA), the copy had none, so every date proposed for an order of
+  // it was refused at CERT-COVERAGE before the path a test meant. The copy gets the same certificate, made up and held by the
+  // company (our own collection, no brand), covering all its colourways and sizes.
+  await h.database.withScope({ audience: 'office', tenantId: T, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      const certificateId = seedUuid(namespace, 'urgency-world:certificate:T-OWN-JKT-02')
+      const at = h.clock.now()
+      await tx.certificate.create({
+        data: {
+          id: certificateId,
+          companyId: w.companyId,
+          standard: 'EN 17092-3:2020',
+          ppeClass: 'AA',
+          number: 'T-OWN-CERT-0002',
+          notifiedBodyName: 'Made-up Notified Body',
+          notifiedBodyNumber: '0000',
+          modelReference: 'T-OWN-JKT-02',
+          validFrom: new Date('2026-01-15T00:00:00.000Z'),
+          validTo: new Date('2031-01-14T00:00:00.000Z'),
+          status: 'VALID',
+          statusChangedAt: at,
+          createdAt: at,
+          updatedAt: at,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
+      await tx.certificateCoverage.create({ data: { id: seedUuid(namespace, 'urgency-world:coverage:T-OWN-JKT-02'), certificateId, styleId: w.styleId, createdAt: at, updatedAt: at, createdById: actorId }, select: { id: true } })
+    }),
+  )
+  // ── end fix-pr-5 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const admin = async <R = Record<string, any>>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
   const replica = async (statements: readonly { readonly sql: string; readonly values?: unknown[] }[]): Promise<void> => {
@@ -167,7 +200,10 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
     const person = await addUser(h, tenant, { email })
     await h.database.withScope({ audience: 'office', tenantId: T, actorId: person.id }, async (client) => {
       const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: T, key: roleKey } }, select: { id: true } })
-      await client.roleAssignment.create({ data: { id: newId(), userId: person.id, roleId: role.id, allCompanies: true, partyIds: parties ? [...parties] : [], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      // fix-pr-5: valid from a minute before the earlier of the world's clock and the server's: the sign-ins move the world's clock
+      // minutes ahead, and the internal approvals engine (a second person's yes) reads the roles on the server clock.
+      const validFrom = new Date(Math.min(h.clock.now().getTime(), Date.now()) - 60_000)
+      await client.roleAssignment.create({ data: { id: newId(), userId: person.id, roleId: role.id, allCompanies: true, partyIds: parties ? [...parties] : [], validFrom }, select: { id: true } })
     })
     const browser = new Browser(h.app)
     const signed = await browser.signIn(namespace, person.email, person.password)

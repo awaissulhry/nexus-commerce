@@ -125,13 +125,17 @@ describe('the problems a customer reported (R-42, R-43)', () => {
     expect(problemWords(state!)).toEqual({ it: 'In attesa di una nostra risposta dal 15 nov', en: 'Waiting on us since 15 Nov' })
   })
 
-  it('reads "Answered" when the answer is in its own thread, "Answered in SO-…" when it is in another order of its batch', () => {
+  it('reads "Answered" when the answer is in its own thread, "Answered in your order N" when it is in another order of its batch', () => {
     const answeredHere = problemStateOf(order(1), B, [problem({ status: 'ANSWERED', answeredAt: at('2026-11-17T08:00:00Z'), answeredInOrderId: order(1) })])
     expect(answeredHere).toEqual({ state: 'ANSWERED', on: '2026-11-17' })
     expect(problemWords(answeredHere!).en).toBe('Answered 17 Nov')
     const elsewhere = problemStateOf(order(1), B, [problem({ status: 'ANSWERED', answeredAt: at('2026-11-17T08:00:00Z'), answeredInOrderId: order(2) })])
     expect(elsewhere).toEqual({ state: 'ANSWERED_IN', on: '2026-11-17', orderId: order(2) })
-    expect(problemWords(elsewhere!, 'SO-2026-00042')).toEqual({ it: 'Risposto in SO-2026-00042', en: 'Answered in SO-2026-00042' })
+    // fix-pr-5 (lead decision): the customer's own number of that order (as the bell), else its PO, else the day; never SO-….
+    expect(problemWords(elsewhere!, { seq: 13, customerRef: 'BETA-PO-0013' })).toEqual({ it: 'Risposto nel vostro ordine 13', en: 'Answered in your order 13' })
+    expect(problemWords(elsewhere!, { seq: null, customerRef: 'BETA-PO-0013' })).toEqual({ it: 'Risposto in BETA-PO-0013', en: 'Answered in BETA-PO-0013' })
+    expect(problemWords(elsewhere!, { seq: null, customerRef: '  ' })).toEqual({ it: 'Risposto il 17 nov', en: 'Answered 17 Nov' })
+    expect(problemWords(elsewhere!)).toEqual({ it: 'Risposto il 17 nov', en: 'Answered 17 Nov' })
     expect(problemStateOf(order(1), B, [problem({ status: 'CANCELLED' })])).toBeNull()
   })
 

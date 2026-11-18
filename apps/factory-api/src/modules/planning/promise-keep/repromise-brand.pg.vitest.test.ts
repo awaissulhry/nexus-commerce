@@ -3,6 +3,7 @@ import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { ASKED_ONLY_FROM_REPROMISE, CUSTOMER_ACCEPTED_ACTION, CUSTOMER_REFUSED_ACTION, NEWER_DATE_WORDS } from '@nexus/factory-domain/planning/promise-keep/brand-answer'
+import { PROMISE_REASON_WORDS } from '@nexus/factory-domain/sales/portal-orders/promise' // fix-pr-5
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed/calendar'
 import { callerFor } from '../../../core/command'
@@ -143,7 +144,10 @@ describe('B-PR-28 sales accepts a new date asking the customer', { timeout: SLOW
     expect(page.request).toMatchObject({ kind: 'REPROMISE', status: 'OPEN' })
     expect(page.may).toMatchObject({ answer: true, withChanges: false })
     expect((page.content.facts as Json[]).map((fact) => fact.label)).toEqual(['Order', 'Line', 'Size 50', 'Reason', 'Please note'])
-    expect(JSON.stringify(page)).not.toMatch(/\bminutes\b|\blanes?\b|\bload\b|capacity|Brand Beta|SEED-SO-B/i)
+    // fix-pr-5: the reason it reads is the customer's curated list (sales/portal-orders PROMISE_REASON_WORDS: "Production capacity"
+    // for the CAPACITY asked here), never a figure of ours; the rest names no minutes, lane, load, capacity or other customer.
+    const shown = JSON.stringify(page).replaceAll(PROMISE_REASON_WORDS.CAPACITY.en, '').replaceAll(PROMISE_REASON_WORDS.CAPACITY.it, '')
+    expect(shown).not.toMatch(/\bminutes\b|\blanes?\b|\bload\b|capacity|Brand Beta|SEED-SO-B/i)
     // A refusal says why (the engine's rule).
     await as(anna.browser, 'POST', `/portal/approvals/${refusedRequest}/answer`, { decision: 'REFUSED', answer: '', typedName: 'Anna Alpha', version: 1 }, 400)
     await as(anna.browser, 'POST', `/portal/approvals/${refusedRequest}/answer`, { decision: 'REFUSED', answer: 'Too late for our shop opening.', typedName: 'Anna Alpha', version: 1 })

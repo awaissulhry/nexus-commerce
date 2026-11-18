@@ -70,8 +70,8 @@ import { drain, type World } from '../testing/world'
  *   M    A approves 2 and pauses 3 as one batch; the office sees one group and accepts it as one: three customer pauses (PW-12)
  *   Z1   A downloads the files zip of two orders: its Buyer gets the order confirmation, its Production person not (PW-12)
  *   H    A asks to resume one paused order; accepted, the pause is lifted (B-PR-27a)
- *   P    A reports a problem on two orders: ONE task; one office reply answers both; the other reads "Answered in <order>"
- *        (portal) and "answered in your order N" (bell) (B-PR-45, PW-15)
+ *   P    A reports a problem on two orders: ONE task; one office reply answers both; the other reads "Answered in your order N"
+ *        (portal, fix-pr-5: as the bell) and "answered in your order N" (bell), never our series (B-PR-45, PW-15)
  *   G    a PP and a size-set approval: A approves the PP itself; we decide the size set for A, put it back once (refused twice),
  *        ask again (B-PR-30a/30b, B-PR-40)
  *   K    the stage and at-risk news: cutting starts on A's order (A told "Cutting"); the PP approval can no longer be put back; an
@@ -649,12 +649,16 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     const ofBuyer = await zipOf(buyerA, [A.p1.orderId, A.p2.orderId])
     const ofProduction = await zipOf(productionA, [A.p1.orderId, A.p2.orderId])
     expect(ofProduction[0]).toBe('index.csv')
-    expect(ofProduction).toContain(`${A.p1.number}/${CARE_NOTES}`)
+    // fix-pr-5 (lead decision): the order's folder is its own PO, never our SO-… number.
+    const po = (await one<{ ref: string }>('SELECT "customerRef" AS ref FROM "SalesOrder" WHERE id = $1', [A.p1.orderId])).ref
+    expect(ofProduction).toContain(`${po}/${CARE_NOTES}`)
+    // The folders (the document's own file name is the document's: a generated confirmation may carry its number).
+    for (const name of [...ofBuyer, ...ofProduction]) expect(name.split('/')[0]).not.toContain(A.p1.number)
     // The Buyer sees prices: the same files and the order's confirmation; the Production person never a confirmation.
     for (const name of ofProduction) expect(ofBuyer).toContain(name)
     const extra = ofBuyer.filter((name) => !ofProduction.includes(name))
     expect(extra).toHaveLength(1)
-    expect(extra[0]!.startsWith(`${A.p1.number}/`)).toBe(true)
+    expect(extra[0]!.startsWith(`${po}/`)).toBe(true)
     // B: none of A's orders is its own — not found, nothing named.
     expect((await call(productionB, 'POST', '/portal/production/files/zip', { orderIds: [A.p1.orderId] })).status).toBe(404)
   })
@@ -679,7 +683,7 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect(await fresh(productionB)).toEqual([])
   })
 
-  it('P A reports a problem on two orders: ONE task; one office reply answers both; the other reads "Answered in <order>" and "answered in your order N" (PW-15)', async () => {
+  it('P A reports a problem on two orders: ONE task; one office reply answers both; the other reads "Answered in your order N" on the page and in the bell, never our series (PW-15)', async () => {
     const reported = await ok(buyerA, 'POST', '/portal/production/problems', { orderIds: [A.q1.orderId, A.q2.orderId], body: PROBLEM_BODY })
     expect((reported.results as Json[]).map((row) => [row.orderId, row.done, row.problem?.state])).toEqual([
       [A.q1.orderId, true, 'WAITING_ON_US'],
@@ -709,10 +713,13 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect((await one<{ status: string }>('SELECT status::text AS status FROM "Task" WHERE id = $1', [G.problemTask])).status).toBe('DONE')
     for (const row of (await outbox('production_issue.answered')).filter((entry) => issues.some((issue) => issue.id === entry.payload.issueId))) expect(row.payload).toMatchObject({ partyId: world.ids.a, source: 'BRAND', answeredInOrderId: A.q1.orderId })
 
-    // The customer's page: answered on the first, "Answered in <the first order>" on the other.
+    // The customer's page: answered on the first, "Answered in your order N" (its own number of the first order, as the bell:
+    // fix-pr-5, lead decision) on the other, never our series.
     const list = await listOfA()
     expect(rowIn(list, A.q1.orderId).problem.state).toBe('ANSWERED')
-    expect(rowIn(list, A.q2.orderId).problem).toMatchObject({ state: 'ANSWERED_IN', inOrder: { id: A.q1.orderId, number: A.q1.number }, words: { en: `Answered in ${A.q1.number}` } })
+    const own = (await one<{ seq: number }>('SELECT "customerSeq" AS seq FROM "SalesOrder" WHERE id = $1', [A.q1.orderId])).seq
+    expect(rowIn(list, A.q2.orderId).problem).toMatchObject({ state: 'ANSWERED_IN', inOrder: { id: A.q1.orderId, number: A.q1.number }, words: { it: `Risposto nel vostro ordine ${own}`, en: `Answered in your order ${own}` } })
+    expect(JSON.stringify(rowIn(list, A.q2.orderId).problem.words)).not.toContain(A.q1.number)
     // Its bell: one group, by its own numbers ("in the conversation of your order N"), never our series.
     const told = (await fresh(buyerA)).filter((notice) => notice.eventType === 'production_issue.answered')
     expect(told.map((notice) => `${notice.messageKey} ${notice.recordId}`).sort()).toEqual([`portal.production.problem_answered ${A.q1.orderId}`, `portal.production.problem_answered_in ${A.q2.orderId}`].sort())

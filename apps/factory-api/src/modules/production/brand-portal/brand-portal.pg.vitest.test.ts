@@ -48,7 +48,7 @@ import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessi
  *   PW-11   (read part) "n of max used" counts only the customer's own open orders; no place, no other customer's count
  *   PW-15   no portal read or file carries a supervisor, an office person, the office's note or another customer's figure
  *   and     the list order, urgency off (no urgency in the read, marks kept), the reported problem's states ("Waiting on us since",
- *           "Answered", "Answered in SO-…"), the CSV export of every own row with urgency.
+ *           "Answered", "Answered in your order N"), the CSV export of every own row with urgency.
  *
  * Every answer B got is scanned for A's names, codes, numbers and ids and for every office word written here. Every name and number
  * is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/production/brand-portal`.
@@ -464,7 +464,7 @@ describe('B-PR-18 the problems B reported (R-42, R-43)', { timeout: SLOW_TEST_TI
     expect(list.items.find((row: Json) => row.id === beta2.orderId).problem).toBeNull()
   })
 
-  it('a batch answered in one order’s thread: that order reads "Answered", the other "Answered in SEED-SO-B001"', async () => {
+  it('a batch answered in one order’s thread: that order reads "Answered", the other "Answered in your order N" (its own number, never SEED-SO-B001)', async () => {
     // The problem was reported on both of B's orders in one batch; we wrote to B in SEED-SO-B001's thread, which answered both.
     const batchId = newId()
     const thread = await one<{ id: string }>(`SELECT id FROM "Thread" WHERE "recordType" = 'SalesOrder' AND "recordId" = $1`, [w.b.salesOrderId])
@@ -486,7 +486,10 @@ describe('B-PR-18 the problems B reported (R-42, R-43)', { timeout: SLOW_TEST_TI
     const first = list.items.find((row: Json) => row.id === w.b.salesOrderId)
     const second = list.items.find((row: Json) => row.id === beta2.orderId)
     expect(first.problem).toEqual({ state: 'ANSWERED', since: null, on: '2026-11-16', inOrder: null, words: { it: 'Risposto il 16 nov', en: 'Answered 16 Nov' } })
-    expect(second.problem).toMatchObject({ state: 'ANSWERED_IN', on: '2026-11-16', inOrder: { id: w.b.salesOrderId, number: 'SEED-SO-B001', customerRef: 'SEED-B-PO-1' }, words: { en: 'Answered in SEED-SO-B001' } })
+    // fix-pr-5 (lead decision): named by B's own number of that order (as the bell), never the office's series.
+    const own = (await one<{ seq: number }>('SELECT "customerSeq" AS seq FROM "SalesOrder" WHERE id = $1', [w.b.salesOrderId])).seq
+    expect(second.problem).toMatchObject({ state: 'ANSWERED_IN', on: '2026-11-16', inOrder: { id: w.b.salesOrderId, number: 'SEED-SO-B001', customerRef: 'SEED-B-PO-1', yourNumber: { seq: own } }, words: { it: `Risposto nel vostro ordine ${own}`, en: `Answered in your order ${own}` } })
+    expect(JSON.stringify(second.problem.words)).not.toContain('SEED-SO-B001')
     // The answer names no person: whoever answered signs in the thread, never here.
     expect(JSON.stringify(list)).not.toContain(OFFICE_WORDS.supervisorName)
   })
