@@ -4,6 +4,7 @@ import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { MAX_ANSWER, ORDER_REQUEST_KINDS, REQUEST_STATUSES } from '@nexus/factory-domain/sales/change-requests/rules'
 import { COUNTER_LIMITS } from '@nexus/factory-domain/sales/change-requests/counter'
 import { askImpact, cancelFee, requestFields } from '../../sales/change-requests/contract'
+import { BATCH_ANSWER_MAX } from '@nexus/factory-domain/production-brand/bulk' // B-PR-46a
 
 /**
  * B-PR-26 — the office's read of every customer request and its answers (production plan §3 "We accept, counter or refuse with
@@ -187,3 +188,46 @@ export const acceptContract = defineContract({
   },
 })
 // ── end B-PR-27a ──
+
+// ── B-PR-46a: a customer's batch answered as one group (./answer.ts refuseBatch, ./accept.ts acceptBatch) ──────────────────────
+const batchParams = input({ batchId: id() })
+/** The requests of the batch as the office read them (each re-checked at its version). */
+const batchItems = z.array(input({ requestId: id(), version })).min(1).max(BATCH_ANSWER_MAX)
+
+const batchAnswer = output({
+  batchId: id(),
+  /** One result per request named of the batch: done (what it did, in words), or why not (the office's real reason). */
+  results: z.array(
+    output({
+      requestId: id(),
+      orderId: id(),
+      orderNumber: z.string(),
+      done: z.boolean(),
+      words: words.nullable(),
+      problem: output({ code: z.string(), message: z.string() }).nullable(),
+    }),
+  ),
+  /** Requests named that are not of this batch (or not reached): counted, never named. */
+  notFound: z.number().int(),
+  /** The batch as it stands now (the group's rows). */
+  requests: z.array(brandRequest),
+})
+
+export const batchAcceptContract = defineContract({
+  params: batchParams,
+  body: input({
+    items: batchItems,
+    /** Our words to the customer, the same on every request (optional on an accept). */
+    answer: z.string().trim().max(MAX_ANSWER).nullable().optional(),
+    /** A batch of "Urgent – asked" only: true = "Accept and rush the floor"; false or left out = "Accept as urgent". */
+    rushFloor: z.boolean().optional(),
+  }),
+  response: { 200: batchAnswer },
+})
+
+export const batchRefuseContract = defineContract({
+  params: batchParams,
+  body: input({ items: batchItems, answer: z.string().trim().min(1).max(MAX_ANSWER) }),
+  response: { 200: batchAnswer },
+})
+// ── end B-PR-46a ──

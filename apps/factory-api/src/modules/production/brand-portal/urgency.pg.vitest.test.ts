@@ -19,7 +19,7 @@ import { urgencyWorld, type UrgencyWorld } from '../testing/urgency-world'
  *           A's id alone is "Order not found."; A's rows never change; "n of max used" counts only B's open orders; no answer B
  *           gets carries an A name, number, code or id, a place in our plan or another customer's count
  *   +       B's Undo of A's batch (and of the harness's batch, which no audit row holds): not found, nothing changed
- *   and     the mark (at once inside the quota and before Cutting; over the quota or at Cutting "Ask us"; locked; back to Regular
+ *   and     the mark (at once inside the quota and before Cutting; over the quota or at Cutting an "Urgent – asked" — B-PR-46a; locked; back to Regular
  *           free), the live cut facts (a bundle made, never the stored stage: R-61), the drag and "Move to top" ("Mark urgent
  *           first"), the batch's audit "before" and Undo skipping rows changed since (R-49), one event + one audit row per command
  *           (the customer's own party: R-48), urgency off, a role without the right, never a write of the office's levers.
@@ -142,10 +142,27 @@ describe('B-PR-22a the customer marks its orders Urgent or Regular (POST /portal
     expect(await levers()).toEqual(before)
   })
 
-  it('over the quota: refused in words ("Ask us"); locked by us: the reason it reads; nothing changes', async () => {
-    const over = await refused('beta', 'POST', '/portal/production/urgency', { orderIds: [B.b4], urgency: 'URGENT' }, 409)
-    expect(over.issues).toEqual([{ path: 'body/orderIds/0/ASK_OVER_QUOTA', message: 'You have used your 2 urgent marks: ask us to make it urgent.' }])
+  it('over the quota: an "Urgent – asked" (B-PR-46a: a RUSH request of its own batch, the urgency unchanged); locked by us: the reason it reads', async () => {
+    // ── B-PR-46a: the mark over the quota becomes "Urgent – asked" (before: refused in words, "Ask us").
+    const over = await ok('beta', 'POST', '/portal/production/urgency', { orderIds: [B.b4], urgency: 'URGENT' })
+    expect(over.batchId).toBeNull()
+    expect(over.askBatchId).toEqual(expect.any(String))
+    expect(over.results).toEqual([
+      expect.objectContaining({
+        orderId: B.b4,
+        outcome: 'ASK_OVER_QUOTA',
+        done: false,
+        ask: null,
+        words: { it: 'Avete già usato le vostre 2 urgenze: inviato a noi come «Urgente – richiesto»: vi rispondiamo noi.', en: 'You have used your 2 urgent marks: sent to us as "Urgent – asked": we answer you.' },
+        asked: { requestId: expect.any(String), words: { it: 'Richiesto: vi rispondiamo noi.', en: 'Asked: we answer you.' } },
+      }),
+    ])
     expect(await state(B.b4)).toMatchObject({ urgency: 'REGULAR', urgentRank: null, setBy: null })
+    expect(await admin('SELECT kind::text, status::text, "batchId"::text AS "batchId", "partyId"::text AS "partyId" FROM "OrderChangeRequest" WHERE id = $1', [over.results[0].asked.requestId])).toEqual([{ kind: 'RUSH', status: 'OPEN', batchId: over.askBatchId, partyId: world.ids.b }])
+    // Asked again while it waits: nothing at once, nothing asked — 409 with the ask's own refusal at the order's place.
+    const again = await refused('beta', 'POST', '/portal/production/urgency', { orderIds: [B.b4], urgency: 'URGENT' }, 409)
+    expect(again.issues[0].path).toBe('body/orderIds/0/WAITING')
+    // ── end B-PR-46a
     const locked = await refused('beta', 'POST', '/portal/production/urgency', { orderIds: [B.locked], urgency: 'URGENT' }, 409)
     expect(locked.issues[0]).toEqual({ path: 'body/orderIds/0/LOCKED', message: `Set to Regular by us: ${world.w.production.lockReason}` })
     // Back to Regular of an order that is Regular: the same already (refused, in words).
@@ -262,15 +279,17 @@ describe('B-PR-22a Undo of a batch (POST /portal/production/urgency/undo; R-49)'
 })
 
 describe('B-PR-22a the mark reads LIVE cut facts (R-61) and the switch (R-46)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('a bundle made on the order: "Ask us" (cutting has started) though the stored stage still says Preparing; a stored Cutting with no cut: at once', async () => {
+  it('a bundle made on the order: "Urgent – asked" (cutting has started) though the stored stage still says Preparing; a stored Cutting with no cut: at once', async () => {
     await ok('beta', 'POST', '/portal/production/urgency', { orderIds: [B.b3], urgency: 'REGULAR' })
     // B's locked order unlocked here (as our unlock would), and a bundle made of one of its work order's cells.
     await admin(`UPDATE "BrandOrderProduction" SET "urgencyLocked" = false, "urgencyLockReason" = NULL, "urgencyLockedAt" = NULL, "urgencyLockedById" = NULL, version = version + 1 WHERE key = $1`, [`brand-production:${B.locked}`])
     const cell = (await admin<{ id: string; siteId: string }>('SELECT id::text, "siteId"::text FROM "WorkOrderSize" WHERE "workOrderId" = $1 ORDER BY size LIMIT 1', [world.w.b.workOrderId]))[0]!
     await world.replica([{ sql: 'INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1, $2, $3, $4, $5, $6, 2)', values: [newId(), world.ids.tenantId, cell.siteId, world.w.b.workOrderId, cell.id, `T-PR22A-BN-${newId().slice(-6)}`] }])
     expect((await admin<{ stage: string }>('SELECT stage::text FROM "BrandOrderProduction" WHERE key = $1', [`brand-production:${B.locked}`]))[0]!.stage).toBe('PREPARING')
-    const cut = await refused('beta', 'POST', '/portal/production/urgency', { orderIds: [B.locked], urgency: 'URGENT' }, 409)
-    expect(cut.issues[0]).toEqual({ path: 'body/orderIds/0/ASK_CUT', message: 'Cutting has started on this order: ask us to make it urgent.' })
+    // B-PR-46a: from Cutting the mark becomes an "Urgent – asked" (before: refused in words, "Ask us"); the urgency is unchanged.
+    const cut = await ok('beta', 'POST', '/portal/production/urgency', { orderIds: [B.locked], urgency: 'URGENT' })
+    expect(cut.results[0]).toMatchObject({ orderId: B.locked, outcome: 'ASK_CUT', done: false, ask: null, words: { en: 'Cutting has started on this order: sent to us as "Urgent – asked": we answer you.' }, asked: { requestId: expect.any(String) } })
+    expect(await state(B.locked)).toMatchObject({ urgency: 'REGULAR', urgentRank: null })
 
     await admin(`UPDATE "BrandOrderProduction" SET stage = 'CUTTING', "stageAt" = now(), version = version + 1 WHERE key = $1`, [`brand-production:${B.b4}`])
     const atOnce = await ok('beta', 'POST', '/portal/production/urgency', { orderIds: [B.b4], urgency: 'URGENT' })

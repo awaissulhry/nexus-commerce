@@ -1,5 +1,9 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
+// B-PR-46a: the partner read of many orders at once.
+import type { FastifyRequest } from 'fastify'
+import { isUuid } from '@nexus/factory-domain/core/ids'
+import type { PortalReader } from '../../sales/portal-orders/access'
 import type { ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
 import {
   answeredInOf,
@@ -350,3 +354,39 @@ export async function readPlanned(db: FactoryClient, ownWorkOrders: ReadonlyMap<
   }
   return planned
 }
+
+// ── B-PR-46a: the partner read of many orders at once ───────────────────────────────────────────────────────────────────────────
+
+/** One of the customer's own orders a bulk action names, where it stood in the body (results come back in the body's order). */
+export interface OwnOrder {
+  readonly orderId: string
+  readonly number: string
+  readonly customerRef: string | null
+  readonly status: string
+  readonly index: number
+}
+
+/**
+ * The set form of sales/portal-orders/access partnerOrder (B-PR-46a; plan §2, L25 "each id checked with partnerOrder()"): the
+ * customer's own orders among these ids, in the portal's company, read in the PARTNER scope (row-level security by party) and
+ * checked once more against the session's party — another customer's order is as unknown as an id that names nothing. They come
+ * back in the body's order; every other id is only counted (`notFound`), never named. Used by every bulk action of My production
+ * (the urgency marks, Ask N, Report a problem's rule, B-PR-46b's Approve N and files).
+ */
+export async function partnerOrders(request: FastifyRequest, reader: PortalReader, orderIds: readonly string[]): Promise<{ readonly orders: OwnOrder[]; readonly notFound: number }> {
+  const wanted = [...new Set(orderIds.filter((orderId) => isUuid(orderId)))]
+  const rows =
+    wanted.length === 0
+      ? []
+      : await request.withClient((client) =>
+          client.salesOrder.findMany({ where: { id: { in: wanted }, companyId: reader.session.company.id }, select: { id: true, number: true, customerRef: true, status: true, partyId: true } }),
+        )
+  // The wall: only the session's party's (row-level security already keeps it so; checked again, fail closed).
+  const byId = new Map(rows.filter((row) => row.partyId === reader.session.partyId).map((row) => [row.id, row]))
+  const orders = orderIds.flatMap((orderId, index) => {
+    const row = byId.get(orderId)
+    return row ? [{ orderId, number: row.number, customerRef: row.customerRef, status: row.status as string, index }] : []
+  })
+  return { orders, notFound: orderIds.length - orders.length }
+}
+// ── end B-PR-46a ──

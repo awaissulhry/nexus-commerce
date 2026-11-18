@@ -16,6 +16,9 @@ import { defineManifest } from '../../../core/manifest'
  * work order's decided inspection — ./quality.ts.
  * B-PR-45: "Report a problem" (portal.production.view + portal.comment over its party, never a preview): one message in each
  * named order's thread and one issue each, one task for the batch — ./problems.ts.
+ * B-PR-46a: the bulk asks (portal.salesOrders.ask over its party, never a preview): Ask N — one request per own order, all of one
+ * batch and one kind (pause, resume, cancel; urgent only through Mark urgent, whose rows over the quota or from Cutting become
+ * "Urgent – asked" of their own batch) — and Undo of a batch (its requests that still wait are withdrawn) — ./bulk.ts.
  */
 export const manifest = defineManifest({
   'GET /portal/production': { audiences: ['partner'], permission: 'portal.production.view', scope: 'party' },
@@ -29,4 +32,7 @@ export const manifest = defineManifest({
   'GET /portal/production/:orderId/quality/report/:inspectionId': { audiences: ['partner'], permission: 'portal.production.view', scope: 'party' },
   // B-PR-45: "Report a problem" on one or many of its own orders (the handler also checks portal.comment: it writes in their threads).
   'POST /portal/production/problems': { audiences: ['partner'], permission: 'portal.production.view', scope: 'party' },
+  // B-PR-46a: Ask N (one request per own order, one batch, one kind: pause, resume, cancel) and its Undo (the batch's open ones).
+  'POST /portal/production/asks': { audiences: ['partner'], permission: 'portal.salesOrders.ask', scope: 'party' },
+  'POST /portal/production/asks/:batchId/withdraw': { audiences: ['partner'], permission: 'portal.salesOrders.ask', scope: 'party' },
 })
