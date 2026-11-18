@@ -61,7 +61,7 @@ export interface ListQuery {
 
 // ── B-SA-033 ──
 /** The NCRs of one sales order: of one of its live work orders, raised from it, or linked to it. */
-function ncrsOfOrderWhere(order: OrderFilter): Prisma.NonconformanceWhereInput {
+export function ncrsOfOrderWhere(order: OrderFilter): Prisma.NonconformanceWhereInput {
   return {
     OR: [
       ...(order.workOrderIds.length > 0 ? [{ workOrderId: { in: [...order.workOrderIds] } }] : []),
