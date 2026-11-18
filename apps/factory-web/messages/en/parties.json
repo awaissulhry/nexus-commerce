@@ -217,6 +217,12 @@
           "due": "Due"
         }
       }
+    },
+    "quotesTab": {
+      "quotes": "Quotes",
+      "incoming": "Incoming",
+      "noQuotes": "No open quote for {customer}.",
+      "noRequests": "No request from {customer}."
     }
   },
   "suppliers": {

@@ -243,3 +243,27 @@ describe('F-SA-278: the strip\'s two windows', () => {
   })
 })
 // ---- end F-SA-278
+
+// ---- F-SA-277 (sales page plan R5, P18; 17-review R-1): Quotes & incoming — two lists stacked, each its own list locked to the customer,
+// its terms its own (in memory: the page's tab stays), a row's click docks its thread (the one DockPick of the page).
+describe('F-SA-277: the customer page mounts Quotes & incoming', () => {
+  it('the tab draws the two lists the container gives; a row docks its record; the old deals table is gone', () => {
+    const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{tab === 'quotes' && quotesIncoming}")
+    expect(view).not.toContain('function DealsTab')
+    const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("<QuotesIncomingTab party={named} onPick={onPick} />")
+    const tab = readFileSync(new URL('./view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("import type { DockPick } from './WorkTab'")
+    expect(tab).toContain("terms: 'memory'")
+    expect(tab).toContain("pane: 'host'")
+  })
+  it('the section words in both languages (the catalogue\'s own titles, R9)', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      for (const key of ['quotes', 'incoming', 'noQuotes', 'noRequests']) expect(t(`customers.quotesTab.${key}`, { customer: 'Brand Alpha' }), `${locale} ${key}`).not.toBe(`customers.quotesTab.${key}`)
+      expect(t('customers.quotesTab.quotes'), locale).toBe(t('deals.titleQuotes'))
+    }
+  })
+})
+// ---- end F-SA-277

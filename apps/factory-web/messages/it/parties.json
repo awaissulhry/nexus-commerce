@@ -217,6 +217,12 @@
           "due": "Scadenza"
         }
       }
+    },
+    "quotesTab": {
+      "quotes": "Preventivi",
+      "incoming": "In arrivo",
+      "noQuotes": "Nessun preventivo aperto per {customer}.",
+      "noRequests": "Nessuna richiesta da {customer}."
     }
   },
   "suppliers": {

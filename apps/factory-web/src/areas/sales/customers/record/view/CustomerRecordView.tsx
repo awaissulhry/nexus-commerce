@@ -3,16 +3,15 @@
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CircleAlert } from 'lucide-react' // F-SA-276: the Work tab's mark (something waits on us)
-import { Card, KeyValue, MetricStrip, RecordLayout, SummaryTable, Tabs, type MenuItemDef, type Metric, type TabItem } from '@nexus/ui/components'
-import { Button, SegmentedControl } from '@nexus/ui/primitives'
+import { Card, KeyValue, MetricStrip, RecordLayout, Tabs, type MenuItemDef, type Metric, type TabItem } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Party } from '../../../../parties/_shared/api'
-import { countryName, dealRows, identitiesOf, keyNumbers, languageName, money, partyName, recordTabs, sideHref, SIDES, writable, type DealFilter, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
+import { countryName, identitiesOf, keyNumbers, languageName, money, partyName, recordTabs, sideHref, SIDES, writable, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
 import { PartyRecordGate, usePartyBand, type OverviewSlot, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
 import { AddressesCard, CardHead, ContactsCard, IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, SidePanel, ViesCard, type TabProps } from '../../../../parties/_shared/view/cards'
-import { dash, PartiesMessages, ReadState, RoleTags } from '../../../../parties/_shared/view/parts'
+import { dash, PartiesMessages, RoleTags } from '../../../../parties/_shared/view/parts'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { rightRef } from '../../../../../lib/i18n/rights' // F-SA-271
 import { CUSTOMER_MONEY_NAMESPACE } from '../../money/model'
@@ -46,6 +45,7 @@ export function CustomerRecordView({
   portalEmails,
   work,
   workCount,
+  quotesIncoming,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -72,11 +72,13 @@ export function CustomerRecordView({
   work?: ReactNode
   /** F-SA-276: the Work tab's count — what waits on us (requests to answer + replies waiting on us); null while read. */
   workCount?: { readonly count: number | null; readonly attention: boolean } | null
+  /** F-SA-277: Quotes & incoming (the customer's quotes, then its incoming requests: each its own list, drawn by the container). */
+  quotesIncoming?: ReactNode
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -99,6 +101,7 @@ interface CustomerProps {
   portalEmails?: ReadonlySet<string> | undefined
   work?: ReactNode // F-SA-276
   workCount?: { readonly count: number | null; readonly attention: boolean } | null | undefined
+  quotesIncoming?: ReactNode // F-SA-277
 }
 
 function Customer(props: CustomerProps) {
@@ -136,7 +139,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -148,7 +151,7 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   const recordPath = sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)
   const activeAddresses = party.addresses.filter((address) => address.status === 'ACTIVE')
   const activeContacts = party.contacts.filter((contact) => contact.status === 'ACTIVE')
-  // Until the Quotes & incoming lists are drawn (F-SA-277), it keeps today's rows of its kind.
+  // F-SA-277: Quotes & incoming counts the customer's quotes (the record's newest quotes, when all were read).
   const quotesCount = model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
   const overdueCount = moneyModel?.can.receivables ? (moneyModel.ageing.items ? (overdueOf(moneyModel.ageing.items, party.id)?.invoices ?? 0) : null) : undefined
   const tabItems: TabItem[] = tabs.map((id) => ({
@@ -196,8 +199,8 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
 
           {/* F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (no tabs inside the tab, R5). */}
           {tab === 'work' && work}
-          {/* F-SA-271: the customer's quotes (the two lists of Quotes & incoming come with F-SA-277). */}
-          {tab === 'quotes' && <DealsTab model={model} actions={actions} only="quote" />}
+          {/* F-SA-277: Quotes & incoming — two lists stacked (Quotes, then Incoming requests), each its own list locked to the customer. */}
+          {tab === 'quotes' && quotesIncoming}
           {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} />}
           {/* F-SA-273: Money — key numbers, credit, open invoices, the open orders' deposits and balances, payment terms. */}
           {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} />}
@@ -361,75 +364,5 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
       }
       asideLabel={t('side.label')}
     />
-  )
-}
-
-// ---- Quotes & orders (moved from PartyRecordView.tsx, F-SA-270) --------------------------------------------------------
-
-// F-SA-271: `only` — the rows of one kind (Work: the orders; Quotes & incoming: the quotes), until their own lists come.
-function DealsTab({ model, actions, only }: { model: PartyRecordModel; actions?: PartyRecordActions | undefined; only: 'quote' | 'order' }) {
-  const t = useT('parties')
-  const locale = useLocale()
-  const filter = model.deals ?? 'open'
-  const quotes = only === 'quote'
-  const problem = quotes ? model.quotes.problem : model.orders.problem
-  const reading = quotes ? model.can.quotes && model.quotes.items === null && !model.quotes.problem : model.can.orders && model.orders.items === null && !model.orders.problem
-  const rows = dealRows(quotes ? (model.quotes.items ?? []) : [], quotes ? [] : (model.orders.items ?? []), filter)
-  const price = model.can.price
-  return (
-    <Card padded>
-      <div className="fw-pty-card-body">
-        <CardHead
-          title={t(quotes ? 'deals.titleQuotes' : 'deals.titleOrders')}
-          action={
-            <SegmentedControl
-              ariaLabel={t('deals.filter')}
-              size="sm"
-              value={filter}
-              onChange={(value) => actions?.onDeals?.(value as DealFilter)}
-              options={(['open', 'won', 'lost', 'all'] as const).map((value) => ({ value, label: t(`deals.${value}`) }))}
-            />
-          }
-        />
-        {quotes && !model.can.quotes && <p className="fw-pty-hint">{t('deals.noQuotesRight')}</p>}
-        {problem ? (
-          <ReadState problem={problem} loading={false} onRetry={actions?.onRetry} failedTitle={t('deals.failed')} />
-        ) : reading ? (
-          <ReadState loading rows={4} />
-        ) : rows.length === 0 ? (
-          <p className="fw-pty-hint">{t(filter === 'open' ? 'deals.emptyOpen' : 'deals.empty')}</p>
-        ) : (
-          <SummaryTable
-            label={t(quotes ? 'deals.titleQuotes' : 'deals.titleOrders')}
-            stackOnPhone
-            columns={[
-              t('deals.col.type'),
-              t('deals.col.number'),
-              t('deals.col.status'),
-              t('deals.col.date'),
-              ...(price ? [t('deals.col.value')] : []),
-              t('deals.col.promise'),
-              t('deals.col.validUntil'),
-            ]}
-            align={Array.from({ length: price ? 7 : 6 }, (_, index) => (price && index === 4 ? 'right' : 'left'))}
-            rows={rows.map((row) => ({
-              id: `${row.type}-${row.id}`,
-              cells: [
-                t(`deals.${row.type}`),
-                <span key="n" className="fw-pty-code">
-                  {row.number}
-                </span>,
-                t(row.type === 'quote' ? `quoteStatus.${row.status}` : `orderStatus.${row.status}`),
-                formatDate(row.date, { locale }),
-                ...(price ? [dash(money(row.amount, row.currency, locale))] : []),
-                row.promiseDate ? formatDate(row.promiseDate, { locale }) : '—',
-                row.validUntil ? formatDate(row.validUntil, { locale }) : '—',
-              ],
-            }))}
-          />
-        )}
-        {(quotes ? model.quotes.more : model.orders.more) && <p className="fw-pty-hint">{t('deals.more')}</p>}
-      </div>
-    </Card>
   )
 }

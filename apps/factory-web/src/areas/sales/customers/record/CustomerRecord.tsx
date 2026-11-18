@@ -29,6 +29,7 @@ import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
 import { OpenTasksDialog } from './view/OpenTasksDialog'
 // ---- end F-SA-278
+import { QuotesIncomingTab } from './view/QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -103,6 +104,8 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       <OpenTasksDialog customer={named.name} tasks={work.reads.tasks} onPick={pickOrGeneral} onClose={() => setWin(null)} />
     ) : null
   // ---- end F-SA-278
+  // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
+  const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} /> : null
   const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={pick} onPick={onPick} onWindow={setWin /* F-SA-278 */} /> : null
   // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
@@ -117,7 +120,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   return (
     <>
       {windows /* F-SA-278 */}
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} work={workTab} workCount={work.attention} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
     </>
   )
 }

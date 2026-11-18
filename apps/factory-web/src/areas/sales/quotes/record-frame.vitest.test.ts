@@ -136,7 +136,7 @@ describe('B-TH-078 on the band: where the quote came from and where it went', ()
 describe('the Quotes list: New messages, "from INQ-…", an accepted row’s order', () => {
   // The grid's cells draw in a browser only (AG Grid): the column, its door and its read are held in the sources and the words.
   const listView = readFileSync(new URL('./list/view/QuotesListView.tsx', import.meta.url), 'utf8')
-  const page = readFileSync(new URL('./list/QuotesPage.tsx', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./list/use-quotes-list.ts', import.meta.url), 'utf8') // F-SA-277: the container's body moved to the hook
 
   it('New messages: one read per page of the quotes on screen, only with threads.read; the cell opens the thread at the first new one', () => {
     expect(page).toContain("const readsThreads = session.permissions.includes('threads.read')")
