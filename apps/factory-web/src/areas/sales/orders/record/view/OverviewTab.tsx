@@ -41,6 +41,10 @@ import { SupervisorFact } from '../../../../_shared/production-supervisor/view/S
 import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/notes/model'
 import { NAMESPACE as DEPTH } from '../../depth/model'
 import { linkedRecordsOf, nextDatesOf, placeWords, requestCountsOf } from '../overview/model'
+// F-SA-243: "Waiting on us: N · Answer…" opens the ONE review window here; "Still to do: N" with its top 3 rows.
+import { WithMessages } from '../../../../../record-panels/i18n'
+import { askingOf, stillRowsOf } from '../changes/model'
+import { AnswerDoor, StillRow } from './RequestsSection'
 // ---- end F-SA-233
 
 /** The columns' words: the shared pieces catalogue's (production `parts.pieces.stages.*`, Shipped added there). */
@@ -370,13 +374,19 @@ function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel
   )
 }
 
-/** O5 Requests & changes (counts only; Answer… opens the review window in S4): what waits on us, on the customer, the latest change. */
+/**
+ * O5 Requests & changes: what waits on us (F-SA-243: "Waiting on us: N · Answer…" — the ONE review window on this page), on the
+ * customer, "Still to do: N" with its top 3 rows (each a door), the latest change.
+ */
 function RequestsCard({ order, model }: { order: Order; model: OrderRecordModel }) {
   const t = useT('orders')
   const locale = useLocale()
   const read = readOf(model.production)
   const counts = requestCountsOf(read, order)
-  const nothing = counts.onUs === 0 && counts.onCustomer === 0
+  // F-SA-243: the first request waiting on us opens the window (when this page read the requests); the rows still to do.
+  const asking = askingOf(model.requests?.value ?? [])
+  const still = stillRowsOf(read)
+  const nothing = counts.onUs === 0 && counts.onCustomer === 0 && still.length === 0
   return (
     <Card padded>
       <div className="fw-so-card-head">
@@ -386,8 +396,27 @@ function RequestsCard({ order, model }: { order: Order; model: OrderRecordModel 
         </Link>
       </div>
       <ul className="fw-so-datelist">
-        {counts.onUs > 0 && <li>{t('overview.requests.onUs', { count: counts.onUs })}</li>}
+        {counts.onUs > 0 && (
+          <li className="fw-so-still">
+            <span>{t('overview.requests.onUs', { count: counts.onUs })}</span>
+            {asking && <AnswerDoor request={asking.first} model={model} />}
+          </li>
+        )}
         {counts.onCustomer > 0 && <li>{t('overview.requests.onCustomer', { count: counts.onCustomer })}</li>}
+        {still.length > 0 && (
+          <li>
+            <Link className="fw-so-link" href={`${model.prefix}/sales/orders/${order.id}?tab=changes#still-to-do`}>
+              {t('overview.requests.still', { count: still.length })}
+            </Link>
+            <WithMessages namespaces={['approvals']}>
+              <ul className="fw-so-datelist">
+                {still.slice(0, 3).map((row, index) => (
+                  <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} />
+                ))}
+              </ul>
+            </WithMessages>
+          </li>
+        )}
         {nothing && <li className="fw-so-hint">{t('overview.requests.nothing')}</li>}
         {counts.latest && <li className="fw-so-hint">{t('overview.requests.latest', { revision: counts.latest.revision, date: counts.latest.at ? formatDate(counts.latest.at, { locale }) : '—' })}</li>}
       </ul>

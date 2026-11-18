@@ -10,6 +10,10 @@ import { minorOf } from '../../../sales/customers/terms/model'
 import type { Loaded } from '../../../sales/quotes/record/record-model'
 import type { RequestFacts } from '../words/request-words'
 import type { AcceptDone, AcceptedWorkOrder, BatchAnswer, BatchItem, BrandRequest, CounterBody, OrderRequestKind, RequestImpactRead, RequestRecord, SalesAccept, Words } from './api'
+// F-SA-241 / F-SA-242: the apply plan, the extra pieces' outcomes, the design change's own-collection hold.
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+import { DESIGN_HELD_WORDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import type { ApplyPlan, ApplyPlanStep } from './api'
 
 /**
  * F-PR-08 — a customer's requests in Home › Approvals, without a screen (production plan §3 "Brand asks, we decide: we accept, counter
@@ -390,7 +394,18 @@ interface ReviewCommon {
 }
 
 export type RequestReviewModel =
-  | (ReviewCommon & { readonly as: 'request'; readonly record: Loaded<RequestRecord>; readonly impact: Loaded<RequestImpactRead> })
+  | (ReviewCommon & {
+      readonly as: 'request'
+      readonly record: Loaded<RequestRecord>
+      readonly impact: Loaded<RequestImpactRead>
+      // F-SA-241 (14-change-flow §3.2, §3.4): the apply plan (On the floor now, Extra pieces, What happens next), the choices made in
+      // the window before Accept, and after it the "Done · What happens next" view. F-SA-242: the "Also write it in the order's
+      // conversation" tick. Optional: a design case or an older host draws today's window.
+      readonly plan?: Loaded<ApplyPlan>
+      readonly choices?: ApplyChoices
+      readonly tell?: TellTick
+      readonly done?: DoneView | null
+    })
   | (ReviewCommon & { readonly as: 'batch'; readonly batch: Loaded<readonly BrandRequest[]> })
 
 /** The window's actions (the container's; a design case passes none). */
@@ -409,6 +424,24 @@ export interface RequestActions {
   onRetry?: () => void
   /** An accepted pause opened later: Lift the hold (the follow-up dialog). */
   onLift?: (followUp: FollowUp) => void
+  // ---- F-SA-241: the choices before Accept, the steps after it ----
+  /** Extra pieces: the outcome picked (none is picked for the reader, Round 4). */
+  onExtraOutcome?: (outcome: ExtraOutcome) => void
+  /** A touched work order with bundles in work: Finish what is started (default) or Stop now. */
+  onWorkChoice?: (workOrderId: string, choice: WorkChoice) => void
+  /** After Accept: one step's own command, or "Do the next steps" (one after another, stopping at the first refusal). */
+  onRunStep?: (key: string) => void
+  onRunAll?: () => void
+  /** After Accept: Close (a door) or Next request › (Home › Approvals). */
+  onDoneClose?: () => void
+  // ---- F-SA-242: the conversation ----
+  /** "Also write it in the order's conversation" ticked or not. */
+  onTell?: (on: boolean) => void
+  /** After Accept: "Tell the customer…" — the words written in the order's conversation (the thread's own send). */
+  onTellOpen?: () => void
+  onTellWords?: (words: string) => void
+  onTellSend?: () => void
+  onTellClose?: () => void
 }
 
 /** An accepted pause opened later: its work orders still held (from the impact read), for "Lift the hold". */
@@ -459,3 +492,222 @@ export function doorAddress(search: string, id: string | null, param: string = D
   return text ? `?${text}` : ''
 }
 // ---- end F-SA-240
+
+// ---- F-SA-241 (sales page plan P5, P6', R1, R8; 14-change-flow §3.2 items 4 and 6, §3.4; lead picks Round 4; review R-6) -----------
+/**
+ * The window's new parts, for every door, from the apply plan (B-SA-045, `GET /sales/change-requests/:id/apply-plan`):
+ *
+ *   On the floor now   the order's OWN cells per asked size (ordered · asked · in work orders · cut · sewn · packed; "not counted here"
+ *                      where a site does not count a step, never 0) and "In work now: 3 bundles at Sewing" — workorders.view, else "—"
+ *                      and "Needs work-order access"
+ *   Extra pieces       pieces already cut beyond the new figure, and ONE required choice: Keep and charge the customer (the priced
+ *                      change Accept makes) · Keep as leftover for <customer> (recorded on the work-order change) · Scrap (the scrap's
+ *                      own approval) — each held with why when its right or grain is missing; none is picked (Round 4), and Accept
+ *                      stays held "Choose what happens to the N extra pieces" until one is (R-6: every outcome is a real command)
+ *   What happens next  the plan's numbered steps, who does each, its state in words; per touched work order with bundles in work
+ *                      the choice Finish what is started (default) / Stop now (a production hold on it, after Accept)
+ *   Done · What        after Accept the window stays open: what the Accept did, then each next step with its own command and its own
+ *   happens next       Idempotency-Key (Stop now's hold, "Change the work order now"); "Do the next steps" runs them one after another
+ *                      and stops at the first refusal (nothing rolled back silently); Close (a door) or Next request › (Approvals)
+ */
+
+export type WorkChoice = 'FINISH' | 'STOP'
+
+/** The choices made in the window before Accept. */
+export interface ApplyChoices {
+  /** The extra pieces' outcome (null: none picked yet). */
+  readonly extraOutcome: ExtraOutcome | null
+  /** The work orders to stop now (a production hold right after Accept); the others finish what is started. */
+  readonly stops: readonly string[]
+}
+
+export const NO_CHOICES: ApplyChoices = Object.freeze({ extraOutcome: null, stops: [] })
+
+const WORK_KINDS: ReadonlySet<string> = new Set(['LOWER_TO_ORDER', 'MAKE_MORE'])
+
+/** A step the reader may stop now: a work order it reaches whose bundles of the step's cells are in work, before Accept. */
+export const stoppable = (step: Pick<ApplyPlanStep, 'kind' | 'workOrder' | 'bundles'>): boolean => WORK_KINDS.has(step.kind) && step.workOrder !== null && (step.bundles ?? 0) > 0
+
+/** The touched work orders that offer Finish what is started / Stop now (once each, in the plan's order). */
+export function stoppableOf(plan: Pick<ApplyPlan, 'next'> | null): { readonly id: string; readonly number: string; readonly bundles: number }[] {
+  const seen = new Set<string>()
+  const out: { id: string; number: string; bundles: number }[] = []
+  for (const step of plan?.next ?? []) {
+    if (!stoppable(step) || seen.has(step.workOrder!.id)) continue
+    seen.add(step.workOrder!.id)
+    out.push({ id: step.workOrder!.id, number: step.workOrder!.number, bundles: step.bundles ?? 0 })
+  }
+  return out
+}
+
+/** The window's words for a choice the plan holds (said once in the window and on the held Accept). */
+export type PlanHeld = { readonly words: Words } | { readonly key: string; readonly params?: Record<string, string | number> }
+
+/**
+ * Why Accept waits on the plan, before the click, in order: the change cannot be carried out as it stands (the record's preview — a
+ * colourway "Already cut in Black: 40 pieces. Suggest something else or refuse." (F-SA-242), a design change of our own collection
+ * (F-SA-242)), then the extra pieces' outcome not chosen (Round 4), then an outcome chosen that this reader may not choose (charging
+ * needs the price grain). Null: the plan holds nothing (answerHeld's own reasons still apply).
+ */
+export function planHeld(plan: ApplyPlan | null | undefined, choices: ApplyChoices = NO_CHOICES): PlanHeld | null {
+  if (!plan) return null
+  const amend = plan.next.find((step) => step.kind === 'AMEND')
+  if (amend?.state === 'NOT_POSSIBLE' && amend.why) return { words: amend.why }
+  const style = plan.next.find((step) => step.kind === 'STYLE_CHANGE' && step.state === 'NOT_POSSIBLE' && step.why !== null)
+  if (style?.why) return { words: style.why }
+  if (plan.extra.needsOutcome && choices.extraOutcome === null) return plan.extra.words ? { words: plan.extra.words } : { key: `${CR}.extra.choose`, params: { count: plan.extra.total } }
+  const option = choices.extraOutcome ? plan.extra.outcomes.find((entry) => entry.outcome === choices.extraOutcome) : undefined
+  if (option && !option.mayChoose) return option.needsWords ? { words: option.needsWords } : { key: `${CR}.extra.notYours` }
+  return null
+}
+
+/** Why one outcome of the extra pieces cannot be picked by this reader (held, never hidden): its needs in words; null: it may. */
+export const outcomeHeld = (option: Pick<ApplyPlan['extra']['outcomes'][number], 'mayChoose' | 'needsWords'>): Words | null => (option.mayChoose ? null : (option.needsWords ?? { en: 'Not yours to choose.', it: 'Non spetta a te sceglierlo.' }))
+
+/**
+ * F-SA-242 (R3): a design change of a style that is not this customer's own label is held — Suggest something else or Refuse; the
+ * line's Options… only while no work order makes it (the domain's words carry the options' hint exactly then).
+ */
+export function designOptionsOffered(plan: Pick<ApplyPlan, 'next' | 'request'> | null | undefined): boolean {
+  if (!plan || plan.request.kind !== 'DESIGN') return false
+  return plan.next.some((step) => step.kind === 'STYLE_CHANGE' && step.state === 'NOT_POSSIBLE' && (step.why?.en ?? '').includes(DESIGN_HELD_WORDS.options.en))
+}
+
+// ---- the state of a step, in words (one word list for the window and the order's "Still to do", F-SA-243) ----
+
+export type StepStateWord = 'thisAccept' | 'afterAccept' | 'done' | 'yourTurn' | 'waiting' | 'needsDecision' | 'leftAsIs' | 'notPossible'
+
+export interface StepState {
+  /** A key of `customerRequest.next.state.` (with its team for `waiting`). */
+  readonly key: string
+  readonly word: StepStateWord
+  readonly tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+}
+
+const stateOf = (word: StepStateWord, team?: string): StepState => ({
+  key: word === 'waiting' ? `${CR}.next.state.waiting.${team ?? 'PLANNER'}` : `${CR}.next.state.${word}`,
+  word,
+  tone: word === 'done' || word === 'thisAccept' ? 'success' : word === 'yourTurn' || word === 'needsDecision' ? 'warning' : word === 'notPossible' ? 'danger' : 'neutral',
+})
+
+/**
+ * A step of the plan in words: before Accept "This Accept" (what the Accept itself does) or "After Accept"; after it Done, Your turn
+ * (the reader may act on it now), Waiting for planning / product / finance / the customer / sales, Left as is, Not possible.
+ */
+export function stepStateOf(step: Pick<ApplyPlanStep, 'kind' | 'state' | 'team' | 'mayDoNow'>, accepted: boolean): StepState {
+  switch (step.state) {
+    case 'DONE':
+      return stateOf('done')
+    case 'LEFT_AS_IS':
+      return stateOf('leftAsIs')
+    case 'NOT_POSSIBLE':
+      return stateOf('notPossible')
+    case 'PROPOSED':
+      return step.mayDoNow ? stateOf('yourTurn') : stateOf('waiting', step.team)
+    case 'TO_DO':
+      if (!accepted) return step.kind === 'AMEND' || step.kind === 'STYLE_CHANGE' ? stateOf('thisAccept') : stateOf('afterAccept')
+      return step.mayDoNow ? stateOf('yourTurn') : stateOf('waiting', step.team)
+  }
+}
+
+/** A "Still to do" row of the order (B-SA-050) in the same words: a decision on pieces or work in progress, your turn, or waiting. */
+export function stillStateOf(row: { readonly kind: string; readonly waitingOn: string; readonly mayAct: boolean }): StepState {
+  if (row.mayAct && (row.kind === 'EXTRA_PIECES' || row.kind === 'WORK_IN_PROGRESS_TASK')) return stateOf('needsDecision')
+  if (row.mayAct) return stateOf('yourTurn')
+  return stateOf('waiting', row.waitingOn)
+}
+
+// ---- after Accept: Done · What happens next ----
+
+/** One next step's own command (each its own Idempotency-Key): Stop now's production hold, or carrying out a work-order change. */
+export type DoneCommand =
+  | { readonly key: string; readonly kind: 'stop'; readonly workOrder: { readonly id: string; readonly number: string } }
+  | { readonly key: string; readonly kind: 'apply'; readonly changeId: string; readonly workOrder: { readonly id: string; readonly number: string } | null; readonly words: Words }
+
+export type CommandState =
+  | { readonly phase: 'todo' }
+  | { readonly phase: 'running' }
+  | { readonly phase: 'done' }
+  /** Refused: its own words (a key of `approvals` and its params). */
+  | { readonly phase: 'refused'; readonly key: string; readonly params?: Record<string, string | number> }
+
+/**
+ * The commands of the done view, in order: the work orders chosen to stop now (their holds go first, so no new bundle starts while
+ * the rest is decided), then each work-order change this reader may carry out now ("Change the work order now": no proposal is
+ * approved by its own proposer — the reader holds workorders.manage over it, rule 42). A command done or refused keeps its place.
+ */
+export function doneCommandsOf(plan: Pick<ApplyPlan, 'next'> | null, stops: readonly { readonly id: string; readonly number: string }[]): DoneCommand[] {
+  const out: DoneCommand[] = stops.map((workOrder) => ({ key: `stop:${workOrder.id}`, kind: 'stop', workOrder: { id: workOrder.id, number: workOrder.number } }))
+  for (const step of plan?.next ?? []) {
+    if (!WORK_KINDS.has(step.kind) || step.state !== 'PROPOSED' || !step.mayDoNow || step.ref?.type !== 'WorkOrderChange') continue
+    out.push({ key: `apply:${step.ref.id}`, kind: 'apply', changeId: step.ref.id, workOrder: step.workOrder, words: step.words })
+  }
+  return out
+}
+
+/** The commands still to run (not done): "Do the next steps" is offered when two or more are left. */
+export const leftToRun = (commands: readonly DoneCommand[], states: Readonly<Record<string, CommandState>>): DoneCommand[] => commands.filter((command) => (states[command.key]?.phase ?? 'todo') !== 'done')
+
+/**
+ * "Do the next steps": the commands one after another, each its own call; it stops at the FIRST refusal (the rest stay to do, nothing
+ * rolled back silently — as Clear rush does). `run` carries one out and answers its state; `onState` hears every change.
+ */
+export async function runInOrder(commands: readonly DoneCommand[], run: (command: DoneCommand) => Promise<CommandState>, onState: (key: string, state: CommandState) => void): Promise<{ readonly done: number; readonly refused: string | null }> {
+  let done = 0
+  for (const command of commands) {
+    onState(command.key, { phase: 'running' })
+    const state = await run(command)
+    onState(command.key, state)
+    if (state.phase !== 'done') return { done, refused: command.key }
+    done += 1
+  }
+  return { done, refused: null }
+}
+
+/** What the done view holds: the notice and what opens next, handed to the host on Close / Next request ›. */
+export interface DoneView {
+  readonly notice: { readonly key: string; readonly tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'; readonly params?: Record<string, string | number>; readonly lines?: readonly Words[] }
+  /** Close (a door) or Next request › (Home › Approvals). */
+  readonly next: 'close' | 'next'
+  readonly commands: readonly DoneCommand[]
+  readonly states: Readonly<Record<string, CommandState>>
+  /** The run of "Do the next steps" is going. */
+  readonly running: boolean
+}
+
+// ---- F-SA-242 (R3, P8; 14-change-flow §4.2): the words in the order's conversation ----
+
+/** The tick "Also write it in the order's conversation" and what became of it. */
+export interface TellTick {
+  /** Ticked by the person (null: not touched — on when words are typed). */
+  readonly chosen: boolean | null
+  /** How the customer is reached: in the portal (a request is asked there), or not at all (no portal person any more). */
+  readonly reach: 'portal' | 'none'
+  /** After the answer: written, refused (a key of `approvals`), or nothing yet. */
+  readonly sent: 'no' | 'sending' | 'sent' | { readonly refused: string }
+  /** "Tell the customer…" in the done view: its words, while open (null: closed). */
+  readonly compose: string | null
+}
+
+export const tickOn = (tick: Pick<TellTick, 'chosen'>, words: string): boolean => tick.chosen ?? words.trim() !== ''
+
+/** Why the tick waits: no words yet ("Type the words first"), or no way to reach the customer. Null: it may be ticked. */
+export function tellHeld(tick: Pick<TellTick, 'reach'>, words: string): string | null {
+  if (tick.reach === 'none') return `${CR}.tell.held.reach`
+  if (words.trim() === '') return `${CR}.tell.held.words`
+  return null
+}
+
+/** The customer is reached in the portal while a portal person asked (every request is asked there) and the portal did not refuse. */
+export const reachOf = (request: Pick<BrandRequest, 'askedBy'>, refusedHere: boolean): TellTick['reach'] => (request.askedBy !== null && !refusedHere ? 'portal' : 'none')
+
+/** The words go to the conversation only when ticked, typed and the customer is reached (never automatic). */
+export const tellsNow = (tick: TellTick, words: string): boolean => tickOn(tick, words) && tellHeld(tick, words) === null
+
+/** A refusal of the conversation's send in this window's words (the thread's own codes: NO_PORTAL, CLOSED …). */
+export function tellRefusalOf(code: string | null): string {
+  if (code === 'notice.portal.NO_PORTAL' || code === 'notice.portal.NO_PARTY') return `${CR}.tell.held.reach`
+  if (code === 'notice.portal.CLOSED') return `${CR}.tell.refused.closed`
+  return `${CR}.tell.refused.other`
+}
+// ---- end F-SA-241 / F-SA-242

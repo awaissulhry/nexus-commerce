@@ -331,6 +331,99 @@
       "rate_limited": "Troppi tentativi: aspetta un momento.",
       "signed_out": "La sessione è terminata: accedi di nuovo.",
       "internal": "Qualcosa è andato storto. Riprova."
+    },
+    "floor": {
+      "title": "In reparto ora",
+      "withheld": "Serve l'accesso agli ordini di lavoro",
+      "nothing": "Niente è ancora negli ordini di lavoro.",
+      "col": {
+        "cell": "Riga · taglia",
+        "asked": "Richiesti",
+        "inWorkOrders": "Negli ordini di lavoro"
+      },
+      "cell": "Riga {line} · {size}",
+      "wholeLine": "Riga {line}",
+      "own": "Solo i pezzi di questo ordine.",
+      "leftOut": "{count} ordini di lavoro di queste righe non sono mostrati: sono fuori da ciò che puoi aprire."
+    },
+    "extra": {
+      "title": "Pezzi in più",
+      "piece": "Riga {line} · {words}",
+      "pick": "Scegli cosa fare dei pezzi in più",
+      "choose": "Scegli cosa fare dei {count} pezzi in più",
+      "notYours": "Non spetta a te sceglierlo.",
+      "chosen": "Scelto all'accettazione: {outcome}",
+      "noneChosen": "Nessun esito registrato: decide la produzione.",
+      "outcome": {
+        "CHARGE": "Una modifica con prezzo: al cliente si chiede di accettare il prezzo dei pezzi in più.",
+        "LEFTOVER": "Tenuti solo per questo cliente: un capo a marchio del cliente non va mai a un altro cliente.",
+        "SCRAP": "Scartati con la loro approvazione, da chi approva gli scarti."
+      }
+    },
+    "next": {
+      "title": "Cosa succede dopo",
+      "who": "Decide: {name}",
+      "inWork": "{order}: {count} fasci in lavorazione",
+      "choiceLabel": "Fasci in lavorazione su {order}",
+      "finish": "Finisci ciò che è iniziato",
+      "stop": "Ferma ora",
+      "stopHeld": "Per fermare un ordine di lavoro serve il permesso di metterlo in pausa.",
+      "stopWords": "{count} fasci in lavorazione: il loro Fatto aspetta finché il blocco è tolto.",
+      "changeNow": "Cambia ora l'ordine di lavoro",
+      "openChange": "Apri la modifica dell'ordine di lavoro",
+      "open": "Apri {number}",
+      "doneAlready": "Già fatto.",
+      "refused": {
+        "stop": "{order} non è stato fermato: aprilo e mettilo in pausa lì."
+      },
+      "state": {
+        "thisAccept": "Questa accettazione",
+        "afterAccept": "Dopo l'accettazione",
+        "done": "Fatto",
+        "yourTurn": "Tocca a te",
+        "needsDecision": "Serve una decisione",
+        "leftAsIs": "Lasciato così",
+        "notPossible": "Non possibile",
+        "waiting": {
+          "PLANNER": "Aspetta la pianificazione",
+          "PRODUCT": "Aspetta il prodotto",
+          "FINANCE": "Aspetta l'amministrazione",
+          "CUSTOMER": "Aspetta il cliente",
+          "SALES": "Aspetta le vendite"
+        }
+      }
+    },
+    "done": {
+      "title": "Fatto · Cosa succede dopo",
+      "accepted": "Accettata: {kind} · {order}",
+      "commands": "I tuoi prossimi passi",
+      "stop": "Ferma ora {order}: nessun nuovo fascio finché decide la pianificazione",
+      "apply": "Cambia ora l'ordine di lavoro: {what}",
+      "again": "Riprova",
+      "runAll": "Fai i prossimi passi ({count})",
+      "runAllHint": "Uno dopo l'altro; si ferma al primo rifiuto.",
+      "nothingLeft": "Per questa modifica non resta nulla da fare.",
+      "close": "Chiudi",
+      "nextRequest": "Richiesta successiva ›"
+    },
+    "tell": {
+      "tick": "Scrivilo anche nella conversazione dell'ordine",
+      "held": {
+        "words": "Scrivi prima le parole",
+        "reach": "Nessun modo di raggiungere {customer}: aggiungi un contatto"
+      },
+      "refused": {
+        "closed": "La conversazione dell'ordine è chiusa: le parole non sono state scritte lì.",
+        "other": "Le parole non sono state scritte nella conversazione dell'ordine: scrivile lì."
+      },
+      "sent": "Scritto nella conversazione dell'ordine.",
+      "open": "Avvisa il cliente…",
+      "title": "Parole per il cliente, nella conversazione dell'ordine",
+      "hint": "Il nostro messaggio al cliente nella conversazione dell'ordine: lo legge nel portale. Mai un prezzo a parole.",
+      "send": "Scrivi nella conversazione"
+    },
+    "design": {
+      "options": "Opzioni…"
     }
   },
   "workOrderChange": {

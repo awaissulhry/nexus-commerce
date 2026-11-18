@@ -89,6 +89,13 @@ import { useBrandHealth } from '../../../../lib/production/health/use-health' //
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
+// F-SA-243: the order page is a door of the ONE review window (Home › Approvals' own), its "Decide for <customer>" too.
+import { useRequestReviewDoor } from '../../../home/approvals/requests/use-request-review-door'
+import { doorListOf } from '../../../home/approvals/requests/model'
+import { CustomerOverrideProvider } from '../../../_shared/customer-override/CustomerOverride'
+// F-SA-242: the Amend review's tick writes the customer's words through the thread's own portal send.
+import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
+import { portalRefusal } from '../../../_shared/record-thread/state'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -427,6 +434,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const costChanges = useCostChanged({ api, companyId: order.status === 'ready' ? order.value.companyId : null, lines: order.status === 'ready' ? order.value.lines : NO_LINES, enabled: order.status === 'ready' && can.cost && tab === 'lines' })
   // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
   const [portalOpening, setPortalOpening] = useState(false)
+  const [portalGone, setPortalGone] = useState(false) // F-SA-242
   const portal = session.permissions.includes('partners.preview') ? { held: null, opening: portalOpening } : { held: { key: 'held.portalRight' }, opening: false }
 
   // B-W2b-323: the orders in depth (reads by tab, writes with the order's version; an answered order replaces the page's).
@@ -517,10 +525,30 @@ function RecordContainer({ orderId }: { orderId: string }) {
       .then((answer) => setAskedOfCustomer(part(answer.requests)))
       .catch((error: unknown) => setAskedOfCustomer({ value: null, problem: readProblem(error) }))
   }, [api, readyId, mayAsked])
+  // F-SA-243: read on every tab while the production read says a request waits or a change has steps left — the band notice and
+  // Overview name them (none waiting: no read at all, as before).
+  const changesPart = production.state?.status === 'ready' ? production.state.read.changes : undefined
+  const wantsRequests = tab === 'changes' || (changesPart?.openRequests.length ?? 0) > 0 || (changesPart?.stillToDo?.rows.length ?? 0) > 0
+  const wantsRef = useRef(wantsRequests)
+  wantsRef.current = wantsRequests
   useEffect(() => {
-    if (tab === 'changes') readRequests()
-  }, [tab, readRequests, readyVersion])
+    if (wantsRequests) readRequests()
+  }, [wantsRequests, readRequests, readyVersion])
   // ---- end F-SA-236
+  // ---- F-SA-243: the window on this page (`?open=<request id>`, the tab kept: Esc returns to the same tab and scroll); its ‹ › walk
+  // this order's waiting requests; an answer reads the requests and the production read's changes again.
+  const doorList = useMemo(() => doorListOf(requests?.value ?? []), [requests])
+  const door = useRequestReviewDoor({
+    ids: doorList.ids,
+    batches: doorList.batches,
+    offline: liveState === 'offline',
+    orderId: readyId,
+    onChanged: () => {
+      readRequests()
+      production.again(['changes', 'headline'])
+    },
+  })
+  // ---- end F-SA-243
   // ---- F-SA-237: the order's files, read while Files shows (the thread's window reads the same route); shared by files.manage ----
   const orderFiles = useOrderFiles(api, {
     orderId: readyId,
@@ -555,7 +583,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       listOrderWorkOrders(api, current.current.id)
         .then((rows) => setWorkOrders(part(rows)))
         .catch(() => undefined)
-    if (parts.includes('changes') && tabRef.current === 'changes') readRequests()
+    if (parts.includes('changes') && (tabRef.current === 'changes' || wantsRef.current /* F-SA-243 */)) readRequests()
     if (parts.includes('files') && tabRef.current === 'files') orderFiles.reload()
   }
   reconnectRef.current = () => {
@@ -586,6 +614,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     readiness, // F-SA-234
     health: healthOwner ? health.model : null, // F-SA-235
     requests, // F-SA-236
+    requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id) }, // F-SA-243
     files: tab === 'files' ? orderFiles.model : null, // F-SA-237
     askedOfCustomer,
     overviewLine,
@@ -608,6 +637,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     margin: margin.model,
     scheduleSteps: scheduleSteps.model,
     portal,
+    portalGone, // F-SA-242
     // B-W2b-340
     lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
     // B-W2b-380 (XF6:02)
@@ -627,7 +657,14 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   const value = order.status === 'ready' ? order.value : null
 
+  // F-SA-243: "Decide for <customer>" on a counter-offer in the window reads it and the requests again once done.
   return (
+    <CustomerOverrideProvider
+      onDone={() => {
+        door.refresh()
+        readRequests()
+      }}
+    >
     <OrderRecordView
       model={model}
       delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
@@ -772,7 +809,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onAmendPrice: (key, text) => setAmend((known) => (known ? { ...known, lines: known.lines.map((line) => (line.key === key ? { ...line, price: text } : line)) } : known)),
         onAmendHeader: (field, text) => setAmend((known) => (known ? { ...known, [field]: text } : known)),
         onAmendReview: review,
-        onAmendApply: (reason) => {
+        onAmendApply: (reason, tell) => {
           const draft = amendRef.current
           if (!draft) return
           const key = newIdempotencyKey()
@@ -782,6 +819,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
             setAmend(null)
             setChanged(null)
             setNotice({ tone: 'success', words: { key: answer.amendment.reacceptance === 'NEEDED' ? 'notice.amendedReaccept' : 'notice.amended', params: { revision: answer.amendment.revision } } })
+            // ---- F-SA-242: ticked, the words go as our message in the order's conversation (the thread's own portal send), after
+            // the amendment took; a refusal never undoes the amendment — it is said in the one notice.
+            if (tell) {
+              const revision = answer.amendment.revision
+              try {
+                await postPortalReplyKeyed(api, { type: 'SalesOrder', id: orderId }, { body: tell, attachments: [] }, newIdempotencyKey())
+                setNotice({ tone: 'success', words: { key: 'notice.amendedTold', params: { revision } } })
+              } catch (error) {
+                const refusal = portalRefusal(error)
+                const gone = refusal === 'notice.portal.NO_PORTAL' || refusal === 'notice.portal.NO_PARTY'
+                if (gone) setPortalGone(true)
+                setNotice({ tone: 'warning', words: { key: gone ? 'notice.amendedNotReached' : 'notice.amendedNotTold', params: { revision, customer: value.party?.legalName ?? '' } } })
+              }
+            }
+            // ---- end F-SA-242
             return answer.order
           }, null)
         },
@@ -814,5 +866,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onStepUpCancel: cancelStepUp,
       }}
     />
+    </CustomerOverrideProvider>
   )
 }

@@ -490,6 +490,11 @@ export const applyPlanContract = defineContract({
           workOrder: output({ id: id(), number: z.string() }).nullable(),
           cells: z.array(output({ seq: z.number().int(), size: z.string(), from: z.number().int(), to: z.number().int() })),
           extra: z.number().int(),
+          /**
+           * F-SA-241 (14-change-flow §3.2 item 6): the work order's bundles in work (ACTIVE) on the step's own cells — the window offers
+           * "Finish what is started" / "Stop now" for it. null: a new work order, or one the reader does not reach (never counted then).
+           */
+          bundles: z.number().int().nullable(),
         }),
       ),
       live,

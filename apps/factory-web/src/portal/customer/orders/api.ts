@@ -351,6 +351,8 @@ export const rulesSchema = z.object({
   // what the rules say of it now and the one that waits; what the freeze rules hold of the order's date and delivery address.
   asks: z.array(z.object({ kind: z.enum(PRODUCTION_REQUEST_KINDS), words, open: z.boolean(), verdict: askVerdict, waitingRequestId: z.string().nullable() })).optional(),
   frozen: z.object({ deliveryDate: freeze, shipTo: freeze }).optional(),
+  // F-SA-246 (B-SA-046): the design change — open while the customer's ask-kinds switch lists it; the one that waits (one per order).
+  design: z.object({ words, open: z.boolean(), verdict: askVerdict, waitingRequestId: z.string().nullable() }).optional(),
   live,
 })
 export type ChangeRules = z.infer<typeof rulesSchema>
@@ -389,6 +391,8 @@ export const changeRequestSchema = z.object({
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), totalFee: price }).nullable().optional(),
   // F-PR-13 (B-PR-26): our counter-offer on it (answered in Waiting for you; never the amount without the price grain).
   counter: z.object({ approvalRequestId: z.string(), state: z.enum(['WAITING', 'AGREED', 'REFUSED', 'LAPSED']).catch('WAITING'), priced: z.boolean(), date: z.string().nullable(), words }).nullable().optional(),
+  // F-SA-246 (B-SA-046): the files a design change sent (none on any other kind).
+  fileIds: z.array(z.string()).optional(),
   version: z.number(),
   mine: z.boolean(),
 })
@@ -430,7 +434,16 @@ export interface ProductionAskBody {
   /** Their words (HOLD: why — required). */
   readonly note?: string | null
 }
-export type AskBody = ChangeBody | CancelBody | ProductionAskBody
+// ---- F-SA-246 (B-SA-046): a design change — their words (required), the lines it is for, up to 10 files of the order shared with
+// them (each the order's own, AVAILABLE: a file still held for the virus scan is refused "File not found."). No date, no address.
+export interface DesignAskBody {
+  readonly kind: 'DESIGN'
+  readonly lineIds: readonly string[]
+  readonly note: string
+  readonly fileIds?: readonly string[]
+}
+// ---- end F-SA-246
+export type AskBody = ChangeBody | CancelBody | ProductionAskBody | DesignAskBody /* F-SA-246 */
 
 /** The impact of an ask (B-PR-24/25): what is frozen, priced or not (never an amount), the earliest date (a date only), notes. */
 export const askImpactSchema = z.object({
@@ -455,6 +468,30 @@ const oneRequest = z.object({ request: changeRequestSchema })
 // F-PR-13: every kind (the production asks beside change and cancel).
 export const askRequest = (api: ApiClient, orderId: string, body: AskBody, idempotencyKey: string = newIdempotencyKey()) =>
   api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/change-requests`, { body, schema: oneRequest, idempotencyKey })
+
+// ---- F-SA-246 (R6; 14-change-flow §2.4): a design change's files from the device go through the order's conversation's own
+// upload route (the portal composer's: `/portal/threads/SalesOrder/:orderId/files`, portal.comment) — announced, PUT to the store,
+// completed; the file is the order's own, shared with the customer, and stays closed until the virus scan says it is clean (the
+// API answers its sentence while uploads from outside are closed). The ask then names the sent ones.
+const presigned = z.object({ method: z.enum(['PUT', 'GET']), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() })
+const orderUpload = z.object({ id: z.string(), originalName: z.string(), kind: z.string(), sizeBytes: z.number(), status: z.string() })
+export type OrderUpload = z.infer<typeof orderUpload>
+const orderFilesPath = (orderId: string) => `/portal/threads/SalesOrder/${encodeURIComponent(orderId)}/files`
+
+/** What a file announces: its name, type, size and SHA-256. */
+export interface OrderFileAnnounce {
+  readonly originalName: string
+  readonly contentType: string
+  readonly sizeBytes: number
+  readonly sha256: string
+}
+
+export const announceOrderFile = (api: ApiClient, orderId: string, body: OrderFileAnnounce, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(orderFilesPath(orderId), { body: { ...body }, schema: z.object({ file: orderUpload, upload: presigned }), idempotencyKey })
+
+export const completeOrderFile = (api: ApiClient, orderId: string, fileId: string, idempotencyKey: string = newIdempotencyKey()): Promise<OrderUpload> =>
+  api.post(`${orderFilesPath(orderId)}/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: orderUpload }), idempotencyKey }).then((answer) => answer.file)
+// ---- end F-SA-246
 
 export const withdrawRequest = (api: ApiClient, orderId: string, requestId: string, version: number) =>
   api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/change-requests/${encodeURIComponent(requestId)}/withdraw`, { body: { version }, schema: oneRequest, idempotencyKey: newIdempotencyKey() })

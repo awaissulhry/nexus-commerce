@@ -190,7 +190,21 @@ export const peopleSchema = z.object({
 })
 export type People = z.infer<typeof peopleSchema>
 
-export const changesSchema = z.object({ openRequests: z.array(z.object({ id: z.string(), kind: z.string(), status: z.string(), since: instant, batchId: z.string().nullable() })) })
+// F-SA-243 (B-SA-050): "Still to do" after the accepted changes, computed from the records — each row names the record that closes it.
+const stillRowSchema = z.object({
+  kind: z.string(),
+  ref: z.object({ type: z.string(), id: z.string(), number: z.string().nullable() }).nullable(),
+  words: z.object({ en: z.string(), it: z.string() }),
+  since: instant,
+  waitingOn: z.string(),
+  mayAct: z.boolean(),
+  requestId: z.string().nullable(),
+})
+export type StillRow = z.infer<typeof stillRowSchema>
+export const changesSchema = z.object({
+  openRequests: z.array(z.object({ id: z.string(), kind: z.string(), status: z.string(), since: instant, batchId: z.string().nullable() })),
+  stillToDo: z.object({ rows: z.array(stillRowSchema), count: z.number(), workOrdersLeftOut: z.number() }).optional(),
+})
 
 export const WITHHELD_KEYS = ['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final', 'dates.forecast'] as const
 export type WithheldKey = (typeof WITHHELD_KEYS)[number]

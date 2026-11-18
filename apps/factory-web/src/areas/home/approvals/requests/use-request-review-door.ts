@@ -73,7 +73,7 @@ export function useRequestReviewDoor(door: RequestDoor): RequestDoorResult {
   const listed = openId ? doorTargetOf(door, openId) : null
   const [probed, setProbed] = useState<{ id: string; as: 'request' | 'batch' } | null>(null)
   useEffect(() => {
-    if (!openId || listed !== null || probed?.id === openId) return
+    if (!openId || listed !== null || probed?.id === openId || sticky.current?.id === openId) return
     let gone = false
     void probeOpen(api, openId, { tasks: false, requests: true }).then((as) => {
       // Neither (or another customer's): read as a request, whose read says "not there any more".
@@ -83,7 +83,12 @@ export function useRequestReviewDoor(door: RequestDoor): RequestDoorResult {
       gone = true
     }
   }, [api, openId, listed, probed?.id])
-  const openAs = !openId ? null : (listed ?? (probed?.id === openId ? probed.as : null))
+  const found = !openId ? null : (listed ?? (probed?.id === openId ? probed.as : null))
+  // F-SA-241: what the id opened as is kept while it stays open — after Accept the door's list reads again without it, and the
+  // "Done · What happens next" view stays (it is not asked again, the window does not blink).
+  const sticky = useRef<{ id: string; as: 'request' | 'batch' } | null>(null)
+  if (openId && found) sticky.current = { id: openId, as: found }
+  const openAs = found ?? (openId && sticky.current?.id === openId ? sticky.current.as : null)
 
   const hrefOf = useCallback((id: string | null) => `${pathname}${doorAddress(search, id, param)}`, [pathname, search, param])
   const open = useCallback((id: string | null) => router.replace(hrefOf(id), { scroll: false }), [router, hrefOf])
@@ -105,6 +110,7 @@ export function useRequestReviewDoor(door: RequestDoor): RequestDoorResult {
     price,
     orderHref,
     mayLift: held.has('workorders.hold'),
+    doneNext: 'close', // F-SA-241: a door closes its done view (Home › Approvals goes to the next request)
     onAnswered: (answered) => {
       setNotice(answered.notice)
       doorRef.current.onChanged?.()

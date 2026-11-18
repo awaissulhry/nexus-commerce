@@ -9,6 +9,10 @@ import { CATALOGUE, placeholdersOf } from '../../../../lib/i18n/messages'
 import type { TodayItem } from '../../today/model'
 import { countsOf, filterRows, heldOf, listedTarget, openIdOf, rowsOf, selectHeld } from '../inbox'
 import { acceptBatch, acceptProduction, acceptSales, counterRequest, listWaitingRequests, refuseRequest, type BrandRequest } from './api'
+// F-SA-241 / F-SA-242
+import { designHeldWords } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { applyPlanSchema, getApplyPlan } from './api'
+import { designOptionsOffered, doneCommandsOf, leftToRun, NO_CHOICES, outcomeHeld, planHeld, reachOf, runInOrder, stepStateOf, stillStateOf, stoppable, stoppableOf, tellHeld, tellRefusalOf, tellsNow, tickOn, type TellTick } from './model'
 import { brandRequest, REQUEST_FIXTURES } from './fixtures'
 import {
   answerHeld,
@@ -427,3 +431,172 @@ describe('every word of the customer request window exists in it and en, with th
     expect(CATALOGUE.en.approvals?.['customerRequest.followUp.clearRush']).toBe('Clear rush')
   })
 })
+
+// ── F-SA-241 / F-SA-242 (sales page plan P5, P6', R1, R3, R8; 14-change-flow §3.2–§3.4, §4.2; lead picks Round 4; review R-6) ──
+describe('F-SA-241: the window’s new parts from the apply plan — On the floor now, Extra pieces, What happens next, Done', () => {
+  const { CHANGE, PLAN, PLAN_AFTER, WO } = REQUEST_FIXTURES
+
+  it('Accept waits on the plan in order: the change not possible as it stands, then the extra pieces unpicked, then an outcome not this reader’s', () => {
+    expect(planHeld(PLAN, NO_CHOICES)).toEqual({ words: PLAN.extra.words })
+    expect(planHeld(PLAN, { extraOutcome: 'LEFTOVER', stops: [] })).toBeNull()
+    expect(planHeld(PLAN, { extraOutcome: 'SCRAP', stops: [] })).toBeNull()
+    const noPrice = { ...PLAN, extra: { ...PLAN.extra, outcomes: PLAN.extra.outcomes.map((option) => (option.outcome === 'CHARGE' ? { ...option, mayChoose: false } : option)) } }
+    expect(planHeld(noPrice, { extraOutcome: 'CHARGE', stops: [] })).toEqual({ words: noPrice.extra.outcomes[0]!.needsWords })
+    // A colourway already cut (the record's own preview, F-SA-242) is said before the extra pieces.
+    const colour = { words: { en: 'Already cut in Black: 40 pieces. Suggest something else or refuse.', it: 'Già tagliati in Nero: 40 pezzi. Proponi altro o rifiuta.' } }
+    const held = { ...PLAN, next: PLAN.next.map((step) => (step.kind === 'AMEND' ? { ...step, state: 'NOT_POSSIBLE' as const, why: colour.words } : step)) }
+    expect(planHeld(held, NO_CHOICES)).toEqual(colour)
+    // No plan (not read, no orders.view): nothing claimed, answerHeld's own reasons stay.
+    expect(planHeld(null)).toBeNull()
+    // Round 4: no outcome is picked for the reader; one it may not choose is held with why, never hidden.
+    expect(NO_CHOICES.extraOutcome).toBeNull()
+    expect(outcomeHeld({ mayChoose: false, needsWords: { en: 'x', it: 'y' } })).toEqual({ en: 'x', it: 'y' })
+    expect(outcomeHeld({ mayChoose: true, needsWords: { en: 'x', it: 'y' } })).toBeNull()
+  })
+
+  it('each step’s state in words, before and after Accept; the order’s Still to do rows in the same words', () => {
+    const [amend, lower] = PLAN.next
+    expect(stepStateOf(amend!, false).key).toBe('customerRequest.next.state.thisAccept')
+    expect(stepStateOf(lower!, false).key).toBe('customerRequest.next.state.afterAccept')
+    const [amendDone, proposed] = PLAN_AFTER.next
+    expect(stepStateOf(amendDone!, true)).toMatchObject({ word: 'done', tone: 'success' })
+    expect(stepStateOf(proposed!, true)).toMatchObject({ word: 'yourTurn' })
+    expect(stepStateOf({ ...proposed!, mayDoNow: false }, true).key).toBe('customerRequest.next.state.waiting.PLANNER')
+    expect(stepStateOf({ ...proposed!, state: 'LEFT_AS_IS' }, true).word).toBe('leftAsIs')
+    expect(stepStateOf({ ...proposed!, team: 'PRODUCT', kind: 'ECO', mayDoNow: false }, true).key).toBe('customerRequest.next.state.waiting.PRODUCT')
+    expect(stillStateOf({ kind: 'EXTRA_PIECES', waitingOn: 'PLANNER', mayAct: true }).word).toBe('needsDecision')
+    expect(stillStateOf({ kind: 'REPROMISE', waitingOn: 'SALES', mayAct: true }).word).toBe('yourTurn')
+    expect(stillStateOf({ kind: 'STYLE_CHANGE', waitingOn: 'PRODUCT', mayAct: false }).key).toBe('customerRequest.next.state.waiting.PRODUCT')
+  })
+
+  it('Finish what is started / Stop now: only for a work order the reader reaches with bundles in work, once each', () => {
+    expect(stoppableOf(PLAN)).toEqual([{ id: WO.id, number: WO.number, bundles: 2 }])
+    const twice = { ...PLAN, next: [...PLAN.next, { ...PLAN.next[1]!, seq: 3, kind: 'MAKE_MORE' as const }] }
+    expect(stoppableOf(twice)).toHaveLength(1)
+    expect(stoppable({ ...PLAN.next[1]!, bundles: 0 })).toBe(false)
+    expect(stoppable({ ...PLAN.next[1]!, workOrder: null })).toBe(false)
+    expect(stoppable({ ...PLAN.next[1]!, bundles: undefined })).toBe(false)
+    expect(stoppable(PLAN.next[0]!)).toBe(false)
+  })
+
+  it('after Accept: the stops go first, then each work-order change this reader may carry out now — every one its own command', () => {
+    const commands = doneCommandsOf(PLAN_AFTER, [WO])
+    expect(commands.map((command) => command.key)).toEqual([`stop:${WO.id}`, `apply:${PLAN_AFTER.next[1]!.ref!.id}`])
+    // A proposal not this reader's (no workorders.manage over it) is a door, never a command.
+    expect(doneCommandsOf({ next: PLAN_AFTER.next.map((step) => ({ ...step, mayDoNow: false })) }, [])).toEqual([])
+    expect(leftToRun(commands, { [`stop:${WO.id}`]: { phase: 'done' } }).map((command) => command.kind)).toEqual(['apply'])
+  })
+
+  it('"Do the next steps" runs one after another and stops at the FIRST refusal (the rest stay to do, nothing rolled back)', async () => {
+    const commands = [...doneCommandsOf(PLAN_AFTER, [WO]), { key: 'apply:other', kind: 'apply' as const, changeId: 'other', workOrder: null, words: { en: 'x', it: 'y' } }]
+    const seen: string[] = []
+    const states: Record<string, string> = {}
+    const result = await runInOrder(
+      commands,
+      async (command) => {
+        seen.push(command.key)
+        return command.kind === 'apply' ? { phase: 'refused', key: 'workOrderChange.refusal.CHANGED_SINCE' } : { phase: 'done' }
+      },
+      (key, state) => (states[key] = state.phase),
+    )
+    expect(result).toEqual({ done: 1, refused: commands[1]!.key })
+    expect(seen).toEqual([commands[0]!.key, commands[1]!.key])
+    expect(states).toEqual({ [commands[0]!.key]: 'done', [commands[1]!.key]: 'refused' })
+  })
+
+  it('Accept sends the outcome chosen (and nothing when none); the plan is read with orders.view from its own route', async () => {
+    const { api, calls } = fakeApi((call) => (call.path.endsWith('/apply-plan') ? PLAN : { request: {}, orderCancelled: false, cancelFee: null, split: null, workOrders: { proposed: [], extra: [], extraOutcome: 'LEFTOVER' }, styleChanges: [] }))
+    await acceptSales(api, CHANGE.id, { version: 1, answer: null, extraOutcome: 'LEFTOVER' }, 'k-41')
+    await acceptSales(api, CHANGE.id, { version: 1, answer: null, extraOutcome: null }, 'k-42')
+    const plan = await getApplyPlan(api, CHANGE.id)
+    expect(calls[0]).toEqual({ method: 'POST', path: `/sales/change-requests/${CHANGE.id}/accept`, body: { version: 1, answer: null, extraOutcome: 'LEFTOVER' }, key: 'k-41' })
+    expect(calls[1]!.body).toEqual({ version: 1, answer: null })
+    expect(calls[2]).toEqual({ method: 'GET', path: `/sales/change-requests/${CHANGE.id}/apply-plan`, query: undefined })
+    expect(plan.next[1]!.bundles).toBe(2)
+    // An older answer without the step's bundles still reads (no count: no Stop now).
+    const older: Record<string, unknown> = { ...PLAN.next[1]! }
+    delete older.bundles
+    expect(applyPlanSchema.parse({ ...PLAN, next: [PLAN.next[0], older] }).next[1]!.bundles).toBeUndefined()
+  })
+
+  it('the window draws every part for every door; a door other than Approvals brings the approvals layout with it', () => {
+    const view = readFileSync(join(HERE, 'view', 'RequestReview.tsx'), 'utf8')
+    expect(view).toContain("import '../../approvals.css'")
+    for (const part of ['<FloorNow plan={plan} />', '<ExtraPieces', '<NextSteps', '<DoneSteps']) expect(view).toContain(part)
+    // Accept held by the plan's reason too (words, before the click), Close or Next request › after it, Esc closes the done view the same way.
+    expect(view).toContain('const acceptHeld = acceptHeldKey ? t(acceptHeldKey) : planHeldText')
+    expect(view).toContain("done.next === 'next' ? t(`${CR}.done.nextRequest`) : t(`${CR}.done.close`)")
+    expect(view).toContain('onClose={() => (done ? actions?.onDoneClose?.() : nav.onOpen?.(null))}')
+    const container = readFileSync(join(HERE, 'use-request-review.ts'), 'utf8')
+    // Stop now = a production hold, its own Idempotency-Key; a work-order change carried out at the version read (each its own command).
+    expect(container).toContain('placeProductionHold(api, command.workOrder.id')
+    expect(container).toContain('applyWorkOrderChange(api, command.changeId, { version: change.version }, keyOf(command))')
+    expect(container).toContain('extraOutcome: choices.extraOutcome')
+    // Approvals says Next request ›, every other door Close.
+    expect(readFileSync(join(HERE, '..', 'Approvals.tsx'), 'utf8')).toContain("doneNext: 'next'")
+    expect(readFileSync(join(HERE, 'use-request-review-door.ts'), 'utf8')).toContain("doneNext: 'close'")
+  })
+})
+
+describe('F-SA-242: the words in the order’s conversation, and the held reasons', () => {
+  const { CHANGE, PLAN } = REQUEST_FIXTURES
+  const tick = (over: Partial<TellTick> = {}): TellTick => ({ chosen: null, reach: 'portal', sent: 'no', compose: null, ...over })
+
+  it('the tick is on when words are typed (never automatic), held "Type the words first" or "No way to reach <customer>"', () => {
+    expect(tickOn(tick(), '')).toBe(false)
+    expect(tickOn(tick(), 'Yes: M 36.')).toBe(true)
+    expect(tickOn(tick({ chosen: false }), 'Yes: M 36.')).toBe(false)
+    expect(tellHeld(tick(), '  ')).toBe('customerRequest.tell.held.words')
+    expect(tellHeld(tick({ reach: 'none' }), 'Yes')).toBe('customerRequest.tell.held.reach')
+    expect(tellsNow(tick(), 'Yes')).toBe(true)
+    expect(tellsNow(tick({ chosen: false }), 'Yes')).toBe(false)
+    expect(tellsNow(tick({ reach: 'none' }), 'Yes')).toBe(false)
+    // A request is asked in the portal: reached there until the portal says nobody reads it any more.
+    expect(reachOf(CHANGE, false)).toBe('portal')
+    expect(reachOf(CHANGE, true)).toBe('none')
+    expect(reachOf({ askedBy: null }, false)).toBe('none')
+    expect(tellRefusalOf('notice.portal.NO_PORTAL')).toBe('customerRequest.tell.held.reach')
+    expect(tellRefusalOf('notice.portal.CLOSED')).toBe('customerRequest.tell.refused.closed')
+    expect(tellRefusalOf(null)).toBe('customerRequest.tell.refused.other')
+  })
+
+  it('the words go through the thread’s own send (the composer’s portal reply call, the composer untouched), only after the answer took', () => {
+    const container = readFileSync(join(HERE, 'use-request-review.ts'), 'utf8')
+    expect(container).toContain("postPortalReplyKeyed(api, { type: 'SalesOrder', id: about.orderId }, { body: text.trim(), attachments: [] }, newIdempotencyKey())")
+    expect(container).toContain('if (told) void tellNow(request, words)')
+    expect(container).not.toMatch(/lib\/record-thread\/composer/)
+  })
+
+  it('held colour and style reasons: a design change of our own collection offers Options… only while no work order makes the line', () => {
+    const style = (inWork: boolean) => ({
+      ...PLAN,
+      request: { ...PLAN.request, kind: 'DESIGN' as const },
+      next: [{ ...PLAN.next[0]!, kind: 'STYLE_CHANGE' as const, state: 'NOT_POSSIBLE' as const, why: designHeldWords('OWN_COLLECTION', inWork) }],
+    })
+    expect(designOptionsOffered(style(false))).toBe(true)
+    expect(designOptionsOffered(style(true))).toBe(false)
+    expect(designOptionsOffered(PLAN)).toBe(false)
+    expect(planHeld(style(true))).toEqual({ words: designHeldWords('OWN_COLLECTION', true) })
+    // No private-label copy door (R3): the window offers Suggest something else, Refuse and (maybe) Options… only.
+    const view = readFileSync(join(HERE, 'view', 'RequestReview.tsx'), 'utf8')
+    expect(view).not.toMatch(/privateLabelCopy|makeCopy|copyStyle/)
+    expect(view).toContain('t(`${CR}.design.options`)')
+  })
+
+  it('every new word in it + en with the same placeholders, the built keys too (states by team, outcomes)', () => {
+    const keys = ['tell.tick', 'tell.held.words', 'tell.held.reach', 'tell.open', 'tell.send', 'tell.sent', 'design.options', 'floor.title', 'floor.withheld', 'extra.title', 'extra.pick', 'next.title', 'next.finish', 'next.stop', 'next.stopWords', 'next.changeNow', 'done.title', 'done.runAll', 'done.nextRequest', 'done.close', 'done.nothingLeft']
+    for (const word of ['thisAccept', 'afterAccept', 'done', 'yourTurn', 'needsDecision', 'leftAsIs', 'notPossible']) keys.push(`next.state.${word}`)
+    for (const team of ['PLANNER', 'PRODUCT', 'FINANCE', 'CUSTOMER', 'SALES']) keys.push(`next.state.waiting.${team}`)
+    for (const outcome of ['CHARGE', 'LEFTOVER', 'SCRAP']) keys.push(`extra.outcome.${outcome}`)
+    for (const locale of LOCALES) {
+      const dictionary = CATALOGUE[locale].approvals ?? {}
+      expect(keys.filter((key) => !dictionary[`customerRequest.${key}`]?.trim()), locale).toEqual([])
+    }
+    expect(CATALOGUE.en.approvals?.['customerRequest.tell.tick']).toBe("Also write it in the order's conversation")
+    expect(CATALOGUE.it.approvals?.['customerRequest.tell.tick']).toBe("Scrivilo anche nella conversazione dell'ordine")
+    expect(CATALOGUE.it.approvals?.['customerRequest.next.state.yourTurn']).toBe('Tocca a te')
+    expect(CATALOGUE.it.approvals?.['customerRequest.next.stop']).toBe('Ferma ora')
+    expect(placeholdersOf(CATALOGUE.it.approvals?.['customerRequest.tell.held.reach'] ?? '')).toEqual(['customer'])
+  })
+})
+// ── end F-SA-241 / F-SA-242 ──

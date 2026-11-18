@@ -44,6 +44,16 @@ export function AskImpact({ model, onRetry }: { model: AskImpactModel; onRetry?:
           ))}
         </ul>
       ) : null}
+      {/* F-SA-246: a design change — how far each line is made (the API's words: its stage, never a number of pieces). */}
+      {view.lines.length > 0 ? (
+        <ul className="fw-pord-requests" aria-label={t('ask.design.impact.linesLabel')}>
+          {view.lines.map((line, index) => (
+            <li key={index} className="fw-pord-request-head">
+              <span>{line[locale]}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <KeyValue labelCase="sentence" items={items} />
       {view.notes.map((key) => (
         <p key={key} className="fw-pord-sub">

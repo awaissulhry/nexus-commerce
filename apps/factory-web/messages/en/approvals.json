@@ -331,6 +331,99 @@
       "rate_limited": "Too many tries: wait a moment.",
       "signed_out": "Your session ended: sign in again.",
       "internal": "Something went wrong. Try again."
+    },
+    "floor": {
+      "title": "On the floor now",
+      "withheld": "Needs work-order access",
+      "nothing": "Nothing of it is in work orders yet.",
+      "col": {
+        "cell": "Line · size",
+        "asked": "Asked",
+        "inWorkOrders": "In work orders"
+      },
+      "cell": "Line {line} · {size}",
+      "wholeLine": "Line {line}",
+      "own": "This order's own pieces only.",
+      "leftOut": "{count} work orders of these lines are not shown: they are outside what you can open."
+    },
+    "extra": {
+      "title": "Extra pieces",
+      "piece": "Line {line} · {words}",
+      "pick": "Pick what happens to the extra pieces",
+      "choose": "Choose what happens to the {count} extra pieces",
+      "notYours": "Not yours to choose.",
+      "chosen": "Chosen at Accept: {outcome}",
+      "noneChosen": "No outcome was recorded: production decides.",
+      "outcome": {
+        "CHARGE": "A priced change: the customer is asked to accept the price of the extra pieces.",
+        "LEFTOVER": "Kept for this customer only: a private-label garment never goes to another customer.",
+        "SCRAP": "Scrapped with the scrap's own approval, by who approves scrap."
+      }
+    },
+    "next": {
+      "title": "What happens next",
+      "who": "Decides: {name}",
+      "inWork": "{order}: {count} bundles in work",
+      "choiceLabel": "Bundles in work on {order}",
+      "finish": "Finish what is started",
+      "stop": "Stop now",
+      "stopHeld": "Stopping a work order needs the right to put work orders on hold.",
+      "stopWords": "{count} bundles in work: their Done waits until the hold is lifted.",
+      "changeNow": "Change the work order now",
+      "openChange": "Open the work-order change",
+      "open": "Open {number}",
+      "doneAlready": "Done already.",
+      "refused": {
+        "stop": "{order} was not stopped: open it and put it on hold there."
+      },
+      "state": {
+        "thisAccept": "This Accept",
+        "afterAccept": "After Accept",
+        "done": "Done",
+        "yourTurn": "Your turn",
+        "needsDecision": "Needs a decision",
+        "leftAsIs": "Left as is",
+        "notPossible": "Not possible",
+        "waiting": {
+          "PLANNER": "Waiting for planning",
+          "PRODUCT": "Waiting for product",
+          "FINANCE": "Waiting for finance",
+          "CUSTOMER": "Waiting for the customer",
+          "SALES": "Waiting for sales"
+        }
+      }
+    },
+    "done": {
+      "title": "Done · What happens next",
+      "accepted": "Accepted: {kind} · {order}",
+      "commands": "Your next steps",
+      "stop": "Stop {order} now: no new bundle until planning decides",
+      "apply": "Change the work order now: {what}",
+      "again": "Try again",
+      "runAll": "Do the next steps ({count})",
+      "runAllHint": "One after another; it stops at the first refusal.",
+      "nothingLeft": "Nothing left to do for this change.",
+      "close": "Close",
+      "nextRequest": "Next request ›"
+    },
+    "tell": {
+      "tick": "Also write it in the order's conversation",
+      "held": {
+        "words": "Type the words first",
+        "reach": "No way to reach {customer}: add a contact"
+      },
+      "refused": {
+        "closed": "The order's conversation is closed: the words were not written there.",
+        "other": "The words were not written in the order's conversation: write them there."
+      },
+      "sent": "Written in the order's conversation.",
+      "open": "Tell the customer…",
+      "title": "Words for the customer, in the order's conversation",
+      "hint": "Our message to the customer in the order's conversation: they read it in the portal. Never a price in words.",
+      "send": "Write in the conversation"
+    },
+    "design": {
+      "options": "Options…"
     }
   },
   "workOrderChange": {

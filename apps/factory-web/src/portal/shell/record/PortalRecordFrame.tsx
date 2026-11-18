@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { ArrowLeft, MessageSquare } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Pencil /* F-SA-246 */ } from 'lucide-react'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../lib/i18n/provider'
 import { messagesButtonWords, PORTAL_DOCK_FROM, portalArrivalCleaned, portalArrivalOf, portalFrameMode, PORTAL_THREAD_PARAM, type PortalFrameMode } from './model'
@@ -48,6 +48,9 @@ export interface PortalRecordFrameProps {
   /** The design review: the docked or the narrow layout whatever the window, the narrow view open, a new-message count. */
   // F-SA-264: + the dock's width and whether it is hidden.
   readonly design?: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number; readonly width?: PortalDockWidth; readonly hidden?: boolean }
+  // F-SA-246 (sales page plan R6; 14-change-flow §2.0 S1): a door above the conversation to the record's own ask ("Ask for a change"
+  // on an order: the page's Ask dialog), held with why (a preview, no right to ask, offline); absent or null: none.
+  readonly door?: { readonly label: string; readonly held: string | null; readonly onOpen: () => void } | null
 }
 
 /** What the conversation inside reads of its frame: whether it is on screen (it marks messages read only then), and the count. */
@@ -101,7 +104,7 @@ const storageOf = (): Storage | null => {
   }
 }
 
-export function PortalRecordFrame({ thread, threadLabel, children, design }: PortalRecordFrameProps) {
+export function PortalRecordFrame({ thread, threadLabel, children, design, door /* F-SA-246 */ }: PortalRecordFrameProps) {
   const t = useT('portal')
   const pathname = usePathname()
   const params = useSearchParams()
@@ -328,6 +331,14 @@ export function PortalRecordFrame({ thread, threadLabel, children, design }: Por
               </div>
             ) : null}
             {tools /* F-SA-264 */}
+            {/* F-SA-246: the record's own ask, beside its conversation (PartnerThread itself is untouched). */}
+            {door ? (
+              <div className="fw-prf-back fw-prf-door">
+                <Button size="sm" heldReason={door.held} onClick={() => !door.held && door.onOpen()}>
+                  <Pencil size={14} aria-hidden /> {door.label}
+                </Button>
+              </div>
+            ) : null}
             <div id={dockId} className="fw-prf-thread">
               {thread}
             </div>
