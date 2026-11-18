@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { customerNumberOf, customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { KIND_RULES, type PortalDocumentKind } from '@nexus/factory-domain/sales/portal-documents/library'
@@ -193,7 +194,8 @@ export const portalOrderFilesContract = defineContract({
           ),
         }),
       ),
-      total: z.number().int(),
+      /** How many files are listed (a count, not money). */
+      total: notMoney(z.number().int()),
     }),
   },
 })
