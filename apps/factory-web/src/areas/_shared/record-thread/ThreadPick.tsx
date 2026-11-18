@@ -23,8 +23,11 @@ export interface ThreadChoice<V extends string = string> {
   readonly label: string
   /** The segment's hover words. */
   readonly title?: string
-  /** The ONE line under the pick while this choice is picked: whose thread it is (who reads what is written there). */
-  readonly line: string
+  /**
+   * The ONE line under the pick while this choice is picked: whose thread it is (who reads what is written there). F-SA-279: null
+   * when the picked view says it itself (All of <customer>'s own read-only line).
+   */
+  readonly line: string | null
 }
 
 export interface ThreadPickProps<V extends string = string> {
@@ -36,6 +39,11 @@ export interface ThreadPickProps<V extends string = string> {
   readonly onPick?: (value: V) => void
   /** The picked thread (the docked office thread, or a design case's). */
   readonly children: ReactNode
+  // ---- F-SA-262 / F-SA-279: a second, quieter line under the pick ("Draft kept on SO-…"), and what sits beside the pick in the same
+  // block (a choice's second select: which project, which work order). Absent: nothing.
+  readonly note?: string | null
+  readonly extra?: ReactNode
+  // ---- end F-SA-262 / F-SA-279
 }
 
 /** The choice shown: the one asked for, else the first (the default) — never one the host did not offer. Null: no choice at all. */
@@ -46,7 +54,7 @@ export function pickedChoice<V extends string>(choices: readonly ThreadChoice<V>
 /** The pick is drawn only when there is something to pick: two threads or more (one thread alone needs no pick). */
 export const pickShown = (choices: readonly ThreadChoice[]): boolean => choices.length > 1
 
-export function ThreadPick<V extends string>({ label, choices, value, onPick, children }: ThreadPickProps<V>) {
+export function ThreadPick<V extends string>({ label, choices, value, onPick, children, note /* F-SA-279 */, extra /* F-SA-262 */ }: ThreadPickProps<V>) {
   const picked = pickedChoice(choices, value)
   return (
     <>
@@ -63,7 +71,9 @@ export function ThreadPick<V extends string>({ label, choices, value, onPick, ch
             }}
             options={choices.map((choice) => ({ value: choice.value, label: choice.label, ...(choice.title ? { title: choice.title } : {}) }))}
           />
-          <p className="fw-thread-pick-line">{picked.line}</p>
+          {extra /* F-SA-262 */}
+          {picked.line && <p className="fw-thread-pick-line">{picked.line}</p>}
+          {note && <p className="fw-thread-pick-line is-note">{note}</p> /* F-SA-279 */}
         </div>
       )}
       {children}

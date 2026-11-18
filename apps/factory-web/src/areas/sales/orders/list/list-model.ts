@@ -166,6 +166,10 @@ export interface OrdersListModel {
   // ---- end F-SA-281
   // ---- F-SA-282: Reply to <customer> on N… while open (one customer, ≤ 50, one batchId; each order's own conversation)
   replyMany?: ReplyManyModel | null
+  // ---- F-SA-279 (the customer page: a row drives the dock) ----
+  /** The order the page's dock shows (marked; null: none), and the words of a phone card's door to its conversation; absent: not a dock list. */
+  active?: { readonly id: string | null; readonly cardDoor?: string | null } | null
+  // ---- end F-SA-279
 }
 
 export interface OrdersListActions {
@@ -246,4 +250,8 @@ export interface OrdersListActions {
   // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions
   onReplyMany?: (ids: readonly string[]) => void
   replyMany?: ReplyManyActions
+  // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
+  onFocusRow?: (row: OrderRow) => void
+  onCardThread?: (row: OrderRow) => void
+  // ---- end F-SA-279
 }

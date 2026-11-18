@@ -734,3 +734,23 @@ a.fw-so-countbtn:focus-visible {
   justify-content: space-between;
   gap: var(--nds-space-8);
 }
+
+/* F-SA-262: All of <customer> in the order's dock — the read-only feed, then "Write in: This order · General" at its foot. */
+.fw-so-dock-all {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-height: 0;
+}
+
+.fw-so-dock-write {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}

@@ -14,3 +14,8 @@
   font-size: var(--nds-font-size-sm);
   line-height: 1.45;
 }
+
+/* F-SA-279: the quieter second line ("Draft kept on SO-…"). */
+.fw-thread-pick-line.is-note {
+  font-style: italic;
+}

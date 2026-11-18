@@ -133,3 +133,27 @@ export function clickedColumn(target: ClickTarget | null | undefined, focused: s
   return target.closest('.ag-cell')?.getAttribute('col-id') ?? null
 }
 // ---- end B-TH-245
+
+// ---- F-SA-279 (sales page plan N5, N4; picks R5, P9, P11; 11-customer-page §3.7): a list that drives a dock — opt-in `active`
+/** The class AG puts on the row a dock shows (the picked row stays marked while the focus moves on). */
+export const ACTIVE_ROW_CLASS = 'fw-list-row-active'
+
+/**
+ * A focus change the grid reports this soon after a pointer press inside it is the click's (the row click picks at once, a link or a
+ * button keeps its own click): only the keys' focus moves (↑ / ↓, j / k, Tab) are reported as "the focus is on this row now".
+ */
+export const POINTER_FOCUS_MS = 400
+
+/** Whether a cell focus the grid reports is a row the keys moved to (not a pinned row, not the header, not a pointer's). */
+export function focusReported(input: { readonly rowIndex: number | null | undefined; readonly pinned: string | null | undefined; readonly sincePointer: number }): boolean {
+  if (input.rowIndex === null || input.rowIndex === undefined || input.rowIndex < 0) return false
+  if (input.pinned) return false
+  return input.sincePointer >= POINTER_FOCUS_MS
+}
+
+/** ⌘↵ (Ctrl ↵ elsewhere) on a row: its record in a new tab (Enter alone opens it here). */
+export const isNewTabKey = (event: { readonly key: string; readonly metaKey: boolean; readonly ctrlKey: boolean }): boolean => event.key === 'Enter' && (event.metaKey || event.ctrlKey)
+
+/** The key a list that drives a dock adds to its footer's keys (the frame's own words). */
+export const ACTIVE_KEYS: readonly ListKey[] = Object.freeze([{ keys: ['⌘', '↵'], does: 'keys.openNewTab' }])
+// ---- end F-SA-279

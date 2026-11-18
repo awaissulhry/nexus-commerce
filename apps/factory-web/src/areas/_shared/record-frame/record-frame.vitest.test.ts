@@ -340,3 +340,56 @@ describe('F-SA-263 — the dock adapts per tab and remembers', () => {
   })
 })
 // ---- end F-SA-263
+
+// ---- F-SA-265 (sales page plan N2, N4, N6; picks P2, P9, R10; 10-order-page §6.4): Discuss, Show in thread, Followers…
+describe('F-SA-265: the frame\'s doors into the conversation (Discuss, Show in thread, Followers…)', () => {
+  it('the parts a message may be about are the API\'s list (B-SA-061), the composer\'s too', async () => {
+    const { DISCUSS_KINDS } = await import('./model')
+    const { ABOUT_KINDS } = await import('../../../lib/record-thread/composer/model')
+    expect([...DISCUSS_KINDS]).toEqual([...ABOUT_KINDS])
+    const api = readFileSync(new URL('../../../../../factory-api/src/platform/threads/about.ts', import.meta.url), 'utf8')
+    for (const kind of DISCUSS_KINDS) expect(api).toContain(`'${kind}'`)
+  })
+  it('Show in thread finds the history step nearest the change (within 10 minutes), else none (said)', async () => {
+    const { stepNearest } = await import('./model')
+    const events = [
+      { id: 'e1', at: '2026-11-18T10:00:00.000Z' },
+      { id: 'e2', at: '2026-11-18T10:04:00.000Z' },
+      { id: 'e3', at: '2026-11-18T12:00:00.000Z' },
+    ]
+    expect(stepNearest(events, '2026-11-18T10:03:00.000Z')).toBe('e2')
+    expect(stepNearest(events, '2026-11-18T10:00:10.000Z')).toBe('e1')
+    expect(stepNearest(events, '2026-11-18T11:00:00.000Z')).toBeNull()
+    expect(stepNearest(events, 'not a date')).toBeNull()
+    expect(stepNearest([], '2026-11-18T10:00:00.000Z')).toBeNull()
+  })
+  it('the frame offers them only where the page has a conversation; each shows it first (narrower: the full-width view)', () => {
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('...(hasThread ? { discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow } : {})')
+    const discuss = frame.slice(frame.indexOf('const discuss = useCallback'), frame.indexOf('const clearDiscuss'))
+    expect(discuss.match(/showThread\(\)/g)?.length).toBe(2)
+    expect(frame).toContain('readonly openDoor?: (door: FrameDoor) => void')
+  })
+  it('the docked thread reads each ask once, only for its own record: the chip on Office note, the step in view, the followers', () => {
+    const docked = readFileSync(new URL('../record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('if (!discussAsk || discussAsk.record.type !== key.type || discussAsk.record.id !== key.id) return')
+    expect(docked).toContain('const next = withAbout(composer.draft, discussAsk.about, composer.context.people)')
+    expect(docked).toContain("notify({ ns: 'record-frame', key: 'discuss.notInThread', tone: 'warning' })")
+    expect(docked).toContain("const followersAsked = frame?.door === 'followers'")
+    const card = readFileSync(new URL('../../../lib/record-thread/card/view/MessageCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('{!readOnly && message.about && actions?.onShowOnPage && (')
+    const feed = readFileSync(new URL('../../../lib/record-thread/feed/view/Feed.tsx', import.meta.url), 'utf8')
+    expect(feed).toContain('data-event-ids={row.events.map((event) => event.id).join(\' \')}')
+  })
+  it('the door words in both languages (Discuti, Mostra nella pagina, Chi segue…)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const words = (CATALOGUE[locale] as unknown as Record<string, { discuss?: Record<string, string> }>)['record-frame']?.discuss ?? {}
+      for (const key of ['label', 'hint', 'of', 'showOnPage', 'showInThread', 'followers', 'notInThread']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+    const it = (CATALOGUE.it as unknown as Record<string, { discuss?: Record<string, string> }>)['record-frame']!.discuss!
+    expect(it.label).toBe('Discuti')
+    expect(it.showOnPage).toBe('Mostra nella pagina')
+    expect(it.followers).toBe('Chi segue…')
+  })
+})
+// ---- end F-SA-265

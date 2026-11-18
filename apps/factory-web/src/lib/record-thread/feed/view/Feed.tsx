@@ -411,7 +411,8 @@ function Row({
     const event = row.event
     const who = whoWords(event)
     return (
-      <p className="fw-rt-event">
+      // F-SA-265: "Show in the thread" (a history row of the page) finds its step by its id.
+      <p className="fw-rt-event" data-event-ids={event.id} tabIndex={-1}>
         <History size={14} aria-hidden />
         <span>
           {t('step.text', { who: 'text' in who ? who.text : t(who.key), verb: t(verbKey(event.verb)) })}
@@ -428,7 +429,8 @@ function Row({
   const listId = `changes-${first.id}`
   return (
     <>
-      <p className="fw-rt-event">
+      {/* F-SA-265: "Show in the thread" finds a grouped change by any of its steps' ids. */}
+      <p className="fw-rt-event" data-event-ids={row.events.map((event) => event.id).join(' ')} tabIndex={-1}>
         <History size={14} aria-hidden />
         <span>
           {t('changes.text', { count, who: 'text' in who ? who.text : t(who.key) })}

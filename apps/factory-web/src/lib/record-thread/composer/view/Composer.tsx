@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { Ban, CornerDownRight, Euro, Globe, Lock, Mail, Paperclip, PencilLine, Ruler, UserPlus, X } from 'lucide-react'
+import { Ban, CornerDownRight, Euro, Globe, Link2, Lock, Mail, Paperclip, PencilLine, Ruler, UserPlus, X } from 'lucide-react'
 import { Button, Checkbox, SegmentedControl } from '@nexus/ui/primitives'
 import { MentionButton, MentionInput, type MentionInputHandle } from '../../helpers/view/MentionInput'
 import { useLocale, useT } from '../../../i18n/provider'
@@ -30,6 +30,8 @@ import {
 } from '../model'
 // F-SA-282a (B-SA-073): the portal's hold of a text that names another customer, and the writer's tick.
 import { draftAfter, namesOtherAsked } from '../model'
+// F-SA-265 (Discuss): the chip "About: …" in the box's audience words, removable.
+import { aboutWords, withoutAbout } from '../model'
 import '../../parts/parts.css'
 import '../composer.css'
 
@@ -239,6 +241,17 @@ export function Composer(props: ComposerProps) {
               : t(`link.correcting.${link.way ?? draft.mode}`, { time: timeOf(link.at, locale), party })}
           </span>
           <Button size="sm" variant="quiet" aria-label={t(link.kind === 'reply' ? 'link.dropReply' : 'link.dropCorrect')} onClick={dropLink}>
+            <X size={13} aria-hidden />
+          </Button>
+        </p>
+      )}
+
+      {/* F-SA-265: what the message is about ("About: SO-2026-0142 · line 2"; to the customer its own words), with × to let it go. */}
+      {aboutWords(draft) && (
+        <p className="fw-rt-cx-link fw-rt-cx-about">
+          <Link2 size={13} aria-hidden />
+          <span>{t('about.chip', { thing: aboutWords(draft)! })}</span>
+          <Button size="sm" variant="quiet" aria-label={t('about.drop')} onClick={() => props.onDraft(withoutAbout(draft), notes)}>
             <X size={13} aria-hidden />
           </Button>
         </p>
