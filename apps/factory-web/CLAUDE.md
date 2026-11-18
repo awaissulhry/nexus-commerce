@@ -807,6 +807,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - UI text: `messages/<locale>/<area>.json` (it, en), found by themselves; every key in both languages with the same
   `{placeholders}` (`check-i18n`). `useT('<area>')` in client code; plurals as `<key>_one` / `<key>_other` + `count`.
   Times are UTC from the API, shown in the site's zone (`lib/i18n/format.ts`, Europe/Rome by default).
+- Italian register: the office says "tu", the portal and the link pages say "voi" (#1618). A key only portal or link pages
+  read is written in voi in its own catalogue. A key office screens read too keeps the office's word, and its portal word goes
+  in `messages/<locale>/outside-words.json` as `<namespace>.<key>` (fix-voi-2): the `(portal)` and `(links)` layouts set
+  `ReaderProvider reader="outside"` (the design index does the same by the screen's folder), and every translator (`useT`,
+  `useScopedT`, ds-parts) then reads the outside word over the shared one. English copies today's text, unless the portal's
+  fact differs (its step-up code comes by e-mail, not from an app).
 - A page never sets its own max-width: it fills the shell's main area (`.fw-office-main`, equal gutters). Inner parts (a
   search field, a text column in a card, a dialog) may; on wide screens use the width (more columns, two-column cards).
 - Design system only: `@nexus/ui` primitives, components, patterns (the narrower `@nexus/ui/patterns/shell/index` for

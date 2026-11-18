@@ -1,4 +1,5 @@
 import type { DesignCase, DesignScreen } from '../../lib/design/design-screen'
+import type { Reader } from '../../lib/i18n/messages'
 
 /**
  * Every screen with design fixtures, found by itself: each `fixtures.ts` under `src/` that exports `designScreen`
@@ -29,4 +30,12 @@ export function findScreen(id: string): FoundScreen | undefined {
 
 export function findCase(screen: FoundScreen, id: string): DesignCase<unknown> | undefined {
   return screen.cases.find((item) => item.id === id)
+}
+
+// fix-voi-2: a portal or link screen is read from outside the office, as the live route groups say (provider.tsx ReaderProvider).
+const OUTSIDE_FOLDERS = ['portal/', 'links/', 'shell/links/']
+
+/** Who reads a screen, by where its fixtures live: the portal's and the link pages' screens are read from outside. */
+export function readerOf(screen: Pick<FoundScreen, 'file'>): Reader {
+  return OUTSIDE_FOLDERS.some((folder) => screen.file.startsWith(folder)) ? 'outside' : 'office'
 }

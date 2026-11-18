@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { ReaderProvider } from '../../lib/i18n/provider'
 
 /**
  * The Portal view (B-W2b-173; A2 §3.2, design portal.frame): the pages a customer, supplier, workshop or adviser opens with a
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   referrer: 'no-referrer',
 }
 
+// fix-voi-2: a portal page is read from outside the office: the portal's own words over the shared catalogues (voi).
 export default function PortalLayout({ children }: { children: ReactNode }) {
-  return children
+  return <ReaderProvider reader="outside">{children}</ReaderProvider>
 }
