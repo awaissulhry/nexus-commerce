@@ -1051,6 +1051,9 @@ function OrderContainer({ id }: { id: string }) {
             onDate: (day) => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, requestedDate: day } } : current)),
             onShipTo: (addressId) => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, shipToAddressId: addressId } } : current)),
             onNote: (note) => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, note } } : current)),
+            // F-PR-23b (B-PR-27a): a line in another colourway of its style ('' keeps its own).
+            onColourway: (lineId, colourwayId) =>
+              setDialog((current) => (current?.kind === 'change' ? { ...current, problem: null, draft: { ...current.draft, colourways: { ...(current.draft.colourways ?? {}), [lineId]: colourwayId } } } : current)),
             onReview: () => {
               if (dialog?.kind !== 'change' || !rules.read || changeHeld(rules.read, dialog.draft, facts)) return
               setDialog({ ...dialog, problem: null, draft: { ...dialog.draft, step: 'review' } })

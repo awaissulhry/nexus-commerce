@@ -482,10 +482,15 @@
     "pieces": "{delta} pieces",
     "sendKeys": "⌘ Enter sends.",
     "problem": {
-      "nothing": "Change a size, the date or the address first.",
+      "nothing": "Change a size, a colour, the date or the address first.",
       "emptied": "A line would have no pieces left: ask to cancel that line instead.",
-      "long": "The note is too long: keep it under 2000 characters."
-    }
+      "long": "The note is too long: keep it under 2000 characters.",
+      "colourSizes": "The colourway you picked is not made in every size you keep: set those sizes to 0 or pick another colourway."
+    },
+    "colourway": "Colourway",
+    "colourwayHint": "Another colourway of this style: we make the sizes you set in it.",
+    "colourwayKeep": "Keep {colour}",
+    "colourwayChanged": "Colourway changed"
   },
   "cancel": {
     "title": "Ask to cancel order {number}",
@@ -743,10 +748,11 @@
     "waitingNoDay": "Your request waits for our answer.",
     "counter": "We suggest something else: answer it in Waiting for you",
     "colourNote": "A colour change: write to us in the order's conversation.",
+    "colourPick": "A colour: pick another colourway of the style, line by line, in the change.",
     "sent": "Your request was sent. We answer here and by e-mail.",
     "kind": {
       "CHANGE": {
-        "title": "Change sizes, quantities, the date or the delivery address",
+        "title": "Change sizes, quantities, a colour, the date or the delivery address",
         "hint": "You pick the sizes and the date; before you send, we tell you what it means."
       },
       "CANCEL": {

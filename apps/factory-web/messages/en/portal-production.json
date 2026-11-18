@@ -72,6 +72,7 @@
     "open": "Open the order",
     "markUrgent": "Mark urgent",
     "markRegular": "Mark regular",
+    "askUs": "Ask us to make it urgent",
     "noName": "your order",
     "report": "Report a problem"
   },
@@ -207,6 +208,211 @@
       "answeredNoDate": "Answered",
       "answeredIn": "Answered in your order {seq}",
       "answeredInRef": "Answered in {ref}"
+    }
+  },
+  "bulk": {
+    "selectAll": "Select all {count}",
+    "markUrgent": "Mark urgent",
+    "markRegular": "Mark regular",
+    "toTop": "Move to top",
+    "more": "More",
+    "moreLabel_one": "More actions for the order you picked",
+    "moreLabel_other": "More actions for the {count} orders you picked",
+    "report": "Report a problem",
+    "reportHint": "One message in each order's conversation: we answer there.",
+    "files": "Download files",
+    "filesHint": "What we shared on these orders, as one zip (order confirmations only for the roles that see prices).",
+    "filesName": "My production files {date}",
+    "filesDone_one": "The files of {count} order are downloaded as one zip.",
+    "filesDone_other": "The files of {count} orders are downloaded as one zip.",
+    "filesFailed": "The zip could not be made. Try again in a moment.",
+    "filesNotFound": "We could not find the orders you picked.",
+    "filesForbidden": "Your role does not open the files of your orders.",
+    "zip": {
+      "NOTHING_TO_ZIP": "There are no files to download for these orders yet.",
+      "TOO_MANY_FILES": "A zip holds at most {files} files: pick fewer orders.",
+      "TOO_LARGE": "A zip holds at most {mb} MB ({fileMb} MB a file): pick fewer orders.",
+      "FILE_UNAVAILABLE": "None of these files can be read now: write to us."
+    },
+    "export": "Export",
+    "exportHint": "The orders you picked, as a CSV file",
+    "held": {
+      "busy": "Sending…",
+      "tooMany": "You picked {count}. At most {max} at a time.",
+      "allUrgent": "The orders you picked are urgent already.",
+      "allRegular": "The orders you picked are regular already.",
+      "markFirst": "Mark urgent first: Move to top changes the order of your urgent orders only.",
+      "nothingWaits": "Nothing waits for your answer on the orders you picked."
+    },
+    "review": {
+      "titleUrgent_one": "Mark {count} order urgent",
+      "titleUrgent_other": "Mark {count} orders urgent",
+      "titleRegular_one": "Mark {count} order regular",
+      "titleRegular_other": "Mark {count} orders regular",
+      "titleTop_one": "Move {count} order to the top",
+      "titleTop_other": "Move {count} orders to the top",
+      "summary": "Each order you picked is named below with what will happen to it. Nothing changes until you send.",
+      "leadFull": "Your urgent marks are all used ({used} of {max}): an order you mark urgent now is asked of us, and we answer each one.",
+      "leadNone": "Urgent marks on your orders are asked of us: we answer each one.",
+      "leadRegular": "Back to Regular is always free.",
+      "leadTop": "The urgent orders you picked go first, in the order they have now; your other urgent orders follow them.",
+      "where": "Order",
+      "what": "Urgency",
+      "stays": "Stays as it is",
+      "regular": "Regular",
+      "urgentRank": "Urgent {rank}",
+      "asked": "Urgent – asked",
+      "askedQuota": "Over your limit ({max} urgent): asked of us, we answer you.",
+      "askedNone": "Urgent marks are asked of us: we answer you.",
+      "askedCut": "Cutting has started on this order: asked of us, we answer you.",
+      "cutNoAsk": "Cutting has started on this order. Asking us needs the Buyer or Production role.",
+      "alreadyUrgent": "Urgent already.",
+      "alreadyRegular": "Regular already.",
+      "noUrgency": "Urgent marks are not open for this order.",
+      "onTop": "At the top already.",
+      "needBy": "Needed by (optional)",
+      "needByHint": "For the orders asked of us: the day you need them ready. We answer each one.",
+      "saveUrgent_one": "Mark {count} urgent",
+      "saveUrgent_other": "Mark {count} urgent",
+      "saveAsk_one": "Ask us for {count}",
+      "saveAsk_other": "Ask us for {count}",
+      "saveBoth": "Mark {now} · ask {asked}",
+      "saveRegular_one": "Mark {count} regular",
+      "saveRegular_other": "Mark {count} regular",
+      "saveTop": "Save the new order",
+      "nothing": "Nothing to send: each order you picked is as it should be already, or cannot change now.",
+      "undo": "Undo",
+      "undoing": "Undoing…",
+      "done": "Done",
+      "leadLeft_one": "You may mark {count} more order urgent at once ({used} of {max} used). Over that, or once cutting has started, the order is asked of us and we answer each one.",
+      "leadLeft_other": "You may mark {count} more orders urgent at once ({used} of {max} used). Over that, or once cutting has started, the order is asked of us and we answer each one."
+    },
+    "result": {
+      "urgent": "Urgent {rank}",
+      "urgentNoRank": "Urgent",
+      "regular": "Regular",
+      "asked": "Asked of us: we answer you.",
+      "notSent": "Not sent",
+      "notSentWhy": "Not sent: {words}",
+      "notFound": "Not found among your orders in production.",
+      "notDone": "Not done.",
+      "notDoneWhy": "Not done: {words}",
+      "notAsked": "This could not be asked for this order.",
+      "changed": "Your urgent orders changed since you opened this: read the list again.",
+      "undone": "Undone"
+    },
+    "done": {
+      "done_one": "{count} done",
+      "done_other": "{count} done",
+      "asked_one": "{count} asked of us",
+      "asked_other": "{count} asked of us",
+      "not_one": "{count} not done",
+      "not_other": "{count} not done",
+      "nothing": "Nothing was done."
+    },
+    "failed": {
+      "unavailable": "Not sent: we could not be reached. Send again: nothing is done twice.",
+      "other": "Not sent. Try again in a moment."
+    },
+    "undo": {
+      "withdrawn_one": "{count} request asked of us is withdrawn.",
+      "withdrawn_other": "{count} requests asked of us are withdrawn.",
+      "withdrawnLeft": "{count} withdrawn; {left} left as they are: we had answered them already."
+    },
+    "approve": {
+      "action_one": "Approve {count}",
+      "action_other": "Approve {count}",
+      "actionNone": "Approve",
+      "heldRole": "Your role reads approvals; answering them needs the Buyer or Production role.",
+      "heldNone": "Tick at least one approval first.",
+      "heldOther": "Open it to answer: it is answered on its own page.",
+      "notFound": "Not found among what waits for your answer.",
+      "unavailable": "Not sent: we could not be reached. Approve again: nothing is answered twice.",
+      "invalid": "Your approval is not complete: type your name and try again.",
+      "readNotFound": "We could not find the orders you picked.",
+      "readFailed": "We could not read what waits on these orders. Try again.",
+      "code": {
+        "OWN_ANSWER": "Open it to answer: it is answered on its own page.",
+        "NOT_YOURS": "Another person answers this one.",
+        "HELD": "It waits on something else first: open it to see what.",
+        "CHANGED": "It changed since you opened the list: read it again.",
+        "NOT_DONE": "Not approved."
+      },
+      "doneOk_one": "{count} approved",
+      "doneOk_other": "{count} approved",
+      "doneNot_one": "{count} not approved",
+      "doneNot_other": "{count} not approved",
+      "doneNone": "Nothing was approved."
+    },
+    "ask": {
+      "menu": "Ask",
+      "menuLabel_one": "Ask us for the order you picked",
+      "menuLabel_other": "Ask us for the {count} orders you picked",
+      "HOLD": "Ask to pause",
+      "CANCEL": "Ask to cancel",
+      "RESUME": "Ask to resume",
+      "hint": {
+        "HOLD": "We stop the work when we accept; your date may move.",
+        "CANCEL": "The whole order; the cut-offs of your terms apply.",
+        "RESUME": "For a pause you asked: we take the work up again."
+      },
+      "reading": "Reading what your orders allow…",
+      "title": {
+        "HOLD_one": "Ask us to pause {count} order",
+        "HOLD_other": "Ask us to pause {count} orders",
+        "CANCEL_one": "Ask us to cancel {count} order",
+        "CANCEL_other": "Ask us to cancel {count} orders",
+        "RESUME_one": "Ask us to resume {count} order",
+        "RESUME_other": "Ask us to resume {count} orders"
+      },
+      "lead": {
+        "HOLD": "One request per order, all sent together: we answer each one. A pause may move your date.",
+        "CANCEL": "One request per order, for the whole order, all sent together: we answer each one. Where a price applies, we tell you.",
+        "RESUME": "One request per order, all sent together: we answer each one and confirm your date."
+      },
+      "summary": "Each order you picked is named below with what will happen to it. Nothing is asked until you send.",
+      "whatColumn": "Request",
+      "what": {
+        "HOLD": "Pause",
+        "CANCEL": "Cancel",
+        "RESUME": "Resume"
+      },
+      "asked": {
+        "HOLD": "Asked: pause",
+        "CANCEL": "Asked: cancel",
+        "RESUME": "Asked: resume"
+      },
+      "now": {
+        "paused": "Paused at your request",
+        "none": "In production"
+      },
+      "readingRow": "Reading…",
+      "unread": "We could not read this order now: we check it when you send.",
+      "impactReading": "Reading what it means…",
+      "impactFailed": "We could not read what it means: we check it when you send.",
+      "openRequest": "A change or cancel request waits on this order already.",
+      "held": {
+        "reading": "Reading what each order allows and what it means first.",
+        "nothing": "None of these orders can be asked this now: see each one."
+      },
+      "form": {
+        "why": "Say why you want to pause, in a few words.",
+        "reason": "Pick a reason.",
+        "note": "Say why in a few words.",
+        "long": "At most {max} characters."
+      },
+      "field": {
+        "why": "Why pause?",
+        "reason": "Reason",
+        "reasonPick": "Pick a reason",
+        "note": "Your words (optional)",
+        "noteNeeded": "Your words",
+        "hint": "Each order's request carries these words."
+      },
+      "save_one": "Ask for {count}",
+      "save_other": "Ask for {count}",
+      "forbidden": "Your role may not ask us: ask a colleague with the Buyer or Production role.",
+      "invalid": "The request is not complete: check the fields and send again."
     }
   }
 }

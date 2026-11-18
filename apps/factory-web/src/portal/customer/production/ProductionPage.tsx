@@ -18,6 +18,15 @@ import type { UrgentOrderDialogModel } from './view/UrgentOrderDialog'
 // ---- F-PR-24: "Report a problem" on a row (the same dialog as the order page's)
 import { useReportProblem } from './problem/useReportProblem'
 // ---- end F-PR-24
+// ---- F-PR-23a: the bulk bar (its container) and the Undo of what a single mark asked of us
+import { withdrawAskBatch } from './bulk/api'
+import { useBulk } from './bulk/useBulk'
+import { undoLineOf, undoProblemOf } from './bulk/model'
+// ---- end F-PR-23a
+// ---- F-PR-23b: Approve N (its dialog's words) and Ask N (the order page's words for verdicts and impact)
+import { useT } from '../../../lib/i18n/provider'
+import { WAITING_NS } from '../waiting/view/BulkApproveDialog'
+// ---- end F-PR-23b
 
 /**
  * F-PR-11 — `/p/<party>/production` for a customer: My production (production plan §5; 06-tree B.1; 17-web-r2 §1.4). Reads GET
@@ -30,7 +39,7 @@ import { useReportProblem } from './problem/useReportProblem'
  */
 export function CustomerProductionPage() {
   return (
-    <WithMessages namespaces={[NS, ORDERS_NS, 'ds-words', 'lists']}>
+    <WithMessages namespaces={[NS, ORDERS_NS, WAITING_NS, 'ds-words', 'lists', 'shell']}>
       <Suspense fallback={null}>
         <ProductionRoute />
       </Suspense>
@@ -54,12 +63,14 @@ function ProductionContainer() {
   const router = useRouter()
   const pathname = usePathname() ?? ''
   const search = useSearchParams()
-  const { t, locale, time } = useProductionPageWords()
+  const { t, locale, time, day, money } = useProductionPageWords()
+  const tOrders = useT(ORDERS_NS) // F-PR-23b
   const offline = useOffline()
   const chip = chipOf(search?.get('chip'))
   const q = search?.get('q') ?? ''
   const preview = frame.me.preview
   const mayMark = frame.me.permissions.includes('portal.production.urgency')
+  const mayAsk = frame.me.permissions.includes('portal.salesOrders.ask') // F-PR-23a/b
 
   const [read, setRead] = useState<ProductionList | null>(null)
   const [state, setState] = useState<'loading' | 'error' | 'ready' | 'forbidden'>('loading')
@@ -131,7 +142,51 @@ function ProductionContainer() {
   })
   // ---- end F-PR-24
 
-  // ── Mark urgent / Mark regular (one order; the bulk bar comes with F-PR-23a) ──────────────────────────────────────────
+  // ---- F-PR-23a: the bulk bar — the picked rows, the review before Send, the result per row, Undo; More ▾ (Report a problem with
+  // the orders named in THE F-PR-24 dialog, Download files, Export of the picked rows).
+  const bulk = useBulk({
+    api,
+    read,
+    locale,
+    t,
+    facts: {
+      urgencyOn: read?.urgencyOn === true,
+      mayMark,
+      mayAsk,
+      mayReport,
+      mayFiles: frame.me.permissions.includes('portal.customerDocuments.view'),
+      preview,
+      offline,
+      // F-PR-23b
+      mayApprove: frame.me.permissions.includes('portal.approvals.view'),
+      mayAnswer: frame.me.permissions.includes('portal.approve'),
+    },
+    onChanged: () => void load(),
+    onNotice: setNotice,
+    onReport: (orders) => problemDialog.open(orders),
+    // F-PR-23b
+    prefix: frame.prefix,
+    tOrders,
+    day,
+    money: (minor, currency) => money(minor, currency),
+  })
+  /** Undo of what a single mark asked of us ("Urgent – asked"): the batch's waiting request withdrawn. */
+  const undoAsks = async (batchId: string) => {
+    if (undoing || writeHeld) return
+    setUndoing(true)
+    try {
+      const answer = await withdrawAskBatch(api, batchId, keyFor({ withdraw: batchId }))
+      setNotice({ tone: 'success', words: undoLineOf(null, answer, t) })
+    } catch (error) {
+      setNotice({ tone: 'warning', words: undoProblemOf(error, t) })
+    } finally {
+      setUndoing(false)
+      void load()
+    }
+  }
+  // ---- end F-PR-23a
+
+  // ── Mark urgent / Mark regular (one order; the bulk bar: F-PR-23a above) ───────────────────────────────────────────
   const mark = async (row: ProductionRow, urgency: BrandUrgencyCode) => {
     if (busy.includes(row.id) || writeHeld) return
     setBusy((current) => [...current, row.id])
@@ -251,6 +306,14 @@ function ProductionContainer() {
         // F-PR-24
         report: mayReport ? { held: preview ? t('problem.held.preview') : offline ? t('problem.held.offline') : null } : null,
         problem: problemDialog.model,
+        // F-PR-23a
+        selected: bulk.selected,
+        bulk: bulk.bar,
+        review: bulk.review,
+        // F-PR-23b
+        mayAsk,
+        approve: bulk.approve,
+        ask: bulk.ask,
       }}
       actions={{
         onChip: (next) => go(next === 'ALL' ? null : next, q),
@@ -270,6 +333,14 @@ function ProductionContainer() {
         // F-PR-24
         onReport: (row) => problemDialog.open([{ id: row.id, name: rowName(row, locale, t) }]),
         problem: problemDialog.actions,
+        // F-PR-23a
+        onSelect: bulk.actions.onSelect,
+        bulk: { onSelectAll: bulk.actions.onSelectAll, onAction: bulk.actions.onAction },
+        review: bulk.actions.review,
+        onUndoAsks: (batchId) => void undoAsks(batchId),
+        // F-PR-23b
+        approve: bulk.actions.approve,
+        ask: bulk.actions.ask,
         dialog: {
           onChange: (items) => setDialog((current) => (current && !current.busy ? { ...current, items, problem: current.problem?.conflict ? current.problem : null } : current)),
           onTop: (id) => setDialog((current) => (current && !current.busy ? { ...current, items: toTop(current.items, id) } : current)),

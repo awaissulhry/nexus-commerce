@@ -146,6 +146,16 @@ export const listContract = defineContract({
     format: z.enum(['json', 'csv']).default('json'),
     /** The file's language (default: the person's). */
     locale: z.enum(['it', 'en']).optional(),
+    // ---- F-PR-23a: the bulk bar's Export — the file holds only these of its own rows (comma-separated, at most 50); an id that is
+    // not one of its own orders in production matches no row (it is neither written nor named).
+    orderIds: z
+      .string()
+      .trim()
+      .max(URGENCY_BATCH_MAX * 37)
+      .transform((value) => [...new Set(value.split(',').map((part) => part.trim()).filter((part) => part !== ''))])
+      .pipe(z.array(id()).min(1).max(URGENCY_BATCH_MAX))
+      .optional(),
+    // ---- end F-PR-23a
   }),
   response: {
     /**

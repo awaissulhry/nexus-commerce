@@ -181,12 +181,17 @@ export interface Notice {
   readonly words: string
   /** The batch an Undo puts back (a mark, an order saved). */
   readonly undo?: string | null
+  /** F-PR-23a (B-PR-46a): the batch of "Urgent – asked" a mark made instead (over the quota or from Cutting): Undo withdraws it. */
+  readonly undoAsks?: string | null
 }
 
 /** A mark that was done: "ALPHA-PO-0042 · Your order 12 is urgent now: Urgent 2." / "… is regular now." */
 export function markedNotice(answer: UrgencyAnswer, row: Pick<ProductionRow, 'customerRef' | 'yourNumber'>, locale: Locale, t: Translate): Notice {
   const result = answer.results[0]
   const name = rowName(row, locale, t)
+  // ---- F-PR-23a (B-PR-46a #1629): over the quota or from Cutting the mark became an "Urgent – asked" we answer (200, not 409).
+  if (result?.asked && answer.askBatchId) return { tone: 'info', words: `${name}: ${result.words ? say(result.words, locale) : t('bulk.result.asked')}`, undoAsks: answer.askBatchId }
+  // ---- end F-PR-23a
   if (!result || !result.done) return { tone: 'warning', words: result?.words ? say(result.words, locale) : t('refused.failed') }
   const words = result.urgency === 'URGENT' ? (result.urgentRank !== null ? t('notice.urgent', { name, rank: result.urgentRank }) : t('notice.urgentNoRank', { name })) : t('notice.regular', { name })
   return { tone: 'success', words, undo: answer.batchId }

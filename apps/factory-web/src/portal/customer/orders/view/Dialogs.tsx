@@ -85,6 +85,8 @@ export interface ChangeDialogActions {
   onRetry?: () => void
   /** F-PR-13: read the impact again. */
   onRetryImpact?: () => void
+  /** F-PR-23b (B-PR-27a): a line in another colourway of its style ('' keeps its own). */
+  onColourway?: (lineId: string, colourwayId: string) => void
 }
 
 export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; actions?: ChangeDialogActions }) {
@@ -153,6 +155,19 @@ export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; act
                   ) : (
                     <p className="fw-pord-held">{line.change.words[locale]}</p>
                   )}
+                  {/* F-PR-23b (B-PR-27a): another colourway of the line's style, when its style has one. */}
+                  {line.change.possible && (line.colourways?.length ?? 0) > 0 ? (
+                    <Field label={t('change.colourway')} hint={t('change.colourwayHint')}>
+                      <Select value={model.draft.colourways?.[line.lineId] ?? ''} onChange={(event) => actions?.onColourway?.(line.lineId, event.target.value)}>
+                        <option value="">{t('change.colourwayKeep', { colour: line.colourway?.name ?? '—' })}</option>
+                        {(line.colourways ?? []).map((colourway) => (
+                          <option key={colourway.id} value={colourway.id}>
+                            {[colourway.code, colourway.name].filter(Boolean).join(' ')}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  ) : null}
                 </section>
               ))}
               <div className="fw-pord-fields">
@@ -216,7 +231,15 @@ export function ChangeReviewStep({ model, rules, words, onRetryImpact }: { model
       return { id: line.lineId, label: lineTitle(line, t), status: t('change.pieces', { delta: after - before > 0 ? `+${after - before}` : String(after - before) }), note: line.style?.name ?? '', selectable: false, values }
     })
   const address = rules.addresses.find((entry) => entry.id === model.draft.shipToAddressId) ?? null
+  // F-PR-23b: a line asked in another colourway of its style.
+  const colours = rules.lines.flatMap((line) => {
+    const asked = (line.colourways ?? []).find((colourway) => colourway.id === model.draft.colourways?.[line.lineId])
+    return asked
+      ? [{ id: `colour-${line.lineId}`, label: lineTitle(line, t), status: t('change.colourwayChanged'), note: '', selectable: false, values: [{ label: t('revision.was'), value: line.colourway?.name ?? '—' }, { label: t('revision.now'), value: [asked.code, asked.name].filter(Boolean).join(' ') }] }]
+      : []
+  })
   const extra = [
+    ...colours,
     ...(model.draft.requestedDate && model.draft.requestedDate !== (rules.order.requestedDate ?? '')
       ? [{ id: 'date', label: t('change.date'), status: t('revision.change.CHANGED'), note: '', selectable: false, values: [{ label: t('revision.was'), value: rules.order.requestedDate ? day(rules.order.requestedDate) : '—' }, { label: t('revision.now'), value: day(model.draft.requestedDate) }] }]
       : []),

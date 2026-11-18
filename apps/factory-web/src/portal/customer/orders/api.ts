@@ -337,6 +337,8 @@ export const rulesSchema = z.object({
       frozen: z.array(z.object({ size: z.string(), freeze })).optional(),
       split: askVerdict.optional(),
       samples: z.array(z.object({ sampleKind: z.enum(ASK_SAMPLE_KINDS), verdict: askVerdict })).optional(),
+      // F-PR-23b (B-PR-27a #1626): the other colourways of the line's style a change may ask it in, each with the sizes it is made in.
+      colourways: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), sizes: z.array(z.string()) })).optional(),
     }),
   ),
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), wholeOrderFee: price }).optional(),
@@ -400,6 +402,8 @@ export interface ChangeBody {
   readonly requestedDate?: string | null
   readonly shipToAddressId?: string | null
   readonly note?: string | null
+  /** F-PR-23b (B-PR-27a): a line in another colourway of its style (its sizes as the cells ask, else as they are). */
+  readonly colourways?: readonly { lineId: string; colourwayId: string }[]
 }
 export interface CancelBody {
   readonly kind: 'CANCEL'

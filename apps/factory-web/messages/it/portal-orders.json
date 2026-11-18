@@ -482,10 +482,15 @@
     "pieces": "{delta} pezzi",
     "sendKeys": "⌘ Invio invia.",
     "problem": {
-      "nothing": "Prima cambiate una taglia, la data o l’indirizzo.",
+      "nothing": "Prima cambiate una taglia, un colore, la data o l’indirizzo.",
       "emptied": "Una riga resterebbe senza pezzi: chiedete invece di annullare quella riga.",
-      "long": "La nota è troppo lunga: restate sotto i 2000 caratteri."
-    }
+      "long": "La nota è troppo lunga: restate sotto i 2000 caratteri.",
+      "colourSizes": "La variante colore che avete scelto non è prodotta in tutte le taglie che tenete: portate quelle taglie a 0 o scegliete un'altra variante."
+    },
+    "colourway": "Variante colore",
+    "colourwayHint": "Un'altra variante colore di questo modello: vi produciamo le taglie che indicate.",
+    "colourwayKeep": "Tenete {colour}",
+    "colourwayChanged": "Variante colore cambiata"
   },
   "cancel": {
     "title": "Chiedi di annullare l’ordine {number}",
@@ -743,10 +748,11 @@
     "waitingNoDay": "La vostra richiesta attende la nostra risposta.",
     "counter": "Vi proponiamo un'alternativa: rispondete in Cosa vi aspetta",
     "colourNote": "Per cambiare un colore scriveteci nella conversazione dell'ordine.",
+    "colourPick": "Un colore: scegliete un'altra variante colore del modello, riga per riga, nella modifica.",
     "sent": "La vostra richiesta è stata inviata. Rispondiamo qui e via e-mail.",
     "kind": {
       "CHANGE": {
-        "title": "Cambiare taglie, quantità, la data o l'indirizzo di consegna",
+        "title": "Cambiare taglie, quantità, un colore, la data o l'indirizzo di consegna",
         "hint": "Scegliete taglie e data; prima dell'invio vi diciamo cosa comporta."
       },
       "CANCEL": {

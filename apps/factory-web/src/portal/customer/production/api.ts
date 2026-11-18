@@ -155,12 +155,19 @@ export type ProductionList = z.infer<typeof productionListSchema>
 export const fetchProduction = (api: ApiClient, query: { chip?: ProductionChip | null; q?: string | null }, signal?: AbortSignal): Promise<ProductionList> =>
   api.get('/portal/production', { query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined }, schema: productionListSchema, signal })
 
-/** "Export": every own row of the chip and search, as the server writes it (its scope, the person's language). */
-export async function downloadProduction(api: ApiClient, query: { chip: ProductionChip | null; q: string | null; locale: 'it' | 'en' }): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
+/**
+ * "Export": every own row of the chip and search, as the server writes it (its scope, the person's language). F-PR-23a: the bulk
+ * bar's Export names its picked rows (`orderIds`, at most 50): the file holds only those of its own.
+ */
+export async function downloadProduction(
+  api: ApiClient,
+  query: { chip: ProductionChip | null; q: string | null; locale: 'it' | 'en'; orderIds?: readonly string[] },
+): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
   let disposition: string | null = null
   let contentType = 'text/csv;charset=utf-8'
+  const picked = query.orderIds && query.orderIds.length > 0 ? query.orderIds.join(',') : undefined
   const bytes = await api.bytes('/portal/production', {
-    query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined, format: 'csv', locale: query.locale },
+    query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined, format: 'csv', locale: query.locale, orderIds: picked },
     onHeaders: (headers) => {
       disposition = headers.get('content-disposition')
       contentType = headers.get('content-type') ?? contentType
@@ -362,6 +369,8 @@ export const urgencyResultSchema = z.object({
   ask: words.nullable(),
   urgency: z.enum(BRAND_URGENCIES).nullable(),
   urgentRank: z.number().nullable(),
+  // ---- F-PR-23a (B-PR-46a #1629): a mark over the quota or from Cutting became an "Urgent – asked" (a RUSH request we answer)
+  asked: z.object({ requestId: z.string(), words }).nullable().optional(),
 })
 export type UrgencyResult = z.infer<typeof urgencyResultSchema>
 
@@ -373,6 +382,8 @@ export const urgencyAnswerSchema = z.object({
   notFound: z.number(),
   use: urgentUse.nullable(),
   replayed: z.boolean(),
+  /** F-PR-23a (B-PR-46a): the batch of the "Urgent – asked" this mark made (Undo withdraws them); null / absent: none. */
+  askBatchId: z.string().nullable().optional(),
 })
 export type UrgencyAnswer = z.infer<typeof urgencyAnswerSchema>
 
@@ -382,8 +393,11 @@ export const undoAnswerSchema = urgencyAnswerSchema.extend({
 })
 export type UndoAnswer = z.infer<typeof undoAnswerSchema>
 
-/** Mark urgent / Mark regular (1 to 50 of its own orders, each once). */
-export const markUrgency = (api: ApiClient, body: { orderIds: readonly string[]; urgency: BrandUrgencyCode }, idempotencyKey: string = newIdempotencyKey()): Promise<UrgencyAnswer> =>
+/**
+ * Mark urgent / Mark regular (1 to 50 of its own orders, each once). F-PR-23a (B-PR-46a): `requestedDate` is the need-by date of the
+ * orders that become "Urgent – asked" (over the quota or from Cutting).
+ */
+export const markUrgency = (api: ApiClient, body: { orderIds: readonly string[]; urgency: BrandUrgencyCode; requestedDate?: string }, idempotencyKey: string = newIdempotencyKey()): Promise<UrgencyAnswer> =>
   api.post('/portal/production/urgency', { body, schema: urgencyAnswerSchema, idempotencyKey })
 
 /** Its WHOLE Urgent list in the new order, with the list's `asOf` as read (a change after it is named in the refusal). */
