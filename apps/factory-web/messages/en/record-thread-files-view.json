@@ -117,5 +117,34 @@
   },
   "design": {
     "openAgain": "Open the Files view"
+  },
+  "order": {
+    "source": {
+      "thread": "in the conversation",
+      "order": "on the order",
+      "from": "from {record}"
+    },
+    "audience": {
+      "CUSTOMER_CAN_SEE": "Shared with the customer",
+      "OFFICE_ONLY": "Office only"
+    },
+    "alsoOn": "also on {record}",
+    "alsoOnOther_one": "also on {count} other record",
+    "alsoOnOther_other": "also on {count} other records",
+    "inThread": "Open in the conversation",
+    "leftOut_one": "{count} file you cannot open",
+    "leftOut_other": "{count} files you cannot open",
+    "leftOutHere_one": "+ {count} you cannot open",
+    "leftOutHere_other": "+ {count} you cannot open",
+    "truncated": "The newest {count} files are listed.",
+    "empty": {
+      "title": "No files yet",
+      "body": "Files added in the conversation show here."
+    },
+    "shareOwn_one": "Share {count} own with {party}",
+    "shareOwn_other": "Share {count} own with {party}",
+    "noneOwn": "Only the order's own office-only files are shared from here.",
+    "openFailed": "The file could not be opened: try again.",
+    "shareFailed": "Sharing did not go through: try again."
   }
 }

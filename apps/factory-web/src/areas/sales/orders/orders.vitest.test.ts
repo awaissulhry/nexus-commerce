@@ -229,7 +229,7 @@ describe('the record: the next step by state, held with its reason', () => {
     // F-SA-232: Overview is the first tab (no address, an unknown one, Activity with the thread).
     expect(tabOf('activity')).toBe('overview')
     for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('overview') // TH-6 part B: never a name of Object's own
-    for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments'] as const) expect(tabOf(tab)).toBe(tab)
+    for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments', 'files'] as const) expect(tabOf(tab)).toBe(tab)
     expect(tabOf('nope')).toBe('overview')
     // B-TH-301 + F-SA-230: every address the old nine tabs (and the five) had lands on its tab today.
     const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'money', invoices: 'money', changes: 'changes', documents: 'changes', confirmation: 'changes', margin: 'money', activity: 'overview' }

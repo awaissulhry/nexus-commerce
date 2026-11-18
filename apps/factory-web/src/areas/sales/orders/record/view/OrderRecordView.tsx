@@ -37,6 +37,7 @@ import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/n
 // ---- end F-SA-230
 // ---- F-SA-232: Overview, the first tab; the band's health and the customer's urgency from the production read ----
 import { BandHealth, BandUrgency, OverviewTab } from './OverviewTab'
+import { FilesTab } from './FilesTab' // F-SA-237
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
 // ---- end F-SA-232
 
@@ -172,7 +173,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tabCountOf(tab, order),
+    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order), // F-SA-237: the files the reader may open
   }))
   // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
   useEffect(() => {
@@ -390,6 +391,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
           {/* F-SA-230: Shipments — left to ship, shipments, deliveries, complaints & returns; the money is on Money. */}
           {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />}
+          {/* F-SA-237: Files — every file of the order by where it comes from (the thread's Files window draws the same body). */}
+          {model.tab === 'files' && <FilesTab order={order} model={model} actions={actions} />}
         </div>
       </RecordFrame>
 

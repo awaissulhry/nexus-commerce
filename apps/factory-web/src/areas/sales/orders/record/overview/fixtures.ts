@@ -2,6 +2,7 @@ import { LINE_BLK, LINE_RED, ORDER_ID, WORK_ORDERS } from '../../_demo/fixtures'
 import { MILESTONES } from '../../depth/demo/fixtures'
 import type { Headline, OrderProduction, ProductionLine, Work } from './api'
 import type { ProductionState } from './model'
+import type { OrderFilesRead } from '../../../../../lib/record-thread/files-view/model' // F-SA-237
 
 /**
  * F-SA-232 — made-up production reads of the demo order SO-2026-0088 (Moto Demo S.r.l., DEMO-JKT-01 in Nero and Rosso) for the
@@ -120,3 +121,17 @@ export const QUALITY_READ: OrderProduction = {
 export const ready = (read: OrderProduction = PRODUCTION_READ): ProductionState => ({ status: 'ready', read })
 export const LOADING_STATE: ProductionState = { status: 'loading' }
 export const FAILED_STATE: ProductionState = { status: 'failed', problem: 'problem.read.unavailable' }
+
+/** F-SA-237: the order's files by source (made up): the order sheet shared in the conversation, an office note, the line's artwork (a copy
+ * also on SO-2026-0151 of the same customer, and on 1 record the reader does not reach), a production photo; 3 the reader cannot open. */
+const fileOf = (n: number, over: Partial<OrderFilesRead['groups'][number]['files'][number]>) => ({ id: `0190f0e2-8181-7000-8000-00000000000${n}`, name: `file-${n}.pdf`, kind: 'DOCUMENT', category: null, contentType: 'application/pdf', sizeBytes: 182_000, versionNo: 1, at: '2026-11-12T10:00:00Z', from: { type: 'SalesOrder', id: ORDER_ID, label: 'SO-2026-0088' }, line: null, audience: 'OFFICE_ONLY' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null, ...over })
+export const ORDER_FILES: OrderFilesRead = {
+  order: { id: ORDER_ID, number: 'SO-2026-0088' },
+  groups: [
+    { key: 'ORDER', words: w('Order & thread', 'Ordine e conversazione'), files: [fileOf(1, { name: 'Ordine firmato.pdf', audience: 'CUSTOMER_CAN_SEE', inThread: { messageId: '0190f0e2-8282-7000-8000-000000000001' } }), fileOf(2, { name: 'Note ufficio.pdf' })], leftOut: 0, measurementsLeftOut: 0 },
+    { key: 'LINES', words: w('Lines & artwork', 'Righe e grafiche'), files: [fileOf(3, { name: 'Logo ricamo.pdf', category: 'ARTWORK', from: { type: 'SalesOrderLine', id: LINE_BLK, label: 'SO-2026-0088 · riga 10' }, alsoOn: [{ type: 'SalesOrder', id: '0190f0e2-5151-7000-8000-000000000151', label: 'SO-2026-0151' }], alsoOnOther: 1 })], leftOut: 0, measurementsLeftOut: 1 },
+    { key: 'PRODUCTION', words: w('Production', 'Produzione'), files: [fileOf(4, { name: 'Taglio nero.jpg', kind: 'PHOTO', contentType: 'image/jpeg', from: { type: 'WorkOrder', id: WORK_ORDERS[0]!.id, label: 'WO-00021' } })], leftOut: 2, measurementsLeftOut: 0 },
+  ],
+  total: 4,
+  truncated: false,
+}

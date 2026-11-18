@@ -86,6 +86,7 @@ import { useBrandHealth } from '../../../../lib/production/health/use-health' //
 // F-SA-236: this order's customer requests and the approvals we asked it (Changes).
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
+import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -494,6 +495,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
     if (tab === 'changes') readRequests()
   }, [tab, readRequests, readyVersion])
   // ---- end F-SA-236
+  // ---- F-SA-237: the order's files, read while Files shows (the thread's window reads the same route); shared by files.manage ----
+  const orderFiles = useOrderFiles(api, {
+    orderId: readyId,
+    enabled: tab === 'files',
+    partyId: order.status === 'ready' ? order.value.partyId : null,
+    canShare: session.permissions.includes('files.manage'),
+    onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
+  })
+  // ---- end F-SA-237
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -517,6 +527,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     readiness, // F-SA-234
     health: healthOwner ? health.model : null, // F-SA-235
     requests, // F-SA-236
+    files: tab === 'files' ? orderFiles.model : null, // F-SA-237
     askedOfCustomer,
     overviewLine,
     liveState,
@@ -597,6 +608,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         // ---- F-SA-232 ----
         onRetryProduction: () => production.again(),
         health: health.actions, // F-SA-235
+        files: orderFiles.actions, // F-SA-237
         onOpenLine: setOverviewLine,
         // ---- F-SA-230: the ⋯ People (the production lane's dialogs) ----
         people: {

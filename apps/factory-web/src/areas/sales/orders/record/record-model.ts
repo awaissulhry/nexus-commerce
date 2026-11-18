@@ -18,6 +18,8 @@ import type { ReadinessRow } from '../../../production/work-orders/daily/api' //
 import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: the one HealthCard
 import type { BrandRequest } from '../../../home/approvals/requests/api' // F-SA-236
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-SA-236
+import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-237
+import type { FilesViewActions } from '../../../../lib/record-thread/files-view/view/FilesView' // F-SA-237
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -149,6 +151,8 @@ export interface OrderRecordModel {
   production?: ProductionState | null
   /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
   readiness?: Part<ReadinessRow[]> | null
+  /** F-SA-237: the order's files (the Files tab; the same read as the thread's Files window); absent: not read here. */
+  files?: OrderFilesModel | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
   /** F-SA-236: the approvals we asked the customer on this order (partners.approvals.view); null: not read (no right, or not here). */
@@ -213,6 +217,8 @@ export interface OrderRecordActions {
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
   links?: LinksActions
+  /** F-SA-237: the Files tab's open, select and bulk actions. */
+  files?: FilesViewActions
   /** F-SA-235: the HealthCard's Raise to At risk, Clear, Try again. */
   health?: HealthActions
   /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */

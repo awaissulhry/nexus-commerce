@@ -448,7 +448,8 @@ export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): n
  * docked beside every tab (B-TH-214); Margin is a section of Money (#margin), only with the margin grain.
  */
 // F-SA-232: + Overview, the new first tab ("where is it now"); no address → Overview.
-export const RECORD_TABS = ['overview', 'lines', 'production', 'changes', 'money', 'shipments'] as const
+// F-SA-237: + Files, last (every file of the order by where it comes from).
+export const RECORD_TABS = ['overview', 'lines', 'production', 'changes', 'money', 'shipments', 'files'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 /** The tab with no address: Overview (F-SA-232). */
@@ -487,7 +488,7 @@ export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilitie
 export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
 
 /** A tab whose body is a wide grid (size grids, the work orders, the shipments): the docked thread takes one third under 1600 px. */
-export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'production' || tab === 'shipments'
+export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'production' || tab === 'shipments' || tab === 'files'
 
 /** The band's health chip from the order read alone (the production read's health comes with Overview): Late · N d, never On track. */
 export const lateDaysOf = (order: Pick<Order, 'daysLate' | 'status'>): number | null => (order.daysLate !== null && order.daysLate > 0 && !CLOSE_FROM_STATES.includes(order.status) ? order.daysLate : null)
@@ -500,6 +501,7 @@ export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' 
   if (tab === 'changes') return order.amendments.count
   if (tab === 'money') return order.chain.invoices.length
   if (tab === 'shipments') return order.chain.shipments.length
+  // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).
   return null
 }
 

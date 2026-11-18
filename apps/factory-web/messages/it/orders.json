@@ -240,7 +240,8 @@
     "depositOpen": "C'è un acconto aperto",
     "changes": "Modifiche",
     "overview": "Panoramica",
-    "attention": "Richiede attenzione: in ritardo o a rischio"
+    "attention": "Richiede attenzione: in ritardo o a rischio",
+    "files": "File"
   },
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
@@ -1490,5 +1491,10 @@
   "mtm": {
     "units_one": "Su misura · {count} unità",
     "units_other": "Su misura · {count} unità"
+  },
+  "files": {
+    "title": "File",
+    "openFailed": "Impossibile aprire il file: riprova.",
+    "shareFailed": "La condivisione non è riuscita: riprova."
   }
 }

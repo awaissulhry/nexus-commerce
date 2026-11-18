@@ -63,7 +63,7 @@ import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
-import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
+import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
@@ -444,6 +444,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-margin-no-grain', label: 'W2a · Production manager · Money: no margin grain, no Margin section', model: base('manager', production, { tab: 'money', margin: marginAs('manager', null) }) },
     { id: 'w2a-margin-loading', label: 'W2a · Margin reading', model: base('finance', production, { tab: 'money', margin: marginAs('finance', { value: null, problem: null }) }) },
     { id: 'w2a-margin-error', label: "W2a · Margin couldn't load: Try again (the rest of the order stays usable)", model: base('finance', production, { tab: 'money', margin: marginAs('finance', { value: null, problem: 'problem.unavailable' }) }) },
+    // ---- F-SA-237: Files, every file of the order by where it comes from (the same body as the thread's Files window) ----
+    { id: 'files', label: 'F-SA-237 · Sales · Files: by source — the order and its conversation, the lines’ artwork (also on SO-2026-0151), production photos; shared or office only; 3 you cannot open', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: [], canShare: true } }) },
+    { id: 'files-chosen', label: 'F-SA-237 · Sales · Files: two chosen — Download 2 · Share 1 own with the customer', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: ['0190f0e2-8181-7000-8000-000000000001', '0190f0e2-8181-7000-8000-000000000002'], canShare: true } }) },
+    { id: 'files-empty', label: 'F-SA-237 · Files: none yet', model: base('sales', production, { tab: 'files', files: { read: { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group) => ({ ...group, files: [], leftOut: 0, measurementsLeftOut: 0 })), total: 0 }, problem: null, selected: [], canShare: true } }) },
+    { id: 'files-failed', label: "F-SA-237 · Files couldn't be read (Try again)", model: base('sales', production, { tab: 'files', files: { read: null, problem: 'read', selected: [], canShare: true } }) },
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
     { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
     { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · waiting for the deposit; Preparing — work orders are made after the deposit', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },

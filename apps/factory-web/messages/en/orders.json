@@ -240,7 +240,8 @@
     "depositOpen": "A deposit is open",
     "changes": "Changes",
     "overview": "Overview",
-    "attention": "Needs attention: late or at risk"
+    "attention": "Needs attention: late or at risk",
+    "files": "Files"
   },
   "step": {
     "makeWorkOrders": "Make work orders",
@@ -1490,5 +1491,10 @@
   "mtm": {
     "units_one": "Made to measure · {count} unit",
     "units_other": "Made to measure · {count} units"
+  },
+  "files": {
+    "title": "Files",
+    "openFailed": "The file could not be opened: try again.",
+    "shareFailed": "Sharing did not go through: try again."
   }
 }
