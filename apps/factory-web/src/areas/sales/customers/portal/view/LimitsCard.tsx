@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, Sparkles, UserCog } from 'lucide-react'
+import { ExternalLink, Sparkles } from 'lucide-react'
 import { Banner, Card, EmptyState, Field } from '@nexus/ui/components'
 import { Button, CheckboxCard, NumberStepper, RadioCard, Skeleton, Tag, Toggle } from '@nexus/ui/primitives'
 import { Combobox, EditModeBar } from '../../../../../lib/i18n/ds-parts'
@@ -21,9 +21,6 @@ import {
   PRODUCTION_ASK_KINDS,
   productionPreviewHeld,
   seesNow,
-  slotChoices,
-  supervisorHeld,
-  supervisorMove,
   URGENT_MAX,
   urgencyNote,
   withPreset,
@@ -39,8 +36,8 @@ import { heldWords, usePortalT } from './parts'
  * sees (four levels, Status only by default), what it may do (Urgent orders with "At most n urgent at once" and the rule in words;
  * switched off, the marks kept but not used; the production asks), who answers on its side (anyone with the Production role, or one
  * named person, for PP, size set, TOP, fabric and trims), whether overrides need a second person, the freeze points (the company's
- * beside its own), and — OFFICE ONLY, never in the portal or the preview, drawn while the portal is off — who looks after it here:
- * the production supervisor and backup (their own route, production.brand.manage; a new one says before Apply how many orders move).
+ * beside its own). F-SA-272: who looks after it here (the production supervisor and backup, office only) moved to the customer's
+ * Overview (customers/record/view/CustomerSupervisorCard.tsx): Apply here carries the limits only.
  * The preset "Production partner" fills the draft; "Open My production as …" previews the saved limits; Apply asks a fresh code.
  * Fetches nothing (the container is portal/limits/use-limits.ts).
  */
@@ -99,14 +96,11 @@ function LimitsForm({ model, partyName, portalOn, people, can, previewing, actio
   const set = (patch: Partial<LimitsDraft>) => setDraft((current) => ({ ...current, ...patch }))
   const name = read.party.name || partyName
   const held = heldWords(t, limitsHeld(read))
-  const supHeldReason = supervisorHeld(model.supervise, model.pick)
-  const supHeld = supHeldReason ? (supHeldReason.ns === 'production-supervisor' ? ts(supHeldReason.key) : t(supHeldReason.key)) : null
   const count = changeCount(saved, draft)
   const problems = limitsProblems(draft)
   const dirty = count > 0
   const previewHeldReason = heldWords(t, productionPreviewHeld(can, dirty)) ?? (previewing ? t('preview.opening') : null)
   const note = urgencyNote(saved, draft)
-  const move = supervisorMove(saved, draft, model.pick)
   const approvers = approverChoices(people, saved)
   const word = (words: { readonly it: string; readonly en: string } | null | undefined) => (words ? (locale === 'en' ? words.en : words.it) : null)
   const apply = () => {
@@ -150,7 +144,6 @@ function LimitsForm({ model, partyName, portalOn, people, can, previewing, actio
                 </Button>
               }
             >
-              {model.saveProblem.limitsSaved ? t('limits.limitsSavedNotSupervisor') : null}
             </Banner>
           )}
 
@@ -269,7 +262,7 @@ function LimitsForm({ model, partyName, portalOn, people, can, previewing, actio
 
           <FreezeBlock model={model} partyName={name} actions={actions} />
 
-          <SupervisorBlock model={model} draft={draft} name={name} held={supHeld} move={move} onDraft={set} actions={actions} />
+          {/* F-SA-272: "Who looks after <customer>" moved to the customer's Overview (record/view/CustomerSupervisorCard.tsx). */}
         </div>
         {dirty && (
           <EditModeBar
@@ -287,79 +280,3 @@ function LimitsForm({ model, partyName, portalOn, people, can, previewing, actio
     </Card>
   )
 }
-
-/** Who looks after the customer here — office only (R-41, R-53): the supervisor and the backup, from the people who may take it. */
-function SupervisorBlock({ model, draft, name, held, move, onDraft, actions }: { model: LimitsModel; draft: LimitsDraft; name: string; held: string | null; move: { key: string; count: number } | null; onDraft: (patch: Partial<LimitsDraft>) => void; actions?: LimitsActions }) {
-  const t = usePortalT()
-  const ts = useT(SUPERVISOR_NS)
-  const saved = model.read!.production
-  const pick = model.pick
-  const supervisors = slotChoices(pick, saved.supervisor, null)
-  const backups = slotChoices(pick, saved.backup, draft.supervisorId)
-  const problems = limitsProblems(draft)
-  const label = (entry: { value: string; label: string; listed: boolean }) => (entry.listed ? entry.label : t('limits.supervisor.notListed', { name: entry.label }))
-  const editable = held === null && pick.status === 'ready'
-  const person = (slot: { readonly name: string; readonly active: boolean } | null) =>
-    slot ? (
-      <span className="fw-pa-cell">
-        <span>{slot.name}</span>
-        {!slot.active && <Tag tone="warning">{ts('fact.inactive')}</Tag>}
-      </span>
-    ) : (
-      <span className="fw-pa-hint">{t('limits.supervisor.none')}</span>
-    )
-  return (
-    <fieldset className="fw-pa-fieldset fw-pa-lim-office">
-      <legend className="fw-pa-legend">
-        <span className="fw-pa-cell">
-          <UserCog size={14} aria-hidden /> {t('limits.supervisor.title', { name })} <Tag tone="info">{t('limits.supervisor.officeOnly')}</Tag>
-        </span>
-      </legend>
-      <p className="fw-pa-hint">{t('limits.supervisor.intro')}</p>
-      {held && <p className="fw-pa-hint">{held}</p>}
-      {pick.status === 'loading' && model.supervise && (
-        <div role="status" aria-label={ts('dialog.reading')}>
-          <Skeleton height={40} />
-        </div>
-      )}
-      {pick.status === 'error' && (
-        <Banner
-          tone="danger"
-          title={t(pick.key)}
-          action={
-            <Button size="sm" onClick={() => actions?.onRetryPick?.()}>
-              {t('common.retry')}
-            </Button>
-          }
-        />
-      )}
-      {pick.status === 'ready' && pick.people.length === 0 && <p className="fw-pa-hint">{ts('dialog.nobody')}</p>}
-      <div className="fw-pa-lim-two">
-        <Field label={t('limits.supervisor.label')}>
-          {editable ? (
-            <Combobox options={[{ value: '', label: t('limits.supervisor.none') }, ...supervisors.map((entry) => ({ value: entry.value, label: label(entry) }))]} value={draft.supervisorId ?? ''} placeholder={ts('dialog.search')} onChange={(value) => onDraft({ supervisorId: value || null, ...(value ? {} : { backupId: null }) })} />
-          ) : (
-            person(saved.supervisor)
-          )}
-        </Field>
-        <Field label={t('limits.supervisor.backup')} hint={t('limits.supervisor.backupHint')} error={problems.backup ? t(problems.backup) : undefined}>
-          {editable && draft.supervisorId !== null ? (
-            <Combobox options={[{ value: '', label: t('limits.supervisor.none') }, ...backups.map((entry) => ({ value: entry.value, label: label(entry) }))]} value={draft.backupId ?? ''} placeholder={ts('dialog.search')} onChange={(value) => onDraft({ backupId: value || null })} />
-          ) : editable ? (
-            <span className="fw-pa-hint">{t('limits.supervisor.backupAlone')}</span>
-          ) : (
-            person(saved.backup)
-          )}
-        </Field>
-      </div>
-      {move && (
-        <p className="fw-pa-strong" role="status">
-          {t(move.key, { count: move.count })}
-        </p>
-      )}
-      {pick.status === 'ready' && !pick.complete && <p className="fw-pa-hint">{ts('dialog.partial')}</p>}
-      <p className="fw-pa-hint">{ts('dialog.hint')}</p>
-    </fieldset>
-  )
-}
-

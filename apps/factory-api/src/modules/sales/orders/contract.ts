@@ -15,6 +15,12 @@ import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-
 import { WAIT_WORDS, type WaitReason } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { CUSTOMER_URGENCIES } from './customer-urgency'
 import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
+// B-SA-070: the production columns of a row (the customer's Work tab).
+import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
+import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
+import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
+import { IDS_TERM_MAX, PRODUCTION_WITHHELD } from './production-columns'
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -260,6 +266,9 @@ const filterFields = {
   kind: z.enum(['mtm']).optional(),
   // ── B-SA-021: a rider's orders — a unit of any revision of the rider's garment profile; only with sales.measurements.view (403 in words) ──
   profile: id().optional(),
+  // ── B-SA-070 (sales page plan R5): the customer's Work tab's "Waiting on us" — the keeper says the order waits on us, or a customer
+  // request on it is still OPEN; the list, the board's counts, the totals and the file alike ──
+  waiting: z.enum(['us']).optional(),
 }
 
 /** B-TH-058: the list's every row term (the overall view's totals take the same, so each total opens exactly its rows). */
@@ -286,6 +295,10 @@ export const listOrdersContract = defineContract({
     // ── end B-TH-057 ──
     /** B-TH-059: count each row's production progress (the Progress column is shown): it reads the floor's records of the page's work orders. */
     progress: flag.optional(),
+    // ── B-SA-070: the production columns (stage, health, waiting on, held, supervisor mark, open requests and issues), and the rows in
+    // view read again (≤ 50 order ids, comma separated; ids the reader may not see are left out) ──
+    production: flag.optional(),
+    ids: z.string().trim().min(36).max(IDS_TERM_MAX * 37).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
@@ -369,6 +382,24 @@ export const listOrdersContract = defineContract({
            * customer: the first two names and how many riders in all; null without it). Never a measurement, a base size or a photo.
            */
           madeToMeasure: output({ units: z.number().int(), waitingReview: z.number().int(), riders: output({ names: z.array(z.string()), count: z.number().int() }).nullable() }).nullable(),
+          /**
+           * B-SA-070: only with `production=true` — the keeper's stored state (no facts read per row): the plain stage and since when,
+           * the shown health (a standing raise counts), who it waits on and since when, a live work order of it on hold, the supervisor
+           * mark (Me / Someone else / Not set, never a name) and the open production issues only with workorders.view over the order
+           * (else null, named in `withheld`), and the customer requests still OPEN.
+           */
+          production: output({
+            stage: z.enum(BRAND_STAGES).nullable(),
+            stageSince: businessDate().nullable(),
+            health: z.enum(BRAND_HEALTHS).nullable(),
+            waitingOn: z.enum(WAITING_ON).nullable(),
+            since: instant().nullable(),
+            held: z.boolean(),
+            supervisorMark: z.enum(SUPERVISOR_MARKS).nullable(),
+            openRequests: z.number().int(),
+            openIssues: z.number().int().nullable(),
+            withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
+          }).optional(),
         }),
       ),
       /** B-TH-057: the next page's cursor (an id newest first; an opaque sort key and id in a server sort). */

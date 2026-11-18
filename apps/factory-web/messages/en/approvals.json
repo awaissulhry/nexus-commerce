@@ -312,7 +312,8 @@
       "COUNTER_AGREED": "The customer said yes to our counter-offer: accept the request to carry it out.",
       "COUNTER_REFUSED": "The customer said no to our counter-offer: the request is withdrawn.",
       "COUNTER_LAPSED": "Our counter-offer lapsed: refuse the request with words.",
-      "COLOUR_IN_WORK": "A work order makes the line in its colour now: answer the colour change by hand (cancel and remake).",
+      "COLOUR_CUT": "Already cut in this colour: a cut piece never changes colour. Suggest something else or refuse.",
+      "EXTRA_OUTCOME": "Pieces are already cut beyond the new quantity: choose what happens to the extra pieces first (keep and charge the customer, keep as leftover, or scrap).",
       "ADDRESS_GONE": "The delivery address asked is no longer in use: refuse, or ask the customer for another address.",
       "SHIPMENT_PREPARED": "A shipment is being prepared for the order’s address: change it there first, or refuse.",
       "NOT_KEPT": "The customer’s production record is not there yet: try again in a moment.",
@@ -330,6 +331,126 @@
       "rate_limited": "Too many tries: wait a moment.",
       "signed_out": "Your session ended: sign in again.",
       "internal": "Something went wrong. Try again."
+    }
+  },
+  "workOrderChange": {
+    "titleUnknown": "Work order change",
+    "subtitle": "Order {order} · proposed by {who}, {at}",
+    "someone": "the system",
+    "notFound": "This work order change is not there any more.",
+    "why": "Why: {reason}",
+    "readAgain": "Read again",
+    "lastError": "The last try was refused: {words}",
+    "decided": "Decided: {status} by {who}, {at}",
+    "decisionNote": "Why: {words}",
+    "cells": {
+      "label": "The sizes it changes",
+      "col": {
+        "cell": "Line · size",
+        "change": "Before → after",
+        "now": "Makes now",
+        "cut": "Already cut and bundled"
+      },
+      "line": "Line {line}",
+      "fromTo": "{from} → {to}",
+      "changed": "Changed since: {now}",
+      "notCounted": "Not counted here",
+      "cutBundled": "{cut} cut · {bundled} bundled",
+      "noRight": "What the work order makes now and what is cut need the right to see work orders: the change is checked again when it is applied.",
+      "notRead": "The work order could not be read now: the change is checked again when it is applied."
+    },
+    "extra": {
+      "title": "Extra pieces",
+      "outcome": "What happens to them: {outcome}",
+      "none": "No outcome was chosen: production decides what happens to them."
+    },
+    "lays": {
+      "title": "The lay it touches",
+      "draft": "A draft has no lay yet.",
+      "noRight": "The lays need the right to see cutting: Apply checks them.",
+      "reading": "Reading the lays…",
+      "notRead": "The lays could not be read now: Apply checks them.",
+      "none": "No open lay holds these sizes.",
+      "open": "Open {number}",
+      "openWorkOrder": "Open the work order's cutting",
+      "stand": {
+        "FOLLOWS": "planned: follows the work order down",
+        "FIXED": "fixed: re-plan it first if it holds more than the new figure",
+        "CUTTING": "being cut: lower the work order once it is cut",
+        "CUT": "cut"
+      }
+    },
+    "does": {
+      "title": "What Apply does",
+      "LOWER_RELEASED": "Lowers the released work order to the order, never below what is already cut; a planned leather lay follows it down. Print the traveller again afterwards.",
+      "SET_DRAFT_CELLS": "Sets the draft's sizes to the new figures.",
+      "CANCEL_WORK_ORDER": "Cancels the work order: the order no longer needs any of it. Pieces already cut stay as they are.",
+      "NEW_DRAFT": "Makes a new draft work order with these sizes.",
+      "unknown": "It is checked against the work order as it is now.",
+      "proposal": "A proposal is not an approval: whoever manages this work order may apply it, the person who proposed it too."
+    },
+    "openWorkOrder": "Open {number}",
+    "openOrder": "Open order {order}",
+    "leave": "Leave as is…",
+    "leaveTitle": "Leave as is · {number}",
+    "leaveWhy": "Why it stays as it is",
+    "leaveHint": "Up to {max} characters. The order's Still to do shows them.",
+    "leaveSend": "Leave as is",
+    "back": "Back",
+    "apply": {
+      "LOWER_TO_ORDER": "Lower to the order",
+      "MAKE_MORE": "Make more for the order",
+      "NEW_DRAFT": "Make the new work order",
+      "CANCEL_WORK_ORDER": "Cancel the work order"
+    },
+    "held": {
+      "reading": "Reading the change…",
+      "decided": "This work order change is decided already.",
+      "DECIDED": "This work order change is decided already.",
+      "noRight": "Only a person who manages this work order decides it.",
+      "WORK_ORDER_DONE": "{number} is no longer open: leave the change as is, with a word.",
+      "ON_HOLD": "{number} is on hold: lift the hold first, then apply the change.",
+      "NOT_A_DRAFT": "{number} is released: it makes no more. Leave this as is and propose a new work order.",
+      "CHANGED_SINCE": "{number} changed since — propose again",
+      "REPLAN_LAY": "Re-plan the lay first",
+      "CUTTING_UNDER_WAY": "Its lay is being cut: lower the work order once it is cut.",
+      "UNIT_CUT": "The unit of {number} is cut already: scrap it with its approval, or keep it.",
+      "offline": "Offline — decide when back online.",
+      "busy": "Working…",
+      "words": "Say why it is left as is.",
+      "long": "At most {max} characters."
+    },
+    "refusal": {
+      "CHANGED_SINCE": "{number} changed since — propose again",
+      "DECIDED": "This work order change is decided already.",
+      "WORK_ORDER_DONE": "{number} is no longer open: leave the change as is, with a word.",
+      "ON_HOLD": "{number} is on hold: lift the hold first, then apply the change.",
+      "NOT_A_DRAFT": "{number} is released: it makes no more. Leave this as is and propose a new work order.",
+      "UNIT_CUT": "The unit of {number} is cut already: scrap it with its approval, or keep it.",
+      "NOT_THIS_ORDER": "A work order change names a work order of its own order.",
+      "REQUEST_NOT_ACCEPTED": "A work order change carries out an accepted request: answer the request first.",
+      "EXTRA_OUTCOME": "Choose what happens to the extra pieces first.",
+      "NOT_RELEASED": "{number} is not released or running any more: its sizes no longer change.",
+      "DRAFT": "{number} is a draft: its sizes are set, not lowered.",
+      "UNIT": "{number} makes one made-to-measure unit: it is cancelled, never lowered.",
+      "REPAIR": "{number} repairs one garment: its size does not change.",
+      "NO_ORDER_LINE": "A size of the change makes no order line: it is not lowered to an order.",
+      "ONLY_LOWERS": "Lower to the order only lowers: to make more, propose making more.",
+      "REPLAN_LAY": "Re-plan the lay first",
+      "CUTTING_UNDER_WAY": "Its lay is being cut: lower the work order once it is cut.",
+      "CELL_IN_USE": "A size cannot go: labels, serials or records of the floor name it. Lower it to 1, or clear those first.",
+      "LAST_CELL": "Every size of {number} would go: cancel the work order instead.",
+      "other": "It was refused as it stands: read it again.",
+      "moved": "It changed since you read it: it was read again.",
+      "gone": "This work order change is not there any more."
+    },
+    "problem": {
+      "forbidden": "You may not decide this work order change.",
+      "invalid": "It was refused as it is: check what you wrote.",
+      "unavailable": "The server did not answer. Try again in a moment.",
+      "rate_limited": "Too many tries: wait a moment.",
+      "signed_out": "You were signed out: sign in again.",
+      "internal": "Something went wrong: try again."
     }
   }
 }

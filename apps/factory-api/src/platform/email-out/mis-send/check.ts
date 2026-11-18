@@ -129,7 +129,8 @@ async function recipientFacts(client: FactoryClient | CommandTx, addresses: read
 }
 
 /** The other customers of the record's company (or tenant-wide) a text names; the record's party and its namesakes never. */
-async function otherCustomers(client: FactoryClient, text: string, partyId: string | null, companyId: string | null) {
+// B-SA-073: exported — every portal reply runs the same text check (platform/threads/replies.ts), inside its command.
+export async function otherCustomers(client: FactoryClient | CommandTx, text: string, partyId: string | null, companyId: string | null) {
   if (text.trim() === '') return []
   const parties = await client.party.findMany({
     where: { roles: { has: 'CUSTOMER' }, status: { not: 'ARCHIVED' }, ...(partyId ? { id: { not: partyId } } : {}), OR: [{ companyId: null }, ...(companyId ? [{ companyId }] : [])] },

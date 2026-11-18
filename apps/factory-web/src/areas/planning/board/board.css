@@ -155,6 +155,14 @@
   gap: var(--nds-space-6);
 }
 
+/* F-SA-283: the bar's window — the work order's style picture (the one picture part, board size) beside its status line. */
+.fw-pb-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
 .fw-pb-legend {
   display: flex;
   flex-direction: column;

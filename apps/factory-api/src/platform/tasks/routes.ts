@@ -1,8 +1,10 @@
 import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
 import { assignTaskContract, bulkTasksContract, createTaskContract, getTaskContract, listTasksContract, snoozeTaskContract, taskAssigneesContract, taskStatusContract, updateTaskContract } from './contract'
+import { batchTasksContract } from './contract' // B-SA-071
 import { manifest } from './manifest'
 import { assignTask, bulkTasks, createTask, getTask, listTasks, setTaskStatus, snoozeTask, taskAssignees, updateTask } from './tasks'
+import { batchTasks } from './tasks' // B-SA-071
 // B-W2b-388: reminders (COL-041).
 import { bulkRemindersContract, listRemindersContract, putOffReminderContract, reminderDoneContract, reminderUndoContract, removeReminderContract, setReminderContract } from './reminders/contract'
 import { bulkReminders, listReminders, putOffReminder, removeReminder, setReminder, setReminderDone } from './reminders/reminders'
@@ -15,6 +17,9 @@ export default defineRoutes('tasks', manifest, async (app) => {
   app.get('/tasks', { schema: listTasksContract }, async (request) => listTasks(request, request.query))
 
   app.post('/tasks/bulk', { schema: bulkTasksContract }, async (request) => bulkTasks(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-SA-071: one task on each of many records ("Add task to N"), one command, one batch.
+  app.post('/tasks/batch', { schema: batchTasksContract }, async (request) => batchTasks(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/tasks/assignees', { schema: taskAssigneesContract }, async (request) => taskAssignees(request, request.query))
 

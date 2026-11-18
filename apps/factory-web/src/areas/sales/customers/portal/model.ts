@@ -14,7 +14,8 @@ import type { LimitsActions, LimitsModel } from './limits/model' // F-PR-07
 export type PortalSide = 'customers' | 'suppliers'
 
 export type PortalDialog =
-  | { kind: 'invite' }
+  // F-SA-274: "Invite to the portal…" from a contact (People & addresses) fills in its e-mail and name.
+  | { kind: 'invite'; email?: string; name?: string }
   | { kind: 'person'; userId: string }
   | { kind: 'confirm'; action: RowAction; userIds: readonly string[] }
   | { kind: 'ask' }

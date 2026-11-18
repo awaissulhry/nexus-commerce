@@ -41,7 +41,12 @@ function Withheld({ part }: { part: 'samples' | 'profiles' | 'repairs' }) {
 }
 
 /** The groups under Now: samples in progress, measurement profiles, a team's riders, repairs in progress. */
-export function GlanceNow({ model }: { model: GlanceModel }) {
+/** F-SA-274: the glance's parts a tab draws (Overview: samples, repairs; People & addresses: profiles, riders); default every one. */
+export const GLANCE_NOW_PARTS = ['samples', 'profiles', 'riders', 'repairs'] as const
+export type GlanceNowPart = (typeof GLANCE_NOW_PARTS)[number]
+
+export function GlanceNow({ model, parts = GLANCE_NOW_PARTS }: { model: GlanceModel; /* F-SA-274 */ parts?: readonly GlanceNowPart[] }) {
+  const show = (part: GlanceNowPart) => parts.includes(part) // F-SA-274
   const { t, say, day } = useSay()
   const glance = valueOf(model.read)
   if (!glance) {
@@ -55,6 +60,7 @@ export function GlanceNow({ model }: { model: GlanceModel }) {
   const samplesHref = `${model.prefix}/products/samples?party=${encodeURIComponent(party.id)}`
   return (
     <div className="fw-cdp-now">
+      {show('samples') && (
       <DepthCard title={t('samples.title')} hint={t('samples.hint')}>
         {glance.samples === null ? (
           <Withheld part="samples" />
@@ -93,7 +99,9 @@ export function GlanceNow({ model }: { model: GlanceModel }) {
           </>
         )}
       </DepthCard>
+      )}
 
+      {show('profiles') && (
       <DepthCard title={t('profiles.title')} hint={t('profiles.hint')}>
         {glance.profiles === null ? (
           <Withheld part="profiles" />
@@ -115,8 +123,9 @@ export function GlanceNow({ model }: { model: GlanceModel }) {
           </>
         )}
       </DepthCard>
+      )}
 
-      {glance.riders !== null && (
+      {show('riders') && glance.riders !== null && (
         <DepthCard title={t('riders.title')} hint={t('riders.hint')}>
           {glance.riders.count === 0 ? (
             <p className="fw-cdp-hint">{t('riders.none')}</p>
@@ -145,6 +154,7 @@ export function GlanceNow({ model }: { model: GlanceModel }) {
         </DepthCard>
       )}
 
+      {show('repairs') && (
       <DepthCard title={t('repairs.title')} hint={t('repairs.hint')}>
         {glance.repairs === null ? (
           <Withheld part="repairs" />
@@ -177,6 +187,7 @@ export function GlanceNow({ model }: { model: GlanceModel }) {
           </>
         )}
       </DepthCard>
+      )}
     </div>
   )
 }

@@ -16,6 +16,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { workOrders as workOrderExport } from '../../../platform/exports/sources/work-orders'
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from '../testing/two-brands'
+import { OWN_STYLE_CODE } from '../testing/two-brands' // B-SA-074
 
 /**
  * B-PR-03 (production plan §2, the brand wall; 06-tree §0.6 PW-02 (list, counts, export) and PW-03 (the record and every
@@ -233,3 +234,93 @@ describe('symmetric: a person limited to customer A (office.p1)', { timeout: 60_
     expect((await ok('office.p1', 'GET', `/production/work-orders/${w.a.workOrderId}`)).workOrder.customer).toMatchObject({ id: w.a.partyId })
   })
 })
+
+// ── B-SA-074 (sales page plan N7, N8, R9; review OW-4): the work orders' small pictures in ONE read ─────────────────────────────────
+/**
+ * POST /production/work-orders/pictures {workOrderIds 1–200} through the office's one picture helper (product/images/small-pictures.ts):
+ * each work order's ONE style and its main picture, walled exactly as the list above — A's work order and the mixed one made before
+ * the rule are simply absent for B's person, as an unknown id (the same words, no count); the production unit reads all of them.
+ * The pictures (made-up rows, the files seed's bench photo copied): our own jacket (A's, B's and the mixed work order make it) and
+ * A's private-label jacket of the seeds' SEED-WO-0001. The readers hold files.read beside the work-order rights (a picture's file);
+ * without it the style stays, never its file.
+ */
+describe('B-SA-074 — the work orders’ pictures: absent for every work order the reader does not reach', { timeout: 60_000 }, () => {
+  const pictureSessions = twoBrandSessions(ids.tenantId, ids.a, ids.b, [...PERMISSIONS, 'files.read'])
+  SESSIONS['pictures.all'] = pictureSessions['office.all']
+  SESSIONS['pictures.p1'] = pictureSessions['office.p1']
+  SESSIONS['pictures.p2'] = pictureSessions['office.p2']
+  SESSIONS['partner.b'] = { audience: 'partner', tenantId: ids.tenantId, actorId: newId(), partyId: ids.b, grants: [{ permissions: [...PERMISSIONS, 'files.read'], companies: 'all', sites: 'all', parties: [ids.b] }] } as unknown as SessionContext
+  const files = { own: newId(), alpha: newId() }
+  let seeded = { workOrderId: '', styleId: '', styleCode: '' }
+  const lit = (value: string): string => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new Error(`not an id: ${value}`)
+    return `'${value}'`
+  }
+  const pictures = async (session: string, workOrderIds: readonly string[]): Promise<Json[]> => {
+    const answer = await ok(session, 'POST', '/production/work-orders/pictures', { workOrderIds })
+    expect(Date.parse(answer.asOf as string)).not.toBeNaN()
+    return answer.pictures as Json[]
+  }
+
+  beforeAll(async () => {
+    const row = (await admin<{ id: string; styleId: string; code: string }>(`SELECT w.id, w."styleId", s.code FROM "WorkOrder" w JOIN "Style" s ON s.id = w."styleId" WHERE w."tenantId" = $1 AND w.number = 'SEED-WO-0001'`, [w.tenantId]))[0]!
+    seeded = { workOrderId: row.id, styleId: row.styleId, styleCode: row.code }
+    const source = (await admin<{ id: string }>(`SELECT id FROM "StoredFile" WHERE "tenantId" = $1 AND status = 'AVAILABLE' AND "contentType" = 'image/jpeg' ORDER BY id LIMIT 1`, [w.tenantId]))[0]!.id
+    // A style's main picture: the bench photo's row copied onto the style (its bytes are never read here: no small preview yet).
+    const picture = (fileId: string, styleId: string, name: string) => `
+      INSERT INTO "StoredFile" SELECT (jsonb_populate_record(NULL::"StoredFile", to_jsonb(f) || jsonb_build_object('id', ${lit(fileId)}, 'recordType', 'Style', 'recordId', ${lit(styleId)}, 'originalName', '${name}', 'storageKey', f."storageKey" || '-' || ${lit(fileId)}, 'visibility', jsonb_build_array('OFFICE'), 'floorSiteId', NULL, 'partyId', NULL, 'thumbnailKey', NULL))).* FROM "StoredFile" f WHERE f.id = ${lit(source)};
+      INSERT INTO "StyleImage" (id, "tenantId", "styleId", "fileId", kind, seq, "isMain") VALUES (${lit(newId())}, ${lit(w.tenantId)}, ${lit(styleId)}, ${lit(fileId)}, 'PHOTO', 0, true);`
+    await db.admin.query(`BEGIN; SET LOCAL session_replication_role = replica; ${picture(files.own, w.styleId, 'Made-up own jacket.jpg')} ${picture(files.alpha, seeded.styleId, 'Made-up private jacket.jpg')} COMMIT;`)
+  })
+
+  it('the production unit reads every work order’s style picture, the mixed one too, in the asked order; an unknown id is absent', async () => {
+    const asked = [w.b.workOrderId, seeded.workOrderId, w.mixed.workOrderId, newId(), w.a.workOrderId]
+    const answer = await pictures('pictures.all', asked)
+    expect(answer.map((picture) => picture.id)).toEqual([w.b.workOrderId, seeded.workOrderId, w.mixed.workOrderId, w.a.workOrderId])
+    const of = (id: string) => answer.find((picture) => picture.id === id)!
+    for (const id of [w.a.workOrderId, w.b.workOrderId, w.mixed.workOrderId]) expect(of(id)).toMatchObject({ styleId: w.styleId, styleCode: OWN_STYLE_CODE, styleCount: 1, fileId: files.own, contentType: 'image/jpeg', small: null })
+    expect(of(seeded.workOrderId)).toMatchObject({ styleId: seeded.styleId, styleCode: seeded.styleCode, styleCount: 1, fileId: files.alpha, small: null })
+    // The one shape of the office's picture part (the sales lists' too).
+    expect(Object.keys(of(w.b.workOrderId)).sort()).toEqual(['contentType', 'fileId', 'id', 'small', 'styleCode', 'styleCount', 'styleId', 'styleName'])
+  })
+
+  it('B’s person: only B’s work order; A’s, the seeds’ A work order and the mixed one answer as an unknown id — nothing of A', async () => {
+    const asked = [w.a.workOrderId, seeded.workOrderId, w.mixed.workOrderId, w.b.workOrderId, newId()]
+    const answer = await pictures('pictures.p2', asked)
+    expect(answer.map((picture) => picture.id)).toEqual([w.b.workOrderId])
+    expect(answer[0]).toMatchObject({ styleCode: OWN_STYLE_CODE, fileId: files.own })
+    const text = JSON.stringify(answer)
+    for (const other of [w.a.workOrderId, seeded.workOrderId, w.mixed.workOrderId, w.mixed.number, seeded.styleId, seeded.styleCode, files.alpha]) expect(text, other).not.toContain(other)
+    expect(findMarkers(answer, aMarkers)).toEqual([])
+    // Word for word: A's id, the mixed one and an unknown one get the same answer (the time aside) — no count, no error.
+    const words = async (workOrderIds: string[]) => ({ ...(await ok('pictures.p2', 'POST', '/production/work-orders/pictures', { workOrderIds })), asOf: '<time>' })
+    const unknown = await words([newId()])
+    expect(unknown).toEqual({ pictures: [], asOf: '<time>' })
+    expect(await words([w.a.workOrderId])).toEqual(unknown)
+    expect(await words([w.mixed.workOrderId])).toEqual(unknown)
+    expect(await words([seeded.workOrderId])).toEqual(unknown)
+  })
+
+  it('symmetric: A’s person gets A’s work orders with A’s own picture, never B’s nor the mixed one', async () => {
+    const answer = await pictures('pictures.p1', [w.b.workOrderId, w.mixed.workOrderId, w.a.workOrderId, seeded.workOrderId])
+    expect(answer.map((picture) => picture.id)).toEqual([w.a.workOrderId, seeded.workOrderId])
+    expect(answer[1]).toMatchObject({ styleCode: seeded.styleCode, fileId: files.alpha })
+    expect(JSON.stringify(answer)).not.toContain(w.b.workOrderId)
+    expect(JSON.stringify(answer)).not.toContain(w.mixed.workOrderId)
+  })
+
+  it('without files.read: the style of the reader’s own work order, never its file or an address', async () => {
+    const answer = await pictures('office.p2', [w.b.workOrderId, w.a.workOrderId])
+    expect(answer).toEqual([{ id: w.b.workOrderId, styleId: w.styleId, styleCode: OWN_STYLE_CODE, styleName: expect.any(String), styleCount: 1, fileId: null, contentType: null, small: null }])
+  })
+
+  it('the ids: 1–200, each once, uuids (400 in words); office only — a portal person is refused by audience', async () => {
+    expect((await pictures('pictures.all', [w.b.workOrderId, ...Array.from({ length: 199 }, () => newId())])).map((picture) => picture.id)).toEqual([w.b.workOrderId])
+    for (const body of [{ workOrderIds: Array.from({ length: 201 }, () => newId()) }, { workOrderIds: [] }, { workOrderIds: ['not-an-id'] }, { orderIds: [w.b.workOrderId] }]) expect((await call('pictures.all', 'POST', '/production/work-orders/pictures', body)).status).toBe(400)
+    const twice = await call('pictures.all', 'POST', '/production/work-orders/pictures', { workOrderIds: [w.b.workOrderId, w.b.workOrderId] })
+    expect(twice.status).toBe(400)
+    expect(twice.body.error.message).toBe('Each id once: the same record was asked twice.')
+    expect((await call('partner.b', 'POST', '/production/work-orders/pictures', { workOrderIds: [w.b.workOrderId] })).status).toBe(403)
+  })
+})
+// ── end B-SA-074

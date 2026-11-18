@@ -218,7 +218,11 @@
         "mail_out": "{actor} sent a message on {record}, which you follow",
         "view": "{record}, a saved view you follow, changed: {entered} came in, {left} left ({count} now)",
         "viewCount": "{record}, a saved view you follow, changed ({count} now)",
-        "changed": "{record}, which you follow, changed"
+        "changed": "{record}, which you follow, changed",
+        "change": "{record} changed: {what}.",
+        "changeStep": "{record} changed: {what}. 1 step still to do.",
+        "changeSteps": "{record} changed: {what}. {count} steps still to do.",
+        "orderChange": "{record}: its order {number} changed — {what}."
       },
       "assigned": {
         "today": "{actor} assigned you {record} on Today ({kind})",

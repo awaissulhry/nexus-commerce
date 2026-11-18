@@ -7,6 +7,9 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
+// B-SA-074: the work orders' pictures, walled as the work-order list (a mixed one only for every-customer people).
+import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { workOrderWhere } from '../../production/work-orders/scope'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -43,8 +46,8 @@ import { isPictureType } from '@nexus/factory-domain/product/images/rules'
  * customer A gets the picture of A's own style on A's records and nothing of another customer's.
  */
 
-/** The record kinds a picture is read for (the web part's `source`). */
-export type PictureSource = 'order' | 'quote' | 'request'
+/** The record kinds a picture is read for (the web part's `source`; B-SA-074: and a work order, POST /production/work-orders/pictures). */
+export type PictureSource = 'order' | 'quote' | 'request' | 'workorder'
 
 /** The most ids one read takes (a page of a list; the POST /threads/unread precedent). */
 export const PICTURES_MAX = 200
@@ -58,7 +61,7 @@ export const pictureIds = () => z.array(id()).min(1).max(PICTURES_MAX)
 export const smallPicturesView = output({
   pictures: z.array(
     output({
-      /** The record's id (an order, a quote, a request). */
+      /** The record's id (an order, a quote, a request; B-SA-074: a work order). */
       id: id(),
       styleId: id(),
       styleCode: z.string(),
@@ -128,6 +131,16 @@ const READS: Readonly<Record<PictureSource, (client: Client, actor: Actor, ids: 
     const lines = visible.length > 0 ? await client.inquiryLine.findMany({ where: { inquiryId: { in: visible }, styleId: { not: null } }, select: { inquiryId: true, styleId: true }, orderBy: [{ inquiryId: 'asc' }, { seq: 'asc' }] }) : []
     return stylesPerRecord(visible, lines.map((line) => ({ recordId: line.inquiryId, styleId: line.styleId })))
   },
+  // ── B-SA-074 (sales page plan N7, N8, R9; review OW-4 "consistent across the whole factory"; the production lane's yes) ──────
+  // A work order makes ONE style: its picture is that style's main picture (styleCount 1). Walled exactly as the work-order list
+  // (production/work-orders/scope workOrderWhere, workorders.view over its company, site and one customer): another customer's
+  // work order, and a mixed one made before the one-customer rule (or a sample of no customer) for anyone who does not reach every
+  // customer, is simply absent — as an unknown id. Office only (no floor or TV screen ever draws a customer's design).
+  async workorder(client, actor, ids) {
+    const seen = await client.workOrder.findMany({ where: { AND: [workOrderWhere(actor, WORKORDERS_VIEW), { id: { in: [...ids] } }] }, select: { id: true, styleId: true } })
+    return seen.map((row) => ({ id: row.id, styleIds: [row.styleId] }))
+  },
+  // ── end B-SA-074
 })
 
 /** The office reader (the routes are office only; a portal, floor or link session never reads these). */

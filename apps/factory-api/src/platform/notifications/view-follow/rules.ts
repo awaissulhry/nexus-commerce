@@ -2,6 +2,7 @@ import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { HOME_VIEW } from '@nexus/factory-domain/insights/permissions'
 import { holds } from '@nexus/factory-domain/core/permissions'
 import { events as notificationEvents } from '@nexus/factory-domain/notifications/events'
+import { orderChangeBatch } from '@nexus/factory-domain/notifications/rules' // B-SA-051
 import { followersOf } from '../../threads/followers'
 import { recordLabelOf } from '../../threads/labels'
 import { mayOnThread, resolveRecord } from '../../threads/records'
@@ -94,12 +95,18 @@ export const FOLLOWING_RULES: readonly FanOutRule[] = Object.freeze([
       const label = scope ? await recordLabelOf(context.tx, change.type, recordId) : null
       if (!scope || label === null) return []
       const actorId = await officeActorOf(context, change.type, recordId)
+      // ---- B-SA-051 (Sales page plan R9 "ONE bell mechanism per change"): an order's status or promise moved by a command folds
+      // into that command's change of the order — the system line on its thread and the floor notes of its work orders
+      // (rules/threads.ts, the same batch) — so a reader told of all of them has ONE bell item, not one per event.
+      const correlationId = context.event?.correlationId
+      const batchId = change.type === 'SalesOrder' && correlationId ? orderChangeBatch(correlationId, recordId) : null
+      // ---- end B-SA-051
       const drafts: Draft[] = []
       for (const userId of followers) {
         if (userId === actorId) continue
         const reader = await context.reader(userId)
         if (!reader || !mayOnThread(reader.actor, THREADS_READ, change.type, scope)) continue
-        drafts.push({ userId, category: 'FOLLOWING', record: { type: change.type, id: recordId, label }, companyId: scope.companyId, anchor: null, messageKey: 'notifications.following.changed', params: { change: type! }, actorId })
+        drafts.push({ userId, category: 'FOLLOWING', record: { type: change.type, id: recordId, label }, companyId: scope.companyId, anchor: null, messageKey: 'notifications.following.changed', params: { change: type! }, actorId, ...(batchId ? { batchId } : {}) /* B-SA-051 */ })
       }
       return drafts
     },

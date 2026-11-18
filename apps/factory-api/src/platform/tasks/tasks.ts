@@ -12,6 +12,10 @@ import { events as taskEvents } from '@nexus/factory-domain/tasks/events'
 import { TASKS_MANAGE } from '@nexus/factory-domain/tasks/permissions'
 import {
   BULK_MAX,
+  // B-SA-071: one task on each of many records (POST /tasks/batch).
+  batchRecordProblems,
+  batchSkipWords,
+  type BatchSkip,
   checklistOf,
   checklistProgress,
   cleanText,
@@ -40,6 +44,9 @@ import { heldRoles } from '../auth/roles/access'
 import { followInCommand } from '../threads/followers'
 import { recordLabelOf } from '../threads/labels'
 import { mayOnThread, resolveRecord } from '../threads/records'
+// B-SA-071: "Each order's supervisor" — the production supervisor of a sales order or a work order (the one resolver), else the
+// record's customer's default.
+import { customerDefaultsOf, supervisorOf } from '../../modules/production/supervisor/resolver'
 
 /**
  * Tasks on any record (B-W2a-20; COL-037; design home.tasks "My tasks", shell.panels popup task-new and side panel
@@ -54,6 +61,8 @@ import { mayOnThread, resolveRecord } from '../threads/records'
  *   POST /tasks/:id/status       DONE (done), OPEN (reopen, Undo), CANCELLED
  *   POST /tasks/:id/snooze       off Today until a time (an OPEN task), or awake again (null)
  *   POST /tasks/bulk             Mark done · Reassign · Set due over many, in ONE command (all or none)
+ *   POST /tasks/batch            B-SA-071: one task on each of many records (1–100), one assignee or each record's supervisor, ONE
+ *                                command and one batch (the assignee's bell: one item); each record made or skipped with why
  *   GET  /tasks/assignees        who may be given a task on a record, or of their own (B-W2a-40)
  *
  * Who sees a task: whoever made it, its assignee, and (a task on a record) whoever may read the record's thread. Who
@@ -240,9 +249,12 @@ export async function getTask(caller: CommandCaller, id: string) {
 // ---- the list -------------------------------------------------------------------------------------------------------------
 
 export interface ListQuery {
-  readonly scope: 'MINE' | 'CREATED' | 'RECORD'
+  /** B-SA-072: + PARTY — the open tasks on one customer's records that the reader may read (the customer page's "Open tasks"). */
+  readonly scope: 'MINE' | 'CREATED' | 'RECORD' | 'PARTY'
   readonly recordType?: string | undefined
   readonly recordId?: string | undefined
+  /** B-SA-072: the customer of scope=PARTY. */
+  readonly partyId?: string | undefined
   readonly tile?: TaskTile | undefined
   readonly status?: TaskStatus | 'ALL' | undefined
   readonly q?: string | undefined
@@ -269,7 +281,18 @@ function afterCursor(cursor: string | undefined): readonly string[] | null {
   throw new ValidationError('The cursor is not one this list gave.', [{ path: 'querystring/cursor', message: 'Send back nextCursor as it came.' }])
 }
 
+// ── B-SA-072 ──
+/**
+ * The most tasks of one customer's records GET /tasks?scope=PARTY reads before it pages (Task.partyId has no index of its own: the
+ * schema wave allows none, R10; measured at the end check).
+ */
+export const PARTY_LIST_LIMIT = 200
+// ── end B-SA-072 ──
+
 /** GET /tasks: one page, ordered by due day (none last), then time and age; tiles over the whole scope. */
+// B-SA-072: scope=PARTY — the tasks on the customer's records, each only when the reader may read its record (never by being its
+// maker or assignee alone: a customer-limited person naming another customer gets nothing, the same answer as an unknown customer).
+
 export async function listTasks(caller: CommandCaller, query: ListQuery) {
   const context = officeOf(caller)
   const actor = actorOf(context)
@@ -283,6 +306,10 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
       const scope = await resolveRecord(client, query.recordType, query.recordId)
       if (!scope || !mayOnThread(actor, THREADS_READ, query.recordType, scope)) throw new NotFoundError('Record not found.')
       where = { recordType: query.recordType, recordId: query.recordId }
+    } else if (query.scope === 'PARTY') {
+      // B-SA-072
+      if (!query.partyId) throw new ValidationError('Name the customer.', [{ path: 'querystring/partyId', message: 'A customer list needs partyId.' }])
+      where = { partyId: query.partyId, recordType: { not: null }, recordId: { not: null } }
     } else {
       where = query.scope === 'MINE' ? { assigneeId: context.actorId } : { createdById: context.actorId }
     }
@@ -291,10 +318,10 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
       await client.task.findMany({
         where: { AND: [where, text ? { title: { contains: text, mode: 'insensitive' } } : {}] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: LIST_LIMIT,
+        take: query.scope === 'PARTY' ? PARTY_LIST_LIMIT : LIST_LIMIT, // B-SA-072
         select: TASK_COLUMNS,
       })
-    ).filter((row) => accessOf(actor, context.actorId, row).relation !== null)
+    ).filter((row) => (query.scope === 'PARTY' ? mayOnThread(actor, THREADS_READ, row.recordType, scopeOf(row)) /* B-SA-072 */ : accessOf(actor, context.actorId, row).relation !== null))
     const tileOfRow = (row: TaskRow) => tileOf({ status: row.status as TaskStatus, dueDate: dayOf(row.dueDate), closedAt: row.closedAt }, today, now)
     const tiles = TASK_TILES.map((tile) => ({ tile, count: rows.filter((row) => tileOfRow(row) === tile).length }))
     const status = query.status ?? (query.tile === 'DONE_7D' ? 'DONE' : 'OPEN')
@@ -309,7 +336,7 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
       today,
       tiles,
       total: shown.length,
-      complete: rows.length < LIST_LIMIT,
+      complete: rows.length < (query.scope === 'PARTY' ? PARTY_LIST_LIMIT : LIST_LIMIT), // B-SA-072
       items: page.map((row) => taskView(row, names, context, now)),
       nextCursor: fromCursor.length > query.limit ? cursorOf(page[page.length - 1]!) : null,
       live: { events: taskEvents.map((event) => event.type) },
@@ -353,7 +380,8 @@ function emitAbout(tools: Pick<CommandTools, 'emit'>, row: Pick<TaskRow, 'id' | 
   const where = { subject: row.id, companyId: row.companyId, siteId: row.siteId }
   return {
     created: (assigneeId: string | null) => tools.emit(eventFor(taskCreated, { ...where, payload: { ...about, assigneeId } })),
-    assigned: (assigneeId: string | null, assignedById: string | null) => tools.emit(eventFor(taskAssigned, { ...where, payload: { ...about, assigneeId, assignedById } })),
+    // B-SA-071: + the batch of one "Add task to N" (the assignee's bell folds it into one item).
+    assigned: (assigneeId: string | null, assignedById: string | null, batchId?: string) => tools.emit(eventFor(taskAssigned, { ...where, payload: { ...about, assigneeId, assignedById, ...(batchId ? { batchId } : {}) } })),
     completed: () => tools.emit(eventFor(taskCompleted, { ...where, payload: about })),
     changed: (status: TaskStatus, fields: string[]) => tools.emit(eventFor(taskChanged, { ...where, payload: { ...about, status, fields } })),
   }
@@ -399,44 +427,63 @@ export async function createTask(caller: CommandCaller, body: CreateBody, idempo
     // No assignee named: the task is its maker's own (My tasks); null: nobody's yet.
     const assigneeId = body.assigneeId === undefined ? context.actorId : body.assigneeId
     if (assigneeId !== null && !(await mayBeAssigned(tx, context.tenantId, assigneeId, scope, record !== null, now, record?.type))) throw new ValidationError(ASSIGNEE_REFUSED, [{ path: 'body/assigneeId', message: ASSIGNEE_REFUSED }])
-    const id = newId()
-    const checklist = nextChecklist([], body.checklist ?? [], { userId: context.actorId, now: toUtcIso(now), newId })
-    const row = await tx.task.create({
-      data: {
-        id,
-        companyId: scope.companyId ?? null,
-        siteId: scope.siteId ?? null,
-        partyId: scope.partyId ?? null,
-        title: cleanTitle(body.title),
-        description: body.description ? cleanText(body.description) || null : null,
-        recordType: record?.type ?? null,
-        recordId: record?.id ?? null,
-        recordLabel: label,
-        assigneeId,
-        assignedById: assigneeId ? context.actorId : null,
-        assignedAt: assigneeId ? now : null,
-        dueDate: body.dueDate ? dateOf(body.dueDate) : null,
-        dueTime: body.dueDate ? (body.dueTime ?? null) : null,
-        checklist: checklist as unknown as Prisma.InputJsonValue,
-        createdAt: now,
-        updatedAt: now,
-        createdById: context.actorId,
-        ...(body.messageId ? { messageId: body.messageId } : {}), // B-TH-050
-      },
-      select: TASK_COLUMNS,
-    })
-    tools.audit({ recordType: 'Task', recordId: id, companyId: row.companyId, siteId: row.siteId, after: { ...fieldsAudit(row), recordType: row.recordType, recordId: row.recordId, ...(row.messageId ? { messageId: row.messageId } : {}) } })
-    if (row.recordType && row.recordId) tools.audit({ action: 'tasks.create', recordType: row.recordType, recordId: row.recordId, companyId: row.companyId, siteId: row.siteId, after: { taskId: id, title: row.title } })
-    const emit = emitAbout(tools, row)
-    emit.created(assigneeId)
-    if (assigneeId) {
-      emit.assigned(assigneeId, context.actorId)
-      await assigneeFollows(tools, row, assigneeId, context.actorId)
-    }
+    const row = await insertTaskInCommand(tools, context, { ...body, record, scope, label, assigneeId }) // B-SA-071: the one write of a new task
     return { task: taskView(row, await namesOf(tx, [row]), context, now) }
   })
   return result
 }
+
+// ── B-SA-071: the write of a new task, checked before by its caller (POST /tasks, and each record of POST /tasks/batch) ──
+interface NewTask extends CreateBody {
+  readonly record: { readonly type: string; readonly id: string } | null
+  readonly scope: ScopedRecord
+  readonly label: string | null
+  readonly assigneeId: string | null
+  /** The batch of one "Add task to N" (its assignee events carry it). */
+  readonly batchId?: string | undefined
+}
+
+/** Writes a task the caller has checked (who reads and writes the record, who may be given it): its row, audit, events and follow. */
+async function insertTaskInCommand(tools: CommandTools, context: OfficeContext, task: NewTask): Promise<TaskRow> {
+  const { tx, now } = tools
+  const { record, scope, label, assigneeId } = task
+  const id = newId()
+  const checklist = nextChecklist([], task.checklist ?? [], { userId: context.actorId, now: toUtcIso(now), newId })
+  const row = await tx.task.create({
+    data: {
+      id,
+      companyId: scope.companyId ?? null,
+      siteId: scope.siteId ?? null,
+      partyId: scope.partyId ?? null,
+      title: cleanTitle(task.title),
+      description: task.description ? cleanText(task.description) || null : null,
+      recordType: record?.type ?? null,
+      recordId: record?.id ?? null,
+      recordLabel: label,
+      assigneeId,
+      assignedById: assigneeId ? context.actorId : null,
+      assignedAt: assigneeId ? now : null,
+      dueDate: task.dueDate ? dateOf(task.dueDate) : null,
+      dueTime: task.dueDate ? (task.dueTime ?? null) : null,
+      checklist: checklist as unknown as Prisma.InputJsonValue,
+      createdAt: now,
+      updatedAt: now,
+      createdById: context.actorId,
+      ...(task.messageId ? { messageId: task.messageId } : {}), // B-TH-050
+    },
+    select: TASK_COLUMNS,
+  })
+  tools.audit({ recordType: 'Task', recordId: id, companyId: row.companyId, siteId: row.siteId, after: { ...fieldsAudit(row), recordType: row.recordType, recordId: row.recordId, ...(row.messageId ? { messageId: row.messageId } : {}), ...(task.batchId ? { batchId: task.batchId } : {}) } })
+  if (row.recordType && row.recordId) tools.audit({ action: 'tasks.create', recordType: row.recordType, recordId: row.recordId, companyId: row.companyId, siteId: row.siteId, after: { taskId: id, title: row.title } })
+  const emit = emitAbout(tools, row)
+  emit.created(assigneeId)
+  if (assigneeId) {
+    emit.assigned(assigneeId, context.actorId, task.batchId)
+    await assigneeFollows(tools, row, assigneeId, context.actorId)
+  }
+  return row
+}
+// ── end B-SA-071 ──
 
 /** Inside a command: the task locked and read, visible and changeable by the person, at the version they read. */
 async function lockForChange(tools: CommandTools, context: OfficeContext, id: string, version: number): Promise<TaskRow> {
@@ -620,3 +667,86 @@ export async function bulkTasks(caller: CommandCaller, body: BulkBody, idempoten
   })
   return result
 }
+
+// ── B-SA-071 (sales page plan N5, pick P10; 11-customer-page §3.9 "Add task to N"): one task on each of many records, one batch ──
+export interface BatchBody {
+  readonly title: string
+  readonly records: readonly { readonly type: string; readonly id: string }[]
+  /** One person, or SUPERVISOR: each record's own production supervisor (a sales order's own, else its customer's default). */
+  readonly assignee: 'SUPERVISOR' | { readonly userId: string }
+  readonly description?: string | null | undefined
+  readonly dueDate?: BusinessDate | null | undefined
+  readonly dueTime?: string | null | undefined
+}
+
+/**
+ * Who "Each order's supervisor" is on a record: a sales order's or a work order's production supervisor (the one resolver: the
+ * order's own, else its customer's default; a work order's single order's, else the default), any other record's customer's default
+ * (null: none — the record is skipped with why).
+ */
+async function supervisorFor(tx: CommandTx, record: { readonly type: string; readonly id: string }, scope: ScopedRecord): Promise<string | null> {
+  if (record.type === 'SalesOrder' || record.type === 'WorkOrder') return (await supervisorOf(tx, record))?.userId ?? null
+  if (!scope.partyId) return null
+  return (await customerDefaultsOf(tx, [scope.partyId])).get(scope.partyId)?.supervisorId ?? null
+}
+
+/**
+ * POST /tasks/batch: one task on each record named (1–100, each once), ONE command and one `batchId` — the assignee's bell folds the
+ * batch into one item (task.assigned carries it). A record is made or skipped with why, never all-or-none: an unknown record or one
+ * the maker may not read (NOT_FOUND, the same words — nothing says it exists, so a person limited to some customers naming another's
+ * order learns nothing), one the maker may not write tasks on (MAY_NOT), one with no supervisor (NO_SUPERVISOR), one the assignee
+ * cannot open (CANNOT_OPEN: "{name} cannot open it" — the assignee must read each record). A skipped record the maker cannot read
+ * carries no label.
+ */
+export async function batchTasks(caller: CommandCaller, body: BatchBody, idempotencyKey?: string) {
+  const context = officeOf(caller)
+  const actor = actorOf(context)
+  const problems = [...taskFieldProblems(body, true), ...batchRecordProblems(body.records)]
+  if (problems.length > 0) throw new ValidationError('The tasks are not valid.', problems)
+  const { result } = await command(caller, { name: 'tasks.batch', idempotencyKey, input: body }, async (tools) => {
+    const { tx, now } = tools
+    const batchId = newId()
+    const made: TaskRow[] = []
+    const skipped: { record: { type: string; id: string }; label: string | null; code: BatchSkip; words: { it: string; en: string } }[] = []
+    const skip = (record: { type: string; id: string }, label: string | null, code: BatchSkip, name: string | null = null) => skipped.push({ record: { type: record.type, id: record.id }, label, code, words: batchSkipWords(code, name) })
+    const people = new Map<string, string>()
+    const nameOf = async (userId: string): Promise<string> => {
+      if (!people.has(userId)) people.set(userId, (await tx.user.findUnique({ where: { id: userId }, select: { displayName: true } }))?.displayName ?? '')
+      return people.get(userId)!
+    }
+    for (const record of body.records) {
+      const found = await resolveRecord(tx, record.type, record.id)
+      if (!found || !mayOnThread(actor, THREADS_READ, record.type, found)) {
+        skip(record, null, 'NOT_FOUND')
+        continue
+      }
+      const label = await recordLabelOf(tx, record.type, record.id)
+      if (label === null) {
+        skip(record, null, 'NOT_FOUND')
+        continue
+      }
+      if (!mayOnThread(actor, THREADS_POST, record.type, found) || !can(actor, TASKS_MANAGE, found)) {
+        skip(record, label, 'MAY_NOT')
+        continue
+      }
+      const assigneeId = body.assignee === 'SUPERVISOR' ? await supervisorFor(tx, record, found) : body.assignee.userId
+      if (assigneeId === null) {
+        skip(record, label, 'NO_SUPERVISOR')
+        continue
+      }
+      if (!(await mayBeAssigned(tx, context.tenantId, assigneeId, found, true, now, record.type))) {
+        skip(record, label, 'CANNOT_OPEN', await nameOf(assigneeId))
+        continue
+      }
+      made.push(await insertTaskInCommand(tools, context, { title: body.title, description: body.description, dueDate: body.dueDate, dueTime: body.dueTime, record, scope: found, label, assigneeId, batchId }))
+    }
+    const names = await namesOf(tx, made)
+    return {
+      batchId,
+      made: made.map((row) => ({ record: { type: row.recordType!, id: row.recordId! }, task: taskView(row, names, context, now) })),
+      skipped,
+    }
+  })
+  return result
+}
+// ── end B-SA-071 ──

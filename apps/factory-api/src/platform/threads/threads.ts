@@ -586,7 +586,26 @@ export interface MessageInput {
   readonly replyToMessageId?: string | null | undefined
   readonly correctsMessageId?: string | null | undefined
   // ---- end B-TH-049 / B-TH-050
+  // ---- B-SA-051 (Sales page plan R9 "ONE bell mechanism"): a CHANGE NOTE — a SYSTEM internal note about a change of a sales order,
+  // on the order's thread (the system line, B-SA-052) or on a work order's (its floor note, B-SA-053). It rides on
+  // thread.message_posted, and the followers' bell tells everyone on the order of it, ONE item per reader and change, never
+  // `causedById` (the office person whose command made the change; null: nobody of the office — the customer, the system).
+  // `orderId` is the order changed (on its own thread: that order); `stillToDo` the steps still to do after it, when counted.
+  readonly change?: { readonly causedById: string | null; readonly orderId: string; readonly stillToDo?: number }
+  // ---- end B-SA-051
 }
+
+// ---- B-SA-051: a change note is a SYSTEM internal note on a sales order's thread (of that order) or on a work order's thread.
+const CHANGE_NOTE_REFUSAL = "A change note is the system's internal note on its sales order's thread or on a work order's."
+function changeNoteProblem(thread: ThreadRow, input: MessageInput): boolean {
+  const change = input.change
+  if (!change) return false
+  if (input.author.kind !== 'SYSTEM' || input.direction !== 'INTERNAL_NOTE') return true
+  if (change.stillToDo !== undefined && (!Number.isInteger(change.stillToDo) || change.stillToDo < 0)) return true
+  if (thread.recordType === 'SalesOrder') return change.orderId !== thread.recordId
+  return thread.recordType !== 'WorkOrder'
+}
+// ---- end B-SA-051
 
 /**
  * Writes one message into a thread, in the command's transaction: the message (append-only), the thread's last
@@ -607,6 +626,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   // ---- B-TH-049: an amount only on an office note that stays in the office (the routes say it in words first).
   if (input.amount && (input.direction !== 'INTERNAL_NOTE' || forFloor)) throw new ApiError('internal_error', forFloor ? AMOUNT_WORDS.FLOOR.en : AMOUNT_WORDS.SHARED.en)
   // ---- end B-TH-049
+  if (changeNoteProblem(thread, input)) throw new ApiError('internal_error', CHANGE_NOTE_REFUSAL) // B-SA-051
   const id = newId()
   const at = input.at ?? tools.now
   const row = await tools.tx.message.create({
@@ -668,7 +688,9 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   const where = { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }
   // B-SA-002: the record's customer for the office's live wall (the thread's party, a work order's, hold's or NCR's wall party).
   const liveParty = livePartyOf(await wallScopeOf(tools.tx, thread))
-  tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience, partyId: liveParty } }))
+  // B-SA-051: a change note names who made the change (never told of it), the order changed and the steps still to do.
+  const change = input.change ? { causedById: input.change.causedById, orderId: input.change.orderId, ...(input.change.stillToDo !== undefined ? { stillToDo: input.change.stillToDo } : {}) } : {}
+  tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience, partyId: liveParty, ...change } }))
   // B-W2a-20 (COL-006, COL-011): each person the note mentions (not its author) gets a mention row with the note (where
   // was I mentioned), follows the record unless they have a follow row (muted stays muted), and is told (the event).
   const told = mentions.filter((userId) => userId !== input.author.id)

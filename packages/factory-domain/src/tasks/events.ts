@@ -33,7 +33,8 @@ export const events = [
     type: 'task.assigned',
     context: 'tasks',
     description: 'A task was given to a person (who should be told), or taken back.',
-    payload: z.strictObject({ ...about, assigneeId: z.uuid().nullable(), assignedById: z.uuid().nullable() }),
+    // B-SA-071: `batchId` — one "Add task to N" (POST /tasks/batch): the assignee's bell folds the batch into one item.
+    payload: z.strictObject({ ...about, assigneeId: z.uuid().nullable(), assignedById: z.uuid().nullable(), batchId: z.uuid().optional() }),
     live,
   }),
   defineEvent({

@@ -4,7 +4,8 @@ import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/per
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 import { PLANNING_PROMISE_VIEW } from '@nexus/factory-domain/planning/promise/permissions'
-import { effectiveHealth, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
+import { effectiveHealth, type BrandHealth, type HealthRaise } from '@nexus/factory-domain/production-brand/health'
+import { standingRaiseOf } from './production-columns' // B-SA-070
 import { nextStageOf, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
 import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgency'
 import { BLOCKER_OWNER, type Blocker, type BlockerKind, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
@@ -283,8 +284,7 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   const inWork = { bundles, pieces: inWorkPiecesOf({ started: Math.min(whole.ordered, started.reduce((sum, cell) => sum + cell.quantity, 0)), cut: whole.cut, sewn: whole.sewn, checked: whole.inspected, packed: whole.packed }) }
 
   // The keeper's health, raised to At risk by a person while the raise stands (its note and who raised it: office only).
-  const until = row?.healthSetUntil ? dayOf(row.healthSetUntil) : null
-  const raise: HealthRaise | null = row && row.healthSet !== null && row.healthReasonCode !== null && until !== null && today < until ? { reasonCode: row.healthReasonCode as HealthReasonCode, until } : null
+  const raise: HealthRaise | null = row ? standingRaiseOf(row, today) : null // B-SA-070: the one reading of a standing raise (./production-columns)
   const effective = row ? effectiveHealth(row.health as BrandHealth | null, raise) : null
   const raisedBy = row && notes && raise && row.healthSetById ? ((await peopleById(db, [row.healthSetById])).get(row.healthSetById) ?? null) : null
   const health =

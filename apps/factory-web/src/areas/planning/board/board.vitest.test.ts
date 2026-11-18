@@ -1,6 +1,11 @@
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+// F-SA-283: the picture part's route and the sources read as written.
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { PICTURE_ROUTES } from '../../../lib/record-picture/api'
 import { SCHEDULE_REASONS, SCHEDULE_STATUSES } from '@nexus/factory-domain/planning/schedule/backward'
 import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
 import { createApiClient, type ApiClient } from '../../../lib/api/client'
@@ -401,3 +406,36 @@ describe('F-PR-18 — the chip "Customer urgency: Urgent 2" and Customer urgency
   })
 })
 // ---- end F-PR-18
+
+// ── F-SA-283 (sales page plan N8, R9; review OW-4 "consistent across the whole factory"): the work order's style picture ──────────
+describe('F-SA-283 — the planning board: the work order’s style picture in the bar’s window (the one picture part)', () => {
+  it('the bar’s window draws the picture part at its board size beside the status; with no read, the neutral placeholder', () => {
+    const bar = designScreen.cases.find((item) => item.id === 'bar')!
+    for (const locale of LOCALES) {
+      const html = render(designScreen as unknown as DesignScreen<unknown>, bar.model, locale)
+      expect(html, locale).toContain('class="fw-pb-dialog-head"')
+      expect(html, locale).toContain('fw-rp fw-rp-board')
+      // The design index reads nothing: the placeholder in words (never "no right"), never a wait that does not end.
+      expect(html, locale).toContain(locale === 'en' ? `aria-label="${WO101!.number} has no picture yet"` : `aria-label="${WO101!.number} non ha ancora un&#x27;immagine"`)
+      expect(html, locale).not.toContain('Reading the picture of')
+    }
+  })
+
+  it('the page reads the walled work-order batch (B-SA-074) only for a reader of work orders; the bar’s window asks it by the work order', () => {
+    const page = readFileSync(new URL('./BoardPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("session.permissions.includes('workorders.view')")
+    expect(page).toContain('readsWorkOrders ? pictureReader(api) : null')
+    expect(page).toMatch(/readPictures, \/\/ F-SA-283/)
+    const dialogs = readFileSync(new URL('./view/BoardDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain('<RecordPicture source="workorder" recordId={dialog.workOrderId} number={number} size="board" read={actions?.readPictures} />')
+    expect(PICTURE_ROUTES.workorder).toEqual({ path: '/production/work-orders/pictures', key: 'workOrderIds' })
+  })
+
+  it('a shared floor or TV screen never draws a customer’s design: no floor file mounts the picture part', () => {
+    const floor = fileURLToPath(new URL('../../../floor', import.meta.url))
+    const files = readdirSync(floor, { recursive: true }).map(String).filter((name) => /\.tsx?$/.test(name))
+    expect(files.length).toBeGreaterThan(0)
+    for (const name of files) expect(readFileSync(join(floor, name), 'utf8'), name).not.toContain('record-picture')
+  })
+})
+// ── end F-SA-283

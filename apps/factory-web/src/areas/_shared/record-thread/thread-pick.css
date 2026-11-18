@@ -1,0 +1,16 @@
+/* F-SA-260: THE pick of a record's dock (ThreadPick.tsx) — the pick above the ONE thread the dock shows (RecordFrame docks the thread
+   itself), and its one "whose thread" line under it. Moved from the work order's dock (B-TH-265, production.css): the same look. */
+.fw-thread-pick {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-thread-pick-line {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}

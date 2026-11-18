@@ -62,6 +62,11 @@ import { MessageSquareLock } from 'lucide-react'
 import { NOTES_NS, openHeld } from '../../_shared/notes/model'
 import { NoteDialog } from '../../_shared/notes/view/NoteDialog'
 // ---- end F-PR-03
+// F-SA-283 (sales page plan N7, N8, R9; review OW-4): the ONE picture part — the 76 px column, the phone card's aside and the picture
+// large — of the work order's style (source 'workorder', the walled batch read B-SA-074). Office only: no floor or TV screen draws it.
+import type { ReactNode } from 'react'
+import { RECORD_PICTURE_NS, RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
+import { PictureViewer } from '../../../../lib/record-picture/view/PictureViewer'
 
 export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
 
@@ -86,7 +91,7 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  */
 export function WorkOrdersListView({ model, actions }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', /* F-PR-21 */ SUPERVISOR_NS, /* F-PR-22 */ NOTES_NS]}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', /* F-PR-21 */ SUPERVISOR_NS, /* F-PR-22 */ NOTES_NS, /* F-SA-283 */ RECORD_PICTURE_NS]}>
       <WorkOrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -157,9 +162,18 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   const noteWaitWords = noteWait ? tn(noteWait.key, noteWait.params) : null
   const rowNoteWait = openHeld(noteCan, 1)
   const rowNoteWaitWords = rowNoteWait ? tn(rowNoteWait.key, rowNoteWait.params) : null
+  // F-SA-283: the picture part's header word and the work order whose picture is open large.
+  const tp = useT(RECORD_PICTURE_NS)
+  const [viewer, setViewer] = useState<string | null>(null)
+  const viewerRow = viewer ? ((items ?? []).find((row) => row.id === viewer) ?? null) : null
+  const pictureOf = (row: WorkOrderRow, size: 'cell' | 'phone'): ReactNode => <RecordPicture source="workorder" recordId={row.id} number={row.number} size={size} read={latest.current.actions?.readPictures} onOpen={() => setViewer(row.id)} />
+  // The phone card (and the Cards mode): the number titles it, the picture is its aside; the rest as the table's columns.
+  const cardFields = useMemo(() => ({ number: { role: 'title' as const }, picture: { role: 'aside' as const, draw: (row: WorkOrderRow) => pictureOf(row, 'phone') } }), [])
 
   const columns = useMemo<ColDef<WorkOrderRow>[]>(() => {
     const href = (row: WorkOrderRow) => `${model.prefix}/production/work-orders/${row.id}`
+    // F-SA-283: the style's picture (one batch read per page of rows the grid draws, cached by file id).
+    const PictureCell = ({ data }: ICellRendererParams<WorkOrderRow>) => (data ? pictureOf(data, 'cell') : null)
     const NumberCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
       data ? (
         <span className="fw-pr-cell">
@@ -313,6 +327,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     // F-PR-03: Pieces, Readiness, Priority and Site under Columns ▾ (shown when a layout asks); the ids are the export's (B-PR-34).
     const later = (column: ColDef<WorkOrderRow>): ColDef<WorkOrderRow> => ({ ...column, hide: true, context: { ...((column.context as object | undefined) ?? {}), optIn: true } })
     return [
+      // F-SA-283: first, as on every list of the office (the Orders sheet's 76 px); no export column (the file writes the Style).
+      { colId: 'picture', headerName: tp('column'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell },
       { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 130, flex: 0.9, cellRenderer: NumberCell },
       { colId: 'customer', headerName: t('col.customer'), minWidth: 180, flex: 1.4, cellRenderer: CustomerCell },
       { colId: 'style', headerName: t('col.style'), field: 'styleCode', minWidth: 170, flex: 1.3, cellRenderer: StyleCell },
@@ -332,7 +348,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       later({ colId: 'customerUrgency', headerName: tw('urgency.column'), headerTooltip: tw('urgency.hint'), minWidth: 150, flex: 0.9, sortable: false, cellRenderer: UrgencyCell }),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, tw, ts, tsv, locale, model.prefix, model.can.orders, model.now, names, readiness, /* F-PR-22 */ tn, rowNoteWaitWords])
+  }, [t, tw, ts, tsv, locale, model.prefix, model.can.orders, model.now, names, readiness, /* F-PR-22 */ tn, rowNoteWaitWords, /* F-SA-283 */ tp])
 
   // B-W2b-13 — the W2b list frame: board by state, calendar by due date, cards, the due quick filter, inline and bulk edit.
   const final = (row: WorkOrderRow) => (row.status === 'CLOSED' || row.status === 'CANCELLED' ? t('w2b.heldFinal') : null)
@@ -609,6 +625,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             laneOf: (row) => row.status,
             // F-PR-03: each card names its customer by code (a board is read across the room), its health and who it waits on.
             card: (row) => ({
+              label: row.number, // F-SA-283: the picture column is first; the card is still named by its number
               title: `${row.styleCode} · ${row.styleName}`,
               fields: [
                 ...(row.customer ? [{ label: t('board.customer'), value: row.customer.code }] : row.mixedCustomers ? [{ label: t('board.customer'), value: t('customer.mixed') }] : []),
@@ -621,7 +638,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           },
           calendar: { dateOf: (row) => row.dueDate, label: t('w2b.dueDate'), field: 'due' },
         }}
-        cards={{ hrefOf: (row) => `${model.prefix}/production/work-orders/${row.id}` }}
+        cards={{ hrefOf: (row) => `${model.prefix}/production/work-orders/${row.id}`, fields: cardFields /* F-SA-283 */ }}
         edit={edit}
         quick={quick}
         groups={groups /* F-PR-03 */}
@@ -647,6 +664,10 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
       {/* F-PR-22 */}
       {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
+      {/* F-SA-283: the picture large — Open style, and the work order (the photo is never a dead end on a list). */}
+      {viewerRow && (
+        <PictureViewer source="workorder" recordId={viewerRow.id} number={viewerRow.number} read={actions?.readPictures} prefix={model.prefix} recordHref={`${model.prefix}/production/work-orders/${encodeURIComponent(viewerRow.id)}`} onClose={() => setViewer(null)} />
+      )}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
           <ul className="fw-pr-list">

@@ -123,7 +123,9 @@
     "holdNotLifted": "Non tolta su {orders}: apri l’ordine di lavoro per toglierla.",
     "holdNothing": "Di questa pausa non è più fermo niente.",
     "rushCleared": "Urgenza in reparto tolta su {orders}.",
-    "rushNotCleared": "Urgenza in reparto non tolta su {orders}: apri l’ordine di lavoro per toglierla."
+    "rushNotCleared": "Urgenza in reparto non tolta su {orders}: apri l’ordine di lavoro per toglierla.",
+    "changeApplied": "Applicata: {request}.",
+    "changeDeclined": "Lasciata così: {request}."
   },
   "table": {
     "waiting": "Richieste in attesa di me",
@@ -266,7 +268,8 @@
       "pickSome": "Prima spunta le richieste da approvare.",
       "oneKind": "Si approvano insieme solo richieste dello stesso tipo.",
       "reading": "Lettura della richiesta…",
-      "answerAlone": "A una richiesta del cliente si risponde nella sua finestra: aprila."
+      "answerAlone": "A una richiesta del cliente si risponde nella sua finestra: aprila.",
+      "changeAlone": "Una modifica dell'ordine di lavoro si decide nella sua finestra: aprila."
     }
   },
   "refusal": {

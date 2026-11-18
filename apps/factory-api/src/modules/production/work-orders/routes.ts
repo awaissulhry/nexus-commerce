@@ -21,6 +21,9 @@ import { productionCustomers, productionCustomersContract } from './customers'
 // B-SA-040: "Lower to the order".
 import { lowerContract } from './contract'
 import { lowerToOrder } from './lower'
+// B-SA-074: the small pictures of a page of work orders in one read (the one helper of the office's picture part).
+import { workOrderPicturesReadContract } from './contract'
+import { recordPictures } from '../../product/images/small-pictures'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -38,6 +41,9 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
 
   // B-W2a-46 (MES-004; design wo-grid "Readiness (W2a word)"): the plan's readiness word of the list's work orders.
   app.get('/production/work-orders/readiness', { schema: listReadinessContract }, async (request) => listReadiness(request, request.query))
+
+  // B-SA-074 (sales page plan N7, N8, R9): the small pictures of a page of work orders (an id the reader does not reach is left out).
+  app.post('/production/work-orders/pictures', { schema: workOrderPicturesReadContract }, async (request) => recordPictures(request, 'workorder', request.body.workOrderIds))
 
   app.get('/production/work-orders/:workOrderId', { schema: getContract }, async (request) => getWorkOrder(request, request.params.workOrderId))
 
