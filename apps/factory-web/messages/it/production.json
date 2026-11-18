@@ -992,7 +992,8 @@
         "HOLD": "Pausa",
         "RESUME": "Ripresa",
         "SPLIT_SHIPMENT": "Spedire ciò che è pronto",
-        "SAMPLE_ROUND": "Un altro giro di campioni"
+        "SAMPLE_ROUND": "Un altro giro di campioni",
+        "DESIGN": "Modifica del design"
       },
       "office": {
         "OPEN": "Tocca a noi",

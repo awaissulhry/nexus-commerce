@@ -64,6 +64,8 @@ export const ASK_OFFICE_KEYS = Object.freeze({
   CHANGE: 'notifications.production.customerAskedChange',
   SPLIT_SHIPMENT: 'notifications.production.customerAskedSplit',
   SAMPLE_ROUND: 'notifications.production.customerAskedSampleRound',
+  // B-SA-046
+  DESIGN: 'notifications.production.customerAskedDesign',
 } as const satisfies Readonly<Record<OrderRequestKind, MessageKey>>)
 export const ASK_CANCEL_LINES_KEY = 'notifications.production.customerAskedCancelLines' satisfies MessageKey
 

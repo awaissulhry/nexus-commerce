@@ -34,6 +34,7 @@ import { mayOnThread, resolveRecord, type RecordScope } from './records'
 import { mayShare, notShareableRefusal } from './records' // B-PR-08a
 import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
 import { livePartyOf } from './records' // B-SA-002
+import { threadPlaceOf } from './records' // B-SA-048
 // ---- B-TH-027 / B-TH-028: the reader's own read mark; the office's head (who answers, what waits).
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
@@ -404,6 +405,8 @@ export interface ThreadPage {
   readonly waitingMail?: WaitingMail | null
   // ---- B-TH-093: the office's only — marked done (null: open work).
   readonly done?: DoneView | null
+  // ---- B-SA-048: the record whose thread this is, when the one asked has none of its own (a change request: its order).
+  readonly place?: { readonly type: string; readonly id: string } | null
 }
 
 /** B-TH-079: a message as the page shows it, told erased (privacy) and, for the office, with an inbound mail's skipped files. */
@@ -416,6 +419,12 @@ const EMPTY: ThreadPage = Object.freeze({ thread: null, messages: [], nextCursor
 
 /** GET /threads/<type>/<id>: the thread and one page of its messages the caller may see, newest first. */
 export async function readThread(caller: CommandCaller, record: RecordRef, page: { readonly cursor?: string | undefined; readonly limit: number; /* B-TH-079 */ readonly audience?: FeedAudience | undefined }): Promise<ThreadPage> {
+  // ---- B-SA-048 (review F-6): a record whose conversation is another record's (a change request's: its order's) answers that
+  // thread, naming it as the place; the wall is the place's own (the same company and customer).
+  // A one-off link opens exactly its own record: it is never moved.
+  const place = caller.factoryContext?.audience === 'link' ? null : await caller.withClient((client) => threadPlaceOf(client, record))
+  if (place) return { ...(await readThread(caller, place, page)), place }
+  // ---- end B-SA-048
   const context = contextOf(caller)
   const actor = actorOf(context)
   const cursor = cursorOf(page.cursor)
@@ -814,6 +823,10 @@ export function floorPriceHeld(bodyText: string): DomainError | null {
 
 /** POST /threads/<type>/<id>/notes (threads.postNote): an internal note, the thread made with the first one. */
 export async function postNote(caller: CommandCaller, record: RecordRef, input: NoteInput, idempotencyKey?: string): Promise<{ thread: ThreadView; message: MessageView }> {
+  // ---- B-SA-048 (review F-6): a note on a change request goes into its order's conversation (one place to talk).
+  const place = await caller.withClient((client) => threadPlaceOf(client, record))
+  if (place) return postNote(caller, place, input, idempotencyKey)
+  // ---- end B-SA-048
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)

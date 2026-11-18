@@ -463,6 +463,23 @@ export function useThreadRecords(resolvers: Readonly<Record<string, RecordResolv
   extra = resolvers ?? {}
 }
 
+// ---- B-SA-048 (sales page plan P21; review F-6 "one place to talk"): a record whose conversation is ANOTHER record's thread. A
+// customer's change request has no conversation of its own any more: its ask is the customer's message in its order's thread, and
+// the office reads and writes there. Read as the caller (a record it cannot see keeps its own type: "none", as before).
+export const THREAD_PLACES: Readonly<Record<string, (client: FactoryClient | CommandTx, recordId: string) => Promise<{ readonly type: string; readonly id: string } | null>>> = Object.freeze({
+  OrderChangeRequest: async (client, id) => {
+    const request = isUuid(id) ? await client.orderChangeRequest.findUnique({ where: { id }, select: { orderId: true } }) : null
+    return request ? { type: 'SalesOrder', id: request.orderId } : null
+  },
+})
+
+/** Where a record's conversation is: its own thread, or the one THREAD_PLACES names (null: its own). */
+export async function threadPlaceOf(client: FactoryClient | CommandTx, record: { readonly type: string; readonly id: string }): Promise<{ readonly type: string; readonly id: string } | null> {
+  const place = Object.hasOwn(THREAD_PLACES, record.type) ? THREAD_PLACES[record.type] : undefined
+  return place ? place(client, record.id) : null
+}
+// ---- end B-SA-048
+
 /** The record's scope, or null when its type has no thread or the record does not exist (for this caller). */
 export async function resolveRecord(client: FactoryClient | CommandTx, recordType: string, recordId: string): Promise<RecordScope | null> {
   const resolver = Object.hasOwn(extra, recordType) ? extra[recordType] : Object.hasOwn(THREAD_RECORDS, recordType) ? THREAD_RECORDS[recordType] : undefined

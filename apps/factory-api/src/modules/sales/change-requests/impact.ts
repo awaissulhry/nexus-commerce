@@ -193,6 +193,8 @@ export function impactAskOf(kind: OrderRequestKind, cells: readonly AskedCell[],
     const asked = cells.filter((cell) => (cell.size !== null && cell.quantity !== cell.quantityBefore) || (cell.colourwayId ?? null) !== null)
     return { kind, cells: asked.map((cell) => ({ lineId: cell.orderLineId, size: cell.quantity !== cell.quantityBefore ? cell.size : null, ...((cell.colourwayId ?? null) !== null ? { colourway: true } : {}) })), requestedDate: header.requestedDate, shipTo: header.shipToAddressId !== null }
   }
+  // B-SA-046: a design change names lines (one row each): the impact says per line how far it is made.
+  if (kind === 'DESIGN') return { kind, cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: null })) }
   return { kind, requestedDate: kind === 'RUSH' || kind === 'SPLIT_SHIPMENT' ? header.requestedDate : null }
 }
 

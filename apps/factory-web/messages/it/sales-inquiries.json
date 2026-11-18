@@ -924,7 +924,8 @@
     "catalogue_other": "{lines} righe · il loro ordine {ref}",
     "change": {
       "CHANGE": "Modifica {order}",
-      "CANCEL": "Annulla {order}"
+      "CANCEL": "Annulla {order}",
+      "DESIGN": "Modifica del design di {order}"
     }
   },
   "replies": {

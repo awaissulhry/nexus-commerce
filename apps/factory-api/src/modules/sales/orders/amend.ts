@@ -27,7 +27,7 @@ import { previewFrozenProblems } from '../order-changes/freeze'
 // B-W2b-374 (XF3:02): a new line's options.
 import { entryOptionsAudit, planEntryOptions, writeEntryOptions, type EntryOptions } from './lines/options-entry'
 // B-SA-042 (P6', R1): an amendment under what work orders make proposes the gap to them in its command; extra pieces need an outcome.
-import { CHANGE_WORDS, chargeFeeOf, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces, type PricedSize } from '@nexus/factory-domain/order-apply/rules'
+import { CHANGE_WORDS, chargeFeeOf, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces, type PlannedChange, type PricedSize } from '@nexus/factory-domain/order-apply/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { gapOf, proposeGapsInCommand, raisesOf, workCellsOf, type GapLine } from '../../production/work-order-changes/propose'
 
@@ -90,9 +90,18 @@ const pricesOf = (after: OrderSnapshot): PricedSize[] => after.lines.flatMap((li
 
 /** The extra pieces an amendment's plan would leave (cut beyond the new figures), with the order's work orders as they are. */
 export async function plannedExtra(db: Reader, tenantId: string, plan: Pick<AmendmentPlan, 'before' | 'after'>, stored: readonly LineRecord[]): Promise<ExtraPieces[]> {
-  const lines = gapLinesAfter(plan.after, stored)
+  return extraOfPlanned(await plannedGap(db, tenantId, plan, stored))
+}
+
+/**
+ * B-SA-045: the work-order changes an amendment's plan would propose (the apply plan shows them before Accept), with the order's
+ * work orders as they are; `closing` replaces the plan's own line of the same id (a colourway change's old line, closed short after).
+ */
+export async function plannedGap(db: Reader, tenantId: string, plan: Pick<AmendmentPlan, 'before' | 'after'>, stored: readonly LineRecord[], closing: readonly GapLine[] = []): Promise<PlannedChange[]> {
+  const replaced = new Set(closing.map((line) => line.id))
+  const lines = [...gapLinesAfter(plan.after, stored).filter((line) => !replaced.has(line.id)), ...closing]
   const cells = await workCellsOf(db, tenantId, lines.map((line) => line.id))
-  return extraOfPlanned(gapOf(lines, cells, raisesOf(sizesOf(plan.before), lines, [])))
+  return gapOf(lines, cells, raisesOf(sizesOf(plan.before), lines, []))
 }
 
 /** A fee in major units plus another (either may be absent), 2 places. */

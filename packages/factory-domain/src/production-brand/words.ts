@@ -83,6 +83,10 @@ export const ASK_KIND_WORDS: Readonly<Record<ProductionRequestKind, Words>> = Ob
   SAMPLE_ROUND: { it: 'Chiedi un altro campione', en: 'Ask for another sample' },
 })
 
+// B-SA-046 (sales page plan P7, R3; review C-10): the design change, a Sales kind opened by the same ask-kinds switch.
+/** The design change in the customer's words (the portal's Ask dialog, the limits card's switch). */
+export const DESIGN_ASK_WORDS: Words = Object.freeze({ it: 'Modifica del design', en: 'Design change' })
+
 /** A closed ask refused to a customer: neutral, it never says why another customer may and it may not. */
 export const ASK_NOT_OPEN_WORDS: Words = Object.freeze({
   it: "Questa richiesta non è disponibile per i vostri ordini. Scriveteci nella conversazione dell'ordine.",

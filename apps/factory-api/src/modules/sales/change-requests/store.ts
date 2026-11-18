@@ -167,6 +167,10 @@ export const REQUEST_COLUMNS = {
   counterDate: true,
   counterFee: true,
   counterNote: true,
+  // B-SA-046: the files a design change sent (partner-readable: the customer's own).
+  fileIds: true,
+  // B-SA-048: the ask's own message in the order's conversation (partner-readable: their own message).
+  askMessageId: true,
 } as const satisfies Prisma.OrderChangeRequestSelect
 export type RequestRow = Prisma.OrderChangeRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 
@@ -340,6 +344,10 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
     // B-PR-26: the batch it was asked in (a bulk ask: one customer, one kind) and our counter-offer, where it stands.
     batchId: row.batchId,
     counter: counterView(row, facts),
+    // B-SA-046
+    fileIds: [...row.fileIds],
+    // B-SA-048
+    askMessageId: row.askMessageId,
     version: row.version,
   }
 }

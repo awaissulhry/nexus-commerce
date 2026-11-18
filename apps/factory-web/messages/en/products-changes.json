@@ -656,6 +656,7 @@
     "WORK_ORDER_NOT_OPEN": "That work order is not open: nothing of it is in progress.",
     "LINE_INVALID": "That change line is not complete.",
     "CANCEL_REASON": "Say why it is cancelled.",
+    "RELEASE_HOLDS": "Releasing it holds work orders: you need the right to hold work orders over each of them.",
     "EDIT_BLOCKED": "The style’s lifecycle state does not allow this change.",
     "NEEDS_NEW_REVISION": "Start a new revision to change it.",
     "NEEDS_CHANGE_ORDER": "This style changes only through a change order.",
