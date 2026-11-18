@@ -30,10 +30,11 @@ function approval(n: number, kind: WaitingApproval['kind'], words: { en: string;
   return { id: id(n), kind, words, question: 'Made-up: please look at it.', dueAt: '2026-11-21T16:00:00Z', status: 'OPEN', waitingFor: null, waitingForBuyer: false, ...over }
 }
 
-const FABRIC = approval(1, 'FABRIC', say(`Fabric · ${STYLE}`, `Tessuto · ${STYLE}`), { dueAt: '2026-11-18T15:00:00Z' })
-const SAMPLE = approval(2, 'SAMPLE', say(`PP sample · ${STYLE}`, `Campione PP · ${STYLE}`), { waitingFor: BRAND_BETA.portalPerson.name })
-const COUNTER = approval(3, 'COUNTER_OFFER', say('Our suggestion · Your order 3', 'La nostra proposta · Il vostro ordine 3'), { waitingForBuyer: true })
-const REPROMISE = approval(4, 'REPROMISE', say('New date · Your order 4', 'Nuova data · Il vostro ordine 4'), { dueAt: '2026-11-16T16:00:00Z' })
+// The record's label as the API sends it (a style its code and name; an order the customer's own number: F-PR-16).
+const FABRIC = approval(1, 'FABRIC', say(`${STYLE} Rider jacket`, `${STYLE} Rider jacket`), { dueAt: '2026-11-18T15:00:00Z' })
+const SAMPLE = approval(2, 'SAMPLE', say(`${STYLE} · round 2`, `${STYLE} · giro 2`), { waitingFor: BRAND_BETA.portalPerson.name })
+const COUNTER = approval(3, 'COUNTER_OFFER', say('#3 · counter-offer', '#3 · controproposta'), { waitingForBuyer: true })
+const REPROMISE = approval(4, 'REPROMISE', say('#4', '#4'), { dueAt: '2026-11-16T16:00:00Z' })
 
 // Who asked (the frame's task list): a person of the factory who wrote the request.
 const task = (approvalId: string, over: Partial<TaskLink> = {}): TaskLink => ({ href: `${PREFIX}/open/ApprovalRequest/${approvalId}`, askedBy: 'Marta Verdi', due: { at: '2026-11-18T15:00:00Z', state: 'soon' }, ...over })
