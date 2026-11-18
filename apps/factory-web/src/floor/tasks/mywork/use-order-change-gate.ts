@@ -82,11 +82,12 @@ export function useOrderChangeGate(input: { readonly api: ApiClient; readonly on
           continue
         }
         const answer = online ? await fetchWorkOrderNotes(api, workOrderId) : null
-        const kept = answer?.ok ? null : keptWorkOrderNotes(workOrderId)
-        const messages = answer?.ok ? answer.value.messages : (kept?.value.messages ?? null)
+        const fresh = answer !== null && answer.ok ? answer.value : null
+        const kept = fresh ? null : keptWorkOrderNotes(workOrderId)
+        const messages = fresh ? fresh.messages : (kept?.value.messages ?? null)
         if (messages === null) continue
         setNotes((current) => ({ ...current, [workOrderId]: orderChangeOf(messages, workOrderId) }))
-        setAsOf((current) => ({ ...current, [workOrderId]: answer?.ok ? null : (kept?.asOf ?? null) }))
+        setAsOf((current) => ({ ...current, [workOrderId]: fresh ? null : (kept?.asOf ?? null) }))
       }
     },
     [api, online],
