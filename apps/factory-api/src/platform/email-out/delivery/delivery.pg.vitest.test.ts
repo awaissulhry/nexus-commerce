@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant } from '@nexus/factory-domain/core/permissions'
+import { EVERY_PARTY_WORDS, type Grant } from '@nexus/factory-domain/core/permissions'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
@@ -53,6 +53,10 @@ const SESSIONS: Record<string, SessionContext> = {
   'admin-one': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['email.delivery.view', 'email.delivery.unblock', 'email.manage'], [companyOne])] },
   viewer: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['email.delivery.view'], [companyOne])] },
   nobody: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['audit.read'])] },
+  // fix-pr-7 (B-PR-10): every right over every company, limited to one customer; and every customer at company two only, one
+  // customer at company one.
+  limited: { audience: 'office', tenantId: tenantA, actorId: user, grants: [{ permissions: ['email.delivery.view', 'email.delivery.unblock', 'email.manage'], companies: 'all', sites: 'all', parties: [party] }] },
+  mixed: { audience: 'office', tenantId: tenantA, actorId: user, grants: [{ permissions: ['email.delivery.view', 'email.manage'], companies: [companyOne], sites: 'all', parties: [party] }, grant(['email.delivery.view'], [companyTwo])] },
 }
 
 const call = (session: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
@@ -231,4 +235,25 @@ describe('the blocked addresses', () => {
     expect(body.addresses.map((row) => row.address)).not.toContain('b@other.example')
     expect((await call('admin', 'POST', `/email/blocked/${blocked.other}/unblock`, { version: 1, reason: 'Not ours' })).statusCode).toBe(404)
   })
+
+  // ---- fix-pr-7 (B-PR-10: the brand wall; found by the B-PR-36 golden flow's sweep: a person limited to customer B read the
+  // sign-in and order mails of customer A's people, their records and addresses) ----
+  it('fix-pr-7: a person limited to some customers reads no mail, no blocked address and unblocks none (403 in words that name no customer); a company reached for every customer shows only its own mail', async () => {
+    for (const [method, url, payload] of [
+      ['GET', '/email/delivery', undefined],
+      ['GET', `/email/delivery?companyId=${companyOne}`, undefined],
+      ['GET', '/email/blocked', undefined],
+      ['POST', `/email/blocked/${blocked.spam}/unblock`, { version: 1, reason: 'Made-up: not ours to free' }],
+    ] as const) {
+      const refused = await call('limited', method, url, payload)
+      expect([refused.statusCode, (refused.json() as { error?: { message?: string } }).error?.message], `${method} ${url}`).toEqual([403, EVERY_PARTY_WORDS.en])
+      for (const word of ['Cliente Esempio', 'cliente.example', 'altro.example', party]) expect(refused.body, `${method} ${url}`).not.toContain(word)
+    }
+    expect((await db.admin.query(`SELECT "liftedAt" FROM "Suppression" WHERE id = $1`, [blocked.spam])).rows).toEqual([{ liftedAt: null }])
+    // Every customer at company two only: the log is company two's mail, never company one's (reached there for one customer).
+    const mixed = (await call('mixed', 'GET', '/email/delivery')).json() as { mails: Mail[] }
+    expect(mixed.mails.map((row) => row.id)).toEqual([mail.two])
+    expect(mixed.mails[0]!.fullAddresses).toBe(false)
+  })
+  // ---- end fix-pr-7
 })
