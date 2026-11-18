@@ -198,6 +198,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   with every production read: released / taken back per line and size, checks, final inspections (report PDF from
   `…/quality/report/:inspectionId` in the order's PDF viewer, saved under our own name), holds, shared photos (`GET /files/:id/preview`,
   one at a time in `QualityPhotoDialog`). Never the inspection's number, a work order or a person of ours.
+  F-PR-13: the order's Ask dialog (`orders/ask-model.ts` pure, `view/AskDialog.tsx`, `view/AskImpact.tsx`; band "Ask us…", `?ask=<KIND>`
+  opens it at a kind): change, cancel and the production asks the customer's limits open (B-PR-25 rules `asks`); a waiting one is
+  withdrawn there, a countered one answered in Waiting for you; step 3 = `POST …/change-requests/impact` (also in the change and
+  cancel pop-ups' review steps): frozen in the API's words, cost (an amount only with prices), earliest date, our notes.
+- F-PR-14 `src/portal/customer/waiting/` — Home › Waiting for you (`/p/<party>/waiting`, catalogue `portal-waiting`, nav page
+  `home.waiting` built): `api.ts` (GET /portal/approvals?state=OPEN with `waitingFor` / `waitingForBuyer`; the answer and the
+  payments re-exported from home/ and documents/), `model.ts` (pure: groups by kind, one verb per row, the 10 s Undo window),
+  `WaitingPage.tsx` (container: Home's ApproveDialog, an answer sent after `UNDO_MS`, sent at once when the page is left),
+  `view/WaitingView.tsx` (DS ActionList). F-PR-12a/b's "See what waits for you" leads here (`waitingHrefOf`).
 - F-PR-15 `src/portal/customer/home/` — Home's What waits for you shows the first five (`firstWaiting`) and "All N waiting" →
   `/waiting` (TasksView `more`) once Waiting for you is built and the person holds portal.approvals.view (else the whole list); the
   In production tile opens My production for portal.production.view (`tilesFor` + B-PR-20's `production.*` counts in its hint,
@@ -566,6 +575,23 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (band ⋯ and the supervisor fact's Ask) and Note to N (Work orders: row ⋯, "Note to N…" ≤ 100): the threads MentionInput (people read
   once per customer + company), `POST /production/notes/check` before Send (who cannot read, customers, the other-customer hold until
   the tick), ONE `POST /production/notes`, one result per record (the rest counted); the bell's batch row "mentioned you on N orders".
+- F-PR-04 `src/areas/production/overview/` (catalogue `production` `ovw.*`, CSS `fw-pov-`, SCR-069-overview) — Production › Overview,
+  the area's FIRST page (`/production/overview`; `/production` opens it as the first built row): GET /production/overview (B-PR-33) +
+  the open issues (GET /production/issues, B-PR-45). Six tiles, Exceptions by customer (+ the mixed row, the no-customer row, the Total =
+  the API's `overall`, never a sum made here), WIP by stage × customer, Most urgent "10 of N · Show all" (row ⋯ Ask the supervisor = THE
+  note dialog over that work order, read once), open issues. `?party=` (the one customer filter) and Only mine `?supervisor=me` are
+  carried to every door: `model.ts workOrdersDoor` = the Work orders list's own address (`list/model.ts listAddress`: + `?gate=true`,
+  `?mixed=true`, `?noCustomer=true`, each a chip there); Customer requests opens Home › Approvals `?kind=ORDER_CHANGE_REQUEST`.
+- F-PR-05b `src/areas/production/work-orders/record/customer/` (catalogue `production` `customerCard.*`, the level and section words
+  `portal-access`; CSS `fw-pcc-`) — the work order record's Customer card on Overview, one block per customer of the work order (PW-07):
+  its requests (`GET /production/brand-requests?orderId=`, Answer in Approvals = `/home/approvals?open=<id>`), what we asked it to
+  approve (`GET /approvals-out?recordType=SalesOrder`), Customer urgency (`GET /production/brands/:partyId/urgency`; Set to regular… /
+  Lock… / Unlock… = `POST /production/brand-orders/urgency/regular|unlock` behind the page's one step-up, no second person), the
+  supervisor fact, open problems (`GET /production/issues?partyId=`, the work order's and its orders' only; Open thread docks it), limits
+  and what it sees (`GET /partners/:id/production`) and Open as <customer>. `work-orders/daily/`: ONE "Put on hold" dialog for the record
+  and the list's Hold N — the picked reason's list decides a quality hold (`/quality/holds`) or a plain production hold (B-PR-21's
+  `/production/work-orders/…/holds`, workorders.hold, the customer's words); the holds card shows both kinds; Release the hold opens what
+  the work order is held under (`releaseTargetOf`).
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

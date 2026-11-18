@@ -608,10 +608,10 @@ describe('F-PR-15 — Home: the first five of What waits for you and "All N wait
       expect(html).not.toMatch(KEY)
       expect(html).not.toMatch(/\bwaiting\.all\b|tiles\.production/)
     }
-    // Waiting for you not built (today's nav): the list stays whole, no door to it.
+    // Four open requests (the buyer's case): the list stays whole, no "All N waiting" under it.
     const whole = designScreen.cases.find((item) => item.id === 'linked')!
     const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(designScreen.view, { model: whole.model })))
-    expect(html).not.toContain('/waiting"')
+    expect(html).not.toMatch(/>All \d+ waiting</)
   })
 
   it('PW-P07: customer B’s production tile is its own read only — it never moves with customer A’s production and names nothing of A', async () => {

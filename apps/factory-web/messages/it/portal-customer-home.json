@@ -295,7 +295,33 @@
     "nav": "{index} di {count} in attesa",
     "previous": "Approvazione in attesa precedente",
     "first": "È la prima approvazione in attesa.",
-    "last": "È l'ultima approvazione in attesa."
+    "last": "È l'ultima approvazione in attesa.",
+    "pending": {
+      "title": {
+        "APPROVED": "Approvato: {label}",
+        "APPROVED_WITH_CHANGES": "Approvato con modifiche: {label}",
+        "REFUSED": "Rifiutato: {label}"
+      },
+      "in": "Ci arriva tra {left}",
+      "now": "Invio in corso…",
+      "undo": "Annulla",
+      "going": "Invio in corso…",
+      "hint": "Fino ad allora non inviamo nulla: Annulla ritira la vostra risposta. Chiudendo questa finestra la risposta parte."
+    },
+    "optionFor": {
+      "REPROMISE": {
+        "APPROVED": "Accettate la nuova data",
+        "APPROVED_body": "La nuova data vi va bene.",
+        "REFUSED": "Rifiutate la nuova data",
+        "REFUSED_body": "Diteci perché: la data resta valida mentre la rivediamo."
+      },
+      "COUNTER_OFFER": {
+        "APPROVED": "Accettate la nostra proposta",
+        "APPROVED_body": "Poi eseguiamo la vostra richiesta come proposto.",
+        "REFUSED": "Rifiutate la nostra proposta",
+        "REFUSED_body": "La vostra richiesta viene ritirata: diteci perché."
+      }
+    }
   },
   "start": {
     "label": "Inizia",

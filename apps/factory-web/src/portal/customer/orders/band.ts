@@ -49,6 +49,11 @@ export interface OrderBandFacts {
   confirmation: boolean
   /** An open deposit may be paid here (null: no such deposit). */
   pay: { held: string | null } | null
+  /**
+   * F-PR-13: the Ask dialog ("Ask us…": change, cancel and the production asks the customer's limits open) and why it cannot open
+   * (words; null: it opens). Absent: the band's one action stays "Ask for a change".
+   */
+  ask?: { held: string | null } | null
   /** F-PR-24: "Report a problem" (the order in production, a person who writes to us): why it waits, or null; absent: not offered. */
   problem?: { held: string | null } | null
 }
@@ -65,6 +70,8 @@ export function orderBandOf(input: {
   onHistory?: () => void
   onConfirmation?: () => void
   onPay?: () => void
+  /** F-PR-13: opens the Ask dialog at its first step. */
+  onAsk?: () => void
   onProblem?: () => void // F-PR-24
 }): PortalBand {
   const { t, locale } = input.words
@@ -74,8 +81,12 @@ export function orderBandOf(input: {
   // One action: Ask for a change (design h). A revised version is re-confirmed from the "Please re-confirm" banner (its
   // opener in the design); the band names it in the ⋯ and on the Status tab.
   const change: PortalBandAction = { id: 'change', label: t('band.change'), variant: 'primary', heldReason: facts.changeHeld, onClick: () => input.onChange?.() }
-  const actions: PortalBandAction[] = order.status === 'CANCELLED' || order.status === 'DELIVERED' ? [] : [change]
+  // F-PR-13: with the Ask dialog, its "Ask us…" is the one action; "Ask for a change" stays one click away in the ⋯.
+  const ask: PortalBandAction | null = facts.ask ? { id: 'ask', label: t('band.ask'), variant: 'primary', heldReason: facts.ask.held, onClick: () => input.onAsk?.() } : null
+  const open = order.status !== 'CANCELLED' && order.status !== 'DELIVERED'
+  const actions: PortalBandAction[] = !open ? [] : ask ? [ask] : [change]
   const more: MenuItemDef[] = [
+    ...(open && ask ? [{ id: 'change', label: t('band.change'), disabled: facts.changeHeld !== null, description: facts.changeHeld ?? undefined, onSelect: () => input.onChange?.() }] : []),
     ...(facts.reconfirm ? [{ id: 'reconfirm', label: t('band.reconfirm', { version: facts.reconfirm.revision }), disabled: facts.reconfirm.held !== null, description: facts.reconfirm.held ?? undefined, onSelect: () => input.onReconfirm?.() }] : []),
     ...(order.status !== 'CANCELLED' && order.status !== 'DELIVERED'
       ? [{ id: 'cancel', label: t('band.cancel'), disabled: facts.cancelHeld !== null, description: facts.cancelHeld ?? undefined, onSelect: () => input.onCancel?.() }]

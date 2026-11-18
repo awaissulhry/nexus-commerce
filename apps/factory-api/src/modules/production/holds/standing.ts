@@ -1,4 +1,5 @@
 import type { StandingHold } from '@nexus/factory-domain/production/holds/rules'
+import { plainHoldWordsOf } from '@nexus/factory-domain/production-brand/accept' // B-PR-27a
 import { workOrderHoldReason } from '@nexus/factory-domain/quality/holds/rules'
 import type { CommandTx } from '../../../core/command'
 import { reasonWords } from '../../../platform/reasons/service'
@@ -19,14 +20,15 @@ export async function standingHoldsOf(tx: CommandTx, workOrderId: string): Promi
   })
   const plain = await tx.workOrderHold.findMany({
     where: { workOrderId, status: 'ACTIVE' },
-    select: { id: true, reasonCode: true, placedAt: true },
+    select: { id: true, kind: true /* B-PR-27a */, reasonCode: true, placedAt: true },
     orderBy: [{ placedAt: 'asc' }, { id: 'asc' }],
   })
   const qualityWords = quality.length > 0 ? await reasonWords(tx, 'HOLD') : new Map()
   const plainWords = plain.length > 0 ? await reasonWords(tx, 'PRODUCTION_HOLD') : new Map()
   return [
     ...quality.map((hold) => ({ recordType: 'QualityHold' as const, id: hold.id, reason: workOrderHoldReason(qualityWords.get(hold.reasonCode)?.labelEn ?? hold.reasonCode, hold.reasonNote), placedAt: hold.placedAt })),
-    ...plain.map((hold) => ({ recordType: 'WorkOrderHold' as const, id: hold.id, reason: plainHoldReason(plainWords.get(hold.reasonCode)?.labelEn ?? hold.reasonCode), placedAt: hold.placedAt })),
+    // B-PR-27a: a customer's pause in its own words (plainHoldWordsOf).
+    ...plain.map((hold) => ({ recordType: 'WorkOrderHold' as const, id: hold.id, reason: plainHoldReason(plainHoldWordsOf(hold, plainWords.get(hold.reasonCode)?.labelEn)), placedAt: hold.placedAt })),
   ]
 }
 

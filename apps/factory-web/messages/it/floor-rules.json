@@ -301,7 +301,8 @@
         "HELP_CALL": "Chiamate di aiuto",
         "ADJUSTMENT": "Rettifiche",
         "HOLD": "Blocchi",
-        "CANCEL": "Annullamenti"
+        "CANCEL": "Annullamenti",
+        "PRODUCTION_HOLD": "Blocchi di produzione"
       }
     },
     "refusal": {

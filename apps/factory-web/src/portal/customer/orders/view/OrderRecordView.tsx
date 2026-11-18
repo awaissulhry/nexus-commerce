@@ -10,6 +10,7 @@ import { useOrderWords } from '../words'
 import type { ProductionOrder } from '../../production/api' // F-PR-12a
 import type { ProductionQuality } from '../../production/api' // F-PR-12c
 import { QualityPhotoDialog, type QualityCardActions, type QualityPhotoModel } from './QualityCard' // F-PR-12c
+import { AskDialog, type AskDialogActions, type AskDialogModel } from './AskDialog' // F-PR-13
 // ---- F-PR-24: Report a problem (the dialog My production opens too) and the chip of the problems reported on the order
 import type { ProblemChip } from '../../production/problem/model'
 import { ReportProblemDialog, type ReportProblemActions, type ReportProblemModel } from '../../production/problem/view/ReportProblemDialog'
@@ -47,6 +48,8 @@ export type OrderDialog =
   | { kind: 'preview'; model: PreviewModel }
   // F-PR-12c: a photo the factory shared on the order, full size (Status & progress › Quality and photos).
   | { kind: 'photo'; model: QualityPhotoModel }
+  // F-PR-13: the Ask dialog (what, the details of a production ask, what it means before Send).
+  | { kind: 'ask'; model: AskDialogModel }
 
 export interface OrderRecordViewModel {
   /** B-W2b-374 (XF3:04): the lines' options and artwork (OrderPage mounts PortalLineOptions), drawn on the Lines tab. */
@@ -149,6 +152,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
     preview?: { onClose?: () => void; onDownload?: () => void; onRetry?: () => void }
     // F-PR-12c
     photo?: { onIndex?: (index: number) => void; onClose?: () => void; onRetry?: () => void }
+    // F-PR-13
+    ask?: AskDialogActions
   }
 }
 
@@ -205,6 +210,8 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
         {dialog?.kind === 'pay' ? <PayDialog model={dialog.model} actions={actions?.dialog?.pay} /> : null}
         {dialog?.kind === 'preview' ? <PreviewDialog model={dialog.model} onClose={actions?.dialog?.preview?.onClose} onDownload={actions?.dialog?.preview?.onDownload} onRetry={actions?.dialog?.preview?.onRetry} /> : null}
         {/* F-PR-12c */}
+        {/* F-PR-13 */}
+        {dialog?.kind === 'ask' ? <AskDialog model={dialog.model} actions={actions?.dialog?.ask} /> : null}
         {dialog?.kind === 'photo' ? <QualityPhotoDialog model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
         {/* F-PR-24 */}
         {model.report ? <ReportProblemDialog model={model.report} actions={actions?.report} /> : null}

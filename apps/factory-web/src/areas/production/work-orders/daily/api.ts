@@ -3,6 +3,8 @@ import type { ApiClient } from '../../../../lib/api/client'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
 import { READINESS_WORDS, WORK_ORDER_STATUSES } from '../../_shared/api'
+// F-PR-05b: the plain production hold beside the quality hold (B-PR-21), one "Put on hold" dialog.
+import { PRODUCTION_HOLD_LIST, WORK_ORDER_HOLD_KINDS, WORK_ORDER_HOLD_STATUSES } from '@nexus/factory-domain/production/holds/kinds'
 
 /**
  * The work order every day (B-W2a-46): every call of the W2a parts of the work order screens, each answer checked by its
@@ -84,9 +86,97 @@ export function releaseHold(api: ApiClient, holdId: string, body: { version: num
   })
 }
 
+/**
+ * The reasons of the ONE "Put on hold" dialog (F-PR-05b): the HOLD list's (a quality hold) and the PRODUCTION_HOLD list's (a plain
+ * production hold, B-PR-21); the list of the picked reason decides the kind (factory-domain production/holds/rules holdKindOfList).
+ */
 export function holdReasons(api: ApiClient, signal?: AbortSignal): Promise<PickerReason[]> {
-  return pickerReasons(api, ['HOLD'], signal)
+  return pickerReasons(api, ['HOLD', PRODUCTION_HOLD_LIST], signal)
 }
+
+// ---- F-PR-05b: the plain production hold (B-PR-21, apps/factory-api modules/production/holds) ------------------------------------
+
+const holdPerson = z.object({ id: z.string(), name: z.string() })
+
+/** A plain hold of the work order (PRODUCTION: ours; BRAND: the customer's accepted pause), as the office reads it. */
+export const workOrderHoldSchema = z.object({
+  id: z.string(),
+  workOrderId: z.string(),
+  kind: z.enum(WORK_ORDER_HOLD_KINDS),
+  status: z.enum(WORK_ORDER_HOLD_STATUSES),
+  reasonCode: z.string(),
+  /** The reason in words (the API's: the PRODUCTION_HOLD list's label, else its code). */
+  reason: z.string(),
+  /** The office's own note: never the floor's or the customer's to read. */
+  note: z.string().nullable(),
+  brandWords: z.string().nullable(),
+  /** What the customer reads beside "On hold". */
+  customerReads: z.string(),
+  requestId: z.string().nullable(),
+  placedAt: z.string(),
+  placedBy: holdPerson.nullable(),
+  liftedAt: z.string().nullable(),
+  liftedBy: holdPerson.nullable(),
+  liftReason: z.string().nullable(),
+  version: z.number(),
+})
+export type WorkOrderHold = z.infer<typeof workOrderHoldSchema>
+
+const heldWorkOrderSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  status: woStatus,
+  version: z.number(),
+  hold: z.object({ reason: z.string().nullable(), at: z.string().nullable(), fromStatus: woStatus.nullable(), recordType: z.string().nullable(), recordId: z.string().nullable() }).nullable(),
+})
+
+export const productionHoldsSchema = z.object({ workOrder: heldWorkOrderSchema, holds: z.array(workOrderHoldSchema), qualityHoldsActive: z.number() })
+export type ProductionHolds = z.infer<typeof productionHoldsSchema>
+
+const holdsPath = (workOrderId: string) => `/production/work-orders/${encodeURIComponent(workOrderId)}/holds`
+
+/** workorders.view: the work order's plain holds (standing first, then the lifted ones, newest first). */
+export function listProductionHolds(api: ApiClient, workOrderId: string, signal?: AbortSignal): Promise<ProductionHolds> {
+  return api.get(holdsPath(workOrderId), { schema: productionHoldsSchema, signal })
+}
+
+export interface ProductionHoldBody {
+  readonly reasonCode: string
+  /** The office's note (never the floor's or the customer's). */
+  readonly note: string | null
+  /** The words the customer reads (null: the reason's words). */
+  readonly brandWords: string | null
+}
+
+const placeBody = (body: ProductionHoldBody) => ({ reasonCode: body.reasonCode, ...(body.note ? { note: body.note } : {}), ...(body.brandWords ? { brandWords: body.brandWords } : {}) })
+
+/** workorders.hold: a plain production hold on one work order (it goes ON_HOLD; one ON_HOLD already stays held under its record). */
+export function placeProductionHold(api: ApiClient, workOrderId: string, body: ProductionHoldBody & { readonly version?: number }, idempotencyKey = newIdempotencyKey()) {
+  return api.post(holdsPath(workOrderId), {
+    body: { ...placeBody(body), ...(body.version ? { version: body.version } : {}) },
+    schema: z.object({ hold: workOrderHoldSchema, workOrder: heldWorkOrderSchema, held: z.boolean() }),
+    idempotencyKey,
+  })
+}
+
+/** workorders.hold: the list's Hold N with a production reason — one hold per work order, all or none, in one command. */
+export function placeProductionHolds(api: ApiClient, body: ProductionHoldBody & { readonly workOrderIds: readonly string[] }, idempotencyKey = newIdempotencyKey()) {
+  return api.post('/production/work-orders/holds', {
+    body: { ...placeBody(body), workOrderIds: [...body.workOrderIds] },
+    schema: z.object({ holds: z.array(workOrderHoldSchema), workOrders: z.array(z.object({ id: z.string(), number: z.string(), status: woStatus, held: z.boolean() })) }),
+    idempotencyKey,
+  })
+}
+
+/** workorders.hold: lift a plain hold (ours or the customer's pause) with why; the work order leaves ON_HOLD only when no hold names it. */
+export function liftProductionHold(api: ApiClient, workOrderId: string, holdId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey = newIdempotencyKey()) {
+  return api.post(`${holdsPath(workOrderId)}/${encodeURIComponent(holdId)}/lift`, {
+    body: { version: body.version, reason: body.reason },
+    schema: z.object({ hold: workOrderHoldSchema, workOrder: heldWorkOrderSchema, lifted: z.boolean(), stillHeldBy: z.object({ quality: z.number(), production: z.number() }) }),
+    idempotencyKey,
+  })
+}
+// ---- end F-PR-05b
 
 // ---- report finished to stock ----------------------------------------------------------------------------------------------------
 

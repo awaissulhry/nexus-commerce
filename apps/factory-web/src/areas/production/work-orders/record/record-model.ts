@@ -25,6 +25,8 @@ import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_s
 import type { NoteDialogActions, NoteDialogModel } from '../../_shared/notes/model'
 // F-PR-06: Cutting & bundles — the Cut record merged in (its recuts with Mark cut, the cut orders of this work order).
 import type { CutPartsActions, CutPartsModel } from '../cutting/use-cut-parts'
+// F-PR-05b: the Customer card on Overview (its requests, approvals, urgency with Set to regular / Lock / Unlock, problems, limits).
+import type { CustomerCardActions, CustomerCardModel } from './customer/model'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -131,6 +133,8 @@ export interface WorkOrderRecordModel {
   /** quality.documents.share: a final inspection's report may be shared with the work order's one customer (in its window). */
   shareReports?: boolean
   // ---- end F-PR-06
+  /** F-PR-05b: the Customer card on Overview (absent or null: not drawn — a work order of no customer order). */
+  customerCard?: CustomerCardModel | null
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
   draft?: { reason?: string; override?: boolean; dueDate?: string; priority?: string; editing?: boolean; grid?: Record<string, Record<string, number>> }
 }
@@ -185,4 +189,6 @@ export interface WorkOrderRecordActions {
   // ---- F-PR-06 ----
   cut?: CutPartsActions
   // ---- end F-PR-06
+  /** F-PR-05b: the Customer card (Set to regular / Lock / Unlock, Try again). */
+  customerCard?: CustomerCardActions
 }

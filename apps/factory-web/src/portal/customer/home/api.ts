@@ -150,7 +150,8 @@ export const approvalSchema = z.object({
   }),
   content: z.object({ facts: z.array(z.object({ label: z.string(), value: z.string() })), revisedOrder: revisedOrderSchema.nullable() }),
   files: z.array(fileSchema),
-  may: z.object({ answer: z.boolean(), withChanges: z.boolean() }),
+  // F-PR-14: why the reader may not answer it, in the API's words ("Waiting for Anna: …", "A price may apply: your buyer answers …").
+  may: z.object({ answer: z.boolean(), withChanges: z.boolean(), held: z.string().nullable().optional() }),
   locale: z.enum(['it', 'en']),
   receipt: z.enum(['SENT', 'FAILED', 'QUEUED']).nullable().optional(),
 })

@@ -88,6 +88,10 @@ import { orderNameOf } from './model'
 import { fetchProductionQuality, fetchQualityReport, qualityPhotoBytes, type QualityPhoto } from '../production/api'
 import { qualityShared } from '../production/model'
 // ---- end F-PR-12c
+// ---- F-PR-13: the Ask dialog (B-PR-25: the production asks the customer's limits open, the impact before Send)
+import { fetchImpact, type AskBody, type ImpactRead } from './api'
+import { askBodyOf, askChoicesOf, askHeld, askProblem, EMPTY_ASK, impactHeld, impactViewOf, isAskKind, isProductionKind, productionAskRefusal, type AskDraft, type AskKind, type ImpactView } from './ask-model'
+// ---- end F-PR-13
 import { useOrderWords } from './words'
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
@@ -124,15 +128,18 @@ function OrderRoute({ id }: { id: string }) {
   return allowed ? <OrderContainer id={id} /> : <Closed title={t('list.title')} />
 }
 
-type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean }
-type CancelState = { kind: 'cancel'; draft: CancelDraft; busy: boolean; problem: string | null }
+// F-PR-13: the impact read before Send (change, cancel and the production asks), and the Ask dialog's own state.
+type ImpactPart = { state: 'loading' | 'error' | 'ready'; view: ImpactView | null }
+type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean; impact?: ImpactPart | null }
+type CancelState = { kind: 'cancel'; draft: CancelDraft; busy: boolean; problem: string | null; impact?: ImpactPart | null }
+type AskState = { kind: 'ask'; step: 'what' | 'details' | 'impact'; ask: AskKind | null; draft: AskDraft; impact: ImpactPart | null; busy: boolean; problem: string | null; withdrawing: string | null }
 type ReconfirmState = { kind: 'reconfirm'; state: 'loading' | 'error' | 'ready'; page: ApprovalPage | null; decision: ReconfirmDecision | null; comment: string; busy: boolean; problem: string | null; done: { decision: ReconfirmDecision; name: string; at: string } | null }
 type PayState = { kind: 'pay'; depositId: string; method: 'CARD' | 'SEPA_DEBIT' | null; phase: 'idle' | 'starting' | 'ready' | 'paying'; secret: string | null; intent: PaymentIntent | null; problem: string | null }
 type PreviewState = { kind: 'preview'; fileId: string; title: string; state: 'loading' | 'error' | 'ready'; bytes: Uint8Array | null }
 // F-PR-12c: a final inspection's report PDF (read once for the viewer) and a shared photo full size (an object URL of its bytes).
 type ReportState = { kind: 'report'; inspectionId: string; title: string; fileName: string; state: 'loading' | 'error' | 'ready'; bytes: Uint8Array | null; problem: string | null }
 type PhotoState = { kind: 'photo'; photos: readonly QualityPhoto[]; index: number; state: 'loading' | 'error' | 'ready'; src: string | null; problem: string | null }
-type DialogState = ChangeState | CancelState | ReconfirmState | PayState | PreviewState | ReportState | PhotoState | null
+type DialogState = ChangeState | CancelState | ReconfirmState | PayState | PreviewState | ReportState | PhotoState | AskState /* F-PR-13 */ | null
 
 type Part<T> = { state: 'loading' | 'error' | 'ready'; read: T | null }
 const loading = <T,>(): Part<T> => ({ state: 'loading', read: null })
@@ -156,6 +163,7 @@ function OrderContainer({ id }: { id: string }) {
   const readsPayments = can('portal.payments.view')
   const paysHere = can('portal.payments.pay')
   const seesProduction = can('portal.production.view') // F-PR-12a
+  const seesPrices = frame.access?.role?.seesPrices ?? false // F-PR-13: a cancel's fee in the impact, only with prices
 
   const [record, setRecord] = useState<OrderRecord | null>(null)
   const [state, setState] = useState<OrderRecordViewModel['state'] | 'forbidden'>('loading')
@@ -470,6 +478,110 @@ function OrderContainer({ id }: { id: string }) {
     setDialog({ kind: 'cancel', draft: { ...EMPTY_CANCEL, scope: rules.read && !rules.read.cancel.possible && cancellableLines(rules.read).length > 0 ? 'LINES' : 'ORDER' }, busy: false, problem: null })
     void loadRules()
   }
+
+  // ---- F-PR-13: the Ask dialog — what, the details of a production ask, what it means before Send ----
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const choices = useMemo(() => (rules.read ? askChoicesOf(rules.read, requests.items) : []), [rules.read, requests.items])
+  /** Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. */
+  const openAsk = (kind: AskKind | null = null) => {
+    if (kind === 'CHANGE') return openChange()
+    if (kind === 'CANCEL') return openCancel()
+    writeKey.current = null
+    setDialog({ kind: 'ask', step: kind ? 'details' : 'what', ask: kind, draft: EMPTY_ASK, impact: null, busy: false, problem: null, withdrawing: null })
+    void loadRules()
+    void loadRequests()
+  }
+  // `?ask=<KIND>` opens the dialog once at that kind (My production's "Ask us" on a row, a notice's link).
+  const askParam = search?.get('ask') ?? null
+  const askOpened = useRef(false)
+  useEffect(() => {
+    if (askOpened.current || !askParam || !isAskKind(askParam) || !mayAsk || preview) return
+    askOpened.current = true
+    // openAsk reads the rules and the requests itself; it is asked once per visit.
+    openAsk(askParam)
+  }, [askParam, mayAsk, preview])
+
+  /** The impact of what is asked, read again for every body (the newest answer wins); a failure says so with Try again. */
+  const impactSeq = useRef(0)
+  const readImpact = (kind: AskKind, body: AskBody, sizesAsked: boolean) => {
+    const seq = ++impactSeq.current
+    const put = (part: ImpactPart) => setDialog((current) => (seq !== impactSeq.current || !current || (current.kind !== 'ask' && current.kind !== 'change' && current.kind !== 'cancel') ? current : { ...current, impact: part }))
+    put({ state: 'loading', view: null })
+    fetchImpact(api, id, body)
+      .then((read: ImpactRead) => {
+        const fee = read.cancelFee?.totalFee ?? null
+        put({ state: 'ready', view: impactViewOf(kind, read.impact, { seesPrices, fee, money: (minor) => words.money(minor, read.cancelFee?.currency ?? record?.order.currency ?? null), sizesAsked }) })
+      })
+      .catch((error: unknown) => {
+        // A refusal of the ask itself (closed, held): said in the dialog, the rules read again; anything else: the impact failed.
+        const refusal = productionAskRefusal(error)
+        if (isApiError(error) && (error.kind === 'conflict' || error.kind === 'invalid')) setDialog((current) => (seq === impactSeq.current && current && (current.kind === 'ask' || current.kind === 'change' || current.kind === 'cancel') ? { ...current, problem: refusal.key } : current))
+        put({ state: 'error', view: null })
+        if (refusal.reread) void loadRules()
+      })
+  }
+  const askFacts = (busy: boolean) => ({ ...facts, busy })
+  /** The cancel's own hold, then — on its review step — what it means (read, nothing blocked). */
+  const cancelHeldWithImpact = (state: CancelState): { key: string; field: 'scope' | 'reason' | 'note' | null } | null => {
+    const own = cancelHeld(rules.read, state.draft, { ...facts, busy: state.busy })
+    if (own || state.draft.step !== 'review') return own
+    const impact = impactHeld(state.impact ?? null)
+    return impact ? { key: impact, field: null } : null
+  }
+  const askNextHeld = (state: AskState): string | null => {
+    const held = askHeld(state.ask, rules.read, choices, askFacts(state.busy))
+    if (held || !rules.read || !state.ask || !isProductionKind(state.ask) || state.step === 'what') return held
+    return askProblem(state.ask, rules.read, state.draft, today) ?? (state.step === 'impact' ? impactHeld(state.impact) : null)
+  }
+  const askNext = () => {
+    if (dialog?.kind !== 'ask' || askHeld(dialog.ask, rules.read, choices, askFacts(dialog.busy))) return
+    // Change and cancel go on in their own pop-ups (the size grid; the lines and the reasons), each with the same step 3.
+    if (dialog.ask === 'CHANGE') return openChange()
+    if (dialog.ask === 'CANCEL') return openCancel()
+    setDialog({ ...dialog, step: 'details', problem: null })
+  }
+  const askReview = () => {
+    if (dialog?.kind !== 'ask' || !rules.read || !dialog.ask || !isProductionKind(dialog.ask) || askNextHeld(dialog)) return
+    const body = askBodyOf(dialog.ask, rules.read, dialog.draft)
+    setDialog({ ...dialog, step: 'impact', problem: null })
+    readImpact(dialog.ask, body, false)
+  }
+  const sendAsk = () => {
+    if (dialog?.kind !== 'ask' || !rules.read || !dialog.ask || !isProductionKind(dialog.ask) || dialog.step !== 'impact' || askNextHeld(dialog)) return
+    const body = askBodyOf(dialog.ask, rules.read, dialog.draft)
+    setDialog({ ...dialog, busy: true, problem: null })
+    askRequest(api, id, body, keyFor(body))
+      .then(() => sent('ask.sent'))
+      .catch((error: unknown) => {
+        const refusal = productionAskRefusal(error)
+        setDialog((current) => (current?.kind === 'ask' ? { ...current, busy: false, problem: refusal.key, step: refusal.reread ? 'what' : current.step } : current))
+        if (refusal.reread) {
+          void loadRules()
+          void loadRequests()
+        }
+      })
+  }
+  /** Withdraw a request that waits (from step 1): its version from the requests read. */
+  const withdrawAsk = (requestId: string) => {
+    const request = requests.items.find((item) => item.id === requestId)
+    if (dialog?.kind !== 'ask' || dialog.withdrawing) return
+    if (!request) {
+      // The requests were not read (or changed since): read them again, and say so.
+      setDialog({ ...dialog, problem: 'problem.changed' })
+      void loadRequests()
+      return
+    }
+    setDialog({ ...dialog, withdrawing: requestId, problem: null })
+    withdrawRequest(api, id, request.id, request.version)
+      .then(() => {
+        setDialog((current) => (current?.kind === 'ask' ? { ...current, withdrawing: null } : current))
+        setNotice({ tone: 'info', key: 'notice.withdrawn' })
+        void loadRequests()
+        void loadRules()
+      })
+      .catch((error: unknown) => setDialog((current) => (current?.kind === 'ask' ? { ...current, withdrawing: null, problem: askRefusal(error).key } : current)))
+  }
+  // ---- end F-PR-13
   const openReconfirm = async () => {
     const requestId = revision.page?.request.id
     if (!requestId) return
@@ -503,13 +615,13 @@ function OrderContainer({ id }: { id: string }) {
 
   const sendChange = () => {
     if (dialog?.kind !== 'change' || !rules.read || dialog.busy) return
-    if (changeHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy })) return
+    if (changeHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }) || impactHeld(dialog.impact ?? null)) return // F-PR-13
     const body = changeBodyOf(rules.read, dialog.draft)
     setDialog({ ...dialog, busy: true, problem: null })
     askRequest(api, id, body, keyFor(body))
       .then(() => sent('notice.changeSent'))
       .catch((error: unknown) => {
-        const refusal = askRefusal(error)
+        const refusal = productionAskRefusal(error) // F-PR-13: a part frozen since is said too
         setDialog((current) => (current?.kind === 'change' ? { ...current, busy: false, problem: refusal.key, draft: refusal.reread ? { ...current.draft, step: 'edit' } : current.draft } : current))
         if (refusal.reread) void loadRules()
       })
@@ -519,9 +631,10 @@ function OrderContainer({ id }: { id: string }) {
     if (dialog?.kind !== 'cancel' || !rules.read || dialog.busy) return
     const held = cancelHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy })
     if (held) {
-      setDialog({ ...dialog, draft: { ...dialog.draft, tried: true } })
+      setDialog({ ...dialog, draft: { ...dialog.draft, tried: true, step: 'edit' } })
       return
     }
+    if (dialog.draft.step !== 'review' || impactHeld(dialog.impact ?? null)) return // F-PR-13: Send after what it means
     const body = cancelBodyOf(rules.read, dialog.draft)
     setDialog({ ...dialog, busy: true, problem: null })
     askRequest(api, id, body, keyFor(body))
@@ -742,6 +855,8 @@ function OrderContainer({ id }: { id: string }) {
             moves: movesOf(record.promiseHistory),
             confirmation: readsDocuments,
             pay: firstPay ? { held: firstPay[1].held } : null,
+            // F-PR-13: "Ask us…" opens the Ask dialog (held like a change: a preview, no right to ask, offline).
+            ask: { held: askHeldWords(null) },
             problem: reportFacts, // F-PR-24
           },
           onChange: () => openChange(),
@@ -753,6 +868,7 @@ function OrderContainer({ id }: { id: string }) {
           },
           onConfirmation: () => void openConfirmation(),
           onPay: () => (firstPay ? openPay(firstPay[0]) : undefined),
+          onAsk: () => openAsk(), // F-PR-13
           onProblem: openProblem, // F-PR-24
         })
       : { title: state === 'missing' ? t('record.missing') : t('list.title'), back: { href: `${frame.prefix}/orders`, label: t('list.title') } },
@@ -760,7 +876,6 @@ function OrderContainer({ id }: { id: string }) {
 
   if (state === 'forbidden') return <Closed title={t('list.title')} />
 
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const dialogModel: OrderDialog | null = !record || !dialog
     ? null
     : dialog.kind === 'change'
@@ -772,16 +887,43 @@ function OrderContainer({ id }: { id: string }) {
             number: orderRefOf(record.order, t),
             rules: rules.read,
             draft: dialog.draft,
-            held: changeHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }),
+            // F-PR-13: Send waits for what it means (read, nothing blocked).
+            held: changeHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }) ?? (dialog.draft.step === 'review' ? impactHeld(dialog.impact ?? null) : null),
             busy: dialog.busy,
             problem: dialog.problem,
             discard: dialog.discard,
             shipTo: shipToLines(record.order.shipTo),
             today,
+            impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null,
           },
         }
       : dialog.kind === 'cancel'
-        ? { kind: 'cancel', model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: cancelHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy }), busy: dialog.busy, problem: dialog.problem } }
+        ? {
+            kind: 'cancel',
+            // F-PR-13: Send waits for what it means (read, nothing blocked).
+            model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: cancelHeldWithImpact(dialog), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null },
+          }
+        : dialog.kind === 'ask' // F-PR-13
+          ? {
+              kind: 'ask',
+              model: {
+                state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading',
+                number: orderRefOf(record.order, t),
+                rules: rules.read,
+                step: dialog.step,
+                kind: dialog.ask,
+                choices,
+                draft: dialog.draft,
+                held: askNextHeld(dialog),
+                impact: dialog.step === 'impact' ? dialog.impact : null,
+                busy: dialog.busy,
+                problem: dialog.problem,
+                waitingHref: waitingHrefOf(frame.prefix),
+                withdrawHeld: preview ? t('held.preview') : !mayAsk ? t('held.mayAsk') : offline ? t('held.offline') : null,
+                withdrawing: dialog.withdrawing,
+                today,
+              },
+            }
         : dialog.kind === 'reconfirm'
           ? {
               kind: 'reconfirm',
@@ -908,7 +1050,18 @@ function OrderContainer({ id }: { id: string }) {
             onDate: (day) => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, requestedDate: day } } : current)),
             onShipTo: (addressId) => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, shipToAddressId: addressId } } : current)),
             onNote: (note) => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, note } } : current)),
-            onReview: () => setDialog((current) => (current?.kind === 'change' && rules.read && !changeHeld(rules.read, current.draft, facts) ? { ...current, problem: null, draft: { ...current.draft, step: 'review' } } : current)),
+            onReview: () => {
+              if (dialog?.kind !== 'change' || !rules.read || changeHeld(rules.read, dialog.draft, facts)) return
+              setDialog({ ...dialog, problem: null, draft: { ...dialog.draft, step: 'review' } })
+              // F-PR-13: what it means, before Send.
+              const body = changeBodyOf(rules.read, dialog.draft)
+              readImpact('CHANGE', body, body.cells.length > 0)
+            },
+            onRetryImpact: () => {
+              if (dialog?.kind !== 'change' || !rules.read) return
+              const body = changeBodyOf(rules.read, dialog.draft)
+              readImpact('CHANGE', body, body.cells.length > 0) // F-PR-13
+            },
             onBack: () => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, step: 'edit' } } : current)),
             onSend: sendChange,
             onClose: () => setDialog((current) => (current?.kind === 'change' && !current.busy ? (changeDirty ? { ...current, discard: true } : null) : current)),
@@ -919,9 +1072,36 @@ function OrderContainer({ id }: { id: string }) {
           cancel: {
             onDraft: (draft) => setDialog((current) => (current?.kind === 'cancel' ? { ...current, draft, problem: null } : current)),
             onSend: sendCancel,
+            // ---- F-PR-13: edit → what it means → Send
+            onReview: () => {
+              if (dialog?.kind !== 'cancel' || !rules.read) return
+              if (cancelHeld(rules.read, dialog.draft, facts)) return setDialog({ ...dialog, draft: { ...dialog.draft, tried: true } })
+              setDialog({ ...dialog, problem: null, draft: { ...dialog.draft, step: 'review' } })
+              readImpact('CANCEL', cancelBodyOf(rules.read, dialog.draft), false)
+            },
+            onBack: () => setDialog((current) => (current?.kind === 'cancel' ? { ...current, draft: { ...current.draft, step: 'edit' } } : current)),
+            onRetryImpact: () => (dialog?.kind === 'cancel' && rules.read ? readImpact('CANCEL', cancelBodyOf(rules.read, dialog.draft), false) : undefined),
+            // ---- end F-PR-13
             onClose: () => setDialog((current) => (current?.kind === 'cancel' && current.busy ? current : null)),
             onRetry: () => void loadRules(),
           },
+          // ---- F-PR-13: the Ask dialog
+          ask: {
+            onKind: (kind) => setDialog((current) => (current?.kind === 'ask' ? { ...current, ask: kind, problem: null } : current)),
+            onNext: askNext,
+            onBack: () => setDialog((current) => (current?.kind === 'ask' && !current.busy ? { ...current, step: current.step === 'impact' ? 'details' : 'what', problem: null } : current)),
+            onReview: askReview,
+            onSend: sendAsk,
+            onDraft: (draft) => setDialog((current) => (current?.kind === 'ask' ? { ...current, draft, problem: null } : current)),
+            onWithdraw: withdrawAsk,
+            onClose: () => setDialog((current) => (current?.kind === 'ask' && current.busy ? current : null)),
+            onRetry: () => {
+              void loadRules()
+              void loadRequests()
+            },
+            onRetryImpact: () => (dialog?.kind === 'ask' && rules.read && dialog.ask && isProductionKind(dialog.ask) ? readImpact(dialog.ask, askBodyOf(dialog.ask, rules.read, dialog.draft), false) : undefined),
+          },
+          // ---- end F-PR-13
           reconfirm: {
             onDecision: (decision) => setDialog((current) => (current?.kind === 'reconfirm' ? { ...current, decision, problem: null } : current)),
             onComment: (comment) => setDialog((current) => (current?.kind === 'reconfirm' ? { ...current, comment } : current)),

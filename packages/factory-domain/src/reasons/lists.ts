@@ -64,7 +64,8 @@ export const fieldsOf = (_list: ReasonList): ReasonFields => ALL_FIELDS
  * (holds, downgrades).
  */
 export const REASON_LIST_GROUPS = Object.freeze({
-  floorRules: Object.freeze(['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL'] as const satisfies readonly ReasonList[]),
+  // F-PR-05b (B-PR-21's open point): the plain production hold's reasons are kept on Production › Floor rules, beside HOLD.
+  floorRules: Object.freeze(['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'PRODUCTION_HOLD', 'CANCEL'] as const satisfies readonly ReasonList[]),
   warehouse: Object.freeze(['WRITE_OFF', 'ADJUSTMENT'] as const satisfies readonly ReasonList[]),
   sales: Object.freeze(['RETURN', 'CANCEL', 'PRICE_ADJUSTMENT'] as const satisfies readonly ReasonList[]),
   purchasing: Object.freeze(['DISCREPANCY', 'CLAIM', 'SUPPLIER_DOCUMENT_TYPE'] as const satisfies readonly ReasonList[]),

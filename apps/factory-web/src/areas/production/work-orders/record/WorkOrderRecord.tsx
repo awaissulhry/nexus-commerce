@@ -45,6 +45,8 @@ import { useExtra } from '../extra/use-extra'
 // B-W2b-245: the frozen spec against the master and Change request.
 import { useWorkOrderSpec } from '../spec/use-spec'
 import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
+// F-PR-05b: the plain production hold (B-PR-21) beside the quality hold — ONE "Put on hold" dialog, the reason decides the kind.
+import { liftProductionHold, listProductionHolds, placeProductionHold } from '../daily/api'
 import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
 // B-W2b-130: the cut log with its W2b facts (the hide photo), and Materials › Leather (the one shade lot rule).
@@ -78,6 +80,8 @@ import { useNoteDialog } from '../../_shared/notes/use-note-dialog'
 // ---- F-PR-06: Cutting & bundles — the Cut record's recuts (Mark cut) and the cut orders of this work order ----
 import { useCutParts } from '../cutting/use-cut-parts'
 // ---- end F-PR-06
+// F-PR-05b: the Customer card (read while Overview shows; urgency writes behind the page's step-up).
+import { useCustomerCard } from './customer/use-customer-card'
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -136,7 +140,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
 
   // B-W2a-46: the work order every day (holds, finished to stock, yield, scrap and rework, readiness, reserve, split).
   const dcan = useMemo(() => dailyCan(session.permissions), [session.permissions])
-  const [daily, setDaily] = useState<DailyModel>(() => NO_DAILY(dcan))
+  const [daily, setDaily] = useState<DailyModel>(() => ({ ...NO_DAILY(dcan), productionHolds: LOADING /* F-PR-05b */ }))
   const patchDailyNow = useCallback((patch: Partial<DailyModel>) => setDaily((current) => ({ ...current, ...patch })), [])
   const patchDaily = patchDailyNow
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
@@ -166,7 +170,11 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
             .then((value) => patchDaily({ bundleHolds: value }))
             .catch(() => patchDaily({ bundleHolds: null }))
       }
-      if ((dcan.holdsView || dcan.holdsPlace) && !dailyRef.current.reasons)
+      // F-PR-05b: the work order's plain holds (workorders.view, as the record itself): ours and a customer's accepted pause.
+      listProductionHolds(api, wo.id)
+        .then((value) => patchDaily({ productionHolds: { value, problem: null } }))
+        .catch(fail('productionHolds'))
+      if ((dcan.holdsView || dcan.holdsPlace || dcan.productionHold) && !dailyRef.current.reasons)
         holdReasons(api)
           .then((value) => patchDaily({ reasons: value }))
           .catch(() => undefined)
@@ -453,6 +461,10 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     reread()
   })
   // ---- end F-PR-06
+  // ---- F-PR-05b: the Customer card — per customer of this work order (its own only) its requests, approvals asked of it, urgency
+  // (Set to regular… / Lock / Unlock: production.brand.override, a fresh code through the page's one step-up), problems and limits.
+  const customerCard = useCustomerCard(api, value, session.permissions, tab === 'overview', guard, (words) => setNotice({ tone: 'success', words }))
+  // ---- end F-PR-05b
 
   const model: WorkOrderRecordModel = {
     prefix,
@@ -505,6 +517,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     // F-PR-06
     cut: cutParts.model,
     shareReports: session.permissions.includes('quality.documents.share'),
+    // F-PR-05b
+    customerCard: customerCard.model,
   }
 
   return (
@@ -620,8 +634,17 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
             const wo = current.current
             if (wo) loadDaily(wo)
           },
-          onPlaceHold: (input) =>
-            void dailyWrite(() => placeHold(api, input), { key: input.workOrderIds.length === 1 ? 'notice.held' : 'notice.heldMany', params: { count: input.workOrderIds.length } }),
+          // F-PR-05b: the kind the picked reason decides — a quality hold (/quality/holds) or a plain production hold (B-PR-21).
+          onPlaceHold: (input) => {
+            const key = newIdempotencyKey()
+            if (input.kind === 'PRODUCTION')
+              void dailyWrite(() => placeProductionHold(api, workOrderId, { reasonCode: input.reasonCode, note: input.reasonNote, brandWords: input.customerWords, version: version() }, key), { key: 'notice.heldProduction' })
+            else void dailyWrite(() => placeHold(api, { workOrderIds: input.workOrderIds, reasonCode: input.reasonCode, reasonNote: input.reasonNote }, key), { key: input.workOrderIds.length === 1 ? 'notice.held' : 'notice.heldMany', params: { count: input.workOrderIds.length } })
+          },
+          onLiftHold: (input) => {
+            const key = newIdempotencyKey()
+            void dailyWrite(() => liftProductionHold(api, workOrderId, input.holdId, { version: input.version, reason: input.reason }, key), { key: 'notice.holdLifted' })
+          },
           onReleaseHold: (input) => {
             const key = newIdempotencyKey()
             void dailyWrite(() => guard('releaseHold.stepUpSentence', () => releaseHold(api, input.holdId, { version: input.version, note: input.note, notMakerStatement: input.notMakerStatement }, key)), { key: 'notice.holdReleased' })
@@ -654,6 +677,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         supervisor: { ...assign.actions, onOpen: openAssign },
         // F-PR-22
         note: { ...note.actions, onOpen: openNote },
+        // F-PR-05b
+        customerCard: customerCard.actions,
         // ---- F-PR-06: the recuts' Mark cut; the bundles waiting at an operation are on Cutting & bundles (was ?tab=bundles) ----
         cut: cutParts.actions,
         onWaitingAt: (seq) => {

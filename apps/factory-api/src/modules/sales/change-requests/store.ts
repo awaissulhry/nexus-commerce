@@ -178,10 +178,51 @@ export type OfficeRequestRow = Prisma.OrderChangeRequestGetPayload<{ select: typ
 export async function readCells(db: Reader, requestIds: readonly string[]): Promise<Map<string, AskedCell[]>> {
   const out = new Map<string, AskedCell[]>()
   if (requestIds.length === 0) return out
-  const rows = await db.orderChangeRequestLine.findMany({ where: { requestId: { in: [...requestIds] } }, select: { requestId: true, orderLineId: true, size: true, quantityBefore: true, quantity: true }, orderBy: [{ id: 'asc' }] })
-  for (const row of rows) out.set(row.requestId, [...(out.get(row.requestId) ?? []), { orderLineId: row.orderLineId, size: row.size, quantityBefore: row.quantityBefore, quantity: row.quantity }])
+  // B-PR-27a: and a change's new colourway of the line (null: the line keeps its own).
+  const rows = await db.orderChangeRequestLine.findMany({ where: { requestId: { in: [...requestIds] } }, select: { requestId: true, orderLineId: true, size: true, quantityBefore: true, quantity: true, colourwayId: true }, orderBy: [{ id: 'asc' }] })
+  for (const row of rows) out.set(row.requestId, [...(out.get(row.requestId) ?? []), { orderLineId: row.orderLineId, size: row.size, quantityBefore: row.quantityBefore, quantity: row.quantity, colourwayId: row.colourwayId }])
   return out
 }
+
+// ── B-PR-27a: another colourway of a line (a change) ─────────────────────────────────────────────────────────────────────────
+/** One other colourway of a line's style a change may ask: its name and the sizes it is made in (an active SKU). */
+export interface OtherColourway {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+  readonly sizes: ReadonlySet<string>
+}
+
+/**
+ * Per line, the OTHER active colourways of its style, each with the sizes of the style's range it is made in (ACTIVE variants);
+ * a colourway made in no size is left out. Read in the tenant's scope (the catalogue is not partner-readable), for the order's
+ * own lines only.
+ */
+export async function readOtherColourways(db: Reader, lines: readonly { readonly id: string; readonly styleId: string; readonly colourwayId: string }[]): Promise<Map<string, OtherColourway[]>> {
+  const out = new Map<string, OtherColourway[]>()
+  if (lines.length === 0) return out
+  const styleIds = [...new Set(lines.map((line) => line.styleId))]
+  const styles = new Map((await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, sizes: true } })).map((row) => [row.id, row.sizes]))
+  const colourways = await db.colourway.findMany({ where: { styleId: { in: styleIds }, status: 'ACTIVE' }, select: { id: true, styleId: true, code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }] })
+  const variants = colourways.length === 0 ? [] : await db.variant.findMany({ where: { colourwayId: { in: colourways.map((row) => row.id) }, status: 'ACTIVE' }, select: { colourwayId: true, size: true } })
+  for (const line of lines) {
+    const range = styles.get(line.styleId) ?? []
+    const others = colourways
+      .filter((row) => row.styleId === line.styleId && row.id !== line.colourwayId)
+      .map((row) => ({ id: row.id, code: row.code, name: row.name, sizes: new Set(variants.filter((variant) => variant.colourwayId === row.id && range.includes(variant.size)).map((variant) => variant.size)) }))
+      .filter((row) => row.sizes.size > 0)
+    out.set(line.id, others)
+  }
+  return out
+}
+
+/** The names of the colourways the requests' cells ask (the views say the new colourway beside the line's own). */
+export async function askedColourwayNames(db: Reader, cells: Iterable<readonly AskedCell[]>): Promise<Map<string, { code: string; name: string }>> {
+  const ids = [...new Set([...cells].flatMap((list) => list.flatMap((cell) => (cell.colourwayId ? [cell.colourwayId] : []))))]
+  if (ids.length === 0) return new Map()
+  return new Map((await db.colourway.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, { code: row.code, name: row.name }]))
+}
+// ── end B-PR-27a ──
 
 /** Locks one request row for its move (FOR UPDATE: the office's answer and the customer's withdrawal wait for each other). */
 export async function lockRequest(tx: CommandTx, requestId: string): Promise<void> {
@@ -276,7 +317,9 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
         const line = facts.lines.get(cell.orderLineId)
         const style = line ? facts.names.styles.get(line.styleId) : undefined
         const colourway = line ? facts.names.colourways.get(line.colourwayId) : undefined
-        return { lineId: cell.orderLineId, seq: line?.seq ?? 0, style: style ? { code: style.code, name: style.name } : null, colourway: colourway ? { code: colourway.code, name: colourway.name } : null, size: cell.size, before: cell.quantityBefore, asked: cell.quantity }
+        // B-PR-27a: the colourway a change asks the line in (null: it keeps its own).
+        const asked = cell.colourwayId ? facts.names.colourways.get(cell.colourwayId) : undefined
+        return { lineId: cell.orderLineId, seq: line?.seq ?? 0, style: style ? { code: style.code, name: style.name } : null, colourway: colourway ? { code: colourway.code, name: colourway.name } : null, size: cell.size, before: cell.quantityBefore, asked: cell.quantity, askedColourway: cell.colourwayId ? { id: cell.colourwayId, code: asked?.code ?? '', name: asked?.name ?? '' } : null }
       })
       .sort((a, b) => a.seq - b.seq),
     wholeOrder: summary.wholeOrder,

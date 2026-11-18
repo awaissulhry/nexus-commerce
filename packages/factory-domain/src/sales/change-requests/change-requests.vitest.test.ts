@@ -42,6 +42,7 @@ import { ASKED_ONLY_FROM_COUNTER, counterAnswererHeld, counterFactsOf, counterGo
 import { customerRequestWords } from '../../insights/words'
 import { blockedProblems, earliestWords, IMPACT_NOTES, impactKeepable, impactNamesOnly, impactOf, PRICED_WORDS, type ImpactLine } from './impact'
 import { acceptWayProblems, ASK_RULES, askLineVerdict, askVerdict, changeAcceptWays, FLOOR_TASK_WORDS, productionAskProblems, productionCellsOf, productionColumnsOf, type ProductionAskFacts } from './rules'
+import { colourInWorkWords, colourKeepsTotal, colourLinesOf, sizesAfter } from './rules' // B-PR-27a
 
 const TODAY = '2026-11-07'
 const line = (id: string, seq: number, overrides: Partial<RuleLine> = {}): RuleLine => ({
@@ -180,7 +181,7 @@ describe('what is asked, at the click (SAL-077, SAL-078)', () => {
     expect(changeProblems({ cells: [], requestedDate: '2026-11-06' }, changeFacts())[0]!.path).toBe('body/requestedDate')
     expect(changeProblems({ cells: [], requestedDate: '2026-12-01' }, changeFacts())[0]!.message).toBe('The order already asks for this date.')
     expect(changeProblems({ cells: [], shipToAddressId: L1 }, changeFacts({ addressOk: false }))[0]!.path).toBe('body/shipToAddressId')
-    expect(changeProblems({ cells: [] }, changeFacts())[0]!.message).toBe('Say what should change: sizes, the date or the delivery address.')
+    expect(changeProblems({ cells: [] }, changeFacts())[0]!.message).toBe('Say what should change: sizes, a colour, the date or the delivery address.') // B-PR-27a: a colour too
     expect(changeProblems({ cells: [] }, changeFacts({ cutoffs: cutoffs({ changeStatus: 'CONFIRMED' }) }))[0]!.path).toBe('body/STATUS')
   })
 
@@ -647,3 +648,50 @@ describe('B-PR-26: what the office may answer, the counter-offer as the customer
   })
 })
 
+// ---- B-PR-27a: a line in another colourway of its style (a change) -----------------------------------------------------------
+describe('B-PR-27a: a change asks a line in another colourway', () => {
+  const RED = '00000000-0000-4000-8000-0000000000aa'
+  const NAVY = '00000000-0000-4000-8000-0000000000bb'
+  // Line 10's style has RED (in 50, 52, 54) and NAVY (in 50 only) besides its own colourway; line 20's style none.
+  const colourways = new Map([[L1, new Map([[RED, new Set(['50', '52', '54'])], [NAVY, new Set(['50'])]])]])
+  const facts = (overrides: Partial<Parameters<typeof changeProblems>[1]> = {}) => changeFacts({ colourways, ...overrides })
+
+  it('takes another colourway made in every size the line keeps; stores the line size by size with the colourway', () => {
+    const ask = { cells: [{ lineId: L1, size: '54', quantity: 1 }], colourways: [{ lineId: L1, colourwayId: RED }] }
+    expect(changeProblems(ask, facts())).toEqual([])
+    expect(changeCellsOf(ask, order())).toEqual([
+      { orderLineId: L1, size: '50', quantityBefore: 2, quantity: 2, colourwayId: RED },
+      { orderLineId: L1, size: '52', quantityBefore: 3, quantity: 3, colourwayId: RED },
+      { orderLineId: L1, size: '54', quantityBefore: 0, quantity: 1, colourwayId: RED },
+    ])
+    // A colour alone is a change (no cells, no date).
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, facts())).toEqual([])
+  })
+
+  it('refuses in words: not another colourway of the style, a size not made in it, a line twice, a held line, everything asked away', () => {
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L2, colourwayId: RED }] }, facts())[0]).toEqual({ path: 'body/colourways/0/colourwayId', message: "Not another colourway of line 20's style." })
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: NAVY }] }, facts())[0]).toEqual({ path: 'body/colourways/0/colourwayId', message: 'Line 10: size 52 is not made in this colourway.' })
+    // Dropping size 52 makes NAVY possible.
+    expect(changeProblems({ cells: [{ lineId: L1, size: '52', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: NAVY }] }, facts())).toEqual([])
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }, { lineId: L1, colourwayId: RED }] }, facts()).map((issue) => issue.path)).toEqual(['body/colourways/1/lineId'])
+    const cut = facts({ order: order({ lines: [line(L1, 10, { cut: { day: '2026-10-12', leather: true } }), line(L2, 20)] }) })
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, cut)[0]!.path).toBe('body/colourways/0/LEATHER_CUT')
+    expect(changeProblems({ cells: [{ lineId: L1, size: '50', quantity: 0 }, { lineId: L1, size: '52', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: RED }] }, facts()).some((issue) => /asked away/.test(issue.message))).toBe(true)
+    const tailored = facts({ order: order({ lines: [line(L1, 10, { kind: 'MADE_TO_MEASURE' }), line(L2, 20)] }) })
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, tailored)[0]!.message).toMatch(/made to measure/)
+    expect(changeProblems({ cells: [], colourways: [{ lineId: '00000000-0000-4000-8000-0000000000ff', colourwayId: RED }] }, facts())[0]!.path).toBe('body/colourways/0/lineId')
+  })
+
+  it('accepts as a new line in the colourway (the sizes asked) and the old one left as it is for its close; same pieces keep the total', () => {
+    const cells = changeCellsOf({ cells: [{ lineId: L1, size: '50', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: RED }] }, order())
+    expect(colourLinesOf(cells)).toEqual([{ fromLineId: L1, colourwayId: RED, sizes: [{ size: '52', quantity: 3 }] }])
+    // The old line's sizes are not the amendment's: it stays as it is until it is closed short.
+    expect(amendmentLinesOf(cells, [line(L1, 10), line(L2, 20)])).toEqual({ lines: [{ id: L1 }, { id: L2 }], changed: true })
+    expect(colourKeepsTotal(cells)).toBe(false)
+    expect(colourKeepsTotal(changeCellsOf({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, order()))).toBe(true)
+    // A size change of another line moves the total: W2a's own rule decides the re-acceptance.
+    expect(colourKeepsTotal([...changeCellsOf({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, order()), { orderLineId: L2, size: '50', quantityBefore: 2, quantity: 3 }])).toBe(false)
+    expect(sizesAfter(line(L1, 10), [{ lineId: L1, size: '50', quantity: 0 }, { lineId: L2, size: '52', quantity: 9 }])).toEqual([{ size: '50', before: 2, quantity: 0 }, { size: '52', before: 3, quantity: 3 }])
+    expect(colourInWorkWords(10, ['WO-0001']).en).toBe('Line 10 is on a work order already (WO-0001): a colour change is then cancel-and-remake. Answer by hand: refuse with words, or cancel and remake the line.')
+  })
+})

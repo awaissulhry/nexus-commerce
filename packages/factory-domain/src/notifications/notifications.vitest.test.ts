@@ -55,6 +55,16 @@ describe('the notification centre (B-W2a-20: PLT-138, PLT-142, PLT-152)', () => 
     expect(peopleOf({ params: { actorId: MARCO }, actorId: null })).toEqual([MARCO])
   })
 
+  // F-PR-05b: the bell of an issue's task names its customer ({customer}) and no person.
+  it('says a reported problem and an issue going up with the customer’s name, never a person', () => {
+    const base = { recordLabel: 'SO-7', actorId: null }
+    expect(sentenceOf({ ...base, messageKey: 'notifications.production.problemReported', params: { customer: 'Brand Alpha', count: 1 } }, names, 'en')).toBe('Brand Alpha reported a problem on SO-7: answer in the order’s thread')
+    expect(sentenceOf({ ...base, messageKey: 'notifications.production.problemReportedMany', params: { customer: 'Brand Alpha', count: 3 } }, names, 'it')).toBe('Brand Alpha ha segnalato un problema su 3 ordini: rispondi nella conversazione di SO-7')
+    expect(sentenceOf({ ...base, messageKey: 'notifications.production.issueEscalatedBackup', params: { customer: 'Brand Alpha', count: 1 } }, names, 'en')).toBe('No answer after 1 working day on SO-7 (Brand Alpha): it now waits on you')
+    expect(sentenceOf({ ...base, messageKey: 'notifications.production.issueEscalatedOwner', params: { customer: 'Brand Alpha', count: 1 } }, names, 'en')).toBe('No answer after 2 working days on SO-7 (Brand Alpha): it now waits on the Owner and Admin')
+    for (const key of ['notifications.production.problemReported', 'notifications.production.issueEscalatedBackup', 'notifications.production.issueEscalatedOwner'] as const) expect(MESSAGE_TEMPLATES[key].en).not.toContain('{actor}')
+  })
+
   it('groups notifications of one person, record and kind that come within 15 minutes', () => {
     expect(groupKeyFor(null, 'own', NOW)).toBe('own')
     expect(groupKeyFor({ id: 'first', groupKey: 'first', createdAt: minutes(-5) }, 'own', NOW)).toBe('first')

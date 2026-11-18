@@ -167,6 +167,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
       '/warehouse/reports': 'inventory.reports.view', // GET /inventory/reports/ageing (B-W2b-356)
       '/warehouse/settings': 'inventory.stock.view', // GET /inventory/rules (B-W2b-355)
+      '/production/overview': 'workorders.view', // GET /production/overview (F-PR-04)
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
       '/production/reports': 'production.reports.view', // GET /production/reports/daily

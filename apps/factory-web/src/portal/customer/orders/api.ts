@@ -2,6 +2,10 @@ import { z } from 'zod'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+// F-PR-13: the production asks (B-PR-25), the freeze states and the sample kinds, as the API names them.
+import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
+import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
+import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 
 /**
  * Every call of the customer's Orders & tracking (B-W2b-191, SCR-184; design portal.customer.orders), each answer checked
@@ -306,6 +310,12 @@ const verdict = z.object({ possible: z.boolean(), code: z.enum(VERDICT_CODES), d
 export type Verdict = z.infer<typeof verdict>
 const address = z.object({ id: z.string(), label: z.string() })
 
+// ---- F-PR-13: what the rules say of a production ask now, and a freeze rule's verdict (never the rule) ----
+const askVerdict = z.object({ possible: z.boolean(), code: z.enum(ASK_VERDICT_CODES).catch('NOT_ASKABLE'), day: z.string().nullable(), words })
+export type AskVerdict = z.infer<typeof askVerdict>
+const freeze = z.object({ state: z.enum(FREEZE_STATES).catch('OPEN'), words })
+// ---- end F-PR-13
+
 export const rulesSchema = z.object({
   asOf: z.string(),
   order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), requestedDate: z.string().nullable(), promiseDate: z.string().nullable(), currency: z.string(), version: z.number() }),
@@ -322,6 +332,10 @@ export const rulesSchema = z.object({
       change: verdict,
       cancel: verdict,
       cancelFee: price,
+      // F-PR-13 (B-PR-25): per size what the freeze rules hold now; whether the line may ship first and take each kind of sample.
+      frozen: z.array(z.object({ size: z.string(), freeze })).optional(),
+      split: askVerdict.optional(),
+      samples: z.array(z.object({ sampleKind: z.enum(ASK_SAMPLE_KINDS), verdict: askVerdict })).optional(),
     }),
   ),
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), wholeOrderFee: price }).optional(),
@@ -329,6 +343,10 @@ export const rulesSchema = z.object({
   addresses: z.array(address),
   noWithdrawal: words.nullable(),
   openRequestId: z.string().nullable(),
+  // F-PR-13 (B-PR-25): the production asks — each open or not by the customer's limits (RUSH only while its urgency switch is on),
+  // what the rules say of it now and the one that waits; what the freeze rules hold of the order's date and delivery address.
+  asks: z.array(z.object({ kind: z.enum(PRODUCTION_REQUEST_KINDS), words, open: z.boolean(), verdict: askVerdict, waitingRequestId: z.string().nullable() })).optional(),
+  frozen: z.object({ deliveryDate: freeze, shipTo: freeze }).optional(),
   live,
 })
 export type ChangeRules = z.infer<typeof rulesSchema>
@@ -364,6 +382,8 @@ export const changeRequestSchema = z.object({
   answeredAt: z.string().nullable(),
   withdrawnAt: z.string().nullable(),
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), totalFee: price }).nullable().optional(),
+  // F-PR-13 (B-PR-26): our counter-offer on it (answered in Waiting for you; never the amount without the price grain).
+  counter: z.object({ approvalRequestId: z.string(), state: z.enum(['WAITING', 'AGREED', 'REFUSED', 'LAPSED']).catch('WAITING'), priced: z.boolean(), date: z.string().nullable(), words }).nullable().optional(),
   version: z.number(),
   mine: z.boolean(),
 })
@@ -388,8 +408,45 @@ export interface CancelBody {
   readonly note?: string | null
 }
 
+// ---- F-PR-13 (B-PR-25): a production ask — the kinds the customer's limits open — and the impact of any ask before Send ----
+export type ProductionAskKind = (typeof PRODUCTION_REQUEST_KINDS)[number]
+export type AskSampleKind = (typeof ASK_SAMPLE_KINDS)[number]
+export interface ProductionAskBody {
+  readonly kind: ProductionAskKind
+  /** SPLIT_SHIPMENT: the first part, the pieces of each size that should ship first. */
+  readonly cells?: readonly { lineId: string; size: string; quantity: number }[]
+  /** RUSH: the date it is needed by; SPLIT_SHIPMENT: the first part's date. */
+  readonly requestedDate?: string | null
+  /** SAMPLE_ROUND: the line and the kind of round. */
+  readonly lineId?: string | null
+  readonly sampleKind?: AskSampleKind | null
+  /** Their words (HOLD: why — required). */
+  readonly note?: string | null
+}
+export type AskBody = ChangeBody | CancelBody | ProductionAskBody
+
+/** The impact of an ask (B-PR-24/25): what is frozen, priced or not (never an amount), the earliest date (a date only), notes. */
+export const askImpactSchema = z.object({
+  kind: z.enum(REQUEST_KINDS),
+  frozen: z.array(z.object({ field: z.string(), lineId: z.string().nullable(), line: z.string().nullable(), size: z.string().nullable(), state: z.enum(['CHANGE_REQUEST', 'BLOCKED']).catch('CHANGE_REQUEST'), words })),
+  blocked: z.boolean(),
+  priced: z.boolean(),
+  earliest: z.object({ date: z.string().nullable(), partial: z.boolean(), meetsWanted: z.boolean().nullable() }).nullable(),
+  notes: z.array(words),
+})
+export type AskImpact = z.infer<typeof askImpactSchema>
+/** The impact read: a cancel's fee only for a reader with the price grain (else left out). */
+export const impactReadSchema = z.object({ asOf: z.string(), impact: askImpactSchema, cancelFee: z.object({ currency: z.string(), totalFee: price }).optional() })
+export type ImpactRead = z.infer<typeof impactReadSchema>
+
+/** POST …/change-requests/impact — the same checks as Send, nothing written. */
+export const fetchImpact = (api: ApiClient, orderId: string, body: AskBody, signal?: AbortSignal): Promise<ImpactRead> =>
+  api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/change-requests/impact`, { body, schema: impactReadSchema, ...(signal ? { signal } : {}) })
+// ---- end F-PR-13
+
 const oneRequest = z.object({ request: changeRequestSchema })
-export const askRequest = (api: ApiClient, orderId: string, body: ChangeBody | CancelBody, idempotencyKey: string = newIdempotencyKey()) =>
+// F-PR-13: every kind (the production asks beside change and cancel).
+export const askRequest = (api: ApiClient, orderId: string, body: AskBody, idempotencyKey: string = newIdempotencyKey()) =>
   api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/change-requests`, { body, schema: oneRequest, idempotencyKey })
 
 export const withdrawRequest = (api: ApiClient, orderId: string, requestId: string, version: number) =>

@@ -87,6 +87,12 @@ const ADDED: Readonly<Record<FloorReasonList, readonly Row[]>> = {
     ['WRONG_LABEL', 'Etichetta errata', 'Wrong label', 'bookmark', AMBER],
     ['RECALL', 'Richiamo', 'Recall', 'alert', RED],
   ],
+  // F-PR-05b: a plain production hold (B-PR-21) — what a leather garment floor also stops a work order for, beside the standard five.
+  PRODUCTION_HOLD: [
+    ['SAMPLE_WAIT', 'In attesa del campione approvato', 'Waiting for the approved sample', 'clock', BLUE],
+    ['SUBCONTRACTOR', 'In attesa del terzista', 'Waiting for the subcontractor', 'truck', ORANGE],
+    ['TOOLING', 'Attrezzatura o fustella mancante', 'Tooling or cutting die missing', 'box', SLATE],
+  ],
   CANCEL: [
     ['MATERIAL_UNAVAILABLE', 'Materiale non disponibile', 'Material unavailable', 'package', ORANGE],
     ['PAYMENT', 'Fido o pagamento', 'Credit or payment', 'percent', RED],

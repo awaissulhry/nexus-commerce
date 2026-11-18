@@ -295,7 +295,33 @@
     "nav": "{index} of {count} waiting",
     "previous": "Previous waiting approval",
     "first": "This is the first waiting approval.",
-    "last": "This is the last waiting approval."
+    "last": "This is the last waiting approval.",
+    "pending": {
+      "title": {
+        "APPROVED": "Approved: {label}",
+        "APPROVED_WITH_CHANGES": "Approved with changes: {label}",
+        "REFUSED": "Refused: {label}"
+      },
+      "in": "It goes to us in {left}",
+      "now": "Sending now…",
+      "undo": "Undo",
+      "going": "Sending…",
+      "hint": "Until then nothing is sent: Undo takes your answer back. Closing this window lets it go."
+    },
+    "optionFor": {
+      "REPROMISE": {
+        "APPROVED": "Accept the new date",
+        "APPROVED_body": "The new date is fine for you.",
+        "REFUSED": "Refuse the new date",
+        "REFUSED_body": "Tell us why: the date stands while we look at it again."
+      },
+      "COUNTER_OFFER": {
+        "APPROVED": "Accept our suggestion",
+        "APPROVED_body": "We then carry out your request as we suggested.",
+        "REFUSED": "Decline our suggestion",
+        "REFUSED_body": "Your request is withdrawn: tell us why."
+      }
+    }
   },
   "start": {
     "label": "Start",
