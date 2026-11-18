@@ -48,7 +48,8 @@ export async function sampleChoices(caller: CommandCaller, query: { readonly com
       shownStyles.length === 0
         ? []
         : await client.sampleRound.findMany({
-            where: { companyId: query.companyId, styleId: { in: shownStyles.map((style) => style.id) }, stage: { in: [...OPEN_ROUND_STAGES] } },
+            // fix-pr-8 (the brand wall): a round for another customer (of our own collection's style too) is that customer's.
+            where: { AND: [{ companyId: query.companyId, styleId: { in: shownStyles.map((style) => style.id) }, stage: { in: [...OPEN_ROUND_STAGES] } }, scopeWhere(actor, PURCHASING_MANAGE, { party: { field: 'partyId', nullable: true } }) as Prisma.SampleRoundWhereInput] },
             orderBy: [{ styleId: 'asc' }, { kind: 'asc' }, { roundNo: 'asc' }, { id: 'asc' }],
             select: { id: true, styleId: true, number: true, kind: true, roundNo: true, stage: true },
           })
