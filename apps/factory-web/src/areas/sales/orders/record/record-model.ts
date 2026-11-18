@@ -8,6 +8,9 @@ import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
 import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-depth' // B-W2b-323
 import type { LinksActions, LinksModel } from './links/model' // B-TH-256
+// F-SA-230: the ⋯ menu's People (the production lane's dialogs, reused in place).
+import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
+import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model'
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -133,6 +136,8 @@ export interface OrderRecordModel {
   reviewBanner?: ReactNode
   /** B-TH-256: what points at the order (./links) — its complaints and returns, planning's open re-promises, the gates' refusals; absent: not read. */
   links?: LinksModel | null
+  /** F-SA-230: ⋯ People — Assign supervisor… (production.brand.manage) and Ask the supervisor… (threads.post), with their open dialogs. */
+  people?: { readonly mayAssign: boolean; readonly mayNote: boolean; readonly assign: AssignSupervisorModel | null; readonly note: NoteDialogModel | null }
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -187,6 +192,8 @@ export interface OrderRecordActions {
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
   links?: LinksActions
+  /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
+  people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */

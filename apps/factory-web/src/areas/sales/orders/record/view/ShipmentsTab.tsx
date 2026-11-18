@@ -14,6 +14,7 @@ import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
 import { createShipmentHref, gridOf, mayCreateShipment, styleGroups } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
+import { PointsAtOrder } from '../links/view/OrderLinks' // F-SA-230: Complaints & returns live here
 
 const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIVERED: 'success', RETURNED: 'warning', CANCELLED: 'danger' } as const
 
@@ -23,7 +24,9 @@ const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIV
  * real link to its record (Warehouse › Shipments). Create shipment opens Warehouse's New shipment with this order chosen.
  */
 // B-W2b-398: `delivered` is the card "Delivered (from carrier)" (its container reads it; the design cases need no session).
-export function ShipmentsTab({ order, model, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; delivered?: ReactNode }) {
+// F-SA-230 (10-order-page §2.6): Shipments = Left to ship · Shipments · Deliveries · Complaints & returns (B-TH-256's list, each by its
+// own right); the invoices and payments it held before are on Money (a door at its foot).
+export function ShipmentsTab({ order, model, actions, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; delivered?: ReactNode }) {
   const t = useT('orders')
   const sales = useT('sales')
   const locale = useLocale()
@@ -88,6 +91,12 @@ export function ShipmentsTab({ order, model, delivered }: { order: Order; model:
         )}
       </Card>
       {delivered}
+      <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
+      <p className="fw-so-hint">
+        <Link className="fw-so-link" href={`${model.prefix}/sales/orders/${order.id}?tab=money`}>
+          {t('ship.moneyDoor')}
+        </Link>
+      </p>
     </div>
   )
 }

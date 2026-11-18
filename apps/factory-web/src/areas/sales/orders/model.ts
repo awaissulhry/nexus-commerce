@@ -365,31 +365,92 @@ export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): n
 
 // ---- the record ---------------------------------------------------------------------------------------------------------
 
-// ---- B-TH-214: the order's tabs 9 → 5 (O-SAL-ORD-REC.body; tree G.2, P10: no tabs inside tabs, one place per thing) ----
+// ---- F-SA-230 (sales page plan N2, picks P2, P3, P15; 10-order-page §2, §4.5): the order's tabs re-cut, nothing lost ----------------
 /**
- * The record's five tabs: Lines · Production & dates (Dates & promise + Production, and the brand tech pack in force) · Shipments &
- * invoices (Shipments + Invoices & payments) · Confirmation & changes (Documents' confirmation and acceptance evidence + Changes) ·
- * Margin (only with the margin grain). Activity left: the thread is docked beside every tab and its tools are in the thread's "⋯"
- * (R-ACT); the files are the thread's Files view.
+ * The record's tabs, each with one job: Lines (the commercial truth) · Production (the work behind it, its dates) · Changes (one story
+ * of requests, amendments, confirmations) · Money (deposits, payment schedule, invoices & credit notes, the margin by its grain) ·
+ * Shipments (left to ship, shipments, deliveries, complaints & returns). Overview and Files join with F-SA-232 / F-SA-237. The thread is
+ * docked beside every tab (B-TH-214); Margin is a section of Money (#margin), only with the margin grain.
  */
-export const RECORD_TABS = ['lines', 'production', 'shipments', 'changes', 'margin'] as const
+export const RECORD_TABS = ['lines', 'production', 'changes', 'money', 'shipments'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
-/** Every old `?tab=` keeps working (R-8): the tab it merged into; Activity opens the thread beside Lines (RecordFrame reads it). */
-export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { dates: 'production', money: 'shipments', documents: 'changes', activity: 'lines' }
+/** The tab with no address (until Overview lands: Lines). */
+export const FIRST_TAB: RecordTab = 'lines'
 
-/** The tab an address asks for: one of the five, an old one's new home, else Lines (Margin without the margin grain: Lines). */
-export function tabOf(asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): RecordTab {
+/**
+ * Every old `?tab=` keeps working (R-8): the tab it now lives in and the section to scroll to (`#anchor`). Margin's anchor only with the
+ * margin grain (else Money's top); Activity opens the thread (RecordFrame reads it) beside the first tab.
+ */
+export const MERGED_TABS: Readonly<Record<string, { readonly tab: RecordTab | null; readonly anchor: string | null }>> = Object.freeze({
+  dates: { tab: 'production', anchor: 'dates' },
+  invoices: { tab: 'money', anchor: 'invoices' },
+  margin: { tab: 'money', anchor: 'margin' },
+  documents: { tab: 'changes', anchor: 'confirmation' },
+  confirmation: { tab: 'changes', anchor: 'confirmation' },
+  activity: { tab: null, anchor: null },
+})
+
+/** Where an address lands: one of the tabs (an old id: its new tab and section), else the first tab. Never a name of Object's own. */
+export function landingOf(asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): { readonly tab: RecordTab; readonly anchor: string | null; readonly moved: boolean } {
   const value = asked ?? ''
-  const tab = (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'lines') // TH-6 part B: never a name of Object's own (?tab=constructor)
-  return tab === 'margin' && can && !can.margin ? 'lines' : tab
+  if ((RECORD_TABS as readonly string[]).includes(value)) return { tab: value as RecordTab, anchor: null, moved: false }
+  if (Object.hasOwn(MERGED_TABS, value)) {
+    const merged = MERGED_TABS[value]!
+    const anchor = merged.anchor === 'margin' && can && !can.margin ? null : merged.anchor
+    // Activity stays in the address: the frame opens the thread from it (arrivalOf); the first tab shows beside it.
+    return { tab: merged.tab ?? FIRST_TAB, anchor, moved: merged.tab !== null }
+  }
+  return { tab: FIRST_TAB, anchor: null, moved: false }
 }
 
-/** The tabs a person sees: Margin only with the margin grain (never an empty tab with zeros). */
-export const recordTabs = (can: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS.filter((tab) => tab !== 'margin' || can.margin)
+/** The tab an address asks for (see landingOf). */
+export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): RecordTab => landingOf(asked, can).tab
 
-/** A tab whose body is a wide grid (the size grids of Lines): the docked thread takes one third under 1600 px (PL1, R-18). */
-export const isWideTab = (tab: RecordTab): boolean => tab === 'lines'
+/** The tabs a person sees: every tab (each part inside says what its right holds back, never an empty tab with zeros). */
+export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
+
+/** A tab whose body is a wide grid (size grids, the work orders, the shipments): the docked thread takes one third under 1600 px. */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'production' || tab === 'shipments'
+
+/** The band's health chip from the order read alone (the production read's health comes with Overview): Late · N d, never On track. */
+export const lateDaysOf = (order: Pick<Order, 'daysLate' | 'status'>): number | null => (order.daysLate !== null && order.daysLate > 0 && !CLOSE_FROM_STATES.includes(order.status) ? order.daysLate : null)
+const CLOSE_FROM_STATES: readonly OrderStatus[] = ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED']
+
+/** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>): number | null {
+  if (tab === 'lines') return order.lines.length
+  if (tab === 'production') return order.chain.workOrders.length
+  if (tab === 'changes') return order.amendments.count
+  if (tab === 'money') return order.chain.invoices.length
+  if (tab === 'shipments') return order.chain.shipments.length
+  return null
+}
+
+/** The ⋯ menu's groups, in their order (10-order-page §1.3); Cancel comes last, after a rule. */
+export const MENU_GROUPS = ['next', 'edit', 'people', 'goTo', 'copy'] as const
+export type MenuGroup = (typeof MENU_GROUPS)[number]
+export type MenuEntry<T> = T | { readonly id: string; readonly heading: true; readonly label: string } | { readonly id: string; readonly separator: true }
+
+/** The ⋯ menu grouped: each group that holds an item gets its heading (a rule between groups); the danger items last, after a rule. */
+export function groupedMenu<T extends { readonly id: string }>(groups: Partial<Record<MenuGroup, readonly T[]>>, danger: readonly T[], headingOf: (group: MenuGroup) => string): MenuEntry<T>[] {
+  const out: MenuEntry<T>[] = []
+  for (const group of MENU_GROUPS) {
+    const items = groups[group] ?? []
+    if (items.length === 0) continue
+    if (out.length > 0) out.push({ id: `sep-${group}`, separator: true })
+    out.push({ id: `head-${group}`, heading: true, label: headingOf(group) }, ...items)
+  }
+  if (danger.length > 0) {
+    if (out.length > 0) out.push({ id: 'sep-danger', separator: true })
+    out.push(...danger)
+  }
+  return out
+}
+
+/** The order holds a made-to-measure line: the band's "Made to measure" mark (the list's word). */
+export const isMadeToMeasure = (order: Pick<Order, 'lines'>): boolean => order.lines.some((line) => line.kind === 'MADE_TO_MEASURE')
+// ---- end F-SA-230
 
 const FINAL: readonly OrderStatus[] = ['CLOSED', 'CANCELLED']
 export const isFinal = (order: Pick<Order, 'status'>): boolean => FINAL.includes(order.status)

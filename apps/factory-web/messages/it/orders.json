@@ -221,12 +221,11 @@
   },
   "tab": {
     "lines": "Righe",
-    "production": "Produzione e date",
-    "shipments": "Spedizioni e fatture",
-    "money": "Fatture e pagamenti",
-    "margin": "Margine",
+    "production": "Produzione",
+    "shipments": "Spedizioni",
+    "money": "Importi",
     "depositOpen": "C'è un acconto aperto",
-    "changes": "Conferma e modifiche"
+    "changes": "Modifiche"
   },
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
@@ -269,8 +268,6 @@
     "tabsLabel": "Sezioni dell'ordine",
     "depositOpen": "Acconto aperto — scade il {date}",
     "depositMissing": "Acconto non chiesto",
-    "late_one": "In ritardo di {count} giorno",
-    "late_other": "In ritardo di {count} giorni",
     "customerRef": "Ordine del cliente {ref}",
     "fromQuote": "Dal preventivo {number} v{revision}",
     "changed": "Questo ordine è cambiato alle {time}",
@@ -282,7 +279,8 @@
     "amended": "Modificato · rev. {revision}",
     "reapproval": "In attesa che il cliente accetti la modifica",
     "typed": "Inserito dall'ufficio",
-    "madeFrom": "Creato da {number} — Apri"
+    "madeFrom": "Creato da {number} — Apri",
+    "madeToMeasure": "Su misura"
   },
   "held": {
     "busy": "Sto salvando l'ultima modifica…",
@@ -486,7 +484,8 @@
       "status": "Stato",
       "shipped": "Partita",
       "delivered": "Consegnata"
-    }
+    },
+    "moneyDoor": "Fatture e pagamenti sono in Importi ›"
   },
   "shipStatus": {
     "DRAFT": "Bozza",
@@ -517,6 +516,11 @@
       "sdi": "SDI",
       "gross": "Totale",
       "open": "Aperto"
+    },
+    "section": {
+      "totals": "Totali",
+      "deposit": "Acconto",
+      "margin": "Margine"
     }
   },
   "docType": {
@@ -1299,5 +1303,16 @@
       "invalid": "Non inviato così: controlla ciò che hai scritto.",
       "unavailable": "Il server della fabbrica non ha risposto. Riprova."
     }
+  },
+  "menu": {
+    "group": {
+      "next": "Prossimi passi",
+      "edit": "Modifica",
+      "people": "Persone",
+      "goTo": "Vai a",
+      "copy": "Copia"
+    },
+    "assignSupervisor": "Assegna supervisore…",
+    "askSupervisor": "Chiedi al supervisore…"
   }
 }

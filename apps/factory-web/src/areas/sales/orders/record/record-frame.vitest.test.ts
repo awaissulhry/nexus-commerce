@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { canOf } from '../_demo/fixtures'
-import { MERGED_TABS, recordTabs, tabOf } from '../model'
+import { groupedMenu, landingOf, MENU_GROUPS, MERGED_TABS, recordTabs, tabOf } from '../model'
 import { designScreen } from './fixtures'
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
@@ -36,22 +36,55 @@ describe('the order on RecordFrame', () => {
     for (const id of ['held-deposit', 'thread-docked', 'money-new', 'w2a-margin']) expect(draw(id), id).toContain('aria-label="Thread tools"')
   })
 
-  it('the tabs 9 → 5: Lines · Production & dates · Shipments & invoices · Confirmation & changes · Margin (the margin grain only)', () => {
-    const text = textOf(draw('thread-docked'))
-    for (const tab of ['Lines', 'Production & dates', 'Shipments & invoices', 'Confirmation & changes', 'Margin']) expect(text).toContain(tab)
-    expect(recordTabs(canOf('sales'))).toEqual(['lines', 'production', 'shipments', 'changes', 'margin'])
-    expect(recordTabs(canOf('manager'))).toEqual(['lines', 'production', 'shipments', 'changes'])
-    expect(textOf(draw('manager-lines'))).not.toMatch(/\bMargin\b/)
+  // ---- F-SA-230: the tabs re-cut without losing anything ----
+  it('F-SA-230: the tabs Lines · Production · Changes · Money · Shipments, the same for every role (Margin is a section of Money)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw('thread-docked', locale))
+      const words = locale === 'en' ? ['Lines', 'Production', 'Changes', 'Money', 'Shipments'] : ['Righe', 'Produzione', 'Modifiche', 'Importi', 'Spedizioni']
+      for (const tab of words) expect(text, tab).toContain(tab)
+      expect(text).not.toContain(locale === 'en' ? 'Shipments & invoices' : 'Spedizioni e fatture')
+    }
+    expect(recordTabs(canOf('sales'))).toEqual(['lines', 'production', 'changes', 'money', 'shipments'])
+    expect(recordTabs(canOf('manager'))).toEqual(['lines', 'production', 'changes', 'money', 'shipments'])
   })
 
-  it('Production & dates hosts the production lane’s body as it is, then the promise, then the tech pack in force', () => {
+  it('F-SA-230: Production hosts the work orders, then the dates (#dates), then the tech pack in force', () => {
     const html = draw('production-progress')
-    const text = textOf(html)
     expect(html).toContain('class="fw-so-merged"')
-    expect(text.indexOf('Work orders')).toBeGreaterThan(-1)
+    expect(textOf(html).indexOf('Work orders')).toBeGreaterThan(-1)
+    expect(html).toContain('id="dates"')
     const source = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
-    expect(source).toMatch(/<ProductionTab order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<DatesTab/)
+    expect(source).toMatch(/<ProductionTab order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<section id="dates"/)
     expect(source).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
+  })
+
+  it('F-SA-230: Money holds the deposit, the payment schedule, the invoices (#invoices) and the Margin section (#margin) only with the grain', () => {
+    const finance = draw('w2a-margin')
+    for (const id of ['id="invoices"', 'id="margin"']) expect(finance).toContain(id)
+    expect(textOf(draw('money-new'))).toContain('Deposit')
+    expect(draw('w2a-margin-no-grain')).not.toContain('id="margin"')
+    // The money left Shipments: its foot says where it is.
+    const shipments = textOf(draw('shipments'))
+    expect(shipments).toContain('Invoices and payments are on Money ›')
+    expect(shipments).not.toContain('Invoices and credit notes')
+  })
+
+  it('F-SA-230: the band — the health chip only when Late (never "On track"), no "Late N days" banner; Made to measure on an MTM order', () => {
+    const late = draw('dates')
+    const band = late.slice(0, late.indexOf('class="fw-rcf-body"'))
+    expect(textOf(band)).toMatch(/Late · \d+ d/)
+    expect(readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')).not.toContain("'record.late'")
+    expect(textOf(draw('sales-lines'))).not.toMatch(/Late · \d+ d|On track/)
+  })
+
+  it('F-SA-230: ⋯ grouped — Next steps · Edit · People · Go to · Copy, each heading only over items, Cancel last after a rule', () => {
+    expect(MENU_GROUPS).toEqual(['next', 'edit', 'people', 'goTo', 'copy'])
+    const menu = groupedMenu({ next: [{ id: 'promise' }], people: [{ id: 'assignSupervisor' }, { id: 'askSupervisor' }], copy: [{ id: 'copy' }] }, [{ id: 'cancel' }], (group) => group.toUpperCase())
+    expect(menu.map((entry) => entry.id)).toEqual(['head-next', 'promise', 'sep-people', 'head-people', 'assignSupervisor', 'askSupervisor', 'sep-copy', 'head-copy', 'copy', 'sep-danger', 'cancel'])
+    expect(groupedMenu({}, [], String)).toEqual([])
+    const source = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('<AssignSupervisorDialog model={model.people.assign}')
+    expect(source).toContain('<NoteDialog model={model.people.note}')
   })
 
   it('one notice: the most serious shows, the rest wait behind "N more notices" (never above the thread)', () => {
@@ -66,15 +99,22 @@ describe('the order on RecordFrame', () => {
     expect(dock).not.toContain('fw-rcf-notices')
   })
 
-  it('every old ?tab= keeps working (R-8): the merged tab, Activity → Lines with the thread opened, Margin without the grain → Lines', () => {
-    expect(MERGED_TABS).toEqual({ dates: 'production', money: 'shipments', documents: 'changes', activity: 'lines' })
-    expect(tabOf('dates')).toBe('production')
-    expect(tabOf('money')).toBe('shipments')
-    expect(tabOf('documents')).toBe('changes')
-    expect(tabOf('activity')).toBe('lines')
-    expect(tabOf('shipments')).toBe('shipments')
-    expect(tabOf('margin', canOf('manager'))).toBe('lines')
-    expect(tabOf('margin', canOf('finance'))).toBe('margin')
+  it('F-SA-230: every old ?tab= keeps working (R-8): its new tab and section; Activity → the first tab with the thread; never Object’s own names', () => {
+    expect(Object.keys(MERGED_TABS).sort()).toEqual(['activity', 'confirmation', 'dates', 'documents', 'invoices', 'margin'])
+    expect(landingOf('dates')).toEqual({ tab: 'production', anchor: 'dates', moved: true })
+    expect(landingOf('invoices')).toEqual({ tab: 'money', anchor: 'invoices', moved: true })
+    expect(landingOf('margin', canOf('finance'))).toEqual({ tab: 'money', anchor: 'margin', moved: true })
+    expect(landingOf('margin', canOf('manager'))).toEqual({ tab: 'money', anchor: null, moved: true })
+    expect(landingOf('documents')).toEqual({ tab: 'changes', anchor: 'confirmation', moved: true })
+    expect(landingOf('confirmation')).toEqual({ tab: 'changes', anchor: 'confirmation', moved: true })
+    // Activity stays in the address (the frame opens the thread from it) and shows the first tab.
+    expect(landingOf('activity')).toEqual({ tab: 'lines', anchor: null, moved: false })
+    for (const tab of ['lines', 'production', 'changes', 'money', 'shipments']) expect(landingOf(tab)).toEqual({ tab, anchor: null, moved: false })
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'nope', '']) expect(landingOf(name), name).toEqual({ tab: 'lines', anchor: null, moved: false })
+    expect(tabOf(null)).toBe('lines')
+    // The page writes the new address (Back keeps it): OrderRecord replaces an old id with its tab and #section.
+    const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("router.replace(`${pathname}?${next.toString()}${landing.anchor ? `#${landing.anchor}` : ''}`, { scroll: false })")
   })
 
   it('the page mounts the office thread docked; the files leave the tabs (the thread’s Files view)', () => {
@@ -103,7 +143,7 @@ describe('the order on RecordFrame', () => {
 
 // ---- B-TH-256: the order shows what points at it (O-SAL-ORD-REC.body-F07, .notice-F04, .notice-F06; picture 29) -----------------
 describe('B-TH-256 — what points at the order', () => {
-  it('Shipments & invoices lists the order’s complaints and returns, each a real link to its record, after the money', () => {
+  it('Shipments lists the order’s complaints and returns, each a real link to its record, after the money', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = draw('th-256-links', locale)
       const text = textOf(html)
@@ -114,8 +154,9 @@ describe('B-TH-256 — what points at the order', () => {
       expect(text).toContain(locale === 'en' ? 'Investigating' : 'In analisi')
       expect(text).toContain(locale === 'en' ? 'A replacement' : 'Una sostituzione')
     }
-    const source = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
-    expect(source).toMatch(/<MoneyTab order=\{order\} model=\{model\} actions=\{actions\} \/>\s*\{\/\*[^*]*\*\/\}\s*<PointsAtOrder/)
+    // F-SA-230: Complaints & returns are Shipments' last section (the money moved to Money).
+    const source = readFileSync(new URL('./view/ShipmentsTab.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(/\{delivered\}\s*<PointsAtOrder model=\{model\.links\}/)
   })
 
   it('no complaints or returns: said in words, never an empty table; no right to either: nothing drawn (W27)', () => {

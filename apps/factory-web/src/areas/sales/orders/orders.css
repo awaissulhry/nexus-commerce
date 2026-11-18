@@ -618,3 +618,8 @@ fieldset.fw-so-colours {
 .fw-so-files-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .fw-so-files-list > li { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
 .fw-so-files-sheet { padding-left: var(--nds-space-4); }
+
+/* ── F-SA-230: a section an old address names (#dates, #invoices, #margin, #confirmation) comes into view with room above ── */
+.fw-so-anchor {
+  scroll-margin-top: var(--nds-space-4);
+}

@@ -172,7 +172,8 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   const [materials, againMaterials, putMaterials] = usePart(on('lines'), (signal) => getMaterials(api, id!, signal))
   // ---- B-TH-214 (tabs 9 → 5): the confirmation is on Confirmation & changes; the tech pack and the dates on Production & dates ----
   const [confirmation, againConfirmation, putConfirmation] = usePart(at && tab === 'changes' ? at : null, (signal) => getConfirmation(api, id!, signal))
-  const [techPack, againTechPack] = usePart(can.inquiries && at && tab === 'production' ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
+  // F-SA-230: the tech pack is read ONCE per order (the band's "Made from INQ-…" and Production's Specs in force both draw it).
+  const [techPack, againTechPack] = usePart(can.inquiries && at ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
   const [milestones, againMilestones] = usePart(can.planning && at && tab === 'production' ? at : null, (signal) => getMilestones(api, id!, signal))
   const sites = useMemo(() => (order ? forecastSites(order, session.sites) : []), [order, session.sites])
   const [forecasts, againForecasts] = usePart<ReadonlyMap<string, Forecast>>(can.promise && at && tab === 'production' && sites.length > 0 /* B-TH-214 */ ? `${at}:${sites.join(',')}` : null, async (signal) => {

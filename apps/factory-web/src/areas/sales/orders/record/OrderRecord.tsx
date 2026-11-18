@@ -1,8 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-// B-TH-228: the request the order was made from (the source read).
-import { getTechPack } from '../depth/api'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
@@ -48,7 +46,7 @@ import {
 } from '../api'
 import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../hooks'
 import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
-import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
+import { abilitiesOf, knownIds, landingOf, liveTouches, readProblem, romeToday, writeProblem, type SizeLayer } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
 // B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
@@ -76,6 +74,12 @@ import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordT
 import { printHref } from '../../../../shell/print/print-model'
 // B-TH-256: what points at the order (complaints, returns, planning's re-promises, the gates' refusals).
 import { useOrderLinks } from './links/use-order-links'
+// ---- F-SA-230: the ⋯ menu's People — the production lane's dialogs, reused in place (Assign supervisor…, Ask the supervisor…) ----
+import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+import { SUPERVISOR_NS } from '../../../_shared/production-supervisor/model'
+import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
+import { NOTES_NS } from '../../../production/_shared/notes/model'
+// ---- end F-SA-230
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -92,7 +96,7 @@ import { useOrderLinks } from './links/use-order-links'
 const NO_LINES: readonly never[] = []
 
 /** The catalogues the order's page loads (W1 browser repair: its tests draw the record with these, as the page does). */
-export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */] as const
+export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */] as const
 
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
@@ -115,8 +119,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const params = useSearchParams()
   const prefix = pathname.replace(/\/sales\/orders\/[^/]+\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
-  // B-TH-214: the five tabs; an old address lands on the tab it merged into (Margin only with the margin grain).
-  const tab = tabOf(params?.get('tab'), can)
+  // F-SA-230: the tabs re-cut; an old address lands on its new tab and section (`?tab=margin` → Money #margin with the margin grain).
+  const landing = landingOf(params?.get('tab'), can)
+  const tab = landing.tab
+  useEffect(() => {
+    if (!landing.moved) return
+    const next = new URLSearchParams(params?.toString() ?? '')
+    next.set('tab', landing.tab)
+    router.replace(`${pathname}?${next.toString()}${landing.anchor ? `#${landing.anchor}` : ''}`, { scroll: false })
+  }, [landing.moved, landing.tab, landing.anchor]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [order, setOrder] = useState<Loaded<Order>>({ status: 'loading' })
   const current = useRef<Order | null>(null)
@@ -368,7 +379,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // B-W2b-16: the owner's waive asks a fresh code (the record's step-up).
     stepUp: { ensureFresh, guard },
   })
-  const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
+  // F-SA-230: Margin is Money's last section (#margin), read while Money shows, with the margin grain.
+  const margin = useOrderMargin(api, orderId, tab === 'money' && can.margin, session.permissions, order.status === 'ready' ? order.value.version : null)
   // B-W2b-380 (XF6:02): the lines' cost sheets (once per revision) while the Lines tab shows them, with the cost grain.
   const costChanges = useCostChanged({ api, companyId: order.status === 'ready' ? order.value.companyId : null, lines: order.status === 'ready' ? order.value.lines : NO_LINES, enabled: order.status === 'ready' && can.cost && tab === 'lines' })
   // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
@@ -402,20 +414,24 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- B-TH-228: the request an order was made from straight (no quote between) — the band's "Made from INQ-… — Open". The source
   // read answers nothing to a person who may not read that request (office only: the portal never reads it).
   // undefined: still reading (the band says nothing yet — never "Typed by the office" before it knows); null: none.
-  const [madeFrom, setMadeFrom] = useState<{ id: string; number: string } | null | undefined>(undefined)
+  // F-SA-230: the tech pack is read ONCE (the depth's read, also Production's Specs in force); a failed read claims nothing.
   const readsRequests = session.permissions.includes('sales.inquiries.view')
-  const straightId = order.status === 'ready' && order.value.chain.quote === null ? order.value.id : null
-  useEffect(() => {
-    if (!straightId || !readsRequests) return setMadeFrom(null)
-    setMadeFrom(undefined)
-    const abort = new AbortController()
-    getTechPack(api, straightId, abort.signal)
-      .then((answer) => setMadeFrom(answer.inquiry ? { id: answer.inquiry.id, number: answer.inquiry.number } : null))
-      // A failed read claims nothing (never "Typed by the office" for an order that may have come from a request).
-      .catch(() => !abort.signal.aborted && setMadeFrom(undefined))
-    return () => abort.abort()
-  }, [api, straightId, readsRequests])
+  const straight = order.status === 'ready' && order.value.chain.quote === null
+  const pack = depth.model.techPack
+  const madeFrom: { id: string; number: string } | null | undefined = !straight || !readsRequests || !pack ? null : pack.value ? (pack.value.inquiry ? { id: pack.value.inquiry.id, number: pack.value.inquiry.number } : null) : undefined
   // ---- end B-TH-228
+  // ---- F-SA-230: the band's ⋯ People — Assign supervisor… (production.brand.manage) and Ask the supervisor… (threads.post: an office
+  // note on THIS order, its supervisor asked), the production lane's own dialogs. A Send reads the order again.
+  const assign = useAssignSupervisor(api, () => void load())
+  const mayNote = session.permissions.includes('threads.post')
+  const note = useNoteDialog(api, { can: mayNote, onDone: () => void load() })
+  const people = {
+    mayAssign: session.permissions.includes('production.brand.manage'),
+    mayNote,
+    assign: assign.model,
+    note: note.model,
+  }
+  // ---- end F-SA-230
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -434,6 +450,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFrom: madeFrom ?? null, // B-TH-228
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
+    people, // F-SA-230
     changed,
     notice,
     busy,
@@ -508,6 +525,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
         links: links.actions, // B-TH-256
+        // ---- F-SA-230: the ⋯ People (the production lane's dialogs) ----
+        people: {
+          onAssign: () => {
+            const value = current.current
+            if (!value || !people.mayAssign) return
+            assign.open([{ orderId: value.id, number: value.number, customerRef: value.customerRef, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? '—', companyId: value.companyId }])
+          },
+          onAsk: () => {
+            const value = current.current
+            if (!value || !mayNote) return
+            note.open({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: value.id, label: value.number, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? null, companyId: value.companyId }], withoutOrder: 0 }, 'band', 'salesOrders')
+          },
+          assign: assign.actions,
+          note: note.actions,
+        },
         // ---- B-W2b-323 ----
         depth: depth.actions,
         onPricedOffer: () => {

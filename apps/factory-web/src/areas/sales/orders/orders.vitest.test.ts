@@ -57,6 +57,7 @@ import {
 import { confirmHeld, draftKey, headerFromAddress, manualBody, newOrderAddress, newOrderHeld, parseDraft, previewByKey } from './new/new-model'
 import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
+import { isMadeToMeasure, lateDaysOf, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
 import { designScreen as listScreen } from './list/fixtures'
 // B-TH-201
 import { getBoard, listOrders } from './api'
@@ -218,14 +219,14 @@ describe('the record: the next step by state, held with its reason', () => {
     expect(promiseProblems({ date: TODAY, reason: 'ok', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({})
   })
   it('tabs from the address; the chain’s ids for live events', () => {
-    // B-TH-214: an old tab lands on the tab it merged into (?tab=activity opens the thread beside Lines); the five stay as they are.
-    expect(tabOf('money')).toBe('shipments')
+    // F-SA-230: the tabs re-cut — an old tab lands on its new tab (and section); the five stay as they are.
+    expect(tabOf('money')).toBe('money')
     expect(tabOf('activity')).toBe('lines')
     for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('lines') // TH-6 part B: never a name of Object's own
-    for (const tab of ['lines', 'production', 'shipments', 'changes', 'margin'] as const) expect(tabOf(tab)).toBe(tab)
+    for (const tab of ['lines', 'production', 'changes', 'money', 'shipments'] as const) expect(tabOf(tab)).toBe(tab)
     expect(tabOf('nope')).toBe('lines')
-    // B-TH-301 (the 9 → 5 merge, done with B-TH-214): every address the old nine tabs had lands on its merged tab.
-    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'shipments', changes: 'changes', documents: 'changes', margin: 'margin', activity: 'lines' }
+    // B-TH-301 + F-SA-230: every address the old nine tabs (and the five) had lands on its tab today.
+    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'money', invoices: 'money', changes: 'changes', documents: 'changes', confirmation: 'changes', margin: 'money', activity: 'lines' }
     for (const [old, merged] of Object.entries(OLD)) expect(tabOf(old), old).toBe(merged)
     const ids = knownIds(order('SHIPPED'))
     expect(ids.has(order('SHIPPED').id)).toBe(true)
@@ -713,3 +714,34 @@ describe('the board card (F-SA-213): photo left, the label that adds something, 
   })
 })
 // ---- end F-SA-213
+
+// ---- F-SA-230: the order's tabs re-cut — what each counts, the band's health and Made to measure ------------------------------
+describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', () => {
+  it('each tab counts what it lists: Money the invoices (no longer Shipments), Shipments the shipments only', () => {
+    const value = order('SHIPPED')
+    expect(tabCountOf('lines', value)).toBe(value.lines.length)
+    expect(tabCountOf('production', value)).toBe(value.chain.workOrders.length)
+    expect(tabCountOf('changes', value)).toBe(value.amendments.count)
+    expect(tabCountOf('money', value)).toBe(value.chain.invoices.length)
+    expect(tabCountOf('shipments', value)).toBe(value.chain.shipments.length)
+  })
+
+  it('the health chip only for a late order still to ship (never On track), from the order read until the production read comes', () => {
+    expect(lateDaysOf({ daysLate: 3, status: 'IN_PRODUCTION' })).toBe(3)
+    expect(lateDaysOf({ daysLate: 0, status: 'IN_PRODUCTION' })).toBeNull()
+    expect(lateDaysOf({ daysLate: null, status: 'CONFIRMED' })).toBeNull()
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(lateDaysOf({ daysLate: 4, status }), status).toBeNull()
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['production']).production!)('parts.health.lateBy', { count: 3 })).toMatch(/3/)
+  })
+
+  it('Made to measure when a line is made to measure; the ⋯ groups and the band words in both languages', () => {
+    expect(isMadeToMeasure(order())).toBe(false)
+    expect(isMadeToMeasure({ lines: [{ ...order().lines[0]!, kind: 'MADE_TO_MEASURE' }] })).toBe(true)
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['record.madeToMeasure', 'menu.assignSupervisor', 'menu.askSupervisor', 'ship.moneyDoor', 'money.section.totals', 'money.section.deposit', 'money.section.margin', ...MENU_GROUPS.map((group) => `menu.group.${group}`), ...RECORD_TABS.map((tab) => `tab.${tab}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+    expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('tab.money')).toBe('Importi')
+  })
+})
+// ---- end F-SA-230

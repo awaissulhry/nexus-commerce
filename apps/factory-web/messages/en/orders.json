@@ -221,12 +221,11 @@
   },
   "tab": {
     "lines": "Lines",
-    "production": "Production & dates",
-    "shipments": "Shipments & invoices",
-    "money": "Invoices & payments",
-    "margin": "Margin",
+    "production": "Production",
+    "shipments": "Shipments",
+    "money": "Money",
     "depositOpen": "A deposit is open",
-    "changes": "Confirmation & changes"
+    "changes": "Changes"
   },
   "step": {
     "makeWorkOrders": "Make work orders",
@@ -269,8 +268,6 @@
     "tabsLabel": "Sections of the order",
     "depositOpen": "Deposit open — due {date}",
     "depositMissing": "Deposit not asked",
-    "late_one": "Late {count} day",
-    "late_other": "Late {count} days",
     "customerRef": "Customer PO {ref}",
     "fromQuote": "From quote {number} v{revision}",
     "changed": "This order changed at {time}",
@@ -282,7 +279,8 @@
     "amended": "Amended · rev {revision}",
     "reapproval": "Waiting for the customer to accept the change",
     "typed": "Typed by the office",
-    "madeFrom": "Made from {number} — Open"
+    "madeFrom": "Made from {number} — Open",
+    "madeToMeasure": "Made to measure"
   },
   "held": {
     "busy": "Working on the last change…",
@@ -486,7 +484,8 @@
       "status": "State",
       "shipped": "Left",
       "delivered": "Delivered"
-    }
+    },
+    "moneyDoor": "Invoices and payments are on Money ›"
   },
   "shipStatus": {
     "DRAFT": "Draft",
@@ -517,6 +516,11 @@
       "sdi": "SDI",
       "gross": "Total",
       "open": "Open"
+    },
+    "section": {
+      "totals": "Totals",
+      "deposit": "Deposit",
+      "margin": "Margin"
     }
   },
   "docType": {
@@ -1299,5 +1303,16 @@
       "invalid": "Not sent as it is: check what you typed.",
       "unavailable": "The factory server didn't answer. Try again."
     }
+  },
+  "menu": {
+    "group": {
+      "next": "Next steps",
+      "edit": "Edit",
+      "people": "People",
+      "goTo": "Go to",
+      "copy": "Copy"
+    },
+    "assignSupervisor": "Assign supervisor…",
+    "askSupervisor": "Ask the supervisor…"
   }
 }
