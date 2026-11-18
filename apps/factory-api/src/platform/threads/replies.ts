@@ -3,7 +3,7 @@ import { DomainError, ForbiddenError, NotFoundError, ValidationError } from '@ne
 import { can, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { REPLY_REFUSAL_WORDS, type ReplyRefusalCode } from '@nexus/factory-domain/threads/replies'
 import { cleanBody, noteProblems, uniqueIds } from '@nexus/factory-domain/threads/rules'
-import { command, type CommandCaller, type CommandTx } from '../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { partyReaders } from '../portal/tasks/people'
 import type { MessageView, ThreadView } from './contract'
@@ -13,6 +13,9 @@ import { attachmentProblems, contextOf, ensureThread, messageViewOf, officeRecor
 import { messageLinkProblems, messageLinksOf } from './threads'
 // B-TH-092: the sender's draft of the record goes with the reply.
 import { clearDraftInCommand } from './draft-keys'
+// B-SA-073: Reply to N checked on the server (one customer, at most 50 records) and the mis-send text check on every reply.
+import { REPLY_BATCH_MAX } from '@nexus/factory-domain/threads/replies'
+import { otherCustomers } from '../email-out/mis-send/check'
 
 /**
  * B-TH-044 (threads plan TH-3, G15; T5-F07 "Reply in the portal only"; wall W08): POST /threads/<type>/<id>/replies — a reply to
@@ -26,6 +29,14 @@ import { clearDraftInCommand } from './draft-keys'
  * (a prospect's request: make the customer first) NO_PARTY, a record that is never shared NOT_SHAREABLE (B-PR-08a), a closed
  * conversation CLOSED, and a party of which nobody may read the record in the portal now NO_PORTAL (reply by e-mail). The files
  * attached are the record's, already shared with its party (`attachmentProblems`, PARTNER).
+ *
+ * B-SA-073 (sales page plan R7, rule 7 / T11; review BW-6): Reply to N is checked HERE, not only in the browser. The replies that
+ * share a `batchId` are one action of one customer: a reply whose record's customer is not the batch's (BATCH_TWO_CUSTOMERS) or that
+ * would be the batch's 51st record (BATCH_FULL) is refused in words — so no action ever writes one message to two customers. The
+ * batch is kept as audit rows of its own (recordType `ReplyBatch`, the batch's id: one row per reply with its customer and record),
+ * read and written under the batch's own lock. Every reply also runs the mis-send text check (email-out/mis-send/check.ts
+ * otherCustomers: another customer of the record's company named in the text): held (NAMES_OTHER_CUSTOMER) until the text changes or
+ * the writer ticks "This text names no other customer" (`namesNoOtherCustomer`, the production notes' R-47 rule).
  */
 
 export interface ReplyInput {
@@ -35,7 +46,31 @@ export interface ReplyInput {
   // ---- B-TH-050
   readonly replyToMessageId?: string | undefined
   readonly correctsMessageId?: string | undefined
+  // ---- B-SA-073: the writer's tick "This text names no other customer" (R-47).
+  readonly namesNoOtherCustomer?: boolean | undefined
 }
+
+// ---- B-SA-073 ----------------------------------------------------------------------------------------------------------------
+/** The audit record type that keeps a Reply to N's batch: one row per reply, keyed by the batch's id. */
+export const REPLY_BATCH_RECORD = 'ReplyBatch'
+
+/**
+ * Inside the reply's command: the batch takes this record of this customer, or the reply is refused in words — another customer than
+ * the batch's (BATCH_TWO_CUSTOMERS), or a 51st record (BATCH_FULL). A record already in the batch is no new record. Serialised on
+ * the batch's id, so two replies of one batch sent at once never both pass.
+ */
+async function joinReplyBatch(tools: CommandTools, batchId: string, thread: ThreadRow): Promise<void> {
+  const { tx } = tools
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.reply-batch', ${batchId}::uuid::text), 0))`
+  const rows = await tx.auditLog.findMany({ where: { recordType: REPLY_BATCH_RECORD, recordId: batchId }, select: { after: true } })
+  const taken = rows.map((row) => (row.after ?? {}) as { partyId?: string | null; recordType?: string; recordId?: string })
+  if (taken.some((entry) => entry.partyId !== thread.partyId)) throw replyRefusal('BATCH_TWO_CUSTOMERS')
+  const records = new Set(taken.map((entry) => `${entry.recordType}:${entry.recordId}`))
+  const key = `${thread.recordType}:${thread.recordId}`
+  if (!records.has(key) && records.size >= REPLY_BATCH_MAX) throw replyRefusal('BATCH_FULL')
+  tools.audit({ action: 'threads.replyBatch', recordType: REPLY_BATCH_RECORD, recordId: batchId, companyId: thread.companyId, siteId: thread.siteId, after: { partyId: thread.partyId, recordType: thread.recordType, recordId: thread.recordId } })
+}
+// ---- end B-SA-073 -------------------------------------------------------------------------------------------------------------
 
 /** The 409 of a refused reply: the words at `refusal/<code>`. */
 export function replyRefusal(code: ReplyRefusalCode): DomainError {
@@ -80,7 +115,7 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
 
   const { result } = await command(
     caller,
-    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } },
+    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null, /* B-SA-073 */ namesNoOtherCustomer: input.namesNoOtherCustomer === true } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides — with its wall party, as the note route
@@ -91,6 +126,10 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
       if (thread.partyId === null) throw replyRefusal('NO_PARTY')
       if (thread.status !== 'OPEN') throw replyRefusal('CLOSED')
       if (!(await portalReaderExists(tools.tx, context.tenantId, thread, tools.now))) throw replyRefusal('NO_PORTAL')
+      // ---- B-SA-073: the mis-send text check (another customer of the company named), then the batch's one customer and 50 records.
+      if (input.namesNoOtherCustomer !== true && (await otherCustomers(tools.tx, draft.bodyText, thread.partyId, thread.companyId)).length > 0) throw replyRefusal('NAMES_OTHER_CUSTOMER')
+      if (input.batchId) await joinReplyBatch(tools, input.batchId, thread)
+      // ---- end B-SA-073
       const links = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } // B-TH-050
       const issues = [...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'PARTNER')), ...(await messageLinkProblems(tools.tx, thread, links, { direction: 'OUTBOUND', channel: 'PORTAL' }))]
       if (issues.length > 0) throw new ValidationError('The reply is not valid.', issues)
