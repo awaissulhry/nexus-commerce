@@ -512,7 +512,12 @@ function Requests({ model, actions }: { model: OrderRecordViewModel; actions?: O
             <li key={request.id} className="fw-pord-request" id={`change-request:${request.id}`}>
               <div className="fw-pord-request-head">
                 <strong>{request.kindWords[locale]}</strong>
-                <Pill tone={requestTone(request.status)}>{request.words[locale]}</Pill>
+                {/* B-SA-046c: an accepted request says whether we are still carrying it out, or it is done (never the steps). */}
+                {request.status === 'ACCEPTED' && request.followUp ? (
+                  <Pill tone={request.followUp === 'DONE' ? 'success' : 'info'}>{t(`requests.followUp.${request.followUp}`)}</Pill>
+                ) : (
+                  <Pill tone={requestTone(request.status)}>{request.words[locale]}</Pill>
+                )}
                 <span className="fw-pord-sub">{t(request.mine ? 'requests.askedByYou' : 'requests.asked', { when: at(request.askedAt) })}</span>
                 {/* B-PR-23: the customer withdraws a change or a cancel here; a production ask is withdrawn where it was asked. */}
                 {request.status === 'OPEN' && (request.kind === 'CHANGE' || request.kind === 'CANCEL') ? (
@@ -544,6 +549,8 @@ function RequestWhat({ request, words }: { request: ChangeRequest; words: OrderW
     parts.push(t('requests.lines', { lines: [...new Set(request.cells.map((cell) => cell.seq))].join(', ') }))
     const files = request.fileIds?.length ?? 0
     if (files > 0) parts.push(t('ask.design.review.files', { count: files }))
+    // B-SA-046b: which pieces it is for, as chosen at Send (a request kept before it says nothing).
+    if (request.impact?.appliesTo) parts.push(t(`ask.design.appliesTo.${request.impact.appliesTo}`))
   } else {
     for (const cell of request.cells) parts.push(t('requests.cell', { seq: cell.seq, size: cell.size ?? '—', old: cell.before, new: cell.asked }))
     if (request.requestedDate) parts.push(t('requests.date', { date: day(request.requestedDate) }))

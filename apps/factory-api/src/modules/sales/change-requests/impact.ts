@@ -2,7 +2,7 @@ import type { FactoryClient } from '@nexus/factory-db'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { dateOnly, type DatedLine, type DateOnly } from '@nexus/factory-domain/planning/promise/date-only'
 import { impactOf, type Impact, type ImpactAsk, type ImpactLine } from '@nexus/factory-domain/sales/change-requests/impact'
-import type { AskedCell, OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
+import type { AskedCell, DesignAppliesTo, OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules' // B-SA-046b: DesignAppliesTo
 import { freezeVerdict, type FreezeRuleFacts, type OrderFreezeField, type OrderFreezeStage } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { countryOf } from '../../compliance/gates/facts'
 import { LINES_LIMIT, promiseLinesOf } from '../../planning/promise-keep/lines'
@@ -187,14 +187,15 @@ export function impactLinesOf(lines: readonly { readonly id: string; readonly se
 }
 
 /** What the ask touches, as the impact rules read it (a change's cells that move, its date and address; a date of a rush or a split). */
-export function impactAskOf(kind: OrderRequestKind, cells: readonly AskedCell[], header: { readonly requestedDate: BusinessDate | null; readonly shipToAddressId: string | null }): ImpactAsk {
+export function impactAskOf(kind: OrderRequestKind, cells: readonly AskedCell[], header: { readonly requestedDate: BusinessDate | null; readonly shipToAddressId: string | null; /** B-SA-046b: a design change's pieces (kept in its impact). */ readonly appliesTo?: DesignAppliesTo | null | undefined }): ImpactAsk {
   if (kind === 'CHANGE') {
     // B-PR-27a: a cell of a line asked in another colourway reads the line's colour freeze (and its size's, when it changes).
     const asked = cells.filter((cell) => (cell.size !== null && cell.quantity !== cell.quantityBefore) || (cell.colourwayId ?? null) !== null)
     return { kind, cells: asked.map((cell) => ({ lineId: cell.orderLineId, size: cell.quantity !== cell.quantityBefore ? cell.size : null, ...((cell.colourwayId ?? null) !== null ? { colourway: true } : {}) })), requestedDate: header.requestedDate, shipTo: header.shipToAddressId !== null }
   }
   // B-SA-046: a design change names lines (one row each): the impact says per line how far it is made.
-  if (kind === 'DESIGN') return { kind, cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: null })) }
+  // B-SA-046b: and which pieces it is for (the pieces not started yet, or also the pieces already made).
+  if (kind === 'DESIGN') return { kind, cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: null })), appliesTo: header.appliesTo ?? null }
   return { kind, requestedDate: kind === 'RUSH' || kind === 'SPLIT_SHIPMENT' ? header.requestedDate : null }
 }
 

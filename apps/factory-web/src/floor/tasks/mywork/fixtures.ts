@@ -80,6 +80,17 @@ const CARD_MESSAGES: MyMessages = {
 }
 // ---- end B-TH-278
 
+// ---- F-SA-247: order changes from the office (B-SA-053's notes, made up: the customer's code, never a name; no price). A CHECK on
+// WO-DEMO-0051 (s1, ready) and a STOP on WO-DEMO-0049 (s4, on hold), beside the plain notes.
+const ORDER_CHECK: WorkMessage = {
+  ...message('m7', 'WO-DEMO-0051', 'OFFICE', "Modifica d'ordine su WO-DEMO-0051 (ALP): taglia 50 ora 18 (erano 20).\nAspetta i nuovi numeri dell'ordine di lavoro prima di tagliare la 50.", '2026-10-29T08:35:00.000Z', false, 'wo-s1'),
+  kind: 'ORDER_CHANGE',
+  check: 'CHECK',
+}
+const ORDER_STOP: WorkMessage = { ...message('m8', 'WO-DEMO-0049', 'OFFICE', 'WO-DEMO-0049 (ALP) in pausa mentre la modifica viene eseguita.', '2026-10-29T08:33:00.000Z', false, 'wo-s4'), kind: 'ORDER_CHANGE', check: 'STOP' }
+const ORDER_MESSAGES: MyMessages = { asOf: AS_OF, messages: [...MESSAGES.messages, ORDER_CHECK, ORDER_STOP] }
+// ---- end F-SA-247
+
 const list = (extra: Partial<DispatchList> = {}): DispatchList => ({
   site: { id: 'site-a', code: 'A1', name: 'Stabilimento Demo Nord', timeZone: 'Europe/Rome' },
   target: { kind: 'STATION', id: 'st-sew-04', code: 'SEW-04', name: STATION, line: { id: 'l2', code: 'L2', name: 'Linea 2' }, workCentre: { id: 'wc-sew', code: 'SEW', name: 'Cucitura' } },
@@ -239,6 +250,34 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
       note: 'The office wrote it in English on an Italian tablet: the words stay as written, never translated, with their lines; the screen\'s own words are the worker\'s language. Where from, never who; no amount, no customer.',
     },
     // ---- end B-TH-278
+    // ---- F-SA-247 (R2; 14-change-flow §5.3): an order change's note on the tablet.
+    {
+      id: 'f-sa-247-for-your-work',
+      label: 'SA: For your work: order changes first',
+      model: model({ messages: ORDER_MESSAGES }),
+      note: 'The order changes not opened on this tablet have their own chip, first; Messages counts the other notes. Both open the list, order changes on top.',
+    },
+    {
+      id: 'f-sa-247-list',
+      label: 'SA: the list, order changes first',
+      model: model({ step: { kind: 'messages' }, messages: ORDER_MESSAGES, seen: ['m3'] }),
+      note: 'Newest first within each group, the order changes above the plain notes: Order change on the work order, STOP in danger, CHECK in warning while New. Never who; nothing records who read what.',
+    },
+    {
+      id: 'f-sa-247-check',
+      label: 'SA: an order change to read before the start',
+      model: model({ step: { kind: 'message', id: 'm7' }, messages: ORDER_MESSAGES, seen: ['m7'] }),
+      note: 'The office\'s words as written, "Read this before you start." and Got it in the bar: kept on this tablet only (no queue, no route), so the next Start on WO-DEMO-0051 opens straight away.',
+    },
+    { id: 'f-sa-247-got', label: 'SA: an order change already got here', model: model({ step: { kind: 'message', id: 'm7' }, messages: ORDER_MESSAGES, seen: ['m7'], gotIt: ['m7'] }), note: 'Once per tablet: no Got it, no line; the words stay to read again.' },
+    { id: 'f-sa-247-stop', label: 'SA: an order change while held (STOP)', model: model({ step: { kind: 'message', id: 'm8' }, messages: ORDER_MESSAGES, seen: ['m8'] }), note: 'The hold already refuses the next scan: the words say why, and to stop and ask the team leader. Nothing to tap.' },
+    {
+      id: 'f-sa-247-card',
+      label: 'SA: the card of a task with an order change',
+      model: model({ step: { kind: 'entry', slotId: 's1' }, messages: ORDER_MESSAGES, seen: [] }),
+      note: 'The card says to read it before the start, with its door; once got on this tablet, nothing more.',
+    },
+    // ---- end F-SA-247
     { id: 'cant-find', label: 'Can\'t find it?', model: model({ cantFind: 's1' }), note: 'Design main action: Call for help: Material, one tap through the tablet\'s queue; or Put it last with a reason tile; or Back. Esc closes.' },
     { id: 'help-reading', label: 'Call for help: checking who to call', model: model({ cantFind: 's1', helpHeld: 'reading' }) },
     { id: 'help-offline', label: 'Call for help held: offline, never read', model: model({ frame: frame({ online: false }), cantFind: 's1', helpHeld: 'offline' }), note: 'Offline the call still goes through the queue when this tablet read the site\'s help types in this visit; only a tablet that never did is held.' },

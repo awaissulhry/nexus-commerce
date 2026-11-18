@@ -554,3 +554,10 @@
   object-fit: contain;
 }
 /* ---- end F-PR-12c */
+
+/* B-SA-046d: a design change's line named with its small picture (the one picture part; layout only). */
+.fw-pord-line-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

@@ -263,6 +263,13 @@ export interface WorkMessage {
   /** The text was cut for the tablet: the rest is in the office. */
   readonly cut: boolean
   readonly at: string
+  /**
+   * F-SA-247 (B-SA-053's read): a plain note, or an order change's "For your work" note (the newest of its work order); left out by
+   * an answer kept from before it: a plain note.
+   */
+  readonly kind?: 'NOTE' | 'ORDER_CHANGE'
+  /** F-SA-247: how an order change opens, read now by the office (STOP while held, else CHECK); null or left out: a plain note. */
+  readonly check?: 'STOP' | 'CHECK' | null
 }
 
 export interface MyMessages {

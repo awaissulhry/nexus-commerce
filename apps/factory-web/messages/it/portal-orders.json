@@ -205,7 +205,11 @@
     "cell": "Riga {seq} · {size}: {old} → {new}",
     "date": "Desiderato entro il {date}",
     "shipTo": "Consegna a {address}",
-    "note": "La vostra nota: {note}"
+    "note": "La vostra nota: {note}",
+    "followUp": {
+      "CARRYING_OUT": "Accettata · la stiamo eseguendo",
+      "DONE": "Accettata · eseguita"
+    }
   },
   "progress": {
     "title": "Avanzamento della produzione",
@@ -908,6 +912,15 @@
       "linePieces_other": "{count} pezzi ordinati",
       "what": "Cosa cambiare",
       "whatHint": "Ditelo con parole vostre: più siete precisi, prima possiamo rispondere.",
+      "appliesTo": {
+        "label": "Quali pezzi",
+        "NOT_STARTED": "Applicare ai pezzi non ancora iniziati",
+        "ALSO_MADE": "Anche ai pezzi già fatti (la rilavorazione può costare)",
+        "hint": {
+          "NOT_STARTED": "I pezzi già fatti restano come sono.",
+          "ALSO_MADE": "I pezzi già fatti vengono rilavorati secondo il nuovo design: vi diciamo il costo con la nostra risposta."
+        }
+      },
       "files": "File",
       "filesHint": "Fino a {max} file: dal vostro dispositivo, o file già sull'ordine.",
       "checked": "I file vengono controllati prima che li apriamo.",

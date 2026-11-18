@@ -10,6 +10,10 @@ import { dispatchSchema, helpSchema, messagesSchema, mineSchema } from './api'
 import { designScreen } from './fixtures'
 import { arranged, changedRows, emptyOf, excerptOf, helpHeld, helpPayload, leftOf, listChanged, listOf, materialTile, messagesOf, putLastIn, readPutLast, readSeen, signatureOf, unreadCount, withPutLast, withSeen, type DispatchEntry, type DispatchList, type PutLast, type StationHelp, type WorkMessage } from './model'
 import { MyWorkView } from './view/MyWorkView'
+// F-SA-247: an order change's note — the rules, the tablet's own Got it, and the operation screen's line.
+import { forgetThisVisit, gateOf, GOT_IT_KEY, gotItHere, isOrderChange, markGotIt, newOrderChanges, orderChangeOf, orderChangesFirst, readGotIt, stillToRead, withGotIt, type OrderChangeNote } from './order-change-seen'
+import { designScreen as operationScreen } from '../scans/fixtures'
+import { OperationView } from '../scans/view/OperationView'
 
 /**
  * SCR-089 My work (B-W2a-74): the next task and the queue from the published plan, work put last on this tablet, why a
@@ -349,3 +353,200 @@ describe('B-TH-278 floor notes on the tablet: as written, on their own work orde
   })
 })
 // ---- end B-TH-278
+
+// ---- F-SA-247 (sales page plan P8', R2; 14-change-flow §5.3; review WP-1): an order change's note on the floor tablet ----------
+describe('F-SA-247 an order change on the tablet: first with New, a CHECK opens before the next Start once per tablet, Got it never leaves it', () => {
+  const note = (id: string, workOrderId: string, extra: Partial<WorkMessage> = {}): WorkMessage => ({ id, workOrder: { id: workOrderId, number: workOrderId.toUpperCase() }, from: 'OFFICE', text: `Note ${id}`, cut: false, at: LIST.asOf, ...extra })
+  const change = (id: string, workOrderId: string, check: 'STOP' | 'CHECK' = 'CHECK'): OrderChangeNote => orderChangeOf([note(id, workOrderId, { kind: 'ORDER_CHANGE', check })], workOrderId)!
+  const read = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+  const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ')
+  const myWork = (id: string, locale: 'it' | 'en' = 'en') => {
+    const item = designScreen.cases.find((entry) => entry.id === id)
+    if (!item) throw new Error(`no design case ${id}`)
+    return textOf(renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, FLOOR_NAMESPACES) }, createElement(MyWorkView, { model: item.model }))))
+  }
+  const operation = (id: string, locale: 'it' | 'en' = 'en') => {
+    const item = operationScreen.cases.find((entry) => entry.id === id)
+    if (!item) throw new Error(`no design case ${id}`)
+    return textOf(renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, FLOOR_NAMESPACES) }, createElement(OperationView, { model: item.model }))))
+  }
+
+  it('lists the order changes first, each group newest first as read; a plain note or an answer kept from before is never one', () => {
+    const rows = [note('a', 'wo-1'), note('b', 'wo-2', { kind: 'ORDER_CHANGE', check: 'CHECK' }), note('c', 'wo-1'), note('d', 'wo-1', { kind: 'ORDER_CHANGE', check: 'STOP' })]
+    expect(orderChangesFirst(rows).map((row) => row.id)).toEqual(['b', 'd', 'a', 'c'])
+    expect(newOrderChanges(rows, ['b'])).toBe(1)
+    expect(orderChangeOf(rows, 'wo-1')?.id).toBe('d')
+    expect(orderChangeOf(rows, 'wo-3')).toBeNull()
+    expect(isOrderChange(note('x', 'wo-1'))).toBe(false)
+    expect(isOrderChange(note('y', 'wo-1', { kind: 'ORDER_CHANGE', check: null }))).toBe(false)
+    expect(isOrderChange(note('z', 'wo-1', { kind: 'NOTE', check: null }))).toBe(false)
+  })
+
+  it('reads the kind and how it opens, and still reads an answer kept from before them; nothing else passes', () => {
+    const parsed = messagesSchema.parse({ asOf: LIST.asOf, messages: [{ ...note('m', 'wo-1'), kind: 'ORDER_CHANGE', check: 'CHECK', seenBy: 'Someone', station: 'SEW-01' }, note('n', 'wo-1')] })
+    expect(Object.keys(parsed.messages[0]!).sort()).toEqual(['at', 'check', 'cut', 'from', 'id', 'kind', 'text', 'workOrder'])
+    expect(Object.keys(parsed.messages[1]!).sort()).toEqual(['at', 'cut', 'from', 'id', 'text', 'workOrder'])
+    expect(messagesSchema.safeParse({ asOf: LIST.asOf, messages: [{ ...note('m', 'wo-1'), kind: 'ORDER_CHANGE', check: 'INFO' }] }).success).toBe(false)
+  })
+
+  it('opens a CHECK before a Start once per tablet; a STOP opens no gate (the hold refuses the scan); of several work orders, the first not got', () => {
+    const a = change('a', 'wo-1')
+    const b = change('b', 'wo-2')
+    const stop = change('s', 'wo-3', 'STOP')
+    expect(gateOf([a], [])?.id).toBe('a')
+    expect(gateOf([a], ['a'])).toBeNull()
+    expect(gateOf([stop], [])).toBeNull()
+    expect(gateOf([null, undefined, stop, a, b], ['a'])?.id).toBe('b')
+    expect(gateOf([], [])).toBeNull()
+    expect(stillToRead(a, [])).toBe(true)
+    expect(stillToRead(a, ['a'])).toBe(false)
+    expect(stillToRead(stop, ['s'])).toBe(true)
+    expect(stillToRead(null, [])).toBe(false)
+  })
+
+  it('keeps Got it on the tablet as note ids only, small; anything else in its storage is dropped', () => {
+    expect(withGotIt(['a'], 'a')).toEqual(['a'])
+    expect(withGotIt(['a'], 'b')).toEqual(['a', 'b'])
+    let many: string[] = []
+    for (let index = 0; index < 305; index += 1) many = withGotIt(many, `n${index}`)
+    expect(many).toHaveLength(300)
+    expect(many[0]).toBe('n5')
+    expect(readGotIt(JSON.stringify(['m1', { id: 'm2', by: 'Someone', at: LIST.asOf, station: 'SEW-01' }, 3]))).toEqual(['m1'])
+    expect(readGotIt('nonsense')).toEqual([])
+    expect(readGotIt(null)).toEqual([])
+    expect(GOT_IT_KEY).toBe('nexus.floor.orderChange.gotIt')
+  })
+
+  it('a working storage keeps it across visits; a failing one shows the note again after a reload and never blocks the Start', () => {
+    forgetThisVisit()
+    const box = new Map<string, string>()
+    const storage = { getItem: (key: string) => box.get(key) ?? null, setItem: (key: string, value: string) => void box.set(key, value) }
+    markGotIt('a', storage)
+    expect(JSON.parse(box.get(GOT_IT_KEY)!)).toEqual(['a'])
+    forgetThisVisit()
+    // Once per tablet: the next visit finds it got.
+    expect(gotItHere(storage)).toEqual(['a'])
+    expect(gateOf([change('a', 'wo-1')], gotItHere(storage))).toBeNull()
+
+    const broken = {
+      getItem: (): string | null => {
+        throw new Error('blocked')
+      },
+      setItem: (): void => {
+        throw new Error('blocked')
+      },
+    }
+    forgetThisVisit()
+    const b = change('b', 'wo-2')
+    // Nothing readable: the note shows.
+    expect(gotItHere(broken)).toEqual([])
+    expect(gateOf([b], gotItHere(broken))?.id).toBe('b')
+    // Got it with a failing storage: nothing throws, and this visit lets the Start go.
+    expect(() => markGotIt('b', broken)).not.toThrow()
+    expect(gateOf([b], gotItHere(broken))).toBeNull()
+    // A reload: shown again — twice, never zero times.
+    forgetThisVisit()
+    expect(gateOf([b], gotItHere(broken))?.id).toBe('b')
+    // No storage at all (a test, a private window that refuses it).
+    expect(gotItHere(null)).toEqual([])
+    expect(() => markGotIt('c', null)).not.toThrow()
+    forgetThisVisit()
+  })
+
+  it('sends nothing on Got it: no route, no queue kind, never POST /production/instructions/floor/seen', () => {
+    const seen = read('./order-change-seen.ts')
+    expect(seen).not.toMatch(/lib\/api|fetch\(|enqueue|floorWrite|floorRead/)
+    const hook = read('./use-order-change-gate.ts')
+    const tap = hook.slice(hook.indexOf('const gotItNow'), hook.indexOf('const close'))
+    expect(tap).toContain('markGotIt')
+    expect(tap).not.toMatch(/api|queue|fetch|enqueue|floorWrite/)
+    expect(hook).not.toMatch(/floorWrite|enqueue|instructions\/api|sendSeen|markSeen/)
+    const screen = read('./MyWork.tsx')
+    const tapped = screen.slice(screen.indexOf("case 'gotIt':"), screen.indexOf("case 'putLast':"))
+    expect(screen.indexOf("case 'gotIt':")).toBeLessThan(screen.indexOf("case 'putLast':"))
+    expect(tapped).toContain('markGotIt')
+    expect(tapped).not.toMatch(/api\.|queue\.|fetch\(|enqueue/)
+    for (const file of ['./order-change-seen.ts', './use-order-change-gate.ts', './view/OrderChangeGate.tsx', './MyWork.tsx', './api.ts', '../scans/Operation.tsx', '../cutting/Cut.tsx', '../fabriccut/FabricCut.tsx', '../../queue/actions.ts']) {
+      expect(read(file), file).not.toContain('/production/instructions/floor/seen')
+    }
+    expect(read('../../queue/actions.ts')).not.toMatch(/orderChange|order_change|gotIt|floor_note/i)
+    // The one read: a GET of the work order's notes, through floorRead.
+    expect(read('./api.ts')).toContain("floorRead(api, '/production/dispatch/mine/messages', { query: { workOrderId }, schema: messagesSchema })")
+  })
+
+  it('the gate stands only at a Start: Resume, Pause and Finish never ask it, so a running bundle is never interrupted', () => {
+    const code = read('../scans/Operation.tsx')
+    const body = (name: string) => code.slice(code.indexOf(`const ${name} = async`), code.indexOf('\n  }\n', code.indexOf(`const ${name} = async`)))
+    expect(body('startWork')).toContain('orderGate.before(')
+    for (const name of ['resumeWork', 'openPause', 'finish']) expect(body(name), name).not.toContain('orderGate.before(')
+    expect(code.match(/orderGate\.before\(/g)).toHaveLength(1)
+    // At the cutting tables: before the next set of the work order at the table, before a lay is started.
+    expect(read('../cutting/Cut.tsx').match(/orderGate\.before\(/g)).toHaveLength(1)
+    expect(read('../fabriccut/FabricCut.tsx').match(/orderGate\.before\(/g)).toHaveLength(1)
+  })
+
+  it('For your work: the order changes first with their own count; the other notes counted apart', () => {
+    const text = myWork('f-sa-247-for-your-work')
+    expect(text.indexOf('Order changes')).toBeGreaterThan(-1)
+    expect(text.indexOf('Order changes')).toBeLessThan(text.indexOf('3 messages to read'))
+    expect(text).toContain('2 order changes to read')
+    expect(myWork('f-sa-247-for-your-work', 'it')).toContain("2 modifiche d'ordine da leggere")
+    // A screen with plain notes only keeps its one chip.
+    expect(myWork('for-your-work')).not.toContain('Order changes')
+  })
+
+  it('the list puts them first, each saying Order change, New until opened here; never who', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = myWork('f-sa-247-list', locale)
+      const kind = locale === 'it' ? "Modifica d'ordine" : 'Order change'
+      expect(text.indexOf(`WO-DEMO-0051 · ${kind}`), locale).toBeGreaterThan(-1)
+      expect(text.indexOf(`WO-DEMO-0049 · ${kind}`), locale).toBeGreaterThan(-1)
+      expect(text.indexOf(`WO-DEMO-0051 · ${kind}`), locale).toBeLessThan(text.indexOf('Per questa commessa'))
+      expect(text, locale).toContain(locale === 'it' ? 'Nuovo' : 'New')
+      expect(text, locale).not.toMatch(/\bSeen\b|\bVisto\b|\bLetto\b|opened by|aperto da/i)
+    }
+  })
+
+  it('a CHECK opened says to read it before the start and offers Got it; once got here, nothing more; a STOP says to stop, nothing to tap', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const check = myWork('f-sa-247-check', locale)
+      expect(check, locale).toContain(locale === 'it' ? 'Leggi prima di iniziare.' : 'Read this before you start.')
+      expect(check, locale).toContain(locale === 'it' ? 'Ho capito' : 'Got it')
+      expect(check, locale).toContain("Aspetta i nuovi numeri dell'ordine di lavoro")
+      const got = myWork('f-sa-247-got', locale)
+      expect(got, locale).not.toContain(locale === 'it' ? 'Leggi prima di iniziare.' : 'Read this before you start.')
+      expect(got, locale).not.toContain(locale === 'it' ? 'Ho capito' : 'Got it')
+      const stop = myWork('f-sa-247-stop', locale)
+      expect(stop, locale).toContain(locale === 'it' ? 'fermati e chiedi al capo squadra' : 'stop and ask your team leader')
+      expect(stop, locale).not.toContain(locale === 'it' ? 'Ho capito' : 'Got it')
+    }
+  })
+
+  it("a task's card says to read it first, with its door; names nobody and no customer, no price", () => {
+    for (const locale of ['en', 'it'] as const) {
+      const card = myWork('f-sa-247-card', locale)
+      expect(card, locale).toContain(locale === 'it' ? "Modifica d'ordine su quest'ordine: leggila prima di iniziare." : 'Order change on this work order: read it before you start.')
+      expect(card, locale).toContain(locale === 'it' ? "Leggi la modifica d'ordine" : 'Read the order change')
+      for (const id of ['f-sa-247-for-your-work', 'f-sa-247-list', 'f-sa-247-check', 'f-sa-247-stop', 'f-sa-247-card']) expect(myWork(id, locale), `${id} ${locale}`).not.toMatch(/€|\bEUR\b|Brand Alpha|Brand Beta|Bea Esempio/)
+    }
+    // The screen's own words about an order change name no person, money or customer.
+    for (const locale of ['en', 'it'] as const) {
+      const words = messagesFor(locale, ['floor-mywork'])['floor-mywork'] as Record<string, unknown>
+      expect(JSON.stringify(words.orderChange), locale).not.toMatch(/€|prezz|price|cost|paga|\bpay|client|customer|brand|marchio|seen|visto|letto/i)
+    }
+  })
+
+  it('the operation screen: the line before a Start, nothing over a running bundle, and why a held one is refused (STOP)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const before = operation('f-sa-247-before-start', locale)
+      expect(before, locale).toContain(locale === 'it' ? "Modifica d'ordine su quest'ordine: leggila prima di iniziare." : 'Order change on this work order: read it before you start.')
+      expect(operation('f-sa-247-got', locale), locale).not.toContain(locale === 'it' ? 'leggila prima di iniziare' : 'read it before you start')
+      expect(operation('f-sa-247-running', locale), locale).not.toContain(locale === 'it' ? 'leggila prima di iniziare' : 'read it before you start')
+      const stop = operation('f-sa-247-stop', locale)
+      expect(stop, locale).toContain(locale === 'it' ? 'fermati e chiedi al capo squadra' : 'stop and ask your team leader')
+      expect(stop, locale).toContain('in pausa mentre la modifica viene eseguita')
+      expect(stop, locale).not.toMatch(/Brand Alpha|Bea Esempio|€/)
+    }
+  })
+})
+// ---- end F-SA-247

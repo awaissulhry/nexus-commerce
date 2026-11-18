@@ -12,6 +12,9 @@ import { acceptBatch, acceptProduction, acceptSales, counterRequest, listWaiting
 // F-SA-241 / F-SA-242
 import { designHeldWords } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import { applyPlanSchema, getApplyPlan } from './api'
+// B-SA-046b: which pieces a design change is for.
+import { impactSchema } from './api'
+import { DESIGN_APPLIES_WORDS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { designOptionsOffered, doneCommandsOf, leftToRun, NO_CHOICES, outcomeHeld, planHeld, reachOf, runInOrder, stepStateOf, stillStateOf, stoppable, stoppableOf, tellHeld, tellRefusalOf, tellsNow, tickOn, type TellTick } from './model'
 import { brandRequest, REQUEST_FIXTURES } from './fixtures'
 import {
@@ -600,3 +603,23 @@ describe('F-SA-242: the words in the order’s conversation, and the held reason
   })
 })
 // ── end F-SA-241 / F-SA-242 ──
+
+// ── B-SA-046b (14-change-flow §2.4): the window says which pieces the customer's design change is for ──────────────────────────
+describe("B-SA-046b: the review window says which pieces the customer's design change is for", () => {
+  it('reads the choice from the impact (kept at Send and now), and an impact without one reads none', () => {
+    const base = { kind: 'DESIGN', frozen: [], blocked: false, priced: true, pricedWords: null, earliest: null, notes: [], words: { en: 'x', it: 'x' } }
+    expect(impactSchema.parse({ ...base, appliesTo: 'ALSO_MADE' }).appliesTo).toBe('ALSO_MADE')
+    expect(impactSchema.parse({ ...base, appliesTo: null }).appliesTo).toBeNull()
+    expect(impactSchema.parse(base).appliesTo).toBeUndefined()
+    expect(impactSchema.safeParse({ ...base, appliesTo: 'EVERYTHING' }).success).toBe(false)
+  })
+
+  it('draws it first in the impact list, in the same words for every reader (both languages)', () => {
+    const view = readFileSync(join(HERE, 'view', 'RequestReview.tsx'), 'utf8')
+    expect(view).toContain('said(DESIGN_APPLIES_WORDS[impact.now.appliesTo], locale)')
+    expect(view.indexOf('DESIGN_APPLIES_WORDS[impact.now.appliesTo]')).toBeLessThan(view.indexOf('impact.now.earliest.words'))
+    expect(DESIGN_APPLIES_WORDS.ALSO_MADE.en).toBe('Also for the pieces already made (rework may cost)')
+    expect(DESIGN_APPLIES_WORDS.ALSO_MADE.it).toBe('Vale anche per i pezzi già fatti (la rilavorazione può costare)')
+  })
+})
+// ── end B-SA-046b ──

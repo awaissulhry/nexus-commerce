@@ -151,7 +151,10 @@
     "repairHere_one": "{count} fascio da riparare a questa postazione",
     "repairHere_other": "{count} fasci da riparare a questa postazione",
     "repairSite_one": "{count} fascio da riparare nello stabilimento",
-    "repairSite_other": "{count} fasci da riparare nello stabilimento"
+    "repairSite_other": "{count} fasci da riparare nello stabilimento",
+    "orderChanges": "Modifiche d'ordine",
+    "orderChangesCount_one": "{count} modifica d'ordine da leggere",
+    "orderChangesCount_other": "{count} modifiche d'ordine da leggere"
   },
   "messages": {
     "title": "Messaggi sui tuoi ordini",
@@ -180,6 +183,16 @@
       "title": "Questo messaggio non è più aperto",
       "body": "Torna all'elenco."
     }
+  },
+  "orderChange": {
+    "kind": "Modifica d'ordine",
+    "on": "Modifica d'ordine su",
+    "title": "Modifica d'ordine su {number}",
+    "readFirst": "Leggi prima di iniziare.",
+    "gotIt": "Ho capito",
+    "line": "Modifica d'ordine su quest'ordine: leggila prima di iniziare.",
+    "open": "Leggi la modifica d'ordine",
+    "stop": "Quest'ordine è bloccato: fermati e chiedi al capo squadra."
   },
   "call": {
     "said": "Aiuto chiamato: materiale per {number} · Op {seq}.",

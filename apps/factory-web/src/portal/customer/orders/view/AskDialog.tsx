@@ -10,11 +10,16 @@ import type { ChangeRules, ProductionAskKind } from '../api'
 import { askBodyOf, sampleKindsOf, splitCells, splitLines, takesDate, type AskChoice, type AskDraft, type AskKind } from '../ask-model'
 // F-SA-246: the design change — its lines, their words, its files (from the device through the order's conversation, or already on it).
 import { designBodyOf, MAX_DESIGN_FILES, MAX_DESIGN_WORDS, takesSteps, type PickableFile } from '../ask-model'
+// B-SA-046b: which pieces a design change is for.
+import { appliesToOf, APPLIES_TO_CHOICES } from '../ask-model'
 import { ComposeFiles, type ComposeFilesModel } from '../../../../lib/request-compose/view/ComposeFiles'
 import { MAX_NOTE } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
 import { AskImpact, type AskImpactModel } from './AskImpact'
 import { Loading, ReadFailed } from './parts'
+// B-SA-046d: the line's picture, the ONE picture part (src/lib), drawn from the address the portal's own read holds.
+import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
+import type { RowPicture } from '../../../../lib/record-picture/model'
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3, §5; 06-tree B.2 P-ORD-ask; design: a DS Modal, a full-screen sheet on a
@@ -217,6 +222,24 @@ function useSplitCopy(t: OrderWords['t']): Partial<SizeGridCopy> {
 
 const lineName = (line: ChangeRules['lines'][number], t: OrderWords['t']) => t('change.line', { seq: line.seq, style: line.style?.code ?? '—', colour: line.colourway?.name ?? '' })
 
+// ── B-SA-046d (14-change-flow §2.4 "which lines (with picture)"): a line named with its small picture ──
+/** The line's picture as the one picture part reads it (no file id: the portal holds only the small preview's address). */
+export function linePictureOf(line: Pick<ChangeRules['lines'][number], 'style' | 'picture'>): RowPicture | null {
+  if (!line.picture) return null
+  return { styleId: '', styleCode: line.style?.code ?? '', styleName: line.style?.name ?? '', fileId: null, small: line.picture.small !== null }
+}
+
+function LineTitle({ line, t }: { line: ChangeRules['lines'][number]; t: OrderWords['t'] }) {
+  const name = lineName(line, t)
+  return (
+    <span className="fw-pord-line-title">
+      <RecordPicture source="order" recordId={line.lineId} number={name} picture={linePictureOf(line)} held={line.picture?.small ?? null} size="line" />
+      <span>{name}</span>
+    </span>
+  )
+}
+// ── end B-SA-046d ──
+
 // ── step 2: the details of a production ask ─────────────────────────────────────────────────────────────────────────────
 function AskDetails({ model, rules, kind, actions, words }: { model: AskDialogModel; rules: ChangeRules; kind: ProductionAskKind; actions?: AskDialogActions; words: OrderWords }) {
   const { t, locale, day } = words
@@ -345,7 +368,7 @@ function DesignDetails({ model, rules, actions, words }: { model: AskDialogModel
               checked={on}
               selected={on}
               onChange={(event) => set({ lineIds: pick(draft.lineIds, line.lineId, event.target.checked) })}
-              title={lineName(line, t)}
+              title={<LineTitle line={line} t={t} /> /* B-SA-046d */}
               description={t('ask.design.linePieces', { count: line.sizes.reduce((sum, size) => sum + size.quantity, 0) })}
             />
           )
@@ -355,6 +378,22 @@ function DesignDetails({ model, rules, actions, words }: { model: AskDialogModel
         <Field label={t('ask.design.what')} required hint={t('ask.design.whatHint')} error={draft.note.trim().length > MAX_DESIGN_WORDS ? t('ask.design.problem.long') : undefined}>
           <Textarea value={draft.note} rows={5} maxLength={MAX_DESIGN_WORDS + 200} onChange={(event) => set({ note: event.target.value })} />
         </Field>
+      </div>
+      {/* B-SA-046b (14-change-flow §2.4): the pieces not started yet (the default), or also the pieces already made (rework may cost). */}
+      <div className="fw-pord-stack" role="radiogroup" aria-label={t('ask.design.appliesTo.label')}>
+        <h3 className="fw-pord-h3">{t('ask.design.appliesTo.label')}</h3>
+        {APPLIES_TO_CHOICES.map((choice) => (
+          <RadioCard
+            key={choice}
+            name="ask-design-applies-to"
+            value={choice}
+            checked={appliesToOf(draft) === choice}
+            selected={appliesToOf(draft) === choice}
+            onChange={() => set({ appliesTo: choice })}
+            title={t(`ask.design.appliesTo.${choice}`)}
+            description={t(`ask.design.appliesTo.hint.${choice}`)}
+          />
+        ))}
       </div>
       <section className="fw-pord-stack" aria-label={t('ask.design.files')}>
         <h3 className="fw-pord-h3">{t('ask.design.files')}</h3>
@@ -407,6 +446,8 @@ function DesignReview({ model, rules, actions, words }: { model: AskDialogModel;
     { label: t('ask.review.what'), value: t('ask.kind.DESIGN.title') },
     { label: t('ask.design.lines'), value: rules.lines.filter((line) => body.lineIds.includes(line.lineId)).map((line) => lineName(line, t)).join(' · ') },
     { label: t('ask.design.what'), value: body.note },
+    // B-SA-046b: which pieces it is for.
+    { label: t('ask.design.appliesTo.label'), value: t(`ask.design.appliesTo.${appliesToOf(model.draft)}`) },
     { label: t('ask.design.files'), value: count > 0 ? t('ask.design.review.files', { count }) : t('ask.design.review.noFiles') },
   ]
   return (

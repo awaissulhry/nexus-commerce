@@ -4,6 +4,10 @@ import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } fr
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 // F-PR-13: the production asks (B-PR-25), the freeze states and the sample kinds, as the API names them.
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046b: which pieces a design change is for.
+import { DESIGN_APPLIES_TO, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046c: an accepted request we are carrying out, or done.
+import { REQUEST_FOLLOW_UPS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
@@ -340,6 +344,8 @@ export const rulesSchema = z.object({
       samples: z.array(z.object({ sampleKind: z.enum(ASK_SAMPLE_KINDS), verdict: askVerdict })).optional(),
       // F-PR-23b (B-PR-27a #1626): the other colourways of the line's style a change may ask it in, each with the sizes it is made in.
       colourways: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), sizes: z.array(z.string()) })).optional(),
+      // B-SA-046d: the line's small picture (the portal's own walled read: only the small preview's address; null: none to show).
+      picture: z.object({ small: z.object({ url: z.string(), expiresAt: z.string() }).nullable() }).nullable().optional(),
     }),
   ),
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), wholeOrderFee: price }).optional(),
@@ -393,8 +399,13 @@ export const changeRequestSchema = z.object({
   counter: z.object({ approvalRequestId: z.string(), state: z.enum(['WAITING', 'AGREED', 'REFUSED', 'LAPSED']).catch('WAITING'), priced: z.boolean(), date: z.string().nullable(), words }).nullable().optional(),
   // F-SA-246 (B-SA-046): the files a design change sent (none on any other kind).
   fileIds: z.array(z.string()).optional(),
+  // B-SA-046b: of the impact kept at Send, only which pieces a design change is for (the rest is not read here).
+  impact: z.object({ appliesTo: z.enum(DESIGN_APPLIES_TO).nullable().optional() }).nullable().optional(),
   version: z.number(),
   mine: z.boolean(),
+  // B-SA-046c: an accepted request: CARRYING_OUT while a step of it is still to do on our side, DONE once none (null or left out:
+  // not accepted, or an older answer). A code only: never a step, a work order or a name.
+  followUp: z.enum(REQUEST_FOLLOW_UPS).nullable().optional(),
 })
 export type ChangeRequest = z.infer<typeof changeRequestSchema>
 
@@ -441,6 +452,8 @@ export interface DesignAskBody {
   readonly lineIds: readonly string[]
   readonly note: string
   readonly fileIds?: readonly string[]
+  /** B-SA-046b: the pieces not started yet (left out: the default) or also the pieces already made (rework may cost). */
+  readonly appliesTo?: DesignAppliesTo
 }
 // ---- end F-SA-246
 export type AskBody = ChangeBody | CancelBody | ProductionAskBody | DesignAskBody /* F-SA-246 */
@@ -453,6 +466,8 @@ export const askImpactSchema = z.object({
   priced: z.boolean(),
   earliest: z.object({ date: z.string().nullable(), partial: z.boolean(), meetsWanted: z.boolean().nullable() }).nullable(),
   notes: z.array(words),
+  // B-SA-046b: a design change: which pieces it is for, as chosen before Send (null or left out: another kind, or kept before it).
+  appliesTo: z.enum(DESIGN_APPLIES_TO).nullable().optional(),
 })
 export type AskImpact = z.infer<typeof askImpactSchema>
 /** The impact read: a cancel's fee only for a reader with the price grain (else left out). */

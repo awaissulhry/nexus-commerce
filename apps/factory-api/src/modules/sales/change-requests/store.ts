@@ -20,6 +20,8 @@ import type { CommandTx } from '../../../core/command'
 // B-PR-25: the impact kept at Send, a sample round's kind.
 import { impactKeepable, type Impact } from '@nexus/factory-domain/sales/change-requests/impact'
 import type { AskSampleKind } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046b: which pieces a design change is for (a code in its kept impact).
+import { isDesignAppliesTo, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-PR-26: our counter-offer, where it stands.
 import { counteredWords, counterPriced, counterStateOf, COUNTER_STATE_WORDS, type Counter, type CounterState } from '@nexus/factory-domain/sales/change-requests/counter'
 
@@ -401,7 +403,16 @@ export const impactOut = (impact: Impact) => ({
   earliest: impact.earliest ? { date: impact.earliest.date, partial: impact.earliest.partial, meetsWanted: impact.earliest.meetsWanted, words: { it: impact.earliest.words.it, en: impact.earliest.words.en } } : null,
   notes: impact.notes.map((note) => ({ it: note.it, en: note.en })),
   words: { it: impact.words.it, en: impact.words.en },
+  // B-SA-046b: a design change's pieces (an impact kept before it, or another kind: null).
+  appliesTo: impact.kind === 'DESIGN' && isDesignAppliesTo(impact.appliesTo) ? impact.appliesTo : null,
 })
+
+/** B-SA-046b: the pieces a kept design change is for (its impact's code); null: not a design change, or kept before it. */
+export function keptAppliesToOf(value: Prisma.JsonValue | null): DesignAppliesTo | null {
+  if (!impactKeepable(value)) return null
+  const kept = value as { readonly kind?: unknown; readonly appliesTo?: unknown }
+  return kept.kind === 'DESIGN' && isDesignAppliesTo(kept.appliesTo) ? kept.appliesTo : null
+}
 
 /** B-PR-25: the impact kept on a request (an object the database checked at Send), or null (none kept). */
 export function keptImpactOf(value: Prisma.JsonValue | null) {

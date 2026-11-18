@@ -63,6 +63,8 @@ const SESSIONS: Record<string, SessionContext> = {
   commenter: { audience: 'floor', tenantId: T, actorId: lead, siteId: siteA1, deviceId: secondTablet, grants: floorGrant(['production.scan']) },
   shelf: { audience: 'floor', tenantId: T, actorId: lead, siteId: siteA1, deviceId: shelfTablet, grants: floorGrant(['floor.work']) },
   noWork: { audience: 'floor', tenantId: T, actorId: operator, siteId: siteA1, deviceId: sewingTablet, grants: floorGrant(['production.dispatch.view']) },
+  // F-SA-247: a tablet of the other plant (site B1), for the one-work-order read.
+  otherSite: { audience: 'floor', tenantId: T, actorId: operator, siteId: idOf('site:B1'), deviceId: newId(), grants: [{ permissions: ['floor.work'], companies: [idOf('company:B')], sites: [idOf('site:B1')], parties: 'all' }] },
 }
 
 type Json = Record<string, any>
@@ -332,3 +334,50 @@ describe('an order change reaches the floor as its own kind, the newest of each 
     expect(JSON.stringify(await messages())).not.toMatch(/seen|shown|offline/i)
   })
 })
+
+// ---- F-SA-247 (R2; 14-change-flow §5.3): one work order in hand — the operation and cutting screens read its notes before a Start -------
+describe("one work order in hand: its notes at the tablet's own site, whatever its lists say (F-SA-247)", () => {
+  const inHand = async (workOrderId: string, session = 'operatorTablet'): Promise<Json[]> => (await ok(session, 'GET', `/production/dispatch/mine/messages?workOrderId=${workOrderId}`)).messages
+
+  it("reads a work order the tablet's queue and day do not list, and only that work order, in the same shape", async () => {
+    await ok('supervisor', 'POST', `/threads/WorkOrder/${otherWorkOrder}/notes`, { body: 'A bundle of this one is worked off the plan (F-SA-247).', ...FOR_FLOOR }, 201)
+    expect((await messages()).map((message) => message.text)).not.toContain('A bundle of this one is worked off the plan (F-SA-247).')
+    const list = await inHand(otherWorkOrder)
+    expect(list.map((message) => message.text)).toContain('A bundle of this one is worked off the plan (F-SA-247).')
+    expect(new Set(list.map((message) => message.workOrder.id))).toEqual(new Set([otherWorkOrder]))
+    expect(list.find((message) => message.text === 'A bundle of this one is worked off the plan (F-SA-247).')).toMatchObject({ workOrder: { id: otherWorkOrder, number: 'SEED-WO-0002' }, from: 'OFFICE', kind: 'NOTE', check: null })
+    expect(Object.keys(list[0]!).sort()).toEqual(['at', 'check', 'cut', 'from', 'id', 'kind', 'text', 'workOrder'])
+    expect(JSON.stringify(list)).not.toContain('Made-up')
+  })
+
+  it("lists the work order's newest order change as on the lists (CHECK), and leaves out this station's own comment", async () => {
+    const own = (await inHand(workOrder)).map((message) => message.id)
+    const fromLists = (await messages()).filter((message) => message.workOrder.id === workOrder).map((message) => message.id)
+    expect(own).toEqual(fromLists)
+    expect((await inHand(workOrder)).filter((message) => message.kind === 'ORDER_CHANGE')).toHaveLength(1)
+    expect((await inHand(workOrder)).find((message) => message.kind === 'ORDER_CHANGE')).toMatchObject({ check: 'CHECK' })
+    expect((await inHand(workOrder)).map((message) => message.text)).not.toContain('This station wrote this.')
+  })
+
+  it("reads nothing for an unknown work order or one of another site: never a refusal that would say it exists", async () => {
+    expect(await inHand(newId())).toEqual([])
+    expect(await inHand(workOrder, 'otherSite')).toEqual([])
+  })
+
+  it('keeps the rules of a floor read: a malformed id is refused in words, floor.work and the floor only', async () => {
+    const malformed = await call('operatorTablet', 'GET', '/production/dispatch/mine/messages?workOrderId=not-an-id')
+    expect(malformed.statusCode).toBe(400)
+    expect(((malformed.json().error?.issues ?? []) as Json[]).map((issue) => issue.path)).toEqual(['querystring/workOrderId'])
+    expect((await call('noWork', 'GET', `/production/dispatch/mine/messages?workOrderId=${workOrder}`)).statusCode).toBe(403)
+    expect((await call('supervisor', 'GET', `/production/dispatch/mine/messages?workOrderId=${workOrder}`)).statusCode).toBe(403)
+  })
+
+  it('records nothing about who or which tablet read it (R2): the read writes no row', async () => {
+    const count = async () => Number((await admin<{ n: string }>(`SELECT (SELECT count(*) FROM "AuditLog" WHERE "tenantId" = $1) + (SELECT count(*) FROM "OutboxEvent" WHERE "tenantId" = $1) AS n`, [T]))[0]!.n)
+    const rows = await count()
+    await inHand(workOrder)
+    await inHand(otherWorkOrder, 'otherStation')
+    expect(await count()).toBe(rows)
+  })
+})
+// ---- end F-SA-247

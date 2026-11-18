@@ -37,6 +37,9 @@ import { InstructionLines, InstructionsButton } from '../../instructions/view/Op
 import type { InstructionFlag } from '../../instructions/model'
 import type { NewerSpec } from '../../instructions/api'
 import { firstPieceHolds } from '../first-piece'
+// F-SA-247: an order change on the bundle's work order (the gate before Start, and why a held one is refused).
+import type { OrderChangeNote } from '../../mywork/order-change-seen'
+import { OrderChangeGate, OrderChangeLine, type OrderChangeGateProps } from '../../mywork/view/OrderChangeGate'
 import {
   CORRECTION_REASONS,
   finishHeld,
@@ -196,6 +199,13 @@ export interface OperationViewModel {
   timeZone?: string
   /** B-W2b-82: this person may add an unplanned operation (production.extraops.add). */
   mayAdd?: boolean
+  /**
+   * F-SA-247: the newest order change of the bundle's work order (null: none) and whether this tablet tapped "Got it" on it; its line
+   * shows on a bundle not started here (never over a running one) and on the refusal of a held work order (STOP).
+   */
+  orderChange?: { readonly note: OrderChangeNote | null; readonly got: boolean } | null
+  /** F-SA-247: the order change open before a Start (or read from its line); null: none. */
+  orderGate?: OrderChangeGateProps['open']
 }
 
 export type OperationAction =
@@ -251,6 +261,10 @@ export type OperationAction =
   | { type: 'continue'; code: string }
   // B-W2b-232: Instructions (design h.more "Instructions (W2b)").
   | { type: 'instructions' }
+  // F-SA-247: the order change's line opens it; Got it (this tablet only, never sent) lets the Start go on; Back keeps the bundle.
+  | { type: 'orderChange' }
+  | { type: 'orderChangeGotIt' }
+  | { type: 'orderChangeBack' }
   // B-W2b-82
   | { type: 'operationOpen'; operationId: string }
   | { type: 'extraOpen' }
@@ -469,6 +483,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       body = (
         <>
           <ProblemState problem={{ kind: 'refused', code: step.code, message: step.message || t('refusal.fallback'), fix: step.fix }} code={step.scanned} words={refusalWords(params)} />
+          {/* F-SA-247: a work order held for an order change: the office's words are the reason (STOP). */}
+          {step.code === 'ON_HOLD' && model.orderChange?.note?.check === 'STOP' ? <OrderChangeLine note={model.orderChange.note} got={false} /> : null}
           {model.done ? <DoneStrip done={model.done} t={t} /> : null}
           {card && card.refusal === null ? <UnplannedActions card={card} current={null} mayAdd={model.mayAdd ?? false} online={model.online} t={t} send={send} /> : null}
         </>
@@ -572,6 +588,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
               <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} lifted={step.firstPieceLifted ?? false} />
               {/* B-W2b-232: New instruction (opens before Start, MES-110) and Spec changed (PRD-195). */}
               <InstructionLines flag={work.instruction} newer={work.newerSpec} />
+              {/* F-SA-247: an order change on this work order — before the Start only; a bundle running or paused here is never stopped by it. */}
+              {!mine || model.orderChange?.note?.check === 'STOP' ? <OrderChangeLine note={model.orderChange?.note} got={model.orderChange?.got ?? false} onOpen={() => send({ type: 'orderChange' })} /> : null}
               <TimingPanel timing={work.timing} skewMs={work.skewMs} reasons={model.pauseReasons ?? []} />
               {goodOnly ? (
                 <TaskLine tone="info" icon={<Workflow />}>
@@ -938,6 +956,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
         ) : null}
       </Modal>
       <OverrideDialog model={model.override ?? null} send={send} words={guardWords} />
+      {/* F-SA-247: the order change before a Start, once per tablet. */}
+      <OrderChangeGate open={model.orderGate ?? null} timeZone={model.timeZone} onGotIt={() => send({ type: 'orderChangeGotIt' })} onBack={() => send({ type: 'orderChangeBack' })} />
     </FloorFrameView>
   )
 }

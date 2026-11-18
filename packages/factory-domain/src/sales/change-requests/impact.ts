@@ -3,6 +3,8 @@ import type { DateOnly } from '../../planning/promise/date-only'
 import { parseDecimal } from '../../tax/decimal'
 import { freezeVerdict, type FreezeRuleFacts, type OrderFreezeField, type OrderFreezeStage } from '../order-changes/freeze'
 import { dayWords, type OrderRequestKind, type Words } from './rules'
+// B-SA-046b: which pieces a design change is for, kept in the impact (no column of its own).
+import { DEFAULT_DESIGN_APPLIES_TO, type DesignAppliesTo } from './rules'
 
 /**
  * B-PR-24 (production plan §3 "Before Send it sees: what is frozen, priced or not, earliest date"; 08-backend §4.2 "Impact
@@ -47,6 +49,8 @@ export interface ImpactAsk {
   readonly requestedDate?: BusinessDate | null | undefined
   /** A change asks another delivery address. */
   readonly shipTo?: boolean | undefined
+  /** B-SA-046b: a design change: the pieces not started yet (left out: the default), or also the pieces already made. */
+  readonly appliesTo?: DesignAppliesTo | null | undefined
 }
 
 export interface ImpactFacts {
@@ -93,6 +97,11 @@ export interface Impact {
   readonly notes: readonly Words[]
   /** The headline: nothing frozen, or what is. */
   readonly words: Words
+  /**
+   * B-SA-046b: a design change: which pieces it is for, as the customer chose before Send (a code: the kept impact holds no
+   * number); left out on every other kind, and on an impact kept before it (read: the pieces not started yet).
+   */
+  readonly appliesTo?: DesignAppliesTo | undefined
 }
 
 /** "A price may apply: we will tell you" — every reader; the amount only live and only under the price grain. */
@@ -192,6 +201,8 @@ export function impactOf(ask: ImpactAsk, facts: ImpactFacts): Impact {
     earliest,
     notes: Object.freeze(ask.kind === 'DESIGN' ? design.sort((a, b) => a.seq - b.seq).map((line) => Object.freeze(designLineWords(line))) /* B-SA-046 */ : note ? [note] : []),
     words: Object.freeze({ ...headline }),
+    // B-SA-046b: a design change says which pieces it is for (the default: the pieces not started yet).
+    ...(ask.kind === 'DESIGN' ? { appliesTo: ask.appliesTo ?? DEFAULT_DESIGN_APPLIES_TO } : {}),
   })
 }
 
