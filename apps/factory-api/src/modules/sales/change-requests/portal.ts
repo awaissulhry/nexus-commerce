@@ -514,10 +514,10 @@ async function askOne(app: FastifyInstance, request: FastifyRequest, reader: Por
     // B-SA-048: their ask as their own message, written first so the request names it (askMessageId, set with the ask).
     const message = await askMessageInCommand(tools, { threadId, order: facts.order, body, prepared, lines: facts.lines, person: session.person })
     await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId, batchId, askMessageId: message?.id ?? null })
-    return { requestId, message }
+    return { requestId, message: message && { id: message.id, threadId: message.threadId, at: toUtcIso(message.at) } }
   })
   // B-SA-048: the conversation's last activity moves to it, in the tenant's system scope (the partner role updates no thread).
-  if (!replayed && result.message) await touchOrderThread(request, session.tenantId, result.message.threadId, result.message.at)
+  if (!replayed && result.message) await touchOrderThread(request, session.tenantId, result.message.threadId, new Date(result.message.at))
   return { requestId: result.requestId, replayed }
 }
 
