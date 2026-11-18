@@ -12,7 +12,8 @@ const wo = (id: string, patch: Partial<AcceptWorkOrder> = {}): AcceptWorkOrder =
 describe('B-PR-27a: where a request is accepted', () => {
   it('production accepts the pause, the resume, the rush and the sample round; Sales the rest', () => {
     expect([...PRODUCTION_ACCEPT_KINDS]).toEqual(['HOLD', 'RESUME', 'RUSH', 'SAMPLE_ROUND'])
-    expect(ORDER_REQUEST_KINDS.filter((kind) => !isProductionAccept(kind))).toEqual(['CHANGE', 'CANCEL', 'SPLIT_SHIPMENT'])
+    // B-SA-046 (sales page plan P7, R3): + DESIGN, a design change of some lines, answered by Sales (orders.manage).
+    expect(ORDER_REQUEST_KINDS.filter((kind) => !isProductionAccept(kind))).toEqual(['CHANGE', 'CANCEL', 'DESIGN', 'SPLIT_SHIPMENT'])
     // The same split as who answers: production.brand.manage and sales.samples.manage here, orders.manage in Sales.
     for (const kind of ORDER_REQUEST_KINDS) expect(isProductionAccept(kind), kind).toBe(ASK_RULES[kind].answeredWith !== 'orders.manage')
   })

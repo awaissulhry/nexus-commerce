@@ -150,6 +150,8 @@ describe('B-SA-053: production.floor_note_posted — the tablets of its site re-
     expect(posted.payload.safeParse(ok).success).toBe(true)
     expect(posted.payload.safeParse({ ...ok, changes: [] }).success).toBe(false)
     expect(posted.payload.safeParse({ ...ok, seenBy: 'SEW-01' }).success).toBe(false)
-    expect([...EVENT_CATALOGUE.types()].filter((type) => /seen/.test(type))).toEqual([])
+    // R2: no event records who or which station saw a change (no production.change_seen). The catalogue's one "seen" event is
+    // safety's own "Seen by safety" on an incident a worker reported (#1143): a safety role's read told to the reporter, not the floor's.
+    expect([...EVENT_CATALOGUE.types()].filter((type) => /seen/.test(type))).toEqual(['incident.seen'])
   })
 })
