@@ -20,6 +20,7 @@ import { JOB, moveJob, queryOf, sourceOf, type JobRow } from './jobs'
 import { exportMailHandler } from './mail'
 import { reimportAdapterOf, reimportColumns, reimportPage, writeReimport } from './reimport'
 import { rowIdOf, titleText, type AnyExportSource, type ExportReadOptions } from './source'
+import { lacksColumnRight } from './source' // B-SA-020
 import { writeExport } from './writer'
 
 /**
@@ -135,6 +136,8 @@ function checkRights(source: AnyExportSource, job: JobRow, actor: Actor, importe
     if (omitted.has(column.key)) continue
     const grain = importerColumns ? importerColumns[column.key]?.grain : source.columns[column.key]?.grain
     if (grain && !grains.has(grain)) throw new Refused('Your rights changed since you asked: export the list again.')
+    // B-SA-020: a column's own right beyond the list's (Sales › Orders' Riders), lost since the file was asked.
+    if (!importerColumns && lacksColumnRight(source, column.key, actor, scope)) throw new Refused('Your rights changed since you asked: export the list again.')
   }
 }
 

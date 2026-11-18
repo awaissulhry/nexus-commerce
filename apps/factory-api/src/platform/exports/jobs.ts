@@ -18,6 +18,7 @@ import type { ExportJobView, RequestExportBody } from './contract'
 import { exportFormatsFor, exportSourceOf } from './registry'
 import { reimportAdapterOf, reimportColumns } from './reimport'
 import type { AnyExportSource } from './source'
+import { withColumnRights } from './source' // B-SA-020
 
 /**
  * The export jobs of the Office (B-W2a-23; PLT-179): asked by a person for the view they are looking at, run by the
@@ -171,6 +172,7 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
     asked = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
   } else {
     picked = pickColumns(source.columns, body.columns, heldGrains(actor))
+    picked = withColumnRights(source, picked, actor, companyId ? { companyId } : {}) // B-SA-020: a column's own right (Riders)
     asked = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
     const order = new Map(body.columns.map((column, index) => [column.key, index]))
     asked.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))

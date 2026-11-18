@@ -42,7 +42,7 @@ export interface SummaryQuery extends ListFilters {
 type Terms = Readonly<Record<string, string>>
 
 /** The list's row terms, as the address names them (the door filters are made of these). */
-const VIEW_KEYS = ['status', 'open', 'late', 'deposit', 'reaccept', 'companyId', 'partyId', 'promiseFrom', 'promiseTo', 'q', 'brand', 'cf', 'invoiced', 'atRisk', 'customerUrgency', 'currency', 'shippedNotInvoiced' /* B-TH-244 */] as const
+const VIEW_KEYS = ['status', 'open', 'late', 'deposit', 'reaccept', 'companyId', 'partyId', 'promiseFrom', 'promiseTo', 'q', 'brand', 'cf', 'invoiced', 'atRisk', 'customerUrgency', 'currency', 'shippedNotInvoiced' /* B-TH-244 */, 'kind' /* B-SA-020 */] as const
 /** Flags whose `false` narrows nothing (a door's `true` takes its place). */
 const FLAGS: ReadonlySet<string> = new Set(['open', 'late', 'reaccept', 'atRisk', 'shippedNotInvoiced' /* B-TH-244 */])
 

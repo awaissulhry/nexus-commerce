@@ -13,6 +13,10 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+// B-SA-020: the file of the view (the export source read as the person).
+import { callerFor } from '../../../core/command'
+import { completeContext } from '../../../core/context'
+import { exportSourceOf } from '../../../platform/exports/registry'
 
 /**
  * The orders sheet's own terms (threads plan TH-1a, pictures 23 + 24; B-TH-225 / B-TH-226, API part): `brand` narrows
@@ -22,7 +26,9 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
  * PostgreSQL 17 database from the migrations (the runtime login: row-level security is real) with the factory-db seeds up to
  * money and the options (the own-collection liner SEED-LNR-01): SEED-SO-0001 / SEED-SO-0002 of customer SEED-C1 (its
  * private-label jacket SEED-JKT-01), and TEST-SO-R1, a copy for customer SEED-R1 whose first line is the own-collection
- * liner and whose second keeps SEED-C1's jacket. Every name and number is made up. Run with
+ * liner and whose second keeps SEED-C1's jacket. B-SA-020 / B-SA-021: TEST-SO-MTM-C1 and TEST-SO-MTM-R1, copies of SEED-SO-0001 for
+ * SEED-C1 and SEED-R1 whose first jacket line is one made-to-measure unit for the customer's own seeded rider (SEED-C1's "Seed Team
+ * Rider", SEED-R1's "Seed Private Rider" revision 1). Every name and number is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs modules/sales/orders/sheet-terms.pg`.
  */
 
@@ -44,6 +50,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   mixed: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['orders.view'], [R1]), grant(['orders.view', 'quotes.view'])] }),
   // A grant naming customers that does not hold orders.view limits nothing of the orders.
   otherLimited: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['orders.view']), grant(['quotes.view'], [R1])] }),
+  // B-SA-020 / B-SA-021: readers of measurements (the riders, the rider term), for every customer or only SEED-R1.
+  measures: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['orders.view', 'sales.measurements.view'])] }),
+  onlyR1Measures: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['orders.view', 'sales.measurements.view'], [R1])] }),
 }
 
 type Json = Record<string, any>
@@ -55,6 +64,22 @@ async function ok(session: string, url: string): Promise<Json> {
 }
 const numbers = async (session: string, query: string): Promise<string[]> => ((await ok(session, `/sales/orders?limit=200&${query}`)).orders as Json[]).map((row) => row.number as string).sort()
 const boardTotal = async (session: string, query: string): Promise<number> => ((await ok(session, `/sales/orders/board?${query}`)).byStatus as Json[]).reduce((sum, entry) => sum + (entry.count as number), 0)
+// ── B-SA-020: the file of a view (the export source's own read, as the person) and the made-to-measure truth in SQL ──
+async function fileNumbers(session: string, address: string): Promise<string[]> {
+  const source = exportSourceOf('sales.orders')!
+  const reader = callerFor(database, completeContext(SESSIONS[session]!(), `test-${newId()}`))
+  const page = await source.read(reader, source.query(new URLSearchParams(address)), null, 200)
+  return (page.rows as Json[]).map((row) => row.number as string).sort()
+}
+async function madeToMeasure(partyId?: string): Promise<string[]> {
+  const rows = await admin<{ number: string }>(
+    `SELECT DISTINCT o.number FROM "SalesOrder" o JOIN "SalesOrderLine" l ON l."orderId" = o.id
+      WHERE o."tenantId" = $1 AND l.kind = 'MADE_TO_MEASURE' AND ($2::uuid IS NULL OR o."partyId" = $2::uuid) ORDER BY 1`,
+    [tenant, partyId ?? null],
+  )
+  return rows.map((row) => row.number).sort()
+}
+// ── end B-SA-020 ──
 
 /** The order numbers a label is on, counted here in SQL (a line of a style of that brand party; null = our own collection). */
 async function labelled(brand: string | null, partyId?: string): Promise<string[]> {
@@ -70,6 +95,28 @@ async function labelled(brand: string | null, partyId?: string): Promise<string[
 const v4 = (expression: string, salt: string): string => {
   const hash = `md5(${expression}::text || '${salt}')`
   return `(substr(${hash}, 1, 8) || '-' || substr(${hash}, 9, 4) || '-4' || substr(${hash}, 14, 3) || '-8' || substr(${hash}, 18, 3) || '-' || substr(${hash}, 21, 12))::uuid`
+}
+
+/**
+ * B-SA-020: SEED-SO-0001 copied for `partyId` as `number`, its first SEED-JKT-01 line one made-to-measure unit (one piece, no size
+ * rows) of `profileId` (a profile of that customer: the line's own foreign key says so). The style is made to measure in the seed.
+ */
+async function mtmCopy(number: string, partyId: string, profileId: string): Promise<void> {
+  const salt = number.toLowerCase()
+  await admin(`
+    CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE "tenantId" = '${tenant}' AND number = 'SEED-SO-0001';
+    CREATE TEMP TABLE l AS SELECT * FROM "SalesOrderLine" WHERE "orderId" = (SELECT id FROM o);
+    CREATE TEMP TABLE s AS SELECT * FROM "SalesOrderLineSize" WHERE "lineId" IN (SELECT id FROM l);
+    CREATE TEMP TABLE u AS SELECT l.id FROM l JOIN "Style" st ON st.id = l."styleId" WHERE st.code = 'SEED-JKT-01' ORDER BY l.seq LIMIT 1;
+    DELETE FROM s WHERE "lineId" IN (SELECT id FROM u);
+    UPDATE l SET kind = 'MADE_TO_MEASURE', quantity = 1, "measurementProfileId" = '${profileId}', "baseSize" = '52' WHERE id IN (SELECT id FROM u);
+    UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${partyId}';
+    UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
+    UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL;
+    INSERT INTO "SalesOrder" SELECT * FROM o;
+    INSERT INTO "SalesOrderLine" SELECT * FROM l;
+    INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
+    DROP TABLE o, l, s, u;`)
 }
 
 beforeAll(async () => {
@@ -94,6 +141,9 @@ beforeAll(async () => {
     INSERT INTO "SalesOrderLine" SELECT * FROM l;
     INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
     DROP TABLE o, l, s;`)
+  // B-SA-020 / B-SA-021: one made-to-measure order per customer, each unit made to that customer's own rider.
+  await mtmCopy('TEST-SO-MTM-C1', C1, id('measurement:P1:rider:JACKET:1'))
+  await mtmCopy('TEST-SO-MTM-R1', R1, id('measurement:P4:rider:JACKET:1'))
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
@@ -154,3 +204,56 @@ describe('the Customer switcher knows a limited reader (B-TH-226)', () => {
     expect((await ok('otherLimited', '/sales/orders/customers')).limited).toBe(false)
   })
 })
+
+// ── B-SA-020 (sales page plan N7, pick P12; 12-lists-board §4.1): kind=mtm, screen = file = count ──
+describe('made-to-measure orders: kind=mtm narrows the list, the board, the totals, the switcher and the file alike (B-SA-020)', () => {
+  it('the orders with a made-to-measure unit, the same rows and counts on every read', async () => {
+    const expected = await madeToMeasure()
+    expect(expected).toEqual(['TEST-SO-MTM-C1', 'TEST-SO-MTM-R1'])
+    expect(await numbers('all', 'kind=mtm')).toEqual(expected)
+    expect(await boardTotal('all', 'kind=mtm')).toBe(expected.length)
+    const summary = await ok('all', '/sales/orders/summary?kind=mtm')
+    expect(summary.all.orders.count).toBe(expected.length)
+    // A total's door keeps the term (it opens exactly the rows it counts).
+    expect(summary.all.orders.filter).toMatchObject({ kind: 'mtm' })
+    const customers = await ok('all', '/sales/orders/customers?kind=mtm')
+    expect((customers.customers as Json[]).map((row) => row.id).sort()).toEqual([C1, R1].sort())
+    expect((customers.customers as Json[]).reduce((sum, row) => sum + (row.orders as number), 0)).toBe(expected.length)
+    // The file holds the screen's rows (the copies are open: the file's default view is the open orders).
+    expect(await fileNumbers('all', 'kind=mtm')).toEqual(expected)
+    expect(await fileNumbers('all', 'kind=mtm&rows=all')).toEqual(expected)
+    // Without the term every order (the term narrows; it never drops a row by itself).
+    expect((await numbers('all', '')).length).toBeGreaterThan(expected.length)
+  })
+
+  it('a person limited to SEED-R1 reads only SEED-R1\'s made-to-measure orders and counts, never a word of SEED-C1\'s', async () => {
+    const expected = await madeToMeasure(R1)
+    expect(expected).toEqual(['TEST-SO-MTM-R1'])
+    expect(await numbers('onlyR1', 'kind=mtm')).toEqual(expected)
+    expect(await boardTotal('onlyR1', 'kind=mtm')).toBe(1)
+    const summary = await ok('onlyR1', '/sales/orders/summary?kind=mtm&group=party')
+    expect(summary.all.orders.count).toBe(1)
+    expect((summary.groups as Json[]).map((group) => group.partyId)).toEqual([R1])
+    const customers = await ok('onlyR1', '/sales/orders/customers?kind=mtm')
+    expect((customers.customers as Json[]).map((row) => row.id)).toEqual([R1])
+    expect(JSON.stringify(customers)).not.toContain(C1)
+    expect(await fileNumbers('onlyR1', 'kind=mtm')).toEqual(expected)
+    expect(await fileNumbers('onlyR1Measures', 'kind=mtm')).toEqual(expected)
+  })
+
+  it('a kind the sheet does not know is refused in words, on the list and for the file (never a file of every order)', async () => {
+    expect((await app.inject({ method: 'GET', url: '/sales/orders?kind=MTM', headers: { 'x-test-session': 'all' } })).statusCode).toBe(400)
+    expect((await app.inject({ method: 'GET', url: '/sales/orders/board?kind=all', headers: { 'x-test-session': 'all' } })).statusCode).toBe(400)
+    expect(() => exportSourceOf('sales.orders')!.query(new URLSearchParams('kind=units'))).toThrow('Not a kind: the file would hold more than the screen.')
+  })
+
+  it('the row\'s mark and the file\'s Made to measure column; the riders only for a reader of measurements', async () => {
+    const row = async (session: string, number: string): Promise<Json> => ((await ok(session, '/sales/orders?limit=200&kind=mtm')).orders as Json[]).find((entry) => entry.number === number)!
+    expect((await row('measures', 'TEST-SO-MTM-C1')).madeToMeasure).toMatchObject({ units: 1, riders: { names: ['Seed Team Rider'], count: 1 } })
+    expect((await row('all', 'TEST-SO-MTM-C1')).madeToMeasure).toMatchObject({ units: 1, riders: null })
+    expect(JSON.stringify(await ok('all', '/sales/orders?limit=200&kind=mtm'))).not.toContain('Seed Team Rider')
+    // An order without a unit carries no mark.
+    expect(((await ok('all', '/sales/orders?limit=200')).orders as Json[]).find((entry) => entry.number === 'SEED-SO-0001')!.madeToMeasure).toBeNull()
+  })
+})
+// ── end B-SA-020 ──

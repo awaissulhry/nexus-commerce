@@ -217,6 +217,9 @@ const filterFields = {
   // ── end B-TH-058 / B-TH-059 ──
   /** B-TH-244: shipped goods no issued invoice bills yet (the Orders sheet's built-in view "Shipped, not invoiced"). */
   shippedNotInvoiced: flag.optional(),
+  // ── B-SA-020 (sales page plan N7, pick P12): made-to-measure orders — the list, the board's counts, the tiles, the totals and the file alike ──
+  /** `mtm`: orders with a made-to-measure unit (a line of kind MADE_TO_MEASURE). */
+  kind: z.enum(['mtm']).optional(),
 }
 
 /** B-TH-058: the list's every row term (the overall view's totals take the same, so each total opens exactly its rows). */
@@ -320,6 +323,12 @@ export const listOrdersContract = defineContract({
           // ── end B-TH-059 ──────────────────────────────────────────────────────────────────────────────────────────────
           /** B-SA-012: why a PENDING_APPROVAL order waits (a yes asked, credit, the factory review, a yes nobody asked); null otherwise. */
           waits: z.array(z.enum(WAIT_REASONS)).nullable(),
+          /**
+           * B-SA-020: its made-to-measure units (null: none) — the units still owed (closed short left out), those whose measures the
+           * factory review has not confirmed, and the riders ONLY for a reader of measurements (sales.measurements.view over the
+           * customer: the first two names and how many riders in all; null without it). Never a measurement, a base size or a photo.
+           */
+          madeToMeasure: output({ units: z.number().int(), waitingReview: z.number().int(), riders: output({ names: z.array(z.string()), count: z.number().int() }).nullable() }).nullable(),
         }),
       ),
       /** B-TH-057: the next page's cursor (an id newest first; an opaque sort key and id in a server sort). */
@@ -384,6 +393,8 @@ export const customersContract = defineContract({
     /** A customer's name or code, case-insensitive. */
     q: z.string().trim().min(1).max(100).optional(),
     companyId: id().optional(),
+    /** B-SA-020: the counts of made-to-measure orders only (the sheet's `kind=mtm`: "3 open · 1 late" counts what the rows show). */
+    kind: z.enum(['mtm']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {

@@ -76,6 +76,8 @@ export interface ListFilters {
   // ── end B-TH-058 / B-TH-059 ──
   /** B-TH-244: shipped goods no issued invoice bills yet (factory-domain sales/orders/invoiced shippedNotInvoiced). */
   readonly shippedNotInvoiced?: 'true' | 'false' | undefined
+  /** B-SA-020: `mtm` — orders with a made-to-measure unit. */
+  readonly kind?: 'mtm' | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -133,9 +135,15 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.brand ? { lines: { some: { style: { brandPartyId: filters.brand === 'own' ? null : filters.brand } } } } : {}, // B-TH-225
       filters.currency ? { currency: filters.currency } : {}, // B-TH-058
       filters.customerUrgency ? customerUrgencyWhere(filters.customerUrgency) : {}, // B-TH-059 (agreement T10)
+      filters.kind === 'mtm' ? MTM_WHERE : {}, // B-SA-020
     ],
   }
 }
+
+// ── B-SA-020 (sales page plan N7, pick P12; 12-lists-board §4.1): one definition of a made-to-measure order ──
+/** An order with a made-to-measure unit: the list, the board's counts and tiles, the switcher's counts, the totals and the file. */
+const MTM_WHERE: Prisma.SalesOrderWhereInput = { lines: { some: { kind: 'MADE_TO_MEASURE' } } }
+// ── end B-SA-020 ──
 
 type DepositState = 'NOT_NEEDED' | 'MISSING' | 'OPEN' | 'PAID' | 'WAIVED'
 
@@ -368,7 +376,7 @@ const TILES = ['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction'
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* B-SA-020 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
   return caller.withClient(async (client) => {

@@ -16,6 +16,7 @@ import { ordersDepth } from '../../../modules/sales/orders-depth/depth' // B-TH-
 import { INVOICED_STATES, type InvoicedState } from '@nexus/factory-domain/sales/orders/invoiced'
 import { CUSTOMER_URGENCIES, type CustomerUrgency } from '../../../modules/sales/orders/customer-urgency'
 import { defineExportSource } from '../source'
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions' // B-SA-020
 
 /**
  * Sales › Orders (SCR-038, `/sales/orders`): the export of the list as the screen shows it. The address is the list's
@@ -46,6 +47,11 @@ import { defineExportSource } from '../source'
  * refused) — and the file writes the later columns by the web's ids: `openUnits`, `progress` ("Cut 12 · Sewn 8 · Finished 4 of
  * 40": the list counts it for the file), `paid` and `balance` (price grain), `site`, `note` (the office's order note),
  * `priority` (now the row's own, the office's level), `atRisk` and `customerUrgency` (read-only, the customer's own mark).
+ *
+ * B-SA-020 (sales page plan N7, pick P12; 17-review F-4: screen = file = count): `?kind=mtm` (made-to-measure orders) narrows the
+ * file as it narrows the screen (another value: refused in words), and the file writes `madeToMeasure` (the units still owed; 0 is
+ * an answer for an order without one) and `riders` (the riders' names, "+N" for the rest) — a column only for a person holding
+ * sales.measurements.view (the column's own right: left out and named above the header otherwise, never an empty column).
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
@@ -161,6 +167,24 @@ function doorTerms(address: URLSearchParams): Pick<ListFilters, 'invoiced' | 'at
   return { ...(invoiced ? { invoiced } : {}), ...(atRisk ? { atRisk } : {}), ...(customerUrgency ? { customerUrgency } : {}), ...(currency ? { currency } : {}), ...(shippedNotInvoiced ? { shippedNotInvoiced } : {}) }
 }
 
+// ── B-SA-020 ──
+/** The made-to-measure term of the address (`kind=mtm`), or undefined; another value is refused (a file of every order otherwise). */
+function kindTerm(address: URLSearchParams): Pick<ListFilters, 'kind'> {
+  const value = address.get('kind')?.trim()
+  if (!value) return {}
+  if (value !== 'mtm') throw new ValidationError('Not a kind: the file would hold more than the screen.', [{ path: 'query/kind', message: 'mtm' }])
+  return { kind: value }
+}
+
+/** The Riders cell: the names the row names, and how many riders more ("Rider A, Rider B (+3)"); none: empty. */
+function ridersText(row: Row): string | null {
+  const riders = row.madeToMeasure?.riders
+  if (!riders || riders.names.length === 0) return null
+  const more = riders.count > riders.names.length ? ` (+${riders.count - riders.names.length})` : ''
+  return `${riders.names.join(', ')}${more}`
+}
+// ── end B-SA-020 ──
+
 /** The Progress cell: cut, sewn and finished of the pieces in work orders ("—" for a step nothing counts); none yet: empty. */
 function progressText(row: Row, words: (code: string) => string): string | null {
   const progress = row.progress
@@ -176,7 +200,7 @@ export const salesOrders = defineExportSource<Query, Row>({
   query(address) {
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
@@ -236,6 +260,10 @@ export const salesOrders = defineExportSource<Query, Row>({
     atRisk: { value: (row, words) => (row.atRisk ? words('atRisk.text').replace('{days}', String(row.atRisk.daysLeft)) : null) },
     customerUrgency: { value: (row, words) => (row.customerUrgency ? words(`urgency.${row.customerUrgency}`) : null) },
     // ── end B-TH-059 ──
+    // ── B-SA-020: the made-to-measure units (0 is an answer) and the riders (only with sales.measurements.view: else no column) ──
+    madeToMeasure: { value: (row) => row.madeToMeasure?.units ?? 0 },
+    riders: { permission: SALES_MEASUREMENTS_VIEW, value: (row) => ridersText(row) },
+    // ── end B-SA-020 ──
   },
   words: {
     it: {
