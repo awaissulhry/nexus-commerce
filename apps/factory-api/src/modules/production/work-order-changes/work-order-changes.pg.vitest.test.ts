@@ -58,7 +58,7 @@ const A = {
 }
 const BETA_PARTY = newId()
 
-const WORK: Permission[] = ['workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'orders.manage', 'threads.read']
+const WORK: Permission[] = ['workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'orders.manage', 'threads.read', /* B-SA-043 */ 'costing.view']
 const grant = (permissions: Permission[], parties: Grant['parties'] = 'all'): Grant => ({ permissions, companies: 'all', sites: 'all', parties })
 const SESSIONS: Record<string, SessionContext> = {
   planner: { audience: 'office', tenantId: A.tenant, actorId: A.actor, grants: [grant(WORK)] },
@@ -290,3 +290,23 @@ describe('the wall: another customer reaches nothing of it (B-SA-041)', () => {
     ).rejects.toThrow(/names an open work order of its own order's customer/)
   })
 })
+
+// ── B-SA-043 (sales page plan R1; review P6-3, P6-4): extra pieces told honestly, office only ──
+describe('extra pieces: named on the order\'s office reads, never hidden (B-SA-043)', () => {
+  it('names the pieces cut beyond what the order now wants on the customer-materials card and as the margin\'s cost line', async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderOf(order, true)
+    await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/start`, {})
+    await force(`INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1, $2, $3, $4, $5, $6, 3)`, [newId(), A.tenant, A.siteA1, workOrder.id, cellOf(workOrder, '52').id, `T-${run}-SA043-BN`])
+    // The order now wants 2 of 52 (a change accepted after cutting): 3 cut, 1 made extra.
+    await force(`UPDATE "SalesOrderLineSize" SET quantity = 2 WHERE "lineId" = $1 AND size = '52'`, [order.lineId])
+    const materials = await ok('planner', 'GET', `/sales/orders/${order.orderId}/customer-materials`)
+    expect(materials.extra.pieces).toEqual([{ lineId: order.lineId, size: '52', count: 1, words: { en: 'Made extra: 1 52', it: 'Fatti in più: 1 52' } }])
+    const margin = await ok('planner', 'GET', `/costing/margins/orders/${order.orderId}`)
+    expect(margin.extraPieces).toMatchObject({ count: 1, lines: [{ lineId: order.lineId, seq: 10, size: '52', count: 1 }], words: expect.stringContaining('cut beyond what the order now wants') })
+    // Another customer's person reads neither.
+    expect((await call('betaPlanner', 'GET', `/sales/orders/${order.orderId}/customer-materials`)).statusCode).toBe(404)
+    expect((await call('betaPlanner', 'GET', `/costing/margins/orders/${order.orderId}`)).statusCode).toBe(404)
+  })
+})
+// ── end B-SA-043 ──

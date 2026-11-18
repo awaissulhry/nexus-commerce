@@ -146,6 +146,14 @@ describe('production progress (SAL-076)', () => {
     expect(view.percent).toBe(50)
     expect(percentOf({ ordered: 0, cut: null, sewn: null, inspected: null, packed: null })).toBeNull()
   })
+
+  // B-SA-043 (review P6-5): an order lowered after cutting (B-SA-042: 40 → 36 with 40 cut) reads at most its ordered figure —
+  // never "Cut 40 of 36", never a word of extra pieces (those are the office's).
+  it('reads an order lowered after cutting at its ordered figure, never more (the extra pieces are the office\'s)', () => {
+    const view = progressOf([{ id: 'l1', seq: 10, quantity: 36, sizes: [{ size: 'M', quantity: 36 }] }], [{ lineId: 'l1', size: 'M', cut: 40, sewn: 38, inspected: 37, packed: 0 }])
+    expect(view.lines[0]!.sizes).toEqual([{ size: 'M', ordered: 36, cut: 36, sewn: 36, inspected: 36, packed: 0 }])
+    expect(JSON.stringify(view)).not.toMatch(/extra/i)
+  })
 })
 
 describe('shipments and what is still to ship (SAL-080, SAL-081)', () => {
