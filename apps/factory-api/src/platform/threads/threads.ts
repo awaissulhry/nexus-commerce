@@ -614,7 +614,7 @@ export interface MessageInput {
   // thread.message_posted, and the followers' bell tells everyone on the order of it, ONE item per reader and change, never
   // `causedById` (the office person whose command made the change; null: nobody of the office — the customer, the system).
   // `orderId` is the order changed (on its own thread: that order); `stillToDo` the steps still to do after it, when counted.
-  readonly change?: { readonly causedById: string | null; readonly orderId: string; readonly stillToDo?: number }
+  readonly change?: { readonly causedById: string | null; readonly orderId: string; readonly stillToDo?: number; /* B-SA-052: told of the same act by another notice (B-PR-32) */ readonly alreadyTold?: readonly string[] }
   // ---- end B-SA-051
   // ---- B-SA-061: the part of its order the message is about (checked first: aboutProblems; the database checks it again). A
   // message of a sales order's thread only; a message shared with the customer never about a work order (office only).
@@ -721,7 +721,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   // B-SA-002: the record's customer for the office's live wall (the thread's party, a work order's, hold's or NCR's wall party).
   const liveParty = livePartyOf(await wallScopeOf(tools.tx, thread))
   // B-SA-051: a change note names who made the change (never told of it), the order changed and the steps still to do.
-  const change = input.change ? { causedById: input.change.causedById, orderId: input.change.orderId, ...(input.change.stillToDo !== undefined ? { stillToDo: input.change.stillToDo } : {}) } : {}
+  const change = input.change ? { causedById: input.change.causedById, orderId: input.change.orderId, ...(input.change.stillToDo !== undefined ? { stillToDo: input.change.stillToDo } : {}), /* B-SA-052 */ ...(input.change.alreadyTold && input.change.alreadyTold.length > 0 ? { alreadyTold: [...new Set(input.change.alreadyTold)] } : {}) } : {}
   tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience, partyId: liveParty, ...change } }))
   // B-W2a-20 (COL-006, COL-011): each person the note mentions (not its author) gets a mention row with the note (where
   // was I mentioned), follows the record unless they have a follow row (muted stays muted), and is told (the event).

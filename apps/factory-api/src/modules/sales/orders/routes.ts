@@ -42,6 +42,8 @@ import { orderMilestonesContract, orderProductionContract } from './production-c
 import { orderMilestones, orderProduction } from './production-read'
 // B-SA-036: every file of the order, and the walled opening of one.
 import { orderFiles, orderFilesContract } from './order-files'
+// B-SA-056: who was told about one change of the order.
+import { toldContract, whoWasTold } from './told'
 import { openOrderFile, openOrderFileContract } from './order-files-open'
 // B-SA-011: the small pictures of a page of orders in one read.
 import { orderPicturesReadContract } from './contract'
@@ -143,4 +145,7 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   // B-SA-036 (Sales page plan N9, P14): the order's files by source group, and the walled opening of one.
   app.get('/sales/orders/:orderId/files', { schema: orderFilesContract }, async (request) => orderFiles(request, request.params.orderId))
   app.post('/sales/orders/:orderId/files/:fileId/open', { schema: openOrderFileContract }, async (request) => openOrderFile(request, request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+
+  // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (never who read it).
+  app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(request, request.params.orderId, request.query))
 })

@@ -94,6 +94,14 @@ import { qualityShared } from '../production/model'
 import { fetchImpact, type AskBody, type ImpactRead } from './api'
 import { askBodyOf, askChoicesOf, askHeld, askProblem, EMPTY_ASK, impactHeld, impactViewOf, isAskKind, isProductionKind, productionAskRefusal, type AskDraft, type AskKind, type ImpactView } from './ask-model'
 // ---- end F-PR-13
+// ---- F-SA-246 (R6): the design change — its lines, words and files (from the device through the order's conversation, or already on it)
+import { fetchOrderFiles, type PortalOrderFiles } from './api'
+import { availableIdsOf, designAskRefusal, designBodyOf, designFilesOf, designProblem, scanningUploadsOf, sentUploadsOf, takesSteps } from './ask-model'
+import { useDesignUploads } from './hooks'
+import { uploading } from '../../../lib/request-compose/files'
+import { COMPOSE_NS } from '../../../lib/request-compose/model'
+import { useT } from '../../../lib/i18n/provider'
+// ---- end F-SA-246
 import { useOrderWords } from './words'
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
@@ -115,7 +123,7 @@ import { useProductionPageWords } from '../production/words'
  */
 export function CustomerOrderPage({ id }: { id: string }) {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists', PRODUCTION_NS /* F-PR-24: Report a problem */]}>
+    <WithMessages namespaces={[NS, 'ds-words', 'lists', PRODUCTION_NS /* F-PR-24: Report a problem */, COMPOSE_NS /* F-SA-246: a design change's files */]}>
       <Suspense fallback={null}>
         <OrderRoute id={id} />
       </Suspense>
@@ -134,7 +142,18 @@ function OrderRoute({ id }: { id: string }) {
 type ImpactPart = { state: 'loading' | 'error' | 'ready'; view: ImpactView | null }
 type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean; impact?: ImpactPart | null }
 type CancelState = { kind: 'cancel'; draft: CancelDraft; busy: boolean; problem: string | null; impact?: ImpactPart | null }
-type AskState = { kind: 'ask'; step: 'what' | 'details' | 'impact'; ask: AskKind | null; draft: AskDraft; impact: ImpactPart | null; busy: boolean; problem: string | null; withdrawing: string | null }
+type AskState = {
+  kind: 'ask'
+  step: 'what' | 'details' | 'impact'
+  ask: AskKind | null
+  draft: AskDraft
+  impact: ImpactPart | null
+  busy: boolean
+  problem: string | null
+  withdrawing: string | null
+  /** F-SA-246: a design change — the order's shared files (the ones it may name; a clean upload of ours is listed there). */
+  orderFiles?: { state: 'loading' | 'error' | 'ready'; read: PortalOrderFiles | null }
+}
 type ReconfirmState = { kind: 'reconfirm'; state: 'loading' | 'error' | 'ready'; page: ApprovalPage | null; decision: ReconfirmDecision | null; comment: string; busy: boolean; problem: string | null; done: { decision: ReconfirmDecision; name: string; at: string } | null }
 type PayState = { kind: 'pay'; depositId: string; method: 'CARD' | 'SEPA_DEBIT' | null; phase: 'idle' | 'starting' | 'ready' | 'paying'; secret: string | null; intent: PaymentIntent | null; problem: string | null }
 type PreviewState = { kind: 'preview'; fileId: string; title: string; state: 'loading' | 'error' | 'ready'; bytes: Uint8Array | null }
@@ -488,14 +507,33 @@ function OrderContainer({ id }: { id: string }) {
   // ---- F-PR-13: the Ask dialog — what, the details of a production ask, what it means before Send ----
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const choices = useMemo(() => (rules.read ? askChoicesOf(rules.read, requests.items) : []), [rules.read, requests.items])
+  // ---- F-SA-246: a design change's files — from the device through the order's conversation's upload route (who may write there:
+  // portal.comment), and the order's own shared files (read when its details open, again before what it means and after a refusal).
+  const tc = useT(COMPOSE_NS)
+  const mayUpload = can('portal.comment')
+  const uploadWords = useMemo(() => ({ network: tc('files.failed.network'), store: tc('files.failed.store'), refused: tc('files.failed.refused') }), [tc])
+  const designUploads = useDesignUploads(api, id, uploadWords)
+  const loadDesignFiles = (): Promise<void> => {
+    setDialog((current) => (current?.kind === 'ask' ? { ...current, orderFiles: { state: 'loading', read: current.orderFiles?.read ?? null } } : current))
+    return fetchOrderFiles(api, id)
+      .then((read) => {
+        setDialog((current) => (current?.kind === 'ask' ? { ...current, orderFiles: { state: 'ready', read } } : current))
+        // An upload of ours the scan cleared is listed there now: it goes with the ask.
+        designUploads.cleaned(availableIdsOf(read))
+      })
+      .catch(() => setDialog((current) => (current?.kind === 'ask' ? { ...current, orderFiles: { state: 'error', read: current.orderFiles?.read ?? null } } : current)))
+  }
+  // ---- end F-SA-246
   /** Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. */
   const openAsk = (kind: AskKind | null = null) => {
     if (kind === 'CHANGE') return openChange()
     if (kind === 'CANCEL') return openCancel()
     writeKey.current = null
     setDialog({ kind: 'ask', step: kind ? 'details' : 'what', ask: kind, draft: EMPTY_ASK, impact: null, busy: false, problem: null, withdrawing: null })
+    designUploads.clear() // F-SA-246: a new ask starts with no file of the device
     void loadRules()
     void loadRequests()
+    if (kind === 'DESIGN') void loadDesignFiles() // F-SA-246
   }
   // `?ask=<KIND>` opens the dialog once at that kind (My production's "Ask us" on a row, a notice's link).
   const askParam = search?.get('ask') ?? null
@@ -520,9 +558,12 @@ function OrderContainer({ id }: { id: string }) {
       })
       .catch((error: unknown) => {
         // A refusal of the ask itself (closed, held): said in the dialog, the rules read again; anything else: the impact failed.
-        const refusal = productionAskRefusal(error)
-        if (isApiError(error) && (error.kind === 'conflict' || error.kind === 'invalid')) setDialog((current) => (seq === impactSeq.current && current && (current.kind === 'ask' || current.kind === 'change' || current.kind === 'cancel') ? { ...current, problem: refusal.key } : current))
+        // F-SA-246: a design change's file the order does not hold as theirs ("File not found.", 404) is said too, the files read again.
+        const design = kind === 'DESIGN' ? designAskRefusal(error) : null
+        const refusal = design ?? productionAskRefusal(error)
+        if (isApiError(error) && (error.kind === 'conflict' || error.kind === 'invalid' || design?.files === true)) setDialog((current) => (seq === impactSeq.current && current && (current.kind === 'ask' || current.kind === 'change' || current.kind === 'cancel') ? { ...current, problem: refusal.key } : current))
         put({ state: 'error', view: null })
+        if (design?.files) void loadDesignFiles()
         if (refusal.reread) void loadRules()
       })
   }
@@ -536,7 +577,9 @@ function OrderContainer({ id }: { id: string }) {
   }
   const askNextHeld = (state: AskState): string | null => {
     const held = askHeld(state.ask, rules.read, choices, askFacts(state.busy))
-    if (held || !rules.read || !state.ask || !isProductionKind(state.ask) || state.step === 'what') return held
+    if (held || !rules.read || !state.ask || !takesSteps(state.ask) || state.step === 'what') return held
+    // F-SA-246: a design change — its lines, their words, at most ten files, none still uploading; then what it means.
+    if (state.ask === 'DESIGN') return designProblem(rules.read, state.draft, { uploaded: sentUploadsOf(designUploads.held), uploading: uploading(designUploads.held) }) ?? (state.step === 'impact' ? impactHeld(state.impact) : null)
     return askProblem(state.ask, rules.read, state.draft, today) ?? (state.step === 'impact' ? impactHeld(state.impact) : null)
   }
   const askNext = () => {
@@ -545,14 +588,46 @@ function OrderContainer({ id }: { id: string }) {
     if (dialog.ask === 'CHANGE') return openChange()
     if (dialog.ask === 'CANCEL') return openCancel()
     setDialog({ ...dialog, step: 'details', problem: null })
+    if (dialog.ask === 'DESIGN') void loadDesignFiles() // F-SA-246
   }
+  // ---- F-SA-246: a design change's body (the uploads as they are now: a clean one of ours goes, one held for the scan stays on the
+  // order); the order's shared files read before the impact, so an upload the scan cleared meanwhile goes with it.
+  const designBody = (draft: AskDraft) => designBodyOf(rules.read ?? { lines: [] }, draft, sentUploadsOf(designUploads.current()))
+  const reviewDesign = () => {
+    if (dialog?.kind !== 'ask' || dialog.ask !== 'DESIGN' || !rules.read || askNextHeld(dialog)) return
+    const draft = dialog.draft
+    setDialog({ ...dialog, step: 'impact', problem: null, impact: { state: 'loading', view: null } })
+    void loadDesignFiles().then(() => readImpact('DESIGN', designBody(draft), false))
+  }
+  const sendDesign = () => {
+    if (dialog?.kind !== 'ask' || dialog.ask !== 'DESIGN' || !rules.read || dialog.step !== 'impact' || askNextHeld(dialog)) return
+    const body = designBody(dialog.draft)
+    setDialog({ ...dialog, busy: true, problem: null })
+    askRequest(api, id, body, keyFor(body))
+      .then(() => {
+        designUploads.clear()
+        sent('ask.design.sent')
+      })
+      .catch((error: unknown) => {
+        const refusal = designAskRefusal(error)
+        setDialog((current) => (current?.kind === 'ask' ? { ...current, busy: false, problem: refusal.key, step: refusal.reread ? 'what' : refusal.files ? 'details' : current.step } : current))
+        if (refusal.files) void loadDesignFiles()
+        if (refusal.reread) {
+          void loadRules()
+          void loadRequests()
+        }
+      })
+  }
+  // ---- end F-SA-246
   const askReview = () => {
+    if (dialog?.kind === 'ask' && dialog.ask === 'DESIGN') return reviewDesign() // F-SA-246
     if (dialog?.kind !== 'ask' || !rules.read || !dialog.ask || !isProductionKind(dialog.ask) || askNextHeld(dialog)) return
     const body = askBodyOf(dialog.ask, rules.read, dialog.draft)
     setDialog({ ...dialog, step: 'impact', problem: null })
     readImpact(dialog.ask, body, false)
   }
   const sendAsk = () => {
+    if (dialog?.kind === 'ask' && dialog.ask === 'DESIGN') return sendDesign() // F-SA-246
     if (dialog?.kind !== 'ask' || !rules.read || !dialog.ask || !isProductionKind(dialog.ask) || dialog.step !== 'impact' || askNextHeld(dialog)) return
     const body = askBodyOf(dialog.ask, rules.read, dialog.draft)
     setDialog({ ...dialog, busy: true, problem: null })
@@ -928,6 +1003,24 @@ function OrderContainer({ id }: { id: string }) {
                 withdrawHeld: preview ? t('held.preview') : !mayAsk ? t('held.mayAsk') : offline ? t('held.offline') : null,
                 withdrawing: dialog.withdrawing,
                 today,
+                // F-SA-246: a design change's files (the device's through the order's conversation; the order's own shared ones).
+                design:
+                  dialog.ask === 'DESIGN'
+                    ? {
+                        orderFiles: { state: dialog.orderFiles?.state ?? 'loading', files: designFilesOf(dialog.orderFiles?.read ?? null, new Set(designUploads.held.flatMap((file) => (file.fileId ? [file.fileId] : [])))) },
+                        upload: {
+                          open: true,
+                          closedWords: null,
+                          held: designUploads.held,
+                          leftOut: designUploads.leftOut,
+                          when: 'send',
+                          readOnly: preview || offline || !mayUpload,
+                          heldReason: preview ? t('held.preview') : !mayUpload ? t('ask.design.deviceHeld') : offline ? t('held.offline') : null,
+                        },
+                        uploaded: sentUploadsOf(designUploads.held),
+                        scanning: scanningUploadsOf(designUploads.held),
+                      }
+                    : null,
               },
             }
         : dialog.kind === 'reconfirm'
@@ -985,6 +1078,8 @@ function OrderContainer({ id }: { id: string }) {
         shipments,
         documents,
         files: orderFiles.model, // F-SA-238
+        // F-SA-246: "Ask for a change" above the order's conversation, held like "Ask us…" (a preview, no right to ask, offline).
+        askDoor: mayAsk || preview ? { held: askHeldWords(null) } : null,
         fileHeld,
         // B-W2b-374 (XF3:04): the lines' options and the artwork the office shows here.
         options: record ? createElement(PortalLineOptions, { api, orderId: id, fileHeld, refreshKey: loadedAt ?? '' }) : null,
@@ -1040,6 +1135,7 @@ function OrderContainer({ id }: { id: string }) {
         },
         onRetryFiles: orderFiles.reload,
         // ---- end F-SA-238
+        onAskChange: () => openAsk(), // F-SA-246: the conversation's "Ask for a change"
         onDownload: download,
         onDismissNotice: () => setNotice(null),
         // ---- F-PR-12a
@@ -1120,7 +1216,18 @@ function OrderContainer({ id }: { id: string }) {
               void loadRules()
               void loadRequests()
             },
-            onRetryImpact: () => (dialog?.kind === 'ask' && rules.read && dialog.ask && isProductionKind(dialog.ask) ? readImpact(dialog.ask, askBodyOf(dialog.ask, rules.read, dialog.draft), false) : undefined),
+            onRetryImpact: () =>
+              dialog?.kind === 'ask' && dialog.ask === 'DESIGN' && rules.read // F-SA-246
+                ? readImpact('DESIGN', designBody(dialog.draft), false)
+                : dialog?.kind === 'ask' && rules.read && dialog.ask && isProductionKind(dialog.ask)
+                  ? readImpact(dialog.ask, askBodyOf(dialog.ask, rules.read, dialog.draft), false)
+                  : undefined,
+            // ---- F-SA-246: a design change's files from the device, and the order's files read again
+            onUpload: (files) => designUploads.add(files),
+            onUploadRemove: (key) => designUploads.remove(key),
+            onUploadRetry: () => designUploads.retry(),
+            onRetryOrderFiles: () => void loadDesignFiles(),
+            // ---- end F-SA-246
           },
           // ---- end F-PR-13
           reconfirm: {

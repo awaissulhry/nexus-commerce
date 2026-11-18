@@ -528,13 +528,15 @@
       "HOLD": "Chiedere una pausa",
       "RESUME": "Chiedere di riprendere",
       "SPLIT_SHIPMENT": "Chiedere di spedire ciò che è pronto",
-      "SAMPLE_ROUND": "Chiedere un altro giro di campioni"
+      "SAMPLE_ROUND": "Chiedere un altro giro di campioni",
+      "DESIGN": "Chiedere una modifica del design"
     },
     "askLine": {
       "HOLD": "Ci chiede di mettere in pausa un ordine; accettiamo o rifiutiamo.",
       "RESUME": "Ci chiede di riprendere un ordine messo in pausa su sua richiesta.",
       "SPLIT_SHIPMENT": "Ci chiede di spedire ora ciò che è pronto e il resto dopo.",
-      "SAMPLE_ROUND": "Chiede un altro giro di campioni prima della produzione."
+      "SAMPLE_ROUND": "Chiede un altro giro di campioni prima della produzione.",
+      "DESIGN": "Ci chiede di cambiare il design di un modello del suo marchio, con parole e file; accettiamo, proponiamo altro o rifiutiamo."
     },
     "approver": {
       "title": "Chi risponde dalla sua parte",

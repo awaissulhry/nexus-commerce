@@ -42,5 +42,57 @@
   "pane": {
     "label": "Riquadro di lettura",
     "close": "Chiudi il riquadro di lettura"
+  },
+  "allOfCustomer": {
+    "title": "Tutto di {customer}",
+    "line": "Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di {customer}. Per scrivere, scegli una conversazione.",
+    "readMarks": "Apri una conversazione per segnarla come letta.",
+    "view": {
+      "label": "Vista",
+      "menu": "Scegli quali messaggi mostra l'elenco",
+      "all": "Tutto",
+      "shared": "Con il cliente",
+      "notes": "Note d'ufficio"
+    },
+    "kind": {
+      "label": "Tipo",
+      "menu": "Scegli di quali record mostrare i messaggi",
+      "every": "Ogni tipo",
+      "ORDERS": "Ordini",
+      "QUOTES": "Preventivi",
+      "REQUESTS": "Richieste",
+      "GENERAL": "Conversazione generale",
+      "PROJECTS": "Progetti",
+      "AFTER_SALES": "Post-vendita"
+    },
+    "newShow_one": "1 nuovo · Mostra",
+    "newShow_other": "{count} nuovi · Mostra",
+    "loading": "Lettura dei messaggi di {customer}…",
+    "failed": "Non è stato possibile leggere i messaggi.",
+    "retry": "Riprova",
+    "gone": "Le conversazioni di questo cliente sono fuori dalla tua portata.",
+    "empty": "Ancora nessun messaggio con {customer}",
+    "emptyFiltered": "Niente con questa vista e questo tipo: scegli Tutto e Ogni tipo per vedere ogni messaggio.",
+    "feedLabel": "Messaggi con {customer}, i più recenti prima",
+    "showOlder": "Mostra i più vecchi",
+    "olderLoading": "Lettura dei messaggi più vecchi…",
+    "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",
+    "older": "Conversazioni più vecchie: apri il loro record",
+    "notShown_one": "1 conversazione di {customer} che non puoi aprire è esclusa.",
+    "notShown_other": "{count} conversazioni di {customer} che non puoi aprire sono escluse.",
+    "openRecord": "Apri {record}",
+    "new": "Nuovo",
+    "answer": "Rispondi nella sua conversazione",
+    "answerLabel": "Rispondi nella conversazione di {record}",
+    "chip": {
+      "general": "{customer} (generale)",
+      "number": "{number}",
+      "unnamed": "Un record non più presente",
+      "own": {
+        "ORDER": "{number} · Ordine {seq} del cliente",
+        "QUOTE": "{number} · Preventivo {seq} del cliente",
+        "REQUEST": "{number} · Richiesta {seq} del cliente"
+      }
+    }
   }
 }

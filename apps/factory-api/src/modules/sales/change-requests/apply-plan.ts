@@ -120,6 +120,8 @@ export interface PlanStep extends ApplyStep {
   readonly workOrder: { readonly id: string; readonly number: string } | null
   readonly cells: { readonly seq: number; readonly size: string; readonly from: number; readonly to: number }[]
   readonly extra: number
+  /** F-SA-241: the work order's ACTIVE bundles on the step's cells (null: a new work order, or one the reader does not reach). */
+  readonly bundles: number | null
 }
 
 type Draft = ApplyStep & Omit<PlanStep, keyof ApplyStep | 'seq'>
@@ -160,6 +162,15 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
   const supervisors = new Map<string, string | null>()
   for (const id of workOrderIds) if (reached(id)) supervisors.set(id, (await supervisorOfWorkOrder(db, id))?.userId ?? null)
   const personIds = unique([...supervisors.values()].filter((id): id is string => id !== null))
+  // F-SA-241: the bundles in work on each step's own cells of a work order the reader reaches ("Finish what is started" / "Stop now").
+  const bundlesOf = async (entry: WorkEntry): Promise<number | null> => {
+    const workOrder = reached(entry.workOrderId)
+    if (!workOrder) return null
+    const cellIds = unique(entry.cells.flatMap((cell) => (cell.workOrderSizeId ? [cell.workOrderSizeId] : [])))
+    return cellIds.length > 0 ? db.bundle.count({ where: { status: 'ACTIVE', workOrderId: workOrder.id, workOrderSizeId: { in: cellIds } } }) : 0
+  }
+  const bundles = new Map<WorkEntry, number | null>()
+  for (const entry of entries) bundles.set(entry, await bundlesOf(entry))
   const people = new Map((personIds.length > 0 ? await db.user.findMany({ where: { id: { in: personIds } }, select: { id: true, displayName: true } }) : []).map((user) => [user.id, user.displayName]))
 
   const workSteps: Draft[] = entries
@@ -188,6 +199,7 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
         workOrder: workOrder ? { id: workOrder.id, number: workOrder.number } : null,
         cells: entry.cells.map((cell) => ({ seq: seqOf.get(cell.salesOrderLineId) ?? 0, size: cell.size, from: cell.from, to: cell.to })),
         extra: facts.extra,
+        bundles: bundles.get(entry) ?? null, // F-SA-241
       }
     })
   const workOrdersLeftOut = workOrderIds.filter((id) => !reached(id)).length
@@ -201,6 +213,7 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
     workOrder: null,
     cells: [],
     extra: 0,
+    bundles: null, // F-SA-241
   }
 
   // REPROMISE: the earliest date the change leaves (kept at Send) against the promise; after Accept, planning's re-promises since.
@@ -224,7 +237,7 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
   const told = accepted && row.answeredAt ? (await toldSubcontractsOf(db, outside.map((entry) => entry.id), row.answeredAt)).size : 0
   const workshop = waiting || accepted ? workshopStepOf({ workshops: outside.length, told }) : null
 
-  const extraNone: Omit<PlanStep, keyof ApplyStep | 'seq'> = { person: null, ref: null, workOrder: null, cells: [], extra: 0 }
+  const extraNone: Omit<PlanStep, keyof ApplyStep | 'seq'> = { person: null, ref: null, workOrder: null, cells: [], extra: 0, bundles: null }
 
   // B-SA-047 (R3): a design change — a style change per style of the customer's own label (before Accept: held for any other), then
   // product's change order, waiting until it is released (the style change DONE) or refused.

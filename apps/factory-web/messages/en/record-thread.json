@@ -42,5 +42,57 @@
   "pane": {
     "label": "Reading pane",
     "close": "Close the reading pane"
+  },
+  "allOfCustomer": {
+    "title": "All of {customer}",
+    "line": "Read only: messages of {customer}'s orders, quotes, requests, projects and general conversation. To write, pick one conversation.",
+    "readMarks": "Open a conversation to mark it read.",
+    "view": {
+      "label": "View",
+      "menu": "Choose which messages the feed shows",
+      "all": "All",
+      "shared": "With the customer",
+      "notes": "Office notes"
+    },
+    "kind": {
+      "label": "Kind",
+      "menu": "Choose which records the feed shows",
+      "every": "Every kind",
+      "ORDERS": "Orders",
+      "QUOTES": "Quotes",
+      "REQUESTS": "Requests",
+      "GENERAL": "General conversation",
+      "PROJECTS": "Projects",
+      "AFTER_SALES": "After-sales"
+    },
+    "newShow_one": "1 new · Show",
+    "newShow_other": "{count} new · Show",
+    "loading": "Reading the messages of {customer}…",
+    "failed": "Couldn't read the messages.",
+    "retry": "Try again",
+    "gone": "The conversations of this customer are out of your reach.",
+    "empty": "No message with {customer} yet",
+    "emptyFiltered": "Nothing with this view and kind: choose All and Every kind to see every message.",
+    "feedLabel": "Messages with {customer}, newest first",
+    "showOlder": "Show older",
+    "olderLoading": "Reading older messages…",
+    "olderFailed": "Couldn't read older messages · Try again",
+    "older": "Older conversations: open their record",
+    "notShown_one": "1 conversation of {customer} you cannot open is left out.",
+    "notShown_other": "{count} conversations of {customer} you cannot open are left out.",
+    "openRecord": "Open {record}",
+    "new": "New",
+    "answer": "Answer in its conversation",
+    "answerLabel": "Answer in the conversation of {record}",
+    "chip": {
+      "general": "{customer} (general)",
+      "number": "{number}",
+      "unnamed": "A record no longer there",
+      "own": {
+        "ORDER": "{number} · Your order {seq}",
+        "QUOTE": "{number} · Your quote {seq}",
+        "REQUEST": "{number} · Your request {seq}"
+      }
+    }
   }
 }

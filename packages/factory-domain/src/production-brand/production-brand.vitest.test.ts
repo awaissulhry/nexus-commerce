@@ -6,7 +6,7 @@ import { groupOf, maySee, PORTAL_DOCUMENT_KINDS, type DocumentAccess } from '../
 import { PORTAL_CUSTOMER_DOCUMENTS_CONFORMITY, PORTAL_CUSTOMER_DOCUMENTS_FINANCE, PORTAL_CUSTOMER_DOCUMENTS_VIEW } from '../sales/portal-documents/permissions'
 import { freezeVerdict, rulesForParty, type FreezeRuleFacts } from '../sales/order-changes/freeze'
 import { computedHealth, effectiveHealth, HEALTH_REASON_CODES, raiseProblems, raiseStands, raiseUntil, type BrandHealth } from './health'
-import { askKindsProblems, isAskOpen, openAskKinds, PRODUCTION_REQUEST_KINDS } from './kinds'
+import { askKindsProblems, isAskOpen, LIMITS_ASK_KINDS, openAskKinds, PRODUCTION_ASK_KINDS, PRODUCTION_REQUEST_KINDS } from './kinds'
 import { maskByLevel, maskOf, PRODUCTION_SHARE_LEVELS, qualityResultsShown, shares } from './levels'
 import { CUSTOMER_PRODUCTION_ROLE } from './permissions'
 import { BRAND_STAGES, lineStageOf, movedForward, orderStageOf, type LineStageFacts } from './stages'
@@ -190,7 +190,18 @@ describe('B-PR-13 production asks open to a customer', () => {
     expect(askKindsProblems(['HOLD', 'HOLD'])).toEqual([{ path: 'body/productionAskKinds', message: 'An ask is listed twice.' }])
     expect(askKindsProblems(['RUSH'])[0]?.message).toMatch(/urgency switch/)
     expect(askKindsProblems(['CANCEL'])[0]?.message).toMatch(/cut-offs/)
-    expect(askKindsProblems(['SHIP'])).toEqual([{ path: 'body/productionAskKinds/0', message: 'Expected one of HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND.' }])
+    expect(askKindsProblems(['SHIP'])).toEqual([{ path: 'body/productionAskKinds/0', message: 'Expected one of HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND, DESIGN.' }])
+  })
+
+  // B-SA-005b: the switch opens the design change too, as the database does (…_order_apply_design_asks_guards); it stays no
+  // production ask (never in openAskKinds: its own door is isDesignOpen).
+  it('the limits card may also list the design change DESIGN, each once, as the database does', () => {
+    expect(LIMITS_ASK_KINDS).toEqual([...PRODUCTION_ASK_KINDS, 'DESIGN'])
+    expect(askKindsProblems(['DESIGN'])).toEqual([])
+    expect(askKindsProblems([...LIMITS_ASK_KINDS])).toEqual([])
+    expect(askKindsProblems(['DESIGN', 'DESIGN'])).toEqual([{ path: 'body/productionAskKinds', message: 'An ask is listed twice.' }])
+    expect(PRODUCTION_REQUEST_KINDS as readonly string[]).not.toContain('DESIGN')
+    expect(openAskKinds({ productionUrgencyOn: false, productionAskKinds: ['DESIGN', 'HOLD'] })).toEqual(['HOLD'])
   })
 })
 

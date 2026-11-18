@@ -180,3 +180,88 @@ p.fw-apv-hint[role='status'] {
     height: min(560px, 80dvh);
   }
 }
+
+/* ---- F-SA-241: the review window's What happens next / Done · What happens next steps, and Extra pieces (every door) ---- */
+.fw-apv-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-apv-step {
+  display: grid;
+  grid-template-columns: var(--nds-space-20) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-apv-step:first-child {
+  border-top: 0;
+}
+
+.fw-apv-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-apv-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-apv-step-what {
+  color: var(--nds-text-strong);
+}
+
+.fw-apv-step-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-apv-step-state {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.fw-apv-extra {
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-apv-extra-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+@media (max-width: 720px) {
+  .fw-apv-step {
+    grid-template-columns: var(--nds-space-20) minmax(0, 1fr);
+  }
+
+  .fw-apv-step-state {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}

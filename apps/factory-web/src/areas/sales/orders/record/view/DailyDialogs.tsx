@@ -11,6 +11,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money, unitPrice } from '../../../quotes/model'
+// F-SA-242: the same tick as the review window — the words for the customer also written in the order's conversation.
+import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import type { ImpactItem, Order } from '../../api'
 import {
   amendPairs,
@@ -68,7 +70,12 @@ export function AmendReviewDialog({ order, model, actions }: { order: Order; mod
   const locale = useLocale()
   const amend = model.amend
   const [reason, setReason] = useState(model.draft?.reason ?? '')
+  // F-SA-242: words for the customer (optional) and the tick (on when typed); never automatic, never a price typed in words.
+  const [tellWords, setTellWords] = useState('')
+  const [tellChosen, setTellChosen] = useState<boolean | null>(null)
   if (!amend) return null
+  const tick = { chosen: tellChosen, reach: model.portalGone ? ('none' as const) : ('portal' as const) }
+  const tellOn = (tellChosen ?? tellWords.trim() !== '') && tick.reach === 'portal' && tellWords.trim() !== ''
   const review = amend.review
   const pairs = amendPairs(amend.lines, order)
   const label = (index: number) => {
@@ -117,7 +124,7 @@ export function AmendReviewDialog({ order, model, actions }: { order: Order; mod
     <Frame
       title={t('amend.reviewTitle', { revision: amend.revision, number: order.number })}
       held={held}
-      go={() => actions?.onAmendApply?.(reason.trim())}
+      go={() => actions?.onAmendApply?.(reason.trim(), tellOn ? tellWords.trim() : null)}
       goLabel={model.busy ? t('common.working') : t('amend.apply')}
       onClose={close(actions)}
       problem={<DialogProblem model={model} />}
@@ -167,6 +174,15 @@ export function AmendReviewDialog({ order, model, actions }: { order: Order; mod
           <Field label={t('amend.reason')} hint={t('amend.reasonHint')}>
             <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
           </Field>
+          {/* F-SA-242 (14-change-flow §2.10, §4.2): the customer is told only when the person writes it — the words, and the tick. */}
+          {order.party && (
+            <>
+              <Field label={t('amend.tell.words')} hint={t('amend.tell.hint')}>
+                <Textarea value={tellWords} onChange={(event) => setTellWords(event.target.value)} rows={2} maxLength={2000} />
+              </Field>
+              <ConversationTick id={`amend-${order.id}`} tick={tick} words={tellWords} customer={order.party.legalName} onTick={setTellChosen} />
+            </>
+          )}
         </>
       )}
     </Frame>

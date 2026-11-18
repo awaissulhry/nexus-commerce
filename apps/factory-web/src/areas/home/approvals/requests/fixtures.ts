@@ -2,7 +2,7 @@ import { PREFIX } from '../../../sales/quotes/record/fixtures'
 import { DEPTH_ROWS, depthModel } from '../depth/fixtures'
 import { requestRow } from '../inbox'
 import type { InboxViewModel } from '../model'
-import type { BrandRequest, RequestImpact, RequestImpactRead, RequestRecord } from './api'
+import type { ApplyPlan, BrandRequest, RequestImpact, RequestImpactRead, RequestRecord } from './api'
 import { batchLinesOf, requestGroupsOf, type RequestReviewModel } from './model'
 
 /**
@@ -166,7 +166,75 @@ const batch = (overrides: Partial<BatchReview> = {}): BatchReview => ({
 const open = (id: string) => ({ view: 'waiting' as const, kind: null, q: '', changed: false, open: id })
 const LINES = batchLinesOf(BATCH_ROWS, 'accept')
 
-export const REQUEST_FIXTURES = { RUSH, HOLD, CANCEL, AGREED, BATCH, BATCH_ROWS, REQUEST_ROWS, LINES, TODAY }
+// ---- F-SA-241 / F-SA-242: the apply plan of a change (Brand Alpha asks M 40 → 36, L 20 → 24 while 38 M are cut) ----
+const CHANGE = brandRequest(5, {
+  kind: 'CHANGE',
+  requestedDate: null,
+  answeredWith: 'orders.manage',
+  answeredIn: 'SALES',
+  note: 'Our store in the north sells more L than we planned.',
+  cells: [
+    { lineId: id(320), seq: 2, style: { code: 'JKT-DEMO-01', name: 'Giacca Demo' }, colourway: { code: 'NAVY', name: 'Navy' }, size: 'M', before: 40, asked: 36, askedColourway: null },
+    { lineId: id(320), seq: 2, style: { code: 'JKT-DEMO-01', name: 'Giacca Demo' }, colourway: { code: 'NAVY', name: 'Navy' }, size: 'L', before: 20, asked: 24, askedColourway: null },
+  ],
+  acceptWords: words('We change the order as asked.', "Modifichiamo l'ordine come richiesto."),
+  impact: { ...IMPACT, kind: 'CHANGE', earliest: null },
+})
+const WO = { id: id(212), number: 'WO-DEMO-0212' }
+/** The plan of a change before Accept (or after it, `accepted`): floor figures, 2 extra M, the lowering held for planning. */
+export function applyPlanOf(request: BrandRequest, overrides: Partial<ApplyPlan> = {}, accepted = false): ApplyPlan {
+  return {
+    asOf: NOW,
+    request: { id: request.id, kind: request.kind, status: accepted ? 'ACCEPTED' : request.status, version: request.version, orderId: request.orderId, orderNumber: request.orderNumber },
+    words: null,
+    floor: {
+      cells: [
+        { lineId: id(320), seq: 2, size: 'M', ordered: 40, asked: 36, inWorkOrders: 40, cut: 38, sewn: 0, packed: 0 },
+        { lineId: id(320), seq: 2, size: 'L', ordered: 20, asked: 24, inWorkOrders: 20, cut: 0, sewn: null, packed: 0 },
+      ],
+      inWork: { bundles: 2, stage: 'CUTTING', words: words('In work now: 2 bundles at Cutting', 'In lavorazione ora: 2 fasci a Taglio') },
+      workOrdersLeftOut: 0,
+    },
+    withheld: [],
+    extra: {
+      pieces: [{ lineId: id(320), seq: 2, size: 'M', count: 2, words: words('Extra pieces: 2 M already cut', 'Pezzi in più: 2 M già tagliati') }],
+      total: 2,
+      outcomes: [
+        { outcome: 'CHARGE', words: words('Keep and charge the customer', 'Tieni e addebita al cliente'), needs: 'PRICE_GRAIN', needsWords: words('Charging the customer needs the right to see prices', 'Per addebitare al cliente serve il permesso di vedere i prezzi'), mayChoose: true },
+        { outcome: 'LEFTOVER', words: words('Keep as leftover for Brand Alpha', 'Tieni come rimanenza di Brand Alpha'), needs: null, needsWords: null, mayChoose: true },
+        { outcome: 'SCRAP', words: words('Scrap', 'Scarta'), needs: 'SCRAP_APPROVAL', needsWords: words('The scrap is approved on its own, by who approves scrap', 'Lo scarto si approva a parte, da chi approva gli scarti'), mayChoose: true },
+      ],
+      chosen: accepted ? 'LEFTOVER' : null,
+      needsOutcome: !accepted,
+      words: accepted ? null : words('Choose what happens to the 2 extra pieces', 'Scegli cosa fare dei 2 pezzi in più'),
+    },
+    next: [
+      { seq: 1, kind: 'AMEND', state: accepted ? 'DONE' : 'TO_DO', team: 'SALES', person: null, words: words('This Accept: the order is changed as asked', "Questa accettazione: l'ordine viene modificato come richiesto"), why: null, mayDoNow: !accepted, ref: null, workOrder: null, cells: [], extra: 0, bundles: null },
+      {
+        seq: 2,
+        kind: 'LOWER_TO_ORDER',
+        state: accepted ? 'PROPOSED' : 'TO_DO',
+        team: 'PLANNER',
+        person: { id: id(950), name: 'Dario Test' },
+        words: words('WO-DEMO-0212: make M 40 → 38 · 2 extra pieces already cut', 'WO-DEMO-0212: produci M 40 → 38 · 2 pezzi in più già tagliati'),
+        why: accepted ? words('Sent to planning: Dario Test decides', 'Inviato alla pianificazione: decide Dario Test') : words('After Accept it goes to planning: who manages the work order applies it', "Dopo l'accettazione va alla pianificazione: la applica chi gestisce l'ordine di lavoro"),
+        mayDoNow: accepted,
+        ref: accepted ? { type: 'WorkOrderChange', id: id(960), number: null } : null,
+        workOrder: WO,
+        cells: [{ seq: 2, size: 'M', from: 40, to: 38 }],
+        extra: 2,
+        bundles: 2,
+      },
+    ],
+    live: { events: ['order_change_request.answered', 'work_order_change.applied'] },
+    ...overrides,
+  }
+}
+const PLAN = applyPlanOf(CHANGE)
+const PLAN_AFTER = applyPlanOf(CHANGE, {}, true)
+const ACCEPTED = { ...CHANGE, status: 'ACCEPTED' as const, waitingOn: null, answeredAt: at(12, 10, 42), standing: words('Accepted', 'Accettata') }
+
+export const REQUEST_FIXTURES = { RUSH, HOLD, CANCEL, AGREED, BATCH, BATCH_ROWS, REQUEST_ROWS, LINES, TODAY, CHANGE, PLAN, PLAN_AFTER, WO }
 
 export const REQUEST_CASES: readonly { id: string; label: string; model: InboxViewModel; note?: string }[] = [
   { id: 'f-pr-08-inbox', label: 'F-PR-08 · customer requests in one inbox: Urgent – asked, a pause, a batch of 6 cancels as one row', model: inbox(), note: '"Customer request" rows open their window here; the batch is ONE row "Cancel · 6 orders · Brand Alpha" (5 still wait); chips say what was already fixed, a price that may apply, the earliest date.' },
@@ -193,4 +261,59 @@ export const REQUEST_CASES: readonly { id: string; label: string; model: InboxVi
   { id: 'f-pr-08-lift', label: 'F-PR-08 · Lift the hold: why, before the customer’s pause is lifted', model: inbox({ followUpDialog: { followUp: { kind: 'lift', requestId: HOLD.id, workOrders: [{ id: id(201), number: 'WO-DEMO-0201' }] }, busy: false, problem: null } }) },
   { id: 'f-pr-08-not-found', label: 'F-PR-08 · another customer’s request (PW-H01b): "not there any more", naming nobody', model: inbox({ controls: open(id(999)), requestReview: { ...one(RUSH), id: id(999), record: { status: 'not_found' }, impact: { status: 'not_found' } } }) },
   { id: 'f-pr-08-loading', label: 'F-PR-08 · the window reading the request', model: inbox({ controls: open(RUSH.id), requestReview: { ...one(RUSH), record: { status: 'loading' }, impact: { status: 'loading' } } }) },
+  // ---- F-SA-241 / F-SA-242: the window's new parts ----
+  {
+    id: 'f-sa-241-extra',
+    label: 'F-SA-241 · a change after cutting: On the floor now, 2 extra M (none picked — Accept held), What happens next',
+    model: inbox({ controls: open(CHANGE.id), requestReview: one(CHANGE, { plan: { status: 'ready', value: PLAN }, choices: { extraOutcome: null, stops: [] }, tell: { chosen: null, reach: 'portal', sent: 'no', compose: null } }) }),
+    note: 'The order’s own cells; 38 M cut beyond the 36 asked: Keep and charge · Keep as leftover for Brand Alpha · Scrap. Accept says "Choose what happens to the 2 extra pieces" until one is picked. WO-DEMO-0212 has 2 bundles in work: Finish what is started / Stop now.',
+  },
+  {
+    id: 'f-sa-241-picked',
+    label: 'F-SA-241 · leftover picked, Stop now chosen, words typed (the conversation tick on)',
+    model: inbox({ controls: open(CHANGE.id), requestReview: one(CHANGE, { words: 'Yes: line 2 becomes M 36 and L 24.', plan: { status: 'ready', value: PLAN }, choices: { extraOutcome: 'LEFTOVER', stops: [WO.id] }, tell: { chosen: null, reach: 'portal', sent: 'no', compose: null } }) }),
+  },
+  {
+    id: 'f-sa-241-floor-withheld',
+    label: 'F-SA-241 · On the floor now without work-order access: "—" and "Needs work-order access"',
+    model: inbox({ controls: open(CHANGE.id), requestReview: one(CHANGE, { plan: { status: 'ready', value: { ...PLAN, floor: null, withheld: ['floor'] } } }) }),
+  },
+  {
+    id: 'f-sa-241-done',
+    label: 'F-SA-241 · after Accept: Done · What happens next — Stop now done, Change the work order now, Next request ›',
+    model: inbox({
+      controls: open(CHANGE.id),
+      requestReview: one(ACCEPTED, {
+        plan: { status: 'ready', value: PLAN_AFTER },
+        choices: { extraOutcome: 'LEFTOVER', stops: [WO.id] },
+        tell: { chosen: true, reach: 'portal', sent: 'sent', compose: null },
+        done: {
+          notice: { key: 'notice.requestAccepted', tone: 'success', lines: [] },
+          next: 'next',
+          commands: [
+            { key: `stop:${WO.id}`, kind: 'stop', workOrder: WO },
+            { key: `apply:${id(960)}`, kind: 'apply', changeId: id(960), workOrder: WO, words: words('WO-DEMO-0212: make M 40 → 38', 'WO-DEMO-0212: produci M 40 → 38') },
+          ],
+          states: { [`stop:${WO.id}`]: { phase: 'done' } },
+          running: false,
+        },
+      }),
+    }),
+  },
+  {
+    id: 'f-sa-242-colour',
+    label: 'F-SA-242 · a colourway change after cutting: Accept held "Already cut in Black: 40 pieces. Suggest something else or refuse."',
+    model: inbox({
+      controls: open(CHANGE.id),
+      requestReview: one(CHANGE, {
+        plan: {
+          status: 'ready',
+          value: applyPlanOf(CHANGE, {
+            extra: { pieces: [], total: 0, outcomes: [], chosen: null, needsOutcome: false, words: null },
+            next: [{ seq: 1, kind: 'AMEND', state: 'NOT_POSSIBLE', team: 'SALES', person: null, words: words('This Accept: the order is changed as asked', "Questa accettazione: l'ordine viene modificato come richiesto"), why: words('Already cut in Black: 40 pieces. Suggest something else or refuse.', 'Già tagliati in Nero: 40 pezzi. Proponi altro o rifiuta.'), mayDoNow: false, ref: null, workOrder: null, cells: [], extra: 0, bundles: null }],
+          }),
+        },
+      }),
+    }),
+  },
 ]

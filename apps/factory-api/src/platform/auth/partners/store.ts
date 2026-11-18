@@ -2,7 +2,7 @@ import type { FactoryClient } from '@nexus/factory-db'
 import { isPartnerKind, partnerKindsOf, type Capability, type PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
 import { holdsSeat, splitRoleKeys } from '@nexus/factory-domain/auth/partners/rules'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
-import type { ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
+import type { LimitsAskKind } from '@nexus/factory-domain/production-brand/kinds'
 import type { ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
 import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import type { CommandTx } from '../../../core/command'
@@ -54,7 +54,7 @@ export interface PortalSettingsView {
   readonly productionLevel: ProductionShareLevel
   readonly productionUrgencyOn: boolean
   readonly productionUrgentMax: number
-  readonly productionAskKinds: readonly ProductionAskKind[]
+  readonly productionAskKinds: readonly LimitsAskKind[] // B-SA-005b: + DESIGN
   readonly productionApproverId: string | null
   readonly overrideFourEyes: boolean
   /** Read only here: saved by B-PR-42a's route (production.brand.manage, L21). */
@@ -82,7 +82,7 @@ const SETTINGS_SELECT = {
 export async function settingsOf(client: Reader, partyId: string): Promise<PortalSettingsView> {
   const rows = await client.portalSettings.findMany({ where: { partyId }, select: SETTINGS_SELECT, take: 1 })
   const row = rows[0]
-  if (row) return { exists: true, ...row, productionAskKinds: row.productionAskKinds as ProductionAskKind[] }
+  if (row) return { exists: true, ...row, productionAskKinds: row.productionAskKinds as LimitsAskKind[] }
   return {
     exists: false,
     portalOn: false,

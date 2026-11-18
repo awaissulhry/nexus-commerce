@@ -48,6 +48,9 @@ export const events = [
       causedById: z.uuid().nullable().optional(),
       orderId: z.uuid().optional(),
       stillToDo: z.number().int().min(0).optional(),
+      // B-SA-052: the office people a notice of the SAME act already told (B-PR-32 tells the supervisor and the backup of the
+      // customer's own withdrawal): the change note's bell leaves them out, so one act is one bell item per person.
+      alreadyTold: z.array(z.uuid()).max(50).optional(),
       // ---- end B-SA-051
     }),
     live: { permission: 'threads.read', fields: ['threadId', 'messageId', 'recordType', 'recordId'] },

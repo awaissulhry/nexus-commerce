@@ -7,7 +7,7 @@ import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/produc
 import { APPLY_WORDS, type ApplyTeam, type StillKind } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import type { Words } from '@nexus/factory-domain/sales/change-requests/rules'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
-import { actorOf, type OfficeContext } from '../../../core/context'
+import { actorOf, type OfficeContext, type SystemContext } from '../../../core/context'
 import { readProposals } from '../../planning/promise-keep/store'
 import { wipTaskIdOf } from '../../product/changes/hooks'
 import { cellsOf, CHANGE_COLUMNS, extraOf, mayDecide } from '../../production/work-order-changes/read'
@@ -83,8 +83,11 @@ export async function toldSubcontractsOf(db: Reader, subcontractIds: readonly st
   return new Set(rows.map((row) => row.recordId))
 }
 
-/** The order's Still to do for this reader (see the file's head), oldest first. */
-export async function stillToDoOf(db: Reader, context: OfficeContext, order: Pick<OrderRow, 'id' | 'companyId' | 'partyId' | 'reapprovalNeededAt'>): Promise<{ rows: StillRow[]; count: number; workOrdersLeftOut: number }> {
+/**
+ * The order's Still to do for this reader (see the file's head), oldest first. B-SA-052: the system line's writer counts it as the
+ * system (`count` does not depend on the reader; the system reaches no work order, so it names none).
+ */
+export async function stillToDoOf(db: Reader, context: OfficeContext | SystemContext, order: Pick<OrderRow, 'id' | 'companyId' | 'partyId' | 'reapprovalNeededAt'>): Promise<{ rows: StillRow[]; count: number; workOrdersLeftOut: number }> {
   const actor = actorOf(context)
   const place = { companyId: order.companyId, partyId: order.partyId }
   const rows: StillRow[] = []

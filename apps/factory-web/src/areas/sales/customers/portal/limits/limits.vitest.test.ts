@@ -12,7 +12,7 @@ import { leftKeys, render, textOf } from '../../../../../lib/record-thread/parts
 import { scanText } from '../../../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../../../lib/testing/two-brands'
 import { runWithStepUp } from '../../../../admin/shared/step-up'
-import type { PartnerPerson, ProductionLimits } from '../../../../admin/users/partners/api'
+import { productionLimitsSchema, type PartnerPerson, type ProductionLimits } from '../../../../admin/users/partners/api'
 import { CUSTOMER_PEOPLE, freezeList, limitsModel, OFFICE_PEOPLE, productionLimits } from '../demo'
 import { designScreen } from '../fixtures'
 import { LimitsCard } from '../view/LimitsCard'
@@ -107,6 +107,21 @@ describe('F-PR-07 — everything starts off; only what changes is sent', () => {
     expect(limitsBody(saved, { ...DEFAULT, approverMode: 'NAMED', approverId: null })).toBeNull()
     expect(limitsProblems({ ...DEFAULT, urgentMax: 21 })).toEqual({ urgentMax: 'limits.urgency.maxRange' })
     expect(limitsProblems({ ...DEFAULT, urgentMax: 0 })).toEqual({})
+  })
+
+  // B-SA-005b (sales page 2/2): the API and the database let the switch hold the design change; the card reads it and keeps it.
+  it('a saved design change (DESIGN) is read, kept in the draft and by the preset, sent with the asks, and is no production ask', () => {
+    const withDesign = productionLimits({ askKinds: ['HOLD', 'DESIGN'] })
+    expect(productionLimitsSchema.safeParse(withDesign).success).toBe(true)
+    const draft = limitsDraftOf(withDesign.production)
+    expect(draft.askKinds).toEqual(['HOLD', 'DESIGN'])
+    expect(limitsBody(withDesign.production, draft)).toBeNull()
+    expect(limitsBody(withDesign.production, { ...draft, askKinds: [...draft.askKinds, 'RESUME'] })).toEqual({ version: 4, productionAskKinds: ['HOLD', 'RESUME', 'DESIGN'] })
+    const preset = withPreset(draft)
+    expect(preset.askKinds).toEqual(['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND', 'DESIGN'])
+    expect(limitsBody(withDesign.production, preset)).toMatchObject({ preset: 'PRODUCTION_PARTNER', productionAskKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND', 'DESIGN'] })
+    expect(openAsksOf(draft)).toEqual(['HOLD'])
+    expect(productionLimitsSchema.safeParse(productionLimits({ askKinds: ['RUSH' as never] })).success).toBe(false)
   })
 
   it('the approver comes from their ACTIVE customer-portal people; a saved one no longer active stays shown', () => {

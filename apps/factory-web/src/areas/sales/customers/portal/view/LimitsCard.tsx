@@ -18,7 +18,9 @@ import {
   limitsProblems,
   LIMITS_ANCHOR,
   openAsksOf,
-  PRODUCTION_ASK_KINDS,
+  // F-SA-246: the switch lists the design change too (sa-17's B-SA-005b: LIMITS_ASK_KINDS = the production asks + DESIGN, the
+  // database's list; the draft keeps a saved DESIGN).
+  LIMITS_ASK_KINDS,
   productionPreviewHeld,
   seesNow,
   URGENT_MAX,
@@ -107,7 +109,8 @@ function LimitsForm({ model, partyName, portalOn, people, can, previewing, actio
     if (!dirty || Object.keys(problems).length > 0 || model.busy) return
     void actions?.onApply?.(draft)
   }
-  const open = openAsksOf(draft)
+  // F-SA-246: the design change ticked is offered in their Ask menu too (it is no production ask: openAsksOf leaves it out).
+  const open = [...openAsksOf(draft), ...(draft.askKinds.includes('DESIGN') ? ['DESIGN'] : [])]
   return (
     <Card padded>
       <section id={LIMITS_ANCHOR} className="fw-pa-lim" aria-labelledby="fw-pa-lim-title">
@@ -194,7 +197,7 @@ function LimitsForm({ model, partyName, portalOn, people, can, previewing, actio
               {note && <Banner tone={draft.urgencyOn ? 'warning' : 'info'} title={word(note)} />}
               <div className="fw-pa-lim-asks" role="group" aria-label={t('limits.asks.title')}>
                 <span className="fw-pa-strong">{t('limits.asks.title')}</span>
-                {PRODUCTION_ASK_KINDS.map((kind) => {
+                {LIMITS_ASK_KINDS.map((kind) => {
                   const on = draft.askKinds.includes(kind)
                   return (
                     <CheckboxCard

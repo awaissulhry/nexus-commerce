@@ -14,6 +14,30 @@ import { getTask } from '../api'
 import { acceptBatch, acceptProduction, acceptSales, counterRequest, getImpact, getRequest, listBatch, refuseBatch, refuseRequest, type BrandRequest, type RequestImpactRead, type RequestRecord, type Words } from './api'
 // F-SA-245: an id no listed row names may be a work-order change.
 import { getWorkOrderChange } from '../work-order-changes/api'
+// F-SA-241: the apply plan; after Accept each next step's own command (Stop now's hold, a work-order change carried out).
+// F-SA-242: the words in the order's conversation through the thread's own send (the composer's portal reply call, untouched).
+import { applyWorkOrderChange } from '../work-order-changes/api'
+import { changeProblemOf } from '../work-order-changes/model'
+import { placeProductionHold } from '../../../production/work-orders/daily/api'
+import { postPortalReplyKeyed, readMessageLanguage } from '../../../_shared/record-thread/api'
+import { portalRefusal } from '../../../_shared/record-thread/state'
+import { getApplyPlan, type ApplyPlan } from './api'
+import {
+  CR,
+  doneCommandsOf,
+  leftToRun,
+  NO_CHOICES,
+  reachOf,
+  runInOrder,
+  stoppableOf,
+  tellRefusalOf,
+  tellsNow,
+  type ApplyChoices,
+  type CommandState,
+  type DoneCommand,
+  type DoneView,
+  type TellTick,
+} from './model'
 import {
   answerProblem,
   batchFactsOf,
@@ -69,7 +93,16 @@ export interface RequestReviewHost {
   readonly onAnswered: (answered: { readonly id: string; readonly notice: RequestNotice; readonly then: string | null }) => void
   /** The list changed under the window (a refusal that reads again). */
   readonly onReload: () => void
+  /** F-SA-241: the done view's primary button — Close (a door, the default) or Next request › (Home › Approvals). */
+  readonly doneNext?: 'close' | 'next'
 }
+
+// ---- F-SA-241: Stop now's production hold — the office's note, the words the customer reads beside "On hold" in its language ----
+const STOP_REASON = 'OTHER'
+const stopNote = (order: string): string => `Stopped at the order change of ${order}: no new bundle until planning decides.`
+const STOP_WORDS = { en: 'Paused while your change is carried out.', it: 'In pausa mentre eseguiamo la vostra modifica.' } as const
+const NO_TELL: TellTick = Object.freeze({ chosen: null, reach: 'portal', sent: 'no', compose: null })
+// ---- end F-SA-241
 
 const loadedOf = <T,>(result: PromiseSettledResult<T>): Loaded<T> => {
   if (result.status === 'fulfilled') return { status: 'ready', value: result.value }
@@ -93,6 +126,14 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
   const [dialog, setDialog] = useState<RequestDialog | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // ---- F-SA-241 / F-SA-242: the plan, the choices, the done view and its commands' keys, the conversation tick ----
+  const [plan, setPlan] = useState<{ id: string; value: Loaded<ApplyPlan> } | null>(null)
+  const [choices, setChoices] = useState<ApplyChoices>(NO_CHOICES)
+  const [done, setDone] = useState<(DoneView & { readonly id: string; readonly then: string | null }) | null>(null)
+  const [tell, setTell] = useState<TellTick>(NO_TELL)
+  const [portalGone, setPortalGone] = useState(false)
+  const commandKeys = useRef(new Map<string, string>())
+  // ---- end F-SA-241 / F-SA-242
 
   const read = useCallback(async () => {
     if (!openId || !openAs) return
@@ -100,9 +141,12 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
       setRecord((current) => (current?.id === openId && current.value.status === 'ready' ? current : { id: openId, value: { status: 'loading' } }))
       setImpact((current) => (current?.id === openId && current.value.status === 'ready' ? current : { id: openId, value: { status: 'loading' } }))
       // One after another is not needed: two reads of the API, each its own answer (the impact may fail alone: the request still draws).
-      const [request, effect] = await Promise.allSettled([getRequest(api, openId), getImpact(api, openId)])
+      // F-SA-241: the apply plan beside them (orders.view; it may fail alone: the window draws today's "What accepting does").
+      setPlan((current) => (current?.id === openId && current.value.status === 'ready' ? current : { id: openId, value: { status: 'loading' } }))
+      const [request, effect, steps] = await Promise.allSettled([getRequest(api, openId), getImpact(api, openId), getApplyPlan(api, openId)])
       setRecord({ id: openId, value: loadedOf(request) })
       setImpact({ id: openId, value: loadedOf(effect) })
+      setPlan({ id: openId, value: loadedOf(steps) })
       return
     }
     setBatch((current) => (current?.id === openId && current.value.status === 'ready' ? current : { id: openId, value: { status: 'loading' } }))
@@ -111,12 +155,24 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
     setBatch({ id: openId, value: requests.status === 'fulfilled' && requests.value.length === 0 ? { status: 'not_found' } : loadedOf(requests) })
   }, [api, openId, openAs])
 
+  // F-SA-241: the window's own state is kept while the SAME id stays open (a list read again after Accept may ask again what it is:
+  // the done view must not be lost under it); another id — or the window closed — starts afresh.
+  const shownId = useRef<string | null>(null)
   useEffect(() => {
-    setWords('')
-    setDialog(null)
-    setProblem(null)
+    if (shownId.current !== openId) {
+      shownId.current = openId
+      setWords('')
+      setDialog(null)
+      setProblem(null)
+      // F-SA-241 / F-SA-242: another request opens with nothing chosen and no done view.
+      setChoices(NO_CHOICES)
+      setDone(null)
+      setTell(NO_TELL)
+      setPortalGone(false)
+      commandKeys.current.clear()
+    }
     void read()
-  }, [read])
+  }, [read, openId])
 
   const request = record && record.id === openId && record.value.status === 'ready' ? record.value.value.request : null
   const answered = (notice: RequestNotice, from: BrandRequest | null) => {
@@ -132,18 +188,99 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
     }
   }
 
+  // ---- F-SA-242: the words in the order's conversation (the thread's own portal reply, one key), after the answer took ----
+  const tellNow = async (about: BrandRequest, text: string): Promise<TellTick['sent']> => {
+    setTell((now) => ({ ...now, sent: 'sending' }))
+    try {
+      await postPortalReplyKeyed(api, { type: 'SalesOrder', id: about.orderId }, { body: text.trim(), attachments: [] }, newIdempotencyKey())
+      setTell((now) => ({ ...now, sent: 'sent', compose: null }))
+      return 'sent'
+    } catch (error) {
+      const key = tellRefusalOf(portalRefusal(error))
+      if (key === `${CR}.tell.held.reach`) setPortalGone(true)
+      const sent = { refused: key }
+      setTell((now) => ({ ...now, sent }))
+      return sent
+    }
+  }
+  const currentTell = (): TellTick => ({ ...tell, reach: request ? reachOf(request, portalGone) : 'none' })
+
+  // ---- F-SA-241: after Accept, each next step's own command — Stop now's hold, a work-order change carried out ----
+  const keyOf = (command: DoneCommand): string => {
+    const known = commandKeys.current.get(command.key)
+    if (known) return known
+    const key = newIdempotencyKey()
+    commandKeys.current.set(command.key, key)
+    return key
+  }
+  const runCommand = async (about: BrandRequest, command: DoneCommand): Promise<CommandState> => {
+    try {
+      if (command.kind === 'stop') {
+        const language = await readMessageLanguage(api, about.party.id).catch(() => null)
+        await placeProductionHold(api, command.workOrder.id, { reasonCode: STOP_REASON, note: stopNote(about.orderNumber), brandWords: language === 'it' ? STOP_WORDS.it : STOP_WORDS.en }, keyOf(command))
+        return { phase: 'done' }
+      }
+      const change = await getWorkOrderChange(api, command.changeId)
+      if (change.status === 'APPLIED') return { phase: 'done' }
+      if (change.status !== 'PROPOSED') return { phase: 'refused', key: 'workOrderChange.refusal.DECIDED' }
+      await applyWorkOrderChange(api, command.changeId, { version: change.version }, keyOf(command))
+      return { phase: 'done' }
+    } catch (error) {
+      // A refusal of the rules: the next try is a new command (a new key); a lost answer keeps its key (never done twice).
+      if (isApiError(error)) commandKeys.current.delete(command.key)
+      if (command.kind === 'stop') return { phase: 'refused', key: `${CR}.next.refused.stop`, params: { order: command.workOrder.number } }
+      const found = changeProblemOf(error)
+      return { phase: 'refused', key: found.key, params: { lay: found.lay ?? '', order: command.workOrder?.number ?? '' } }
+    }
+  }
+  const run = async (commands: readonly DoneCommand[]) => {
+    if (!request || commands.length === 0) return
+    const about = request
+    setDone((now) => (now ? { ...now, running: true } : now))
+    await runInOrder(
+      commands,
+      (command) => runCommand(about, command),
+      (key, state) => setDone((now) => (now ? { ...now, states: { ...now.states, [key]: state } } : now)),
+    )
+    setDone((now) => (now ? { ...now, running: false } : now))
+    // What the steps did shows in the plan read again (Done, Your turn …); the door's record read again too.
+    if (openId) void getApplyPlan(api, openId).then((value) => setPlan({ id: openId, value: { status: 'ready', value } })).catch(() => undefined)
+    hostRef.current.onReload()
+  }
+  // ---- end F-SA-241
+
   const accept = async (rushFloor: boolean) => {
     if (!request || busy) return
     setBusy(true)
     setProblem(null)
+    const tick = currentTell()
+    const told = tellsNow(tick, words)
     try {
       if (request.answeredIn === 'SALES') {
-        const done = await acceptSales(api, request.id, { version: request.version, answer: words })
-        answered({ key: 'notice.requestAccepted', tone: 'success', request: noticeFactsOf(request), lines: doneWordsOf(done) }, request)
+        // F-SA-241: the extra pieces' outcome chosen in the window goes with the Accept (B-SA-042); Stop now runs right after it.
+        const accepted = await acceptSales(api, request.id, { version: request.version, answer: words, extraOutcome: choices.extraOutcome })
+        const notice: RequestNotice = { key: 'notice.requestAccepted', tone: 'success', request: noticeFactsOf(request), lines: doneWordsOf(accepted) }
+        const then = request.batch && request.batch.waiting > 1 && request.batchId ? request.batchId : null
+        // The plan after Accept: what was done, what each next step is now (its record named).
+        const after = await getApplyPlan(api, request.id).catch(() => null)
+        if (after && openId) setPlan({ id: openId, value: { status: 'ready', value: after } })
+        const known = plan?.id === openId && plan.value.status === 'ready' ? plan.value.value : null
+        const stops = stoppableOf(known).filter((workOrder) => choices.stops.includes(workOrder.id))
+        const commands = doneCommandsOf(after, stops)
+        setDone({ id: openId ?? request.id, then, notice: { key: notice.key, tone: notice.tone, lines: notice.lines ?? [] }, next: hostRef.current.doneNext ?? 'close', commands, states: {}, running: false })
+        hostRef.current.onReload()
+        // The request read again (it reads Accepted now); the done view stays over it.
+        void read()
+        if (told) void tellNow(request, words)
+        // Stop now: the holds go at once, each its own command, stopping at the first refusal.
+        const stopNow = commands.filter((command) => command.kind === 'stop')
+        if (stopNow.length > 0) void run(stopNow)
       } else {
-        const done = await acceptProduction(api, request.id, { version: request.version, answer: words, ...(hasTwoAccepts(request) ? { rushFloor } : {}) })
-        const followUp = followUpOf(request.id, done)
-        answered({ key: hasTwoAccepts(request) && rushFloor ? 'notice.requestRushed' : 'notice.requestAccepted', tone: 'success', request: noticeFactsOf(request), lines: doneWordsOf(done), ...(followUp ? { followUp } : {}) }, request)
+        const accepted = await acceptProduction(api, request.id, { version: request.version, answer: words, ...(hasTwoAccepts(request) ? { rushFloor } : {}) })
+        const followUp = followUpOf(request.id, accepted)
+        // F-SA-242: the words written in the conversation too, when ticked (said beside the notice).
+        const sent = told ? await tellNow(request, words) : 'no'
+        answered({ key: hasTwoAccepts(request) && rushFloor ? 'notice.requestRushed' : 'notice.requestAccepted', tone: 'success', request: noticeFactsOf(request), lines: [...doneWordsOf(accepted), ...tellLines(sent)], ...(followUp ? { followUp } : {}) }, request)
       }
     } catch (error) {
       failed(error)
@@ -156,9 +293,12 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
     if (!request || busy || words.trim() === '') return
     setBusy(true)
     setProblem(null)
+    const told = tellsNow(currentTell(), words)
     try {
       await refuseRequest(api, request, { version: request.version, answer: words })
-      answered({ key: 'notice.requestRefused', tone: 'success', request: noticeFactsOf(request) }, request)
+      // F-SA-242: the same words in the order's conversation, when ticked (said beside the notice).
+      const sent = told ? await tellNow(request, words) : 'no'
+      answered({ key: 'notice.requestRefused', tone: 'success', request: noticeFactsOf(request), lines: tellLines(sent) }, request)
     } catch (error) {
       failed(error)
     } finally {
@@ -244,6 +384,32 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
     onBatchConfirm: () => void batchSend(),
     onCloseDialog: closeDialog,
     onRetry: () => void read(),
+    // ---- F-SA-241 ----
+    onExtraOutcome: (outcome) => setChoices((now) => ({ ...now, extraOutcome: outcome })),
+    onWorkChoice: (workOrderId, choice) => setChoices((now) => ({ ...now, stops: choice === 'STOP' ? [...new Set([...now.stops, workOrderId])] : now.stops.filter((id) => id !== workOrderId) })),
+    onRunStep: (key) => {
+      const command = done?.commands.find((entry) => entry.key === key)
+      if (command && !done?.running) void run([command])
+    },
+    onRunAll: () => {
+      if (done && !done.running) void run(leftToRun(done.commands, done.states))
+    },
+    onDoneClose: () => {
+      const finished = done
+      if (!finished) return
+      setDone(null)
+      hostRef.current.onAnswered({ id: finished.id, notice: { ...finished.notice, ...(request ? { request: noticeFactsOf(request) } : {}) }, then: finished.then })
+    },
+    // ---- F-SA-242 ----
+    onTell: (on) => setTell((now) => ({ ...now, chosen: on })),
+    onTellOpen: () => setTell((now) => ({ ...now, compose: words.trim() })),
+    onTellWords: (text) => setTell((now) => (now.compose === null ? now : { ...now, compose: text })),
+    onTellSend: () => {
+      const text = tell.compose ?? ''
+      if (!request || text.trim() === '' || tell.sent === 'sending') return
+      void tellNow(request, text)
+    },
+    onTellClose: () => setTell((now) => ({ ...now, compose: null })),
   }
 
   const common = {
@@ -259,7 +425,17 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
     !openId || !openAs
       ? null
       : openAs === 'request'
-        ? { ...common, as: 'request', record: record?.id === openId ? record.value : { status: 'loading' }, impact: impact?.id === openId ? impact.value : { status: 'loading' } }
+        ? {
+            ...common,
+            as: 'request',
+            record: record?.id === openId ? record.value : { status: 'loading' },
+            impact: impact?.id === openId ? impact.value : { status: 'loading' },
+            // F-SA-241 / F-SA-242
+            plan: plan?.id === openId ? plan.value : { status: 'loading' },
+            choices,
+            tell: { ...tell, reach: request ? reachOf(request, portalGone) : tell.reach },
+            done: done && done.id === openId ? done : null,
+          }
         : { ...common, as: 'batch', batch: batch?.id === openId ? batch.value : { status: 'loading' } }
   return { model, actions, busy, refresh: () => void read() }
 }
@@ -351,3 +527,11 @@ export async function clearRush(api: ApiClient, followUp: FollowUp): Promise<{ r
   }
   return { cleared, failed }
 }
+
+// ---- F-SA-242: what became of the words in the conversation, said beside the notice ----
+function tellLines(sent: TellTick['sent']): Words[] {
+  if (sent === 'sent') return [{ en: 'Also written in the order’s conversation.', it: 'Scritto anche nella conversazione dell’ordine.' }]
+  if (typeof sent === 'object') return [{ en: 'Not written in the order’s conversation: write it there.', it: 'Non scritto nella conversazione dell’ordine: scrivilo lì.' }]
+  return []
+}
+// ---- end F-SA-242
