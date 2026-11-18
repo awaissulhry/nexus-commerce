@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { COUNTER_STATES } from '@nexus/factory-domain/sales/change-requests/counter'
 import { ORDER_REQUEST_KINDS, REQUEST_STATUSES } from '@nexus/factory-domain/sales/change-requests/rules'
+// F-SA-241: the apply plan's steps, teams and outcomes; the accept's extra pieces.
+import { APPLY_STEP_KINDS, APPLY_STEP_STATES, APPLY_TEAMS, OUTCOME_NEEDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS, type ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../../lib/api/client'
 
 /**
@@ -205,6 +208,16 @@ export type AcceptDone = z.infer<typeof doneSchema>
 const salesAcceptSchema = z.object({
   orderCancelled: z.boolean(),
   split: z.object({ shipComplete: z.boolean(), proposals: z.array(z.object({ id: z.string() })), skipped: z.array(z.object({ orderLineId: z.string(), seq: z.number(), words })), words }).nullable(),
+  // F-SA-241 (B-SA-042, B-SA-047): the work-order changes the accept proposed, its extra pieces and their outcome, the style changes
+  // a design change raised (optional: an older answer leaves them out).
+  workOrders: z
+    .object({
+      proposed: z.array(z.object({ id: z.string(), kind: z.enum(WORK_ORDER_CHANGE_KINDS), workOrderId: z.string().nullable(), number: z.string().nullable() })),
+      extra: z.array(z.object({ workOrderSizeId: z.string(), salesOrderLineId: z.string(), size: z.string(), count: z.number(), words })),
+      extraOutcome: z.enum(EXTRA_OUTCOMES).nullable(),
+    })
+    .optional(),
+  styleChanges: z.array(z.object({ id: z.string(), number: z.string(), style: z.object({ id: z.string(), code: z.string(), name: z.string() }) })).optional(),
 })
 export type SalesAccept = z.infer<typeof salesAcceptSchema>
 
@@ -214,6 +227,8 @@ export interface AcceptBody {
   readonly answer: string | null
   /** RUSH only: "Accept and rush the floor" (true) or "Accept as urgent" (false). */
   readonly rushFloor?: boolean
+  /** F-SA-241 (B-SA-042, R1): what happens to the pieces already cut beyond the new figures (Sales' accept; required when it leaves some). */
+  readonly extraOutcome?: ExtraOutcome | null
 }
 
 const answerOrNull = (answer: string | null): string | null => (answer && answer.trim() ? answer.trim() : null)
@@ -226,8 +241,81 @@ export async function acceptProduction(api: ApiClient, requestId: string, body: 
 
 /** Sales' accept (CHANGE, CANCEL, SPLIT_SHIPMENT): the amendment, the cancel or close-short, ship what is ready. */
 export function acceptSales(api: ApiClient, requestId: string, body: AcceptBody, idempotencyKey: string = newIdempotencyKey()): Promise<SalesAccept> {
-  return api.post(`/sales/change-requests/${encodeURIComponent(requestId)}/accept`, { body: { version: body.version, answer: answerOrNull(body.answer) }, schema: salesAcceptSchema, idempotencyKey })
+  // F-SA-241: the extra pieces' outcome goes only when one is chosen (an accept that leaves none sends nothing).
+  const sent = { version: body.version, answer: answerOrNull(body.answer), ...(body.extraOutcome ? { extraOutcome: body.extraOutcome } : {}) }
+  return api.post(`/sales/change-requests/${encodeURIComponent(requestId)}/accept`, { body: sent, schema: salesAcceptSchema, idempotencyKey })
 }
+
+// ---- F-SA-241 (sales page plan P5, P6', R1, R8; 14-change-flow §3.2 items 4 and 6, §3.4; B-SA-045): the review window's apply plan ----
+/**
+ * GET /sales/change-requests/:requestId/apply-plan (orders.view over the request's order; else 404 in the words of an unknown id):
+ * "On the floor now" (the order's OWN cells, withheld without workorders.view — `withheld: ['floor']`), the extra pieces cut beyond
+ * the new figures with the three outcomes and what each needs, and "What happens next" — numbered steps, the same before Accept (what
+ * accepting would do) and after it (what was done, what is still open). Ids, counts and words only; never another customer.
+ */
+const stepRef = z.object({ type: z.string(), id: z.string(), number: z.string().nullable() })
+
+export const applyPlanSchema = z.object({
+  asOf: z.string(),
+  request: z.object({ id: z.string(), kind: z.enum(ORDER_REQUEST_KINDS), status: z.enum(REQUEST_STATUSES), version: z.number(), orderId: z.string(), orderNumber: z.string() }),
+  /** Why there are no steps (refused, withdrawn, a production ask); null: the steps say it. */
+  words: words.nullable(),
+  floor: z
+    .object({
+      cells: z.array(
+        z.object({
+          lineId: z.string(),
+          seq: z.number(),
+          size: z.string().nullable(),
+          ordered: z.number(),
+          asked: z.number().nullable(),
+          inWorkOrders: z.number(),
+          cut: z.number().nullable(),
+          sewn: z.number().nullable(),
+          packed: z.number(),
+        }),
+      ),
+      inWork: z.object({ bundles: z.number(), stage: z.string().nullable(), words: words.nullable() }),
+      workOrdersLeftOut: z.number(),
+    })
+    .nullable(),
+  withheld: z.array(z.string()),
+  extra: z.object({
+    pieces: z.array(z.object({ lineId: z.string(), seq: z.number(), size: z.string(), count: z.number(), words })),
+    total: z.number(),
+    outcomes: z.array(z.object({ outcome: z.enum(EXTRA_OUTCOMES), words, needs: z.enum(OUTCOME_NEEDS).nullable(), needsWords: words.nullable(), mayChoose: z.boolean() })),
+    chosen: z.enum(EXTRA_OUTCOMES).nullable(),
+    needsOutcome: z.boolean(),
+    words: words.nullable(),
+  }),
+  next: z.array(
+    z.object({
+      seq: z.number(),
+      kind: z.enum(APPLY_STEP_KINDS),
+      state: z.enum(APPLY_STEP_STATES),
+      team: z.enum(APPLY_TEAMS),
+      person: z.object({ id: z.string(), name: z.string() }).nullable(),
+      words,
+      why: words.nullable(),
+      mayDoNow: z.boolean(),
+      ref: stepRef.nullable(),
+      workOrder: z.object({ id: z.string(), number: z.string() }).nullable(),
+      cells: z.array(z.object({ seq: z.number(), size: z.string(), from: z.number(), to: z.number() })),
+      extra: z.number(),
+      /** The work order's bundles in work on the step's cells (null: a new work order, or one the reader does not reach). */
+      bundles: z.number().nullable().optional(),
+    }),
+  ),
+  live: z.object({ events: z.array(z.string()) }),
+})
+export type ApplyPlan = z.infer<typeof applyPlanSchema>
+export type ApplyPlanStep = ApplyPlan['next'][number]
+export type ExtraOutcomeOption = ApplyPlan['extra']['outcomes'][number]
+
+export function getApplyPlan(api: ApiClient, requestId: string, signal?: AbortSignal): Promise<ApplyPlan> {
+  return api.get(`/sales/change-requests/${encodeURIComponent(requestId)}/apply-plan`, { schema: applyPlanSchema, signal })
+}
+// ---- end F-SA-241
 
 /** A refusal with the words the customer reads (required): Sales' route for its kinds, production's for the others. */
 export async function refuseRequest(api: ApiClient, request: Pick<BrandRequest, 'id' | 'answeredIn'>, body: { readonly version: number; readonly answer: string }, idempotencyKey: string = newIdempotencyKey()): Promise<void> {

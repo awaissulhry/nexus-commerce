@@ -160,3 +160,32 @@ describe('B-SA-045: the apply plan of a request, before and after Accept', { tim
     expect(walled.message).toBe(unknown.message)
   })
 })
+
+// ── F-SA-241 (14-change-flow §3.2 item 6): the bundles in work per work-order step ("Finish what is started" / "Stop now") ──
+describe('F-SA-241: the bundles in work of each work order a step changes', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('counts the ACTIVE bundles on the step’s own cells of a work order the reader reaches; none of the other steps carries a count', async () => {
+    forgetProgress()
+    const world = await inWork(3, 2)
+    const plan = await applyPlan(planner(), world.request, h.clock.now())
+    expect(plan.next.map((step) => [step.kind, step.bundles])).toEqual([
+      ['AMEND', null],
+      ['LOWER_TO_ORDER', 1],
+    ])
+  })
+
+  it('nothing bundled: 0, never null, for a work order the reader reaches', async () => {
+    forgetProgress()
+    const world = await inWork(0, 3)
+    const plan = await applyPlan(planner(), world.request, h.clock.now())
+    expect(plan.next.find((step) => step.kind === 'LOWER_TO_ORDER')?.bundles).toBe(0)
+  })
+
+  it('the wall: a work order the reader does not reach is never counted (null), its number never said', async () => {
+    forgetProgress()
+    const world = await inWork(1, 3)
+    const plan = await applyPlan(sales(), world.request, h.clock.now())
+    expect(plan.next[1]).toMatchObject({ kind: 'LOWER_TO_ORDER', workOrder: null, bundles: null })
+    expect(JSON.stringify(plan)).not.toContain(world.number)
+  })
+})
+// ── end F-SA-241 ──

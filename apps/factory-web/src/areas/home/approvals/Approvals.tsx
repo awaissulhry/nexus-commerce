@@ -153,9 +153,14 @@ export function Approvals() {
   // F-PR-08: what the id opens — a listed row says it; an id no row names (the Customer card's link, the bell, Incoming) is asked
   // (an engine request, a customer request, a batch); none of them, or another customer's (PW-H01b): the neutral "not found".
   const listed = openId && rows ? listedTarget(rows, openId) : null
-  const target = !openId || rows === null ? null : (listed ?? (probed?.id === openId ? probed.as : null))
+  const found = !openId || rows === null ? null : (listed ?? (probed?.id === openId ? probed.as : null))
+  // F-SA-241: a customer request keeps what it opened as while it stays open — after Accept the inbox reads again without its row,
+  // and the window's "Done · What happens next" view stays until Next request › (it is not asked again, the window does not blink).
+  const stickyTarget = useRef<{ id: string; as: NonNullable<typeof found> } | null>(null)
+  if (openId && found) stickyTarget.current = { id: openId, as: found }
+  const target = found ?? (openId && stickyTarget.current?.id === openId && (stickyTarget.current.as === 'request' || stickyTarget.current.as === 'batch') ? stickyTarget.current.as : null)
   useEffect(() => {
-    if (!openId || rows === null || listed !== null || probed?.id === openId) return
+    if (!openId || rows === null || listed !== null || probed?.id === openId || target !== null) return // F-SA-241: target kept
     let gone = false
     void probeOpen(api, openId, { tasks: can.tasks, requests: can.requests, changes: can.changes }).then((as) => {
       if (!gone) setProbed({ id: openId, as })
@@ -241,6 +246,7 @@ export function Approvals() {
     price: grains.price,
     orderHref: orderPage,
     mayLift: held.has('workorders.hold'),
+    doneNext: 'next', // F-SA-241: the done view's primary button here is Next request ›
     onAnswered: (answered) => void afterRequest(answered),
     onReload: () => void load(),
   })
