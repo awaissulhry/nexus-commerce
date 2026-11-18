@@ -10,7 +10,7 @@ import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFound
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { askKindsProblems, openAskKinds, PRODUCTION_ASK_KINDS, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
+import { askKindsProblems, LIMITS_ASK_KINDS, openAskKinds, PRODUCTION_ASK_KINDS, type LimitsAskKind } from '@nexus/factory-domain/production-brand/kinds'
 import { CUSTOMER_PRODUCTION_ROLE, PARTNERS_PRODUCTION_MANAGE } from '@nexus/factory-domain/production-brand/permissions'
 import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import { dormantMarksWords, overQuotaWords, PRODUCTION_ROLE_NOT_OFFERED_WORDS } from '@nexus/factory-domain/production-brand/words'
@@ -250,8 +250,8 @@ const PRODUCTION_PARTNER = Object.freeze({ productionLevel: 'PROGRESS' as const,
 /** Production limits are a customer's (or a brand's): its production, its orders. */
 const PRODUCTION_ONLY_CUSTOMERS = 'Production limits are set only for a customer or a brand.'
 
-/** The asks in the limits card's order, each once. */
-const inCardOrder = (kinds: readonly string[]): ProductionAskKind[] => PRODUCTION_ASK_KINDS.filter((kind) => kinds.includes(kind))
+/** The asks in the limits card's order, each once (B-SA-005b: the design change DESIGN too, last). */
+const inCardOrder = (kinds: readonly string[]): LimitsAskKind[] => LIMITS_ASK_KINDS.filter((kind) => kinds.includes(kind))
 
 type SettingsReader = Parameters<typeof settingsOf>[0]
 
@@ -344,7 +344,8 @@ export async function changeProduction(auth: OfficeAuth, request: FastifyRequest
       productionLevel: asked.productionLevel ?? before.productionLevel,
       productionUrgencyOn: asked.productionUrgencyOn ?? before.productionUrgencyOn,
       productionUrgentMax: asked.productionUrgentMax ?? before.productionUrgentMax,
-      productionAskKinds: asked.productionAskKinds ?? inCardOrder(before.productionAskKinds),
+      // B-SA-005b: the preset opens every production ask and leaves the design change as it was (DESIGN is no production ask).
+      productionAskKinds: preset && body.productionAskKinds === undefined ? inCardOrder([...preset.productionAskKinds, ...before.productionAskKinds]) : (asked.productionAskKinds ?? inCardOrder(before.productionAskKinds)),
       productionApproverId: asked.productionApproverId === undefined ? before.productionApproverId : asked.productionApproverId,
       overrideFourEyes: asked.overrideFourEyes ?? before.overrideFourEyes,
     }

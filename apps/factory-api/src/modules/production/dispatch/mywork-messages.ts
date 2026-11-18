@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { defineContract, id, instant, output } from '@nexus/factory-domain/core/contracts'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
+// B-SA-053: an order change's note for the floor and its kind, read now (STOP while held, else CHECK), never stored.
+import { FLOOR_NOTE_KINDS, floorNoteKindOf } from '@nexus/factory-domain/sales/orders/change-notes'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { systemView } from '../scans/access'
@@ -28,6 +30,13 @@ import { dispatchWorld } from './world'
  * work order, where the note comes from, its words and its time: never a name, never a file, and no more than a tablet can
  * show. Words that may be cut say so. There is no money field, and nothing reads the words of a note: that is why a person
  * chooses, note by note, and the composer's tick says no prices (the Owner's rule; record-panels).
+ *
+ * B-SA-053 (sales page plan P8', R2; 14-change-flow §5.3): `kind` ORDER_CHANGE is an order change's "For your work" note — the
+ * system's own floor note (author SYSTEM with no name: a station's comment always carries its station's code, B-W2b-47) written
+ * by modules/sales/orders/change-notes.ts; only the NEWEST of each work order is listed (a later step of the same change replaces
+ * it on the tablet). `check` is read now, never stored: STOP while the work order is on hold (the hold already refuses its scans),
+ * else CHECK (the tablet opens it before the next Start). Whether a tablet showed it, or "Got it" was tapped, stays on the tablet:
+ * nothing here records who or which station saw it (R2). A plain note is kind NOTE, check null.
  */
 
 export const FLOOR_MESSAGES = Object.freeze({
@@ -50,7 +59,13 @@ const messageView = output({
   /** The text was cut: the rest is in the office. */
   cut: z.boolean(),
   at: instant(),
+  // B-SA-053: a plain note, or an order change's (the newest of its work order), and how it opens (null: a plain note).
+  kind: z.enum(['NOTE', 'ORDER_CHANGE']),
+  check: z.enum(FLOOR_NOTE_KINDS).nullable(),
 })
+
+/** B-SA-053: an order change's floor note (the system's own: no station code). */
+const isOrderChange = (row: { readonly authorKind: string; readonly authorName: string | null }): boolean => row.authorKind === 'SYSTEM' && row.authorName === null
 
 export const myMessagesContract = defineContract({
   response: { 200: output({ asOf: instant(), messages: z.array(messageView) }) },
@@ -88,11 +103,18 @@ export async function myWorkMessages(caller: CommandCaller) {
       },
       orderBy: [{ at: 'desc' }, { id: 'desc' }],
       take: FLOOR_MESSAGES.rows,
-      select: { id: true, threadId: true, authorKind: true, bodyText: true, at: true },
+      select: { id: true, threadId: true, authorKind: true, /* B-SA-053 */ authorName: true, bodyText: true, at: true },
     })
-    const messages = rows.map((row) => {
+    // B-SA-053: the work orders' state now (STOP / CHECK), and only the newest order-change note of each (rows are newest first).
+    const statuses = new Map((await db.workOrder.findMany({ where: { id: { in: [...new Set(threads.map((thread) => thread.recordId))] } }, select: { id: true, status: true } })).map((row) => [row.id, row.status as string]))
+    const changed = new Set<string>()
+    const messages = rows.flatMap((row) => {
       const workOrderId = orderOf.get(row.threadId)!
-      return { id: row.id, workOrder: { id: workOrderId, number: numbers.get(workOrderId)! }, from: row.authorKind === 'USER' ? ('OFFICE' as const) : ('FLOOR' as const), text: row.bodyText.slice(0, FLOOR_MESSAGES.text), cut: row.bodyText.length > FLOOR_MESSAGES.text, at: toUtcIso(row.at) }
+      const orderChange = isOrderChange(row)
+      if (orderChange && changed.has(workOrderId)) return []
+      if (orderChange) changed.add(workOrderId)
+      const from = row.authorKind === 'USER' || orderChange ? ('OFFICE' as const) : ('FLOOR' as const)
+      return [{ id: row.id, workOrder: { id: workOrderId, number: numbers.get(workOrderId)! }, from, text: row.bodyText.slice(0, FLOOR_MESSAGES.text), cut: row.bodyText.length > FLOOR_MESSAGES.text, at: toUtcIso(row.at), kind: orderChange ? ('ORDER_CHANGE' as const) : ('NOTE' as const), check: orderChange ? floorNoteKindOf(statuses.get(workOrderId) ?? '') : null }]
     })
     return { ...answer, messages }
   })

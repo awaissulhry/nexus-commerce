@@ -3,7 +3,7 @@ import { CAPABILITIES, PARTNER_KINDS } from '@nexus/factory-domain/auth/partners
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { LOCALES } from '@nexus/factory-domain/email/rules'
 import { notMoney } from '@nexus/factory-domain/money/marked'
-import { PRODUCTION_ASK_KINDS, PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
+import { LIMITS_ASK_KINDS, PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
 import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 
@@ -276,8 +276,8 @@ const productionView = output({
     /** On and over the quota (a quota lowered, an accepted ask): the marks stay; only new marks stop. */
     overQuota: wordsView.nullable(),
   }),
-  /** The production asks the customer may make (HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND). */
-  askKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)),
+  /** The production asks the customer may make (HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND) and, B-SA-005b, the design change DESIGN. */
+  askKinds: z.array(z.enum(LIMITS_ASK_KINDS)),
   /** Every production ask open to it now ("Urgent – asked" exactly while urgency is on: R-50). */
   openAsks: z.array(z.enum(PRODUCTION_REQUEST_KINDS)),
   /** The one person of the customer who answers its production approvals (null: anyone with the approve right). */

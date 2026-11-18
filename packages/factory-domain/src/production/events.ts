@@ -25,6 +25,8 @@ import { ON_BEHALF_REASON_CODES } from './onbehalf/rules'
 import { CUT_OVERRIDE_REASON_CODES, CUT_WARNING_KINDS } from './cutting/checks'
 // B-PR-16: the plain production hold on a work order.
 import { WORK_ORDER_HOLD_KINDS } from './holds/kinds'
+// B-SA-053: an order change's note for the floor.
+import { FLOOR_CHANGE_KINDS } from '../sales/orders/change-notes'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -916,4 +918,27 @@ export const events = [
     live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'holdId', 'kind'] },
   }),
   // ---- end B-PR-16
+  // ---- B-SA-053 (sales page plan P8', R2; 14-change-flow §5.3; review C-5: the one new floor event): an order change's "For your
+  // work" note was written on an open work order (modules/sales/orders/change-notes.ts): the tablets of its site re-read My work at
+  // once (the 30 s beat stays the safety net); B-SA-054's partner rule tells the workshops of its open subcontract orders when
+  // its quantities change (`changes`). Ids, the number and what kind of change only: never the words, a customer, a person or a
+  // price. NOTHING here, or anywhere, records who or which station saw it (R2: no "seen" event).
+  defineEvent({
+    type: 'production.floor_note_posted',
+    context: 'production',
+    description: "An order change's note for the floor was written on an open work order: the tablets of its site read it before the next Start.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      partyId: livePartyId(),
+      messageId: z.uuid(),
+      /** The sales order whose change it carries (its own customer's, or one of a work order of several customers). */
+      salesOrderId: z.uuid(),
+      /** What changes for the work order (factory-domain sales/orders/change-notes FloorChange kinds). */
+      changes: z.array(z.enum(FLOOR_CHANGE_KINDS)).min(1),
+    }),
+    live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'messageId'] },
+  }),
+  // ---- end B-SA-053
 ] as const

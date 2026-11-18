@@ -92,6 +92,9 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.order_request.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your order request {label} was not accepted', it: "La vostra richiesta d'ordine {label} non è stata accettata" },
   // B-TH-068 (threads plan TH-5, PROJ.members-F04): the factory added the person to a project of their organisation ({label}: its
   // number and name, which the portal shows); told to that person only.
+  // B-SA-054 (sales page plan R8): an outside workshop is told that a job's order changed ({label}: its own subcontract order's
+  // number); never the customer, the sales order or a price.
+  'portal.job.order_changed': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Order changed — check quantities: {label}', it: 'Ordine cambiato — controllate le quantità: {label}' },
   'portal.project.added': { topic: 'MESSAGES', category: 'FOLLOWING', en: '{company} added you to the project {label}', it: '{company} vi ha aggiunto al progetto {label}' },
 } as const satisfies Record<string, { readonly topic: PartnerEmailTopic | null; readonly category: 'ASSIGNMENT' | 'FOLLOWING' | 'SYSTEM'; readonly en: string; readonly it: string }>
 
