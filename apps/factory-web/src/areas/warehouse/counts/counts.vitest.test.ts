@@ -358,7 +358,7 @@ describe('B-TH-264 — the count on RecordFrame: tabs 4 → 3, the docked thread
 
   it('the page mounts the office thread docked with no party; the count’s own band and Activity are gone', () => {
     const container = readFileSync(new URL('./record/CountRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toMatch(/<OfficeRecordThread docked record=\{record\}[^>]*party=\{null\}/)
+    expect(container).toMatch(/<OfficeRecordThread docked record=\{threadRecord\}[^>]*party=\{null\}/) // #1601: the thread's record is `threadRecord` (`record` is the count's read)
     expect(container).not.toMatch(/tab === 'activity'/)
     const view = readFileSync(new URL('./record/view/CountRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain("from '../../../../_shared/record-frame/RecordFrame'")
