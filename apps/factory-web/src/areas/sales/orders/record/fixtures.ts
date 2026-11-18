@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import type { Order } from '../api'
+import type { Order, OrderLine } from '../api'
 import { draftOf, newKey, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
@@ -150,6 +150,21 @@ const paidDraft = order('CONFIRMED', { chain: { ...confirmed.chain, depositReque
 const noTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ fiscalDocument: 'NONE', fiscalRule: 'DEPOSIT_EU_B2B_GOODS', status: 'PAID', paidAt: at(29, 9), paidAmount: 228384, link: SENT_LINK })] } })
 const noDeposit = order('CONFIRMED', { depositRequired: false, chain: { ...confirmed.chain, depositRequests: [] } })
 const production = order('IN_PRODUCTION')
+// ---- F-SA-231b: the order read names each line's artwork files (the chip opens them in the thread's viewer) and, with
+// sales.measurements.view, a made-to-measure line's rider (name, garment, revision — never a measurement) ----
+const ARTWORK_FILES = [
+  { fileId: '0190f0e2-5353-7000-8000-000000000001', name: 'Logo ricamo petto.pdf', contentType: 'application/pdf', sizeBytes: 182_000 },
+  { fileId: '0190f0e2-5353-7000-8000-000000000002', name: 'Toppa manica.png', contentType: 'image/png', sizeBytes: 96_000 },
+]
+const DEMO_RIDER = { profileId: '0190f0e2-5454-7000-8000-000000000001', name: 'Demo Rider Uno', garmentType: 'JACKET', revision: 2 }
+const withUnit = (value: Order, rider: OrderLine['rider']): Order => {
+  const red = value.lines[value.lines.length - 1]!
+  const one = { ordered: 1, inWorkOrders: 1, made: null, released: 0, shipped: 0, invoiced: '0', toShip: 1, closedShort: 0 }
+  const unit: OrderLine = { ...red, id: '0190f0e2-7171-7000-8000-000000000030', seq: 30, kind: 'MADE_TO_MEASURE', measurementProfileId: DEMO_RIDER.profileId, baseSize: '52', quantity: 1, netAmount: 61_000, vatAmount: 13_420, sizes: [{ size: null, quantity: 1, unitPrice: null, progress: one }], progress: one, closedShort: null, artwork: [], artworkCount: 0, rider }
+  return { ...value, lines: [...value.lines, unit] }
+}
+const withArtwork = (value: Order): Order => ({ ...value, lines: value.lines.map((line, index) => (index === 0 ? { ...line, artwork: ARTWORK_FILES, artworkCount: ARTWORK_FILES.length } : line)) })
+// ---- end F-SA-231b
 const partly = order('PARTLY_SHIPPED')
 const shipped = order('SHIPPED')
 const settled = order('SHIPPED', { settled: true })
@@ -311,6 +326,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
       note: 'The mark beside a line whose revision costs more or less today than when it was priced; nothing where it did not move or without the cost grain.',
     },
     { id: 'manager-lines', label: 'Production manager · Lines: no money; read-only', model: base('manager', paidNotSent) },
+    // ---- F-SA-231b ----
+    { id: 'lines-artwork-viewer', label: 'F-SA-231b · Sales · Lines: "Artwork (2)" opens both files in the thread’s viewer (the read names them; ← / → walk them)', model: base('sales', withArtwork(production)) },
+    { id: 'lines-mtm-rider', label: 'F-SA-231b · Sales · Lines: a made-to-measure unit names its rider (name, garment, revision) — never a measurement', model: base('sales', withUnit(production, DEMO_RIDER)) },
+    { id: 'lines-mtm-no-right', label: 'F-SA-231b · Finance · Lines: without the measurements right the unit says only "Made to measure"', model: base('finance', withUnit(production, null)) },
+    // ---- end F-SA-231b
     { id: 'money-new', label: 'Owner · Money: deposit asked, page not sent yet', model: base('owner', confirmed, { tab: 'money' }), note: 'The five steps: asked → bank-details page → payment → TD02 → SDI, each with what moves it on.' },
     { id: 'link-dialog', label: 'Owner · Send the bank-details page (DEPOSIT_INFO link)', model: base('owner', confirmed, { tab: 'money', dialog: { kind: 'depositLink', requestId: PAID.id }, draft: { message: 'Buongiorno, ecco i dati per il bonifico dell’acconto.' } }) },
     {

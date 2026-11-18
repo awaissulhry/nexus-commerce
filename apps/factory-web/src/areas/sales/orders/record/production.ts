@@ -72,3 +72,31 @@ export function forecastPart(state: ProductionState | null | undefined): DepthPa
   const risks = new Set<string>(RISK_STATES)
   return { value: new Map(forecast.map((line) => [line.lineId, { finish: line.finish, source: line.source, slackDays: line.slackDays, risk: line.risk && risks.has(line.risk) ? (line.risk as RiskState) : null }])), problem: null }
 }
+
+// ── F-SA-231b (sa-7's follow-up; 10-order-page §2.2 L3): a style card's artwork chip ───────────────────────────────────────────────
+/** One artwork file a line shows that the reader may open (the order read's `lines[].artwork`, files.read). */
+export interface ArtworkFile {
+  readonly fileId: string
+  readonly name: string
+  readonly contentType: string
+  readonly sizeBytes: number
+}
+
+/**
+ * The artwork of a style's colour lines for its chip: the files the order read names (each once, in the lines' order — the viewer
+ * walks them), and how many — the files' number, else the count the read gave (an older read names no files: the chip then opens the
+ * order's Files tab). Never a file the read did not name.
+ */
+export function artworkOfGroup(lines: readonly { readonly artwork?: readonly ArtworkFile[]; readonly artworkCount?: number }[]): { readonly files: readonly ArtworkFile[]; readonly count: number } {
+  const seen = new Set<string>()
+  const files: ArtworkFile[] = []
+  for (const line of lines) {
+    for (const file of line.artwork ?? []) {
+      if (seen.has(file.fileId)) continue
+      seen.add(file.fileId)
+      files.push(file)
+    }
+  }
+  const counted = lines.reduce((sum, line) => sum + (line.artworkCount ?? 0), 0)
+  return { files, count: files.length > 0 ? files.length : counted }
+}

@@ -22,6 +22,9 @@ import { LinesEditor } from './LinesEditor'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { FrozenSizes, frozenIssues } from '../../depth/view/LinesDepth'
 import { NAMESPACE as DEPTH } from '../../depth/model'
+// ---- F-SA-231b: the artwork chip opens the artwork in the thread's ONE viewer (the frame's openFiles)
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { artworkOfGroup } from '../production'
 
 /**
  * F-SA-231 (sales page plan N2, picks P2, R9; 10-order-page §2.2) — Lines, the commercial truth: a totals strip (lines · units · net ·
@@ -43,6 +46,7 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
   const closeWait = closeLinesHeld(order, model.can)
   const reopenWait = reopenHeld(order, model.can)
   const busy = model.busy ? t('held.busy') : null
+  const frame = useRecordFrame() // F-SA-231b
 
   if (model.amend) return <AmendLines order={order} amend={model.amend} model={model} actions={actions} />
 
@@ -71,7 +75,8 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
         const grid = gridOf(group, 'ordered')
         const currency = order.currency
         const first = group.lines[0]!
-        const artwork = group.lines.reduce((sum, line) => sum + (line.artworkCount ?? 0), 0)
+        // F-SA-231b: the artwork files the order read names (files.read), each once; the count the read gave where it names none.
+        const artwork = artworkOfGroup(group.lines)
         const rows = group.lines.map((line) => ({
           id: line.id,
           cells: [
@@ -81,6 +86,8 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
                 <span className="fw-so-inline">
                   {line.colourway ? `${line.colourway.code} · ${line.colourway.name}` : '—'}
                   {line.kind === 'MADE_TO_MEASURE' && <Tag tone="neutral">{t('record.madeToMeasure')}</Tag>}
+                  {/* F-SA-231b: the rider (name, garment, revision — never a measurement), only when the read names it (sales.measurements.view). */}
+                  {line.kind === 'MADE_TO_MEASURE' && line.rider && <span className="fw-so-cell-sub">{t('lines.rider', { rider: line.rider.name, garment: line.rider.garmentType, revision: line.rider.revision })}</span>}
                   {model.lineOptions?.(line) /* B-W2b-340: the line's options */}
                   {model.lineCost?.(line) /* B-W2b-380: cost changed since priced */}
                 </span>
@@ -117,14 +124,25 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
               </span>
               <span className="fw-so-inline">
                 {group.revision ? <Tag tone={group.revision.status === 'RELEASED' ? 'success' : 'warning'}>{t('lines.revision', { revision: group.revision.revision })}</Tag> : <Tag tone="neutral">{t('lines.noRevision')}</Tag>}
-                {/* F-SA-231: the artwork the reader may open (the order read counts it), in the order's Files. */}
-                {artwork > 0 && (
-                  <Button size="sm" variant="quiet" asChild>
-                    <Link href={`${model.prefix}/sales/orders/${order.id}?tab=files`}>
-                      <FileImage size={13} aria-hidden /> {t('lines.artwork', { count: artwork })}
-                    </Link>
-                  </Button>
-                )}
+                {/* F-SA-231: the artwork the reader may open (the order read counts it). F-SA-231b: it opens in the thread's ONE viewer
+                    (the files the read names, the first shown; ← / → walk them); with no docked thread, the order's Files as before. */}
+                {artwork.count > 0 &&
+                  (frame?.openFiles && artwork.files.length > 0 ? (
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      title={t('lines.artworkOpen')}
+                      onClick={(event) => frame.openFiles?.({ files: artwork.files.map((file) => ({ id: file.fileId, name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes })), fileId: artwork.files[0]!.fileId, returnTo: event.currentTarget })}
+                    >
+                      <FileImage size={13} aria-hidden /> {t('lines.artwork', { count: artwork.count })}
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="quiet" asChild>
+                      <Link href={`${model.prefix}/sales/orders/${order.id}?tab=files`}>
+                        <FileImage size={13} aria-hidden /> {t('lines.artwork', { count: artwork.count })}
+                      </Link>
+                    </Button>
+                  ))}
               </span>
             </div>
             <div className="fw-so-gridbox">
