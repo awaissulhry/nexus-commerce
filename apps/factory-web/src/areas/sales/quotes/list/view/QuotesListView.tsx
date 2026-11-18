@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Copy, Download, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Ban, Copy, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, RadioCard, Select, Spinner, Tag, TokenChip } from '@nexus/ui/primitives'
@@ -356,11 +356,10 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         selection={{
           selected,
           onChange: setSelected,
+          // F-SA-225: Export N through the export job (the same writer as Export ▾, the screen's columns and the picked ids).
+          exportSelected: true,
           actions: (
             <>
-              <Button size="sm" aria-label={t('list.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-                <Download size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.export', { count: picked.length })}</SelectionLabel>
-              </Button>
               <Button
                 size="sm"
                 variant="danger-outline"
@@ -378,6 +377,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         keys={ownKeys}
         onHelp={() => setDialog('help')}
         onOpen={(row) => actions?.onOpen?.(row.id)}
+        // F-SA-225: the rest of a row opens the quote (⌘ / Ctrl: a new tab), as on every Sales list.
+        onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : actions?.onOpen?.(row.id))}
         state={state}
         focusRow={model.focusRow}
       />

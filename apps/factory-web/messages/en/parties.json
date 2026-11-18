@@ -92,7 +92,6 @@
     "intro": "Everyone we sell to — companies, brands and riders — with what an e-invoice needs and the VIES proof for zero-rated EU sales.",
     "search": "Search code, name, VAT number or codice fiscale",
     "table": "Customers",
-    "file": "customers",
     "failedTitle": "Couldn't load customers",
     "empty": {
       "title": "No customers yet",
@@ -169,7 +168,6 @@
     "intro": "Tanneries, mills, trim and protector makers, subcontractors and carriers: who we buy from and send work and goods with.",
     "search": "Search code, name or VAT number",
     "table": "Suppliers",
-    "file": "suppliers",
     "failedTitle": "Couldn't load suppliers",
     "empty": {
       "title": "No suppliers yet",
@@ -406,8 +404,6 @@
     "removeFilter": "Remove the filter {name}",
     "bulkVies_one": "Check VIES for {count}",
     "bulkVies_other": "Check VIES for {count}",
-    "bulkExport_one": "Export {count} (CSV)",
-    "bulkExport_other": "Export {count} (CSV)",
     "bulkBlock_one": "Block {count}",
     "bulkBlock_other": "Block {count}",
     "bulkArchive_one": "Archive {count}",
@@ -415,14 +411,10 @@
     "count": "{shown} of {total}",
     "countShown": "{shown} shown",
     "showMore": "Show {count} more",
-    "exportView": "Export this view (CSV)",
-    "exportViewHint": "The {count} rows shown, with the columns of the list",
-    "exportNothing": "Nothing to export in this view",
     "recheckAll": "Re-check every EU VAT number now",
     "recheckAllHint": "One VIES call each, up to {max} at a time",
     "cannotInvoice": "Can't invoice yet",
     "noIdentity": "No tax identity",
-    "exported": "Exported {count} rows.",
     "col": {
       "name": "Name",
       "roles": "Roles",
@@ -463,20 +455,6 @@
     "nothingToArchive": "Nothing selected can be archived (blocked ones are unblocked first)",
     "noEmail": "Needs an email first",
     "projects": "Starting a project needs the right {right}."
-  },
-  "csv": {
-    "code": "Code",
-    "legalName": "Legal name",
-    "tradeName": "Trade name",
-    "roles": "Roles",
-    "status": "Status",
-    "country": "Country",
-    "city": "City",
-    "taxMode": "Tax mode",
-    "vat": "VAT number",
-    "fiscalCode": "Codice fiscale",
-    "vies": "VIES",
-    "language": "Language"
   },
   "new": {
     "taxFirst": "Tax identity",

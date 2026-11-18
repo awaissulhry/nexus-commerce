@@ -116,7 +116,6 @@ export interface QuotesListActions extends DuplicateActions, NewFromActions {
   /** Enter on a row: open its record. */
   onOpen?: (id: string) => void
   /** The selected rows as a CSV file (the columns this person sees). */
-  onExport?: (ids: readonly string[]) => void
   /** Cancel the selected quotes, one by one with each one's version; resolves true when all were cancelled. */
   onCancelMany?: (ids: readonly string[], reason: string) => Promise<boolean>
   /** F-SA-212: the page's pictures in ONE batch read (POST /sales/quotes/pictures through lib/record-picture). */

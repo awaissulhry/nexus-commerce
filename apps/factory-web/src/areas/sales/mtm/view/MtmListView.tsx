@@ -351,6 +351,8 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
         keys={ownKeys}
         keysOpen={model.keysOpen}
         onOpen={(row) => actions?.onOpen?.(row.id)}
+        // F-SA-225: the rest of a row opens the rider (⌘ / Ctrl: a new tab), as on every Sales list.
+        onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(recordHref(model.prefix, row.id), '_blank', 'noopener') : actions?.onOpen?.(row.id))}
         state={state}
         focusRow={model.focusRow}
         title={t('list.tableLabel')}

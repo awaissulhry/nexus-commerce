@@ -8,11 +8,10 @@ import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, list
 // F-SA-212: the Picture cell is the ONE picture part (its batch read; #1649's browserAddress kept there).
 import { pictureReader } from '../../../../lib/record-picture/api'
 import { useDuplicate } from '../duplicate/use-duplicate'
-import { abilitiesOf, filtersOfTile, grainsOf, quotesCsv, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
+import { abilitiesOf, filtersOfTile, grainsOf, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
 // F-SA-224: the one customer filter of the Sales lists (`?party=`; names only: Quotes has no count read per customer).
 import { partyOfAddress, type SwitcherState } from '../../_shared/customer-switcher/model'
 import type { PartyRow } from '../api'
-import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { readProblem, writeProblem } from '../problems'
 import type { NewQuoteModel, QuotesListViewModel } from './list-model'
@@ -73,8 +72,6 @@ export function QuotesPage() {
 }
 
 function QuotesContainer() {
-  const t = useT('sales')
-  const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -342,19 +339,7 @@ function QuotesContainer() {
   // F-SA-212: a page's pictures in ONE call (never the original); none yet or out of reach: the placeholder.
   const readPictures = useMemo(() => pictureReader(api), [api])
 
-  const exportCsv = (ids: readonly string[]) => {
-    const chosen = (rows.items ?? []).filter((row) => ids.includes(row.id))
-    const csv = quotesCsv(chosen, grains, { header: (key) => t(key), status: (status) => t(`status.${status}`) }, locale)
-    const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }))
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `quotes-${romeToday()}.csv`
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    setNotice({ key: 'list.bulk.exported', tone: 'success', params: { count: chosen.length } })
-  }
+  // F-SA-225: Export N is the list frame's (the export job with the picked ids, exports/sources/quotes.ts): no CSV is made here.
 
   return (
     // B-W2b-348: the list, then Quote speed (SCR-428).
@@ -387,7 +372,6 @@ function QuotesContainer() {
         onCreate: create,
         onDismissNotice: () => setNotice(null),
         onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`),
-        onExport: exportCsv,
         onCancelMany: cancelMany,
         readPictures, // F-SA-212
         ...duplicate.actions,

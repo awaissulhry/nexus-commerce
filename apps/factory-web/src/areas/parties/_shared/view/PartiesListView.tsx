@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Archive, Ban, Building2, Download, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react'
+import { Archive, Ban, Building2, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react'
 import { EmptyState, Menu, MetricStrip, type MenuItemDef, type Metric } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
@@ -55,7 +55,6 @@ export interface PartiesListActions {
   onCheckVies?: (partyIds: readonly string[]) => void
   /** Every EU business of this list (customers' ⋯ "Re-check every EU VAT number now"). */
   onRecheckAll?: () => void
-  onExport?: (rows: readonly PartyRow[]) => void
   onDismissNotice?: () => void
 }
 
@@ -270,14 +269,8 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       onSelect: () => actions?.onFilters?.({ ...model.filters, taxMode: model.filters.taxMode === mode ? null : (mode as TaxMode) }),
     })),
   ]
+  // F-SA-225: the view's file is the frame's Export ▾ (the export job: exports/sources/parties.ts), never a CSV made here.
   const moreItems: MenuItemDef[] = [
-    {
-      id: 'export',
-      label: t('list.exportView'),
-      onSelect: () => actions?.onExport?.(rows),
-      disabled: rows.length === 0,
-      description: rows.length === 0 ? t('list.exportNothing') : t('list.exportViewHint', { count: rows.length }),
-    },
     ...(side === 'customers'
       ? [
           {
@@ -330,7 +323,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
   const bulkActions = (
     <>
       {bulk(t('list.bulkVies', { count: viesReach.reach.length }), <ShieldCheck size={13} aria-hidden />, () => actions?.onCheckVies?.(viesReach.reach.map((row) => row.id)), viesHeld)}
-      {bulk(t('list.bulkExport', { count: selectedRows.length }), <Download size={13} aria-hidden />, () => actions?.onExport?.(selectedRows), null)}
+      {/* F-SA-225: Export N is the frame's (the export job with the picked rows), after these. */}
       {/* B-W2b-334: the side's own bulk actions (Suppliers: Request documents N). */}
       {depth?.bulk}
       {bulk(t('list.bulkBlock', { count: blockReach.reach.length }), <Ban size={13} aria-hidden />, () => open({ kind: 'block', partyIds: blockReach.reach.map((row) => row.id) }), blockHeld)}
@@ -421,7 +414,9 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
         }
         tools={tools}
         right={<Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('list.more') }} items={moreItems} />}
-        selection={{ selected: model.selected, onChange: (ids) => actions?.onSelect?.(ids), actions: bulkActions }}
+        selection={{ selected: model.selected, onChange: (ids) => actions?.onSelect?.(ids), actions: bulkActions, exportSelected: true /* F-SA-225 */ }}
+        // F-SA-225: the rest of a row opens its record (⌘ / Ctrl: a new tab), on Customers and Purchasing › Suppliers alike (one list).
+        onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(recordHref(model.prefix, config, row.id), '_blank', 'noopener') : actions?.onOpen?.(row))}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
         more={
           model.more

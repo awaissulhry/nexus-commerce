@@ -713,10 +713,6 @@
     "keyNew": "Nuovo preventivo",
     "keysTitle": "Tasti dell'elenco preventivi",
     "bulk": {
-      "export_one": "Esporta {count} (CSV)",
-      "export_other": "Esporta {count} (CSV)",
-      "exported_one": "{count} preventivo esportato (CSV, le colonne che vedi).",
-      "exported_other": "{count} preventivi esportati (CSV, le colonne che vedi).",
       "cancel_one": "Annulla {count} preventivo",
       "cancel_other": "Annulla {count} preventivi",
       "cancelHeld_one": "{count} preventivo selezionato è già chiuso (accettato, rifiutato, scaduto o annullato): togli la spunta.",
