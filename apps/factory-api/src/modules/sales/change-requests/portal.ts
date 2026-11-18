@@ -15,9 +15,17 @@ import {
   type RuleOrder,
 } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-046 (sales page plan P7, R3; review C-10): the design change, and the kinds that keep one request waiting between them.
-import { CHANGE_OR_CANCEL, DESIGN_KIND, designCellsOf, designProblems, designVerdict, isDesignOpen } from '@nexus/factory-domain/sales/change-requests/rules'
+import { CHANGE_OR_CANCEL, DESIGN_KIND, dayWords, designCellsOf, designProblems, designVerdict, isDesignOpen } from '@nexus/factory-domain/sales/change-requests/rules'
 import { DESIGN_ASK_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { contentWalledFor } from '../../../platform/files/content-wall'
+// B-SA-048 (sales page plan P21; review F-6): the customer's ask is also their own message in the order's conversation.
+import { eventFor } from '@nexus/factory-domain/events/define'
+import { events as threadEvents } from '@nexus/factory-domain/threads/events'
+import { cleanBody } from '@nexus/factory-domain/threads/rules'
+import { command } from '../../../core/command'
+import { systemCallerOf } from '../../../platform/files/files'
+import { ensureThread } from '../../../platform/threads/threads'
+import { reopenOnSharedMessage } from '../../../platform/threads/work-state'
 import { cancelFeeFor } from '@nexus/factory-domain/sales/change-requests/fee'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTools } from '../../../core/command'
@@ -460,6 +468,8 @@ export async function askRequest(app: FastifyInstance, request: FastifyRequest, 
 async function askOne(app: FastifyInstance, request: FastifyRequest, reader: PortalReader, orderId: string, body: AskBody, idempotencyKey: string | undefined, batchId: string | null): Promise<{ readonly requestId: string; readonly replayed: boolean }> {
   const session = reader.session
   const requestId = newId()
+  // B-SA-048: the order's conversation, made in the tenant's system scope when it has none yet (the partner role makes no thread).
+  const threadId = await orderThreadOf(request, reader, orderId)
   const { result, replayed } = await commandOn(app, request, { name: 'portal.askOrderChange', idempotencyKey, input: { orderId, ...body, ...(batchId ? { batchId } : {}) } }, async (tools) => {
     const facts = await askFacts(request, reader, orderId, tools.now)
     // B-PR-46a: in a batch, the order's own verdict for the kind (the customer reads it in its language beside the order).
@@ -476,11 +486,115 @@ async function askOne(app: FastifyInstance, request: FastifyRequest, reader: Por
     // B-SA-046: a design change's files are its order's own, AVAILABLE, shared with the customer and not behind the content wall.
     const files = await designFileProblems(tools.tx, reader, facts.order, prepared.fileIds)
     if (files.length > 0) throw new DomainError('not_found', 'File not found.', files)
-    await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId, batchId })
-    return { requestId }
+    // B-SA-048: their ask as their own message, written first so the request names it (askMessageId, set with the ask).
+    const message = await askMessageInCommand(tools, { threadId, order: facts.order, body, prepared, lines: facts.lines, person: session.person })
+    await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId, batchId, askMessageId: message?.id ?? null })
+    return { requestId, message }
   })
+  // B-SA-048: the conversation's last activity moves to it, in the tenant's system scope (the partner role updates no thread).
+  if (!replayed && result.message) await touchOrderThread(request, session.tenantId, result.message.threadId, result.message.at)
   return { requestId: result.requestId, replayed }
 }
+
+// ── B-SA-048 (sales page plan P21; 14-change-flow §2.0 S1, §4.3 item 1; review F-6): the customer's ask as their own message ──
+
+/**
+ * The order's conversation for the ask's message: the order's thread (its party the order's: the customer's own), made in the
+ * tenant's system scope when it has none yet — as a first portal post makes it (threads partner service). The order is first found
+ * through the partner's own read (404 otherwise): no thread is ever made for another customer's order. Null: the thread belongs to
+ * no-one of this customer (never written into).
+ */
+async function orderThreadOf(request: FastifyRequest, reader: PortalReader, orderId: string): Promise<string | null> {
+  const order = await partnerOrder(request, reader, orderId)
+  const seen = await request.withClient((client) => client.thread.findFirst({ where: { recordType: 'SalesOrder', recordId: order.id }, select: { id: true, partyId: true } }))
+  if (seen) return seen.partyId === order.partyId ? seen.id : null
+  const { result } = await command(
+    systemCallerOf(request)(reader.session.tenantId),
+    { name: 'portal.openThread', input: { recordType: 'SalesOrder', recordId: order.id, partyId: order.partyId, personId: reader.session.userId } },
+    async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: order.id }, reader.session.userId)
+      if (thread.partyId !== order.partyId) throw new NotFoundError('Order not found.')
+      return { id: thread.id }
+    },
+  )
+  return result.id
+}
+
+const messagePosted = threadEvents.find((event) => event.type === 'thread.message_posted')!
+
+/** The ask in the customer's own words and language: "Change request · line 10 · 52 4 → 6 · 'Our season starts earlier.'". */
+export function askMessageText(kind: OrderRequestKind, cells: readonly AskedCell[], header: { readonly requestedDate: BusinessDate | null; readonly shipToAddressId: string | null; readonly reason: string | null }, seqOf: ReadonlyMap<string, number>, locale: 'it' | 'en'): string {
+  const it = locale === 'it'
+  const parts: string[] = [ORDER_REQUEST_KIND_WORDS[kind][locale]]
+  const byLine = new Map<string, AskedCell[]>()
+  for (const cell of cells) byLine.set(cell.orderLineId, [...(byLine.get(cell.orderLineId) ?? []), cell])
+  const lineWord = (lineId: string) => `${it ? 'riga' : 'line'} ${seqOf.get(lineId) ?? '?'}`
+  const lines = [...byLine.entries()].sort((a, b) => (seqOf.get(a[0]) ?? 0) - (seqOf.get(b[0]) ?? 0))
+  if (kind === 'CANCEL' && cells.length === 0) parts.push(it ? "l'intero ordine" : 'the whole order')
+  for (const [lineId, own] of lines) {
+    const sized = own.filter((cell) => cell.size !== null && (kind === 'CHANGE' ? cell.quantity !== cell.quantityBefore : kind === 'SPLIT_SHIPMENT'))
+    const what = sized.map((cell) => (kind === 'CHANGE' ? `${cell.size} ${cell.quantityBefore} → ${cell.quantity}` : `${cell.size} ${cell.quantity}`))
+    const coloured = own.some((cell) => (cell.colourwayId ?? null) !== null)
+    parts.push([lineWord(lineId), ...what, ...(coloured ? [it ? 'altra variante di colore' : 'another colourway'] : [])].join(' · '))
+  }
+  if (header.requestedDate) parts.push(`${it ? 'data' : 'date'} ${dayWords(header.requestedDate, locale)}`)
+  if (header.shipToAddressId) parts.push(it ? 'nuovo indirizzo di consegna' : 'new delivery address')
+  if (header.reason) parts.push(`'${header.reason}'`)
+  return parts.join(' · ')
+}
+
+/**
+ * Writes the ask as the customer's own message on its order's conversation, inside the ask's command (the partner's scope: the
+ * partner inserts its own party's INBOUND messages, nothing else): INBOUND, shared with the customer (PARTNER), by the asking
+ * person's name, in their language, a design change's files attached (each already the order's own, shared with the customer, not
+ * behind the content wall). It reaches only that order's customer: the thread's party is re-read as the partner and must be the
+ * order's. Null when the order has no such conversation, or it is CLOSED (the ask still waits; its words stay on the request).
+ * Answering and withdrawing never touch it (messages never change); a replayed ask writes nothing (its receipt answers).
+ */
+async function askMessageInCommand(
+  tools: CommandTools,
+  input: { readonly threadId: string | null; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly lines: readonly PortalLine[]; readonly person: { readonly displayName: string; readonly locale: string } },
+): Promise<{ readonly id: string; readonly threadId: string; readonly at: Date } | null> {
+  if (!input.threadId) return null
+  const { tx, now } = tools
+  const thread = await tx.thread.findUnique({ where: { id: input.threadId }, select: { id: true, partyId: true, status: true, recordType: true, recordId: true, companyId: true, siteId: true } })
+  if (!thread || thread.partyId !== input.order.partyId || thread.recordType !== 'SalesOrder' || thread.recordId !== input.order.id || thread.status === 'CLOSED') return null
+  const locale = input.person.locale.toLowerCase().startsWith('it') ? 'it' : 'en'
+  const seqOf = new Map(input.lines.map((line) => [line.id, line.seq]))
+  const text = cleanBody(askMessageText(input.body.kind, input.prepared.cells, { requestedDate: input.prepared.requestedDate, shipToAddressId: input.prepared.shipToAddressId, reason: input.prepared.reason }, seqOf, locale))
+  const id = newId()
+  await tx.message.create({
+    data: {
+      id,
+      threadId: thread.id,
+      partyId: thread.partyId,
+      direction: 'INBOUND',
+      audience: 'PARTNER',
+      channel: 'PORTAL',
+      authorKind: 'PARTY',
+      authorName: input.person.displayName,
+      bodyText: text,
+      bodyHtml: null,
+      attachmentFileIds: [...input.prepared.fileIds],
+      emailMessageId: null,
+      at: now,
+      createdAt: now,
+    },
+    select: { id: true },
+  })
+  tools.audit({ recordType: 'Message', recordId: id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...input.prepared.fileIds], askOf: input.body.kind } })
+  tools.emit(eventFor(messagePosted, { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId, payload: { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', partyId: thread.partyId } }))
+  return { id, threadId: thread.id, at: now }
+}
+
+/** The thread's last activity moved to the ask's message, in the tenant's system scope (only later: the thread guard). */
+async function touchOrderThread(request: FastifyRequest, tenantId: string, threadId: string, at: Date): Promise<void> {
+  await systemCallerOf(request)(tenantId).withClient(async (client) => {
+    await client.thread.updateMany({ where: { id: threadId, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } })
+    await reopenOnSharedMessage(client, threadId)
+  })
+}
+// ── end B-SA-048 ──
 
 // ── B-PR-46a: one order's ask of a customer's batch (production/brand-portal/bulk.ts) ─────────────────────────────────────────
 
@@ -544,7 +658,7 @@ async function designFileProblems(tx: Reader, reader: PortalReader, order: Porta
  * The request written (the customer's scope): serialised per order, one that waits at a time (B-PR-25: per kind; a change and a
  * cancel keep one between them), the order still askable for its kind.
  */
-async function askInCommand(tools: CommandTools, input: { readonly requestId: string; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly impact: Impact; readonly partnerUserId: string; /** B-PR-46a */ readonly batchId: string | null }) {
+async function askInCommand(tools: CommandTools, input: { readonly requestId: string; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly impact: Impact; readonly partnerUserId: string; /** B-PR-46a */ readonly batchId: string | null; /** B-SA-048 */ readonly askMessageId: string | null }) {
   const { tx, now } = tools
   const { order, body, prepared } = input
   const cells = prepared.cells
@@ -581,6 +695,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
       ...(input.batchId ? { batchId: input.batchId } : {}),
       // B-SA-046: a design change's files (the database checks each is the order's own, shared with the customer).
       ...(prepared.fileIds.length > 0 ? { fileIds: [...prepared.fileIds] } : {}),
+      // B-SA-048: their ask's own message in the order's conversation (set with the ask, never changed).
+      ...(input.askMessageId ? { askMessageId: input.askMessageId } : {}),
       createdAt: now,
       updatedAt: now,
       createdById: input.partnerUserId,
@@ -620,6 +736,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
     ...(input.batchId ? { batchId: input.batchId } : {}),
     // B-SA-046
     ...(prepared.fileIds.length > 0 ? { fileIds: [...prepared.fileIds] } : {}),
+    // B-SA-048
+    ...(input.askMessageId ? { askMessageId: input.askMessageId } : {}),
   }
   tools.audit({ action: 'portal.askOrderChange', recordType: 'OrderChangeRequest', recordId: input.requestId, companyId: order.companyId, after: { orderId: order.id, status: 'OPEN', ...asked } })
   // The order's timeline (its Activity) shows what the customer asked.

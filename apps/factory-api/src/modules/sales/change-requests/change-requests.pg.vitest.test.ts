@@ -26,6 +26,9 @@ import { createFreezeRule } from '../order-changes/freeze'
 // B-SA-047: a design change accepted (the review window's plan; our counter-offer of every kind).
 import { counterBrandRequest } from '../../production/brand-requests/answer'
 import { applyPlan } from './apply-plan'
+// B-SA-048: the ask as the customer's own message; the request's thread points at the order's conversation.
+import { readThread } from '../../../platform/threads/threads'
+import { askMessageText } from './portal'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -905,3 +908,72 @@ describe('B-SA-047: a design change is accepted only for the customer\'s own pri
   })
 })
 // ── end B-SA-047 ──
+
+// ── B-SA-048 (sales page plan P21; 14-change-flow §4.3; review F-6): the customer's ask is also its own message ──
+describe('B-SA-048: the customer\'s ask is its own message in the order\'s conversation, and the one place to talk', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const threadsReader = () => callerFor(h.database, { audience: 'office', tenantId: T, actorId: officeId, requestId: newId(), grants: [{ permissions: ['orders.view', 'orders.manage', 'threads.read', 'threads.post'] as Permission[], companies: 'all', sites: 'all', parties: 'all' }] })
+  const messagesOf = (orderId: string) => admin('SELECT m.id::text AS id FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = $1 AND t."recordId" = $2', ['SalesOrder', orderId])
+
+  it('one INBOUND message by the asking person on its order\'s thread, named by the request; a replay writes nothing more', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const key = `ask-message-${newId()}`
+    const body = { note: 'Embroider the logo smaller.', lineIds: [design.line10], fileIds: [design.file] }
+    const asked = await designAsk(design.order, body, key)
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const { message: messageId } = await one('SELECT "askMessageId"::text AS message FROM "OrderChangeRequest" WHERE id = $1', [asked.body.request.id])
+    expect(messageId).toBeTruthy()
+    expect(asked.body.request.askMessageId).toBe(messageId)
+    const message = await one(
+      'SELECT m.direction::text AS direction, m.audience::text AS audience, m.channel::text AS channel, m."authorKind"::text AS author, m."authorName" AS name, m."bodyText" AS body, m."partyId"::text AS party, m."attachmentFileIds"::text[] AS files, m.held, t."recordType" AS type, t."recordId"::text AS record, t."partyId"::text AS "threadParty" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE m.id = $1',
+      [messageId],
+    )
+    expect(message).toEqual({ direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', author: 'PARTY', name: 'bea.buyer', body: "Design change request · line 10 · 'Embroider the logo smaller.'", party: P1, files: [design.file], held: false, type: 'SalesOrder', record: design.order, threadParty: P1 })
+    expect((await outbox('thread.message_posted')).filter((row) => row.payload.messageId === messageId).map((row) => row.payload)).toEqual([expect.objectContaining({ recordType: 'SalesOrder', recordId: design.order, direction: 'INBOUND', audience: 'PARTNER', partyId: P1 })])
+    // A replay (the same key) answers the same request and writes no second message.
+    const replay = await designAsk(design.order, body, key)
+    expect(replay.body.request.id).toBe(asked.body.request.id)
+    expect(await messagesOf(design.order)).toEqual([{ id: messageId }])
+    // Withdrawing never edits it (messages never change).
+    const withdrawn = await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests/${asked.body.request.id}/withdraw`, { version: asked.body.request.version }, { headers: { 'idempotency-key': `withdraw-${newId()}` } })
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200)
+    expect((await one('SELECT "bodyText" AS body FROM "Message" WHERE id = $1', [messageId])).body).toBe(message.body)
+    expect((await one('SELECT "askMessageId"::text AS message FROM "OrderChangeRequest" WHERE id = $1', [asked.body.request.id])).message).toBe(messageId)
+  })
+
+  it('reaches only that order\'s customer: its portal reads it, another customer\'s person does not reach the order', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const asked = await designAsk(design.order, { note: 'A reflective piping.', lineIds: [design.line20] })
+    const { message: messageId } = await one('SELECT "askMessageId"::text AS message FROM "OrderChangeRequest" WHERE id = $1', [asked.body.request.id])
+    const theirs = await ok(browsers.buyer, `/portal/threads/SalesOrder/${design.order}`)
+    expect(JSON.stringify(theirs)).toContain(messageId)
+    const beta = await browsers.other.get(`/portal/threads/SalesOrder/${design.order}`)
+    expect(beta.status).toBe(404)
+    expect(JSON.stringify(beta.body)).not.toContain(messageId)
+  })
+
+  it('the request\'s own thread is no second place to talk: the office reads its order\'s conversation there, and a note lands there', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const asked = await designAsk(design.order, { note: 'Shorter sleeves by 1 cm.', lineIds: [design.line10] })
+    const { message: messageId } = await one('SELECT "askMessageId"::text AS message FROM "OrderChangeRequest" WHERE id = $1', [asked.body.request.id])
+    const page = await readThread(threadsReader(), { type: 'OrderChangeRequest', id: asked.body.request.id }, { limit: 20 })
+    expect(page.place).toEqual({ type: 'SalesOrder', id: design.order })
+    expect(page.messages.map((row) => row.id)).toContain(messageId)
+    expect(await admin('SELECT id FROM "Thread" WHERE "recordType" = $1 AND "recordId" = $2', ['OrderChangeRequest', asked.body.request.id])).toEqual([])
+  })
+
+  it('says the ask in the customer\'s own words and language: sizes old → new, the date, the address, their note', () => {
+    const seqOf = new Map([['l10', 10], ['l20', 20]])
+    const cells = [
+      { orderLineId: 'l10', size: 'M', quantityBefore: 40, quantity: 36 },
+      { orderLineId: 'l10', size: 'L', quantityBefore: 20, quantity: 24 },
+    ]
+    expect(askMessageText('CHANGE', cells, { requestedDate: null, shipToAddressId: null, reason: 'Our season starts earlier.' }, seqOf, 'en')).toBe("Change request · line 10 · M 40 → 36 · L 20 → 24 · 'Our season starts earlier.'")
+    expect(askMessageText('CHANGE', cells, { requestedDate: '2026-12-04', shipToAddressId: 'a', reason: null }, seqOf, 'it')).toBe('Richiesta di modifica · riga 10 · M 40 → 36 · L 20 → 24 · data 4 dic · nuovo indirizzo di consegna')
+    expect(askMessageText('CANCEL', [], { requestedDate: null, shipToAddressId: null, reason: null }, seqOf, 'en')).toBe('Cancel request · the whole order')
+    expect(askMessageText('DESIGN', [{ orderLineId: 'l20', size: null, quantityBefore: 2, quantity: 2 }], { requestedDate: null, shipToAddressId: null, reason: 'Logo smaller' }, seqOf, 'it')).toBe("Richiesta di modifica del design · riga 20 · 'Logo smaller'")
+  })
+})
+// ── end B-SA-048 ──

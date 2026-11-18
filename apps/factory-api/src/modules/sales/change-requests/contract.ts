@@ -152,6 +152,8 @@ export const requestFields = {
   counter: counterOut.nullable(),
   /** B-SA-046: the files a design change sent (of the order or its lines, shared with the customer; none on any other kind). */
   fileIds: z.array(id()),
+  /** B-SA-048: the ask's own message in the order's conversation (null: asked before it, or the conversation was closed). */
+  askMessageId: id().nullable(),
   version: z.number().int(),
 }
 

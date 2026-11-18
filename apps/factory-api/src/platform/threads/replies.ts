@@ -8,6 +8,7 @@ import { actorOf } from '../../core/context'
 import { partyReaders } from '../portal/tasks/people'
 import type { MessageView, ThreadView } from './contract'
 import { mayOnThread, mayShare, notShareableRefusal, wallScopeOf } from './records'
+import { threadPlaceOf } from './records' // B-SA-048
 import { attachmentProblems, contextOf, ensureThread, messageViewOf, officeRecord, scopeOfThread, THREAD_OFFICE, threadViewOf, visibleAttachments, writeMessage, type RecordRef, type ThreadRow } from './threads'
 // B-TH-050: a reply names the shared message it answers, or corrects a portal reply of ours.
 import { messageLinkProblems, messageLinksOf } from './threads'
@@ -65,6 +66,10 @@ async function portalReaderExists(tx: CommandTx, tenantId: string, thread: Threa
 
 /** POST /threads/<type>/<id>/replies (threads.postReply): the reply, the thread made with it when the record has none yet. */
 export async function postPortalReply(caller: CommandCaller, record: RecordRef, input: ReplyInput, idempotencyKey?: string): Promise<{ thread: ThreadView; message: MessageView }> {
+  // ---- B-SA-048 (review F-6): a reply about a change request goes into its order's conversation (one place to talk).
+  const place = await caller.withClient((client) => threadPlaceOf(client, record))
+  if (place) return postPortalReply(caller, place, input, idempotencyKey)
+  // ---- end B-SA-048
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
