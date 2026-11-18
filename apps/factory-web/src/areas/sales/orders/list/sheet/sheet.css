@@ -19,8 +19,7 @@
 }
 .fw-sheet-door:focus-visible,
 .fw-sheet-held:focus-visible,
-.fw-sheet-funnel:focus-visible,
-.fw-sheet-thumb:focus-visible {
+.fw-sheet-funnel:focus-visible {
   outline: 2px solid var(--nds-primary);
   outline-offset: 1px;
 }
@@ -113,73 +112,7 @@
   border-color: var(--nds-success);
 }
 
-.fw-sheet-thumb {
-  all: unset;
-  box-sizing: border-box;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--nds-radius-md);
-  border: 1px solid var(--nds-border-subtle);
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-muted);
-  overflow: visible;
-  cursor: zoom-in;
-}
-.fw-sheet-thumb:disabled {
-  cursor: default;
-}
-.fw-sheet-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
-}
-.fw-sheet-thumb-wait {
-  opacity: 0.4;
-}
-.fw-sheet-thumb-more {
-  position: absolute;
-  right: -6px;
-  bottom: -4px;
-  padding: 0 4px;
-  border-radius: var(--nds-radius-pill);
-  background: var(--nds-surface);
-  border: 1px solid var(--nds-border-subtle);
-  color: var(--nds-text-strong);
-  font-size: 10px;
-  line-height: 14px;
-  font-weight: var(--nds-font-weight-medium);
-}
-
-.fw-sheet-viewer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 240px;
-  border-radius: var(--nds-radius-lg);
-  background: var(--nds-surface-sunken);
-}
-.fw-sheet-viewer img {
-  max-width: 100%;
-  max-height: 60vh;
-  border-radius: var(--nds-radius-md);
-}
-.fw-sheet-viewer-none {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--nds-space-8);
-  color: var(--nds-text-muted);
-}
-.fw-sheet-viewer-note {
-  margin: var(--nds-space-8) 0 0;
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
-}
+/* F-SA-212: the Picture cell and its viewer are the ONE picture part (lib/record-picture/record-picture.css). */
 
 .fw-sheet-peek {
   width: 280px;

@@ -152,7 +152,9 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   // B-PR-12 (production plan, schema wave 2/5): what a customer sees of its production, and the asks it may make of an order
   // (CHANGE and CANCEL of the portal, the production asks beside them).
   mirror('ProductionShareLevel', ProductionShareLevel, 'production-brand/levels PRODUCTION_SHARE_LEVELS', PRODUCTION_SHARE_LEVELS, true),
-  mirror('OrderChangeRequestKind', OrderChangeRequestKind, 'sales/change-requests/rules REQUEST_KINDS + production-brand/kinds PRODUCTION_REQUEST_KINDS', [...REQUEST_KINDS, ...PRODUCTION_REQUEST_KINDS] as const, true),
+  // B-SA-005 (sales page plan, schema wave "sales page 1/1"): + DESIGN, held here as a literal until B-SA-046 adds it to
+  // REQUEST_KINDS (Sales answers it, with its rules and words): drop the literal then ('each value once' fails while both hold it).
+  mirror('OrderChangeRequestKind', OrderChangeRequestKind, 'sales/change-requests/rules REQUEST_KINDS + production-brand/kinds PRODUCTION_REQUEST_KINDS (+ DESIGN until B-SA-046)', [...REQUEST_KINDS, ...PRODUCTION_REQUEST_KINDS, 'DESIGN'] as const, true),
   // B-PR-15 (production plan, schema wave 3/5): a customer's production state of its orders (B-PR-13's stages, health and
   // waiting, B-PR-41's urgency), the issues that need an answer and the plain production hold.
   mirror('BrandStage', BrandStage, 'production-brand/stages BRAND_STAGES', BRAND_STAGES, true),

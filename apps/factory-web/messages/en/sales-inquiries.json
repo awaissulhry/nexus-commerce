@@ -704,19 +704,6 @@
     "company": "Show only: {name}",
     "kind": "Show only: {kind}"
   },
-  "picture": {
-    "open": "Picture of {style} on {number}: open it large",
-    "noneOf": "{number} names no style: no picture",
-    "alt": "{style}",
-    "viewerOf": "From {number}",
-    "small": "A small preview: the original opens from the style.",
-    "none": "No picture of this style yet",
-    "openStyle": "Open style",
-    "close": "Close",
-    "more": "+{count}",
-    "moreStyles_one": "{count} more style on this request: open it",
-    "moreStyles_other": "{count} more styles on this request: open it"
-  },
   "peek": {
     "title": "{number} · {customer}",
     "received": "Received",

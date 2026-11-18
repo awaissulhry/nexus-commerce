@@ -299,7 +299,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
       actorOf(context),
       page.map((row) => {
         const version = versions.find((entry) => entry.id === row.quoteVersionId)
-        return { id: row.id, companyId: row.companyId, partyId: row.partyId, quote: version ? { id: version.quoteId, versionId: version.id } : null }
+        return { id: row.id, companyId: row.companyId, partyId: row.partyId, quote: version ? { id: version.quoteId, versionId: version.id } : null, status: row.status /* B-SA-012 */ }
       }),
       deposits,
       allShipments,
@@ -360,8 +360,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
 }
 
 /** The tiles (the design's saved-filter tiles): each count is the list's total under its filter. */
-// B-W2b-323: + waitingForCustomer.
-const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
+// B-W2b-323: + waitingForCustomer. B-SA-012: + waitingForApproval (second place: the board's first lane).
+const TILES = ['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
 
 /**
  * The board (SAL-214; W1: the state counts as tiles and lanes, the drag-free board view is W2a): the count of every
@@ -382,6 +382,7 @@ export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilter
     const reaccept = await client.salesOrder.count({ where: { AND: [base, reacceptWhere] } }) // B-W2b-323
     const counts: Record<(typeof TILES)[number], { count: number; filter: Record<string, string> }> = {
       late: { count: late, filter: { late: 'true' } },
+      waitingForApproval: { count: countOf('PENDING_APPROVAL'), filter: { status: 'PENDING_APPROVAL' } }, // B-SA-012
       waitingForDeposit: { count: deposit, filter: { deposit: 'OPEN' } },
       inProduction: { count: countOf('IN_PRODUCTION'), filter: { status: 'IN_PRODUCTION' } },
       readyToShip: { count: countOf('READY'), filter: { status: 'READY' } },

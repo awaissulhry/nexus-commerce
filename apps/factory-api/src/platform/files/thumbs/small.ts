@@ -13,7 +13,7 @@ import { decodePng, encodePng } from './codec/png'
  * The small preview of a picture (B-TH-063; threads plan TH-1a, gap G8): about 320 pixels on its longer side, made by
  * the job that makes the stripped copy (strip-copy.ts) from the stripped copy's pixels, so it holds no EXIF and no
  * position either, turned the right way up (the EXIF orientation applied to the pixels). The Picture column of Sales ›
- * Orders reads it, never the original (GET /sales/orders/:orderId/picture); lists and portal cards can read it the same
+ * Orders reads it, never the original (POST /sales/orders/pictures, B-SA-011); lists and portal cards can read it the same
  * way. A placeholder shows until it exists.
  *
  *   key       derived from the stripped copy's key (one small preview per file, made once with it): the same prefix and a

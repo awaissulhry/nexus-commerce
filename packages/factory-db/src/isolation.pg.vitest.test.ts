@@ -49,6 +49,7 @@ import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOptions } from '../seed/options'
+import { seed as seedOrderApply } from '../seed/order-apply' // B-SA-005
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedPacking } from '../seed/packing'
 import { seed as seedParties } from '../seed/parties'
@@ -552,6 +553,11 @@ beforeAll(async () => {
   // value filter on Message (held: false) has a row of the other value inside P1's scope to prove itself against.
   await seedHeldMail({ db: factory, namespace: 'iso-a' })
   // ---- end B-TH-038
+  // ---- B-SA-005 (sales page plan, schema wave "sales page 1/1"): SEED-WO-0001's PROPOSED work-order change in each tenant (the
+  // copy a generated insert makes is PROPOSED too).
+  await seedOrderApply({ db: factory, namespace: 'iso-a' })
+  await seedOrderApply({ db: factory, namespace: 'iso-b' })
+  // ---- end B-SA-005
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -1168,6 +1174,7 @@ it('covers every classified table and every runtime role', () => {
     'WorkInstructionStep',
     'WorkInstructionVersion',
     'WorkOrder',
+    'WorkOrderChange', // B-SA-005
     'WorkOrderClose',
     'WorkOrderCostEntry',
     'WorkOrderHold',

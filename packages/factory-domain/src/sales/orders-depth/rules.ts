@@ -40,7 +40,8 @@ export const PRIORITY_WORDS: Readonly<Record<SalesOrderPriorityLevel, Words>> = 
   LOW: { en: 'Low', it: 'Bassa' },
   NORMAL: { en: 'Normal', it: 'Normale' },
   HIGH: { en: 'High', it: 'Alta' },
-  URGENT: { en: 'Urgent', it: 'Urgente' },
+  // F-SA-216 (sales page plan P25): the office's top level reads "Top", so "Urgent" means only the factory rush (the value stays URGENT).
+  URGENT: { en: 'Top', it: 'Massima' },
 })
 
 const ONE_LINE = /^[^\r\n]+$/

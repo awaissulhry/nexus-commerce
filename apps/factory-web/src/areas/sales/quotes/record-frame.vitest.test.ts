@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { ComponentType } from 'react'
 import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
@@ -154,24 +154,28 @@ describe('the Quotes list: New messages, "from INQ-…", an accepted row’s ord
     for (const locale of ['en', 'it'] as const) expect(textOf(list('th-257-sources', locale)).length).toBeGreaterThan(100)
   })
 
-  // ---- TH-6 part B (B-TH-257 follow-up; grid-F01): the quote row's Picture, as the Orders sheet's (its API: GET /sales/quotes rows'
-  // `picture` + GET /sales/quotes/:id/picture, files.read only).
-  it('Picture: the first column, the small preview read once per row (never the original), the picture large on click', () => {
+  // ---- TH-6 part B (B-TH-257 follow-up; grid-F01): the quote row's Picture, as the Orders sheet's. F-SA-212: the ONE picture part
+  // (lib/record-picture) — its API: GET /sales/quotes rows' `picture` + POST /sales/quotes/pictures (one read per page, files.read only).
+  it('Picture: the first column, the one picture part read once per page (never the original), the picture large on click', () => {
     expect(listView).toContain("{ colId: 'picture', headerName: t('list.col.picture')")
-    expect(listView).toContain('<QuotePictureCell row={data} load={latest.current.actions?.loadPicture}')
-    expect(listView).toContain('<QuotePictureViewer row={row}')
-    expect(page).toContain('const picture = await readQuotePicture(api, quoteId)')
-    // fix-pr-6: #1649 opens the small preview through /api (browserAddress), so the local store's picture shows.
-    expect(page).toContain('return picture.small ? { url: browserAddress(picture.small.url)')
-    expect(page).toContain('expiresAt: picture.small.expiresAt } : null')
-    const cell = readFileSync(new URL('./list/view/QuotePicture.tsx', import.meta.url), 'utf8')
-    expect(cell).toContain('useRequestPicture({ id: row.id, picture: row.picture ?? null }, load, demo)')
+    expect(listView).toContain('<RecordPicture')
+    expect(listView).toContain('source="quote"')
+    expect(listView).toContain('read={latest.current.actions?.readPictures}')
+    expect(listView).toContain('<PictureViewer')
+    expect(page).toContain('const readPictures = useMemo(() => pictureReader(api), [api])')
+    // fix-pr-6: #1649 opens the small preview through /api (browserAddress), so the local store's picture shows — now in the one part.
+    const reads = readFileSync(new URL('../../../lib/record-picture/api.ts', import.meta.url), 'utf8')
+    expect(reads).toContain('browserAddress(picture.small.url)')
+    expect(existsSync(new URL('./list/view/QuotePicture.tsx', import.meta.url))).toBe(false)
   })
 
-  it('the Picture words in both languages', () => {
+  it('the Picture words: the column in the quotes catalogue, the part\'s own in record-picture (one word set)', () => {
     for (const locale of ['en', 'it'] as const) {
       const words = CATALOGUE[locale].sales ?? {}
-      for (const key of ['list.col.picture', 'list.picture.open', 'list.picture.noneOf', 'list.picture.alt', 'list.picture.viewerOf', 'list.picture.small', 'list.picture.none', 'list.picture.openStyle', 'list.picture.close', 'list.picture.more', 'list.picture.moreStyles_other']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      expect(words['list.col.picture'], `${locale} list.col.picture`).toBeTruthy()
+      expect(Object.keys(words).filter((key) => key.startsWith('list.picture.')), locale).toEqual([])
+      const part = CATALOGUE[locale]['record-picture'] ?? {}
+      for (const key of ['open', 'noneOf', 'alt', 'viewerOf', 'small', 'none', 'openStyle', 'close', 'more', 'moreStyles_other']) expect(part[key], `${locale} ${key}`).toBeTruthy()
     }
   })
   // ---- end TH-6 part B

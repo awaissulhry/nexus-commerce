@@ -57,6 +57,13 @@ model ChangeRequest {
   updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   /// The office user who raised it; null for a floor request (a device names no worker here).
   createdById   String?             @db.Uuid
+  /// B-SA-005 (sales page plan, schema wave "sales page 1/1"; lead picks R3, R10): a customer's DESIGN request of an order
+  /// that raised it, when the office accepted it (portal-sales.prisma OrderChangeRequest, of the same customer: the
+  /// reference). Only on a CUSTOMER request about a style that is that customer's own private label (Style.brandPartyId =
+  /// partyId) and the style of one of the request's lines: a style of our own collection or of another label never gets one
+  /// from a customer's ask (it would change other customers' work). Set once, never changed; office only (the floor's insert
+  /// has no grant on it; a customer reads no change request).
+  orderChangeRequestId String?        @db.Uuid
 
   company     Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId or
@@ -68,12 +75,17 @@ model ChangeRequest {
   revision    StyleRevision? @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrder   WorkOrder?     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   changeOrder ChangeOrder?   @relation(fields: [tenantId, styleId, changeOrderId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-SA-005: the customer's DESIGN request that raised it, of the same customer (the party is in the reference). Restrict,
+  // not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  orderChangeRequest OrderChangeRequest? @relation("ChangeRequestOrderChangeRequest", fields: [tenantId, partyId, orderChangeRequestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, companyId, number])
   // What waits for triage, per company.
   @@index([tenantId, companyId, status])
   @@index([tenantId, styleId])
   @@index([tenantId, changeOrderId])
+  // B-SA-005: the product change requests a customer's DESIGN request raised (its order's "Still to do", B-SA-050).
+  @@index([tenantId, orderChangeRequestId])
 }
 
 /// Where a change request comes from (design "Raised by": floor, quality, sales, customer).

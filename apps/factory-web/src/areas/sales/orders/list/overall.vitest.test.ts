@@ -108,7 +108,8 @@ describe('a door\'s address reads exactly the rows it counted (the API\'s filter
     const extra = extraFromAddress(params, rowsFromAddress(params))
     expect(rowsFromAddress(params)).toBe('late')
     expect(extra).toEqual({ status: 'READY', invoiced: 'PART', atRisk: true, currency: 'USD' })
-    expect(extraChips(extra, t, s).map((chip) => chip.label)).toEqual(['Status: Ready', 'Invoiced: Part', 'At risk', 'Currency: USD'])
+    // F-SA-216: the list rule's chip reads "Close to promise" (P15).
+    expect(extraChips(extra, t, s).map((chip) => chip.label)).toEqual(['Status: Ready', 'Invoiced: Part', 'Close to promise', 'Currency: USD'])
     expect(withoutExtra(extra, 'atRisk')).toEqual({ status: 'READY', invoiced: 'PART', currency: 'USD' })
     expect(noExtra({})).toBe(true)
     expect(noExtra(extra)).toBe(false)

@@ -141,9 +141,51 @@ async function waitOf(db: Reader, orderId: string) {
   const hold = await creditHoldOf(db, orderId)
   // B-W2b-368 (XF1:02): a made-to-measure unit's measures not yet confirmed by the factory review (B-W2b-358's waitsForMeasures).
   const measures = await waitsForMeasures(db, orderId)
-  const reasons: WaitReason[] = [...(pending ? (['REQUEST_PENDING'] as const) : []), ...(hold ? (['CREDIT_HOLD'] as const) : []), ...(measures ? (['MEASUREMENTS'] as const) : [])]
+  const reasons: WaitReason[] = reasonsOf(pending !== null, hold !== null, measures) // B-SA-012: one order of the reasons
   return { tasks, pending, hold, reasons }
 }
+
+// ---- B-SA-012 (sales page plan N8, picks P12, P13; 12-lists-board §3.3): why each waiting order of a page waits ----------------
+
+/** The reasons in their one order (waitOf's): a request for a yes standing, the credit HOLD, the factory review. */
+const reasonsOf = (pending: boolean, hold: boolean, measures: boolean): WaitReason[] => [...(pending ? (['REQUEST_PENDING'] as const) : []), ...(hold ? (['CREDIT_HOLD'] as const) : []), ...(measures ? (['MEASUREMENTS'] as const) : [])]
+
+/**
+ * Why each PENDING_APPROVAL order of a list page waits — the facts waitOf reads for one order (GET /sales/orders/:id/approval),
+ * read for the whole page at once: one query per fact (the standing SALES_ORDER requests; the newest credit check of the order
+ * steps, a HOLD with no override standing; the made-to-measure units' profiles not confirmed by the factory review). An order
+ * that waits for none of them waits for a yes nobody asked (NO_REQUEST), as the record says. The caller passes only orders the
+ * reader may see (the list's rows under scopeWhere).
+ */
+export async function waitsOfOrders(db: Reader, orderIds: readonly string[]): Promise<Map<string, WaitReason[]>> {
+  const out = new Map<string, WaitReason[]>()
+  if (orderIds.length === 0) return out
+  const ids = [...new Set(orderIds)]
+  const [pending, checks, units] = await Promise.all([
+    db.approvalTask.findMany({ where: { kind: 'SALES_ORDER', recordType: 'SalesOrder', recordId: { in: ids }, status: 'PENDING' }, select: { recordId: true } }),
+    db.creditCheck.findMany({ where: { recordType: 'SalesOrder', recordId: { in: ids }, step: { in: [...ORDER_STEPS] } }, orderBy: [{ checkedAt: 'desc' }, { id: 'desc' }], select: { recordId: true, result: true, overridesCheckId: true } }),
+    db.salesOrderLine.findMany({ where: { orderId: { in: ids }, kind: 'MADE_TO_MEASURE', measurementProfileId: { not: null } }, select: { orderId: true, measurementProfileId: true } }),
+  ])
+  const asked = new Set(pending.map((task) => task.recordId))
+  // creditHoldOf: the newest check of the order steps decides (the newest of its step is that same row): a HOLD not itself an override.
+  const held = new Set<string>()
+  const newest = new Set<string>()
+  for (const check of checks) {
+    if (newest.has(check.recordId)) continue
+    newest.add(check.recordId)
+    if (check.result === 'HOLD' && check.overridesCheckId === null) held.add(check.recordId)
+  }
+  // waitsForMeasures: a unit made to measures the factory has not confirmed (or a profile this read cannot find).
+  const profileIds = [...new Set(units.map((unit) => unit.measurementProfileId!))]
+  const confirmed = new Set(profileIds.length > 0 ? (await db.measurementProfile.findMany({ where: { id: { in: profileIds }, reviewStatus: 'CONFIRMED' }, select: { id: true } })).map((row) => row.id) : [])
+  const measuring = new Set(units.filter((unit) => !confirmed.has(unit.measurementProfileId!)).map((unit) => unit.orderId))
+  for (const orderId of ids) {
+    const reasons = reasonsOf(asked.has(orderId), held.has(orderId), measuring.has(orderId))
+    out.set(orderId, reasons.length > 0 ? reasons : ['NO_REQUEST'])
+  }
+  return out
+}
+// ---- end B-SA-012
 
 async function namesOf(db: Reader, userIds: readonly (string | null)[], roleIds: readonly (string | null)[]) {
   const users = [...new Set(userIds.filter((id): id is string => id !== null))]

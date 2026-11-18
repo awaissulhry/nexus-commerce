@@ -190,6 +190,17 @@
     "seeClosed": "See closed orders",
     "keyWalk": "Previous or next card",
     "cardLabel": "{number}, {customer}",
+    "priority": "Priority · {level}",
+    "customerUrgent": "Urgent (customer)",
+    "held": {
+      "deposit": "Waits for the deposit"
+    },
+    "cardPieces_one": "{count} piece",
+    "cardPieces_other": "{count} pieces",
+    "cardPromised": "promised {date}",
+    "cardNoPromise": "no promise",
+    "cardNew_one": "{count} new message",
+    "cardNew_other": "{count} new messages",
     "promise": "Promised {date}",
     "promiseLate_one": "{date} · {count} day late",
     "promiseLate_other": "{date} · {count} days late",

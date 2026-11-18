@@ -20,6 +20,7 @@ import {
 import { linkProofView, shownProofsField } from '../quote-proofs/contract'
 // TH-6 part B: the request's own state on "Made from".
 import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
 
 /**
  * The quotes routes' contracts (B-W1-21; A2 SCR-030 "Quotes", SCR-034 "Quote record", SCR-035 the line and the approval
@@ -278,10 +279,14 @@ export const listQuotesContract = defineContract({
           order: quoteOrderView,
           // ---- TH-6 part B (B-TH-257 follow-up; O-SAL-QUO-LIST.grid-F01, as the Orders sheet's B-TH-017): the current version's first
           // line's style and its main picture — the file only with files.read (null: the placeholder); `small`: its ~320 px preview
-          // exists (GET /sales/quotes/:quoteId/picture serves it; the list never loads the original). `styleCount`: "+2".
+          // exists (POST /sales/quotes/pictures serves it, B-SA-011; the list never loads the original). `styleCount`: "+2".
           picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
           styleCount: z.number().int(),
           // ---- end TH-6 part B
+
+// ---- B-SA-011 (sales page plan N8): the small pictures of a page of quotes in ONE read (modules/product/images/small-pictures.ts)
+export const quotePicturesReadContract = defineContract({ body: input({ quoteIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ---- end B-SA-011
         }),
       ),
       nextCursor: id().nullable(),
@@ -291,22 +296,6 @@ export const listQuotesContract = defineContract({
 
 export const getQuoteContract = defineContract({ params: quoteParams, response: { 200: one } })
 
-// ---- TH-6 part B (B-TH-257 follow-up): the quote list's Picture cell's small preview (as GET /sales/orders/:orderId/picture).
-export const quotePictureContract = defineContract({
-  params: quoteParams,
-  response: {
-    200: output({
-      picture: output({
-        fileId: id(),
-        styleId: id(),
-        contentType: z.string(),
-        /** A presigned GET of the ~320 px preview (60 seconds); null until it exists (the cell's placeholder). */
-        small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
-      }),
-    }),
-  },
-})
-// ---- end TH-6 part B
 
 const headerFields = {
   contactId: id().nullish(),

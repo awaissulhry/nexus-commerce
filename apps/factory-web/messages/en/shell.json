@@ -43,6 +43,8 @@
       "main": "Main",
       "customers": "Customers",
       "incoming": "Incoming",
+      "incomingWaiting_one": "Incoming, {count} waiting on us",
+      "incomingWaiting_other": "Incoming, {count} waiting on us",
       "quotes": "Quotes",
       "orders": "Orders",
       "specialOrders": "Special orders",

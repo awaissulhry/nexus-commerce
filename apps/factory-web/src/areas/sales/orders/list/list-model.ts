@@ -9,7 +9,7 @@ import type { OrdersImportModel } from '../import/view/OrdersImportView'
 import type { OrdersImportActions } from '../import/use-orders-import' // B-TH-293
 import type { WeekModel } from '../week/use-promise-week'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
-import type { PictureLoader } from './sheet/parts'
+import type { ReadPictures } from '../../../../lib/record-picture/cache' // F-SA-212: the one picture part's batch read
 import type { SwitcherState } from './sheet/model'
 // ---- B-TH-244 (TH-4: the overall view) ----
 import type { OrderSummary } from '../api'
@@ -39,6 +39,7 @@ export interface NewOrderDialogModel {
 }
 // B-TH-230
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'
+import type { ReadUnread } from '../../../../lib/last-message-cell/use-unread' // F-SA-213
 
 export interface OrdersListModel {
   /** `/w/<company>`. */
@@ -66,6 +67,8 @@ export interface OrdersListModel {
   margins?: ReadonlyMap<string, string | null> | null
   /** B-TH-230: the reader's own new messages per order (one read per page); null/absent: no threads.read, the column is not drawn. */
   unread?: UnreadMap | null
+  /** F-SA-213: the board's lanes read their own new-message counts (≤ 50 rows each), again on `refresh`; null: no threads.read. */
+  boardUnread?: { readonly read: ReadUnread; readonly refresh: number } | null
   // ---- B-W2b-323 (orders in depth on screen) ----
   /** The Priority and Season columns, the inline priority, Set priority on a selection; null/absent: not drawn. */
   depth?: ListDepthModel | null
@@ -92,7 +95,7 @@ export interface OrdersListModel {
   companies?: ReadonlyArray<{ id: string; name: string }>
   /** The Customer switcher: the reader's customers, their counts, a limited reader (null: not drawn). */
   switcher?: (SwitcherState & { query: string; searching: boolean }) | null
-  /** Design cases: each row's picture as an address (the page loads the small previews through `actions.loadPicture`). */
+  /** Design cases: each row's picture as an address (the page reads the small previews through `actions.readPictures`). */
   demoPictures?: Readonly<Record<string, string>>
   /** Design cases: the viewer open on a row, the switcher open, the widths that show the wide columns. */
   viewerOpen?: string | null
@@ -133,8 +136,8 @@ export interface OrdersListActions {
   /** B-TH-057: a header click or the Sort menu (null: newest first again); the custom field chip's ✕. */
   onSort?: (sort: OrderSort | null) => void
   onClearCf?: () => void
-  /** B-TH-225: the small preview of a row's picture (null: the placeholder). */
-  loadPicture?: PictureLoader
+  /** F-SA-212: the pictures of the rows the sheet, the phone cards and the board draw (ONE batch read per page: lib/record-picture). */
+  readPictures?: ReadPictures
   /** B-TH-225: the rest of a row opens the order (⌘ / Ctrl: a new tab). */
   onOpenRow?: (id: string, newTab: boolean) => void
   onMore?: () => void

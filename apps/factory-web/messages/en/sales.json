@@ -793,20 +793,7 @@
     "madeFrom": "from {number}",
     "order": "Order {number}",
     "orderCancelled": "Order {number} cancelled",
-    "orderWaits": "Order waits",
-    "picture": {
-      "open": "Picture of {style} on {number}: open it large",
-      "noneOf": "{number} has no line yet: no picture",
-      "alt": "{style}",
-      "viewerOf": "On {number}",
-      "small": "A small preview: the original opens from the style.",
-      "none": "No picture of this style yet",
-      "openStyle": "Open style",
-      "close": "Close",
-      "more": "+{count}",
-      "moreStyles_one": "{count} more style on this quote: open it",
-      "moreStyles_other": "{count} more styles on this quote: open it"
-    }
+    "orderWaits": "Order waits"
   },
   "newQuote": {
     "title": "New quote",

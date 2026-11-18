@@ -1,6 +1,6 @@
 import { defineRoutes } from '../../../core/manifest'
-import { listIncomingContract } from './contract'
-import { listIncoming } from './incoming'
+import { listIncomingContract, waitingCountContract } from './contract'
+import { listIncoming, waitingCount } from './incoming'
 import { manifest } from './manifest'
 
 /**
@@ -10,4 +10,7 @@ import { manifest } from './manifest'
  */
 export default defineRoutes('sales.incoming', manifest, async (app) => {
   app.get('/sales/incoming', { schema: listIncomingContract }, async (request) => listIncoming(request, request.query))
+
+  // B-SA-010: the office shell's "N waiting on us" beside Incoming.
+  app.get('/sales/incoming/waiting-count', { schema: waitingCountContract }, async (request) => waitingCount(request))
 })

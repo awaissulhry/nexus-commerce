@@ -70,7 +70,12 @@ import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { waitingOf } from '../model'
 import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
-import { joined, PictureCell, PictureViewer, useRequestPicture, type PictureLoader } from './cells'
+import { joined } from './cells'
+// F-SA-212: the ONE picture part (the cell with the file-kinds fallback, the pane's row 1, the picture large).
+import type { ReadPictures } from '../../../../lib/record-picture/cache'
+import { useRecordPicture } from '../../../../lib/record-picture/use-record-picture'
+import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
+import { PictureViewer } from '../../../../lib/record-picture/view/PictureViewer'
 import { AssignDialog, DeclineDialog, type AssignModel, type DeclineModel } from './Dialogs'
 import { NewRequestDialog, type NewRequestActions, type NewRequestModel } from './NewRequestDialog'
 // B-TH-217: the reading pane beside the list (the 1160 px modal with its four tabs went).
@@ -181,8 +186,8 @@ export interface InquiriesActions {
   onCopy?: (numbers: readonly string[]) => void
   onDismissNotice?: () => void
   onDismissPageNotice?: (key: string) => void
-  /** B-TH-216: the Picture cell's small preview (the container reads it; the view fetches nothing). */
-  loadPicture?: PictureLoader
+  /** F-SA-212: the page's pictures in ONE batch read (the container reads it; the view fetches nothing). */
+  readPictures?: ReadPictures
   /** B-TH-217: the pane's own acts — the next request, an erasure request, closing the thread. */
   pane?: { onNext?: () => void; onErase?: () => void; onCloseThread?: () => void; onConfirmClose?: () => void; onCancelClose?: () => void }
 }
@@ -251,7 +256,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const byId = useMemo(() => new Map((rows ?? []).map((row) => [row.id, row])), [rows])
   // B-TH-217: the open request's small preview for row 1 (the list already read it).
   const paneRow = model.address.open ? (byId.get(model.address.open)?.request ?? null) : null
-  const paneSrc = useRequestPicture(paneRow ?? { id: '', picture: null }, actions?.loadPicture, paneRow ? model.demoPictures?.[paneRow.id] : undefined)
+  const paneSrc = useRecordPicture({ source: 'request', recordId: paneRow?.id ?? '', picture: paneRow?.picture ?? null, styleCount: paneRow?.styleCount, read: actions?.readPictures, demo: paneRow ? model.demoPictures?.[paneRow.id] : undefined }).src // F-SA-212
   const companies = model.companies ?? []
   const manyCompanies = companies.length > 1
   const companyName = (id: string | null) => (id ? (companies.find((entry) => entry.id === id)?.name ?? null) : null)
@@ -317,17 +322,32 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         </Tag>
       )
 
+    // F-SA-212: the ONE picture part at its cell size, with Incoming's file-kinds fallback (a request that names no style); a
+    // catalogue order or a change request says its kind in the part's placeholder square.
     const PictureRender = ({ data }: ICellRendererParams<IncomingRow>) => {
       const request = data?.request ?? null
-      const src = useRequestPicture(request ?? { id: '', picture: null }, latest.current.actions?.loadPicture, request ? latest.current.model.demoPictures?.[request.id] : undefined)
       if (!data) return null
       if (!request)
         return (
-          <span className="fw-sheet-thumb fw-inq-thumb-none" role="img" aria-label={t(`kind.${data.kind}`)} title={t(`kind.${data.kind}`)}>
+          <span className="fw-rp fw-rp-cell fw-rp-none" role="img" aria-label={t(`kind.${data.kind}`)} title={t(`kind.${data.kind}`)}>
             {kindIcon(data.kind)}
           </span>
         )
-      return <PictureCell row={request} src={src} t={t} filesHref={m.can.files ? recordHref(m.prefix, request.id, 'files') : null} onOpen={() => setViewer(request.id)} />
+      const files = m.can.files && request.fileCounts ? { ...request.fileCounts, href: recordHref(m.prefix, request.id, 'files') } : null
+      return (
+        <RecordPicture
+          source="request"
+          recordId={request.id}
+          number={request.number}
+          picture={request.picture ?? null}
+          styleCount={request.styleCount ?? 1}
+          size="cell"
+          fallback={files}
+          read={latest.current.actions?.readPictures}
+          demo={latest.current.model.demoPictures?.[request.id]}
+          onOpen={() => setViewer(request.id)}
+        />
+      )
     }
     const CustomerCell = ({ data }: ICellRendererParams<IncomingRow>) => {
       if (!data) return null
@@ -519,13 +539,13 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           </span>
         ) : null
       return [
-        { colId: 'picture', headerName: t('col.picture'), minWidth: 84, maxWidth: 88, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => params.data?.request?.picture?.styleCode ?? '', cellRenderer: PictureRender },
+        { colId: 'picture', headerName: t('col.picture'), minWidth: 76, maxWidth: 76 /* F-SA-212: one width */, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => params.data?.request?.picture?.styleCode ?? '', cellRenderer: PictureRender },
         { colId: 'subject', headerName: t('col.request'), minWidth: 180, flex: 1, valueGetter: (params) => (params.data ? `${customerName(params.data)} ${params.data.summary}` : ''), cellRenderer: RequestCell },
         { colId: 'status', headerName: t('col.state'), minWidth: 136, maxWidth: 170, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: CompactState },
       ]
     }
     return [
-      { colId: 'picture', headerName: t('col.picture'), minWidth: 88, maxWidth: 92, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => params.data?.request?.picture?.styleCode ?? '', cellRenderer: PictureRender },
+      { colId: 'picture', headerName: t('col.picture'), minWidth: 76, maxWidth: 76 /* F-SA-212: one width */, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => params.data?.request?.picture?.styleCode ?? '', cellRenderer: PictureRender },
       { colId: 'customer', headerName: t('col.customer'), minWidth: 150, flex: 1, valueGetter: (params) => (params.data ? customerName(params.data) : ''), cellRenderer: CustomerCell },
       { colId: 'subject', headerName: t('col.subject'), minWidth: 220, flex: 1.8, valueGetter: (params) => params.data?.summary ?? '', cellRenderer: SubjectCell },
       { colId: 'files', headerName: t('col.files'), minWidth: 110, flex: 0.5, valueGetter: (params) => (params.data?.request ? joined(filesPhrases(params.data.request) ?? [], say) || '—' : '—'), cellRenderer: FilesCell },
@@ -937,9 +957,20 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   )
 }
 
-/** The picture large of one row (its small preview read again from the cache). */
+/** The picture large of one row (F-SA-212: the one viewer; its small preview read again from the one cache). */
 function ViewerFor({ row, model, actions, onClose }: { row: InquiryRow; model: InquiriesModel; actions?: InquiriesActions; onClose: () => void }) {
-  const { t } = useWords()
-  const src = useRequestPicture(row, actions?.loadPicture, model.demoPictures?.[row.id])
-  return <PictureViewer row={row} src={src} prefix={model.prefix} requestHref={recordHref(model.prefix, row.id)} t={t} onClose={onClose} />
+  return (
+    <PictureViewer
+      source="request"
+      recordId={row.id}
+      number={row.number}
+      picture={row.picture ?? null}
+      styleCount={row.styleCount ?? 1}
+      read={actions?.readPictures}
+      demo={model.demoPictures?.[row.id]}
+      prefix={model.prefix}
+      recordHref={recordHref(model.prefix, row.id)}
+      onClose={onClose}
+    />
+  )
 }

@@ -1,0 +1,110 @@
+// An accepted change of a sales order carried into its work orders (sales page plan, schema wave "sales page 1/1", B-SA-005;
+// lead picks P6', R1, R10; 13-backend B4b; 15-steps-notes §5 item 4). Accept runs the commercial change at once (the
+// amendment, a cancel or a close); the gap it leaves between the order and one of its work orders becomes a WorkOrderChange,
+// held for a person who manages the work order: lower the work order to the order (production's "Lower to the order",
+// B-SA-040: a RELEASED or IN_PROGRESS work order's cells down to max(already cut, ordered), a DRAFT's cells set) or make
+// more (an open DRAFT's cell grows, or a new DRAFT is made). Pieces already cut beyond the new quantity are the change's
+// extra pieces, with the outcome the accepter named before Accept (R1): charged to the customer, kept as its leftover, or
+// scrapped. apps/factory-api's modules/production/work-order-changes writes it through command() (B-SA-041); "Left as is" is
+// a DECLINED change with its words (B-SA-050).
+//
+// Who sees what (ownership/order-apply.json): the office only (factory_runtime: select, insert, update; the API keeps staff
+// to the companies and customers their grants reach). No portal, floor or link grant: a customer reads its order, never the
+// work orders behind it; the floor is told by a note on its work order (B-SA-053). No money column (a charge is the
+// amendment's priced change), no personal data (the proposer and the decider are office people, named as an approval is).
+// The hand-written …_order_apply_guards hold its moves and its wall for every login, the owner included.
+
+/// B-SA-005: the change an accepted change of a sales order proposes for one of its work orders, held for a person (R1, P6').
+/// PROPOSED → APPLIED (the person who manages the work order carried it out) | DECLINED (left as is, in words) | STALE (what it
+/// carries out was put back); the last three final, the decision written once. Of ONE customer: the order's (the reference);
+/// its work order that customer's or a mixed one made before the one-customer rule (no party); its cells lines of its own
+/// order and cells of its own work order. Never deleted.
+model WorkOrderChange {
+  id              String                       @id @db.Uuid
+  tenantId        String                       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the reference's keys; the brand wall's filter), fixed.
+  companyId       String                       @db.Uuid
+  partyId         String                       @db.Uuid
+  salesOrderId    String                       @db.Uuid
+  /// The work order it changes and that work order's site, both or neither, fixed: always on LOWER_TO_ORDER; on MAKE_MORE
+  /// the open DRAFT whose cell grows, or none (a new DRAFT is made: madeWorkOrderId).
+  siteId          String?                      @db.Uuid
+  workOrderId     String?                      @db.Uuid
+  /// What it carries out, fixed: the customer's request (of the same customer and order) and the order's amendment (of the
+  /// same order), each when there is one (an office close or cancel of a line names neither).
+  requestId       String?                      @db.Uuid
+  amendmentId     String?                      @db.Uuid
+  kind            WorkOrderChangeKind
+  /// The cells, written with the change, fixed: a JSON array of 1 to 200 objects of exactly these keys
+  /// {salesOrderLineId, size, from, to, workOrderSizeId}: a line of its own order, the size code (1 to 40 characters; a
+  /// made-to-measure unit: its base size), the pieces from and to (0 to 100 000), and the work order's cell (null only on a
+  /// MAKE_MORE cell that does not exist yet). LOWER_TO_ORDER lowers (to below from; 0: the cell goes), MAKE_MORE raises.
+  cells           Json
+  /// LOWER_TO_ORDER only, written with the change, fixed (R1): the pieces already cut beyond the new quantity, a JSON array of
+  /// 1 to 200 objects of exactly these keys {workOrderSizeId, salesOrderLineId, size, count} (count from 1; a cell the change
+  /// lowers), and what happens to them; both or neither.
+  extra           Json?
+  extraOutcome    WorkOrderChangeExtraOutcome?
+  /// The proposer's words (1 to 500), fixed.
+  reason          String
+  status          WorkOrderChangeStatus        @default(PROPOSED)
+  /// A failed apply's words (1 to 500): written while PROPOSED (never a silent half-update), kept or cleared at the decision.
+  lastError       String?
+  /// The active office person who proposed it (the Accept's), fixed (a plain id, as WorkOrderHold.placedById).
+  proposedById    String                       @db.Uuid
+  /// The decision, written once: when, exactly once APPLIED, DECLINED or STALE (not before it was proposed); by whom, an
+  /// active office person, always on APPLIED and DECLINED (a STALE change made in the system's context names none); and
+  /// words (1 to 300), required to decline ("Left as is").
+  decidedAt       DateTime?                    @db.Timestamptz(3)
+  decidedById     String?                      @db.Uuid
+  decisionNote    String?
+  /// An APPLIED MAKE_MORE that named no work order: the new DRAFT made for it, of the same customer (a plain id), set with the
+  /// apply.
+  madeWorkOrderId String?                      @db.Uuid
+  version         Int                          @default(1)
+  createdAt       DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                      @db.Uuid
+
+  salesOrder SalesOrder           @relation("WorkOrderChangeOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, partyId or
+  // salesOrderId.
+  workOrder  WorkOrder?           @relation("WorkOrderChangeWorkOrder", fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  request    OrderChangeRequest?  @relation("WorkOrderChangeRequest", fields: [tenantId, partyId, requestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  amendment  SalesOrderAmendment? @relation("WorkOrderChangeAmendment", fields: [tenantId, salesOrderId, amendmentId], references: [tenantId, orderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's changes, what waits first (the order read's "Still to do", B-SA-050).
+  @@index([tenantId, salesOrderId, status])
+  // A work order's changes (its band notice; Home › Approvals, B-SA-044).
+  @@index([tenantId, workOrderId, status])
+}
+
+/// B-SA-005: what a WorkOrderChange does to its work order.
+enum WorkOrderChangeKind {
+  /// Lower the work order to the order: its cells down to max(already cut, ordered) (a RELEASED or IN_PROGRESS one through
+  /// production's "Lower to the order"; a DRAFT's cells set).
+  LOWER_TO_ORDER
+  /// Make more: an open DRAFT's cell grows, or a new DRAFT is made.
+  MAKE_MORE
+}
+
+/// B-SA-005: a WorkOrderChange's life.
+enum WorkOrderChangeStatus {
+  PROPOSED
+  APPLIED
+  /// Left as is, in words.
+  DECLINED
+  /// What it carries out was put back (the amendment undone) before it was applied.
+  STALE
+}
+
+/// B-SA-005 (R1): what happens to the pieces already cut beyond an order's new quantity.
+enum WorkOrderChangeExtraOutcome {
+  /// Kept and charged to the customer (the amendment becomes a priced change).
+  CHARGE
+  /// Kept as this customer's leftover: never shipped (shipments stop at the ordered pieces), never another customer's (a
+  /// private-label garment never goes to another customer).
+  LEFTOVER
+  /// Scrapped, through the scrap approval.
+  SCRAP
+}

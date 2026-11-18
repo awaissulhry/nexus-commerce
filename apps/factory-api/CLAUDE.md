@@ -1055,8 +1055,10 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   fees owe nothing — share this function, never a copy), `doors` {quote (quotes.view), depositInvoice (invoices.view: the issued
   TD02 of the deposit), deliveryNotes (shipping.view: count of not-cancelled DDTs, the one when one, the shipment when one carries
   all), invoices (invoices.view: count, the one when one)}: null = no right (the row's own words stay).
-  `GET /sales/orders/:orderId/picture` (orders.view + files.read): a presigned GET (60 s) of the SMALL preview, `small` null until it
-  exists — the sheet never loads the original. `GET /sales/orders/customers` {q, companyId, limit} (orders.view, scopeWhere like the
+  `POST /sales/{orders,quotes,inquiries}/pictures` {ids 1–200, each once} (the record's view + files.read; B-SA-011, one helper
+  `modules/product/images/small-pictures.ts`, one shape): per record the reader may see, its first style and a presigned GET (60 s)
+  of the SMALL preview (one presign per distinct file), `small` null until it exists — an id the reader may not see is absent; the
+  lists never load the original (the one-row routes went, B-SA-013). `GET /sales/orders/customers` {q, companyId, limit} (orders.view, scopeWhere like the
   list: a customer-limited person reads only its customers): customers with orders, latest order first, `orders`/`open`/`late`
   (late = the list's one definition), `total`; the board takes the same `partyId` term. Saved views (`platform/views/views.ts`):
   `GET /views` and `GET /views/:id` leave out a view whose party term (`party`, `partyId`, `customer`, … `PARTY_TERMS`) names a party
