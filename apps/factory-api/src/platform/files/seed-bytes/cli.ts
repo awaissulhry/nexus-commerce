@@ -8,7 +8,8 @@ import { putSeedFileBytes } from './seed-bytes'
 
 /**
  * `npm run seed:files -w @nexus/factory-api` (B-W2b-F59): after `npm run seed -w @nexus/factory-db`, puts the bytes of every
- * seeded file in this stack's store (seed-bytes.ts), for every active tenant, through the process's files runtime: the FAKE
+ * seeded file in this stack's store (seed-bytes.ts; fix-thumbs-1: and each seeded picture's stripped copy and small preview,
+ * made by the app's own job), for every active tenant, through the process's files runtime: the FAKE
  * R2 account's local folder (FACTORY_LOCAL_FILES_DIR, else the default folder named after FACTORY_QUEUE_PREFIX). The same
  * apps/factory-api settings as the API's (FACTORY_DATABASE_URL, FACTORY_REDIS_URL for the gateway's limits, …), so it fills
  * the folder the API reads. FACTORY_ENV local or test only: staging and production have no seed and no local folder.
@@ -34,7 +35,11 @@ try {
   if (!files.local) refuse('this process has no local file store.')
   for (const tenantId of await activeTenants(database)) {
     const outcome = await putSeedFileBytes(files, callerFor(database, systemContext(tenantId, `seed-files-${randomUUID()}`)))
-    console.log(`seed:files: tenant ${tenantId}: ${outcome.written} file(s) and ${outcome.thumbnails} stripped cop(ies) put in ${files.local.root}; ${outcome.notSeeded} other file(s) left alone`)
+    // fix-thumbs-1: the small previews (B-TH-063) and the copies made now, with their command.
+    const noCopy = outcome.noCopy > 0 ? `; ${outcome.noCopy} seeded picture(s) the job could not strip (no copy, no small preview)` : ''
+    console.log(
+      `seed:files: tenant ${tenantId}: ${outcome.written} file(s), ${outcome.thumbnails} stripped cop(ies) (${outcome.made} made now, recorded by files.recordStrippedCopy) and ${outcome.smallPreviews} small preview(s) put in ${files.local.root}; ${outcome.notSeeded} other file(s) left alone${noCopy}`,
+    )
   }
 } catch (error) {
   console.error(`seed:files: ${(error as Error).message}`)
