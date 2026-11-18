@@ -65,7 +65,7 @@ export async function signSafetyCheck(caller: CommandCaller, repairId: string, b
       before: { safetyCheckResult: repair.safetyCheckResult, safetyCheckedAt: repair.safetyCheckedAt ? toUtcIso(repair.safetyCheckedAt) : null, safetyChecklist: repair.safetyChecklist },
       after: { safetyCheckResult: result, safetyCheckedAt: toUtcIso(now), safetyChecklist: stored, repairedAt: repair.repairedAt ? toUtcIso(repair.repairedAt) : null, failures },
     })
-    tools.emit({ type: 'repair.safety_checked', subject: repair.id, companyId: repair.companyId, siteId: repair.siteId, payload: { repairId: repair.id, number: repair.number, result } })
+    tools.emit({ type: 'repair.safety_checked', subject: repair.id, companyId: repair.companyId, siteId: repair.siteId, payload: { repairId: repair.id, number: repair.number, result, partyId: repair.partyId /* B-SA-004b */ } })
     return { result }
   })
   return { repair: await recordOf(caller, seen.id), result, failures }

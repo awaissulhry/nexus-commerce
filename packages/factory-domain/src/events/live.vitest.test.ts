@@ -552,17 +552,18 @@ describe('the portal learns of its own request’s answer live (B-SA-055)', () =
 
 // ── B-SA-004b ──
 /**
- * B-SA-004b (Sales page plan P17'): every quote.* and return.* event (and a return's label) names the record's customer
- * (`partyId`, from the quote or RMA row the command read), and backlog.ranked the customers of every order it moved
+ * B-SA-004b (Sales page plan P17'): every quote.*, return.* and repair.* event (a return's label, a repair's estimate too) names
+ * the record's customer (`partyId`, from the quote, RMA or repair row the command read), and backlog.ranked the customers of every order it moved
  * (`partyIds`), so an office person limited to some customers gets the live hint of their own customers' quotes, returns and
  * rankings (they got none before: a message naming no customer fails closed) and never another customer's. The party ids never
  * reach the browser. The dock's floor rule (a return's site) is unchanged: a tablet is the factory's, of every customer.
  */
-describe('quote, return and ranking events name their customer (B-SA-004b)', () => {
+describe('quote, return, repair and ranking events name their customer (B-SA-004b)', () => {
   const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
   const BETA = '0190a000-0000-7000-8000-0000000000b2'
-  /** Every quote.* and return.* type the catalogue declares (a new one is held to the rule by itself), and the return label. */
-  const ONE = [...EVENT_CATALOGUE.types().filter((type) => /^(quote|return)\./.test(type)), 'return_label.changed']
+  /** Every quote.*, return.*, repair.* and repair_estimate.* type the catalogue declares (a new one is held to the rule by
+   * itself), and the return label. */
+  const ONE = [...EVENT_CATALOGUE.types().filter((type) => /^(quote|return|repair|repair_estimate)\./.test(type)), 'return_label.changed']
   const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
   const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
   const messageOf = (type: string, payload: Record<string, unknown>) => {
@@ -570,8 +571,8 @@ describe('quote, return and ranking events name their customer (B-SA-004b)', () 
     return { ...liveMessageFor(envelope(definition, payload), definition)!, subject: 'a-record-of-a-brand' }
   }
 
-  it('covers the quote and return events of every module (W1, quotes in depth, seasons, W2a, outcomes, returns in depth, labels)', () => {
-    expect(ONE).toEqual(expect.arrayContaining(['quote.updated', 'quote.lines_changed', 'quote.sent', 'quote.expired', 'quote.reminder_sent', 'quote.season_changed', 'return.received', 'return.decided', 'return.status_changed', 'return.finished', 'return.line_split', 'return.policy_checked', 'return.scan_code_set', 'return_label.changed']))
+  it('covers the quote, return and repair events of every module (W1, quotes in depth, seasons, W2a, outcomes, returns in depth, labels, repairs)', () => {
+    expect(ONE).toEqual(expect.arrayContaining(['quote.updated', 'quote.lines_changed', 'quote.sent', 'quote.expired', 'quote.reminder_sent', 'quote.season_changed', 'return.received', 'return.decided', 'return.status_changed', 'return.finished', 'return.line_split', 'return.policy_checked', 'return.scan_code_set', 'return_label.changed', 'repair.changed', 'repair.stage_changed', 'repair.safety_checked', 'repair_estimate.withdrawn']))
   })
 
   it.each(ONE)('%s declares partyId (an id only) and never copies it to the browser', (type) => {
@@ -580,13 +581,13 @@ describe('quote, return and ranking events name their customer (B-SA-004b)', () 
     expect(field, `${type} names its record's customer`).toBeDefined()
     expect(field!.safeParse(ALPHA).success).toBe(true)
     expect(field!.safeParse('Brand Alpha').success).toBe(false)
-    expect(['quotes.view', 'sales.returns.view']).toContain(definition.live?.permission)
+    expect(['quotes.view', 'sales.returns.view', 'sales.repairs.view']).toContain(definition.live?.permission)
     expect(definition.live!.fields ?? []).not.toContain('partyId')
   })
 
   it.each(ONE)("%s: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
-    const ofAlpha = messageOf(type, { quoteId: 'Q-A', returnId: 'RMA-A', partyId: ALPHA })
-    const ofBeta = messageOf(type, { quoteId: 'Q-B', returnId: 'RMA-B', partyId: BETA })
+    const ofAlpha = messageOf(type, { quoteId: 'Q-A', returnId: 'RMA-A', repairId: 'REP-A', partyId: ALPHA })
+    const ofBeta = messageOf(type, { quoteId: 'Q-B', returnId: 'RMA-B', repairId: 'REP-B', partyId: BETA })
     expect(ofAlpha.partyIds).toEqual([ALPHA])
     expect(liveViewFor(ofAlpha, viewerOf(type, [BETA]), EVENT_CATALOGUE)).toBeNull()
     expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toBeNull()

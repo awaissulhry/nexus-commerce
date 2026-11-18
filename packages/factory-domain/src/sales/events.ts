@@ -102,6 +102,8 @@ const returnStatus = z.enum(RETURN_STATUSES)
 // B-W2a-57: repairs and alterations.
 const repairLive = { permission: 'sales.repairs.view', fields: ['repairId', 'number'] } as const
 const repairStage = z.enum(REPAIR_STAGES)
+// B-SA-004b (Sales page plan P17'): every repair.* payload names the repair's customer (`partyId`, the repair row's own, read in the
+// command), for the office's live wall only; never in the live fields; optional for an older event (every-customer viewers only).
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
 
 export const events = [
@@ -395,21 +397,21 @@ export const events = [
     type: 'repair.changed',
     context: 'sales',
     description: "A repair's problem, garment, owner, the customer's transport document or its internal note changed.",
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), fields: z.array(z.string()) }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), fields: z.array(z.string()), partyId: livePartyId() /* B-SA-004b */ }),
     live: repairLive,
   }),
   defineEvent({
     type: 'repair.stage_changed',
     context: 'sales',
     description: 'A repair moved to another stage: the garment arrived, estimated, approved, in repair, repaired, back into repair, shipped back to the customer, or cancelled.',
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), from: repairStage, to: repairStage, workOrderId: z.uuid().nullable(), ddtId: z.uuid().nullable() }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), from: repairStage, to: repairStage, workOrderId: z.uuid().nullable(), ddtId: z.uuid().nullable(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...repairLive, fields: ['repairId', 'number', 'from', 'to'] },
   }),
   defineEvent({
     type: 'repair.safety_checked',
     context: 'sales',
     description: "A repaired protective garment's safety check was signed (seams, abrasion zones, closures, protectors, the certificate still covers it): passed, so it may go back, or failed.",
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), result: z.enum(SAFETY_RESULTS) }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), result: z.enum(SAFETY_RESULTS), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...repairLive, fields: ['repairId', 'number', 'result'] },
   }),
   // B-W2b-16: deposit requests of an order (ids, the step's kind and the fiscal decision; never an amount).
