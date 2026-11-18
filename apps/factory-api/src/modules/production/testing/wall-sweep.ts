@@ -58,17 +58,45 @@ export interface Called {
 }
 
 /**
- * Routes the walker lists that the sweep does not call, each with its reason. Office routes only are swept: a floor device
+ * fix-pr-8: the sweep calls EVERY office route the app registers (the onRoute list: every route whose manifest audiences include
+ * office), reads and writes — not only the walker's: a route added later is swept by itself. Office routes only: a floor device
  * reaches every customer of its site by design (plan §2: floor screens show the customer code), partner and link sessions are
  * fixed to their own party by the session (row-level security), the platform has no tenant.
+ *
+ * EXEMPT holds ONLY (1) a route that is factory-wide on purpose AND refuses a person limited to some customers (403 in
+ * EVERY_PARTY words), or (2) a route that cannot be called in a test (an outside service), each with its reason in words. A
+ * route that answers a person limited to B with A's data is never exempt: it is a breach.
  */
-export const EXEMPT: Readonly<Record<string, string>> = {}
+const SDI = 'e-invoicing (SDI): it reads the outside service’s set-up from the environment before any record (a test has none)'
+const CARRIERS = 'the carriers’ outside services: it reads their set-up from the environment before any record (a test has none)'
+const LABELS = 'carrier labels: the carrier’s outside service, read from the environment before any record (a test has none)'
+const INBOUND = 'inbound mail: the mail service, read from the environment before any record (a test has none)'
+export const EXEMPT: Readonly<Record<string, string>> = {
+  'GET /invoicing/e-invoicing/settings': SDI,
+  'PUT /invoicing/e-invoicing/settings/:companyId': SDI,
+  'PUT /invoicing/e-invoicing/settings/:companyId/rules': SDI,
+  'POST /invoicing/invoices/:invoiceId/sdi/send': `SDI send — ${SDI}`,
+  'GET /payables/sdi': `SDI pickup — ${SDI}`,
+  'POST /payables/sdi/pickup': `SDI pickup — ${SDI}`,
+  'GET /shipping/test-mode': CARRIERS,
+  'PUT /shipping/sites/:siteId/test-mode': CARRIERS,
+  'POST /shipping/carrier-contracts': CARRIERS,
+  'PATCH /shipping/carrier-contracts/:contractId': CARRIERS,
+  'PUT /shipping/customer-carrier-accounts/:partyId': CARRIERS,
+  'POST /shipping/shipments/:shipmentId/labels': LABELS,
+  'POST /shipping/shipments/:shipmentId/labels/void': LABELS,
+  'POST /shipping/shipments/:shipmentId/parcels/:parcelId/label/void': LABELS,
+  'POST /sales/returns/:returnId/return-labels': LABELS,
+  'POST /email/inbound/:inboundEmailId/assign': `inbound-mail assign — ${INBOUND}`,
+  'POST /email/inbound/:inboundEmailId/release': INBOUND,
+  'PUT /exchange-rates/feed': 'the exchange-rate feed: an outside service, read from the environment (a test has none)',
+  'POST /print/printers': 'printers: the print service, read from the environment (a test has none)',
+  'POST /integrations/accounts/:accountId/test': 'tests an outside account through the gateway (the sweep has none)',
+  'GET /live': 'the live stream: a server-sent stream on the job queue’s Redis, read from the environment — never one answer',
+}
 
-/**
- * The named leftovers of B-PR-04…09 whose answers name another customer's work without a work order model in their own
- * reads (an item of a private-label style, a scenario's moves, a run's log lines): swept with the walker's routes.
- */
-export const ALSO: readonly RegExp[] = [/^\/planning\/strategy\b/, /^\/planning\/schedule\/what-ifs\b/, /^\/planning\/runs\b/, /^\/product\/styles$/, /^\/product\/styles\/:styleId$/]
+/** A route an office person can call (its manifest audiences include office). */
+export const isOffice = (route: RouteFacts): boolean => route.manifest.audiences !== 'public' && (route.manifest.audiences as readonly string[]).includes('office')
 
 export const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 
@@ -106,7 +134,7 @@ export interface WallSweep {
   prepare(world: WallSweepWorld): Promise<void>
   /** The routes the walker lists (after `prepare`). */
   walked(): readonly WalkedRoute[]
-  /** The office routes the walker found (and ALSO), less EXEMPT, in the address order. */
+  /** Every office route the app registered, less EXEMPT, in the address order (fix-pr-8). */
   swept(method: 'read' | 'write'): RouteFacts[]
   /** The values of an enum parameter (an export list, a board kind): each is swept on its own. */
   variantsOf(route: RouteFacts): Json[]
@@ -120,6 +148,8 @@ export interface WallSweep {
   readonly failures: Finding[]
   /** The id fields no model was found for, with the routes that name them. */
   unresolved(): Record<string, string[]>
+  /** fix-pr-8: A's words left out of the scan because they are also our own or B's words. */
+  ambiguous(): readonly Marker[]
   report(name: string, value: unknown): void
 }
 
@@ -137,6 +167,8 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
   let walked: WalkedRoute[] = []
   /** What must never reach brand B: A's markers (names, codes, numbers, references) and the mixed work order's number … */
   let aMarkers: Marker[] = []
+  /** fix-pr-8: A's words that are also our own or B's (no marker: they tell nothing of A), for the report. */
+  let ambiguous: Marker[] = []
   /** … and the ids of A's records (the markers' ids and every record of A's gathered below), found by one look-up each. */
   const aMarkerIds = new Map<string, string>()
 
@@ -205,6 +237,22 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
       const tenant = has(model, 'tenantId') ? `WHERE "tenantId" = '${ids.tenantId}'` : ''
       const any = await admin<{ id: string }>(`SELECT id FROM "${model.table}" ${tenant} ${sql ? `${tenant ? 'AND' : 'WHERE'} id NOT IN (${sql})` : ''} ORDER BY id LIMIT 1`).catch(() => [])
       if (any[0]) neutral.set(model.name, String(any[0].id))
+    }
+    // fix-pr-8: a record of no customer that A's records name (the item of A's stock moves, the location of A's cut) stands in
+    // for its model's record: a route that explains it (the stock card of an item) shows A's work there, so the wall is proven
+    // on it — the first record of a model by id may be one A never touched (fix-pr-7: the stock card leak hid so).
+    const touched = new Set<string>()
+    for (const owner of models) {
+      const own = ofA.get(owner.name)
+      if (!own) continue
+      for (const field of owner.fields) {
+        const target = field.relation && !field.list ? modelByName(field.type) : undefined
+        if (!target || ofA.has(target.name) || touched.has(target.name) || !has(owner, `${field.name}Id`)) continue
+        const rows = await admin<{ id: string }>(`SELECT x."${field.name}Id"::text AS id FROM "${owner.table}" x WHERE x.id::text = ANY($1::text[]) AND x."${field.name}Id" IS NOT NULL ORDER BY 1 LIMIT 1`, [own]).catch(() => [])
+        if (!rows[0]) continue
+        neutral.set(target.name, String(rows[0].id))
+        touched.add(target.name)
+      }
     }
   }
 
@@ -728,12 +776,10 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
     return out
   }
 
+  // fix-pr-8: every office route the app registered (the onRoute list), less EXEMPT — the walker's list no longer decides.
   function swept(method: 'read' | 'write'): RouteFacts[] {
-    const keys = new Set([...walked.map((route) => route.key), ...[...ROUTES.keys()].filter((key) => ALSO.some((also) => also.test(key.split(' ')[1]!)))])
-    return [...keys]
-      .map((key) => ROUTES.get(key))
-      .filter((route): route is RouteFacts => route !== undefined)
-      .filter((route) => route.manifest.audiences !== 'public' && (route.manifest.audiences as readonly string[]).includes('office'))
+    return [...ROUTES.values()]
+      .filter((route) => isOffice(route))
       .filter((route) => !EXEMPT[`${route.method} ${route.url}`])
       .filter((route) => (method === 'read' ? route.method === 'GET' : route.method !== 'GET'))
       .sort((x, y) => `${x.url} ${x.method}`.localeCompare(`${y.url} ${y.method}`))
@@ -770,7 +816,25 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
       const all = [...(await markersOf(input.db, ids.a)), { label: 'mixed work order', text: input.w.mixed.number }, { label: 'mixed work order', text: input.w.mixed.workOrderId }, ...(input.markers ?? [])]
       for (const marker of all) if (/^[0-9a-f-]{36}$/i.test(marker.text)) aMarkerIds.set(marker.text.toLowerCase(), marker.label)
       for (const id of aIds) if (!aMarkerIds.has(id)) aMarkerIds.set(id, 'record of A')
-      aMarkers = all.filter((marker) => !/^[0-9a-f-]{36}$/i.test(marker.text))
+      // fix-pr-8: a word of A's that is also a word of our own (a site's or a company's name or address line) or of B's tells
+      // nothing of A — the made-up seeds give A's workshop the address of site B1 — so it is no marker; each one dropped is
+      // reported (`ambiguous`). A's ids are never dropped.
+      const own = new Set(
+        [
+          ...(await admin<{ text: string | null }>(
+            `SELECT "legalName" AS text FROM "Company" WHERE "tenantId" = $1 UNION SELECT "tradeName" FROM "Company" WHERE "tenantId" = $1
+             UNION SELECT address->>'line1' FROM "Company" WHERE "tenantId" = $1 UNION SELECT name FROM "Site" WHERE "tenantId" = $1
+             UNION SELECT address->>'line1' FROM "Site" WHERE "tenantId" = $1`,
+            [ids.tenantId],
+          )).map((row) => row.text),
+          ...(await markersOf(input.db, ids.b)).map((marker) => marker.text),
+        ]
+          .filter((text): text is string => typeof text === 'string')
+          .map((text) => text.trim().toLowerCase()),
+      )
+      const words = all.filter((marker) => !/^[0-9a-f-]{36}$/i.test(marker.text))
+      ambiguous = words.filter((marker) => own.has(marker.text.toLowerCase()))
+      aMarkers = words.filter((marker) => !own.has(marker.text.toLowerCase()))
     },
     walked: () => walked,
     swept,
@@ -780,6 +844,7 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
     called,
     failures,
     unresolved: () => Object.fromEntries([...unresolved].map(([name, urls]) => [name, [...urls]])),
+    ambiguous: () => ambiguous,
     report(name, value) {
       if (options.reportPrefix) writeFileSync(`${options.reportPrefix}.${name}.json`, JSON.stringify(value, null, 1))
     },

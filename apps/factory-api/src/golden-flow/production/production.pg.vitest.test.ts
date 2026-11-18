@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { inflateRawSync } from 'node:zlib'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
@@ -12,7 +9,6 @@ import { NOTE_WORDS } from '@nexus/factory-domain/production-brand/notes'
 import { SUPERVISOR_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/words'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCalendar } from '../../../../../packages/factory-db/seed/calendar'
-import { localFileStore } from '../../adapters/local-files/local'
 import { buildApp } from '../../core/app'
 import { routesFiles } from '../../core/autoload'
 import { callerFor } from '../../core/command'
@@ -31,9 +27,7 @@ import { madeUpPdf } from '../../modules/shipping/documents/testing/compliance'
 import { createErrorTracker, useErrorTracker } from '../../observability/tracker'
 import { freshGuard } from '../../platform/auth/portal/testing/portal'
 import type { Answer } from '../../platform/auth/sessions/testing/harness'
-import { createEmailRuntime, useEmail } from '../../platform/email-out/service'
 import { storeGeneratedFile } from '../../platform/files/files'
-import { createFilesRuntime, useFiles } from '../../platform/files/service'
 import type { Gateway } from '../../platform/gateway/gateway'
 import { useGateway } from '../../platform/gateway/service'
 import { notificationsHandler } from '../../platform/notifications/fan-out'
@@ -81,8 +75,8 @@ import { drain, type World } from '../testing/world'
  *   W    the wall: B's people and an office person limited to B see nothing of A by any door; the production unit sees every
  *        customer (the overview); A is never told who its supervisor is — the reply in its thread signs with its writer's name
  *   Z    no route answered 500 and no handler failed during the flow
- *   X    the B-PR-10 sweep again, on this world at the end (../../modules/production/testing/wall-sweep.ts): every route that reads
- *        a work order, reads and writes, as B with A's ids
+ *   X    the B-PR-10 sweep again, on this world at the end (../../modules/production/testing/wall-sweep.ts): every office route
+ *        (fix-pr-8), reads and writes, as B with A's ids
  *
  * SQL reads ids and asserts. Three acts are not made through a route, each named where it is done: the world's set-up (back-dated
  * role assignments, as the PG tests do), the files the office shares (the platform's own store call) and the cutting floor's first
@@ -325,7 +319,6 @@ const OFFICE_PERMISSIONS = FACTORY_PERMISSIONS.all.filter((definition) => defini
 let sweepSessions: Record<string, OfficeSession> = {}
 let sweeper: ReturnType<typeof createWallSweep> | undefined
 let sweepApp: FastifyInstance | undefined
-let sweepFiles: string | undefined
 
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
@@ -367,10 +360,7 @@ afterAll(async () => {
   useServerClock(undefined) // fix-pr-7 (P: the reply on the portal's clock)
   useErrorTracker(undefined)
   await sweepApp?.close()
-  useFiles(undefined)
   useGateway(undefined)
-  useEmail(undefined)
-  if (sweepFiles) rmSync(sweepFiles, { recursive: true, force: true })
   await world?.close()
 }, 120_000)
 
@@ -957,15 +947,12 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
 
   // ---- X: the B-PR-10 sweep again, on this world ----------------------------------------------------------------------------------
 
-  it('X1 the B-PR-10 sweep, again at the end: every GET that reads a work order, as B with A’s ids — as unknown, empty or 403 EVERY_PARTY, never a word of A', async () => {
+  it('X1 the B-PR-10 sweep, again at the end: every office GET, as B with A’s ids — as unknown, empty or 403 EVERY_PARTY, never a word of A', async () => {
     // From here on outside calls are not this flow's (the sweep's own set-up, as brand-wall.pg): no 500 is counted any more.
     useErrorTracker(undefined)
-    sweepFiles = mkdtempSync(join(tmpdir(), 'factory-pr36-sweep-'))
-    const noGateway = new Proxy({}, { get: () => () => { throw new Error('the sweep has no gateway') } }) as Gateway
-    const files = createFilesRuntime({ gateway: noGateway, local: localFileStore({ root: sweepFiles, environment: 'test' }) })
-    useFiles(files)
-    useGateway(noGateway)
-    useEmail(createEmailRuntime({ gateway: noGateway, fake: null, webOrigin: 'http://localhost:3901', files: files.storage }))
+    // fix-pr-8 (as brand-wall.pg): the harness's own file store and mail stay (a route that makes a PDF is swept too); no process
+    // gateway — a route that reaches it is an outside service (the sweep's EXEMPT names each one).
+    useGateway(new Proxy({}, { get: () => () => { throw new Error('the sweep has no gateway') } }) as Gateway)
     sweepSessions = twoBrandSessions(T(), world.ids.a, world.ids.b, OFFICE_PERMISSIONS)
     sweeper = createWallSweep({ ids: world.ids, sessions: sweepSessions, reportPrefix: process.env.FACTORY_PR36_SWEEP_REPORT })
     const plugins: FastifyPluginAsync[] = [sweeper.routeSpy]
@@ -985,7 +972,7 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect(findings).toEqual([])
   }, SWEEP_TIMEOUT)
 
-  it('X2 the B-PR-10 sweep, again at the end (PW-10): every write that reads a work order, as B with A’s ids, is refused as unknown and writes no row about A', async () => {
+  it('X2 the B-PR-10 sweep, again at the end (PW-10): every office write, as B with A’s ids, is refused as unknown and writes no row about A', async () => {
     expect(sweeper, 'X1 set the sweep up').toBeDefined()
     const findings: Finding[] = []
     for (const route of sweeper!.swept('write')) findings.push(...(await sweeper!.sweep(route)))
