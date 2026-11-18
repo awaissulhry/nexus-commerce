@@ -67,7 +67,8 @@ export default defineStage({
             await press(finish)
             await expect(page.getByText('Saved on this tablet').first()).toBeVisible()
           }
-          expect(await waiting(page)).toBe(bundles.length)
+          // The tablet's queue counts the last one a moment after its "Saved on this tablet" (end check: read until it settles).
+          await expect.poll(() => waiting(page), { timeout: 15_000 }).toBe(bundles.length)
           await expect(page.getByText('Offline: work waits on this tablet').first()).toBeVisible()
           await flow.shot(page, `scans-offline-${key}`)
           await context.setOffline(false)

@@ -380,8 +380,8 @@ describe('the partner session', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     )
     const browser = await portalBrowser(h)
     browser.cookies.set(PORTAL_COOKIE, token.value)
-    // B-PR-13: + portal.production.view (a preview reads production, never the urgency mark).
-    expect((await browser.get('/portal/me')).body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'], terms: null, user: { email: 'previewer@portal-a.example', partnerKind: null } })
+    // B-PR-13: + portal.production.view (a preview reads production, never the urgency mark). B-TH-066 (#1575): + portal.projects.view.
+    expect((await browser.get('/portal/me')).body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', 'portal.projects.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'], terms: null, user: { email: 'previewer@portal-a.example', partnerKind: null } })
     expect((await browser.post('/portal/sessions/refresh')).status).toBe(200)
     const write = await browser.post('/portal/first-visit', { noticeId: world.noticeId, noticeLocale: 'en', sha256: 'a'.repeat(64) })
     expect(write.status).toBe(403)

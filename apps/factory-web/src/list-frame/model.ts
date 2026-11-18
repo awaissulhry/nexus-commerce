@@ -114,3 +114,22 @@ export const FIT_ROWS = 50
 export function gridLayout(rowCount: number): { domLayout: 'autoHeight' | 'normal'; fit: boolean } {
   return rowCount <= FIT_ROWS ? { domLayout: 'autoHeight', fit: rowCount > 0 } : { domLayout: 'normal', fit: false }
 }
+
+// ---- End check (B-TH-245): the cell a row click was on
+/** The element a click landed on, as far as the row click needs it (a DOM element, or a test's stand-in). */
+export interface ClickTarget {
+  readonly isConnected: boolean
+  closest(selector: string): { getAttribute(name: string): string | null } | null
+}
+
+/**
+ * The column of the cell a row click was on. A double click on a cell that edits makes it its editor before the grid reports the
+ * row's clicks, so the clicked element is no longer on the page: the grid's focused cell answers then (never "no cell", which
+ * would open the record instead of the editor).
+ */
+export function clickedColumn(target: ClickTarget | null | undefined, focused: string | null): string | null {
+  if (!target) return null
+  if (!target.isConnected) return focused
+  return target.closest('.ag-cell')?.getAttribute('col-id') ?? null
+}
+// ---- end B-TH-245

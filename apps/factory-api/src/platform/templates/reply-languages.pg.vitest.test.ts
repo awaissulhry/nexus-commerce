@@ -64,11 +64,9 @@ beforeAll(async () => {
   END $$`)
   // ---- th-backend-g step 2: a sending address (the FAKE mail account), brand A's requests 8 (typed), 9 (from its contact's own mail,
   // DMARC passed) and 10 (made from a mail of another address), written past their triggers: test data only.
-  await h.database.withScope({ audience: 'office', tenantId: tenant.id, actorId: newId() }, async (client) => {
-    const accountId = newId()
-    await client.integrationAccount.create({ data: { id: accountId, provider: 'SES', code: 'ses-tpl-lang', label: 'Mail (fake)', mode: 'FAKE', rateLimitPerMinute: 6000, rateLimitBurst: 1000 } })
-    await client.emailIdentity.create({ data: { id: newId(), companyId, kind: 'NOTIFICATION', domain: 'mail.tpl-lang.example.com', fromAddress: 'noreply@mail.tpl-lang.example.com', displayName: 'Esempio Moto', displayNamePolicy: 'COMPANY', replyDomain: 'reply.tpl-lang.example.com', accountId, verificationStatus: 'SUCCESS', dkimStatus: 'SUCCESS', isDefault: true } })
-  })
+  // fix-pg-1: addTenant already makes the FAKE SES account and the verified NOTIFICATION identity noreply@mail.tpl-lang.example.com
+  // (a second one broke the unique sender address of the company); it only takes the company's name here.
+  await admin(`UPDATE "EmailIdentity" SET "displayName" = 'Esempio Moto' WHERE "tenantId" = $1 AND "companyId" = $2 AND "fromAddress" = 'noreply@mail.tpl-lang.example.com'`, [tenant.id, companyId])
   await admin(`DO $$ BEGIN
     SET LOCAL session_replication_role = replica;
     INSERT INTO "InboundEmail" (id, "tenantId", "companyId", "accountId", "receiptId", "sesMessageId", "s3Bucket", "s3Key", "receivedAt", "fromAddress", subject, "spfVerdict", "dkimVerdict", "dmarcVerdict", "spamVerdict", "virusVerdict", status)

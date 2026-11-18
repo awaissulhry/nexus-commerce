@@ -149,7 +149,14 @@ export async function pinMessage(caller: CommandCaller, record: RecordRef, messa
     const message = await tools.tx.message.findFirst({ where: { id: messageId, threadId: thread.id }, select: { id: true, held: true } })
     if (!message) throw new NotFoundError('Not a message of this conversation.')
     if (message.held) throw refusal('HELD')
-    if (await tools.tx.threadPin.findFirst({ where: { threadId: thread.id, messageId }, select: { id: true } })) return null
+    // ---- fix-pg-1: a second pin changes nothing — and says so in the audit (command() audits every write; without a row the
+    // command refused with a 500), as a follow that changes nothing does (followers.ts threads.followUnchanged).
+    const pinnedAlready = await tools.tx.threadPin.findFirst({ where: { threadId: thread.id, messageId }, select: { id: true } })
+    if (pinnedAlready) {
+      tools.audit({ action: 'threads.pinUnchanged', recordType: 'ThreadPin', recordId: pinnedAlready.id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, messageId, pinned: true } })
+      return null
+    }
+    // ---- end fix-pg-1
     if ((await tools.tx.threadPin.count({ where: { threadId: thread.id } })) >= PINS_MAX) throw refusal('FULL')
     const id = newId()
     // The pin's party is the message's, copied by the database (the app never writes it).
@@ -166,7 +173,12 @@ export async function unpinMessage(caller: CommandCaller, record: RecordRef, mes
   if (!thread || !isUuid(messageId)) throw new NotFoundError('Not a message of this conversation.')
   await command(caller, { name: 'threads.unpin', idempotencyKey, input: { recordType: record.type, recordId: record.id, messageId } }, async (tools) => {
     const pin = await tools.tx.threadPin.findFirst({ where: { threadId: thread.id, messageId }, select: { id: true } })
-    if (!pin) return null
+    // ---- fix-pg-1: a message not pinned changes nothing, audited as such (see pinMessage).
+    if (!pin) {
+      tools.audit({ action: 'threads.unpinUnchanged', recordType: 'Message', recordId: messageId, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, messageId, pinned: false } })
+      return null
+    }
+    // ---- end fix-pg-1
     await tools.tx.threadPin.delete({ where: { id: pin.id } })
     tools.audit({ action: 'threads.unpin', recordType: 'ThreadPin', recordId: pin.id, companyId: thread.companyId, siteId: thread.siteId, before: { threadId: thread.id, messageId } })
     return null

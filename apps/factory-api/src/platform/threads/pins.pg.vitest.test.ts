@@ -46,7 +46,7 @@ const sessions = (): Record<string, SessionContext> => ({
   reader: { audience: 'office', tenantId: world.tenantId, actorId: office.reader, grants: [{ permissions: ['threads.read'], companies: 'all', sites: 'all', parties: 'all' }] },
 })
 const call = async (who: keyof typeof office, method: 'GET' | 'PUT' | 'DELETE' | 'POST', url: string) => {
-  const response = await app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th091-${++run}` }) } })
+  const response = await app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th091-key-${++run}` }) } })
   return { status: response.statusCode, body: response.json() as Json }
 }
 const pinned = (answer: { body: Json }): string[] => answer.body.pins.map((pin: Json) => pin.messageId)
@@ -78,8 +78,9 @@ beforeAll(async () => {
   } finally {
     await admin('SET session_replication_role = DEFAULT')
   }
-  // An open request of brand A with its own office note.
-  ids.request = (await admin<{ id: string }>(`SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2 AND status IN ('NEW', 'ASSIGNED', 'NEED_INFO') ORDER BY number LIMIT 1`, [world.tenantId, world.p1]))[0]!.id
+  // A request of brand A with its own office note. fix-pg-1: the seeds give brand A one request, SEED-INQ-0004, already quoted (seed/
+  // sales-intake.ts); moving its note does not ask the request's state.
+  ids.request = (await admin<{ id: string }>(`SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2 ORDER BY number LIMIT 1`, [world.tenantId, world.p1]))[0]!.id
   await admin(`UPDATE "Inquiry" SET note = 'Made-up: the buyer prefers calls after 15:00.' WHERE id = $1`, [ids.request])
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
@@ -142,6 +143,10 @@ describe('T08: a brand sees only pins of messages shared with it', { timeout: SL
     expect(after.status, JSON.stringify(after.body)).toBe(200)
     expect(pinned(after)).toEqual([ids.note])
     expect(pinned(await alpha.get(`/threads/SalesOrder/${ids.order}/pins`))).toEqual([])
+    // fix-pg-1: unpinning a message that is not pinned changes nothing (it was a 500: the command wrote no audit row).
+    const again = await call('writer', 'DELETE', `/threads/SalesOrder/${ids.order}/pins/${ids.mail}`)
+    expect(again.status, JSON.stringify(again.body)).toBe(200)
+    expect(pinned(again)).toEqual([ids.note])
   })
 })
 

@@ -52,7 +52,7 @@ let orders: string[] = []
 let workOrder = ''
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 const call = (who: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
-  app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th050-${++run}` }) }, ...(payload === undefined ? {} : { payload: payload as object }) })
+  app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th050-key-${++run}` }) }, ...(payload === undefined ? {} : { payload: payload as object }) })
 async function ok(method: 'GET' | 'POST', url: string, payload?: unknown, status = 200): Promise<Json> {
   const response = await call('writer', method, url, payload)
   expect(response.statusCode, response.body).toBe(status)
@@ -88,6 +88,8 @@ async function seam(record: { type: string; id: string }, direction: MessageDire
 async function problems(record: { type: string; id: string }, links: MessageLinkInput, facts: { direction: MessageDirection; channel: MessageChannel; forFloor?: boolean }): Promise<string[]> {
   const { result } = await command(callerFor(h.database, office()), { name: 'threads.test.links', input: { record, links, facts } }, async (tools) => {
     const { thread } = await ensureThread(tools, record, WRITER)
+    // fix-pg-1: command() audits every write; on a thread that exists already nothing else is written, so the check names itself.
+    tools.audit({ recordType: 'Test', recordId: thread.id, after: { checked: 'messageLinkProblems' } })
     return { issues: await messageLinkProblems(tools.tx, thread, links, facts) }
   })
   return result.issues.map((issue) => `${issue.path}: ${issue.message}`)

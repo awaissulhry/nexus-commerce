@@ -342,7 +342,8 @@ describe('saved replies (COL-016)', () => {
   it("fills a reply with a record's values for the message box (nothing is sent)", async () => {
     const filled = await finance.post(`/templates/replies/${own.id}/fill`, { recordType: 'Party', recordId: party, contactId: contactEn })
     expect(filled.status, JSON.stringify(filled.body)).toBe(200)
-    expect(filled.body).toEqual({ body: 'Gentile Ann Example, le scrivo per Cliente Esempio S.r.l.. finance', language: 'it', missing: [] })
+    // th-backend-g step 1 (#1591): + the audience the numbers were written for (a mail: CUSTOMER) and the record numbers used (none here).
+    expect(filled.body).toEqual({ body: 'Gentile Ann Example, le scrivo per Cliente Esempio S.r.l.. finance', language: 'it', missing: [], audience: 'CUSTOMER', numbers: [] })
     const noContact = await sales.post(`/templates/replies/${shared.id}/fill`, { recordType: 'Party', recordId: party })
     expect(noContact.body.missing).toEqual(['contact.name'])
     expect(noContact.body.body.startsWith('Dear ,\nwe are late for Cliente Esempio S.r.l..\nEsempio Moto, ')).toBe(true)
@@ -359,7 +360,8 @@ describe('saved replies (COL-016)', () => {
 
 describe("the partner contact's language (PLT-131)", () => {
   it("is the contact's, else the party's; English for a language documents are not written in", async () => {
-    expect((await sales.get(`/templates/language?partyId=${party}&contactId=${contactEn}`)).body).toEqual({ partyId: party, contactId: contactEn, language: 'en', source: 'CONTACT', notOffered: null })
+    // B-TH-098 (#1584): + the language of a message (five languages; the documents' language stays above).
+    expect((await sales.get(`/templates/language?partyId=${party}&contactId=${contactEn}`)).body).toEqual({ partyId: party, contactId: contactEn, language: 'en', source: 'CONTACT', notOffered: null, message: { language: 'en', source: 'CONTACT', notOffered: null, read: true } })
     expect((await sales.get(`/templates/language?partyId=${party}&contactId=${contactNone}`)).body).toMatchObject({ language: 'it', source: 'PARTY' })
     expect((await sales.get(`/templates/language?partyId=${party}&contactId=${contactDe}`)).body).toMatchObject({ language: 'en', source: 'CONTACT', notOffered: 'de' })
     expect((await sales.get(`/templates/language?partyId=${party}&contactId=${newId()}`)).status).toBe(400)

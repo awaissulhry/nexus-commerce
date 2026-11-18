@@ -48,10 +48,10 @@ const sessions = (): Record<string, SessionContext> => {
   return { writer: { audience: 'office', tenantId: world.tenantId, actorId: office.writer, grants }, other: { audience: 'office', tenantId: world.tenantId, actorId: office.other, grants } }
 }
 const call = async (who: keyof typeof office, method: 'GET' | 'PUT' | 'DELETE' | 'POST', url: string, payload?: Json) => {
-  const response = await app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th092-${++run}` }) }, ...(payload ? { payload } : {}) })
+  const response = await app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th092-key-${++run}` }) }, ...(payload ? { payload } : {}) })
   return { status: response.statusCode, body: response.json() as Json }
 }
-const send = (browser: Browser, method: 'PUT' | 'DELETE' | 'POST', url: string, body?: Json) => browser.send(method, url, body ?? {}, { headers: { 'idempotency-key': `th092-${++run}` } })
+const send = (browser: Browser, method: 'PUT' | 'DELETE' | 'POST', url: string, body?: Json) => browser.send(method, url, body ?? {}, { headers: { 'idempotency-key': `th092-key-${++run}` } })
 
 beforeAll(async () => {
   h = await startHarness('drafts_th092')
@@ -78,6 +78,12 @@ beforeAll(async () => {
   })
   alpha = await signIn(h, world, world.people.buyer)
   colleague = await signIn(h, world, mate)
+  // fix-pg-1: brand B's buyer may write on its own records (portal.comment, as brand A's buyer has), so its refusal on brand A's
+  // record is that record's neutral 404 — not the route's "You may not do this." (403) that any record id gets alike.
+  await inTenant(h, world, async (client) => {
+    const role = await client.role.findFirstOrThrow({ where: { key: 'partner-comment', audience: 'PARTNER' }, select: { id: true } })
+    await client.roleAssignment.create({ data: { id: newId(), userId: buyerB.id, roleId: role.id, allCompanies: true, partyIds: [brandB], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+  })
   beta = await signIn(h, world, { id: buyerB.id, email: buyerB.email, name: buyerB.displayName } satisfies Person)
 }, 600_000)
 

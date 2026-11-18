@@ -45,8 +45,10 @@ type Client = FactoryClient | CommandTx
 const ROW = { id: true, topic: true, frequency: true, version: true, updatedAt: true } as const
 
 /**
- * The person's stored frequencies (the newest row of a topic wins, should two exist). Only the topics this list knows: the
- * database's enum may name a topic before its words and rules are here (PRODUCTION, B-PR-15's schema; its topic is B-PR-31's).
+ * The person's stored frequencies (the newest row of a topic wins, should two exist). Only the topics factory-domain knows
+ * (portal/notifications/topics.ts: ORDERS, DATES, SHIPPED, INVOICES, CLAIMS, DOCUMENTS, MESSAGES, REMINDERS and PRODUCTION —
+ * a domain topic with its words and its daily default since B-PR-31): a value the database's enum gains before its words and
+ * rules are there is left out.
  */
 export async function preferencesOf(client: Client, userId: string): Promise<Map<PartnerEmailTopic, PartnerEmailFrequency>> {
   const rows = await client.partnerEmailPreference.findMany({ where: { userId }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], select: ROW })

@@ -44,7 +44,7 @@ const sessions = (): Record<string, SessionContext> => ({
   reader: { audience: 'office', tenantId: world.tenantId, actorId: office.reader, grants: [{ permissions: ['threads.read', 'orders.view'], companies: 'all', sites: 'all', parties: 'all' }] },
 })
 const call = async (who: keyof typeof office, method: 'GET' | 'PUT', url: string, payload?: Json) => {
-  const response = await app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th093-${++run}` }) }, ...(payload ? { payload } : {}) })
+  const response = await app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th093-key-${++run}` }) }, ...(payload ? { payload } : {}) })
   return { status: response.statusCode, body: response.json() as Json }
 }
 const markDone = (done: boolean, recordId = order) => call('writer', 'PUT', `/threads/SalesOrder/${recordId}/done`, { done })
@@ -68,7 +68,8 @@ beforeAll(async () => {
   world = await partnerWorld(h, NS)
   for (const [key, id] of Object.entries(office)) await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, locale) VALUES ($1, $2, $3, $4, \'ACTIVE\', \'en\')', [id, world.tenantId, `th093-${key}@example.com`, `Made-up ${key}`])
   order = (await admin<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0001' AND "partyId" = $2`, [world.tenantId, world.p1]))[0]!.id
-  quiet = (await admin<{ id: string }>(`SELECT o.id FROM "SalesOrder" o WHERE o."tenantId" = $1 AND o."partyId" = $2 AND NOT EXISTS (SELECT 1 FROM "Thread" t WHERE t."recordType" = 'SalesOrder' AND t."recordId" = o.id) ORDER BY o.number LIMIT 1`, [world.tenantId, world.p1]))[0]!.id
+  // fix-pg-1: never SEED-SO-0001 itself — its thread is only made below (ourMail), so it was the first order "with no thread".
+  quiet = (await admin<{ id: string }>(`SELECT o.id FROM "SalesOrder" o WHERE o."tenantId" = $1 AND o."partyId" = $2 AND o.id <> $3 AND NOT EXISTS (SELECT 1 FROM "Thread" t WHERE t."recordType" = 'SalesOrder' AND t."recordId" = o.id) ORDER BY o.number LIMIT 1`, [world.tenantId, world.p1, order]))[0]!.id
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions()[String(request.headers['x-test-session'])] ?? null) },
@@ -76,7 +77,7 @@ beforeAll(async () => {
   alpha = await signIn(h, world, world.people.buyer)
   // Brand A writes: the conversation waits on us.
   await ourMail('Made-up: your order is confirmed.')
-  const posted = await alpha.send('POST', `/portal/threads/SalesOrder/${order}/messages`, { body: 'Made-up: can the lining be red?' }, { headers: { 'idempotency-key': `th093-${++run}` } })
+  const posted = await alpha.send('POST', `/portal/threads/SalesOrder/${order}/messages`, { body: 'Made-up: can the lining be red?' }, { headers: { 'idempotency-key': `th093-key-${++run}` } })
   expect(posted.status, JSON.stringify(posted.body)).toBe(201)
 }, 600_000)
 
@@ -112,7 +113,7 @@ describe('B-TH-093: Done leaves the waiting views, never closes', { timeout: SLO
       expect(answer.status, JSON.stringify(answer.body)).toBe(200)
       expect(JSON.stringify(answer.body)).not.toMatch(/"done"|doneAt|doneBy|Made-up writer/)
     }
-    const posted = await alpha.send('POST', `/portal/threads/SalesOrder/${order}/messages`, { body: 'Made-up: one more question.' }, { headers: { 'idempotency-key': `th093-${++run}` } })
+    const posted = await alpha.send('POST', `/portal/threads/SalesOrder/${order}/messages`, { body: 'Made-up: one more question.' }, { headers: { 'idempotency-key': `th093-key-${++run}` } })
     expect(posted.status, JSON.stringify(posted.body)).toBe(201)
     const after = await head()
     expect(after.done).toBeNull()
