@@ -427,8 +427,8 @@ describe("B-PR-44: an order line's files and its quote line's artwork under the 
 })
 // ---- end B-PR-44
 
-// ---- fix-pr-4 (the brand wall; the pr3m finding): an old copy of another customer's content ------------------------------------
-describe("fix-pr-4: an old copy whose content is another customer's is never listed or opened", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+// ---- fix-pr-4 (the brand wall; the pr3m findings): an old copy of another customer's content, and the documents that carry prices -----
+describe("fix-pr-4: an old copy whose content is another customer's is never listed or opened; a proforma only for a role with prices", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   /** Rows written as an older build wrote them (before the copy rule and the content wall), the database's rules off for them. */
   async function replica(statements: readonly { readonly sql: string; readonly values?: unknown[] }[]): Promise<void> {
     await admin('BEGIN')
@@ -479,6 +479,23 @@ describe("fix-pr-4: an old copy whose content is another customer's is never lis
     expect(download.status).toBe(404)
     for (const answer of [byId, download]) expect(JSON.stringify(answer.body)).not.toMatch(/their price sheet|another customer/i)
     expect((await browsers.buyer.get(`/portal/customer-documents/${own}`)).status).toBe(200)
+  })
+
+  it('a proforma shared on the shipment is a "Proforma invoice" of the priced group for the buyer; the quality person (no prices) never lists, opens or downloads it', async () => {
+    const file = await fileOn('Shipment', shipping.shipmentId, 'fix-pr-4 proforma.pdf', P1)
+    await replica([
+      {
+        sql: `INSERT INTO "GeneratedDocument" (id, "tenantId", "companyId", "recordType", "recordId", kind, version, fingerprint, language, number, "fileId", "createdAt") VALUES ($1, $2, $3, 'Shipment', $4, 'PROFORMA', 1, $5, 'en', 'PF-T-0001', $6, now())`,
+        values: [newId(), T, companyA, shipping.shipmentId, 'c'.repeat(64), file],
+      },
+    ])
+    const buyer = await ok(browsers.buyer, '/portal/customer-documents?group=ORDERS')
+    expect((buyer.items as Json[]).find((item) => item.id === file)).toMatchObject({ kind: 'PROFORMA', group: 'ORDERS', title: { en: 'Proforma invoice · PF-T-0001', it: 'Fattura proforma · PF-T-0001' } })
+    const quality = await ok(browsers.quality, '/portal/customer-documents?versions=all')
+    expect((quality.items as Json[]).map((item) => item.id)).not.toContain(file)
+    expect(kinds(quality)).not.toContain('PROFORMA')
+    expect((await browsers.quality.get(`/portal/customer-documents/${file}`)).status).toBe(404)
+    expect((await browsers.quality.post(`/portal/customer-documents/${file}/download`, {})).status).toBe(404)
   })
 })
 // ---- end fix-pr-4

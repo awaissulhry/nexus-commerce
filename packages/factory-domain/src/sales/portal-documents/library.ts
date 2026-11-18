@@ -16,7 +16,8 @@ import type { Words } from '../../portal/tasks/kinds'
  *              report …), else a plain document
  *   who        the kind's group, and the group's permission and grain (`groupRules`): delivery papers and other documents
  *              need portal.customerDocuments.view; conformity portal.customerDocuments.conformity; invoices and statements
- *              portal.customerDocuments.finance; order confirmations, quotes, invoices and statements also the price grain
+ *              portal.customerDocuments.finance; order confirmations, quotes, proformas, commercial invoices, price lists,
+ *              invoices and statements also the price grain
  *              (they carry prices: never shown to a role without prices, a preview included)
  *   versions   a fixed version is never changed: an earlier one stays readable and names the one that replaced it
  *              (`replacementsOf`); a WITHDRAWN one leaves the library and the newer one is named instead
@@ -50,6 +51,10 @@ export const PORTAL_DOCUMENT_KINDS = [
   'FISCAL_DOCUMENT',
   'ORDER_CONFIRMATION',
   'QUOTE',
+  // fix-pr-4 (B-PR-46b's rule): the other documents that carry prices, never a plain document.
+  'PROFORMA',
+  'COMMERCIAL_INVOICE',
+  'PRICE_LIST',
   'PROOF',
   'OTHER',
 ] as const
@@ -97,6 +102,10 @@ export const KIND_RULES: Readonly<Record<PortalDocumentKind, KindRule>> = Object
   FISCAL_DOCUMENT: { group: 'FINANCE', words: { it: 'Documento fiscale', en: 'Fiscal document' } },
   ORDER_CONFIRMATION: { group: 'ORDERS', words: { it: "Conferma d'ordine", en: 'Order confirmation' } },
   QUOTE: { group: 'ORDERS', words: { it: 'Preventivo', en: 'Quote' } },
+  // fix-pr-4: priced like an order confirmation (group ORDERS: the price grain).
+  PROFORMA: { group: 'ORDERS', words: { it: 'Fattura proforma', en: 'Proforma invoice' } },
+  COMMERCIAL_INVOICE: { group: 'ORDERS', words: { it: 'Fattura commerciale', en: 'Commercial invoice' } },
+  PRICE_LIST: { group: 'ORDERS', words: { it: 'Listino', en: 'Price list' } },
   PROOF: { group: 'OTHER', words: { it: 'Bozza da approvare', en: 'Proof' } },
   OTHER: { group: 'OTHER', words: { it: 'Documento', en: 'Document' } },
 })
@@ -165,6 +174,11 @@ const GENERATED_KINDS: Readonly<Record<string, PortalDocumentKind>> = Object.fre
   // shared with its customer on the order, sales/orders-depth/confirmation) carries the order's prices: it is an ORDER_CONFIRMATION
   // (group ORDERS: the price grain), never a plain document every role of the customer reads (a Production person has no prices).
   ORDER_CONFIRMATION: 'ORDER_CONFIRMATION',
+  // fix-pr-4: a proforma (shipping/proforma: shared with the customer), a commercial invoice (customs values) and a price list's
+  // copy (sales/pricelists: shared on the customer) carry prices too: never a plain document a role without prices opens or zips.
+  PROFORMA: 'PROFORMA',
+  COMMERCIAL_INVOICE: 'COMMERCIAL_INVOICE',
+  PRICE_LIST: 'PRICE_LIST',
 })
 
 const CATEGORY_KINDS: Readonly<Record<string, PortalDocumentKind>> = Object.freeze({
