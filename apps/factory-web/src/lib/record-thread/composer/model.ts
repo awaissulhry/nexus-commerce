@@ -19,6 +19,9 @@ import { amountProblem, floorPriceFound } from '../helpers/amount'
  * (409 NAMES_OTHER_CUSTOMER, never naming whom): the box says why in words and offers the tick "This text names no other customer";
  * Send waits until the text changes or the tick is set, then goes again with the tick. Both go with a change of the text (the API
  * checks the new text again) and when the box leaves the portal; neither is kept with a draft.
+ *
+ * F-SA-282 (Reply to <customer> on N, the Orders sheet): the same box in N mode (`many`) — the portal only, one text for the own
+ * conversation of each of N orders of one customer; the window (areas/sales/orders/list/view/ReplyManyDialog) gives no clip.
  */
 
 export const COMPOSER_MODES = ['note', 'reply', 'portal'] as const
@@ -62,6 +65,9 @@ export interface ComposerContext {
    * with its customer, and the API has not said that nobody of the customer reads it in the portal (NO_PORTAL).
    */
   portal?: boolean
+  // ---- F-SA-282 (sales page plan R7; the Orders sheet's Reply to N): N mode — the same words go into the own conversation of each of
+  // N records of ONE customer, in the portal only (an office note on N records is Note to N…; a mail goes per record).
+  many?: boolean
 }
 
 /** B-TH-236 (B-TH-050): the message a draft answers or corrects, as the box names it ("Replying to Alma, 14 Nov ×"). */
@@ -132,7 +138,9 @@ export const COUNTER_FROM = 18_000
  * The modes offered, in order: a note needs threads.post; a reply needs email.send AND a customer (or a prospect, held);
  * B-TH-237: "In the portal only" needs threads.post, a customer, and the record offered to the portal (`portal`).
  */
-export function composerModes(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal'>>): ComposerMode[] {
+export function composerModes(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal' | 'many'>>): ComposerMode[] {
+  // F-SA-282: N mode offers the portal only (and nothing when the record's customer may not read it there).
+  if (context.many) return context.portal && context.can.post && context.party ? ['portal'] : []
   const modes: ComposerMode[] = []
   if (context.can.post) modes.push('note')
   if (context.can.email && (context.party !== null || context.prospect)) modes.push('reply')
@@ -160,12 +168,12 @@ export function withSavedReply(draft: ComposerDraft, filled: { body: string; aud
 // ---- end th-backend-g step 1
 
 /** Every visit starts on Office note (P3); a person who may only send mail starts on the reply. */
-export function startDraft(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'>): ComposerDraft {
+export function startDraft(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal' | 'many'>> /* F-SA-282 */): ComposerDraft {
   return { mode: composerModes(context)[0] ?? 'note', body: '', forFloor: false }
 }
 
 /** What stands in place of the box: the closed thread, no right to write, or the box itself. */
-export function boxState(context: Pick<ComposerContext, 'can' | 'party' | 'prospect' | 'closed'> & Partial<Pick<ComposerContext, 'portal'>>): 'closed' | 'noRight' | 'open' {
+export function boxState(context: Pick<ComposerContext, 'can' | 'party' | 'prospect' | 'closed'> & Partial<Pick<ComposerContext, 'portal' | 'many'>> /* F-SA-282 */): 'closed' | 'noRight' | 'open' {
   if (context.closed) return 'closed'
   if (composerModes(context).length === 0) return 'noRight'
   return 'open'
