@@ -152,6 +152,7 @@ export const BOARD: OrderBoard = {
   lanes: ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'],
   tiles: [
     { key: 'late', count: 2, filter: { late: 'true' } },
+    { key: 'waitingForApproval', count: 0, filter: { status: 'PENDING_APPROVAL' } }, // F-SA-214
     { key: 'waitingForDeposit', count: 2, filter: { deposit: 'OPEN' } },
     { key: 'inProduction', count: 2, filter: { status: 'IN_PRODUCTION' } },
     { key: 'readyToShip', count: 1, filter: { status: 'READY' } },

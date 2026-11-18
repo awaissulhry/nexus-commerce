@@ -16,6 +16,9 @@ import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, listAddress as pageOfList, recordAddress, RECORD_PAGES } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { TILE_KEYS, WAIT_REASONS } from './api' // F-SA-214
+import { WAIT_WORDS } from '@nexus/factory-domain/sales/orders-depth/rules' // F-SA-214
+import { boardRereadOf, offBoard, waitDoorsOf } from './model' // F-SA-214
 import { BOARD_LANES, DEPOSIT_KINDS, DEPOSIT_REQUEST_STATUSES, DEPOSIT_STATES, INVOICE_DOC_TYPES, INVOICE_STATUSES, LINK_STATES, ORDER_ACTIONS, ORDER_STATUSES, SDI_NEXT_ACTIONS, SDI_STATE_CODES, SETTLEMENT_GAPS, SHIPMENT_STATUSES, WORK_ORDER_STATUSES } from './api'
 import { AMEND_PREVIEW, AMENDMENTS, BOARD, BRN, CANCEL_BLOCKED, CANCEL_CHECK, canOf, deposit, LIST_ROWS, MANUAL_PREVIEW, order, PAID, PARTY, SCHEDULE, SENT_LINK, STYLE, STYLE_ID, TD02, TODAY } from './_demo/fixtures'
 import { DAILY_ORDER_ACTIONS, IMPACT_CODES, LINE_CHANGES, MILESTONE_KINDS, MILESTONE_STATUSES, type Milestone } from './api'
@@ -147,8 +150,9 @@ describe('the saved rows, the address and the API query (one filter model)', () 
   })
 
   it('a tile is a saved rows view; its count is the board’s (unknown: null, never 0)', () => {
-    // B-W2b-323: + reaccept (Waiting for the customer to accept a change).
-    expect(TILES.map((tile) => tile.rows)).toEqual(['late', 'deposit', 'IN_PRODUCTION', 'READY', 'reaccept'])
+    // B-W2b-323: + reaccept (Waiting for the customer to accept a change). F-SA-214: + Waiting for approval, second.
+    expect(TILES.map((tile) => tile.rows)).toEqual(['late', 'PENDING_APPROVAL', 'deposit', 'IN_PRODUCTION', 'READY', 'reaccept'])
+    expect(TILES.map((tile) => tile.key)).toEqual([...TILE_KEYS])
     // The board's own filters mean the same rows as the tiles' saved views.
     for (const tile of BOARD.tiles) expect(rowsQuery(TILES.find((entry) => entry.key === tile.key)!.rows, '')).toMatchObject(Object.fromEntries(Object.entries(tile.filter).map(([key, value]) => [key, key === 'late' || key === 'reaccept' /* B-W2b-323 */ ? true : value])))
     expect(tileCount(BOARD, 'late')).toBe(2)
@@ -713,3 +717,66 @@ describe('the board card (F-SA-213): photo left, the label that adds something, 
   })
 })
 // ---- end F-SA-213
+
+// ---- F-SA-214 (sales page plan N8 / N7, picks P12, P13, P17; 12-lists-board §3.1, §3.4, §3.5): the waiting lane, Delivered, live ----
+describe('the board\'s Waiting for approval lane, its reasons with doors, Delivered under the board, the live re-read (F-SA-214)', () => {
+  const base = LIST_ROWS[0]!
+  const waiting = (waits: (typeof WAIT_REASONS)[number][] | null) => ({ ...base, status: 'PENDING_APPROVAL' as const, waits })
+  const reader = { measurements: true }
+  const noMeasures = { measurements: false }
+
+  it('the reasons mirror factory-domain\'s WAIT_WORDS (the screen has words for every code the API sends)', () => {
+    expect([...WAIT_REASONS].sort()).toEqual(Object.keys(WAIT_WORDS).sort())
+  })
+  it('each reason once, each with its door: a yes asked → Approvals; nobody asked / credit → the order; the review → Riders (right holders only)', () => {
+    expect(waitDoorsOf(waiting(['REQUEST_PENDING']), '/w/DEMO', reader)).toEqual([{ word: 'waits.yes', href: '/w/DEMO/home/approvals?kind=SALES_ORDER' }])
+    expect(waitDoorsOf(waiting(['NO_REQUEST']), '/w/DEMO', reader)).toEqual([{ word: 'waits.yes', href: `/w/DEMO/sales/orders/${base.id}` }])
+    expect(waitDoorsOf(waiting(['CREDIT_HOLD']), '/w/DEMO', reader)).toEqual([{ word: 'waits.credit', href: `/w/DEMO/sales/orders/${base.id}` }])
+    expect(waitDoorsOf(waiting(['MEASUREMENTS']), '/w/DEMO', reader)).toEqual([{ word: 'waits.review', href: `/w/DEMO/sales/made-to-measure?segment=riders&view=waiting&party=${base.partyId}` }])
+    // Without sales.measurements.view: the words, no door to the riders (body data).
+    expect(waitDoorsOf(waiting(['MEASUREMENTS']), '/w/DEMO', noMeasures)).toEqual([{ word: 'waits.review', href: null }])
+    // A yes asked and none asked say "Waits for a yes" once (the first door wins).
+    expect(waitDoorsOf(waiting(['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD']), '/w/DEMO', reader).map((door) => door.word)).toEqual(['waits.yes', 'waits.credit'])
+    // Another state, or no reason read: nothing.
+    expect(waitDoorsOf({ ...base, status: 'CONFIRMED', waits: ['CREDIT_HOLD'] }, '/w/DEMO', reader)).toEqual([])
+    expect(waitDoorsOf(waiting(null), '/w/DEMO', reader)).toEqual([])
+  })
+  it('Delivered has no lane: counted under the board beside closed and cancelled', () => {
+    expect(offBoard({ ...BOARD, byStatus: [...BOARD.byStatus, { status: 'DELIVERED', count: 4 }] })).toEqual({ closed: 12, cancelled: 1, delivered: 4 })
+    expect(offBoard(BOARD)).toEqual({ closed: 12, cancelled: 1, delivered: 0 })
+    expect(offBoard(null)).toBeNull()
+  })
+  it('a state that moved re-reads only its from and to lanes; a new order the lanes it may enter; another change the lane holding it', () => {
+    const lanes = BOARD_LANES.map((status) => ({ status, items: LIST_ROWS.filter((row) => row.status === status) }))
+    expect(boardRereadOf({ type: 'sales_order.status_changed', fields: { orderId: 'x', number: 'SO-1', from: 'CONFIRMED', to: 'IN_PRODUCTION' } }, lanes)).toEqual(['CONFIRMED', 'IN_PRODUCTION'])
+    expect(boardRereadOf({ type: 'sales_order.status_changed', fields: { orderId: 'x', number: 'SO-1', from: 'PENDING_APPROVAL', to: 'CONFIRMED' } }, lanes)).toEqual(['PENDING_APPROVAL', 'CONFIRMED'])
+    // A move to a state without a lane (closed) re-reads only the lane it left.
+    expect(boardRereadOf({ type: 'sales_order.status_changed', fields: { orderId: 'x', number: 'SO-1', from: 'SHIPPED', to: 'CLOSED' } }, lanes)).toEqual(['SHIPPED'])
+    expect(boardRereadOf({ type: 'sales_order.created', fields: { orderId: 'x', number: 'SO-9' } }, lanes)).toEqual(['PENDING_APPROVAL', 'CONFIRMED'])
+    const held = LIST_ROWS.find((row) => row.status === 'IN_PRODUCTION')!
+    expect(boardRereadOf({ type: 'sales_order.promise_changed', fields: { orderId: held.id, number: held.number } }, lanes)).toEqual(['IN_PRODUCTION'])
+    expect(boardRereadOf({ type: 'sales_order.promise_changed', fields: { orderId: 'not-on-screen', number: 'SO-0' } }, lanes)).toEqual([])
+    // Only the lanes the board shows (a state's view shows one lane).
+    expect(boardRereadOf({ type: 'sales_order.status_changed', fields: { orderId: 'x', number: 'SO-1', from: 'CONFIRMED', to: 'IN_PRODUCTION' } }, lanes.filter((lane) => lane.status === 'READY'))).toEqual([])
+  })
+  it('the words in both languages: the tile, the reasons, Delivered under the board, an empty lane', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['tile.waitingForApproval', 'waits.yes', 'waits.credit', 'waits.review', 'lane.none']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('offBoard.delivered', { count: 3 }), locale).toContain('3')
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    expect(en('offBoard.delivered', { count: 3 })).toBe('3 delivered · See them in the list')
+    expect(en('tile.waitingForApproval')).toBe('Waiting for approval')
+  })
+  it('the board holds live re-reads while a card has the focus or its picture is open, and draws the reasons on the waiting cards', () => {
+    const view = readFileSync(new URL('./list/view/OrdersBoard.tsx', import.meta.url), 'utf8')
+    const page = readFileSync(new URL('./list/OrdersPage.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('onBoardHold')
+    expect(view).toContain('waitDoorsOf(row')
+    expect(view).toContain("t('lane.none')")
+    expect(view).not.toContain('board.laneEmpty')
+    expect(page).toContain('boardRereadOf(change')
+  })
+})
+// ---- end F-SA-214

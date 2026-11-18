@@ -18,6 +18,9 @@ export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
 export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
 // F-SA-213: the office's priority levels (as depth/api PRIORITY_LEVELS, which reads this file: kept here so no import goes round).
 export const ORDER_PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
+// F-SA-214: why a waiting order waits (factory-domain sales/orders-depth WAIT_WORDS' codes, the row's `waits`).
+export const WAIT_REASONS = ['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD', 'MEASUREMENTS'] as const
+export type WaitReason = (typeof WAIT_REASONS)[number]
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
@@ -147,6 +150,8 @@ export const orderRowSchema = z.object({
   // ── end B-TH-244 ──
   /** F-SA-213: the office's own priority (its level; the API's words are not drawn: the screen says its own). */
   priority: z.object({ level: z.enum(ORDER_PRIORITY_LEVELS), number: z.number(), urgentReason: z.string().nullable() }).optional(),
+  /** F-SA-214 (the API's B-SA-012): why a PENDING_APPROVAL order waits; null for every other order (absent from an older answer). */
+  waits: z.array(z.enum(WAIT_REASONS)).nullable().optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 

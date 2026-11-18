@@ -9,6 +9,8 @@ import { findCustomers, getParty } from '../../quotes/api'
 import { getBoard, listOrderCustomers, listOrders, nextOrderNumber, type OrderBoard, type OrderCustomer } from '../api'
 import type { OrderRow } from '../api' // B-TH-245
 import { useCoalesced, useLive } from '../hooks'
+import { boardRereadOf } from '../model' // F-SA-214
+import type { BoardLane } from '../api' // F-SA-214
 import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
 import type { OrderSort } from '../api' // B-TH-057
 import { newOrderAddress } from '../new/new-model'
@@ -316,10 +318,58 @@ function OrdersContainer() {
     readSummary(readId.current) // B-TH-244: the totals follow at once, like the tiles
   }, 800)
   const rereadBoard = useCoalesced(() => void load(true), 900)
+  // ── F-SA-214 (12-lists-board §3.5): the board re-reads only the lanes a change touches (a state that moved: its from and to
+  // lanes; a new order: the lanes it may enter; another change: the lane that holds the order) and the counts. While a card has the
+  // focus or a picture is open large, the change waits behind "N updates · Show" (a card never moves under the person). ──
+  const boardHeld = useRef(false)
+  const onBoardHold = useCallback((held: boolean) => {
+    boardHeld.current = held
+  }, [])
+  const lanesNow = useRef(lanes)
+  lanesNow.current = lanes
+  const pendingLanes = useRef(new Set<BoardLane>())
+  const readLanes = useCallback(
+    async (statuses: readonly BoardLane[]) => {
+      const id = readId.current
+      await Promise.all(
+        statuses.map(async (status) => {
+          try {
+            const page = await listOrders(api, laneQuery(status, rows, q, party, narrow))
+            if (id !== readId.current) return
+            setLanes((current) => current.map((lane) => (lane.status === status ? { status, items: page.orders, more: page.nextCursor !== null, problem: null } : lane)))
+          } catch (error) {
+            if (id !== readId.current) return
+            setLanes((current) => current.map((lane) => (lane.status === status ? { status, items: null, more: false, problem: readProblem(error) } : lane)))
+          }
+        }),
+      )
+      if (id === readId.current) setAsOf(new Date().toISOString())
+    },
+    [api, rows, q, party, narrow],
+  )
+  const rereadLanes = useCoalesced(() => {
+    const statuses = [...pendingLanes.current]
+    pendingLanes.current.clear()
+    if (statuses.length > 0) void readLanes(statuses)
+  }, 900)
+  // ── end F-SA-214 ──
   const live = useLive(
     (change) => {
       if (!listTouches(change)) return
-      if (layout === 'board' || layout === 'week' /* B-W2b-323 */) {
+      // F-SA-214: the board's lanes one by one (above); the counts follow at once.
+      if (layout === 'board') {
+        recount()
+        const touched = boardRereadOf(change, lanesNow.current)
+        if (touched.length === 0) return
+        if (boardHeld.current) {
+          setUpdates((count) => count + 1)
+          return
+        }
+        for (const status of touched) pendingLanes.current.add(status)
+        rereadLanes()
+        return
+      }
+      if (layout === 'week' /* B-W2b-323 */) {
         rereadBoard()
         return
       }
@@ -431,6 +481,7 @@ function OrdersContainer() {
         onCloseInvoiceDrafts: () => setInvoiceDrafts(null),
         // ---- end B-TH-244 ----
         // ---- B-TH-245: a saved cell's note and the row's new version, on the list and on the grouped view's rows ----
+        onBoardHold, // F-SA-214
         onCellSaved: (id, after, version) => {
           const apply = <R extends OrderRow>(row: R): R => (row.id === id ? { ...row, version, ...(Object.hasOwn(after, 'note') ? { internalNote: after.note === null ? null : String(after.note) } : {}) } : row)
           setList((current) => ({ ...current, items: current.items?.map(apply) ?? null }))

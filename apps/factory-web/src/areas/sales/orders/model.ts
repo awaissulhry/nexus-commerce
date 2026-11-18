@@ -62,6 +62,8 @@ export interface OrderAbilities {
   price: boolean
   cost: boolean
   margin: boolean
+  /** F-SA-214 / B-SA-020: rider profiles (sales.measurements.view): the riders' names, the review's door, the rider term. */
+  measurements: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -83,6 +85,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     price: held.has('money.price'),
     cost: held.has('money.cost'),
     margin: held.has('money.margin'),
+    measurements: held.has('sales.measurements.view'), // F-SA-214
   }
 }
 
@@ -273,6 +276,8 @@ export function rowsQuery(rows: RowView, q: string, cursor?: string | null, part
 /** The tiles (the design's saved-filter tiles), each the saved rows its count stands for. */
 export const TILES: ReadonlyArray<{ key: TileKey; rows: RowView }> = Object.freeze([
   { key: 'late', rows: 'late' },
+  // F-SA-214 (12-lists-board §3.4): Waiting for approval, second (the board's first lane; PENDING_APPROVAL is a rows view).
+  { key: 'waitingForApproval', rows: 'PENDING_APPROVAL' },
   { key: 'waitingForDeposit', rows: 'deposit' },
   { key: 'inProduction', rows: 'IN_PRODUCTION' },
   { key: 'readyToShip', rows: 'READY' },
@@ -353,12 +358,59 @@ export function laneValue(lane: Lane, price: boolean): number | null {
   return lane.items.reduce((sum, row) => sum + (row.netAmount ?? 0), 0)
 }
 
-/** Closed and cancelled orders the board does not draw, from the board's counts. */
-export function offBoard(board: OrderBoard | null): { closed: number; cancelled: number } | null {
+/** Closed, cancelled and (F-SA-214) delivered orders the board does not draw, from the board's counts. */
+export function offBoard(board: OrderBoard | null): { closed: number; cancelled: number; delivered: number } | null {
   if (!board) return null
   const count = (status: OrderStatus) => board.byStatus.find((entry) => entry.status === status)?.count ?? 0
-  return { closed: count('CLOSED'), cancelled: count('CANCELLED') }
+  return { closed: count('CLOSED'), cancelled: count('CANCELLED'), delivered: count('DELIVERED') }
 }
+
+// ── F-SA-214 (sales page plan N8 / N7, picks P12, P13, P17; 12-lists-board §3.3–§3.5): the waiting lane's reasons, the live re-read ──
+/** A waiting order's reason as the card says it (`orders` words `waits.*`) and its door: where it is decided, or null (no door). */
+export interface WaitDoor {
+  readonly word: 'waits.yes' | 'waits.credit' | 'waits.review'
+  readonly href: string | null
+}
+
+/**
+ * Why a PENDING_APPROVAL card waits, each reason once with its door: a yes asked → Home › Approvals (sales orders); a yes nobody
+ * asked yet and the customer's credit → the order (where a yes is asked, or the credit read); the factory review of a
+ * made-to-measure unit → Made-to-measure › Riders waiting for the review of this customer, ONLY for a reader of measurements
+ * (sales.measurements.view: else the words without a door). An order that waits for nothing says nothing.
+ */
+export function waitDoorsOf(row: Pick<OrderRow, 'id' | 'partyId' | 'status' | 'waits'>, prefix: string, can: Pick<OrderAbilities, 'measurements'>): WaitDoor[] {
+  if (row.status !== 'PENDING_APPROVAL' || !row.waits) return []
+  const order = `${prefix}/sales/orders/${encodeURIComponent(row.id)}`
+  const out: WaitDoor[] = []
+  const add = (door: WaitDoor) => {
+    if (!out.some((seen) => seen.word === door.word)) out.push(door)
+  }
+  for (const reason of row.waits) {
+    if (reason === 'REQUEST_PENDING') add({ word: 'waits.yes', href: `${prefix}/home/approvals?kind=SALES_ORDER` })
+    else if (reason === 'NO_REQUEST') add({ word: 'waits.yes', href: order })
+    else if (reason === 'CREDIT_HOLD') add({ word: 'waits.credit', href: order })
+    else if (reason === 'MEASUREMENTS') add({ word: 'waits.review', href: can.measurements ? `${prefix}/sales/made-to-measure?segment=riders&view=waiting&party=${encodeURIComponent(row.partyId)}` : null })
+  }
+  return out
+}
+
+/** The events a new order may follow (an accepted quote makes one, waiting for a yes or confirmed). */
+const NEW_ORDER_LANES: readonly BoardLane[] = ['PENDING_APPROVAL', 'CONFIRMED']
+
+/**
+ * The lanes a live event re-reads on the board (never all of them for one change): a state that moved re-reads its `from` and `to`
+ * lanes (both are live fields of sales_order.status_changed); a new order the lanes it may enter; another order event the lane that
+ * holds the order on screen (none: nothing on the board changes, only the counts). Only the lanes the board shows.
+ */
+export function boardRereadOf(change: { type: string; fields: Readonly<Record<string, unknown>> }, lanes: readonly Pick<Lane, 'status' | 'items'>[]): BoardLane[] {
+  const shown = lanes.map((lane) => lane.status)
+  const keep = (statuses: readonly unknown[]): BoardLane[] => (BOARD_LANES as readonly BoardLane[]).filter((lane) => shown.includes(lane) && statuses.includes(lane))
+  if (change.type === 'sales_order.status_changed') return keep([change.fields.from, change.fields.to])
+  if (change.type === 'sales_order.created' || change.type === 'quote.accepted') return keep(NEW_ORDER_LANES)
+  const named = new Set(idsOf(change.fields))
+  return keep(lanes.filter((lane) => (lane.items ?? []).some((row) => named.has(row.id))).map((lane) => lane.status))
+}
+// ── end F-SA-214 ──
 
 /** How far the order's garments left (shipped of ordered), 0–100. */
 export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): number => (row.units > 0 ? Math.round((row.shippedUnits / row.units) * 100) : 0)

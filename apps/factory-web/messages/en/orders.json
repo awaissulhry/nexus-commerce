@@ -102,6 +102,7 @@
   },
   "tile": {
     "late": "Late",
+    "waitingForApproval": "Waiting for approval",
     "waitingForDeposit": "Waiting for deposit",
     "inProduction": "In production",
     "readyToShip": "Ready to ship",
@@ -184,7 +185,6 @@
     "updates_one": "{count} update · Show",
     "updates_other": "{count} updates · Show",
     "valuePartial": "Value when all are shown",
-    "laneEmpty": "No order in this state",
     "allInList": "All {state} orders in the list",
     "offBoard": "Not on the board: {closed} closed, {cancelled} cancelled.",
     "seeClosed": "See closed orders",
@@ -218,6 +218,18 @@
     },
     "newTab": "Board in a new tab",
     "newTabHint": "Leave it open on a second screen: it follows every change by itself."
+  },
+  "waits": {
+    "yes": "Waits for a yes",
+    "credit": "Waits for credit",
+    "review": "Waits for the factory review"
+  },
+  "offBoard": {
+    "delivered_one": "{count} delivered · See it in the list",
+    "delivered_other": "{count} delivered · See them in the list"
+  },
+  "lane": {
+    "none": "None"
   },
   "tab": {
     "lines": "Lines",
