@@ -828,6 +828,9 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
             [ids.tenantId],
           )).map((row) => row.text),
           ...(await markersOf(input.db, ids.b)).map((marker) => marker.text),
+          // The next numbers our series show (factory settings, read by Sales): another company's next WO-00001 is A's first work
+          // order's number, and the seeds' invoice series shows next an invoice number A already has.
+          ...((((await input.app.inject({ method: 'GET', url: '/numbering/series', headers: { 'x-test-session': everyone } })).json() as Json).series ?? []) as Json[]).map((series) => series.nextNumber as string | null),
         ]
           .filter((text): text is string => typeof text === 'string')
           .map((text) => text.trim().toLowerCase()),
