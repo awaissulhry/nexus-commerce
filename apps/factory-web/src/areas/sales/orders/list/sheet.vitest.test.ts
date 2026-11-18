@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-SA-221
 import { describe, expect, it } from 'vitest'
 import type { ColDef } from '@nexus/ui/grid'
 import { LOCALES } from '../../../../lib/i18n/locales'
@@ -10,6 +11,9 @@ import type { OrderRow } from '../api'
 import { brandFromAddress, companyFromAddress, extraFromAddress /* F-SA-216 */, listAddress, rowsQuery, viewCount } from '../model'
 import { BOARD } from '../_demo/fixtures'
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE, orderDoor, quoteDoor, shippedDoor } from './sheet/model'
+// F-SA-221: made-to-measure in the sheet.
+import { abilitiesOf, boardNarrowOf, boardRereadOf, doorAddress, kindFromAddress, laneQuery, listTouches } from '../model'
+import { builtInActive, MTM_VIEW, mtmText, ridersText } from './view/OrdersListView'
 
 /**
  * B-TH-225 (threads plan TH-1a, picture 23; Owner rule 2026-11-16 "every cell is a door"; features grid-F01…F30, ORD-G02): the
@@ -172,3 +176,72 @@ describe('one meaning per word: the list rule is "Close to promise", the office\
   })
 })
 // ---- end F-SA-216
+
+// ---- F-SA-221 (sales page plan N7, pick P12; 12-lists-board §4.1–§4.3): made-to-measure in the Orders sheet ---------------------------
+describe('made-to-measure in the sheet: the term in the address and every read, the chip, the mark that narrows, the riders by right (F-SA-221)', () => {
+  const mtm = { units: 3, waitingReview: 1, riders: { names: ['Rider A', 'Rider B'], count: 4 } }
+
+  it('kind=mtm is read from the address, written back, and sent with the list, each lane, the board\'s counts and a total\'s door', () => {
+    expect(kindFromAddress(new URLSearchParams('kind=mtm'))).toBe('mtm')
+    expect(kindFromAddress(new URLSearchParams('kind=MTM'))).toBeNull()
+    expect(kindFromAddress(new URLSearchParams(''))).toBeNull()
+    expect(listAddress('/p', { rows: 'open', q: '', layout: 'list', kind: 'mtm' })).toBe('/p?kind=mtm')
+    expect(listAddress('/p', { rows: 'late', q: '', layout: 'board', kind: 'mtm' })).toBe('/p?view=board&late=true&kind=mtm')
+    expect(rowsQuery('open', '', null, null, { kind: 'mtm' })).toMatchObject({ open: true, kind: 'mtm' })
+    expect(laneQuery('PENDING_APPROVAL', 'open', '', null, { kind: 'mtm' })).toMatchObject({ status: 'PENDING_APPROVAL', kind: 'mtm' })
+    expect(boardNarrowOf({ kind: 'mtm' })).toMatchObject({ kind: 'mtm' })
+    expect(rowsQuery('open', '')).not.toHaveProperty('kind')
+    expect(doorAddress('/p', { open: 'true', kind: 'mtm' })).toBe('/p?kind=mtm')
+  })
+
+  it('the mark says the units and the factory review, never a rider; Riders names them only as the API gave them', () => {
+    const en = tFor('en')
+    expect(mtmText({ madeToMeasure: mtm }, en)).toBe('Made to measure · 3 units · 1 waiting for review')
+    expect(mtmText({ madeToMeasure: { ...mtm, waitingReview: 0, units: 1 } }, en)).toBe('Made to measure · 1 unit')
+    expect(mtmText({ madeToMeasure: null }, en)).toBe('')
+    expect(mtmText({ madeToMeasure: mtm }, en)).not.toContain('Rider')
+    expect(ridersText({ madeToMeasure: mtm })).toBe('Rider A, Rider B +2')
+    expect(ridersText({ madeToMeasure: { ...mtm, riders: null } })).toBe('')
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['mtm.mark', 'mtm.filter', 'col.riders', 'views.mtm', 'empty.mtmNoRight']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('mtm.units', { count: 2 }), locale).toContain('2')
+      expect(t('mtm.waitingReview', { count: 2 }), locale).toContain('2')
+    }
+    // R9: the Italian review is the catalogue's "controllo" ("revisione" is a measurement's revision there).
+    expect(tFor('it')('mtm.waitingReview', { count: 2 })).toBe('· 2 da controllare')
+  })
+
+  it('the chip "Made to measure" with ✕ on Sales › Orders, fixed where the page holds it; Clear all keeps a fixed chip', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("label: s('mtm.mark'), onClear: model.locked?.kind ? null : () => actions?.onKind?.(null)")
+    const parts = readFileSync(new URL('./sheet/parts.tsx', import.meta.url), 'utf8')
+    expect(parts).toContain('const removable = chips.filter((chip) => chip.onClear)')
+    expect(parts).toContain('removable.length > 1')
+  })
+
+  it('the mark under the number is a funnel door to the made-to-measure orders; the Riders column is only for a reader of measurements', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("<MtmMark row={data} s={s} onNarrow={latest.current.model.kind ? undefined : () => act()?.onKind?.('mtm')} />")
+    expect(view).toContain("...(can.measurements ? [{ ...later({ colId: 'riders'")
+    expect(view).toContain("colId: 'madeToMeasure'")
+    // The built-in view "Made-to-measure" = kind=mtm with the open orders; it is the active one then.
+    expect(builtInActive({ rows: 'open', kind: 'mtm' })).toBe(MTM_VIEW)
+    expect(builtInActive({ rows: 'late', kind: 'mtm' })).toBe('late')
+    expect(builtInActive({ rows: 'open', kind: null })).toBe('open')
+    expect(MTM_VIEW).toBe('kind:mtm')
+  })
+
+  it('live: a rider profile\'s event counts as an update of the list and re-reads the waiting lane only', () => {
+    expect(listTouches({ type: 'measurement_profile.reviewed' })).toBe(true)
+    expect(listTouches({ type: 'measurement_profile.recorded' })).toBe(true)
+    const lanes = [{ status: 'PENDING_APPROVAL' as const, items: [] }, { status: 'CONFIRMED' as const, items: [] }]
+    expect(boardRereadOf({ type: 'measurement_profile.reviewed', fields: { profileId: 'p1' } }, lanes)).toEqual(['PENDING_APPROVAL'])
+  })
+
+  it('the abilities say who reads riders (sales.measurements.view)', () => {
+    expect(abilitiesOf(['orders.view']).measurements).toBe(false)
+    expect(abilitiesOf(['orders.view', 'sales.measurements.view']).measurements).toBe(true)
+  })
+})
+// ---- end F-SA-221

@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Copy, Download, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Ban, Copy, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, RadioCard, Select, Spinner, Tag, TokenChip } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
+import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
+import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/CustomerSwitcher' // F-SA-224
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -50,16 +52,10 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const lists = useT('lists')
   const l = useT(LAST_MESSAGE_NS) // B-TH-257
   const locale = useLocale()
-  const [query, setQuery] = useState(model.filters.q)
-  useEffect(() => setQuery(model.filters.q), [model.filters.q])
-  const typed = useRef(false)
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
-  useEffect(() => {
-    if (!typed.current) return
-    const timer = setTimeout(() => latest.current.actions?.onFilters?.({ ...latest.current.model.filters, q: query }), 300)
-    return () => clearTimeout(timer)
-  }, [query])
+  // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
+  const search = useListSearch(model.filters.q, (q) => latest.current.actions?.onFilters?.({ ...latest.current.model.filters, q }))
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const [dialog, setDialog] = useState<'cancel' | 'help' | null>(null)
   const [viewer, setViewer] = useState<string | null>(null) // TH-6 part B: the row whose picture is open large
@@ -325,11 +321,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             leadingIcon={<Search size={13} aria-hidden />}
             aria-label={t('list.search')}
             placeholder={t('list.search')}
-            value={query}
-            onChange={(event) => {
-              typed.current = true
-              setQuery(event.target.value)
-            }}
+            {...search.field /* F-SA-223 */}
           />
         }
         tools={
@@ -345,16 +337,29 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             <FilterChip pressed={model.filters.mine} onClick={() => actions?.onFilters?.({ ...model.filters, mine: !model.filters.mine })}>
               {t('list.onlyMine')}
             </FilterChip>
+            {/* F-SA-224: the one customer filter of the Sales lists (`?party=`; names only). */}
+            {model.switcher && (
+              <CustomerSwitcher
+                state={model.switcher.state}
+                party={model.filters.party ?? null}
+                partyName={model.switcher.partyName}
+                query={model.switcher.query}
+                searching={model.switcher.searching}
+                onQuery={actions?.onCustomerSearch}
+                onPick={(party) => actions?.onFilters?.({ ...model.filters, party })}
+                recent={0}
+                subject="list"
+              />
+            )}
           </>
         }
         selection={{
           selected,
           onChange: setSelected,
+          // F-SA-225: Export N through the export job (the same writer as Export ▾, the screen's columns and the picked ids).
+          exportSelected: true,
           actions: (
             <>
-              <Button size="sm" aria-label={t('list.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-                <Download size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.export', { count: picked.length })}</SelectionLabel>
-              </Button>
               <Button
                 size="sm"
                 variant="danger-outline"
@@ -372,6 +377,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         keys={ownKeys}
         onHelp={() => setDialog('help')}
         onOpen={(row) => actions?.onOpen?.(row.id)}
+        // F-SA-225: the rest of a row opens the quote (⌘ / Ctrl: a new tab), as on every Sales list.
+        onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : actions?.onOpen?.(row.id))}
         state={state}
         focusRow={model.focusRow}
       />

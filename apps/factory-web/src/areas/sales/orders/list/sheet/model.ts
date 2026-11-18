@@ -1,5 +1,5 @@
 import type { ExportFormat } from '@nexus/factory-domain/views/exports'
-import type { OrderCustomer, OrderRow } from '../../api'
+import type { OrderRow } from '../../api'
 import type { OrderAbilities } from '../../model'
 
 /**
@@ -109,55 +109,7 @@ export function invoicedCell(row: Pick<OrderRow, 'invoiced' | 'currency'>, can: 
   return { word: `invoiced.${state}`, amount }
 }
 
-// ---- the Customer switcher -------------------------------------------------------------------------------------------------
-
-export interface SwitcherState {
-  /** The first page of the reader's customers (recent first); null while read. */
-  readonly customers: readonly OrderCustomer[] | null
-  /** How many customers match the search (or in all, unsearched). */
-  readonly total: number
-  /** Every grant of the reader's orders.view names its customers. */
-  readonly limited: boolean
-  readonly problem: string | null
-}
-
-/**
- * The switcher's face: hidden while there is no customer yet; a fixed label for a reader limited to one customer; else the
- * button with the customer chosen, "All my customers (n)" for a limited reader, "All customers" for the rest.
- */
-export type SwitcherFace = { readonly kind: 'hidden' } | { readonly kind: 'fixed'; readonly name: string } | { readonly kind: 'button'; readonly label: Phrase }
-
-export function switcherFace(state: SwitcherState, party: string | null, partyName: string | null | undefined): SwitcherFace {
-  const customers = state.customers
-  if (customers && state.limited && state.total === 1 && customers.length === 1 && (!party || party === customers[0]!.id)) return { kind: 'fixed', name: customers[0]!.name }
-  if (party) {
-    const known = customers?.find((customer) => customer.id === party)?.name ?? partyName
-    return { kind: 'button', label: known === null ? { key: 'switcher.unknown' } : known === undefined ? { key: 'switcher.reading' } : { key: 'switcher.chosen', params: { name: known } } }
-  }
-  if (customers && customers.length === 0 && state.total === 0 && !state.problem) return { kind: 'hidden' }
-  return { kind: 'button', label: state.limited ? { key: 'switcher.allMine', params: { count: state.total } } : { key: 'switcher.all' } }
-}
-
-export interface SwitcherLine {
-  readonly value: string
-  readonly label: string
-  readonly group?: string
-  readonly open?: number
-  readonly late?: number
-  readonly archived?: boolean
-}
-
-/**
- * The switcher's lines: unsearched, "All customers" (or "All my customers (n)") on top, then the two most recent customers,
- * then the others by name; searched, the matches recent first. Each customer once.
- */
-export function switcherLines(customers: readonly OrderCustomer[], searched: boolean, words: { all: string; recent: string; others: string }): SwitcherLine[] {
-  const line = (customer: OrderCustomer, group?: string): SwitcherLine => ({ value: customer.id, label: customer.name, ...(group ? { group } : {}), open: customer.open, late: customer.late, archived: customer.archived })
-  if (searched) return customers.map((customer) => line(customer))
-  const recent = customers.slice(0, 2)
-  const rest = customers.slice(2).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
-  return [{ value: '', label: words.all }, ...recent.map((customer) => line(customer, words.recent)), ...rest.map((customer) => line(customer, words.others))]
-}
+// F-SA-224: the Customer switcher moved to areas/sales/_shared/customer-switcher (one customer filter for every Sales list).
 
 // ---- the Export menu: what the file holds --------------------------------------------------------------------------------------
 

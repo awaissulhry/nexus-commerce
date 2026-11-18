@@ -5,6 +5,8 @@ import { BASIC_MEASURES, MTM_OFFICE_LIMITS, REVIEW_STATUSES, type ReviewDecision
 import { APPOINTMENT_KINDS, APPOINTMENT_STATUSES, FITTING_LIMITS, FITTING_VERDICTS, type FittingVerdict } from '@nexus/factory-domain/sales/fittings/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Appointment, AppointmentRow, FittingResult, FittingsTab, MtmCheck, ProfileRecord, ProfilesQuery, QuoteProofs, RepeatFacts, Revision, SentRevision, TemplatePoint, Tiles, Unit } from './api'
+import type { TemplateOption } from './api' // F-SA-222
+import { partyOfAddress } from '../_shared/customer-switcher/model' // F-SA-224
 
 /**
  * Sales › Made-to-measure (SCR-036, the rider profile, the worksheet tab; B-W2b-362), pure: who may do what, the list's
@@ -139,13 +141,11 @@ export interface ListAddress {
   readonly isNew: boolean
   /** Send a measurement link from the band (`?link=1`). */
   readonly link: boolean
-  /** B-W2b-371 (XF2:03): one customer's riders (`?customer=<party id>`, design Rows ▾ "By customer"). */
+  /** B-W2b-371 (XF2:03): one customer's riders (design Rows ▾ "By customer"). F-SA-224: `?party=<id>` (the one customer term; the old `?customer=` is still read). */
   readonly customer: string | null
 }
 
 export const HOME_ADDRESS: ListAddress = Object.freeze({ view: 'all', garment: null, q: '', isNew: false, link: false, customer: null })
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export function addressOf(params: Pick<URLSearchParams, 'get'> | null | undefined): ListAddress {
   const view = params?.get('view') ?? ''
   const garment = (params?.get('garment') ?? '').trim()
@@ -155,7 +155,7 @@ export function addressOf(params: Pick<URLSearchParams, 'get'> | null | undefine
     q: (params?.get('q') ?? '').slice(0, 100),
     isNew: params?.get('new') === '1',
     link: params?.get('link') === '1',
-    customer: UUID.test(params?.get('customer') ?? '') ? params!.get('customer') : null,
+    customer: partyOfAddress(params, 'customer'), // F-SA-224: ?party=, else the old ?customer=
   }
 }
 
@@ -164,12 +164,54 @@ export function addressText(address: ListAddress): string {
   if (address.view !== 'all') search.set('view', address.view)
   if (address.garment) search.set('garment', address.garment)
   if (address.q.trim()) search.set('q', address.q.trim())
-  if (address.customer) search.set('customer', address.customer)
+  if (address.customer) search.set('party', address.customer) // F-SA-224: the one customer term of every Sales list
   if (address.isNew) search.set('new', '1')
   if (address.link) search.set('link', '1')
   const text = search.toString()
   return text ? `?${text}` : ''
 }
+
+// ── F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.4, §4.7): the page shows Orders | Riders ──
+/** The page's two segments (link tabs in its band): the made-to-measure orders, and the riders (today's list). */
+export const SEGMENTS = ['orders', 'riders'] as const
+export type Segment = (typeof SEGMENTS)[number]
+
+/** The rider list's own terms: an address that names one (an old link, an alert, New measurements) opens Riders. */
+const RIDER_TERMS = ['garment', 'customer', 'new', 'link'] as const
+
+/**
+ * The segment an address opens: `?segment=` when it names one; else Riders for every address of the rider list (a rider view —
+ * `view=waiting`, … never clashes with the Orders' `view=board|week` —, `?garment=`, `?customer=`, `?new=1`, `?link=1`); else Orders.
+ * Without orders.view the page is Riders only (no Orders tab).
+ */
+export function segmentOf(params: Pick<URLSearchParams, 'get' | 'has'> | null | undefined, can: Pick<MtmCan, 'ordersView'>): Segment {
+  if (!can.ordersView) return 'riders'
+  const asked = params?.get('segment')
+  if (asked === 'riders' || asked === 'orders') return asked
+  const view = params?.get('view') ?? ''
+  if ((ROW_VIEWS as readonly string[]).includes(view)) return 'riders'
+  if (RIDER_TERMS.some((name) => params?.has(name))) return 'riders'
+  return 'orders'
+}
+
+/** A segment's address (a real link: back, forward and ⌘-click work). */
+export const segmentHref = (prefix: string, segment: Segment): string => `${listHref(prefix)}${segment === 'riders' ? '?segment=riders' : ''}`
+
+/** The rider list's address with its segment kept (a rider address without terms would open Orders otherwise). */
+export function ridersAddressText(address: ListAddress): string {
+  const text = addressText(address)
+  return text ? `${text}&segment=riders` : '?segment=riders'
+}
+
+/** A rider's orders: the Orders segment narrowed to any revision of the rider's garment profile (the Open orders count's door). */
+export const riderOrdersHref = (prefix: string, profileId: string): string => `${listHref(prefix)}?profile=${encodeURIComponent(profileId)}`
+
+/** GATE-MTM: why the Orders segment is empty when nothing narrows it — made-to-measure not started for any template, or no order yet. */
+export function ordersGateOf(templates: readonly Pick<TemplateOption, 'rulesOn' | 'status'>[] | null): 'off' | 'none' | null {
+  if (templates === null) return null
+  return templates.some((template) => template.rulesOn && template.status === 'ACTIVE') ? 'none' : 'off'
+}
+// ── end F-SA-222 ──
 
 export const isFiltered = (address: ListAddress): boolean => address.view !== 'all' || address.garment !== null || address.q.trim() !== '' || address.customer !== null
 

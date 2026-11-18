@@ -97,6 +97,20 @@
     "copied_one": "{count} rider copied.",
     "copied_other": "{count} riders copied."
   },
+  "segment": {
+    "label": "Made-to-measure: orders or riders",
+    "orders": "Orders",
+    "riders": "Riders"
+  },
+  "week": {
+    "held": "It reads one site’s promise plan and cannot show only made-to-measure orders."
+  },
+  "gate": {
+    "offTitle": "No made-to-measure orders",
+    "offBody": "Made-to-measure has not started for any measurement template: start it in Products › Sizes & measurements › Measurement templates.",
+    "noneTitle": "No made-to-measure orders yet",
+    "noneBody": "They come from a quote with a made-to-measure unit (Riders › Use in a new quote)."
+  },
   "keys": {
     "new": "New measurements"
   },
@@ -158,7 +172,9 @@
     "openNewTab": "Open in new tab",
     "revision": "New revision",
     "quote": "Use in a new quote",
-    "worksheet": "Print worksheet"
+    "worksheet": "Print worksheet",
+    "openOrders_one": "{count} open order of {rider}: see it",
+    "openOrders_other": "{count} open orders of {rider}: see them"
   },
   "review": {
     "WAITING": "Waiting",

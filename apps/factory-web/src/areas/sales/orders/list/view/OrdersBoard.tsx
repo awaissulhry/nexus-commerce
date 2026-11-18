@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { EmptyState, ProgressBar } from '@nexus/ui/components'
 import { GridCard, GridFooterSpacer, GridFooterStrip, GridSearchSlot, GridToolbar } from '@nexus/ui/grid'
 import { Button, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Ruler } from 'lucide-react' // F-SA-221: the made-to-measure mark
 import { ListKeysInfo } from '../../../../../list-frame/ListKeysInfo'
 import { isListKey, type ListKey } from '../../../../../list-frame/model'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -13,6 +14,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { money } from '../../../quotes/model'
 import type { OrderRow, OrderStatus } from '../../api'
 import { boardLanes, createShipmentHref, dayInstant, depositTone, laneCount, laneValue, offBoard, shippedPercent, type Lane, type OrderAbilities } from '../../model'
+import { waitDoorsOf } from '../../model' // F-SA-214
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 // ---- F-SA-213 (sales page plan N8, picks P13, P15, P18; 12-lists-board §3): the photo, the label, the priority, new messages ----
 import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
@@ -39,6 +41,12 @@ type Translate = (key: string, params?: Readonly<Record<string, string | number>
  * (customer)" (the customer's own mark). The shipped bar only in Ready · Partly shipped · Shipped. The verb is held with why
  * instead of hidden. Lanes are 260 px wide and scroll sideways inside the card (an empty lane 160 px; they snap at a lane's
  * start), one under the other on a phone. A lane reads its own new-message counts (≤ 50 rows each).
+ *
+ * F-SA-214 (sales page plan N8 / N7; 12-lists-board §3.1, §3.4, §3.5): the first lane is Waiting for approval; its cards say why
+ * each waits, each reason a door (Home › Approvals · the order · Made-to-measure › Riders, the last only for a reader of
+ * measurements). Delivered orders are counted under the board with "See them in the list". An empty lane says "None". While a
+ * card has the focus or the picture is open large, live changes wait behind "N updates · Show" (the board tells the page:
+ * `onBoardHold`), so a card never moves under the person.
  */
 
 /** The lanes whose cards show what left (elsewhere "0 of 40 shipped" is noise). */
@@ -86,11 +94,13 @@ export function cardFacts(row: OrderRow, can: Pick<OrderAbilities, 'makeWorkOrde
 }
 
 /** The card's name for a screen reader: number, customer, pieces, the promise, and the reader's new messages when there are any. */
-export function cardName(t: Translate, row: Pick<OrderRow, 'number' | 'partyName' | 'units' | 'promiseDate'>, locale: Locale, newMessages: number): string {
+// F-SA-221: + "made to measure" for an order with a made-to-measure unit (never a rider's name).
+export function cardName(t: Translate, row: Pick<OrderRow, 'number' | 'partyName' | 'units' | 'promiseDate' | 'madeToMeasure'>, locale: Locale, newMessages: number): string {
   const parts = [
     t('board.cardLabel', { number: row.number, customer: row.partyName || '—' }),
     t('board.cardPieces', { count: row.units }),
     row.promiseDate ? t('board.cardPromised', { date: formatDate(dayInstant(row.promiseDate), { locale }) }) : t('board.cardNoPromise'),
+    ...(row.madeToMeasure ? [t('board.cardMtm')] : []),
     ...(newMessages > 0 ? [t('board.cardNew', { count: newMessages })] : []),
   ]
   return parts.join(', ')
@@ -106,6 +116,12 @@ export function OrdersBoard({ model, actions, search, rowsSelect, onHelp }: { mo
   // F-SA-213: the photo large (one viewer for the board; Esc gives the focus back to the photo).
   const [viewer, setViewer] = useState<string | null>(null)
   const viewerRow = viewer ? (shown.flatMap((lane) => lane.items ?? []).find((row) => row.id === viewer) ?? null) : null
+  // F-SA-214: a card with the focus, or the picture open large, holds the live re-reads (the page counts them as updates).
+  const [focused, setFocused] = useState(false)
+  const held = focused || viewer !== null
+  const onHold = actions?.onBoardHold
+  useEffect(() => onHold?.(held), [onHold, held])
+  useEffect(() => () => onHold?.(false), [onHold])
   const keys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
     { keys: ['j', 'k'], does: t('board.keyWalk') },
@@ -170,13 +186,26 @@ export function OrdersBoard({ model, actions, search, rowsSelect, onHelp }: { mo
           </Button>
         </span>
       ) : null}
+      {/* F-SA-214: Delivered has no lane: counted here, a door to its rows in the list. */}
+      {off && off.delivered > 0 ? (
+        <Button size="sm" variant="link" onClick={() => actions?.onRows?.('DELIVERED')}>
+          {t('offBoard.delivered', { count: off.delivered })}
+        </Button>
+      ) : null}
       <GridFooterSpacer />
       <ListKeysInfo keys={keys} onHelp={onHelp} />
     </GridFooterStrip>
   )
 
   return (
-    <div ref={ref}>
+    <div
+      ref={ref}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        // F-SA-214: the focus left the board (not only one card for the next).
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false)
+      }}
+    >
       <GridCard toolbar={toolbar} footer={footer} className="fw-so-boardcard">
         {lanes.length === 0 ? (
           <div className="fw-so-board-state">
@@ -246,7 +275,7 @@ function BoardLaneView({ lane, model, actions, t, locale, onPicture }: { lane: L
           <Skeleton height={112} />
         </div>
       ) : lane.items.length === 0 ? (
-        <p className="fw-so-hint fw-so-lane-empty">{t('board.laneEmpty')}</p>
+        <p className="fw-so-hint fw-so-lane-empty">{t('lane.none') /* F-SA-214: 0 is an answer; the lane says None */}</p>
       ) : (
         <ul className="fw-so-lane-cards">
           {lane.items.map((row) => (
@@ -277,6 +306,7 @@ function BoardCard({ row, model, actions, newMessages, onPicture }: { row: Order
   const facts = cardFacts(row, model.can)
   const labelWords = facts.labels.map((label) => (label.kind === 'own' ? s('brand.own') : label.kind === 'hidden' ? s('brand.hidden') : label.name)).join(', ')
   const fresh = newMessages && newMessages.newCount > 0 ? newMessages : undefined
+  const waits = waitDoorsOf(row, model.prefix, model.can) // F-SA-214
   return (
     <article className="fw-so-card" aria-label={cardName(t, row, locale, fresh?.newCount ?? 0)}>
       <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="board" read={actions?.readPictures} demo={model.demoPictures?.[row.id]} onOpen={onPicture} />
@@ -297,8 +327,31 @@ function BoardCard({ row, model, actions, newMessages, onPicture }: { row: Order
             <Tag tone="neutral">{t('list.noPromise')}</Tag>
           )}
         </span>
-        {(fresh || facts.priority || facts.customerUrgent) && (
+        {/* F-SA-214: why a waiting order waits, each reason a door where it is decided (none: the words alone). */}
+        {waits.length > 0 && (
           <span className="fw-so-card-line">
+            {waits.map((wait) =>
+              wait.href ? (
+                <Link key={wait.word} className="fw-so-link" href={wait.href}>
+                  {t(wait.word)}
+                </Link>
+              ) : (
+                <span key={wait.word} className="fw-so-card-sub">
+                  {t(wait.word)}
+                </span>
+              ),
+            )}
+          </span>
+        )}
+        {(fresh || facts.priority || facts.customerUrgent || row.madeToMeasure) && (
+          <span className="fw-so-card-line">
+            {/* F-SA-221: the made-to-measure mark (and its units waiting for the factory review); never a rider's name. */}
+            {row.madeToMeasure && (
+              <Tag tone="neutral">
+                <Ruler size={12} aria-hidden /> {s('mtm.mark')}
+              </Tag>
+            )}
+            {row.madeToMeasure && row.madeToMeasure.waitingReview > 0 && <Tag tone="warning">{s('mtm.waitingReview', { count: row.madeToMeasure.waitingReview })}</Tag>}
             {fresh && <LastMessageCell unread={fresh} href={`${href}?thread=new`} record={row.number} />}
             {facts.priority && <Tag tone={facts.priority === 'URGENT' ? 'danger' : facts.priority === 'HIGH' ? 'warning' : 'neutral'}>{t('board.priority', { level: d(`priority.level.${facts.priority}`) })}</Tag>}
             {facts.customerUrgent && <Tag tone="warning">{t('board.customerUrgent')}</Tag>}

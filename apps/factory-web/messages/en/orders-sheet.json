@@ -29,7 +29,8 @@
     "atRisk": "Close to promise",
     "atRiskHint": "The promise is near and the order is still being made (the alert rule’s days)",
     "customerUrgency": "Customer’s mark",
-    "customerUrgencyHint": "The customer’s own mark, read-only (Priority stays the office’s)"
+    "customerUrgencyHint": "The customer’s own mark, read-only (Priority stays the office’s)",
+    "riders": "Riders"
   },
   "door": {
     "order": "Open order {number} · its thread on the right",
@@ -104,11 +105,14 @@
     "invoiced": "Invoiced: {state}",
     "atRisk": "Close to promise",
     "currency": "Currency: {currency}",
-    "urgency": "Customer’s mark: {urgency}"
+    "urgency": "Customer’s mark: {urgency}",
+    "rider": "Rider: {name}",
+    "riderUnnamed": "One rider"
   },
   "switcher": {
     "title": "Customer",
     "trigger": "choose whose orders the sheet shows",
+    "triggerList": "choose whose rows the list shows",
     "all": "All customers",
     "allMine": "All my customers ({count})",
     "chosen": "Customer: {name}",
@@ -130,6 +134,7 @@
     "failed": "The customers could not be read.",
     "noMatch": "No customer matches “{q}”",
     "none": "No customer has orders yet",
+    "noneList": "No customer yet",
     "unavailable": "This customer is not available.",
     "unavailableBody": "The link names a customer you cannot open, or one that no longer exists.",
     "showAll": "Show all customers"
@@ -169,7 +174,8 @@
   },
   "views": {
     "suggest": "{customer} — tracking",
-    "ofCustomer": "Orders of {customer}"
+    "ofCustomer": "Orders of {customer}",
+    "mtm": "Made-to-measure"
   },
   "group": {
     "label": "Group the rows",
@@ -253,5 +259,15 @@
     "nounOne": "order",
     "nounOther": "orders",
     "noManage": "Changing the cells needs the right to change orders."
+  },
+  "mtm": {
+    "mark": "Made to measure",
+    "units_one": "Made to measure · {count} unit",
+    "units_other": "Made to measure · {count} units",
+    "waitingReview": "· {count} waiting for review",
+    "filter": "Show only made-to-measure orders (filters the sheet)"
+  },
+  "empty": {
+    "mtmNoRight": "No made-to-measure orders in this view."
   }
 }

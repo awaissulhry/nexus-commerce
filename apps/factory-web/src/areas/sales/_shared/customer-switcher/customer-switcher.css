@@ -1,0 +1,28 @@
+/* F-SA-224: the ONE Customer switcher of the Sales lists (moved from the Orders sheet's sheet.css). */
+.fw-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-switcher-panel {
+  width: 340px;
+  max-width: calc(100vw - 32px);
+}
+.fw-switcher-n {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+}
+.fw-switcher-fixed {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--nds-space-8);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+  white-space: nowrap;
+}

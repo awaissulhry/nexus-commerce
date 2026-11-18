@@ -5,12 +5,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { ColDef } from '@nexus/ui/grid'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
-import { useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { checkVies, countParties, createParty, findParties, listParties, moveParty, type PartyRow, type NewPartyBody } from './api'
-import { downloadText, partyEvent, useLive } from './hooks'
+import { PARTY_KINDS, PARTY_TAX_MODES, type PartyKind, type TaxMode } from './api' // F-SA-225: the chips' terms in the address
+import { partyEvent, useLive } from './hooks'
 // B-W2b-427: the check for likely duplicates on create.
 import { checkParty } from '../../admin/import/duplicates/api'
 import {
@@ -20,7 +20,6 @@ import {
   loaded,
   loading,
   failed,
-  partiesCsv,
   partyName,
   problemKey,
   recordHref,
@@ -55,7 +54,7 @@ export type ListDepthSlot = (list: { view: ListView; onView: (view: ListView) =>
  * SCR-056): reads one page of 50 of the view (`GET /parties` with the side's roles), the tiles' counts (one count per
  * tile, the same filters), creates a party (and, for an EU business with parties.vies, asks VIES at once so the answer
  * is kept as the proof), blocks, unblocks, archives and reactivates with the version read, checks VIES one row or a
- * selection at a time, exports the view as CSV, and listens to the live stream: changes wait behind "N updates · Show"
+ * selection at a time (F-SA-225: Export ▾ and Export N go through the export job, the view's terms in the address), and listens to the live stream: changes wait behind "N updates · Show"
  * (rows never move under the cursor). `?view=` keeps the view in the address; `?new=1` opens New.
  */
 export function PartiesList({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
@@ -75,14 +74,21 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
-  const t = useT('parties')
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const can = { view: held.has('parties.view'), manage: held.has('parties.manage'), block: held.has('parties.block'), vies: held.has('parties.vies') }
   const prefix = companyPrefix(session.company?.code ?? '')
+  // F-SA-225 (screen = file): the view, the search and the kind / tax-mode chips live in the ADDRESS — Export ▾ and Export N (the export
+  // job reads the screen's address: exports/sources/parties.ts), a saved view, Back and a shared link hold the screen's rows; every
+  // change writes the address in one step (writeAddress) and the list reads it back.
   const askedView = params?.get('view') ?? 'open'
-  const [view, setView] = useState<ListView>(VIEWS.has(askedView) && (config.views as readonly string[]).includes(askedView) ? (askedView as ListView) : 'open')
-  const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState<ListFilters>({})
+  const view: ListView = VIEWS.has(askedView) && (config.views as readonly string[]).includes(askedView) ? (askedView as ListView) : 'open'
+  const query = (params?.get('q') ?? '').slice(0, 100)
+  const askedKind = params?.get('kind') ?? ''
+  const askedMode = params?.get('taxMode') ?? ''
+  const filters = useMemo<ListFilters>(
+    () => ({ ...((PARTY_KINDS as readonly string[]).includes(askedKind) ? { kind: askedKind as PartyKind } : {}), ...((PARTY_TAX_MODES as readonly string[]).includes(askedMode) ? { taxMode: askedMode as TaxMode } : {}) }),
+    [askedKind, askedMode],
+  )
   const [rows, setRows] = useState<Loaded<PartyRow>>(loading())
   const [total, setTotal] = useState<number | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
@@ -136,11 +142,10 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     )
   }, [api, can.view, config])
 
-  // The search waits for a pause in typing (250 ms); a view or filter change reads at once.
+  // F-SA-223: the search field waits for a pause in typing itself (list-frame/search: 300 ms, Enter at once): every change reads at once.
   useEffect(() => {
-    const timer = setTimeout(() => void load(), query ? 250 : 0)
-    return () => clearTimeout(timer)
-  }, [load, query])
+    void load()
+  }, [load])
   useEffect(() => {
     void loadTiles()
   }, [loadTiles])
@@ -160,16 +165,29 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     void loadTiles()
   }
 
-  const changeView = (next: ListView) => {
-    setView(next)
-    setRows(loading())
-    setSelected([])
+  // F-SA-225: one write of the address for a change of the view, the search or the chips (the other terms kept).
+  const writeAddress = (next: { view?: ListView; query?: string; filters?: ListFilters }) => {
     const search = new URLSearchParams(params?.toString() ?? '')
-    if (next === 'open') search.delete('view')
-    else search.set('view', next)
+    const nextView = next.view ?? view
+    const nextQuery = (next.query ?? query).trim()
+    const nextFilters = next.filters ?? filters
+    if (nextView === 'open') search.delete('view')
+    else search.set('view', nextView)
+    if (nextQuery) search.set('q', nextQuery)
+    else search.delete('q')
+    if (nextFilters.kind) search.set('kind', nextFilters.kind)
+    else search.delete('kind')
+    if (nextFilters.taxMode) search.set('taxMode', nextFilters.taxMode)
+    else search.delete('taxMode')
     search.delete('new')
     const qs = search.toString()
     router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false })
+  }
+
+  const changeView = (next: ListView) => {
+    setRows(loading())
+    setSelected([])
+    writeAddress({ view: next })
   }
 
   const closeDialog = () => {
@@ -320,31 +338,6 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     }
   }
 
-  const onExport = (list: readonly PartyRow[]) => {
-    const csv = partiesCsv(list, {
-      header: [
-        t('csv.code'),
-        t('csv.legalName'),
-        t('csv.tradeName'),
-        t('csv.roles'),
-        t('csv.status'),
-        t('csv.country'),
-        t('csv.city'),
-        t('csv.taxMode'),
-        t('csv.vat'),
-        t('csv.fiscalCode'),
-        t('csv.vies'),
-        t('csv.language'),
-      ],
-      status: (row) => t(`status.${row.status}`),
-      roles: (row) => row.roles.map((role) => t(`role.${role}`)).join(' · '),
-      vies: (row) => t(`vies.state.${row.vies.state}`),
-      taxMode: (row) => (row.taxMode ? t(`taxMode.${row.taxMode}`) : ''),
-    })
-    downloadText(`${t(`${side}.file`)}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
-    setNotice({ key: 'list.exported', tone: 'success', params: { count: list.length } })
-  }
-
   const onMore = async () => {
     if (!cursor) return
     setLoadingMore(true)
@@ -406,19 +399,18 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
       }}
       actions={{
         onQuery: (next) => {
-          setQuery(next)
           setSelected([])
+          writeAddress({ query: next }) // F-SA-225
         },
         onView: changeView,
         onFilters: (next) => {
-          setFilters(next)
           setRows(loading())
           setSelected([])
+          writeAddress({ filters: next }) // F-SA-225
         },
         onClearAll: () => {
-          setQuery('')
-          setFilters({})
-          if (view !== 'open') changeView('open')
+          setSelected([])
+          writeAddress({ view: 'open', query: '', filters: {} }) // F-SA-225: one write
         },
         onMore: () => void onMore(),
         onRetry: () => {
@@ -460,7 +452,6 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
         },
         onCheckVies: (ids) => void onCheckVies(ids),
         onRecheckAll: () => void onRecheckAll(),
-        onExport,
         onDismissNotice: () => setNotice(null),
       }}
     />

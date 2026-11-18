@@ -130,9 +130,11 @@ export interface ListFilters {
   /** Sent quotes whose offer ends within 7 days (filtered here: the API filters by status). */
   expiring: boolean
   q: string
+  /** F-SA-224: one customer's quotes (`?party=`, the Sales lists' one customer filter); none: every customer. */
+  party?: string | null
 }
 
-export const NO_FILTERS: ListFilters = { status: null, mine: false, expiring: false, q: '' }
+export const NO_FILTERS: ListFilters = { status: null, mine: false, expiring: false, q: '', party: null }
 
 export function filtersOfTile(tile: QuoteTile): ListFilters {
   switch (tile) {
@@ -158,7 +160,7 @@ export function tileOfFilters(filters: ListFilters): QuoteTile | null {
 }
 
 export function activeFilterCount(filters: ListFilters): number {
-  return (filters.status ? 1 : 0) + (filters.mine ? 1 : 0) + (filters.expiring ? 1 : 0) + (filters.q.trim() ? 1 : 0)
+  return (filters.status ? 1 : 0) + (filters.mine ? 1 : 0) + (filters.expiring ? 1 : 0) + (filters.q.trim() ? 1 : 0) + (filters.party ? 1 : 0) /* F-SA-224 */
 }
 
 /** Rows the expiring filter keeps: sent, valid until today + 7 days at most, not past. */
@@ -541,31 +543,6 @@ export function styleTags(style: Pick<StyleRow, 'revisionState' | 'ppeClass' | '
   const tags = [style.revisionState === 'RELEASED' ? 'style.released' : style.revisionState === 'DRAFT' ? 'style.estimate' : 'style.noRevision']
   if (style.mtmAllowed) tags.push('style.mtm')
   return tags
-}
-
-/** A CSV cell: quoted when it holds a separator, a quote or a line break (RFC 4180). */
-const csvCell = (value: string): string => (/[",\n\r;]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
-
-/**
- * The selected quotes as a CSV file ("Export N (CSV)"): the columns this person sees in the list, in their words; money
- * only with the price grain, the margin only with the margin grain (never more than the screen shows).
- */
-export function quotesCsv(rows: readonly QuoteListRow[], grains: Grains, words: { header: (key: string) => string; status: (status: QuoteStatus) => string }, locale: Locale): string {
-  const header = ['list.col.number', 'list.col.customer', 'terms.customerRef', 'list.col.status', 'versions.col.version', 'list.col.units', ...(grains.price ? ['list.col.net', 'list.col.gross'] : []), ...(grains.margin ? ['list.col.margin'] : []), 'list.col.validUntil'].map(words.header)
-  const lines = rows.map((row) =>
-    [
-      row.number,
-      row.partyName,
-      row.customerRef ?? '',
-      words.status(row.status),
-      String(row.revision),
-      String(row.units),
-      ...(grains.price ? [money(row.netAmount, row.currency, locale), money(row.grossAmount, row.currency, locale)] : []),
-      ...(grains.margin ? [row.marginPct ?? ''] : []),
-      row.validUntil ?? '',
-    ].map(csvCell).join(','),
-  )
-  return [header.map(csvCell).join(','), ...lines].join('\r\n') + '\r\n'
 }
 
 // ---- B-W2a-49: list price, duplicate, start from a past quote -------------------------------------------------------------

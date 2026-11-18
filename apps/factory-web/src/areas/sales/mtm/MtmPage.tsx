@@ -9,6 +9,10 @@ import { liveMatches, useLive } from '../../quality/_shared/hooks'
 import { findCustomers, listProfiles, listTemplates, PAGE_SIZE, type PartyOption, type ProfileRow, type TemplateOption, type Tiles } from './api'
 import { addressOf, addressText, HOME_ADDRESS, mtmCan, queryOf, quoteHref, readProblem, recordHref, type ListAddress, type Notice } from './model'
 import { MtmMessages } from './parts'
+// ---- F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.4, §4.7): Orders | Riders ----
+import { LIST_PATH, ordersGateOf, ridersAddressText, segmentHref, segmentOf, type MtmCan, type Segment } from './model'
+import { useOrdersSheet } from '../orders/list/use-orders-sheet'
+import { MtmOrdersSegment } from './view/MtmListView'
 import { useMeasurementsDialog } from './use-measurements'
 import { useLinkDialog, useQuoteDialog } from './use-dialogs'
 import type { MtmListModel } from './view-model'
@@ -21,6 +25,12 @@ import { MtmListView } from './view/MtmListView'
  * measurement link answered → a new revision waiting for the factory review), `appointment.*` and `fitting_result.*` behind "N
  * updates · Show". A row's New revision opens the record with its dialog; Use in a new quote is drawn here (the row names the
  * rider and the customer); Print worksheet opens the worksheet tab.
+ *
+ * F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.4, §4.7): the page shows Orders | Riders — link tabs in its band
+ * (`?segment=riders`). Orders is the ONE Orders sheet (use-orders-sheet.ts) locked to made-to-measure orders (`kind=mtm`, in the
+ * address), embedded (this page's band), list and board — By promise week is held with why (it reads one site's promise plan and
+ * cannot narrow to made-to-measure); an empty view says why (GATE-MTM). Riders is the rider list as it was; every old address of
+ * it (`?view=<rider view>`, `?garment=`, `?customer=`, `?new=1`, `?link=1`) opens Riders. Without orders.view: Riders only.
  */
 export function MtmPage() {
   return (
@@ -31,6 +41,49 @@ export function MtmPage() {
 }
 
 function Container() {
+  const session = useOfficeSession()
+  const params = useSearchParams()
+  const can = useMemo(() => mtmCan(session.permissions), [session.permissions])
+  const segment = segmentOf(params, can)
+  // F-SA-222: each segment is its own part (only its reads run).
+  return segment === 'orders' ? <OrdersSegment can={can} /> : <RidersSegment segmented={can.ordersView} />
+}
+
+/** F-SA-222: the band's link tabs (none without orders.view: the page is Riders only). */
+function segmentsOf(prefix: string, active: Segment, shown: boolean) {
+  return shown ? { active, href: (segment: Segment) => segmentHref(prefix, segment) } : null
+}
+
+/** F-SA-222: the made-to-measure orders — the Orders sheet locked to `kind=mtm`, this page's band. */
+function OrdersSegment({ can }: { can: MtmCan }) {
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const router = useRouter()
+  const params = useSearchParams()
+  const prefix = companyPrefix(session.company?.code ?? '')
+  const sheet = useOrdersSheet({ basePath: LIST_PATH, locked: { kind: 'mtm' }, embedded: true, keep: ['segment'] })
+  // GATE-MTM: the templates say why an empty view is empty (read with product.styles.view, as the rider list reads them).
+  const [templates, setTemplates] = useState<readonly TemplateOption[] | null>(null)
+  useEffect(() => {
+    if (!can.styles) return
+    listTemplates(api, { status: 'ALL' })
+      .then((answer) => setTemplates(answer.templates))
+      .catch(() => setTemplates(null))
+  }, [api, can.styles])
+  // By promise week cannot show only made-to-measure orders: an address that asks it opens the list (the switch holds it with why).
+  const week = sheet.model.layout === 'week'
+  useEffect(() => {
+    if (!week) return
+    const next = new URLSearchParams(params?.toString() ?? '')
+    next.delete('view')
+    next.delete('site')
+    router.replace(`${prefix}${LIST_PATH}?${next.toString()}`, { scroll: false })
+  }, [week, params, prefix, router])
+  return <MtmOrdersSegment sheet={sheet} gate={ordersGateOf(templates)} segments={segmentsOf(prefix, 'orders', true)} can={can} />
+}
+
+/** The rider list (SCR-036) as it was; F-SA-222: its band carries the segment tabs and its address keeps `segment=riders`. */
+function RidersSegment({ segmented }: { segmented: boolean }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -43,7 +96,8 @@ function Container() {
   const me = useMemo(() => ({ id: session.user.id, name: session.user.displayName }), [session.user.id, session.user.displayName])
   const can = useMemo(() => mtmCan(session.permissions), [session.permissions])
   const address = useMemo(() => addressOf(params), [params])
-  const go = useCallback((next: Partial<ListAddress>) => router.replace(`${pathname}${addressText({ ...address, ...next })}`, { scroll: false }), [router, pathname, address])
+  // F-SA-222: the rider list's addresses keep its segment when the page shows Orders | Riders.
+  const go = useCallback((next: Partial<ListAddress>) => router.replace(`${pathname}${(segmented ? ridersAddressText : addressText)({ ...address, ...next })}`, { scroll: false }), [router, pathname, address, segmented])
 
   const [rows, setRows] = useState<MtmListModel['rows']>({ items: null, more: false, problem: null, matching: null })
   const [tiles, setTiles] = useState<Tiles | null>(null)
@@ -166,6 +220,7 @@ function Container() {
     link: link.model,
     quote: quote.model,
     customers,
+    segments: segmentsOf(prefix, 'riders', segmented), // F-SA-222
   }
 
   const openQuote = (row: ProfileRow) => quote.open({ profileId: row.id, riderName: row.riderName, customer: row.customer.name, partyId: row.partyId, contactId: row.contactId, revision: row.revision })

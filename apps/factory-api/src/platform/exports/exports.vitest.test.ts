@@ -8,6 +8,8 @@ import { loadReports } from '../../modules/insights/reports/registry'
 import { processImporters } from '../imports/registry'
 import { exportFormatsFor, exportSourceOf, processExportSources } from './registry'
 import { formatsOf, pageOf, titleText } from './source'
+import { lacksColumnRight, withColumnRights } from './source' // B-SA-020
+import { pickColumns } from '@nexus/factory-domain/views/exports' // B-SA-020
 import { EXPORT_SOURCES } from './sources'
 import { REPORT_CODE_WORDS, reportCell, reportListKey } from './sources/reports'
 import { salesOrders } from './sources/sales-orders' // B-TH-008
@@ -185,3 +187,43 @@ describe('the orders file writes the sheet’s columns and reads its Brand term 
   })
 })
 // ── end B-TH-018 ──
+
+// ── B-SA-020 (sales page plan N7, pick P12; 17-review F-4: screen = file): made-to-measure on the orders file ──────────────────────
+describe('the orders file reads kind=mtm and writes Made to measure and Riders, the riders only for a reader of measurements (B-SA-020)', () => {
+  const query = (address: string) => salesOrders.query(new URLSearchParams(address)) as Record<string, unknown>
+  const say = (code: string) => code
+  const actor = (permissions: Permission[]) => ({ audience: 'office' as const, tenantId: '0190a1b2-0000-7000-8000-0000000000a1', grants: [{ permissions, companies: 'all' as const, sites: 'all' as const, parties: 'all' as const }] })
+
+  it('keeps kind=mtm with every rows view; another kind is refused in words (a file of every order otherwise)', () => {
+    expect(query('kind=mtm')).toEqual({ kind: 'mtm', open: 'true', q: undefined })
+    expect(query('kind=mtm&rows=all')).toEqual({ kind: 'mtm', q: undefined })
+    expect(query('kind=mtm&status=READY')).toEqual({ kind: 'mtm', status: 'READY', q: undefined })
+    expect(() => query('kind=MTM')).toThrow('Not a kind: the file would hold more than the screen.')
+    expect(() => query('kind=all')).toThrow('Not a kind: the file would hold more than the screen.')
+  })
+
+  it('Made to measure writes the units (0 is an answer); Riders the names and how many more, and needs sales.measurements.view', () => {
+    expect(salesOrders.columns.madeToMeasure!.value({ madeToMeasure: null } as never, say)).toBe(0)
+    expect(salesOrders.columns.madeToMeasure!.value({ madeToMeasure: { units: 3, waitingReview: 1, riders: null } } as never, say)).toBe(3)
+    expect(salesOrders.columns.riders!.value({ madeToMeasure: { units: 3, waitingReview: 0, riders: { names: ['Rider A', 'Rider B'], count: 3 } } } as never, say)).toBe('Rider A, Rider B (+1)')
+    expect(salesOrders.columns.riders!.value({ madeToMeasure: { units: 1, waitingReview: 0, riders: { names: ['Rider A'], count: 1 } } } as never, say)).toBe('Rider A')
+    expect(salesOrders.columns.riders!.value({ madeToMeasure: null } as never, say)).toBeNull()
+    expect(salesOrders.columns.riders!.permission).toBe('sales.measurements.view')
+    expect(salesOrders.columns.madeToMeasure!.permission).toBeUndefined()
+  })
+
+  it('a person without the right gets no Riders column: left out and named, never an empty column', () => {
+    const asked = [{ key: 'number', label: 'Number' }, { key: 'riders', label: 'Riders' }, { key: 'madeToMeasure', label: 'Made to measure' }]
+    const picked = pickColumns(salesOrders.columns, asked, new Set())
+    const without = withColumnRights(salesOrders, picked, actor(['orders.view', 'views.export']), {})
+    expect(without.columns.map((column) => column.key)).toEqual(['number', 'madeToMeasure'])
+    expect(without.omitted).toEqual([{ key: 'riders', label: 'Riders' }])
+    const holder = withColumnRights(salesOrders, picked, actor(['orders.view', 'views.export', 'sales.measurements.view']), {})
+    expect(holder.columns.map((column) => column.key)).toEqual(['number', 'riders', 'madeToMeasure'])
+    expect(holder.omitted).toEqual([])
+    expect(lacksColumnRight(salesOrders, 'riders', actor(['orders.view']), {})).toBe(true)
+    expect(lacksColumnRight(salesOrders, 'number', actor(['orders.view']), {})).toBe(false)
+    expect(lacksColumnRight(salesOrders, 'not-a-column', actor(['orders.view']), {})).toBe(false)
+  })
+})
+// ── end B-SA-020 ──

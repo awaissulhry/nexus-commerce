@@ -3,14 +3,14 @@ import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { addDays, QUOTE_STATUSES, type QuoteStatus } from '@nexus/factory-domain/sales/quotes/quotes'
 import { serverClock } from '../../../core/time'
 import { listQuotes, type ListQuotesQuery } from '../../../modules/sales/quotes/quotes'
-import { defineExportSource } from '../source'
+import { defineExportSource, partyTerm } from '../source' // F-SA-224: + the customer term
 
 /**
  * Sales › Quotes (SCR-034, `/sales/quotes`): the export of the list as the screen shows it. The address is the list's
  * own (apps/factory-web areas/sales/quotes/list QuotesPage filtersOf): `?status=…`, `?mine=1` (the quotes the person
  * made), `?expiring=1` (only with `status=SENT`: valid until at most 7 days from today, not past — the screen keeps
  * these rows of each page itself, so does the read here) and `?q=` (number or customer reference); nothing: every
- * quote, newest first. Read through the module's listQuotes (quotes.view, its companies and customers). Net and total
+ * quote, newest first. F-SA-224: `?party=` (one customer's quotes; malformed: refused). Read through the module's listQuotes (quotes.view, its companies and customers). Net and total
  * are the price grain, the margin % the margin grain: each absent from the file without its grain.
  */
 
@@ -31,8 +31,10 @@ export const quotes = defineExportSource<Query, Row>({
   query(address) {
     const status = address.get('status')
     const q = address.get('q')?.trim().slice(0, 100) || undefined
+    const partyId = partyTerm(address) // F-SA-224: the one customer filter (`?party=`): the file holds the screen's rows
     return {
       ...(isStatus(status) ? { status } : {}),
+      ...(partyId ? { partyId } : {}),
       ...(address.get('mine') === '1' ? { mine: 'true' as const } : {}),
       expiring: address.get('expiring') === '1' && status === 'SENT',
       q,

@@ -12,6 +12,8 @@ import { mainPictureThumbnails } from '../../product/images/main-picture'
 // B-SA-012: why a waiting order waits (the board's "Waiting for approval" lane).
 import type { WaitReason } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { waitsOfOrders } from '../orders-depth/approval'
+// B-SA-020: the made-to-measure mark; the riders' names only for a reader of measurements.
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 
 /**
  * What a Sales › Orders row carries beside the order (B-TH-017; threads plan TH-1a, pictures 23 + 24; features
@@ -39,6 +41,11 @@ import { waitsOfOrders } from '../orders-depth/approval'
  *   waits     B-SA-012: an order waiting for approval (PENDING_APPROVAL), why — a yes asked, the customer's credit, the factory
  *             review of a made-to-measure unit, or a yes nobody asked yet (orders-depth/approval.ts waitsOfOrders, one query per
  *             fact for the page: the record's GET …/approval reasons); null for every other order.
+ *   madeToMeasure  B-SA-020: its made-to-measure units (12-lists-board §4.3; null: none) — the units still owed (a unit closed short
+ *             is left out), how many of them are made to measures the factory review has not confirmed (the waiting reason's own
+ *             rule, mtm/order-gate.ts), and the riders (the first two names in line order, and how many riders in all) ONLY for a
+ *             reader holding sales.measurements.view over the order's customer, else null. Never a measurement, a base size or a
+ *             photo (body data).
  */
 
 type Reader = FactoryClient | CommandTx
@@ -83,7 +90,19 @@ export interface OrderRowExtras {
   readonly doors: RowDoors
   /** B-SA-012: why a PENDING_APPROVAL order waits; null for every other order. */
   readonly waits: WaitReason[] | null
+  /** B-SA-020: the made-to-measure units, those waiting for the factory review, the riders (right holders only); null: none. */
+  readonly madeToMeasure: RowMadeToMeasure | null
 }
+
+/** B-SA-020: a row's made-to-measure mark (see the file's head). */
+export interface RowMadeToMeasure {
+  readonly units: number
+  readonly waitingReview: number
+  readonly riders: { readonly names: readonly string[]; readonly count: number } | null
+}
+
+/** B-SA-020: how many riders' names a row names (the rest are counted: "+N"). */
+const RIDERS_NAMED = 2
 
 const unique = <T>(values: readonly T[]): T[] => [...new Set(values)]
 const push = <T>(map: Map<string, T[]>, key: string, value: T): void => {
@@ -109,7 +128,7 @@ export async function orderRowExtras(
   // ---- lines, styles, labels, pictures ----------------------------------------------------------------------------------
   const lines = await client.salesOrderLine.findMany({
     where: { orderId: { in: orderIds } },
-    select: { id: true, orderId: true, seq: true, kind: true, styleId: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true },
+    select: { id: true, orderId: true, seq: true, kind: true, styleId: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true, measurementProfileId: true /* B-SA-020 */ },
     orderBy: [{ orderId: 'asc' }, { seq: 'asc' }],
   })
   const styles = lines.length > 0 ? await client.style.findMany({ where: { id: { in: unique(lines.map((line) => line.styleId)) } }, select: { id: true, code: true, name: true, brandPartyId: true } }) : []
@@ -158,6 +177,10 @@ export async function orderRowExtras(
 
   // ---- B-SA-012: why the page's waiting orders wait ----------------------------------------------------------------------
   const waits = await waitsOfOrders(client, orders.filter((order) => order.status === 'PENDING_APPROVAL').map((order) => order.id))
+
+  // ---- B-SA-020: the made-to-measure units' profiles (the review state for everyone, the rider's name only where it is said) ----
+  const profileIds = unique(lines.flatMap((line) => (line.kind === 'MADE_TO_MEASURE' && line.measurementProfileId ? [line.measurementProfileId] : [])))
+  const profiles = new Map(profileIds.length > 0 ? (await client.measurementProfile.findMany({ where: { id: { in: profileIds } }, select: { id: true, riderName: true, reviewStatus: true } })).map((profile) => [profile.id, profile]) : [])
 
   // ---- delivery notes -----------------------------------------------------------------------------------------------------
   const shipmentIds = shipments.map((shipment) => shipment.id)
@@ -220,7 +243,25 @@ export async function orderRowExtras(
         invoices: mayInvoices ? { count: goods.length, only: goods.length === 1 ? { id: goods[0]!.id, number: goods[0]!.number, docType: goods[0]!.docType } : null } : null,
       },
       waits: order.status === 'PENDING_APPROVAL' ? (waits.get(order.id) ?? ['NO_REQUEST']) : null, // B-SA-012
+      madeToMeasure: madeToMeasureOf(own, profiles, can(actor, SALES_MEASUREMENTS_VIEW, { partyId: order.partyId })), // B-SA-020
     })
   }
   return out
 }
+
+// ── B-SA-020 (sales page plan N7, pick P12; 12-lists-board §4.3) ──
+/** An order's made-to-measure mark from its lines (in line order) and their profiles; null: no made-to-measure unit. */
+function madeToMeasureOf(
+  lines: readonly { readonly kind: string; readonly quantity: number; readonly closedShortQuantity: number | null; readonly measurementProfileId: string | null }[],
+  profiles: ReadonlyMap<string, { readonly riderName: string; readonly reviewStatus: string }>,
+  namesRiders: boolean,
+): RowMadeToMeasure | null {
+  const units = lines.filter((line) => line.kind === 'MADE_TO_MEASURE')
+  if (units.length === 0) return null
+  const owed = units.filter((line) => line.quantity - (line.closedShortQuantity ?? 0) > 0)
+  // The waiting reason's own rule: a unit whose profile the review has not confirmed (or a profile this read cannot find).
+  const waitingReview = owed.filter((line) => !line.measurementProfileId || profiles.get(line.measurementProfileId)?.reviewStatus !== 'CONFIRMED').length
+  const names = unique(units.flatMap((line) => (line.measurementProfileId && profiles.has(line.measurementProfileId) ? [profiles.get(line.measurementProfileId)!.riderName] : [])))
+  return { units: owed.length, waitingReview, riders: namesRiders ? { names: names.slice(0, RIDERS_NAMED), count: names.length } : null }
+}
+// ── end B-SA-020 ──
