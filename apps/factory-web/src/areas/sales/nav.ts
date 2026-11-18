@@ -25,16 +25,20 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.sales.main',
         hideLabel: true,
         noCrumb: true,
+        // F-SA-210 — Sales plan N1 (Owner yes on plan.md, 2026-11-18): Sales opens on Orders (the first row is where it opens);
+        // Orders · Incoming · Quotes · Customers. A person without orders.view (buyer, quality inspector) lands on their first
+        // allowed row, Customers.
         items: [
-          { id: 'sales-customers', label: 'shell:nav.sales.customers', href: '/sales/customers', icon: Contact, permission: 'parties.view' },
+          // SCR-038 / SCR-039 (B-W1-25): orders from accepted quotes, the board by state, the order studio with the deposit.
+          { id: 'sales-orders', label: 'shell:nav.sales.orders', href: '/sales/orders', icon: ClipboardList, permission: 'orders.view' },
           // SCR-105 (B-W2b-322): requests and RFQs from mail, phone, a fair or the office, until they become a quote.
           // B-TH-216 (threads plan TH-1b): Inquiries renamed Incoming — every request of every customer on one page, same place;
           // the production manager reads it too (B-TH-014: sales.inquiries.view). The old address redirects (shell/nav/renamed.ts).
-          { id: 'sales-incoming', label: 'shell:nav.sales.incoming', href: '/sales/incoming', icon: Inbox, permission: 'sales.inquiries.view' },
+          // F-SA-210: its badge "N waiting on us" (shell/office/use-nav-counts.ts; none while unknown, never a guessed 0).
+          { id: 'sales-incoming', label: 'shell:nav.sales.incoming', href: '/sales/incoming', icon: Inbox, permission: 'sales.inquiries.view', badge: 'sales.incoming.waiting' },
           // SCR-034 / SCR-035 (B-W1-21, B-W1-24): quotes by style, colour and size with price, margin, approval and send.
           { id: 'sales-quotes', label: 'shell:nav.sales.quotes', href: '/sales/quotes', icon: FileText, permission: 'quotes.view' },
-          // SCR-038 / SCR-039 (B-W1-25): orders from accepted quotes, the board by state, the order studio with the deposit.
-          { id: 'sales-orders', label: 'shell:nav.sales.orders', href: '/sales/orders', icon: ClipboardList, permission: 'orders.view' },
+          { id: 'sales-customers', label: 'shell:nav.sales.customers', href: '/sales/customers', icon: Contact, permission: 'parties.view' },
         ],
       },
       // B-W2b-362: Special orders › Made-to-measure (SCR-036, a rider profile SCR-036-record): rider measurement profiles, the
