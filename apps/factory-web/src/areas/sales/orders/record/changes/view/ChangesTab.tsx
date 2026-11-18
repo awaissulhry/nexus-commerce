@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { GitCompare, Undo2 } from 'lucide-react'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Pill, SegmentedControl } from '@nexus/ui/primitives'
@@ -17,6 +17,9 @@ import { PartState } from '../../view/OrderRecordView'
 import { DocumentsTab } from '../../view/DocumentsTab'
 import { RequestsSection, StillToDo } from '../../view/RequestsSection'
 import { HISTORY_CHIPS, historyFor, historyOf, type HistoryChip, type HistoryEntry } from '../model'
+// F-SA-266: each history row's Discuss and Show in the thread; its anchor `change-<id>` ("Show on the page", `?tab=changes#change-<id>`)
+import { DiscussDoor, ShowInThreadDoor } from '../../view/Discuss'
+import type { DiscussPart } from '../../dock/discuss'
 
 /**
  * F-SA-236 (sales page plan N2, N3, P5; 10-order-page §2.4) — Changes, one newest-first story:
@@ -66,6 +69,25 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
   })
   const shown = historyFor(entries, chip)
   const when = (at: string) => t('changes.when', { date: formatDate(at, { locale }), time: formatTime(at, { locale }) })
+  // ---- F-SA-266: a request's row by its reference (the customer reads its own words); an amendment or a confirmation in words, in an
+  // office note; every row: its step in the thread (the history step nearest its time).
+  const partOf = (entry: HistoryEntry): DiscussPart => {
+    if (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered') return { part: t('discuss.request', { kind: w.t(`parts.request.kind.${entry.request.kind}`) }), target: { kind: 'OrderChangeRequest', id: entry.request.id } }
+    if (entry.kind === 'amendment') return { part: t('discuss.revision', { revision: entry.revision }), target: null }
+    return { part: t(entry.kind === 'confirmationMade' ? 'changes.history.made' : 'changes.history.sent', { version: entry.version }), target: null }
+  }
+  const withDoors = <S extends { label: ReactNode }>(entry: HistoryEntry, drawn: S): S & { key: string } => ({
+    ...drawn,
+    key: entry.id,
+    label: (
+      <span className="fw-so-inline" id={`change-${entry.id}`} tabIndex={-1}>
+        {drawn.label}
+        <DiscussDoor order={order} {...partOf(entry)} />
+        <ShowInThreadDoor order={order} at={entry.at} />
+      </span>
+    ),
+  })
+  // ---- end F-SA-266
   const step = (entry: HistoryEntry) => {
     switch (entry.kind) {
       case 'requestAsked':
@@ -133,7 +155,7 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
       {shown.length === 0 ? (
         <EmptyState title={t(entries.length === 0 ? 'changes.empty.title' : 'changes.history.noneHere')} description={entries.length === 0 ? t(order.status === 'CANCELLED' || order.status === 'CLOSED' ? 'changes.empty.final' : 'changes.empty.body') : undefined} />
       ) : (
-        <Timeline label={t('changes.history.title')} steps={shown.map((entry) => ({ key: entry.id, ...step(entry) }))} />
+        <Timeline label={t('changes.history.title')} steps={shown.map((entry) => withDoors(entry, step(entry)))} />
       )}
     </Card>
   )

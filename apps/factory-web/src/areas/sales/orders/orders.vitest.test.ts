@@ -940,3 +940,72 @@ describe('F-SA-231b: Lines — the artwork in the thread’s viewer, the rider o
 
 })
 // ---- end F-SA-231b
+
+// ---- F-SA-266 (sales page plan N2, N4; picks P2, P9; 10-order-page §2 "Doors legend", §6.4): Discuss and the doors on the order's rows
+describe('F-SA-266: what a row discusses — the chip per audience, the office-only rows, the way back', () => {
+  const order = { number: 'SO-2026-0142' }
+  const words = { yourOrder: 'your order', firstLine: (thing: string) => `About: ${thing}` }
+  it('a line: the office\'s number in a note, the customer\'s own words in a reply (no price, no work-order number)', async () => {
+    const { discussAboutOf } = await import('./record/dock/discuss')
+    expect(discussAboutOf(order, words, { part: 'line 2 · JKT-01 Black', target: { kind: 'SalesOrderLine', id: 'l2' } })).toEqual({ ref: { kind: 'SalesOrderLine', id: 'l2' }, office: 'SO-2026-0142 · line 2 · JKT-01 Black', customer: 'your order · line 2 · JKT-01 Black' })
+    expect(discussAboutOf(order, words, { part: 'shipment SH-1', target: { kind: 'Shipment', id: 's1' } }).customer).toBe('your order · shipment SH-1')
+  })
+  it('office-only rows (work orders, holds, quality, the money rows) and a part with no reference never have customer words', async () => {
+    const { discussAboutOf } = await import('./record/dock/discuss')
+    expect(discussAboutOf(order, words, { part: 'WO-2026-0311', target: { kind: 'WorkOrder', id: 'w1' }, officeOnly: true }).customer).toBeNull()
+    expect(discussAboutOf(order, words, { part: 'deposit', target: { kind: 'DepositRequest', id: 'd1' }, officeOnly: true }).customer).toBeNull()
+    expect(discussAboutOf(order, words, { part: 'invoice FT-1', target: { kind: 'Invoice', id: 'i1' }, officeOnly: true }).customer).toBeNull()
+    const planned = discussAboutOf(order, words, { part: 'Cut start · 22 Nov', target: null })
+    expect(planned).toEqual({ ref: null, office: 'SO-2026-0142 · Cut start · 22 Nov', customer: null, line: 'About: SO-2026-0142 · Cut start · 22 Nov' })
+  })
+  it('"Show on the page": each kind\'s tab and the row\'s anchor; a kind the page does not draw: nothing', async () => {
+    const { aboutPlace, rowAnchor } = await import('./record/dock/discuss')
+    expect(aboutPlace({ kind: 'SalesOrderLine', id: 'l2' })).toEqual({ tab: 'lines', anchor: 'about-SalesOrderLine-l2' })
+    expect(aboutPlace({ kind: 'Shipment', id: 's1' })?.tab).toBe('shipments')
+    expect(aboutPlace({ kind: 'Invoice', id: 'i1' })?.tab).toBe('money')
+    expect(aboutPlace({ kind: 'DepositRequest', id: 'd1' })?.tab).toBe('money')
+    expect(aboutPlace({ kind: 'OrderGate', id: 'g1' })?.tab).toBe('production')
+    expect(aboutPlace({ kind: 'OrderChangeRequest', id: 'r1' })).toEqual({ tab: 'changes', anchor: 'about-OrderChangeRequest-r1' })
+    expect(aboutPlace({ kind: 'WorkOrder', id: 'w1' })?.tab).toBe('production')
+    expect(aboutPlace({ kind: 'Nonconformance', id: 'n1' })).toBeNull()
+    expect(rowAnchor('WorkOrder', 'w1')).toBe('about-WorkOrder-w1')
+  })
+  it('each tab gives its rows their door and anchor; the office-only ones say so (the sources)', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const lines = read('./record/view/LinesTab.tsx')
+    expect(lines).toContain("target={{ kind: 'SalesOrderLine', id: line.id }} />")
+    expect(lines).toContain("id={rowAnchor('SalesOrderLine', line.id) /* F-SA-266 */}")
+    const production = read('./record/view/ProductionTab.tsx')
+    for (const door of ["target={{ kind: 'WorkOrder', id: row.id }} officeOnly", "target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly", "target={{ kind: 'WorkOrder', id: entry.workOrderId }} officeOnly"]) expect(production).toContain(door)
+    expect(production).toContain("id={rowAnchor('WorkOrder', row.id) /* F-SA-266 */}")
+    const money = read('./record/view/MoneyTab.tsx')
+    for (const door of ["target={{ kind: 'DepositRequest', id: request.id }} officeOnly", "target={{ kind: 'Invoice', id: invoice.id }} officeOnly", 'target={null} officeOnly']) expect(money).toContain(door)
+    const shipments = read('./record/view/ShipmentsTab.tsx')
+    expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
+    const requests = read('./record/view/RequestsSection.tsx')
+    expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} />")
+    const overview = read('./record/view/OverviewTab.tsx')
+    expect(overview).toContain("target={gateId ? { kind: 'OrderGate', id: gateId } : null} />")
+    expect(overview).toContain('<FollowersDoor />')
+    const changes = read('./record/changes/view/ChangesTab.tsx')
+    expect(changes).toContain('<ShowInThreadDoor order={order} at={entry.at} />')
+    expect(changes).toContain('id={`change-${entry.id}`}')
+    // A thread card jumps back to its row: a replace (no history entry), then the row in view with the focus.
+    const page = read('./record/OrderRecord.tsx')
+    expect(page).toContain("router.replace(`${pathname}?${next.toString()}#${place.anchor}`, { scroll: false })")
+    expect(page).toContain('row.focus({ preventScroll: true })')
+    expect(page).toContain('showOnPage={showOnPage /* F-SA-266 */}')
+  })
+  it('the doors drawn on the page with its conversation, in both languages', () => {
+    const caseOf = (id: string) => recordScreen.cases.find((item) => item.id === id)!.model
+    const en = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('thread-lines'), 'en')
+    expect(en).toMatch(/aria-label="Discuss line \d+ · [^"]* in the thread"/)
+    const it = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('thread-lines'), 'it')
+    expect(it).toMatch(/aria-label="Discuti riga \d+ · [^"]* nella conversazione"/)
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['yourOrder', 'firstLine', 'line', 'shipment', 'invoice', 'deposit', 'request', 'hold', 'quality', 'revision', 'step']) expect(t(`discuss.${key}`, { thing: 'x', seq: 1, name: 'n', number: 'N', kind: 'k', revision: 2 }), `${locale} ${key}`).not.toBe(`discuss.${key}`)
+    }
+  })
+})
+// ---- end F-SA-266

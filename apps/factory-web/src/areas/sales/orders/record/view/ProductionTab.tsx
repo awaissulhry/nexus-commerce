@@ -49,6 +49,11 @@ const WORK_ORDERS_NS = 'production-work-orders'
  *                   shipments, the gates and milestones under the order's own right (P16), by line with the finish forecast, and
  *                   every promise move with who and why. Today's Dates card lives here now.
  */
+// F-SA-266: Discuss on Production's rows — the work orders, holds and quality in office notes only (never a reply), a line's dates by
+// its reference; each row its anchor ("Show on the page").
+import { DiscussDoor } from './Discuss'
+import { rowAnchor } from '../dock/discuss'
+
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
     <WithMessages namespaces={[WORK_ORDERS_NS, 'production' /* F-SA-235: the HealthCard's words */]}>
@@ -123,7 +128,7 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
         work.workOrders.length === 0 && work.mtm.length === 0 ? (
           <EmptyState title={t('production.empty.title')} description={t('production.empty.body')} />
         ) : (
-          <OwnWorkOrders work={work} model={model} href={workOrderHref} />
+          <OwnWorkOrders work={work} model={model} href={workOrderHref} order={order /* F-SA-266 */} />
         )
       ) : order.chain.workOrders.length === 0 ? (
         <EmptyState title={t('production.empty.title')} description={t('production.empty.body')} />
@@ -154,7 +159,7 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
 }
 
 /** The work orders with the order's own pieces, and the made-to-measure groups (one row per style × colourway). */
-function OwnWorkOrders({ work, model, href }: { work: Work; model: OrderRecordModel; href: (row: { id: string; number: string }) => string }) {
+function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderRecordModel; href: (row: { id: string; number: string }) => string; order: Order }) {
   const t = useT('orders')
   const r = useT(WORK_ORDERS_NS)
   const locale = useLocale()
@@ -171,10 +176,14 @@ function OwnWorkOrders({ work, model, href }: { work: Work; model: OrderRecordMo
     return {
       id: row.id,
       cells: [
-        <span key="n" className="fw-so-cell">
-          <Link className="fw-so-link" href={href(row)}>
-            {row.number}
-          </Link>
+        <span key="n" className="fw-so-cell" id={rowAnchor('WorkOrder', row.id) /* F-SA-266 */} tabIndex={-1}>
+          <span className="fw-so-inline">
+            <Link className="fw-so-link" href={href(row)}>
+              {row.number}
+            </Link>
+            {/* F-SA-266: a work order is discussed in an office note only (its number never reaches a customer). */}
+            <DiscussDoor order={order} part={row.number} target={{ kind: 'WorkOrder', id: row.id }} officeOnly />
+          </span>
           <span className="fw-so-inline">
             <Pill tone={WO_TONE[row.status as keyof typeof WO_TONE] ?? 'neutral'}>{t(`woStatus.${row.status}`)}</Pill>
             {row.held && <Tag tone="warning">{t('production.held')}</Tag>}
@@ -342,7 +351,11 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
         rows={lines.map((line) => ({
           id: line.id,
           cells: [
-            `${line.style?.code ?? '—'} · ${line.colourway ? `${line.colourway.code} ${line.colourway.name}` : '—'}`,
+            // F-SA-266: a line's dates discussed by the line's reference (the customer reads its own words, never a price).
+            <span key="l" className="fw-so-inline">
+              {`${line.style?.code ?? '—'} · ${line.colourway ? `${line.colourway.code} ${line.colourway.name}` : '—'}`}
+              <DiscussDoor order={order} part={t('discuss.line', { seq: line.seq, name: `${line.style?.code ?? '—'} ${line.colourway?.name ?? ''}`.trim() })} target={{ kind: 'SalesOrderLine', id: line.id }} />
+            </span>,
             day(line.requestedDate ?? order.requestedDate),
             line.promiseDate ? day(line.promiseDate) : t('dates.asOrder', { date: day(order.promiseDate) }),
             lateness(line.promiseDate ?? order.promiseDate) ?? '—',
@@ -450,6 +463,8 @@ function HoldsQualityCard({ order, model, actions }: { order: Order; model: Orde
                   <li key={`${note.workOrderId}-${note.since}`}>
                     <span className="fw-so-inline">
                       <Lock size={12} aria-hidden /> <strong>{note.number}</strong> {note.note}
+                      {/* F-SA-266: a hold is discussed in an office note only. */}
+                      <DiscussDoor order={order} part={t('discuss.hold', { number: note.number })} target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly />
                     </span>
                     <span className="fw-so-cell-sub">{t('production.quality.officeOnly', { date: formatDate(note.since, { locale }) })}</span>
                   </li>
@@ -489,7 +504,11 @@ function HoldsQualityCard({ order, model, actions }: { order: Order; model: Orde
               <ul className="fw-so-datelist" aria-label={t('production.quality.final')}>
                 {finals.map((entry) => (
                   <li key={entry.workOrderId}>
-                    <span>{t('production.quality.finalRow', { number: entry.number ?? '—', checked: entry.sampleSize })}</span>
+                    <span className="fw-so-inline">
+                      {t('production.quality.finalRow', { number: entry.number ?? '—', checked: entry.sampleSize })}
+                      {/* F-SA-266: quality is discussed in an office note only. */}
+                      <DiscussDoor order={order} part={t('discuss.quality', { number: entry.number ?? '—' })} target={{ kind: 'WorkOrder', id: entry.workOrderId }} officeOnly />
+                    </span>
                     <span className="fw-so-cell-sub">{t(`production.quality.finalState.${entry.status === 'PASSED' || entry.status === 'FAILED' ? entry.status : 'WAITING'}`, { date: entry.on ? formatDate(dayInstant(entry.on), { locale }) : '—' })}</span>
                   </li>
                 ))}

@@ -89,6 +89,9 @@ import { useBrandHealth } from '../../../../lib/production/health/use-health' //
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
+import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
+import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
+import type { Work } from './overview/api' // F-SA-262
 // F-SA-243: the order page is a door of the ONE review window (Home › Approvals' own), its "Decide for <customer>" too.
 import { useRequestReviewDoor } from '../../../home/approvals/requests/use-request-review-door'
 import { doorListOf } from '../../../home/approvals/requests/model'
@@ -559,6 +562,38 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
   // ---- end F-SA-237
 
+  // ---- F-SA-266: "Show on the page" — the message's part: its tab (a replace: no history entry), then its row in view with the focus
+  // (the row is drawn after the tab's read: looked for a few frames).
+  const [focusRow, setFocusRow] = useState<{ anchor: string; at: number } | null>(null)
+  const showOnPage = useCallback(
+    (about: { kind: string; id: string }) => {
+      const place = aboutPlace(about)
+      if (!place) return
+      const next = new URLSearchParams(window.location.search)
+      next.set('tab', place.tab)
+      router.replace(`${pathname}?${next.toString()}#${place.anchor}`, { scroll: false })
+      setFocusRow({ anchor: place.anchor, at: Date.now() })
+    },
+    [router, pathname],
+  )
+  useEffect(() => {
+    if (!focusRow) return
+    let frames = 0
+    let handle = 0
+    const find = () => {
+      const row = document.getElementById(focusRow.anchor)
+      if (row) {
+        row.scrollIntoView({ block: 'center' })
+        row.focus({ preventScroll: true })
+        return
+      }
+      if (frames++ < 60) handle = requestAnimationFrame(find)
+    }
+    handle = requestAnimationFrame(find)
+    return () => cancelAnimationFrame(handle)
+  }, [focusRow])
+  // ---- end F-SA-266
+
   // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
   runPartsRef.current = (parts) => {
     const open = dialogRef.current
@@ -669,17 +704,28 @@ function RecordContainer({ orderId }: { orderId: string }) {
       model={model}
       delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
       // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view prints the thread with ThreadPrint (B-TH-280).
+      // F-SA-262: the dock's pick — This order · <Customer> (general) · Projects ▾ · Work orders ▾ (office only) · All of <Customer>.
       thread={
         value ? (
-          <OfficeRecordThread
-            docked
-            record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }}
-            title={`${value.number} · ${value.party?.legalName ?? ''}`}
-            recordLabel={value.number}
-            party={value.party ? { id: value.partyId, name: value.party.legalName } : null}
-            partyRole="customer"
-            printHref={printHref(pathname, params?.toString() ?? '')}
-          />
+          value.party ? (
+            <OrderDock
+              order={{ id: value.id, number: value.number, companyId: value.companyId, partyId: value.partyId, partyName: value.party.legalName, partyCode: value.party.code }}
+              workOrders={dockWorkOrders(readWork, value)}
+              prefix={prefix}
+              printHref={printHref(pathname, params?.toString() ?? '')}
+              showOnPage={showOnPage /* F-SA-266 */}
+            />
+          ) : (
+            <OfficeRecordThread
+              docked
+              record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }}
+              title={`${value.number} · ${value.party?.legalName ?? ''}`}
+              recordLabel={value.number}
+              party={value.party ? { id: value.partyId, name: value.party.legalName } : null}
+              partyRole="customer"
+              printHref={printHref(pathname, params?.toString() ?? '')}
+            />
+          )
         ) : null
       }
       printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
@@ -869,3 +915,32 @@ function RecordContainer({ orderId }: { orderId: string }) {
     </CustomerOverrideProvider>
   )
 }
+
+// ---- F-SA-262: the work orders the dock may show the notes of — the production read's (this reader's wall), each with its site
+// from the order's chain (a floor note goes to that site's tablets); null while the read is not there. Made-to-measure units (the
+// read counts them per style × colourway, without their numbers) are the chain's other work orders — only when the read left
+// none out (else a unit could not be told from a work order out of this reader's reach), at most the read's count of them; one
+// group names its style and colourway, several are "Made to measure".
+function dockWorkOrders(work: Work | null | undefined, order: Order): (DockWorkOrderRow & { siteId: string | null })[] | null {
+  if (!work) return null
+  const siteOf = (id: string) => order.chain.workOrders.find((chained) => chained.id === id)?.siteId ?? null
+  const listed = work.workOrders.map((row) => ({
+    id: row.id,
+    number: row.number,
+    style: row.style ? `${row.style.code} · ${row.style.name}` : null,
+    colourway: row.colourways.length > 0 ? row.colourways.map((colour) => colour.name).join(', ') : null,
+    siteId: siteOf(row.id),
+  }))
+  const unitCount = work.mtm.reduce((sum, group) => sum + group.workOrders, 0)
+  const single = work.mtm.length === 1 ? work.mtm[0]! : null
+  const units =
+    work.workOrdersLeftOut === 0 && unitCount > 0
+      ? order.chain.workOrders
+          .filter((chained) => !work.workOrders.some((row) => row.id === chained.id))
+          .slice(0, unitCount)
+          .map((chained) => ({ id: chained.id, number: chained.number, style: single?.style ? `${single.style.code} · ${single.style.name}` : null, colourway: single?.colourway?.name ?? null, siteId: chained.siteId, mtm: true }))
+      : []
+  return [...listed, ...units]
+}
+type DockWorkOrderRow = { id: string; number: string; style: string | null; colourway: string | null; mtm?: boolean }
+// ---- end F-SA-262

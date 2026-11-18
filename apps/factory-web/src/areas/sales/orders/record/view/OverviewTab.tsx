@@ -45,6 +45,8 @@ import { linkedRecordsOf, nextDatesOf, placeWords, requestCountsOf } from '../ov
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { askingOf, stillRowsOf } from '../changes/model'
 import { AnswerDoor, StillRow } from './RequestsSection'
+// F-SA-266: Discuss on Overview's rows (a line, a next date, the request that waits on us)
+import { DiscussDoor, FollowersDoor } from './Discuss'
 // ---- end F-SA-233
 
 /** The columns' words: the shared pieces catalogue's (production `parts.pieces.stages.*`, Shipped added there). */
@@ -191,7 +193,10 @@ function ProgressByLine({ order, model, actions }: { order: Order; model: OrderR
                 return {
                   id: row.id,
                   cells: [
-                    <button key="l" type="button" className="fw-so-lineopen" onClick={() => actions?.onOpenLine?.(row.id)} aria-label={t('overview.lineOpen', { seq: row.seq, name: nameOf(row) })}>
+                    // F-SA-266: the line's own Discuss beside the button that opens its sizes (one line: its reference; a made-to-measure
+                    // group of units: in words, in an office note).
+                    <span key="l" className="fw-so-inline">
+                    <button type="button" className="fw-so-lineopen" onClick={() => actions?.onOpenLine?.(row.id)} aria-label={t('overview.lineOpen', { seq: row.seq, name: nameOf(row) })}>
                       <RecordPicture
                         source="order"
                         recordId={order.id}
@@ -208,7 +213,9 @@ function ProgressByLine({ order, model, actions }: { order: Order; model: OrderR
                           {row.madeExtra > 0 && <Tag tone="warning">{t('overview.madeExtra', { count: row.madeExtra })}</Tag>}
                         </span>
                       </span>
-                    </button>,
+                    </button>
+                    <DiscussDoor order={order} part={t('discuss.line', { seq: row.seq, name: nameOf(row) })} target={row.lineIds.length === 1 ? { kind: 'SalesOrderLine', id: row.lineIds[0]! } : null} />
+                    </span>,
                     ...LINE_COLUMNS.map((column) => <FigureCell key={column} value={row.figures[column]} />),
                   ],
                 }
@@ -325,6 +332,8 @@ function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecor
           )}
           {withheld && <p className="fw-so-hint">{t('overview.people.held')}</p>}
           <KeyValue dense labelCase="sentence" items={items} />
+          {/* F-SA-265 / F-SA-266: who is told about this order — the thread's followers (the frame's door). */}
+          <FollowersDoor />
         </div>
       )}
     </Card>
@@ -354,9 +363,17 @@ function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel
         <p className="fw-so-hint">{t('overview.dates.none')}</p>
       ) : (
         <ul className="fw-so-datelist">
-          {rows.map((row) => (
+          {rows.map((row) => {
+            // F-SA-266: a gate is discussed by its reference (the customer reads its own words); a date of the working plan or the
+            // ex-factory date in an office note, in words.
+            const what = row.what.kind === 'gate' ? (row.what.label ?? d(`gate.${row.what.gateKind ?? 'OTHER'}`)) : row.what.kind === 'milestone' ? d(`milestone.kind.${row.what.milestone}`) : t('overview.fact.exFactory')
+            const gateId = row.what.kind === 'gate' ? ((read?.dates?.milestones ?? []).find((milestone) => milestone.id === row.id)?.gateId ?? null) : null
+            return (
             <li key={row.id}>
-              <span>{row.what.kind === 'gate' ? (row.what.label ?? d(`gate.${row.what.gateKind ?? 'OTHER'}`)) : row.what.kind === 'milestone' ? d(`milestone.kind.${row.what.milestone}`) : t('overview.fact.exFactory')}</span>
+              <span className="fw-so-inline">
+                {what}
+                <DiscussDoor order={order} part={row.target ? `${what} · ${day(row.target)}` : what} target={gateId ? { kind: 'OrderGate', id: gateId } : null} />
+              </span>
               <span className="fw-so-cell-sub">
                 {row.target ? d('milestone.target', { date: day(row.target) }) : '—'}
                 {row.late !== null && row.late > 0 && (
@@ -367,7 +384,8 @@ function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel
                 )}
               </span>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </Card>
@@ -380,6 +398,7 @@ function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel
  */
 function RequestsCard({ order, model }: { order: Order; model: OrderRecordModel }) {
   const t = useT('orders')
+  const w = useProductionWords() // F-SA-266: the request's kind in the catalogue's words
   const locale = useLocale()
   const read = readOf(model.production)
   const counts = requestCountsOf(read, order)
@@ -400,6 +419,8 @@ function RequestsCard({ order, model }: { order: Order; model: OrderRecordModel 
           <li className="fw-so-still">
             <span>{t('overview.requests.onUs', { count: counts.onUs })}</span>
             {asking && <AnswerDoor request={asking.first} model={model} />}
+            {/* F-SA-266: discuss the request that waits on us (its reference; the customer reads its own words). */}
+            {asking && <DiscussDoor order={order} part={t('discuss.request', { kind: w.t(`parts.request.kind.${asking.first.kind}`) })} target={{ kind: 'OrderChangeRequest', id: asking.first.id }} />}
           </li>
         )}
         {counts.onCustomer > 0 && <li>{t('overview.requests.onCustomer', { count: counts.onCustomer })}</li>}

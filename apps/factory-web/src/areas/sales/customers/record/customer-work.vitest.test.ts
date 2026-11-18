@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { viewQuery } from '@nexus/factory-domain/views/state'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
@@ -9,6 +9,8 @@ import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { valueOf } from './view/WaitingStrip'
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
+// F-SA-279: the dock follows the row
+import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 
 /**
  * F-SA-276 (sales page plan N5, N7, N3; picks R5, R9, P10, P17; 11-customer-page §3; 17-review R-1, BW-7): the customer's Work tab —
@@ -252,7 +254,7 @@ describe('F-SA-277: the customer page mounts Quotes & incoming', () => {
     expect(view).toContain("{tab === 'quotes' && quotesIncoming}")
     expect(view).not.toContain('function DealsTab')
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("<QuotesIncomingTab party={named} onPick={onPick} />")
+    expect(page).toContain("<QuotesIncomingTab party={named} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} />") // F-SA-279
     const tab = readFileSync(new URL('./view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("import type { DockPick } from './WorkTab'")
     expect(tab).toContain("terms: 'memory'")
@@ -267,3 +269,155 @@ describe('F-SA-277: the customer page mounts Quotes & incoming', () => {
   })
 })
 // ---- end F-SA-277
+
+// ---- F-SA-279 (sales page plan N5, N4, N6; picks R5, R9, P9, P11; 11-customer-page §3.7, §9.1): a row drives the dock
+describe('F-SA-279: the dock follows the row — the address term `dock=`', () => {
+  const ORDER = '11111111-1111-4111-8111-111111111111'
+  it('reads a record, All of <customer> or the general conversation; anything else is the general one (no word that it existed)', () => {
+    expect(dockTermOf(`SalesOrder.${ORDER}`)).toEqual({ kind: 'record', type: 'SalesOrder', id: ORDER })
+    expect(dockTermOf(`Quote.${ORDER}`)).toEqual({ kind: 'record', type: 'Quote', id: ORDER })
+    expect(dockTermOf('all')).toEqual({ kind: 'all' })
+    expect(dockTermOf(null)).toEqual(GENERAL_DOCK)
+    // Work-order notes are never in this dock (Production › Work orders holds them); a hold, an NCR, a change request, a supplier's
+    // record, the general one written as a record, a made-up id: the general conversation.
+    for (const type of ['WorkOrder', 'QualityHold', 'Nonconformance', 'OrderChangeRequest', 'PurchaseOrder', 'SubcontractOrder', 'Party', 'Nothing']) {
+      expect(dockable(type), type).toBe(false)
+      expect(dockTermOf(`${type}.${ORDER}`), type).toEqual(GENERAL_DOCK)
+    }
+    expect(dockTermOf('SalesOrder.not-an-id')).toEqual(GENERAL_DOCK)
+    expect(dockTermOf('SalesOrder')).toEqual(GENERAL_DOCK)
+    for (const type of ['SalesOrder', 'Quote', 'Inquiry', 'PortalOrderRequest', 'Shipment', 'Project', 'ReturnAuthorisation']) expect(dockable(type), type).toBe(true)
+  })
+  it('writes the term (a replace keeps every other term; the general one drops it; a line of All of opens at its message)', () => {
+    expect(DOCK_PARAM).toBe('dock')
+    expect(dockValueOf({ kind: 'record', type: 'SalesOrder', id: ORDER })).toBe(`SalesOrder.${ORDER}`)
+    expect(dockValueOf({ kind: 'all' })).toBe('all')
+    expect(dockValueOf(GENERAL_DOCK)).toBeNull()
+    const base = '/w/DEMO/sales/customers/p1'
+    expect(dockAddress(base, '?tab=work&party=p1&status=IN_PRODUCTION', { kind: 'record', type: 'SalesOrder', id: ORDER })).toBe(`${base}?tab=work&party=p1&status=IN_PRODUCTION&dock=SalesOrder.${ORDER}`)
+    expect(dockAddress(base, `?tab=work&dock=SalesOrder.${ORDER}&message=m1`, GENERAL_DOCK)).toBe(`${base}?tab=work`)
+    expect(dockAddress(base, '?tab=overview', { kind: 'all' })).toBe(`${base}?tab=overview&dock=all`)
+    expect(dockAddress(base, '?tab=work', { kind: 'record', type: 'Quote', id: ORDER }, 'm9')).toBe(`${base}?tab=work&dock=Quote.${ORDER}&message=m9`)
+    expect(dockAddress(base, '', GENERAL_DOCK)).toBe(base)
+  })
+  it('a record docks on Work and Quotes & incoming only; All of <customer> on every tab', () => {
+    expect(DOCK_TABS).toEqual(['work', 'quotes'])
+    const record = { kind: 'record', type: 'SalesOrder', id: ORDER } as const
+    expect(dockOnTab('work', record)).toBe(record)
+    expect(dockOnTab('quotes', record)).toBe(record)
+    expect(dockOnTab('overview', record)).toEqual(GENERAL_DOCK)
+    expect(dockOnTab('money', { kind: 'all' })).toEqual({ kind: 'all' })
+  })
+  it('an address\'s record docks only when the summary read gives it and it is THIS customer\'s', () => {
+    const term = { kind: 'record', type: 'SalesOrder', id: ORDER } as const
+    expect(pickOfSummary(term, { label: 'SO-2026-0142', party: { id: 'alpha' } }, 'alpha')).toEqual({ type: 'SalesOrder', id: ORDER, label: 'SO-2026-0142', companyId: null })
+    // Another customer's order (a person reaching both customers), a record of no customer, a refused read: the general conversation.
+    expect(pickOfSummary(term, { label: 'SO-2026-0151', party: { id: 'beta' } }, 'alpha')).toBeNull()
+    expect(pickOfSummary(term, { label: 'SO-2026-0151', party: null }, 'alpha')).toBeNull()
+    expect(pickOfSummary(term, null, 'alpha')).toBeNull()
+    expect(pickOfSummary({ kind: 'all' }, { label: 'x', party: { id: 'alpha' } }, 'alpha')).toBeNull()
+  })
+  it('the pick shows the record only while the term names the record picked', () => {
+    const pick = { type: 'SalesOrder', id: ORDER, label: 'SO-1', companyId: 'c1' }
+    expect(scopeOf({ kind: 'record', type: 'SalesOrder', id: ORDER }, pick)).toBe('record')
+    expect(scopeOf({ kind: 'record', type: 'SalesOrder', id: ORDER }, null)).toBe('general')
+    expect(scopeOf({ kind: 'record', type: 'Quote', id: ORDER }, pick)).toBe('general')
+    expect(scopeOf({ kind: 'all' }, pick)).toBe('all')
+    expect(scopeOf(GENERAL_DOCK, pick)).toBe('general')
+    expect(dockKeyOf(pick)).toBe(`SalesOrder.${ORDER}`)
+  })
+})
+
+describe('F-SA-279: a click picks at once, the keys after 300 ms of rest', () => {
+  afterEach(() => vi.useRealTimers())
+  it('a fast run of keys reads ONE conversation: the row the keys stop on, 300 ms later', () => {
+    vi.useFakeTimers()
+    const applied: string[] = []
+    const follow = dockFollower<string>((pick) => applied.push(pick))
+    expect(DOCK_FOLLOW_MS).toBe(300)
+    follow.soon('row-1')
+    vi.advanceTimersByTime(120)
+    follow.soon('row-2')
+    vi.advanceTimersByTime(120)
+    follow.soon('row-3')
+    vi.advanceTimersByTime(DOCK_FOLLOW_MS - 1)
+    expect(applied).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(applied).toEqual(['row-3'])
+  })
+  it('a click wins over a waiting key move; leaving the tab cancels the wait', () => {
+    vi.useFakeTimers()
+    const applied: string[] = []
+    const follow = dockFollower<string>((pick) => applied.push(pick))
+    follow.soon('row-1')
+    follow.now('row-9')
+    vi.advanceTimersByTime(1000)
+    expect(applied).toEqual(['row-9'])
+    follow.soon('row-2')
+    follow.cancel()
+    vi.advanceTimersByTime(1000)
+    expect(applied).toEqual(['row-9'])
+  })
+  it('"Draft kept on SO-…" names the newest record left with a draft, never the one shown', () => {
+    const drafts = new Map([
+      ['SalesOrder.a', 'SO-1'],
+      ['Quote.b', 'QT-2'],
+    ])
+    expect(draftKeptOf(drafts, null)).toBe('QT-2')
+    expect(draftKeptOf(drafts, 'Quote.b')).toBe('SO-1')
+    expect(draftKeptOf(new Map([['SalesOrder.a', 'SO-1']]), 'SalesOrder.a')).toBeNull()
+    expect(draftKeptOf(new Map(), null)).toBeNull()
+  })
+})
+
+describe('F-SA-279: the page wires it (the sources)', () => {
+  const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
+  const block = hook.slice(hook.indexOf('export function useCustomerDock'))
+  it('a replace, never a push (Back leaves the page); the summary read checks an address\'s record', () => {
+    expect(block).toContain('router.replace(address, { scroll: false })')
+    expect(block).not.toContain('router.push')
+    expect(block).toContain('readRecordSummary(api, { type: term.type, id: term.id }, controller.signal)')
+    expect(block).toContain('if (!checked) return write(GENERAL_DOCK)')
+  })
+  it('the Work tab marks the docked order, reports the keys\' row and gives a phone card its door; Quotes & incoming too', () => {
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("active: can.threads ? { id: picked && picked.type === 'SalesOrder' ? picked.id : null, cardDoor: t('customers.work.dock.cardDoor') } : null")
+    expect(tab).toContain('onFocusRow: (row: OrderRow) => onFocus?.(pickOfRow(row))')
+    expect(tab).toContain('frame?.showThread?.()')
+    const quotes = readFileSync(new URL('./view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(quotes).toContain("active: { id: shown?.type === 'Quote' ? shown.id : null }")
+    expect(quotes).toContain("row.kind === 'CHANGE_REQUEST' ? undefined")
+  })
+  it('the dock: <customer> (general) · the record · All of <customer> (the feed\'s lines open their ONE conversation)', () => {
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    const dock = tab.slice(tab.indexOf('function Dock('))
+    expect(dock).toContain("{ value: 'general', label: t('customers.work.dock.general'")
+    expect(dock).toContain("{ value: 'all', label: t('customers.work.dock.all'")
+    expect(dock).toContain('<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />')
+    expect(dock).toContain('onDraft={(kept) => dock.onDraft(pick, kept)}')
+    expect(dock).toContain("note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}")
+    // No threads.read: no dock at all.
+    expect(dock).toContain('if (general === null || general === undefined) return null')
+  })
+  it('Work\'s dock a third; the band\'s button below 1280 px names the record docked', () => {
+    const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("defaultWidth={tab === 'work' ? 'third' : undefined}")
+    expect(view).toContain('dockTab={tab}')
+    const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null")
+    const frame = readFileSync(new URL('../../../_shared/record-frame/RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain("mode === 'stacked' && namedButton ? namedButton")
+  })
+  it('the words in both languages, the catalogue\'s own (R9): "conversazione", the All of title the feed\'s', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      const rt = createTranslator(locale, messagesFor(locale, ['record-thread'])['record-thread']!)
+      for (const key of ['all', 'readOnly', 'draftKept', 'button', 'cardDoor', 'generalLine']) expect(t(`customers.work.dock.${key}`, { customer: 'Brand Alpha', record: 'SO-1' }), `${locale} ${key}`).not.toBe(`customers.work.dock.${key}`)
+      expect(t('customers.work.dock.all', { customer: 'Brand Alpha' })).toBe(rt('allOfCustomer.title', { customer: 'Brand Alpha' }))
+    }
+    const it = createTranslator('it', messagesFor('it', ['parties']).parties!)
+    expect(it('customers.work.dock.button', { record: 'SO-1' })).toBe('Conversazione · SO-1')
+    expect(it('customers.work.dock.generalLine', { customer: 'Brand Alpha' })).toContain("le note d'ufficio restano qui")
+  })
+})
+// ---- end F-SA-279

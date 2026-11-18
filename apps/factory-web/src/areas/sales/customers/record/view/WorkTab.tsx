@@ -19,6 +19,13 @@ import { ORDERS_LIST_KEY, sheetAddress, useOrdersSheet, type OrdersSheetHost } f
 import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/OrdersListView'
 import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
+// ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
+import type { useCustomerDock } from '../use-customer-work'
+import { useOfficeApi } from '../../../../../lib/session/context'
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
+import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
+// ---- end F-SA-279
 import { WaitingStrip, type StripDoors } from './WaitingStrip'
 import './customer-work.css'
 
@@ -69,6 +76,8 @@ export interface WorkTabProps {
   /** The record the dock shows now (the picked row); null: the customer's own thread. */
   readonly picked: DockPick | null
   readonly onPick: (pick: DockPick) => void
+  /** F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest). */
+  readonly onFocus?: (pick: DockPick) => void
   /** F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks). */
   readonly onWindow?: StripDoors['onWindow']
 }
@@ -95,10 +104,11 @@ export function WorkTab(props: WorkTabProps) {
   )
 }
 
-function WorkSheet({ party, prefix, work, can, picked, onPick, onWindow }: WorkTabProps) {
+function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow }: WorkTabProps) {
   const t = useT('parties')
   const o = useT('orders')
   const params = useSearchParams()
+  const frame = useRecordFrame() // F-SA-279: a phone card's door shows the conversation (the full-width view)
   const basePath = `/sales/customers/${encodeURIComponent(party.id)}`
   const host: OrdersSheetHost = {
     basePath,
@@ -126,6 +136,20 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onWindow }: WorkT
     doorHref: door.hrefOf,
     toolbarLink: can.workorders ? { href: `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}`, label: t('customers.band.workOrders', { customer: party.name }) } : null,
     empty: rows === WORK_DEFAULT_ROWS && !waiting ? { title: t('customers.work.empty', { customer: party.name }), link: { href: all, label: t('customers.work.showAll') } } : (sheet.model.empty ?? null),
+    // F-SA-279: the row the dock shows is marked; the keys' row is reported (the dock follows after its rest); a phone card's door.
+    active: can.threads ? { id: picked && picked.type === 'SalesOrder' ? picked.id : null, cardDoor: t('customers.work.dock.cardDoor') } : null,
+  }
+  const actions = {
+    ...sheet.actions,
+    ...(can.threads
+      ? {
+          onFocusRow: (row: OrderRow) => onFocus?.(pickOfRow(row)),
+          onCardThread: (row: OrderRow) => {
+            onPick(pickOfRow(row))
+            frame?.showThread?.()
+          },
+        }
+      : {}),
   }
   const doors: StripDoors = {
     onView: (view) => (view === 'waitingUs' ? sheet.actions.onWaiting?.('us', 'open') : waiting ? sheet.actions.onWaiting?.(null, view) : sheet.actions.onRows?.(view)),
@@ -150,7 +174,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onWindow }: WorkT
             </Button>
           </p>
         )}
-        <OrdersListView model={model} actions={sheet.actions} />
+        <OrdersListView model={model} actions={actions /* F-SA-279 */} />
       </div>
       <RequestDoorWindow door={door} />
     </CustomerOverrideProvider>
@@ -161,18 +185,39 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onWindow }: WorkT
  * F-SA-276 (11-customer-page §9.1, review C-13): the customer page's dock — the customer's own thread, and beside it the record a
  * row picked (an order of the Work tab, a quote or a request of Quotes & incoming): ONE thread at a time, picked with the shared
  * ThreadPick ("<customer> (general)" · the record), ONE line under it saying who reads what is written there. Writing always goes
- * into the one thread shown. The read-only "All of <customer>" choice comes with F-SA-279.
+ * into the one thread shown.
+ * F-SA-279 (sales page plan N5, N4; picks R5, R9, P9; 11-customer-page §3.7, §9.1, §9.2): the third choice "All of <customer>" — the
+ * read-only merged feed (F-SA-261), whose lines open their ONE conversation at that message; the record follows the row (the page's
+ * `dock=` term, useCustomerDock); "Draft kept on SO-…" under the pick when the dock left a record with a draft; the words of the pick
+ * the same as the order page's (C-13). No threads.read: no dock at all.
  */
-export function CustomerDock({ customer, general, pick, scope, onScope, prefix }: { customer: { id: string; name: string }; general: ReactNode; pick: DockPick | null; scope: 'general' | 'record'; onScope: (scope: 'general' | 'record') => void; prefix: string }) {
-  const t = useT('parties')
-  if (!pick || general === null || general === undefined) return <>{general}</>
-  const choices: ThreadChoice<'general' | 'record'>[] = [
-    { value: 'general', label: t('customers.work.dock.general', { customer: customer.name }), line: t('customers.work.dock.generalLine', { customer: customer.name }) },
-    { value: 'record', label: pick.label, line: t('customers.work.dock.recordLine', { record: pick.label, customer: customer.name }) },
-  ]
+export function CustomerDock({ customer, general, dock, prefix, canReadFiles }: { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; prefix: string; canReadFiles: boolean }) {
   return (
-    <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={onScope}>
-      {scope === 'record' ? (
+    <WithMessages namespaces={ALL_OF_CUSTOMER_NS}>
+      <Dock customer={customer} general={general} dock={dock} prefix={prefix} canReadFiles={canReadFiles} />
+    </WithMessages>
+  )
+}
+
+function Dock({ customer, general, dock, prefix, canReadFiles }: { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; prefix: string; canReadFiles: boolean }) {
+  const t = useT('parties')
+  const api = useOfficeApi()
+  const feed = useAllOfCustomer(api, { partyId: customer.id, customerName: customer.name, enabled: general !== null && general !== undefined && dock.scope === 'all', prefix, canReadFiles })
+  if (general === null || general === undefined) return null
+  const pick = dock.pick
+  const choices: ThreadChoice<'general' | 'record' | 'all'>[] = [
+    { value: 'general', label: t('customers.work.dock.general', { customer: customer.name }), line: t('customers.work.dock.generalLine', { customer: customer.name }) },
+    ...(pick ? [{ value: 'record' as const, label: pick.label, line: t('customers.work.dock.recordLine', { record: pick.label, customer: customer.name }) }] : []),
+    // The feed says itself that it is read only and how to write (its own line).
+    { value: 'all', label: t('customers.work.dock.all', { customer: customer.name }), title: t('customers.work.dock.readOnly'), line: null },
+  ]
+  const onAnswer = (record: { readonly type: string; readonly id: string }, messageId: string) => {
+    const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id)
+    dock.onAnswer({ type: record.type, id: record.id, label: entry?.record.label ?? record.type, companyId: entry?.record.companyId ?? null }, messageId)
+  }
+  return (
+    <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
+      {dock.scope === 'record' && pick ? (
         <OfficeRecordThread
           key={`${pick.type}:${pick.id}`}
           docked
@@ -182,7 +227,10 @@ export function CustomerDock({ customer, general, pick, scope, onScope, prefix }
           party={{ id: customer.id, name: customer.name }}
           partyRole="customer"
           recordHref={`${prefix}${recordAddress({ type: pick.type, id: pick.id, label: pick.label, companyId: pick.companyId }, OFFICE_PAGES)}`}
+          onDraft={(kept) => dock.onDraft(pick, kept)}
         />
+      ) : dock.scope === 'all' ? (
+        <AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />
       ) : (
         general
       )}

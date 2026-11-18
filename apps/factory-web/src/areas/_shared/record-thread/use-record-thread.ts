@@ -30,6 +30,7 @@ import { correctionWay } from '../../../lib/record-thread/card/model'
 import { floorLocked, type ComposerMode, type DraftLink } from '../../../lib/record-thread/composer/model'
 // F-SA-282a (B-SA-073): the API held a portal text that names another customer: the box holds it with the tick, then it goes again.
 import { heldForNamesOther, namesNoOtherCustomerOf } from '../../../lib/record-thread/composer/model'
+import { aboutRefOf, bodyWithAbout } from '../../../lib/record-thread/composer/model' // F-SA-265 (Discuss)
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
 // B-TH-229: the person's own read mark (B-TH-027).
 import { markThreadRead } from './api'
@@ -786,7 +787,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const outboxKey = `local-${newIdempotencyKey()}`
     const idempotencyKey = newIdempotencyKey()
     const attachments = sendable(now.files).map((file) => file.fileId as string)
-    const links = linksOf(now.draft.link)
+    // F-SA-265 (Discuss): what the message is about goes with it (never an office-only chip to the customer).
+    const about = aboutRefOf(now.draft)
+    const links = { ...linksOf(now.draft.link), ...(about ? { about } : {}) }
     // ---- B-TH-237: in the portal — ours, on the PORTAL channel, no mail.
     if (now.draft.mode === 'portal') {
       const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [] }
@@ -800,8 +803,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // ---- end B-TH-237
     const forFloor = now.draft.forFloor || floorLocked(now.draft)
     const amount = amountBody(now.draft.amount, now.draft.currency)
-    const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, forFloor, mentions: [], files: [], ...(amount ? { amount } : {}) }
-    const item = { key: outboxKey, idempotencyKey, body: now.draft.body, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor, card, amount, links, snapshot: now }
+    // F-SA-265: a part the conversation cannot keep goes as the note's first line.
+    const noteBody = bodyWithAbout(now.draft)
+    const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: noteBody, forFloor, mentions: [], files: [], ...(amount ? { amount } : {}) }
+    const item = { key: outboxKey, idempotencyKey, body: noteBody, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor, card, amount, links, snapshot: now }
     retries.current.set(outboxKey, () => sendNote(item))
     setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
     forgetDraft()
@@ -825,7 +830,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const outside = check?.outside ?? false
     const subject = model.composer.subject
     // B-TH-236 (B-TH-050): the message it answers or corrects goes with it.
-    const body = { ...sendBody({ to: now.to, cc: now.cc, subject, body: now.draft.body, attachments: sendable(now.files).map((file) => file.fileId as string), outside }), ...linksOf(now.draft.link) }
+    // F-SA-265: what the mail is about goes with it (never an office-only chip to the customer).
+    const about = aboutRefOf(now.draft)
+    const body = { ...sendBody({ to: now.to, cc: now.cc, subject, body: now.draft.body, attachments: sendable(now.files).map((file) => file.fileId as string), outside }), ...linksOf(now.draft.link), ...(about ? { about } : {}) }
     const outboxKey = `local-${newIdempotencyKey()}`
     const idempotencyKey = newIdempotencyKey()
     const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'EMAIL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [], email: { to: body.to, subject, status: 'QUEUED' } }

@@ -1,0 +1,214 @@
+import { REPLY_BATCH_MAX } from '@nexus/factory-domain/threads/replies'
+import type { ComposerContext, ComposerDraft, SwitchNote } from '../../../../lib/record-thread/composer/model'
+import type { OrderRow } from '../api'
+import type { Phrase } from './sheet/model'
+
+/**
+ * F-SA-282 (sales page plan N5, picks P10, R7; 11-customer-page §3.8 "Reply to <customer> on N…"; review BW-6; rule 7 / agreement T11
+ * "never one bulk message from the office to several customers"): the pure rules of Reply to N on the Orders sheet's own bar — here
+ * and on the customer page's Work tab. The SAME words go into the own conversation of each ticked order of ONE customer, in the portal
+ * only (POST /threads/SalesOrder/:id/replies, one per order, all with ONE batchId: B-TH-045 folds them into one bell item per reader).
+ * Nothing is copied between orders: each conversation gets its own message. No files (a file belongs to one order). Checked here
+ * before any window (one customer, the right, at most 50) and again on the server (B-SA-073: BATCH_TWO_CUSTOMERS, BATCH_FULL, and the
+ * mis-send text check NAMES_OTHER_CUSTOMER — the composer's own tick, F-SA-282a). Words are keys of the `orders-sheet` catalogue.
+ */
+
+/** The most orders one Reply to N posts on: the server's own limit (factory-domain threads/replies REPLY_BATCH_MAX). */
+export const REPLY_MAX = REPLY_BATCH_MAX
+
+/** An order the reply goes to: its own conversation (`SalesOrder` thread), its customer, its numbers as the office reads them. */
+export interface ReplyTarget {
+  readonly id: string
+  readonly number: string
+  readonly customerRef: string | null
+  readonly partyId: string
+  readonly partyName: string
+}
+
+export const replyTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'>[]): ReplyTarget[] =>
+  rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName }))
+
+/**
+ * Why the bar's Reply to N… is held, in words before the click, or null: a ticked order of another customer than the page's (the
+ * customer page), orders of more than one customer (Sales › Orders: one message never reaches two customers), no right to write in
+ * the orders' conversations (threads.post), more than REPLY_MAX orders. The server checks each reply again (B-SA-073).
+ */
+export function replyManyHeld(rows: readonly Pick<OrderRow, 'partyId'>[], locked: string | null, canPost: boolean): Phrase | null {
+  if (rows.length === 0) return null
+  if (locked && rows.some((row) => row.partyId !== locked)) return { key: 'bulk.notThisCustomer' }
+  if (new Set(rows.map((row) => row.partyId)).size > 1) return { key: 'reply.oneCustomer' }
+  if (!canPost) return { key: 'reply.noRight' }
+  if (rows.length > REPLY_MAX) return { key: 'reply.tooMany', params: { max: REPLY_MAX } }
+  return null
+}
+
+/** The bar's words: "Reply to Brand Alpha on 6…" for one customer; with ticks of several, the customer is not named. */
+export function replyManyLabel(rows: readonly Pick<OrderRow, 'partyId' | 'partyName'>[]): Phrase {
+  const one = rows.length > 0 && new Set(rows.map((row) => row.partyId)).size === 1
+  return one ? { key: 'bulk.reply', params: { customer: rows[0]!.partyName, count: rows.length } } : { key: 'bulk.replyAny', params: { count: rows.length } }
+}
+
+/**
+ * The composer in N mode (rule 24: the thread's own text box, never a copy): the customer's portal only — an office note on N orders is
+ * Note to N…, a mail goes per order — no @mentions (they live in office notes), no files (no clip is given). The API checks every call.
+ */
+export function replyComposerContext(customer: string): ComposerContext {
+  return { recordType: 'SalesOrder', recordLabel: '', party: { name: customer }, can: { post: true, email: false, manage: false }, people: [], portal: true, many: true }
+}
+
+// ---- one order's answer ---------------------------------------------------------------------------------------------------------
+
+/** What happened on one order: posted, refused for good with why (the server said it), or a fault (tried again by the next Send). */
+export type ReplyResult = { readonly state: 'sent' } | { readonly state: 'refused'; readonly why: Phrase } | { readonly state: 'failed'; readonly why: Phrase }
+
+/** One reply's error as the hook reads it: the API's refusal code at `refusal/<CODE>` and the error's kind (null: no API answer). */
+export interface ReplyError {
+  readonly code: string | null
+  readonly kind: string | null
+}
+
+/**
+ * What one refused reply means: the box's hold (the text names another customer of ours — the API never says whom; the round stops and
+ * the composer offers its tick), a refusal of THIS order for good with why, or a fault (no answer, the factory busy): tried again.
+ */
+export function replyOutcomeOf(error: ReplyError, customer: string): { readonly kind: 'namesOther' } | { readonly kind: 'refused' | 'failed'; readonly why: Phrase } {
+  switch (error.code) {
+    case 'NAMES_OTHER_CUSTOMER':
+      return { kind: 'namesOther' }
+    case 'BATCH_TWO_CUSTOMERS':
+      return { kind: 'refused', why: { key: 'reply.oneCustomer' } }
+    case 'BATCH_FULL':
+      return { kind: 'refused', why: { key: 'reply.tooMany', params: { max: REPLY_MAX } } }
+    case 'CLOSED':
+      return { kind: 'refused', why: { key: 'reply.why.closed' } }
+    case 'NO_PORTAL':
+      return { kind: 'refused', why: { key: 'reply.why.noPortal', params: { customer } } }
+    case 'NO_PARTY':
+    case 'NOT_SHAREABLE':
+      return { kind: 'refused', why: { key: 'reply.why.refused' } }
+    default:
+      break
+  }
+  if (error.kind === 'not_found') return { kind: 'refused', why: { key: 'reply.why.notFound' } }
+  if (error.kind === 'forbidden' || error.kind === 'step_up' || error.kind === 'signed_out') return { kind: 'refused', why: { key: 'reply.why.forbidden' } }
+  if (error.kind === 'invalid' || error.kind === 'conflict') return { kind: 'refused', why: { key: 'reply.why.refused' } }
+  return { kind: 'failed', why: { key: 'reply.why.failed' } }
+}
+
+/** The orders the next Send posts on: not posted yet and not refused for good (a fault is tried again), in the ticked order. */
+export const toSend = (targets: readonly ReplyTarget[], results: Readonly<Record<string, ReplyResult>>): ReplyTarget[] =>
+  targets.filter((target) => {
+    const result = results[target.id]
+    return !result || result.state === 'failed'
+  })
+
+/** The orders already posted on (said above the box after the round stopped on a hold). */
+export const sentOf = (targets: readonly ReplyTarget[], results: Readonly<Record<string, ReplyResult>>): ReplyTarget[] => targets.filter((target) => results[target.id]?.state === 'sent')
+
+/** An order as the preview and the results name it: the office number, and the customer's PO when it gave one. */
+export const targetLabel = (target: Pick<ReplyTarget, 'number' | 'customerRef'>): string => (target.customerRef ? `${target.number} (${target.customerRef})` : target.number)
+
+/** The Idempotency-Key of one order's reply, and the words and tick it was made for. */
+export interface ReplyKey {
+  readonly key: string
+  readonly body: string
+  readonly ticked: boolean
+}
+
+/**
+ * The key one order's reply goes with: the same while the same words (and tick) go again — a try after a lost answer never posts
+ * twice — and a new one for new words or the tick (the API refuses a key used for another request; a refused reply kept none).
+ */
+export function keyFor(previous: ReplyKey | undefined, body: string, ticked: boolean, fresh: () => string): ReplyKey {
+  return previous && previous.body === body && previous.ticked === ticked ? previous : { key: fresh(), body, ticked }
+}
+
+/**
+ * One round of Send: each order still to post in turn, never two at once (the ticked order), one call per order into its OWN
+ * conversation. It stops at the first text the API holds because it names another customer of ours (`namesOther`): nothing more goes,
+ * the words come back held with the tick. Answers whether it was held and how many were posted.
+ */
+export async function replyRound(
+  pending: readonly ReplyTarget[],
+  post: (target: ReplyTarget) => Promise<ReplyResult | 'namesOther'>,
+  onResult: (id: string, result: ReplyResult, done: number) => void,
+): Promise<{ held: boolean; posted: number }> {
+  let posted = 0
+  for (const [index, target] of pending.entries()) {
+    const result = await post(target)
+    if (result === 'namesOther') return { held: true, posted }
+    if (result.state === 'sent') posted += 1
+    onResult(target.id, result, index + 1)
+  }
+  return { held: false, posted }
+}
+
+// ---- the window's own holds -------------------------------------------------------------------------------------------------------
+
+/** Whether the customer reads anything in its portal: on, off (the switch is off, or nobody active yet), unknown (not read). */
+export type PortalState = 'on' | 'off' | 'unknown'
+
+/** The portal from the customer's Portal access read (partners.view): off when its switch is off or no person of it is active. */
+export function portalStateOf(access: { readonly settings: { readonly portalOn: boolean }; readonly people: readonly { readonly status: string }[] } | null): PortalState {
+  if (!access) return 'unknown'
+  return access.settings.portalOn && access.people.some((person) => person.status === 'ACTIVE') ? 'on' : 'off'
+}
+
+/**
+ * Why Send waits beyond the composer's own reasons (empty, too long, sending, the names-another-customer hold), or null: the customer
+ * has no portal yet (write by e-mail in each order's conversation), or every order is done (nothing left to post on).
+ */
+export function replySendHeld(portal: PortalState | undefined, customer: string, left: number): Phrase | null {
+  if (portal === 'off') return { key: 'reply.portalOff', params: { customer } }
+  if (left === 0) return { key: 'reply.nothingLeft' }
+  return null
+}
+
+/**
+ * The customer's language inside "{customer} reads {language}", in the page's language as a sentence writes it (Intl: "Italian",
+ * "italiano"; the parties' `languageName` capitalises it for a label); its code when the browser has no name for it.
+ */
+export function languageInSentence(code: string, locale: string): string {
+  try {
+    return new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code
+  } catch {
+    return code
+  }
+}
+
+/** The round's receipt: how many were posted, and each order's line (posted, or not with why) in the ticked order. */
+export function replyReceipt(targets: readonly ReplyTarget[], results: Readonly<Record<string, ReplyResult>>): { sent: number; failed: number; lines: Array<{ id: string; label: string; result: ReplyResult | null }> } {
+  const lines = targets.map((target) => ({ id: target.id, label: targetLabel(target), result: results[target.id] ?? null }))
+  return { sent: lines.filter((line) => line.result?.state === 'sent').length, failed: lines.filter((line) => line.result?.state === 'failed').length, lines }
+}
+
+// ---- the window's model (use-reply-many.ts keeps it; view/ReplyManyDialog.tsx draws it) -----------------------------------------
+
+export interface ReplyManyModel {
+  /** The one customer every ticked order is of. */
+  readonly customer: { readonly id: string; readonly name: string }
+  readonly targets: readonly ReplyTarget[]
+  /** The one batch of every reply of this window (B-TH-045, B-SA-073). */
+  readonly batchId: string
+  /** The composer's draft (N mode: the portal only). */
+  readonly draft: ComposerDraft
+  readonly notes: readonly SwitchNote[]
+  /** The customer's language (ISO 639-1): undefined while read; null when the reader may not read the customer (nothing guessed). */
+  readonly language: string | null | undefined
+  /** Whether the customer reads its portal: undefined while read; `unknown` when the reader may not read it (the server says at Send). */
+  readonly portal: PortalState | undefined
+  readonly sending: boolean
+  /** While a round runs: how many orders of how many are done. */
+  readonly progress: { readonly done: number; readonly count: number } | null
+  /** Each order's answer so far, by order id. */
+  readonly results: Readonly<Record<string, ReplyResult>>
+  /** The last round ended with nothing held: the window shows its receipt. */
+  readonly done: boolean
+}
+
+export interface ReplyManyActions {
+  readonly onDraft: (draft: ComposerDraft, notes: readonly SwitchNote[]) => void
+  /** Send (and Try again): the orders still to post. */
+  readonly onSend: () => void
+  readonly onClose: () => void
+}

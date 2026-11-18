@@ -303,6 +303,48 @@
     "notThisCustomer": "An order of another customer is ticked: tick this customer's orders only.",
     "addTask_one": "Add task to {count}…",
     "addTask_other": "Add task to {count}…",
-    "tooMany": "At most {max} orders at once."
+    "tooMany": "At most {max} orders at once.",
+    "reply_one": "Reply to {customer} on {count}…",
+    "reply_other": "Reply to {customer} on {count}…",
+    "replyAny_one": "Reply on {count}…",
+    "replyAny_other": "Reply on {count}…"
+  },
+  "reply": {
+    "title_one": "Reply to {customer} on {count} order",
+    "title_other": "Reply to {customer} on {count} orders",
+    "oneCustomer": "Reply to many works for one customer at a time.",
+    "noRight": "Your role does not write to customers.",
+    "tooMany": "At most {max} orders in one reply.",
+    "portalOff": "{customer} has no portal yet: write by e-mail in each order's conversation.",
+    "reads": "{customer} reads {language}",
+    "preview_one": "{customer} will read this on {count} order:",
+    "preview_other": "{customer} will read this on {count} orders:",
+    "each": "Each order's conversation gets its own message; nothing is copied between orders.",
+    "noFiles": "No files here: a file belongs to one order, so add it in that order's conversation.",
+    "already_one": "Already posted on {count} order: {orders}",
+    "already_other": "Already posted on {count} orders: {orders}",
+    "nothingLeft": "Every order is done: nothing is left to post on.",
+    "progress": "{done} of {count} done…",
+    "sending": "Wait: the replies are being posted.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry_one": "Try again on {count} order",
+    "retry_other": "Try again on {count} orders",
+    "result": {
+      "title_one": "Posted on {count} order: {customer} reads it in that order's conversation.",
+      "title_other": "Posted on {count} orders: {customer} reads it in each order's conversation.",
+      "none": "Nothing was posted.",
+      "label": "Each order",
+      "sent": "Posted",
+      "notSent": "Not posted. {why}"
+    },
+    "why": {
+      "closed": "Its conversation is closed: reopen it to reply.",
+      "noPortal": "Nobody of {customer} reads this order in the portal: write by e-mail in its conversation.",
+      "refused": "The factory refused it as it is.",
+      "notFound": "This order can no longer be opened.",
+      "forbidden": "Your role does not write in this order's conversation.",
+      "failed": "It did not go through: try again."
+    }
   }
 }

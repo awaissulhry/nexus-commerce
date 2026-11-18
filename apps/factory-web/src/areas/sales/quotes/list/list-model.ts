@@ -89,11 +89,15 @@ export interface QuotesListViewModel {
   switcher?: { readonly state: SwitcherState; readonly query: string; readonly searching: boolean; readonly partyName: string | null | undefined } | null
   /** F-SA-277: embedded in a host page (the customer's Quotes & incoming): no own head (intro, as of, New quote) and no tiles. */
   embedded?: boolean
+  /** F-SA-279: the quote the host's dock shows (its row marked; null: none); absent: the list drives no dock. */
+  active?: { readonly id: string | null } | null
 }
 
 export interface QuotesListActions extends DuplicateActions, NewFromActions {
   /** F-SA-277: a row's click (the host's: the customer page docks the quote's thread); ⌘ / Ctrl: a new tab. Absent: the quote opens. */
   onOpenRow?: (id: string, newTab: boolean) => void
+  /** F-SA-279: the keys moved the focus to a row (the host's dock follows after its rest). */
+  onFocusRow?: (row: QuoteListRow) => void
   /** B-W2b-316: New quote › Start from Template / Inquiry. */
   onNewFrom?: (kind: NewFromKind) => void
   /** Row ⋯ Duplicate: opens the dialog for that quote. */

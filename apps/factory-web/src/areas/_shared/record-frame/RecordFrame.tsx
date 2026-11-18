@@ -16,6 +16,8 @@ import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width
 import { usePrintMode } from '../../../shell/print/print-mode'
 import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
 import { showsOnArrival, type DockDefault } from './model' // F-SA-263
+import { viewOpenOf } from './model' // F-SA-262
+import type { DiscussAsk, FrameDoor, ShowInThreadAsk } from './model' // F-SA-265
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
@@ -79,10 +81,15 @@ export interface RecordFrameProps {
   // of the body column — the page passes it on its first tab only; absent: nothing. The print view prints it after the body.
   readonly fields?: ReactNode
   // ---- end B-TH-280
+  // ---- F-SA-279 (11-customer-page §3.7): below 1280 px the band's button names the conversation the dock holds now ("Thread · SO-…",
+  // in the page's words) — a row of the customer's Work tab picked it; absent: "Thread" (or "Thread · 2 new").
+  readonly threadButton?: string | null
+  // ---- end F-SA-279
 }
 
 // B-TH-264 follow-up: the body's files in the thread's ONE viewer (the types live in model.ts).
 export type { FrameFile, FrameFilesAsk } from './model'
+export type { DiscussAbout, DiscussAsk, ShowInThreadAsk } from './model' // F-SA-265
 
 /** What the docked thread reads of its frame: the width (null where it is not docked), the chooser, the phone head, the way back. */
 export interface RecordFrameState {
@@ -92,14 +99,14 @@ export interface RecordFrameState {
   readonly choose: (choice: DockWidth | 'hide' | 'reset') => void
   /** Stacked: back from the full-width thread to the body (same tab, same scroll). */
   readonly close: () => void
-  /** The door the address asked for on arrival (`panel=approvals`), once; the thread clears it. */
-  readonly door: 'approve' | null
+  /** The door the address asked for on arrival (`panel=approvals`), once; the thread clears it. F-SA-265: or the body's Followers…. */
+  readonly door: FrameDoor | null
   readonly clearDoor: () => void
   /** B-TH-229: the thread tells the band how many messages are new to the reader ("Thread · 2 new"). */
   readonly reportNew?: (count: number) => void
   // ---- B-TH-262 (R-ACT; 08-tabs R-ACT "the sample Approval tab's Ask the customer opens the Ask popover"): a part of the body opens
   // one of the thread's doors — the thread shows (docked) or opens full width (narrower), then the door opens, as `panel=approvals` does.
-  readonly openDoor?: (door: 'approve') => void
+  readonly openDoor?: (door: FrameDoor) => void
   // ---- end B-TH-262
   // ---- B-TH-264 follow-up: the body's files in the thread's ONE viewer. `openFiles` is there only where the page has a thread (else
   // the body opens the file as before); the thread reads `filesAsk` once and clears it.
@@ -111,6 +118,16 @@ export interface RecordFrameState {
   // docked, it shows (if hidden); narrower, the full-width thread opens. (TH-6 part B's invoice Send copy uses it too, B-TH-268.)
   readonly showThread?: () => void
   // ---- end B-TH-265
+  // ---- F-SA-265 (10-order-page §6.4): Discuss — a row of the body opens the conversation about it: the dock shows (narrower: the
+  // full-width conversation), the page's pick goes to the record's own conversation, the box opens on Office note with the chip
+  // "About: …". Show in thread — a history row shows its step in the conversation. The thread reads each ask once and clears it.
+  readonly discuss?: (ask: DiscussAsk) => void
+  readonly discussAsk?: DiscussAsk | null
+  readonly clearDiscuss?: () => void
+  readonly showInThread?: (ask: ShowInThreadAsk) => void
+  readonly showAsk?: ShowInThreadAsk | null
+  readonly clearShow?: () => void
+  // ---- end F-SA-265
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -187,7 +204,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */ }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */, threadButton: namedButton /* F-SA-279 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -203,10 +220,13 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, tab: dockTab ?? null, rememberHidden: dockTab !== undefined })
   const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })
   const hasThread = thread !== null
-  const viewOpen = params?.get(THREAD_PARAM) === 'open'
+  // F-SA-262: a dock scope in the address (`general`, `project:…`, `wo:…`, `all`: the order page's pick) keeps the narrow view open too.
+  const viewOpen = viewOpenOf(params?.get(THREAD_PARAM) ?? null)
   const [details, setDetails] = useState(false)
   const [keys, setKeys] = useState(false)
-  const [door, setDoor] = useState<'approve' | null>(null)
+  const [door, setDoor] = useState<FrameDoor | null>(null)
+  const [discussAsk, setDiscussAsk] = useState<DiscussAsk | null>(null) // F-SA-265
+  const [showAsk, setShowAsk] = useState<ShowInThreadAsk | null>(null) // F-SA-265
   const [filesAsk, setFilesAsk] = useState<FrameFilesAsk | null>(null) // B-TH-264 follow-up
   // B-TH-229 (band-F05, PL1-F04): the reader's own new messages, as the docked thread read them.
   const [fresh, setFresh] = useState(0)
@@ -358,7 +378,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
 
   // B-TH-262: a body part's door (the sample's "Ask the customer"): show the thread, then the door.
   const openDoor = useCallback(
-    (asked: 'approve') => {
+    (asked: FrameDoor) => {
       if (mode === 'docked') sizes.show()
       else if (!viewOpen) openView()
       setDoor(asked)
@@ -374,9 +394,40 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
     else if (!viewOpen) openView()
   }, [mode, sizes, viewOpen, openView])
   // ---- end B-TH-265
+  // ---- F-SA-265: Discuss and Show in thread — the conversation shows, then reads the ask.
+  const discuss = useCallback(
+    (ask: DiscussAsk) => {
+      showThread()
+      setDiscussAsk(ask)
+    },
+    [showThread],
+  )
+  const showInThread = useCallback(
+    (ask: ShowInThreadAsk) => {
+      showThread()
+      setShowAsk(ask)
+    },
+    [showThread],
+  )
+  const clearDiscuss = useCallback(() => setDiscussAsk(null), [])
+  const clearShow = useCallback(() => setShowAsk(null), [])
+  // ---- end F-SA-265
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, showThread /* B-TH-265 */, ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */ }),
-    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles],
+    () => ({
+      mode,
+      width: mode === 'docked' ? width : null,
+      phone,
+      choose,
+      close: closeView,
+      door,
+      clearDoor: () => setDoor(null),
+      reportNew: setFresh,
+      openDoor /* B-TH-262 */,
+      showThread /* B-TH-265 */,
+      ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */,
+      ...(hasThread ? { discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow } : {}) /* F-SA-265: only where the page has a conversation */,
+    }),
+    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229
@@ -392,8 +443,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       onClick={toggle}
       title={t(mode === 'docked' ? 'thread.hintDocked' : 'thread.hintView')}
     >
-      {/* B-TH-229: "Thread · 2 new" (99+ above 99), the same number as the thread's Head. */}
-      <MessageSquare size={14} aria-hidden /> <span>{t(buttonWords.key, buttonWords.count === undefined ? undefined : { count: buttonWords.count })}</span>
+      {/* B-TH-229: "Thread · 2 new" (99+ above 99), the same number as the thread's Head. F-SA-279: narrower, the page's name of the
+          conversation it holds ("Thread · SO-…"). */}
+      <MessageSquare size={14} aria-hidden /> <span>{mode === 'stacked' && namedButton ? namedButton : t(buttonWords.key, buttonWords.count === undefined ? undefined : { count: buttonWords.count })}</span>
       <span className="fw-rcf-keys" aria-hidden>
         <Kbd>⌘</Kbd>
         <Kbd>J</Kbd>
