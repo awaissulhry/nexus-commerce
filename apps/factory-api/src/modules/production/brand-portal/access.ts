@@ -362,6 +362,8 @@ export interface OwnOrder {
   readonly orderId: string
   readonly number: string
   readonly customerRef: string | null
+  /** fix-pr-5: the customer's own number of the order ("Your order 13"; null: none given). */
+  readonly customerSeq: number | null
   readonly status: string
   readonly index: number
 }
@@ -379,13 +381,13 @@ export async function partnerOrders(request: FastifyRequest, reader: PortalReade
     wanted.length === 0
       ? []
       : await request.withClient((client) =>
-          client.salesOrder.findMany({ where: { id: { in: wanted }, companyId: reader.session.company.id }, select: { id: true, number: true, customerRef: true, status: true, partyId: true } }),
+          client.salesOrder.findMany({ where: { id: { in: wanted }, companyId: reader.session.company.id }, select: { id: true, number: true, customerRef: true, customerSeq: true, status: true, partyId: true } }),
         )
   // The wall: only the session's party's (row-level security already keeps it so; checked again, fail closed).
   const byId = new Map(rows.filter((row) => row.partyId === reader.session.partyId).map((row) => [row.id, row]))
   const orders = orderIds.flatMap((orderId, index) => {
     const row = byId.get(orderId)
-    return row ? [{ orderId, number: row.number, customerRef: row.customerRef, status: row.status as string, index }] : []
+    return row ? [{ orderId, number: row.number, customerRef: row.customerRef, customerSeq: row.customerSeq, status: row.status as string, index }] : []
   })
   return { orders, notFound: orderIds.length - orders.length }
 }

@@ -632,7 +632,7 @@ describe('B-PR-45 escalation (cron production.issueEscalation)', { timeout: SLOW
 })
 
 describe('B-PR-45 answered: our first shared reply in one order’s thread answers the batch (T11 fallback)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('a shared message in SEED-SO-B001’s thread answers every issue of the batch and closes every task; B2 reads "Answered in SEED-SO-B001"; the other batch waits; escalation stops', async () => {
+  it('a shared message in SEED-SO-B001’s thread answers every issue of the batch and closes every task; B2 reads "Answered in your order N" (B’s own number of SEED-SO-B001); the other batch waits; escalation stops', async () => {
     const raisedAt = new Date(batchIssues[0]!.raisedAt)
     await shareOn(w.b.salesOrderId, new Date(raisedAt.getTime() + 60_000))
     expect(await answerAll()).toBeGreaterThanOrEqual(2)
@@ -645,7 +645,9 @@ describe('B-PR-45 answered: our first shared reply in one order’s thread answe
     const list = await portalGet('betaProd', '/portal/production')
     const row = (orderId: string) => list.items.find((item: Json) => item.id === orderId)
     expect(row(w.b.salesOrderId).problem.state).toBe('ANSWERED')
-    expect(row(beta2.orderId).problem).toMatchObject({ state: 'ANSWERED_IN', inOrder: { number: 'SEED-SO-B001' }, words: { en: 'Answered in SEED-SO-B001' } })
+    // fix-pr-5 (lead decision): named by B's own number of the order (as the bell), never the office's series.
+    const own = (await one<{ seq: number }>('SELECT "customerSeq" AS seq FROM "SalesOrder" WHERE id = $1', [w.b.salesOrderId]))!.seq
+    expect(row(beta2.orderId).problem).toMatchObject({ state: 'ANSWERED_IN', inOrder: { number: 'SEED-SO-B001' }, words: { it: `Risposto nel vostro ordine ${own}`, en: `Answered in your order ${own}` } })
     expect(row(beta4.orderId).problem.state).toBe('WAITING_ON_US')
 
     const answered = await ok('office.all', `/production/issues?partyId=${ids.b}&status=ANSWERED&limit=200`)

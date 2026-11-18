@@ -4,6 +4,7 @@ import { APPROVAL_LIMITS } from '../approvals-out/rules'
 import type { Issue } from '../core/errors'
 import type { BusinessDate } from '../core/time'
 import type { Words } from '../portal/tasks/kinds'
+import { customerNumberOf } from '../sales/customer-numbers' // fix-pr-5
 import { BULK_ASK_MAX } from './bulk'
 
 /**
@@ -126,7 +127,29 @@ export function productionZipProblem(files: readonly { readonly sizeBytes: numbe
   return null
 }
 
-/** Each file's path in the zip: `<order number>/<name>`, a repeated name in a folder numbered (`name (2).pdf`). */
+// ── fix-pr-5 (lead decision): the zip names an order as the customer knows it, never by the office's SO-… series ─────────────────
+/** What the customer knows an order by: its own PO and its own running number (SalesOrder.customerSeq). */
+export interface ZipOrder {
+  readonly customerRef: string | null
+  readonly customerSeq: number | null
+}
+
+/**
+ * The customer's own name of an order in its zip (folders, the index's order column, the zip's name): its PO, else "Your order
+ * 13" / "Il vostro ordine 13" (its own number, as the bell names it), else "Order <its place among those picked>" — never the
+ * office's series. A name two picked orders share (the same PO twice) adds the order's own number, else its place.
+ */
+export function productionZipFolders(orders: readonly ZipOrder[], locale: 'it' | 'en'): string[] {
+  const own = (order: ZipOrder) => customerNumberOf('ORDER', order.customerSeq)?.words[locale] ?? null
+  const place = (at: number) => (locale === 'it' ? `Ordine ${at + 1}` : `Order ${at + 1}`)
+  const first = orders.map((order, at) => zipSafeName(order.customerRef?.trim() || own(order) || place(at)))
+  const count = new Map<string, number>()
+  for (const name of first) count.set(name.toLowerCase(), (count.get(name.toLowerCase()) ?? 0) + 1)
+  return first.map((name, at) => ((count.get(name.toLowerCase()) ?? 0) > 1 ? zipSafeName(`${name} (${own(orders[at]!) ?? place(at)})`) : name))
+}
+// ── end fix-pr-5 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Each file's path in the zip: `<the order's own name>/<name>`, a repeated name in a folder numbered (`name (2).pdf`). */
 export function productionZipPaths(entries: readonly { readonly folder: string; readonly name: string }[]): string[] {
   const taken = new Set<string>()
   return entries.map((entry) => {
@@ -142,7 +165,7 @@ export function productionZipPaths(entries: readonly { readonly folder: string; 
   })
 }
 
-/** The zip's own name: one order's number, else how many orders and the day. */
-export function productionZipName(orderNumbers: readonly string[], day: BusinessDate): string {
-  return zipSafeName(orderNumbers.length === 1 ? `${orderNumbers[0]}_files.zip` : `files_${orderNumbers.length}_orders_${day}.zip`)
+/** The zip's own name: one order's own name (fix-pr-5: productionZipFolders, never the office's number), else how many orders and the day. */
+export function productionZipName(orderNames: readonly string[], day: BusinessDate): string {
+  return zipSafeName(orderNames.length === 1 ? `${orderNames[0]}_files.zip` : `files_${orderNames.length}_orders_${day}.zip`)
 }
