@@ -39,6 +39,8 @@ import { PRODUCTION_PARTS, type ProductionPart, type WithheldKey } from './produ
 import { dayOf, dayOrNull, readLines, readOrderFacts, type LineRecord, type OrderRow } from './store'
 // B-SA-043: the order's extra pieces (cut beyond what it now wants), office only.
 import { madeExtraOf } from './made-extra'
+// B-SA-050: Still to do, computed from the records.
+import { stillToDoOf } from './still-to-do'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2; review WP-3): the office's
@@ -66,7 +68,8 @@ import { madeExtraOf } from './made-extra'
  *   people    the supervisor and where from, the customer's backup, who answers the customer (the order thread's owner), the
  *             places — a site and line (a team by name only), an outside workshop; never an operator, a count or an output
  *                                                                                                         workorders.view
- *   changes   the customer's requests still waiting                                                         orders.view
+ *   changes   the customer's requests still waiting; B-SA-050: Still to do after the accepted changes (./still-to-do: each row
+ *             names the record that closes it, computed — never ticked)                                      orders.view
  *
  * About 35 indexed queries for every part; `?parts=` makes a live re-read 3–8. No planning engine runs for the health (the
  * keeper's stored row): the forecast is the only planning read, and only for a reader of promises. A read: no command, no event.
@@ -586,9 +589,11 @@ async function peoplePart(db: Db, context: OfficeContext, order: OrderRow, load:
   }
 }
 
-async function changesPart(db: Db, order: OrderRow) {
+async function changesPart(db: Db, order: OrderRow, /* B-SA-050 */ context: OfficeContext) {
   const rows = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: { in: ['OPEN', 'COUNTERED'] } }, select: { id: true, kind: true, status: true, createdAt: true, batchId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
-  return { openRequests: rows.map((row) => ({ id: row.id, kind: row.kind as string, status: row.status as string, since: toUtcIso(row.createdAt), batchId: row.batchId })) }
+  // B-SA-050 (R1, P6; review C-8): what is still to do after the accepted changes, computed from the records (./still-to-do).
+  const stillToDo = await stillToDoOf(db, context, order)
+  return { openRequests: rows.map((row) => ({ id: row.id, kind: row.kind as string, status: row.status as string, since: toUtcIso(row.createdAt), batchId: row.batchId })), stillToDo }
 }
 
 /** The parts asked of one order the caller reached with orders.view (`order`), each by its right. */
@@ -607,7 +612,7 @@ export async function readOrderProduction(caller: CommandCaller, context: Office
     const dates = parts.includes('dates') ? await datesPart(db, context, order, load, now) : undefined
     const quality = parts.includes('quality') ? await qualityPart(db, context, load, { issues: kept('quality.issues'), ncrs: kept('quality.ncrs'), final: kept('quality.final') }) : undefined
     const people = parts.includes('people') ? (kept('people') ? await peoplePart(db, context, order, load) : null) : undefined
-    const changes = parts.includes('changes') ? await changesPart(db, order) : undefined
+    const changes = parts.includes('changes') ? await changesPart(db, order, context) : undefined
     const progress = parts.includes('lines') || parts.includes('headline') ? await load.progress() : null
     return { headline, lines, work, dates, quality, people, changes, asOf: progress ? progress.computedAt : now, orderLines: dates && kept('dates.forecast') ? await load.lines() : null }
   })

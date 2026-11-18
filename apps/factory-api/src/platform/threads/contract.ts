@@ -149,6 +149,8 @@ export const readThreadContract = defineContract({
     200: output({
       /** Null: the record has no message yet (or none this reader may see). */
       thread: threadView.nullable(),
+      /** B-SA-048: the record whose conversation this is, when the one asked has none of its own (a change request: its order). */
+      place: output({ type: z.string(), id: id() }).nullable().optional(),
       messages: z.array(messageView),
       nextCursor: z.string().nullable(),
       /** B-TH-027: the reader's own reading (office and portal people; null for a link or before the first message). */

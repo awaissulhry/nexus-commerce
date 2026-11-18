@@ -74,6 +74,10 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.order.change_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {yours} was not accepted', it: 'La vostra richiesta di modifica per {yours} non è stata accettata' },
   'portal.order.cancel_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {yours} was accepted', it: 'La vostra richiesta di annullamento per {yours} è stata accettata' },
   'portal.order.cancel_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {yours} was not accepted', it: 'La vostra richiesta di annullamento per {yours} non è stata accettata' },
+  // B-SA-046 (sales page plan P7, R3): a design change — received, then our answer (the words are on the order's page).
+  'portal.order.design_received': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your design change request on {yours} was received', it: 'La vostra richiesta di modifica del design per {yours} è arrivata' },
+  'portal.order.design_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your design change request on {yours} was accepted', it: 'La vostra richiesta di modifica del design per {yours} è stata accettata' },
+  'portal.order.design_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your design change request on {yours} was not accepted', it: 'La vostra richiesta di modifica del design per {yours} non è stata accettata' },
   // B-W2b-F15: our check of a delivery address the person added ({label}: the address in short; {reason}: the office's
   // reason of a refusal, which the customer also reads on its address list). Orders need it: a transactional topic.
   'portal.address.approved': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was checked: your orders can use it', it: 'Il vostro indirizzo di consegna {label} è stato verificato: i vostri ordini possono usarlo' },

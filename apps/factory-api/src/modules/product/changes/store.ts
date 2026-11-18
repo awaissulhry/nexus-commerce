@@ -94,6 +94,8 @@ export const REQUEST_COLUMNS = {
   version: true,
   createdAt: true,
   createdById: true,
+  // B-SA-047: the customer's design change that raised it (its order's files are its door).
+  orderChangeRequestId: true,
 } as const satisfies Prisma.ChangeRequestSelect
 export type RequestData = Prisma.ChangeRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 

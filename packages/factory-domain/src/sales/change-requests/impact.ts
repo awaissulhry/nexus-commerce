@@ -109,6 +109,17 @@ export const IMPACT_NOTES: Readonly<Partial<Record<OrderRequestKind, Words>>> = 
 
 const NOTHING_FROZEN: Words = Object.freeze({ it: 'Niente di ciò che chiedete è bloccato', en: 'Nothing you ask is frozen' })
 
+// ── B-SA-046 (sales page plan P7, R3; 14-change-flow §2.4): a design change names lines — each says how far it is made ──
+/** How far one line of a design change is made, in the customer's words (its freeze stage: never a number of pieces). */
+export function designLineWords(line: Pick<ImpactLine, 'seq' | 'stage'>): Words {
+  if (line.stage === null) return { it: `La riga ${line.seq} non è ancora in produzione`, en: `Line ${line.seq} is not in production yet` }
+  if (line.stage === 'RELEASED') return { it: `La riga ${line.seq} è pianificata, niente è ancora tagliato: la modifica può ancora valere per lei`, en: `Line ${line.seq} is planned, nothing is cut yet: the change can still apply to it` }
+  return { it: `Il taglio della riga ${line.seq} è iniziato: la modifica può costare di più o valere per il prossimo ordine`, en: `Cutting has started on line ${line.seq}: the change may cost extra or apply to the next order` }
+}
+const DESIGN_CUT: Words = Object.freeze({ it: 'Il taglio di una parte delle righe è iniziato: la modifica del design può costare di più', en: 'Cutting has started on some of the lines: the design change may cost extra' })
+const DESIGN_NOT_CUT: Words = Object.freeze({ it: 'Niente delle righe è ancora tagliato', en: 'Nothing of the lines is cut yet' })
+// ── end B-SA-046 ──
+
 /** The earliest date in the customer's words (an estimate: dates only). */
 export function earliestWords(earliest: Pick<DateOnly, 'date' | 'partial' | 'meetsWanted'>): Words {
   if (earliest.date === null) return { it: 'Vi diamo una data appena l’abbiamo pianificata', en: 'We give you a date once we have planned it' }
@@ -153,14 +164,21 @@ export function impactOf(ask: ImpactAsk, facts: ImpactFacts): Impact {
     if (ask.shipTo) read('SHIP_TO', null, null, facts.orderStage)
   }
   if ((ask.kind === 'CHANGE' || ask.kind === 'RUSH' || ask.kind === 'SPLIT_SHIPMENT') && (ask.requestedDate ?? null) !== null) read('DELIVERY_DATE', null, null, facts.orderStage)
-  const priced = ask.kind === 'CHANGE' ? frozen.some((item) => item.state === 'CHANGE_REQUEST') : ask.kind === 'CANCEL' ? feeApplies(facts.cancelFeePct) : false
+  // B-SA-046: a design change says per line how far it is made; once cutting started on one of them a price may apply.
+  const design = ask.kind === 'DESIGN' ? [...new Set((ask.cells ?? []).map((cell) => cell.lineId))].flatMap((lineId) => (lines.has(lineId) ? [lines.get(lineId)!] : [])) : []
+  const designCut = design.some((line) => line.stage !== null && line.stage !== 'RELEASED')
+  const priced = ask.kind === 'CHANGE' ? frozen.some((item) => item.state === 'CHANGE_REQUEST') : ask.kind === 'CANCEL' ? feeApplies(facts.cancelFeePct) : ask.kind === 'DESIGN' ? designCut : false
   const blocked = frozen.some((item) => item.state === 'BLOCKED')
   const earliest = facts.earliest
     ? Object.freeze({ date: facts.earliest.date, partial: facts.earliest.partial, meetsWanted: facts.earliest.meetsWanted, words: Object.freeze(earliestWords(facts.earliest)) })
     : null
   const note = IMPACT_NOTES[ask.kind]
   const headline: Words =
-    frozen.length === 0
+    ask.kind === 'DESIGN' // B-SA-046
+      ? designCut
+        ? DESIGN_CUT
+        : DESIGN_NOT_CUT
+      : frozen.length === 0
       ? NOTHING_FROZEN
       : blocked
         ? { it: 'Una parte di ciò che chiedete non si può più cambiare', en: 'Part of what you ask cannot change any more' }
@@ -172,7 +190,7 @@ export function impactOf(ask: ImpactAsk, facts: ImpactFacts): Impact {
     priced,
     pricedWords: priced ? PRICED_WORDS : null,
     earliest,
-    notes: Object.freeze(note ? [note] : []),
+    notes: Object.freeze(ask.kind === 'DESIGN' ? design.sort((a, b) => a.seq - b.seq).map((line) => Object.freeze(designLineWords(line))) /* B-SA-046 */ : note ? [note] : []),
     words: Object.freeze({ ...headline }),
   })
 }

@@ -139,6 +139,8 @@ const ROWS: Readonly<Record<ReasonCodeList, readonly Row[]>> = {
     ['CAPACITY', 'Capacità', 'Capacity', 'clock', INDIGO],
     ['MACHINE', 'Macchina ferma', 'Machine stopped', 'alert', RED],
     ['PAYMENT', 'In attesa di pagamento', 'Waiting for payment', 'percent', VIOLET],
+    // B-SA-049 (sales page plan R3, P7; 13-backend B6): a released change order holds its work in progress (HOLD, REWORK).
+    ['CHANGE_ORDER', 'Modifica del modello in corso', 'Design change in progress', 'flag', INDIGO],
     OTHER(),
   ],
 }

@@ -363,7 +363,8 @@ export const fetchRules = (api: ApiClient, orderId: string, signal?: AbortSignal
 // the order (the production asks beside CHANGE and CANCEL; the domain's ORDER_REQUEST_KINDS, kept equal by orders.vitest).
 export const REQUEST_STATUSES = ['OPEN', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'COUNTERED'] as const
 export type RequestStatus = (typeof REQUEST_STATUSES)[number]
-export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] as const
+// B-SA-046: + DESIGN (a design change of some lines), in the domain's order.
+export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'DESIGN', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] as const
 
 export const changeRequestSchema = z.object({
   id: z.string(),
