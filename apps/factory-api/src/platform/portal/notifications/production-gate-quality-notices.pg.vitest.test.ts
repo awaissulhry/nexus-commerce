@@ -140,7 +140,7 @@ async function fresh(person: Portal): Promise<Notice[]> {
 const shortOf = (notice: Notice) => ({ messageKey: notice.messageKey, recordId: notice.recordId })
 
 beforeAll(async () => {
-  world = await urgencyWorld('pr2o_gate_quality_notices', NS)
+  world = await urgencyWorld('pr2o_gate_quality', NS) // fix-pr-9: a test database label has at most 20 characters
   orders.a1 = (await world.addOrder(world.ids.a, 'G1', '2026-10-01')).orderId
   orders.a2 = (await world.addOrder(world.ids.a, 'G2', '2026-10-02')).orderId
   orders.b1 = (await world.addOrder(world.ids.b, 'G3', '2026-10-03')).orderId

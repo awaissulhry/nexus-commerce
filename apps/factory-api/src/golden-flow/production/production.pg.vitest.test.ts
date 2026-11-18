@@ -17,7 +17,6 @@ import { buildApp } from '../../core/app'
 import { routesFiles } from '../../core/autoload'
 import { callerFor } from '../../core/command'
 import { testAuthenticator } from '../../core/context'
-import { useServerClock } from '../../core/time'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { gateHandlers } from '../../modules/planning/milestones/follow'
 import { brandKeeperHandler, keepOrder } from '../../modules/production/brand/keeper'
@@ -329,7 +328,10 @@ let sweepFiles: string | undefined
 
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
-  world = await urgencyWorld('pr36_golden_prod', NS)
+  // fix-pr-9: the world runs on ONE clock (urgency-world), started 8 minutes behind the database's: the flow's six two-factor
+  // sign-ins, three portal sign-ins and seven step-ups move it about 9.5 minutes on in a run of about a minute, and the database
+  // refuses a time more than 5 minutes ahead of its own (fix-pr-7 found a portal post's read mark refused at P on one clock from now).
+  world = await urgencyWorld('pr36_golden_prod', NS, { clockBehindMs: 8 * 60_000 })
   await seedCalendar({ db: world.h.database, namespace: NS })
   worker = { h: world.h, tenant: world.tenant, retried: [] as string[] } as unknown as World
   handlers = [...gateHandlers(), brandKeeperHandler(), supervisorFollowsHandler(), issueAnsweredHandler(), notificationsHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET, clock: world.h.clock })]
@@ -364,7 +366,6 @@ beforeEach(() => {
 })
 
 afterAll(async () => {
-  useServerClock(undefined) // fix-pr-7 (P: the reply on the portal's clock)
   useErrorTracker(undefined)
   await sweepApp?.close()
   useFiles(undefined)
@@ -722,18 +723,10 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
 
     // "Answer N" of one customer's orders is not built (threads T11): we answer in the first order's conversation, as the plan's
     // fallback; it answers every problem of the batch.
-    // fix-pr-7: our reply is dated on the portal's clock. The portal dates its commands by the harness clock (B-W2b-167), which the
-    // flow's sign-ins and two-factor acts moved some minutes ahead of the server's; our reply on the server's clock was dated before
-    // the problem it answers and answered nothing (a shared message at or after the raise answers it). On one clock it comes after,
-    // as in production, where both clocks are the server's. One clock for the whole flow is not possible: by here the harness clock
-    // runs more than the database's 5 minutes ahead (factory_recall_not_future), and the portal post's read mark would be refused.
-    useServerClock(world.h.clock)
-    let reply: Json
-    try {
-      reply = await ok(planner, 'POST', `/threads/SalesOrder/${A.q1.orderId}/replies`, { body: REPLY_BODY }, 201)
-    } finally {
-      useServerClock(undefined)
-    }
+    // fix-pr-7: our reply comes after the problem it answers (a shared message at or after the raise answers it), as in production.
+    // fix-pr-9: the whole flow runs on the world's one clock now (started behind the database's, so the portal post's read mark is
+    // never more than its 5 minutes ahead): the reply needs no clock of its own.
+    const reply = await ok(planner, 'POST', `/threads/SalesOrder/${A.q1.orderId}/replies`, { body: REPLY_BODY }, 201)
     expect(reply.message).toBeDefined()
     await settle()
     expect((await admin<{ status: string }>('SELECT status::text AS status FROM "ProductionIssue" WHERE id = ANY($1::uuid[]) ORDER BY "raisedAt", id', [issues.map((issue) => issue.id)])).map((row) => row.status)).toEqual(['ANSWERED', 'ANSWERED'])

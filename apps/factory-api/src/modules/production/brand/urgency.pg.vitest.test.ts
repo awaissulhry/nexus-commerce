@@ -286,7 +286,9 @@ describe('B-PR-22b the factory sets back, locks and unlocks (production.brand.ov
   })
 
   it('switched off: the marks stay (dormant) but no column, chip or backlog place counts them; the card says so', async () => {
-    await admin(`UPDATE "BrandOrderProduction" SET urgency = 'URGENT', "urgentRank" = 1, "urgencySetAt" = now(), "urgencySetBy" = 'BRAND', "urgencyBatchId" = $2, version = version + 1 WHERE key = $1`, [`brand-production:${B.b3}`, newId()])
+    // fix-pr-9: B's own mark names no office person (the set-back above left our manager on the row; the database's rule
+    // 202611170701 refuses a BRAND mark set by an office person).
+    await admin(`UPDATE "BrandOrderProduction" SET urgency = 'URGENT', "urgentRank" = 1, "urgencySetAt" = now(), "urgencySetBy" = 'BRAND', "urgencySetById" = NULL, "urgencyBatchId" = $2, version = version + 1 WHERE key = $1`, [`brand-production:${B.b3}`, newId()])
     await admin(`UPDATE "PortalSettings" SET "productionUrgencyOn" = false, version = version + 1 WHERE "partyId" = $1`, [world.ids.b])
     const card = await read('office.all', `/production/brands/${world.ids.b}/urgency`)
     expect(card.urgency).toMatchObject({ on: false, dormant: { en: '1 urgent mark is kept but not used while this is off.' } })
