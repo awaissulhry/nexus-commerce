@@ -12,6 +12,7 @@ import { ORDER_SORTS } from './sort' // B-TH-057
 // B-TH-058 / B-TH-059: the office's priority levels, the customer's own urgency (read-only).
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { CUSTOMER_URGENCIES } from './customer-urgency'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -382,6 +383,10 @@ export const orderPictureContract = defineContract({
   },
 })
 // ── end B-TH-017 / B-TH-063 ───────────────────────────────────────────────────────────────────────────────────────────
+
+// ── B-SA-011 (sales page plan N8): the small pictures of a page of orders in ONE read (modules/product/images/small-pictures.ts) ──
+export const orderPicturesReadContract = defineContract({ body: input({ orderIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ── end B-SA-011 ──
 
 // ── B-TH-019: the Customer switcher's numbers ─────────────────────────────────────────────────────────────────────────
 export const customersContract = defineContract({

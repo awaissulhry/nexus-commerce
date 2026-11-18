@@ -39,6 +39,9 @@ import { orderPicture } from './picture'
 import { orderSummary } from './summary'
 // B-TH-077: what points at the order (its complaints and returns, planning's open re-promises, the gates' refusals).
 import { orderLinks, recordLinksContract } from './record-links'
+// B-SA-011: the small pictures of a page of orders in one read.
+import { orderPicturesReadContract } from './contract'
+import { recordPictures } from '../../product/images/small-pictures'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -63,6 +66,9 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-TH-058: the overall view's totals per customer and for the whole view, each with the filter of its rows (before /:orderId).
   app.get('/sales/orders/summary', { schema: summaryContract }, async (request) => orderSummary(request, request.query))
+
+  // B-SA-011: the small pictures of a page of orders (the ids the reader may not see are left out; before /:orderId).
+  app.post('/sales/orders/pictures', { schema: orderPicturesReadContract }, async (request) => recordPictures(request, 'order', request.body.orderIds))
 
   app.get('/sales/orders/:orderId', { schema: getOrderContract }, async (request) => getOrder(request, request.params.orderId))
 

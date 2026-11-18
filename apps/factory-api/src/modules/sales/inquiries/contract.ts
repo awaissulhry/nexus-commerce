@@ -38,6 +38,7 @@ import {
   // B-TH-071
   carriedFiles,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
 // ---- B-TH-094
 import { productionAnswerBody, productionSuggestionQuery, productionSuggestionView } from '@nexus/factory-domain/sales/inquiries/production-answer'
 // ---- end B-TH-094
@@ -68,6 +69,8 @@ export const styleDraftContract = defineContract({ params: inquiryParams, body: 
 export const assigneesContract = defineContract({ querystring: input({ companyId: id(), partyId: id().optional() }), response: { 200: assigneesView } })
 // B-TH-216 (Sales › Incoming): the Picture cell's small preview.
 export const inquiryPictureContract = defineContract({ params: inquiryParams, response: { 200: inquiryPictureView } })
+// B-SA-011 (sales page plan N8): the small pictures of a page of requests in ONE read (modules/product/images/small-pictures.ts).
+export const inquiryPicturesReadContract = defineContract({ body: input({ inquiryIds: pictureIds() }), response: { 200: smallPicturesView } })
 // B-TH-042: answer a new customer — the check, and the customer made or matched.
 export const customerCheckContract = defineContract({ params: inquiryParams, response: { 200: customerCheckView } })
 export const makeCustomerContract = defineContract({ params: inquiryParams, body: makeCustomerBody, response: { 200: makeCustomerAnswer } })

@@ -20,6 +20,7 @@ import {
 import { linkProofView, shownProofsField } from '../quote-proofs/contract'
 // TH-6 part B: the request's own state on "Made from".
 import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
 
 /**
  * The quotes routes' contracts (B-W1-21; A2 SCR-030 "Quotes", SCR-034 "Quote record", SCR-035 the line and the approval
@@ -282,6 +283,10 @@ export const listQuotesContract = defineContract({
           picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
           styleCount: z.number().int(),
           // ---- end TH-6 part B
+
+// ---- B-SA-011 (sales page plan N8): the small pictures of a page of quotes in ONE read (modules/product/images/small-pictures.ts)
+export const quotePicturesReadContract = defineContract({ body: input({ quoteIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ---- end B-SA-011
         }),
       ),
       nextCursor: id().nullable(),

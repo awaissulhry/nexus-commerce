@@ -43,6 +43,9 @@ import { orderInquiry } from './order'
 import { styleDraftOf } from './style-draft'
 // B-TH-216 (Sales › Incoming): the Picture cell's small preview.
 import { inquiryPicture } from './row-extras'
+// B-SA-011: the small pictures of a page of requests in one read.
+import { inquiryPicturesReadContract } from './contract'
+import { recordPictures } from '../../product/images/small-pictures'
 // B-W2b-394 (ML1:02): the addresses whose mail makes an inquiry by itself.
 import { inquiryAddresses, inquiryAddressesContract, saveInquiryAddresses, saveInquiryAddressesContract } from './from-mail'
 // B-TH-221: New request's customer picker (wall W23).
@@ -73,6 +76,8 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   app.post('/sales/inquiries/from-mail/:inboundEmailId', { schema: fromMailContract }, async (request, reply) => reply.code(201).send(await createFromMail(request, request.params.inboundEmailId, request.body, idempotencyKeyFrom(request))))
   app.post('/sales/inquiries/assign', { schema: bulkAssignContract }, async (request) => assignInquiries(request, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/decline', { schema: bulkDeclineContract }, async (request) => declineInquiries(request, request.body, idempotencyKeyFrom(request)))
+  // B-SA-011: the small pictures of a page of requests (the ids the reader may not see are left out).
+  app.post('/sales/inquiries/pictures', { schema: inquiryPicturesReadContract }, async (request) => recordPictures(request, 'request', request.body.inquiryIds))
   app.get('/sales/inquiries/:inquiryId', { schema: readInquiryContract }, async (request) => ({ inquiry: await readInquiry(request, request.params.inquiryId) }))
   app.get('/sales/inquiries/:inquiryId/picture', { schema: inquiryPictureContract }, async (request) => inquiryPicture(request, request.params.inquiryId)) // B-TH-216
   app.post('/sales/inquiries', { schema: createInquiryContract }, async (request, reply) => reply.code(201).send(await createInquiry(request, request.body, idempotencyKeyFrom(request))))

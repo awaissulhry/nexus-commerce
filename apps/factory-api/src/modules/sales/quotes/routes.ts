@@ -53,6 +53,9 @@ import { addMadeToMeasureLine, editMadeToMeasureLine, outOfChart, quoteUnits } f
 // TH-6 part B (B-TH-257 follow-up): the quote list's Picture cell's small preview.
 import { quotePictureContract } from './contract'
 import { quotePicture } from './row-picture'
+// B-SA-011: the small pictures of a page of quotes in one read.
+import { quotePicturesReadContract } from './contract'
+import { recordPictures } from '../../product/images/small-pictures'
 
 /**
  * Quotes, part 1 (B-W1-21): the list and the record, a new quote, its header and terms, its size-grid lines (each costed
@@ -67,6 +70,9 @@ import { quotePicture } from './row-picture'
  */
 export default defineRoutes('sales.quotes', manifest, async (app) => {
   app.get('/sales/quotes', { schema: listQuotesContract }, async (request) => listQuotes(request, request.query))
+
+  // B-SA-011: the small pictures of a page of quotes (the ids the reader may not see are left out).
+  app.post('/sales/quotes/pictures', { schema: quotePicturesReadContract }, async (request) => recordPictures(request, 'quote', request.body.quoteIds))
 
   app.get('/sales/quotes/:quoteId', { schema: getQuoteContract }, async (request) => getQuote(request, request.params.quoteId))
   app.get('/sales/quotes/:quoteId/picture', { schema: quotePictureContract }, async (request) => quotePicture(request, request.params.quoteId)) // TH-6 part B
