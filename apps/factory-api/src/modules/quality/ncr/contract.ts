@@ -93,6 +93,12 @@ export const summaryView = output({
   cost: money.cost(z.number().int().nullable()),
   /** B-W2b-113: the company's currency (ISO 4217) the cost is in. */
   currency: z.string(),
+  /**
+   * B-SA-033: only on a list narrowed to one sales order — its work order also makes another customer's work (one made before
+   * the one-customer rule). Such an NCR reaches only people who reach every customer (the brand wall), so a person limited to
+   * some customers never meets it; the order page says "made together with other work", naming no one.
+   */
+  sharedWorkOrder: z.boolean().optional(),
 })
 
 export const ncrView = summaryView.extend({
@@ -241,6 +247,12 @@ const filters = {
   q: z.string().max(80).optional(),
   /** B-PR-06: the customer filter (the NCRs about that customer's work); the brand wall applies first. */
   partyId: id().optional(),
+  /**
+   * B-SA-033 (Sales page plan P2, the order page's Quality section): one sales order's NCRs — of one of its live work orders,
+   * raised from it, or linked to it — AFTER the brand wall. The order is checked with orders.view first: one the reader does not
+   * reach is "Sales order not found." (the words of an unknown id).
+   */
+  salesOrderId: id().optional(),
 }
 
 export const listContract = defineContract({
