@@ -120,22 +120,25 @@ export function counteredWords(counter: Counter): Words {
  *            in place of the one asked: acceptedWithCounter) — the request stays COUNTERED until then (the database makes
  *            COUNTERED → ACCEPTED exactly when the counter was approved)
  *   REFUSED  the customer said no: the request is WITHDRAWN (the office's side of the answer does it: the approvals' settle)
- *   LAPSED   EXPIRED or WITHDRAWN: no answer comes; the office refuses the request with words (a request is countered once)
+ *   LAPSED   EXPIRED or WITHDRAWN: no answer comes; the office refuses the request with words (a request is countered once);
+ *            B-PR-40: also a yes we put back (B-PR-30b, the counter's answer reversed before the accept carried it out): it is no
+ *            yes any more, and the database refuses the request's accept
  */
 export const COUNTER_STATES = ['WAITING', 'AGREED', 'REFUSED', 'LAPSED'] as const
 export type CounterState = (typeof COUNTER_STATES)[number]
 
 /**
- * The counter's state from its approval request's status (null: not a status an approval has). The customer's yes is not put
- * back (B-PR-30b): once they agreed, the request is only carried out (apps/factory-api change-requests/counter-reverse).
+ * The counter's state from its approval request's status (null: not a status an approval has) and whether its answer was put
+ * back (B-PR-40: a yes put back before the accept carried it out lapses — the office refuses the request with words; a no put
+ * back leaves its request withdrawn).
  */
-export function counterStateOf(approvalStatus: string | null | undefined): CounterState | null {
+export function counterStateOf(approvalStatus: string | null | undefined, reversed = false): CounterState | null {
   switch (approvalStatus) {
     case 'OPEN':
       return 'WAITING'
     case 'APPROVED':
     case 'APPROVED_WITH_CHANGES':
-      return 'AGREED'
+      return reversed ? 'LAPSED' : 'AGREED' // B-PR-40
     case 'REFUSED':
       return 'REFUSED'
     case 'EXPIRED':
@@ -160,9 +163,13 @@ export const COUNTER_STATE_WORDS: Readonly<Record<CounterState, { readonly custo
     customer: { it: 'Avete rifiutato la nostra controproposta: la richiesta è ritirata', en: 'You said no to our counter-offer: the request is withdrawn' },
     office: { it: 'Il cliente ha rifiutato la controproposta: la richiesta è ritirata', en: 'The customer said no to the counter-offer: the request is withdrawn' },
   },
+  // B-PR-40: a yes put back lapses too (the words say so, never only "expired").
   LAPSED: {
-    customer: { it: 'La nostra controproposta è scaduta: vi rispondiamo noi', en: 'Our counter-offer lapsed: we will answer you' },
-    office: { it: 'La controproposta è scaduta o è stata ritirata: rifiuta la richiesta con un motivo', en: 'The counter-offer expired or was withdrawn: refuse the request with a reason' },
+    customer: { it: 'La nostra controproposta non è più valida: vi rispondiamo noi', en: 'Our counter-offer no longer stands: we will answer you' },
+    office: {
+      it: 'La controproposta è scaduta, è stata ritirata o il suo sì è stato revocato: rifiuta la richiesta con un motivo',
+      en: 'The counter-offer expired, was withdrawn or its yes was put back: refuse the request with a reason',
+    },
   },
 })
 
@@ -229,7 +236,7 @@ export function officeAnswerProblem(answer: OfficeAnswer, request: { readonly ki
           ? 'The customer said no to our counter-offer: the request is withdrawn.'
           : answer === 'COUNTERED'
             ? 'A request is countered once: our counter-offer lapsed, refuse the request with words.'
-            : 'Our counter-offer lapsed: refuse the request with words; it cannot be accepted without the customer’s yes.'
+            : 'Our counter-offer no longer stands (it lapsed, or its yes was put back): refuse the request with words; it cannot be accepted without the customer’s yes.' // B-PR-40
   return { path: `request/COUNTER_${state}`, message }
 }
 

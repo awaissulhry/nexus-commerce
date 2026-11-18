@@ -18,6 +18,8 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
  *   - …_production_wave5_samples_guards (EXTRA 1): a DECIDED round goes back UNDER_REVIEW, a decided swatch is undecided and a
  *     gate passed by its round waits again ONLY by the reversal of the approval request whose answer decided them (and a gate
  *     only before work starts on its order); refused otherwise, with nothing else changed;
+ *   - …_production_wave5_counter_guards (EXTRA 2): a COUNTERED request whose counter's yes was put back is refused (or
+ *     withdrawn), never accepted; before that reversal it is accepted, never refused.
  * The refusals are check_violation (SQLSTATE 23514); their messages are read through raw SQL. Not run in the build (Owner rule
  * 2026-11-17: checks at the end).
  */
@@ -26,6 +28,7 @@ const NS = 'pr40-wave5'
 const ROUND_BACK = /a decided round goes back under review only by the reversal of the approval request that decided it/
 const SWATCH_BACK = /it is undecided again only by the reversal of the approval request that decided it/
 const GATE_BACK = /waits again only by the reversal of the round's approval, before work starts on its order/
+const COUNTER_YES = /ACCEPTED exactly when the customer said yes to its counter-offer, a yes we did not put back/
 
 let db: MigratedDatabase
 let factory: FactoryDatabase
@@ -218,5 +221,41 @@ describe('a sample decision put back (…_production_wave5_samples_guards, EXTRA
     expect(await update(office(), 'SampleRound', pp, `stage = 'UNDER_REVIEW', ${CLEARED}`)).toBe(1)
     await expect(update(office(), 'OrderGate', samples.gateIds.pp, WAITS)).rejects.toThrow(GATE_BACK)
     expect((await admin(`SELECT "passedAt" IS NOT NULL AS passed FROM "OrderGate" WHERE id = $1`, [samples.gateIds.pp]))[0]).toEqual({ passed: true })
+  })
+})
+
+describe("a counter-offer's yes put back (…_production_wave5_counter_guards, EXTRA 2)", () => {
+  /** A new OPEN request of P1 (a copy of the seed's OPEN change, by its buyer), countered by the office; returns both ids. */
+  async function countered(): Promise<{ asked: string; counter: string }> {
+    const asked = randomUUID()
+    const at = await serverNow()
+    await copyRow('OrderChangeRequest', sales.changes.open, { id: asked, createdAt: at, updatedAt: at }, p1())
+    const counter = await approval({ kind: 'COUNTER_OFFER', recordType: 'OrderChangeRequest', recordId: asked })
+    expect(await update(office(), 'OrderChangeRequest', asked, `status = 'COUNTERED', "counterApprovalId" = $2::uuid, "counteredAt" = now(), "counteredById" = $3::uuid, "counterDate" = $4::date, version = version + 1`, counter, U.office, NEXT_WEEK())).toBe(1)
+    return { asked, counter }
+  }
+  const REFUSE = `status = 'REFUSED', answer = 'Made-up: we keep the order as it is', "answeredAt" = now(), "answeredById" = $2::uuid, version = version + 1`
+  const ACCEPT = `status = 'ACCEPTED', "answeredAt" = now(), "answeredById" = $2::uuid, version = version + 1`
+
+  it('after the yes: accepted, never refused; once the yes is put back: refused, never accepted', async () => {
+    const { asked, counter } = await countered()
+    expect(await answerAs(counter, 'APPROVED')).toBe(1)
+    await expect(update(office(), 'OrderChangeRequest', asked, REFUSE, U.office)).rejects.toThrow(COUNTER_YES)
+    expect(await reverse(counter, U.office)).toBe(1)
+    await expect(update(office(), 'OrderChangeRequest', asked, ACCEPT, U.office)).rejects.toThrow(COUNTER_YES)
+    await expect(admin(`UPDATE "OrderChangeRequest" SET ${ACCEPT} WHERE id = $1`, [asked, U.office])).rejects.toThrow(COUNTER_YES)
+    expect(await update(office(), 'OrderChangeRequest', asked, REFUSE, U.office)).toBe(1)
+    expect((await admin(`SELECT status::text AS status FROM "OrderChangeRequest" WHERE id = $1`, [asked]))[0]).toEqual({ status: 'REFUSED' })
+  })
+
+  it('a yes put back lets the customer withdraw it too (the partner reads the reversal); a yes that stands is accepted', async () => {
+    const first = await countered()
+    expect(await answerAs(first.counter, 'APPROVED')).toBe(1)
+    expect(await reverse(first.counter, U.office)).toBe(1)
+    expect(await update(p1(), 'OrderChangeRequest', first.asked, `status = 'WITHDRAWN', "withdrawnAt" = now(), version = version + 1`)).toBe(1)
+    const second = await countered()
+    expect(await answerAs(second.counter, 'APPROVED')).toBe(1)
+    await expect(update(p1(), 'OrderChangeRequest', second.asked, `status = 'WITHDRAWN', "withdrawnAt" = now(), version = version + 1`)).rejects.toThrow(COUNTER_YES)
+    expect(await update(office(), 'OrderChangeRequest', second.asked, ACCEPT, U.office)).toBe(1)
   })
 })

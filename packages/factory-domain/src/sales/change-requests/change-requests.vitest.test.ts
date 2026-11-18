@@ -559,6 +559,13 @@ describe('B-PR-26: what the office may answer, the counter-offer as the customer
     expect(counterStateOf('EXPIRED')).toBe('LAPSED')
     expect(counterStateOf('WITHDRAWN')).toBe('LAPSED')
     expect(counterStateOf(null)).toBeNull()
+    // B-PR-40: a yes we put back is no yes (it lapses: refused in words, never accepted); a no put back stays a no.
+    expect(counterStateOf('APPROVED', true)).toBe('LAPSED')
+    expect(counterStateOf('APPROVED_WITH_CHANGES', true)).toBe('LAPSED')
+    expect(counterStateOf('REFUSED', true)).toBe('REFUSED')
+    expect(counterStateOf('APPROVED', false)).toBe('AGREED')
+    expect(COUNTER_STATE_WORDS.LAPSED.office.en).toMatch(/its yes was put back/)
+    expect(COUNTER_STATE_WORDS.LAPSED.customer.it).toMatch(/vi rispondiamo noi/)
     const open = officeAnswersOf({ kind: 'HOLD', status: 'OPEN' }, null)
     expect(open).toMatchObject({ accept: true, refuse: true, counter: true, waitingOn: 'US' })
     // A resume is accepted or refused, never countered (the pause is the customer's to end).

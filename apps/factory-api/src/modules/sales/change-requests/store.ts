@@ -353,8 +353,10 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
 export async function readCounterStates(db: Reader, rows: readonly { readonly counterApprovalId: string | null }[]): Promise<Map<string, CounterState>> {
   const ids = [...new Set(rows.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : [])))]
   if (ids.length === 0) return new Map()
-  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } })
-  return new Map(found.map((row) => [row.id, counterStateOf(row.status) ?? 'LAPSED']))
+  // ---- B-PR-40: + whether its answer was put back (a yes put back lapses: factory-domain counterStateOf).
+  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, reversedAt: true } })
+  return new Map(found.map((row) => [row.id, counterStateOf(row.status, row.reversedAt !== null) ?? 'LAPSED']))
+  // ---- end B-PR-40
 }
 
 /**

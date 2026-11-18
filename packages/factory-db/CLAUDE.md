@@ -596,7 +596,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    reversed: `factory_sample_decision_reversed`), wave 4's `factory_sample_swatch_guard` (a decided swatch undecided by the same
    rule) and `factory_order_gate_guard` (a gate passed by its round waits again, its pass cleared and nothing else, only once
    the round is back without a decision by that reversal and no work started on its order — no cut log piece not reversed, no
-   bundle not VOID for a cell of its lines: `factory_order_gate_waits_again`, `factory_sales_order_work_started`)):
+   bundle not VOID for a cell of its lines: `factory_order_gate_waits_again`, `factory_sales_order_work_started`)),
+   `…_production_wave5_counter_guards` (B-PR-40 EXTRA 2, no schema folder of its own: it redefines wave 4's
+   `factory_order_change_request_guard`: a COUNTERED request is ACCEPTED exactly when the customer said yes to the counter and
+   that yes was not put back; a yes put back is no yes — the request is refused or withdrawn, never accepted)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
