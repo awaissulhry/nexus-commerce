@@ -34,6 +34,10 @@ import type { Draft, FanOutRule, Reader, RuleContext } from '../fan-out'
  * order's company and customer. A notice of the customer itself (a sample round of no order) goes the same way through the
  * customer's default. Each person is told once per event, of the orders he is told of ("asks to pause 3 orders"), and a batch's
  * notices are one bell group per person (the draft's batchId). Nobody of the customer acted as an office person: no actor.
+ * fix-pr-4 (pr3n open point, lead decision): an answer to OUR question also tells the office person who asked it — the approval
+ * request's maker (createdById), the counter-offer's (counteredById) — beside the supervisor and backup (or the managers), while he
+ * is an ACTIVE office person who reads the record over its company and customer (the same wall; a person limited to another
+ * customer, suspended or without threads.read is never told).
  *
  * THE WALL (PW-04, PW-09, PW-14): every order is read by its own row and kept only when it is the event's customer's (an order of
  * another customer named by mistake is dropped, never told); a person is told only while he is an ACTIVE office person who reads
@@ -102,7 +106,7 @@ async function managersOf(context: RuleContext, place: ScopedRecord, reads: (rea
  * Who is told of each subject (see the head): its supervisor and the customer's backup who read it now, else the holders of
  * production.brand.manage over its company and customer who read it. Each person once, with the subjects he is told of.
  */
-async function audienceOf(context: RuleContext, partyId: string, subjects: readonly Subject[]): Promise<Map<string, Subject[]>> {
+async function audienceOf(context: RuleContext, partyId: string, subjects: readonly Subject[], asker: string | null = null): Promise<Map<string, Subject[]>> {
   const defaults = (await customerDefaultsOf(context.tx, [partyId])).get(partyId) ?? null
   const own = await orderSupervisorsOf(context.tx, subjects.flatMap((subject) => (subject.orderId !== null ? [subject.orderId] : [])))
   const managers = new Map<string, readonly string[]>()
@@ -126,13 +130,21 @@ async function audienceOf(context: RuleContext, partyId: string, subjects: reado
     }
     for (const userId of people) told.set(userId, [...(told.get(userId) ?? []), subject])
   }
+  // fix-pr-4: the office person who asked the customer, of the subjects he reads now (each person once, each subject once).
+  if (asker !== null) {
+    const reader = await context.reader(asker)
+    const his = reader ? subjects.filter((subject) => mayOnThread(reader.actor, THREADS_READ, subject.recordType, { companyId: subject.companyId, siteId: null, partyId })) : []
+    const already = told.get(asker) ?? []
+    const added = his.filter((subject) => !already.includes(subject))
+    if (added.length > 0) told.set(asker, [...already, ...added])
+  }
   return told
 }
 
 /** The notices of an act on the customer's orders: one per person, over the orders he is told of (the first named, how many). */
-async function orderDrafts(context: RuleContext, customer: Customer, orders: readonly OwnOrder[], noticeOf: (count: number) => OfficeNotice | null, options: { readonly batchId: string | null; readonly skip?: ReadonlySet<string> }): Promise<Draft[]> {
+async function orderDrafts(context: RuleContext, customer: Customer, orders: readonly OwnOrder[], noticeOf: (count: number) => OfficeNotice | null, options: { readonly batchId: string | null; readonly skip?: ReadonlySet<string>; /* fix-pr-4 */ readonly asker?: string | null }): Promise<Draft[]> {
   if (orders.length === 0) return []
-  const audience = await audienceOf(context, customer.id, orders.map((order): Subject => ({ orderId: order.id, recordType: 'SalesOrder', companyId: order.companyId })))
+  const audience = await audienceOf(context, customer.id, orders.map((order): Subject => ({ orderId: order.id, recordType: 'SalesOrder', companyId: order.companyId })), options.asker ?? null)
   const drafts: Draft[] = []
   for (const [userId, subjects] of audience) {
     if (options.skip?.has(userId)) continue
@@ -297,13 +309,14 @@ export const BRAND_PRODUCTION_RULES: readonly FanOutRule[] = Object.freeze([
     events: ['order_change_request.counter_answered'],
     async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
       const event = counterAnswered.payload.parse(raw)
-      const request = await context.tx.orderChangeRequest.findUnique({ where: { id: event.requestId }, select: { partyId: true, orderId: true } })
+      const request = await context.tx.orderChangeRequest.findUnique({ where: { id: event.requestId }, select: { partyId: true, orderId: true, counteredById: true } })
       if (!request || request.partyId !== event.partyId || request.orderId !== event.orderId) return []
       const customer = await customerOf(context, event.partyId)
       if (!customer) return []
       const orders = await ownOrders(context, customer.id, [event.orderId])
       const notice = counterOfficeNotice(event.answer)
-      return orderDrafts(context, customer, orders, () => notice, { batchId: null })
+      // fix-pr-4: the office person who made the counter-offer is told too.
+      return orderDrafts(context, customer, orders, () => notice, { batchId: null, asker: request.counteredById })
     },
   },
   {
@@ -314,7 +327,7 @@ export const BRAND_PRODUCTION_RULES: readonly FanOutRule[] = Object.freeze([
       // Decided on the payload first (a kind or a record that never tells: nothing to read); the round's kind is read after.
       if (!mayTellApproval({ kind: event.kind, recordType: event.recordType, status: event.status })) return []
       // The request by its own row, still answered so (a decision for the customer or a reversal is the office's own act).
-      const row = await context.tx.approvalRequest.findUnique({ where: { id: event.requestId }, select: { id: true, companyId: true, partyId: true, kind: true, recordType: true, recordId: true, status: true, decidedForPartyById: true } })
+      const row = await context.tx.approvalRequest.findUnique({ where: { id: event.requestId }, select: { id: true, companyId: true, partyId: true, kind: true, recordType: true, recordId: true, status: true, decidedForPartyById: true, createdById: true } })
       if (!row || row.partyId !== event.partyId || row.kind !== event.kind || row.recordType !== event.recordType || row.recordId !== event.recordId || row.status !== event.status || row.decidedForPartyById !== null) return []
       const round = row.recordType === 'SampleRound' ? await context.tx.sampleRound.findUnique({ where: { id: row.recordId }, select: { kind: true } }) : null
       const notice = approvalOfficeNotice({ kind: event.kind, recordType: row.recordType, sampleKind: round?.kind ?? null, status: event.status })
@@ -327,7 +340,8 @@ export const BRAND_PRODUCTION_RULES: readonly FanOutRule[] = Object.freeze([
       const followUp = event.kind === 'REPROMISE' ? await context.tx.task.findUnique({ where: { id: row.id }, select: { assigneeId: true } }) : null
       const skip = new Set(followUp?.assigneeId ? [followUp.assigneeId] : [])
       const subjects = about.orderIds.length > 0 ? about.orderIds.map((orderId): Subject => ({ orderId, recordType: about.record.type, companyId: about.companyId })) : [{ orderId: null, recordType: about.record.type, companyId: about.companyId }]
-      const audience = await audienceOf(context, customer.id, subjects)
+      // fix-pr-4: the office person who sent the request is told too.
+      const audience = await audienceOf(context, customer.id, subjects, row.createdById)
       return [...audience.keys()]
         .filter((userId) => !skip.has(userId))
         .map((userId): Draft => ({ userId, category: notice.category, record: about.record, companyId: about.companyId, anchor: null, messageKey: notice.key, params: { customer: customer.name }, actorId: null }))

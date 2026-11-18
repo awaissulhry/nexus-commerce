@@ -370,6 +370,61 @@ describe('B-PR-32 the customer’s production approvals answered', { timeout: 12
   })
 })
 
+// ---- fix-pr-4 (pr3n open point, lead decision): the office person who asked the customer is told of its answer too ---------------
+describe('fix-pr-4 the office person who asked: the counter-offer’s maker and the approval request’s, while active and reading the customer', { timeout: 120_000 }, () => {
+  const askers: string[] = []
+  /** A made-up office person of the plan role (threads.read), limited to these customers, made for this step. */
+  async function officePerson(key: string, partyIds: readonly string[]): Promise<string> {
+    const id = newId()
+    const roleId = `ffffffff${seedUuid(ns, 'two-brands:supervisor-people:role:plan').slice(8)}`
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: newId() }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.user.create({ data: { id, email: `${key}.${ns}@example.com`, displayName: `T ${key} (made up)`, status: 'ACTIVE', requireMfa: false }, select: { id: true } })
+        await tx.roleAssignment.create({ data: { id: newId(), userId: id, roleId, allCompanies: true, partyIds: [...partyIds], validFrom: new Date(Date.now() - 60_000) }, select: { id: true } })
+      }),
+    )
+    askers.push(id)
+    return id
+  }
+  afterAll(async () => {
+    // Out of the later steps' fallbacks (the plan role holds production.brand.manage).
+    if (askers.length > 0) await admin(`UPDATE "User" SET status = 'SUSPENDED' WHERE id = ANY($1::uuid[])`, [askers])
+  })
+
+  it('our counter-offer answered: its maker is told beside the supervisor and the backup — once; never one limited to the other customer or suspended', async () => {
+    const [, aNew] = w.production.urgent
+    const askerA = await officePerson('t-fixpr4-counter-a', [ids.a])
+    const counterBy = async (userId: string) => {
+      const change = await request({ orderId: aNew, partyId: ids.a, kind: 'CHANGE', status: 'COUNTERED' })
+      await replica([{ sql: `UPDATE "OrderChangeRequest" SET "counteredById" = $2, "counteredAt" = now() WHERE id = $1`, values: [change, userId] }])
+      return tell(eventOf('order_change_request.counter_answered', { requestId: change, orderId: aNew, partyId: ids.a, kind: 'CHANGE', answer: 'REFUSED' }))
+    }
+    const rows = await counterBy(askerA)
+    expect(whoOf(rows)).toEqual([people.supervisorA, people.backupA, askerA].sort())
+    for (const row of rows) expect(row).toMatchObject({ category: 'APPROVAL', messageKey: 'notifications.production.customerCounterRefused', recordType: 'SalesOrder', recordId: aNew, params: { customer: names.a, count: 1 }, actorId: null })
+    // The supervisor who countered: told once.
+    expect(whoOf(await counterBy(people.supervisorA))).toEqual([people.supervisorA, people.backupA].sort())
+    // The wall: limited to the other customer, without threads.read, suspended — never told.
+    for (const userId of [people.plannerB, people.noThread, people.inactive]) expect(whoOf(await counterBy(userId)), userId).toEqual([people.supervisorA, people.backupA].sort())
+  })
+
+  it('a production approval answered: the person who sent the request is told too; one limited to the other customer is not', async () => {
+    const askerA = await officePerson('t-fixpr4-approval-a', [ids.a])
+    const sentBy = async (userId: string) => {
+      const round = await sampleRound(ids.a, 'TOP_OF_PRODUCTION')
+      const input = { recordType: 'SampleRound', recordId: round.id, partyId: ids.a, kind: 'SAMPLE', status: 'REFUSED' }
+      const requestId = await answered(input)
+      await replica([{ sql: `UPDATE "ApprovalRequest" SET "createdById" = $2 WHERE id = $1`, values: [requestId, userId] }])
+      return { round, rows: await tell(answeredEvent(requestId, input)) }
+    }
+    const { round, rows } = await sentBy(askerA)
+    expect(whoOf(rows)).toEqual([people.supervisorA, people.backupA, askerA].sort())
+    for (const row of rows) expect(row).toMatchObject({ messageKey: 'notifications.production.customerRefusedTop', recordType: 'SampleRound', recordId: round.id, params: { customer: names.a } })
+    expect(whoOf((await sentBy(people.officeB)).rows)).toEqual([people.supervisorA, people.backupA].sort())
+  })
+})
+// ---- end fix-pr-4
+
 describe('B-PR-32 the wall: PW-04, PW-09, PW-14', { timeout: 120_000 }, () => {
   it('a customer with no supervisor or backup: the holders of production.brand.manage who read it — never a person limited to the other customer', async () => {
     const rows = await tell(urgencyEvent(ids.b, [w.b.salesOrderId]))
