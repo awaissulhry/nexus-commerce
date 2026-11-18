@@ -47,110 +47,23 @@ const emitting = (event: string) => `export async function send(tools: { emit(ev
 
 describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const guard = (root?: string) => run('check-event-contract.mjs', root)
+  /** The guard's two counts from its ok line ("ok (N declared event version(s), M literal emit(s) …"). */
+  const countsOf = (output: string) => {
+    const found = /ok \((\d+) declared event version\(s\), (\d+) literal emit/.exec(output)
+    expect(found, output).not.toBeNull()
+    return { events: Number(found![1]), emits: Number(found![2]) }
+  }
 
   it('passes on the repository, on an untouched copy, and with a declared, assembled and emitted event', () => {
     expect(guard()).toMatchObject({ status: 0 })
-    expect(guard(tree()).status).toBe(0)
+    // End check (11-18): the counts are read from the untouched copy, so a step that adds events or emits never edits this test.
+    // The planted module adds one declared event and the planted service one literal emit: exactly +1 and +1 over that copy.
+    const untouched = guard(tree())
+    expect(untouched.status, untouched.output).toBe(0)
+    const base = countsOf(untouched.output)
     const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }))
-    // B-W2b-F38: one more literal emit (sales_settings.changed by PUT /sales/settings/reminders): 1290 → 1291.
-    // B-W2b-371: three events (measurement_photo.added, .dated, .deleted) and five literal emits: 828 → 831, 1291 → 1296.
-    // B-W2b-374: three more literal emits (sales_order.options_changed by a typed order and an amendment, option_group.changed by PUT …/takes): 1296 → 1299.
-    // B-W2b-377: four events (inventory.receipt_held, .receipt_released, purchase_order.chase_recorded, supplier_document.typed)
-    // and one literal emit (purchasing_settings.changed by PUT /purchasing/reminders/settings/timing): 831 → 835, 1299 → 1300.
-    // B-W2b-384: one event (shipping.carton_packed) and six literal emits (the carton scan, take-out, close ×2, marks, marks print job): 835 → 836, 1300 → 1306.
-    // B-W2b-385: one event (notification.view_changed, emitted through eventFor, not a literal): 836 → 837.
-    // B-W2b-386: four events (shipment.hold_placed, .hold_released, shipment.split, shipping.cut_offs_saved) and eight literal
-    // emits (a hold placed, released and carried over; a split's created, split and packing_changed ×2; the cut-offs): 837 → 841, 1306 → 1314.
-    // B-W2b-389: two events (currency.changed, currency.rates_changed) and six literal emits (a currency added and switched, a
-    // manual rate kept and removed, the daily ECB switch, an ECB file read): 841 → 843, 1314 → 1320.
-    // B-W2b-390: one event (shipping.test_mode_changed) and six literal emits (going live: a label voided, packing changed, the
-    // switch; the own transport: details changed, a typed status recorded, its move): 841 → 842, 1314 → 1320.
-    // B-W2b-389 + B-W2b-390 together: 841 + 2 + 1 = 844 declared event versions, 1314 + 6 + 6 = 1326 literal emits.
-    // B-W2b-391: three events (shipping.label_reprinted, shipping.pack_made, shipping.proforma_made) and seven literal emits (a
-    // direct job taken and reported; a reprint's jobs and its event; a pack's event and print job; a proforma's event): 844 → 847, 1326 → 1333.
-    // B-W2b-392: four events (tax_code.changed, tax_settings.changed, declaration_of_intent.changed, stamp_duty_quarter.changed)
-    // and sixteen literal emits (a code made, changed, versioned ×2, archived, deleted, confirmed; a switch; a declaration
-    // recorded, checked, revoked, used, given back; a quarter recounted, paid; a draft naming a declaration): 844 → 848, 1326 → 1342.
-    // B-W2b-391 + B-W2b-392 together: 844 + 3 + 4 = 851 declared event versions, 1326 + 7 + 16 = 1349 literal emits.
-    // B-W2b-393: seven events (bank_statement.imported, bank_line.suggestions_changed, bank_match.accepted, .reversed,
-    // payment.written_off, .write_off_reversed, write_off_tolerance.changed) and ten literal emits: 847 → 854, 1333 → 1343.
-    // B-W2b-391 + 392 + 393 together: 851 + 7 = 858 declared event versions, 1349 + 10 = 1359 literal emits.
-    // B-W2b-394: five events (email.team_inbox_changed, email.capture_changed, email.inbound_worked, email.bounce_noted,
-    // email.webhook_secret_changed; emitted through eventFor) and one literal emit (sales_settings.changed by PUT
-    // /sales/inquiries/addresses): 844 → 849, 1326 → 1327.
-    // B-W2b-391 + 392 + 393 + 394 together: 858 + 5 = 863 declared event versions, 1359 + 1 = 1360 literal emits.
-    // B-W2b-396: four events (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided,
-    // fee_credit.changed) and eleven literal emits (a run made or re-picked, issued, deleted; a rule made, changed, archived; a
-    // cancelled order's deposits decided; a fee credited ×2; a draft's language and rate): the guard counts 871 and 1370
-    // on this tree (867 and 1359 on origin/main 6fc19c33ee); this test's planted event adds one of each: 872, 1371.
-    // B-W2b-419: two events (cost_per_minute.changed, overhead_rule.changed) and eight literal emits (a calculation made,
-    // corrected, removed, applied; a rule added, ended, corrected, archived): the guard counts 877 and 1390 on this tree
-    // (875 and 1382 on origin/main 46f8ca898c); with the planted event and emit: 878, 1391.
-    // B-W2b-401: three events (e_invoicing.settings_changed, self_invoice.changed, sdi_archive_copy.changed) and six literal
-    // emits (a settings change; a self-invoice made, issued, cancelled with its draft deleted; a copy made or completed): the
-    // guard counts 883 and 1400 on this tree (880 and 1394 on origin/main e63ea9a137); with the planted event and emit: 884, 1401.
-    // B-W2b-418: three events (cost_sheet.components_written, leather_cost_basis.changed, cost_uplift.changed) and eight literal
-    // emits (a draft's lines written; a basis added, corrected, archived; an uplift added, corrected, archived; piece-rate labour
-    // switched, costing_settings.changed): the guard counts 886 and 1408 on this tree (883 and 1400 on origin/main with B-W2b-401);
-    // with the planted event and emit: 887, 1409.
-    // B-W2b-404: + 2 declared (security.settings_changed, security.role_archive_changed), + 3 literal emits.
-    // B-W2b-411: one event (work_order_close.changed) and six literal emits (the close: the status, the close, its entries;
-    // the undo or reopen: the same three): with B-W2b-404, the count the guard reports after the merge.
-    // B-W2b-408: + 3 declared (account_mapping.changed, accounting_settings.changed, integrity_checks.ran), + 5 literal emits
-    // (a mapping row added, changed, removed; the journals switched; the integrity checks run).
-    // B-W2b-402: six events (riba_batch.changed, riba_item.settled, reminder_stop.changed, reminder_trust.changed,
-    // collections_settings.changed, payment.receipt_sent) and thirteen literal emits: with B-W2b-408 (main c2caff5161) the
-    // guard counts 901 and 1438 on this tree; with the planted event and emit: 902, 1439.
-    // B-W2b-403: two events (supplier_invoice.first_approved, payment_proposal.changed) and four literal emits (the first yes,
-    // a proposal changed, an invoice paid by its proposal, the remittance switch's payables_settings.changed): 904 → 906, 1442 → 1446.
-    // B-W2b-421: three events (custom_field.changed, picklist.changed, custom_value.changed) and three literal emits: with
-    // B-W2b-403, 906 → 909 and 1446 → 1449.
-    // B-W2b-380: two events (price_list.pdf_kept, price_list.pdf_sent) and four literal emits (the PDF kept and mailed; the
-    // import's size surcharges of a style and its version row's rules_changed): 912 → 914, 1449 → 1453.
-    // B-W2b-395: two events (shipping.pickup_changed, shipping.day_sheet_closed) and five literal emits (a pickup booked, answered
-    // or moved; a day sheet closed; a collection recorded; a collection delivered: tracking recorded and status changed): with
-    // B-W2b-380, B-W2b-405 and B-W2b-388 (main 295a7832be) the guard counts 924 and 1467; with the planted event and emit: 925, 1468.
-    // B-W2b-409: three events (customs.document_made, customs.declaration_changed, customs.settings_changed; emitted through
-    // eventFor, never a literal): with B-W2b-395 and B-W2b-400 (main 0c1e2b57e2), 930 → 933 and 1468 literal emits.
-    // B-W2b-406: one event (customer_figures.changed) and two literal emits (their figures recorded, corrected): with B-W2b-409
-    // (main bf4fee0ba4) 933 → 934, 1468 → 1470.
-    // B-W2b-427: one event (duplicate.merged) and seven literal emits (the merge: the duplicate archived, the contacts, addresses,
-    // tax identities or colours moved, duplicate.merged): with B-W2b-406 (main fdb7cc920c) 934 → 935, 1470 → 1477.
-    // B-W2b-415: six events (integration.error_opened, .error_retried, .error_dismissed, .account_tested, jobs.run_requested,
-    // jobs.run_finished) and nine literal emits (the collector's opened and went-through, retry, the webhook's inbound_received
-    // again, dismiss, a test, Run now asked, a run failed, a Run now finished): with B-W2b-406, B-W2b-427 and B-W2b-435 (main 15a030a875) 942 → 948, 1486 → 1495.
-    // B-W2b-GF2: no event and two literal emits (a fatal accident's deadline moved with the incident's time: inail_filing.changed;
-    // a corrected invoice's declaration of intent used or given back: declaration_of_intent.changed): 948, 1495 → 1497.
-    // B-TH-013: no event and one literal emit (the customer's answer takes a request up again: inquiry.changed RESUMED by the
-    // resume handler): 948, 1497 → 1498.
-    // B-TH-042: no event and one literal emit (a contact the prospect becomes of an existing customer: party.contacts_changed):
-    // 948, 1498 → 1499.
-    // TH-5 back end (B-TH-066…072, B-TH-094): nine events (project.created, .changed, .status_changed, .linked, .unlinked,
-    // .person_added, .person_removed; thread.follower_added; inquiry.production_answered, emitted through eventFor) and eleven literal
-    // emits (a project made, changed, moved; a person added twice-told (thread.follower_added + project.person_added) and by the
-    // portal path; a person removed with thread.followers_changed; linked, unlinked; an invitation ended at close): 948 → 957,
-    // 1499 → 1510.
-    // ---- END CHECK (fix wave 3c, counted by the guard on each main commit): the TH-5 count missed two literal emits merged
-    // before it — B-PR-41 + B-PR-14 (#1572: one) and B-TH-049…054 (#1573: one) — so the guard counted 956 and 1511 on TH-5's tree
-    // (a8e20d4036), 957 and 1512 with the planted event and emit. Since then:
-    // B-PR-16: ten events (brand_production.stage_reached, .health_changed, .urgency_changed, .hold_changed, .supervisor_changed;
-    // work_order_hold.placed, .lifted; production_issue.raised, .answered, .escalated) and no literal emit: 956 → 966.
-    // B-PR-21: no event and four literal emits (a production hold placed and lifted: work_order_hold.placed and .lifted, each with its
-    // workorder.status_changed): 1511 → 1515.
-    // B-PR-24: four events (approval_request.decided_for_party, .reversed; order_change_request.countered, .counter_answered) and
-    // no literal emit: 966 → 970.
-    // B-PR-25 + B-PR-28 (#1610): no event and two literal emits (a new promise date asked of the customer: approval_request.asked;
-    // the open ask about an older date of that line: approval_request.withdrawn): 1515 → 1517.
-    // B-PR-30a + B-PR-30b (#1613): no event and two literal emits (decided for the customer: approval_request.decided_for_party;
-    // its answer reversed: approval_request.reversed): 1517 → 1519.
-    // B-PR-26 (#1615): no event and four literal emits (the factory answers a customer's ask: order_change_request.answered,
-    // .countered, .counter_answered; approval_request.asked): 1519 → 1523.
-    // The guard counts 970 and 1523 on main 368044503c; with the planted event and emit: 971, 1524.
-    // B-PR-46a: one event (order_change_request.batch_asked) and one literal emit (a customer's batch told once); the single
-    // withdraw's emit moved into withdrawOpenInCommand (still one): +1, +1 over the count of the tree it lands on (the lead
-    // recounts at the end check: #1620, #1623 and #1626 landed after the 368044503c count without changing it).
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(972 declared event version\(s\), 1525 literal emit/) })
-    // ---- end END CHECK
+    expect(ok.status, ok.output).toBe(0)
+    expect(countsOf(ok.output)).toEqual({ events: base.events + 1, emits: base.emits + 1 })
   })
 
   it.each<[string, Plants, RegExp]>([
