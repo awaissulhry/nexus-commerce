@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-001 */ livePartyId } from '../events/define'
 
 /**
  * The configurator on an order line (B-W2b-340; SAL-133, SAL-139). apps/factory-api's modules/sales/configurator emits it in
@@ -17,7 +17,8 @@ export const events = [
     type: 'sales_order.options_changed',
     context: 'configurator',
     description: 'The options chosen on a sales order line changed (values, a panel colour, the leather, a typed text), or its quote line options were copied to it; a work order made afterwards takes them.',
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), change: z.enum(['CHOSEN', 'COPIED']) }),
+    // B-SA-001: the order's customer (the order row's own, read on the server; never in the live fields).
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), change: z.enum(['CHOSEN', 'COPIED']), partyId: livePartyId() /* B-SA-001 */ }),
     live: { permission: 'orders.view', fields: ['orderId', 'number', 'change'] },
   }),
 ]

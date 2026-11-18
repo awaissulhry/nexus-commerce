@@ -61,8 +61,9 @@ export async function recordAfter(caller: CommandCaller, orderId: string): Promi
   })
 }
 
-function statusChanged(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId'>, from: SalesOrderStatus, to: SalesOrderStatus, by: 'person' | 'system'): void {
-  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from, to, by } })
+// B-SA-001: the payload names the order's customer, the order row's own (read on the server), never a caller's value.
+function statusChanged(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId'>, from: SalesOrderStatus, to: SalesOrderStatus, by: 'person' | 'system'): void {
+  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from, to, by, partyId: order.partyId } })
 }
 
 const reasonOf = (value: string | null | undefined): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
@@ -111,7 +112,7 @@ export async function changePromiseInCommand(tools: CommandTools, order: Pick<Or
       const originalPromiseDate = original ?? body.promiseDate
       await tx.salesOrder.update({ where: { id: order.id }, data: { promiseDate: asDay(body.promiseDate), ...(original === null ? { originalPromiseDate: asDay(originalPromiseDate) } : {}), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
       tools.audit({ action: 'orders.changePromise', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { promiseDate: previous, originalPromiseDate: original }, after: { promiseDate: body.promiseDate, previous, originalPromiseDate, lineIds: [] }, reason })
-      tools.emit({ type: 'sales_order.promise_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, promiseDate: body.promiseDate, previous, lineIds: [] } })
+      tools.emit({ type: 'sales_order.promise_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, promiseDate: body.promiseDate, previous, lineIds: [], partyId: current.partyId /* B-SA-001: the row read under the lock */ } })
     } else {
       const chosen = lines.filter((line) => lineIds.includes(line.id))
       const before = Object.fromEntries(chosen.map((line) => [line.id, dayOrNull(line.promiseDate) ?? dayOrNull(current.promiseDate)]))
@@ -119,7 +120,7 @@ export async function changePromiseInCommand(tools: CommandTools, order: Pick<Or
       await tx.salesOrder.update({ where: { id: order.id }, data: { updatedAt: now, version: { increment: 1 } }, select: { id: true } })
       const previous = new Set(Object.values(before)).size === 1 ? (Object.values(before)[0] ?? null) : null
       tools.audit({ action: 'orders.changePromise', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { lines: before, originalPromiseDate: original }, after: { promiseDate: body.promiseDate, previous, originalPromiseDate: original, lineIds }, reason })
-      tools.emit({ type: 'sales_order.promise_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, promiseDate: body.promiseDate, previous, lineIds } })
+      tools.emit({ type: 'sales_order.promise_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, promiseDate: body.promiseDate, previous, lineIds, partyId: current.partyId /* B-SA-001 */ } })
     }
     // B-W2b-317 (PLN-173): the lines' promise history.
     if (options.history !== false) await typedPromiseRowsInCommand(tools, { order: { ...current, status: locked.status }, lines, lineIds, promiseDate: body.promiseDate, reason })

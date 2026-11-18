@@ -85,8 +85,9 @@ export async function planCustomerMaterials(caller: CommandCaller, orderId: stri
     const counted = await recountInCommand(tools, order.partyId)
     const rows = await tools.tx.customerMaterial.count({ where: { orderId: order.id } })
     tools.audit({ action: 'orders.customerMaterials.plan', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { ...planned, counted: counted.changed, rows } })
-    tools.emit({ type: 'customer_material.changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'PLANNED', rows } })
-    for (const other of counted.orders.filter((entry) => entry.id !== order.id)) tools.emit({ type: 'customer_material.changed', subject: other.id, companyId: other.companyId, payload: { orderId: other.id, number: other.number, change: 'RECOUNTED', rows: other.rows } })
+    // B-SA-001: each names its order's customer (the order rows' own).
+    tools.emit({ type: 'customer_material.changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'PLANNED', rows, partyId: order.partyId } })
+    for (const other of counted.orders.filter((entry) => entry.id !== order.id)) tools.emit({ type: 'customer_material.changed', subject: other.id, companyId: other.companyId, payload: { orderId: other.id, number: other.number, change: 'RECOUNTED', rows: other.rows, partyId: other.partyId } })
     return planned
   })
   return { ...(await listCustomerMaterials(caller, orderId)), planned: result }
@@ -98,7 +99,7 @@ export async function recountCustomerMaterials(caller: CommandCaller, orderId: s
   const { result } = await command(caller, { name: 'orders.customerMaterials.recount', idempotencyKey, input: { orderId } }, async (tools) => {
     const counted = await recountInCommand(tools, order.partyId)
     tools.audit({ action: 'orders.customerMaterials.recount', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { changed: counted.changed, orders: counted.orders.map((entry) => entry.id) } })
-    for (const other of counted.orders) tools.emit({ type: 'customer_material.changed', subject: other.id, companyId: other.companyId, payload: { orderId: other.id, number: other.number, change: 'RECOUNTED', rows: other.rows } })
+    for (const other of counted.orders) tools.emit({ type: 'customer_material.changed', subject: other.id, companyId: other.companyId, payload: { orderId: other.id, number: other.number, change: 'RECOUNTED', rows: other.rows, partyId: other.partyId /* B-SA-001 */ } })
     return { changed: counted.changed }
   })
   return { ...(await listCustomerMaterials(caller, orderId)), changed: result.changed }

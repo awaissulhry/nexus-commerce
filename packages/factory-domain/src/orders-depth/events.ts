@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-001 */ livePartyId } from '../events/define'
 import { SALES_ORDER_PRIORITY_LEVELS } from '../sales/orders-depth/rules'
 import { SEASON_CHANGES } from '../sales/seasons/rules'
 
@@ -23,41 +23,43 @@ import { SEASON_CHANGES } from '../sales/seasons/rules'
  */
 
 const order = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
+// B-SA-001: the order events name the order's customer (`partyId`, livePartyId(): the order row's own, read on the server), so
+// people limited to some customers get their customers' live messages; never in the live fields (sales/events.ts).
 
 export const events = [
   defineEvent({
     type: 'sales_order.priority_changed',
     context: 'orders-depth',
     description: "A sales order's priority level, its urgent reason or its number within the level changed.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), from: z.enum(SALES_ORDER_PRIORITY_LEVELS), to: z.enum(SALES_ORDER_PRIORITY_LEVELS), priority: z.number().int(), urgent: z.boolean() }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), from: z.enum(SALES_ORDER_PRIORITY_LEVELS), to: z.enum(SALES_ORDER_PRIORITY_LEVELS), priority: z.number().int(), urgent: z.boolean(), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
   defineEvent({
     type: 'sales_order.season_changed',
     context: 'orders-depth',
     description: 'A sales order names another season of its company, or none.',
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), seasonId: z.uuid().nullable(), code: z.string().nullable() }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), seasonId: z.uuid().nullable(), code: z.string().nullable(), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
   defineEvent({
     type: 'sales_order.split',
     context: 'orders-depth',
     description: 'Parts of a sales order became orders of their own (each with its lines, deliveries and ship-to); the order keeps the rest.',
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), newOrderIds: z.array(z.uuid()), newNumbers: z.array(z.string()), amendmentId: z.uuid(), revision: z.number().int() }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), newOrderIds: z.array(z.uuid()), newNumbers: z.array(z.string()), amendmentId: z.uuid(), revision: z.number().int(), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
   defineEvent({
     type: 'sales_order.confirmation_made',
     context: 'orders-depth',
     description: "A new version of a sales order's confirmation PDF was kept.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), version: z.number().int(), generatedDocumentId: z.uuid(), fileId: z.uuid() }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), version: z.number().int(), generatedDocumentId: z.uuid(), fileId: z.uuid(), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
   defineEvent({
     type: 'sales_order.confirmation_sent',
     context: 'orders-depth',
     description: "A version of a sales order's confirmation was mailed to the customer on the order's thread.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), version: z.number().int(), outboundId: z.uuid() }),
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), version: z.number().int(), outboundId: z.uuid(), partyId: livePartyId() /* B-SA-001 */ }),
     live: order,
   }),
   defineEvent({

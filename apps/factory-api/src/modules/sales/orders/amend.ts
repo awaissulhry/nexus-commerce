@@ -481,8 +481,9 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     },
     reason: body.reason!.trim(),
   })
-  if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: optionLineIds, change: 'CHOSEN' } })
-  tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds } })
+  // B-SA-001: both name the order's customer (the order row's own, read on the server).
+  if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: optionLineIds, change: 'CHOSEN', partyId: order.partyId } })
+  tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds, partyId: order.partyId } })
   // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
   await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })
   return { amendmentId }

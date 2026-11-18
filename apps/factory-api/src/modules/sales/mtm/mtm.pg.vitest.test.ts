@@ -304,7 +304,9 @@ describe('the order waits for the factory review (SAL-292)', { timeout: SLOW_TES
     const confirmed = await ok('pm', 'POST', `/sales/mtm/profiles/${rev2}/review`, { decision: 'CONFIRM', note: 'Pattern from 54, longer sleeves.' })
     expect(confirmed).toMatchObject({ mailed: false, profile: { review: { status: 'CONFIRMED', by: { id: PEOPLE.pm } } }, ordersGoneOn: [{ id: orderId, number: made.order.number }] })
     expect((await one(`SELECT status::text FROM "SalesOrder" WHERE id = $1`, [orderId])).status).toBe('CONFIRMED')
-    expect((await outbox('sales_order.status_changed')).filter((row) => row.orderId === orderId)).toEqual([{ orderId, number: made.order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person' }])
+    // B-SA-001: the event names the order's own customer.
+    const { partyId } = await one<{ partyId: string }>(`SELECT "partyId" FROM "SalesOrder" WHERE id = $1`, [orderId])
+    expect((await outbox('sales_order.status_changed')).filter((row) => row.orderId === orderId)).toEqual([{ orderId, number: made.order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person', partyId }])
     expect((await ok('sales', 'GET', `/sales/orders/${orderId}/made-to-measure`)).made).toMatchObject({ waitsForReview: false })
     expect((await no('pm', 'POST', `/sales/mtm/profiles/${rev2}/review`, { decision: 'NEED_MORE', note: 'Again.' }, 409)).message).toContain('is confirmed: its review does not change')
   })

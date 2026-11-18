@@ -708,3 +708,22 @@ describe('what the order screens read (SCR-039): the deposit as paid and sent, t
     expect(changed.people.map((person: Json) => person.id)).toEqual([actorId])
   })
 })
+
+// ---- B-SA-001: every order event names its order's own customer (the live wall for people limited to some customers) ----
+describe('live: every order event names its order’s customer (B-SA-001)', () => {
+  it('each sales_order.* row the commands above wrote carries partyId = the order row’s own (never a caller’s value)', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, o."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "SalesOrder" o ON o.id = (e.payload->>'orderId')::uuid
+        WHERE e.type LIKE 'sales_order.%' AND e."tenantId" = ANY($1::uuid[])
+        ORDER BY e.type, e.id`,
+      [Object.values(T)],
+    )
+    // The emitters this file runs: the acceptance, the moves (person and system), the promise, the close.
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['sales_order.created', 'sales_order.status_changed', 'sales_order.promise_changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+    // The order of tenant e (F-SA-201) moved by the system and by a person: both name P1 of tenant e.
+    expect(new Set((await statusEvents(seeded.e.quality.production.salesOrderId)).map((row) => row.payload.partyId))).toEqual(new Set([idIn('e', 'party:P1')]))
+  })
+})
+// ---- end B-SA-001

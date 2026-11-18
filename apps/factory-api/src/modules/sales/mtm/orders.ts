@@ -29,7 +29,7 @@ export async function ordersAfterReview(tools: CommandTools, profileId: string):
     }
     await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CONFIRMED', version: { increment: 1 }, updatedAt: now }, select: { id: true } })
     tools.audit({ action: 'mtm.orderGoesOn', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: 'PENDING_APPROVAL' }, after: { status: 'CONFIRMED' }, reason: 'The factory confirmed the measures of its made-to-measure units.' })
-    tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person' } })
+    tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person', partyId: order.partyId /* B-SA-001: the order row's own */ } })
     gone.push({ id: order.id, number: order.number })
   }
   return gone

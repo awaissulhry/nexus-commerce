@@ -84,7 +84,7 @@ export async function confirmWaitingOrder(tools: CommandTools, orderId: string, 
   }
   await tools.tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CONFIRMED', version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
   tools.audit({ action: 'credit.orderGoesOn', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: 'PENDING_APPROVAL' }, after: { status: 'CONFIRMED' }, reason: words })
-  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: tools.context.audience === 'office' ? 'person' : 'system' } })
+  tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: tools.context.audience === 'office' ? 'person' : 'system', partyId: order.partyId /* B-SA-001: the order row's own */ } })
   return true
 }
 
