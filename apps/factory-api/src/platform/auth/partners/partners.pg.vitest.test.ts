@@ -443,24 +443,27 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
 
   it('wall (PW-15): the supervisor and backup show on the office card by name only; the settings event and the preview carry none', async () => {
     const theta = await party(['CUSTOMER'])
+    // fix-pr-4: the supervisor is ANOTHER office person than the owner who opens the preview (the preview's /portal/me names the
+    // previewer himself: that is not a leak).
+    const supervisor = await addUser(h, tenant, { email: 'supervisor.theta@partners-a.example', role: 'production_manager' })
     const backup = await addUser(h, tenant, { email: 'backup.theta@partners-a.example', role: 'production_manager' })
     await inWorld(h, world, (client) =>
-      client.portalSettings.update({ where: { id: theta }, data: { productionSupervisorId: ownerUser.id, productionSupervisorSetAt: h.clock.now(), productionBackupId: backup.id }, select: { id: true } }),
+      client.portalSettings.update({ where: { id: theta }, data: { productionSupervisorId: supervisor.id, productionSupervisorSetAt: h.clock.now(), productionBackupId: backup.id }, select: { id: true } }),
     )
     const read = await owner.get(card(theta))
-    expect(read.body.production).toMatchObject({ supervisor: { id: ownerUser.id, name: 'owner', active: true }, backup: { id: backup.id, active: true } })
+    expect(read.body.production).toMatchObject({ supervisor: { id: supervisor.id, name: 'supervisor theta', active: true }, backup: { id: backup.id, active: true } })
     const changed = await asOwnerPut(card(theta), { productionLevel: 'QUALITY', version: read.body.production.version })
     expect(changed.status, JSON.stringify(changed.body)).toBe(200)
     const event = (await events('partner_portal.settings_changed')).at(-1)!
     expect(Object.keys(event).sort()).toEqual(['fields', 'partyId', 'portalOn', 'productionAskKinds', 'productionLevel', 'productionUrgencyOn', 'productionUrgentMax'])
-    expect(JSON.stringify(event)).not.toContain(ownerUser.id)
+    expect(JSON.stringify(event)).not.toContain(supervisor.id)
     expect(JSON.stringify(event)).not.toContain(backup.id)
     const opened = await owner.post(`/partners/${theta}/preview`, { companyId: world.companyId })
     expect(opened.status, JSON.stringify(opened.body)).toBe(200)
     for (const answer of [opened, await owner.get('/portal/me'), await owner.get('/portal/access')]) {
       const text = JSON.stringify(answer.body)
       expect(text).not.toMatch(/supervis|backup/i)
-      expect(text).not.toContain(ownerUser.id)
+      expect(text).not.toContain(supervisor.id)
       expect(text).not.toContain(backup.id)
     }
   })
