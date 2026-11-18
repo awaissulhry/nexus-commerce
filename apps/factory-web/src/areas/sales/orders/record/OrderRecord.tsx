@@ -102,7 +102,7 @@ import { portalRefusal } from '../../../_shared/record-thread/state'
 // F-SA-244: the conversation side of a change — the told lines of the order's changes, the cards' facts, Who was told.
 import { askFactsOf, changeFactsOf, readToldChanges, type ToldChanges } from './told'
 import { stillRowsOf } from './changes/model'
-import { WhoWasToldDialog } from './view/WhoWasToldDialog'
+import { WhoWasToldDialog } from './WhoWasTold'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -770,9 +770,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
             <OfficeRecordThread
               docked
               record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }}
-              title={`${value.number} · ${value.party?.legalName ?? ''}`}
+              title={value.number}
               recordLabel={value.number}
-              party={value.party ? { id: value.partyId, name: value.party.legalName } : null}
+              party={null}
               partyRole="customer"
               printHref={printHref(pathname, params?.toString() ?? '')}
             />

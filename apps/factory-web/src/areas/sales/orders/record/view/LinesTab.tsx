@@ -216,7 +216,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
   const count = changeCount(amend.lines, order) + (headerChanged ? 1 : 0)
   // F-SA-231: the floor of a size is what is already cut (the production read's own cells); under work orders is said, not held.
   const floors = cutFloorsOf(readOf(model.production)?.lines ?? [])
-  const held = model.busy ? phraseOf('held.busy') : reviewHeld(amend.lines, order, minimums, { changed: headerChanged }, floors)
+  const held = model.busy ? phraseOf('held.busy') : reviewHeld(amend.lines, order, { changed: headerChanged }, floors)
   const heldText = held ? t(held.key, held.params) : null
   useEffect(() => {
     if (count === 0) return

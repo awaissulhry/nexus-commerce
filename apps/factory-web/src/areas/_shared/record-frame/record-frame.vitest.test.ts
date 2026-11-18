@@ -314,13 +314,14 @@ describe('F-SA-263 — the dock adapts per tab and remembers', () => {
       'sales/pricelists/record/view/PriceListRecordView.tsx',
       'sales/quotes/record/view/QuoteRecordView.tsx',
       'sales/returns/record/view/RmaRecordView.tsx',
+      'warehouse/counts/record/view/CountRecordView.tsx',
       'warehouse/lots/record/view/LotRecordView.tsx',
       'warehouse/receipts/record/view/ReceiptRecordView.tsx',
       'warehouse/shipments/record/view/ShipmentRecordView.tsx',
     ]
     for (const page of pages) {
       const source = readFileSync(new URL(page, root), 'utf8')
-      expect(source, page).not.toMatch(/^\s+wide=\{/m)
+      expect(source, page).not.toMatch(/\swide=\{/)
       expect(source, page).toMatch(/defaultWidth=\{.+ \? 'grid' : undefined \/\* F-SA-263 \*\/\}/)
       expect(source, page).not.toContain('dockTab=')
     }
@@ -382,14 +383,15 @@ describe('F-SA-265: the frame\'s doors into the conversation (Discuss, Show in t
     expect(feed).toContain('data-event-ids={row.events.map((event) => event.id).join(\' \')}')
   })
   it('the door words in both languages (Discuti, Mostra nella pagina, Chi segue…)', () => {
+    // The catalogues are flat keys (`discuss.label`), as every translator reads them.
     for (const locale of ['en', 'it'] as const) {
-      const words = (CATALOGUE[locale] as unknown as Record<string, { discuss?: Record<string, string> }>)['record-frame']?.discuss ?? {}
-      for (const key of ['label', 'hint', 'of', 'showOnPage', 'showInThread', 'followers', 'notInThread']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      const words = CATALOGUE[locale]['record-frame'] ?? {}
+      for (const key of ['label', 'hint', 'of', 'showOnPage', 'showInThread', 'followers', 'notInThread']) expect(words[`discuss.${key}`], `${locale} ${key}`).toBeTruthy()
     }
-    const it = (CATALOGUE.it as unknown as Record<string, { discuss?: Record<string, string> }>)['record-frame']!.discuss!
-    expect(it.label).toBe('Discuti')
-    expect(it.showOnPage).toBe('Mostra nella pagina')
-    expect(it.followers).toBe('Chi segue…')
+    const it = CATALOGUE.it['record-frame']!
+    expect(it['discuss.label']).toBe('Discuti')
+    expect(it['discuss.showOnPage']).toBe('Mostra nella pagina')
+    expect(it['discuss.followers']).toBe('Chi segue…')
   })
 })
 // ---- end F-SA-265

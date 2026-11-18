@@ -269,8 +269,9 @@ describe('words and navigation', () => {
     // B-TH-014: the production manager reads it too.
     expect(rows(ROLE_PERMISSIONS.production)).toContain('/sales/incoming')
     expect(rows(ROLE_PERMISSIONS.warehouse)).not.toContain('/sales/incoming')
+    // F-SA-210 (sales plan N1, pick P1): Sales opens on Orders, Incoming right after it.
     const sales = rows(ROLE_PERMISSIONS.sales)
-    expect(sales.indexOf('/sales/incoming')).toBe(sales.indexOf('/sales/customers') + 1)
+    expect(sales.indexOf('/sales/incoming')).toBe(sales.indexOf('/sales/orders') + 1)
   })
 })
 
@@ -660,7 +661,7 @@ describe('F-SA-277: the Incoming list lifted — the locked container, the page 
     expect(approvals).toBeGreaterThan(0)
     expect(approvals).toBeLessThan(hook.indexOf('if (host.onRowClick) return host.onRowClick(row, newTab)'))
     expect(THREAD_TYPE.REQUEST).toBe('Inquiry')
-    const tab = readFileSync(new URL('../customers/record/view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    const tab = readFileSync(new URL('../customers/record/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("type: 'Quote', id: row.id, label: row.number, companyId: row.companyId")
     expect(tab).toContain('type: THREAD_TYPE[row.kind], id: row.id, label: row.number')
     // Each list only for who may read it.
@@ -681,7 +682,7 @@ describe('F-SA-277: the Incoming list lifted — the locked container, the page 
     expect(scoped.query).toBe(`party=${LOCK}`)
     expect(scoped.pageKey).toBe('sales.inquiries')
     expect(scoped.linked).toEqual({ view: null, export: null })
-    const tab = readFileSync(new URL('../customers/record/view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    const tab = readFileSync(new URL('../customers/record/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
     expect(tab.match(/<ScopedListTools /g)?.length).toBe(2)
     expect(tab.match(/terms: 'memory'/g)?.length).toBe(2)
     expect(tab).toContain("pane: 'host'")

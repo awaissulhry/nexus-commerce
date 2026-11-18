@@ -19,19 +19,20 @@ import { CommercialTerms } from '../terms/CommercialTerms'
 // B-W2b-324: Customer 360 and customers in depth (the glance, requirements, the hold, PO number, consent and personal data).
 import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth'
 import { CustomerRecordView } from './view/CustomerRecordView'
-import { CustomerSupervisor } from '../portal/view/CustomerSupervisorCard' // F-SA-272
+import { CustomerSupervisor } from '../portal/CustomerSupervisor' // F-SA-272
 import { partyName } from '../../../parties/_shared/model'
 // ---- F-SA-276: the Work tab (the strip's reads, the Orders sheet locked to the customer) and the dock that follows its rows ----
 import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer-work'
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 import { useCustomerDock } from './use-customer-work' // F-SA-279: the dock follows the row (`dock=`), All of <customer>
+import { useAllOfCustomer } from '../../../_shared/record-thread/all-of-customer/use-all-of-customer' // F-SA-279: All of <customer>, read by the page
 import { useT } from '../../../../lib/i18n/provider' // F-SA-279: the band's "Thread · SO-…" below 1280 px
 // ---- end F-SA-276
 // ---- F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks) ----
 import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
 import { OpenTasksDialog } from './view/OpenTasksDialog'
 // ---- end F-SA-278
-import { QuotesIncomingTab } from './view/QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
+import { QuotesIncomingTab } from './QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -85,11 +86,15 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // ---- F-SA-279: the dock follows the row — a click at once, the keys after 300 ms of rest; `dock=` in the address (a replace: Back
   // leaves the page); the record any row (or a window's row, or a line of All of <customer>) picks, checked against this customer.
   const customerDock = useCustomerDock(partyId, tab)
+  const api = useOfficeApi()
   const session = useOfficeSession()
   const onPick = customerDock.onRow
   const t = useT('parties')
   const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
-  const dock = named && record.thread ? <CustomerDock customer={named} general={record.thread} dock={customerDock} prefix={prefix} canReadFiles={session.permissions.includes('files.read')} /> : record.thread
+  const docked = named !== null && record.thread !== null && record.thread !== undefined
+  // All of <customer>: read here while the dock shows it (the dock draws the feed it is given).
+  const feed = useAllOfCustomer(api, { partyId: named?.id ?? null, customerName: named?.name ?? '', enabled: docked && customerDock.scope === 'all', prefix, canReadFiles: session.permissions.includes('files.read') })
+  const dock = named && docked ? <CustomerDock customer={named} general={record.thread} dock={customerDock} feed={feed} prefix={prefix} /> : record.thread
   const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null
   // ---- end F-SA-279
   // ---- F-SA-278: the strip's windows — each row picks its record in the dock (the customer's own record: its thread).

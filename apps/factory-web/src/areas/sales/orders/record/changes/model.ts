@@ -68,8 +68,8 @@ export type HistoryEntry =
 
 const chipOf = (entry: HistoryEntry): Exclude<HistoryChip, 'all'> => (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered' ? 'requests' : entry.kind === 'amendment' ? 'amendments' : 'confirmations')
 
-/** The lines an amendment moved, and the pieces before → after. */
-function countsOf(diff: Amendment['diff']) {
+/** The lines an amendment moved, and the pieces before → after (an amendment's diff or a change's: only what it counts). */
+function countsOf(diff: { readonly lines: readonly Pick<Amendment['diff']['lines'][number], 'change' | 'piecesBefore' | 'piecesAfter'>[] }) {
   const counts = { changed: 0, added: 0, removed: 0, before: 0, after: 0 }
   for (const line of diff.lines) {
     if (line.change === 'CHANGED') counts.changed++

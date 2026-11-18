@@ -13,8 +13,9 @@ import { scanText } from '../../../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../../../lib/testing/two-brands'
 import { runWithStepUp } from '../../../../admin/shared/step-up'
 import { productionLimitsSchema, type PartnerPerson, type ProductionLimits } from '../../../../admin/users/partners/api'
-import { CUSTOMER_PEOPLE, freezeList, limitsModel, OFFICE_PEOPLE, productionLimits } from '../demo'
+import { CUSTOMER_PEOPLE, freezeList, limitsModel, OFFICE_PEOPLE, productionLimits, supervisorModel } from '../demo'
 import { designScreen } from '../fixtures'
+import { CustomerSupervisorCard } from '../view/CustomerSupervisorCard'
 import { LimitsCard } from '../view/LimitsCard'
 import { PortalAccessMessages } from '../view/parts'
 import {
@@ -49,6 +50,7 @@ import {
   withPreset,
   type LimitsModel,
   type PickState,
+  type SupervisorModel,
 } from './model'
 
 /**
@@ -74,6 +76,8 @@ const card = (model: LimitsModel, locale: 'it' | 'en' = 'en', over: { partyName?
     createElement(PortalAccessMessages, null, createElement(LimitsCard, { model, partyName: over.partyName ?? 'Moda Demo', portalOn: over.portalOn ?? true, people: over.people ?? CUSTOMER_PEOPLE, can: { preview: over.preview ?? true }, previewing: false })),
     locale,
   )
+// F-SA-272 (pick P10'): who looks after the customer is its own card on the customer's Overview (CustomerSupervisorCard), no longer the limits card's.
+const supervisorCard = (model: SupervisorModel, locale: 'it' | 'en' = 'en') => render(createElement(CustomerSupervisorCard, { model, name: 'Moda Demo' }), locale)
 
 describe('F-PR-07 — everything starts off; only what changes is sent', () => {
   it('a new customer: Status only, urgency off (quota 3), no production asks, anyone answers, no second person, no supervisor', () => {
@@ -274,17 +278,18 @@ describe('F-PR-07 — who looks after it here: office only, the pick list, the o
     expect(supervisorMove(saved, draft, { ...ready, ordersOnDefault: 0 })).toEqual({ key: 'limits.supervisor.movesNone', count: 0 })
     const set = productionLimits({ supervisor: { id: OFFICE_PEOPLE.bea.id, name: 'Bea Esempio', active: true } }).production
     expect(supervisorMove(set, { ...limitsDraftOf(set), supervisorId: null }, ready)).toEqual({ key: 'limits.supervisor.clears', count: 7 })
-    expect(textOf(card(limitsModel({ draft }), 'en'))).toContain('Changing the supervisor moves 7 orders that have no supervisor of their own.')
-    expect(textOf(card(limitsModel({ draft }), 'it'))).toContain('Cambiare il supervisore sposta 7 ordini che non hanno un supervisore proprio.')
+    expect(textOf(supervisorCard(supervisorModel({ draft }), 'en'))).toContain('Changing the supervisor moves 7 orders that have no supervisor of their own.')
+    expect(textOf(supervisorCard(supervisorModel({ draft }), 'it'))).toContain('Cambiare il supervisore sposta 7 ordini che non hanno un supervisore proprio.')
   })
 
   it('R-53: drawn with the portal off; nobody eligible says what a supervisor needs; without the right, held in words', () => {
-    const off = textOf(card(limitsModel({ read: productionLimits({ version: 0 }) }), 'en', { portalOn: false }))
+    // The Overview card has no portal condition: it is drawn whatever the portal; the limits card says a supervisor needs no portal.
+    const off = textOf(supervisorCard(supervisorModel({ read: productionLimits({ version: 0 }) })))
     expect(off).toContain('Who looks after Moda Demo here')
     expect(off).toContain('Office only')
-    expect(off).toContain('A supervisor works without a portal: saving one opens nothing for them.')
-    expect(textOf(card(limitsModel({ pick: { status: 'ready', people: [], complete: true, ordersOnDefault: 0 } })))).toContain('A supervisor must be active, allowed on the customer and hold the measurements right.')
-    const held = textOf(card(limitsModel({ supervise: false, pick: { status: 'held', key: 'held.noRight', ns: 'production-supervisor' }, read: productionLimits({ supervisor: { id: OFFICE_PEOPLE.bea.id, name: 'Bea Esempio', active: true } }) })))
+    expect(textOf(card(limitsModel({ read: productionLimits({ version: 0 }) }), 'en', { portalOn: false }))).toContain('A supervisor works without a portal: saving one opens nothing for them.')
+    expect(textOf(supervisorCard(supervisorModel({ pick: { status: 'ready', people: [], complete: true, ordersOnDefault: 0 } })))).toContain('A supervisor must be active, allowed on the customer and hold the measurements right.')
+    const held = textOf(supervisorCard(supervisorModel({ supervise: false, pick: { status: 'held', key: 'held.noRight', ns: 'production-supervisor' }, read: productionLimits({ supervisor: { id: OFFICE_PEOPLE.bea.id, name: 'Bea Esempio', active: true } }) })))
     expect(held).toContain("Setting a production supervisor needs the right to manage customers' production.")
     expect(held).toContain('Bea Esempio')
   })
@@ -333,7 +338,10 @@ describe('F-PR-07 — the card on screen', () => {
     for (const words of ['What Moda Demo sees', 'Status only', '+ Progress', '+ Gates & dates', '+ Quality & photos', 'Urgent orders', 'Ask to pause', 'Ask for another sample round', 'Anyone with the Production role', 'One named person', 'PP sample, size set, top of production, fabric and trims', 'Overrides need a second person', 'Production partner', 'Open My production as Moda Demo'])
       expect(en, words).toContain(words)
     const it = textOf(card(limitsModel(), 'it'))
-    for (const words of ['Cosa vede Moda Demo', 'Solo lo stato', 'Ordini urgenti', 'Supervisore di produzione', 'Partner di produzione', 'Solo ufficio']) expect(it, words).toContain(words)
+    for (const words of ['Cosa vede Moda Demo', 'Solo lo stato', 'Ordini urgenti', 'Partner di produzione']) expect(it, words).toContain(words)
+    // F-SA-272 (pick P10'): the supervisor, office only, is the Overview card's.
+    const office = textOf(supervisorCard(supervisorModel(), 'it'))
+    for (const words of ['Supervisore di produzione', 'Solo ufficio']) expect(office, words).toContain(words)
   })
 
   it('the level titles are the domain’s words; the freeze stages too (one source)', () => {
@@ -409,8 +417,9 @@ describe('F-PR-07 — the brand wall (web side)', () => {
     for (const locale of ['it', 'en'] as const)
       for (const [namespace, words] of Object.entries(CATALOGUE[locale]).filter(([name]) => name.startsWith('portal') && name !== 'portal-access'))
         for (const value of Object.values(words)) expect(value, `${locale} ${namespace}`).not.toMatch(/supervisor|supervisore/i)
-    // The limits card is the office's only: its supervisor block never reaches the settings event or a partner live entry (the API's
-    // PW-15 test); on screen it is the one block marked "Office only".
-    expect(textOf(card(limitsModel()))).toContain('Office only')
+    // The supervisor is the office's only: it never reaches the settings event or a partner live entry (the API's PW-15 test); on
+    // screen it is the customer Overview's card marked "Office only" (F-SA-272, pick P10'), no longer a block of the limits card.
+    expect(textOf(supervisorCard(supervisorModel()))).toContain('Office only')
+    expect(textOf(card(limitsModel()))).not.toContain('Office only')
   })
 })
