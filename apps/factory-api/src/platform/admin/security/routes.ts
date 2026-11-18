@@ -18,6 +18,7 @@ import { announceEvidence, completeEvidence, listDrills, readFingerprint, record
 import { manifest } from './manifest'
 import { securityPage } from './page'
 import { changeTwoFactor, listTwoFactor, previewTwoFactor } from './two-factor'
+import { assertEveryCustomer } from '../../auth/every-customer'
 
 /**
  * Security & health (B-W2a-36; PLT-045, PLT-214; SCR-166):
@@ -35,9 +36,20 @@ import { changeTwoFactor, listTwoFactor, previewTwoFactor } from './two-factor'
 export default defineRoutes('admin-security', manifest, async (app) => {
   const auth = () => officeAuthOf(app)
   app.get('/admin/security', { schema: pageContract }, (request) => securityPage(auth(), request))
-  app.get('/admin/security/two-factor', { schema: twoFactorListContract }, (request) => listTwoFactor(auth(), request))
-  app.post('/admin/security/two-factor/preview', { schema: twoFactorPreviewContract }, (request) => previewTwoFactor(auth(), request, request.body))
-  app.post('/admin/security/two-factor', { schema: twoFactorChangeContract }, (request) => changeTwoFactor(auth(), request, request.body))
+  // fix-pr-8 (the brand wall): who must prove two-factor is the tenant's people — every customer's portal people too: the
+  // people admin needs every customer (as /auth/users).
+  app.get('/admin/security/two-factor', { schema: twoFactorListContract }, async (request) => {
+    assertEveryCustomer(request, 'roles.view')
+    return listTwoFactor(auth(), request)
+  })
+  app.post('/admin/security/two-factor/preview', { schema: twoFactorPreviewContract }, async (request) => {
+    assertEveryCustomer(request, 'roles.view')
+    return previewTwoFactor(auth(), request, request.body)
+  })
+  app.post('/admin/security/two-factor', { schema: twoFactorChangeContract }, async (request) => {
+    assertEveryCustomer(request, 'roles.manage')
+    return changeTwoFactor(auth(), request, request.body)
+  })
   app.get('/admin/security/fingerprint', { schema: fingerprintContract }, (request) => readFingerprint(auth(), request, request.query.asOf))
   app.get('/admin/security/drills', { schema: drillsContract }, (request) => listDrills(auth(), request))
   app.post('/admin/security/drills/evidence', { schema: evidenceContract }, async (request, reply) =>
