@@ -62,7 +62,15 @@
  * the customer's news, the brand wall and the B-PR-10 sweep at the end) in its own throwaway database, the same rules. The default
  * run leaves that folder out too. Long: run it alone, nice, one worker.
  *
- * Run: node scripts/factory/golden-flow.mjs [daily|followups|people|quality|portal|product|sales-depth|money-depth|threads|production] — exit 1 when a step fails or the server is not usable. The vitest
+ * Twelfth suite (B-SA-089): `node scripts/factory/golden-flow.mjs sales-page` runs only src/golden-flow/sales-page/ — the sales page
+ * plan's flow (two customers: Brand Alpha asks a size decrease and a design change of its private-label jacket, its own messages in
+ * the order's conversation; the office answers from the order's door, picks the extra pieces' outcome and accepts; the work-order
+ * change applied with Lower to the order; one system line, one bell item per person, a floor note with no names, the workshop
+ * told, Still to do closed, who was told; a design change of our own collection's jacket held; at every step Brand Beta's people
+ * and a person limited to Brand Beta get nothing of Alpha) in its own throwaway database, the same rules. The default run leaves
+ * that folder out too. Long: run it alone, nice, one worker.
+ *
+ * Run: node scripts/factory/golden-flow.mjs [daily|followups|people|quality|portal|product|sales-depth|money-depth|threads|production|sales-page] — exit 1 when a step fails or the server is not usable. The vitest
  * database guard needs FACTORY_DATABASE_URL (loopback, factory_test… or this worktree's database) on the command line
  * when the worktree has no apps/factory-api/.env.
  */
@@ -98,8 +106,10 @@ const MONEY_DEPTH = 'src/golden-flow/money-depth/'
 const THREADS = 'src/golden-flow/threads/'
 // B-PR-36: the eleventh suite, the production plan's flow; the default run leaves it out too.
 const PRODUCTION = 'src/golden-flow/production/'
+// B-SA-089: the twelfth suite, the sales page plan's flow; the default run leaves it out too.
+const SALES_PAGE = 'src/golden-flow/sales-page/'
 const SUITES = {
-  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`, '--exclude', `${QUALITY}**`, '--exclude', `${PORTAL}**`, '--exclude', `${PRODUCT}**`, /* B-W2b-359 */ '--exclude', `${SALES_DEPTH}**`, /* B-W2b-436 */ '--exclude', `${MONEY_DEPTH}**`, /* B-TH-102 */ '--exclude', `${THREADS}**`, /* B-PR-36 */ '--exclude', `${PRODUCTION}**`] },
+  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`, '--exclude', `${QUALITY}**`, '--exclude', `${PORTAL}**`, '--exclude', `${PRODUCT}**`, /* B-W2b-359 */ '--exclude', `${SALES_DEPTH}**`, /* B-W2b-436 */ '--exclude', `${MONEY_DEPTH}**`, /* B-TH-102 */ '--exclude', `${THREADS}**`, /* B-PR-36 */ '--exclude', `${PRODUCTION}**`, /* B-SA-089 */ '--exclude', `${SALES_PAGE}**`] },
   daily: { folder: DAILY, extra: [] },
   followups: { folder: FOLLOWUPS, extra: [] },
   people: { folder: PEOPLE, extra: [] },
@@ -116,11 +126,13 @@ const SUITES = {
   threads: { folder: THREADS, extra: ['--no-file-parallelism'] },
   // B-PR-36
   production: { folder: PRODUCTION, extra: ['--maxWorkers=1'] },
+  // B-SA-089
+  'sales-page': { folder: SALES_PAGE, extra: ['--maxWorkers=1'] },
 }
 const suiteName = process.argv[2] ?? 'w1'
 const suite = SUITES[suiteName]
 if (!suite) {
-  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people, quality, portal, product, sales-depth, money-depth, threads, production)`)
+  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people, quality, portal, product, sales-depth, money-depth, threads, production, sales-page)`)
   process.exit(2)
 }
 const VITEST = join(ROOT, 'node_modules/.bin/vitest')
