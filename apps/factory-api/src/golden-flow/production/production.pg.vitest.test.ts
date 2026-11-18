@@ -524,7 +524,9 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect(await notes()).toBe(before)
 
     const batch = await ok(planner, 'POST', '/production/notes', { records, body: NOTE_BODY, askSupervisor: true })
-    expect((batch.written as Json[]).map((row) => [row.id, row.supervisorAsked])).toEqual(records.map((record) => [record.id, true]))
+    // fix-pr-7: written in the write's own order (threads locked in record id order, B-PR-43a), not the order they were picked in.
+    const byId = (rows: readonly (readonly [string, boolean])[]) => [...rows].sort(([x], [y]) => x.localeCompare(y))
+    expect(byId((batch.written as Json[]).map((row): [string, boolean] => [row.id as string, row.supervisorAsked as boolean]))).toEqual(byId(records.map((record): [string, boolean] => [record.id, true])))
     for (const row of batch.written as Json[]) {
       expect(await one('SELECT direction::text AS direction, audience::text AS audience, "partyId" FROM "Message" WHERE id = $1', [row.messageId]), row.id).toEqual({ direction: 'INTERNAL_NOTE', audience: 'OFFICE', partyId: null })
     }
