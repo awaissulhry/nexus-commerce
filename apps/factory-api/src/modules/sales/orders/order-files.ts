@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { FactoryClient } from '@nexus/factory-db'
 import { FILES_READ, THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { can, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
@@ -486,7 +487,8 @@ export const orderFilesContract = defineContract({
           measurementsLeftOut: z.number().int(),
         }),
       ),
-      total: z.number().int(),
+      /** How many files are listed (a count, not money). */
+      total: notMoney(z.number().int()),
       /** More than `cap` files: the newest `cap` are read. */
       truncated: z.boolean(),
       cap: z.number().int(),
