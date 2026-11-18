@@ -257,3 +257,53 @@ describe('made-to-measure orders: kind=mtm narrows the list, the board, the tota
   })
 })
 // ── end B-SA-020 ──
+
+// ── B-SA-021 (sales page plan N7, pick P12; 12-lists-board §4.2): a rider's orders, and the rider-name search ──
+describe('the rider term and the rider-name search, only for a reader of measurements (B-SA-021)', () => {
+  const P1_RIDER = id('measurement:P1:rider:JACKET:1')
+  const P4_REV1 = id('measurement:P4:rider:JACKET:1')
+  const P4_REV2 = id('measurement:P4:rider:JACKET:2')
+
+  it('profile=: the orders with a unit of ANY revision of the rider\'s garment profile, on the list, the board, the totals and the file', async () => {
+    // The unit is made to revision 1; revision 2 is the same rider's newer measures: both name the same orders.
+    for (const profile of [P4_REV1, P4_REV2]) {
+      expect(await numbers('measures', `profile=${profile}`), profile).toEqual(['TEST-SO-MTM-R1'])
+      expect(await boardTotal('measures', `profile=${profile}`)).toBe(1)
+      expect((await ok('measures', `/sales/orders/summary?profile=${profile}`)).all.orders.count).toBe(1)
+      expect(await fileNumbers('measures', `profile=${profile}`)).toEqual(['TEST-SO-MTM-R1'])
+    }
+    expect(await numbers('measures', `profile=${P1_RIDER}&kind=mtm`)).toEqual(['TEST-SO-MTM-C1'])
+  })
+
+  it('without sales.measurements.view the term is refused in words (403) on every read, and the file is refused before anything is read', async () => {
+    for (const url of [`/sales/orders?profile=${P4_REV1}`, `/sales/orders/board?profile=${P4_REV1}`, `/sales/orders/summary?profile=${P4_REV1}`]) {
+      const response = await app.inject({ method: 'GET', url, headers: { 'x-test-session': 'all' } })
+      expect(response.statusCode, url).toBe(403)
+      expect(response.body, url).toContain('You may not narrow orders by rider.')
+    }
+    const source = exportSourceOf('sales.orders')!
+    const query = source.query(new URLSearchParams(`profile=${P4_REV1}`))
+    expect(source.refusal?.(completeContext(SESSIONS.all!(), 'test-refusal') as never, query)).toBe('You may not narrow orders by rider.')
+    expect(source.refusal?.(completeContext(SESSIONS.measures!(), 'test-refusal') as never, query)).toBeNull()
+    expect(() => source.query(new URLSearchParams('profile=Seed Team Rider'))).toThrow(/Not a rider/)
+  })
+
+  it('a SEED-R1-limited holder of the right naming SEED-C1\'s rider gets no row and no count — the same as a rider without orders', async () => {
+    expect(await numbers('onlyR1Measures', `profile=${P1_RIDER}`)).toEqual([])
+    expect(await boardTotal('onlyR1Measures', `profile=${P1_RIDER}`)).toBe(0)
+    expect(await fileNumbers('onlyR1Measures', `profile=${P1_RIDER}`)).toEqual([])
+    // An unknown profile answers the same.
+    expect(await numbers('measures', `profile=${newId()}`)).toEqual([])
+    // Its own rider: its order.
+    expect(await numbers('onlyR1Measures', `profile=${P4_REV1}`)).toEqual(['TEST-SO-MTM-R1'])
+  })
+
+  it('the search finds an order by its unit\'s rider only for a reader of measurements of that customer', async () => {
+    expect(await numbers('measures', 'q=Seed%20Team%20Rider')).toEqual(['TEST-SO-MTM-C1'])
+    expect(await numbers('measures', 'q=Seed%20Private%20Rider')).toEqual(['TEST-SO-MTM-R1'])
+    expect(await numbers('all', 'q=Seed%20Team%20Rider')).toEqual([])
+    expect(await numbers('onlyR1Measures', 'q=Seed%20Team%20Rider')).toEqual([])
+    expect(await numbers('onlyR1Measures', 'q=Seed%20Private%20Rider')).toEqual(['TEST-SO-MTM-R1'])
+  })
+})
+// ── end B-SA-021 ──

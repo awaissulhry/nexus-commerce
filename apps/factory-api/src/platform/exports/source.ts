@@ -29,7 +29,8 @@ import type { CommandCaller } from '../../core/command'
  * W2b (B-W2b-11; PLT-184) adds, each optional:
  *   page        the list's address under /w/<company> (`/sales/orders`; default: the list key with `/` for its dots):
  *               the link of the e-mail that says the file is ready (`?export=<job>` opens the job on its list)
- *   refusal     why the person may not export it beyond `permission`, in words (a report they may not run), or null
+ *   refusal     why the person may not export it beyond `permission`, in words (a report they may not run), or null;
+ *               B-SA-021: it reads the view's query too (a term only some may use: Sales › Orders' rider, `profile=`)
  *   count       how many rows the view holds, read before the run (JobProgress "38 of 61"); without it the worker
  *               counts by reading the list once without writing (factory-domain views/export/progress.ts)
  *   reimport    "Full file for re-import (XLSX)": the importer (platform/imports registry key) whose layout the file
@@ -109,7 +110,7 @@ export interface ExportSource<Query, Row> {
   readonly words?: Readonly<Record<ExportLocale, Readonly<Record<string, string>>>>
   readonly formats?: readonly ExportFormat[]
   readonly page?: string
-  refusal?(actor: Actor): string | null
+  refusal?(actor: Actor, query: Query): string | null // B-SA-021: + the view's query
   count?(caller: CommandCaller, query: Query): Promise<number>
   readonly reimport?: ExportReimport<Row>
   idOf?(row: Row): string

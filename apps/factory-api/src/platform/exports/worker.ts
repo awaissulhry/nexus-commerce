@@ -125,10 +125,10 @@ function readerFor(system: CommandCaller, job: JobRow, actor: Actor, requestId: 
 }
 
 /** The rights the file was asked with, checked again now (a re-import file's columns are its importer's). */
-function checkRights(source: AnyExportSource, job: JobRow, actor: Actor, importerColumns: Readonly<Record<string, ImportColumn>> | null): void {
+function checkRights(source: AnyExportSource, job: JobRow, actor: Actor, importerColumns: Readonly<Record<string, ImportColumn>> | null, params: unknown /* B-SA-021 */): void {
   const scope = job.companyId ? { companyId: job.companyId } : {}
   if (!can(actor, VIEWS_EXPORT, scope) || !can(actor, source.permission, scope)) throw new Refused('You no longer have the right to see or export this list: nothing was exported.')
-  const refusal = source.refusal?.(actor) ?? null
+  const refusal = source.refusal?.(actor, params) ?? null // B-SA-021: + the view's query
   if (refusal) throw new Refused(`${refusal} Nothing was exported.`)
   const grains = heldGrains(actor)
   const omitted = new Set(job.omittedColumns)
@@ -215,13 +215,14 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
     const actor = await requesterOf(caller, job, clock.now())
     const reimport = job.format === 'XLSX_REIMPORT'
     const adapter = reimport ? reimportAdapterOf(source) : null
-    checkRights(source, job, actor, adapter ? (adapter.importer.columns as Readonly<Record<string, ImportColumn>>) : null)
+    // B-SA-021: the view's query before the rights (a source's refusal may read a term of it).
+    const params = source.query(new URLSearchParams(query.address))
+    checkRights(source, job, actor, adapter ? (adapter.importer.columns as Readonly<Record<string, ImportColumn>>) : null, params)
     const reader = readerFor(caller, job, actor, causationId ?? `export-${jobId}`)
     const omitted = new Set(job.omittedColumns)
     const columns = query.columns.filter((column) => !omitted.has(column.key) && (adapter ? true : Object.hasOwn(source.columns, column.key)))
     const words = source.words?.[query.locale] ?? {}
     const say = (code: string): string => words[code] ?? code
-    const params = source.query(new URLSearchParams(query.address))
     const options: ExportReadOptions = { locale: query.locale }
     // A re-import file: the importer's layout, as asked (its columns the job kept; a grain lost since was refused above).
     const kept = new Set(columns.map((column) => column.key))

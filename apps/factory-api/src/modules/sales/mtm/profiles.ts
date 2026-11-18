@@ -68,6 +68,11 @@ const FIVE_MINUTES = 5 * 60 * 1000
 
 const invalid = (issues: Issue[]): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : 'The measurements cannot be saved like this.', issues)
 const keyOf = (row: Pick<ProfileRow, 'partyId' | 'riderName' | 'garmentType'>): string => JSON.stringify([row.partyId, row.riderName, row.garmentType])
+/**
+ * B-SA-021: every revision of one rider's garment profile — the chain this list groups by (keyOf: one customer, one rider name, one
+ * garment type) — as a filter; Sales › Orders' rider term (`profile=`, orders/orders.ts) reads a rider's orders through it.
+ */
+export const chainWhere = (row: Pick<ProfileRow, 'partyId' | 'riderName' | 'garmentType'>): Prisma.MeasurementProfileWhereInput => ({ partyId: row.partyId, riderName: row.riderName, garmentType: row.garmentType })
 const isUniqueViolation = (error: unknown): boolean => typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
 
 // ---- the list -------------------------------------------------------------------------------------------------------------

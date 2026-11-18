@@ -220,6 +220,8 @@ const filterFields = {
   // ── B-SA-020 (sales page plan N7, pick P12): made-to-measure orders — the list, the board's counts, the tiles, the totals and the file alike ──
   /** `mtm`: orders with a made-to-measure unit (a line of kind MADE_TO_MEASURE). */
   kind: z.enum(['mtm']).optional(),
+  // ── B-SA-021: a rider's orders — a unit of any revision of the rider's garment profile; only with sales.measurements.view (403 in words) ──
+  profile: id().optional(),
 }
 
 /** B-TH-058: the list's every row term (the overall view's totals take the same, so each total opens exactly its rows). */
