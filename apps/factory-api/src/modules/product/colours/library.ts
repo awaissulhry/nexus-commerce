@@ -6,7 +6,7 @@ import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permis
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { afterCursor, decodeCursor, encodeCursor } from '../styles/cursor'
-import { contextOf } from '../styles/store'
+import { contextOf, STYLE_SCOPE } from '../styles/store'
 import { brandColourIds, COLOUR_COLUMNS, COLOUR_SCOPE, SET_SCOPE, unusedWhere, viewsOf } from './store'
 
 /**
@@ -96,7 +96,7 @@ export async function libraryCounts(caller: CommandCaller, query: { readonly com
       // Private-label styles under the brand's own name (B-W2b-206: brandPartyId set, not sold under our name) the person sees.
       client.style.groupBy({
         by: ['companyId', 'brandPartyId'],
-        where: { AND: [scopeWhere(actor, PRODUCT_STYLES_VIEW, COLOUR_SCOPE) as Prisma.StyleWhereInput, { brandPartyId: { not: null }, soldUnderOurName: false, status: { not: 'ARCHIVED' } }, query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {}] },
+        where: { AND: [scopeWhere(actor, PRODUCT_STYLES_VIEW, STYLE_SCOPE) as Prisma.StyleWhereInput, { brandPartyId: { not: null }, soldUnderOurName: false, status: { not: 'ARCHIVED' } }, query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {}] },
         _count: { _all: true },
       }),
       client.brandingSet.findMany({ where: { status: 'ACTIVE' }, select: { companyId: true, partyId: true } }),

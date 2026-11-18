@@ -61,12 +61,14 @@ async function readPrepackFor(caller: CommandCaller, prepackId: string): Promise
     const row = await client.prepack.findUnique({ where: { id: prepackId }, select: PREPACK_COLUMNS })
     if (!row) return null
     const scale = await client.sizeScale.findUniqueOrThrow({ where: { id: row.sizeScaleId }, select: SCALE_COLUMNS })
-    const style = row.styleId ? await client.style.findUnique({ where: { id: row.styleId }, select: STYLE_COLUMNS }) : null
+    const style = row.styleId ? await client.style.findUnique({ where: { id: row.styleId }, select: { ...STYLE_COLUMNS, brandPartyId: true } }) : null
     return { row, scale, style }
   })
   if (!found) throw new NotFoundError('Prepack not found.')
   const companyId = found.style ? found.style.companyId : found.scale.companyId
   if (!can(actorOf(contextOf(caller)), PRODUCT_STYLES_VIEW, { companyId })) throw new NotFoundError('Prepack not found.')
+  // fix-pr-8 (the brand wall): a prepack of another customer's private-label style is that customer's.
+  if (found.style && !can(actorOf(contextOf(caller)), PRODUCT_STYLES_VIEW, { partyId: found.style.brandPartyId })) throw new NotFoundError('Prepack not found.')
   return { row: found.row, scale: found.scale, companyId, range: found.style ? [...found.style.sizes] : null }
 }
 

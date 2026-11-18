@@ -11,6 +11,7 @@ import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/unit
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { contextOf, mayWrite } from '../materials/store'
+import { STYLE_SCOPE as BRAND_STYLE_SCOPE } from '../styles/store'
 
 /**
  * The operation library's rows (factory-db `Operation`) and where each is used (`RoutingOperation`, `StyleRevision`,
@@ -24,7 +25,8 @@ import { contextOf, mayWrite } from '../materials/store'
 export { contextOf }
 
 export const OPERATION_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
-const STYLE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
+// fix-pr-8 (the brand wall): by brand too — B-PR-10's STYLE_SCOPE (another customer's private-label style is not counted).
+const STYLE_SCOPE: ScopeColumns = BRAND_STYLE_SCOPE
 
 export const OPERATION_COLUMNS = {
   id: true,

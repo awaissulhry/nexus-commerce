@@ -22,6 +22,8 @@ import { actorOf } from '../../../core/context'
 import { libraryGuarded } from '../colours/store'
 import { contextOf } from '../styles/store'
 import { assertMayKeep, readSet, rowsOf, SET_COLUMNS, setsWhere, viewOf, type SetRowData } from './store'
+import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 
 /**
  * The brands' branding sets (B-W2b-247; PRD-045; design products.colours sec:colours.branding, pop:colours.branding). Read
@@ -81,6 +83,7 @@ export async function brandCandidates(caller: CommandCaller, query: { readonly q
       where: {
         AND: [
           { roles: { hasSome: ['CUSTOMER', 'BRAND'] }, status: { in: ['PROSPECT', 'ACTIVE'] }, kind: 'ORGANISATION' },
+          scopeWhere(actor, PRODUCT_STYLES_VIEW, { party: 'id' }) as Prisma.PartyWhereInput, // fix-pr-8: the customers the person reaches
           q ? { OR: [{ code: { contains: q, mode: 'insensitive' } }, { legalName: { contains: q, mode: 'insensitive' } }, { tradeName: { contains: q, mode: 'insensitive' } }] } : {},
         ],
       },

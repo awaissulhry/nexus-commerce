@@ -4,7 +4,8 @@ import type { ColourRow, ListColoursQuery } from '@nexus/factory-domain/product/
 import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { contextOf, STYLE_SCOPE } from './store'
+import { COLOUR_SCOPE } from '../colours/store'
+import { contextOf } from './store'
 
 /**
  * The colour library as a colourway picks its main colour (SCR-041 "Colourways": the swatch). Read only: the library
@@ -16,7 +17,7 @@ export async function listColours(caller: CommandCaller, query: ListColoursQuery
   const context = contextOf(caller)
   const search = query.q?.trim()
   const filters: Prisma.ColourWhereInput[] = [
-    scopeWhere(actorOf(context), PRODUCT_STYLES_VIEW, STYLE_SCOPE) as Prisma.ColourWhereInput,
+    scopeWhere(actorOf(context), PRODUCT_STYLES_VIEW, COLOUR_SCOPE) as Prisma.ColourWhereInput, // fix-pr-8: a colour has no brand (500 for a limited person)
     query.status === 'ALL' ? {} : { status: query.status },
     search ? { OR: [{ code: { contains: search, mode: 'insensitive' } }, { name: { contains: search, mode: 'insensitive' } }] } : {},
     query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
