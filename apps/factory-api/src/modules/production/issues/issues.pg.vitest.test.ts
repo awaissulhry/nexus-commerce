@@ -627,6 +627,7 @@ describe('B-PR-45 escalation (cron production.issueEscalation)', { timeout: SLOW
     const bellOf = (task: { id: string; createdById: string | null }) => system.withClient((client) => client.$transaction((tx) => issueBellOf(tx, { ...task, recordType: 'SalesOrder', recordId: w.b.salesOrderId, assigneeId: staff.pmB })))
     expect(await bellOf({ id: newId(), createdById: staff.adminAll })).toBeNull()
     expect(await bellOf({ id: newId(), createdById: null })).toBeNull()
+  })
   // ---- end F-PR-05b
 })
 
