@@ -56,7 +56,8 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel }
+// F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[] }
 
 function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDepth | undefined {
   if (!depth) return undefined
@@ -71,7 +72,9 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
     ...(glance
       ? {
           numbers: [tile('credit'), { ...tile('promises'), href: `${recordHref}?tab=work` }] satisfies Metric[],
-          now: createElement(GlanceNow, { model: glance }),
+          // F-SA-274: samples and repairs on the Overview, riders and measurement profiles on People & addresses.
+          now: createElement(GlanceNow, { model: glance, parts: ['samples', 'repairs'] }),
+          people: createElement(GlanceNow, { model: glance, parts: ['profiles', 'riders'] }),
           status: createElement(GlanceStatus, { model: glance }),
           aside: createElement(GlanceAside, { model: glance }),
         }
@@ -83,7 +86,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -92,7 +95,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null }),
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}) }),
     ),
   )
 }
@@ -209,6 +212,8 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'overview-supervisor-every-company', label: 'F-SA-272 · The supervisor held — the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
     { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody } },
     { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused } },
+    // ---- F-SA-274: People & addresses — a contact with portal access is tagged (an exact e-mail match), the others offer Invite.
+    { id: 'people-portal', label: 'F-SA-274 · People & addresses: contacts tagged "Has portal access" on the same e-mail; ⋯ Invite to the portal… for the others', model: { ...record('MODA-DEMO', { tab: 'people', can: { ...RECORD_CAN, partners: true } }), portalEmails: by('MODA-DEMO').contacts.slice(0, 1).flatMap((contact) => (contact.email ? [contact.email.toLowerCase()] : [])) } },
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)
     // and its Files view.
     { id: 'thread-docked', label: 'TH-6 · The customer’s thread docked beside the Overview (40 %): Reply to this customer only', model: record('MODA-DEMO'), note: 'The band sits in the shell’s band row with ONE pill; "Projects (2)" opens this customer’s projects. The thread is docked at 40 %, sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me); its Files view the old Documents tab’s files. An old ?tab=activity or ?tab=documents opens the thread; ?tab=tax and ?tab=requirements land on Terms & requirements.' },

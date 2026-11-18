@@ -506,3 +506,26 @@ describe('F-SA-271: the customer’s seven tabs and band', () => {
   })
 })
 // ---- end F-SA-271
+
+// ---- F-SA-274: People & addresses — the same-e-mail tags (a hint from two reads) and the invitation filled in from a contact
+describe('F-SA-274: People & addresses', () => {
+  it('a contact whose e-mail a portal person has is tagged "Has portal access" (exact e-mail, case aside); the others are not', () => {
+    const moda = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!
+    const html = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'people-portal')!.model, 'en')
+    const tagged = moda.contacts.filter((contact) => contact.email).slice(0, 1)
+    expect(tagged.length).toBe(1)
+    expect((html.match(/Has portal access/g) ?? []).length).toBe(1)
+    expect(render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'addresses')!.model, 'en')).not.toContain('Has portal access')
+    expect(render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'people-portal')!.model, 'it')).toContain('Ha accesso al portale')
+  })
+
+  it('the invitation from a contact fills in its e-mail and name (the portal reads ?invite= and ?inviteName= once)', () => {
+    const view = readFileSync(new URL('../../sales/customers/record/view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('?tab=people&invite=${encodeURIComponent(contact.email)}&inviteName=${encodeURIComponent(contact.name)}')
+    const portal = readFileSync(new URL('../../sales/customers/portal/PortalAccess.tsx', import.meta.url), 'utf8')
+    expect(portal).toContain("setDialog({ kind: 'invite', email,")
+    const dialog = readFileSync(new URL('../../sales/customers/portal/view/PortalDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain('{ ...blankInvite(access, locale), ...from }')
+  })
+})
+// ---- end F-SA-274

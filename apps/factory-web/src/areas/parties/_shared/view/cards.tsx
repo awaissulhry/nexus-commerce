@@ -417,7 +417,12 @@ export function AddressesCard({ model, party, actions, editable }: TabProps) {
   )
 }
 
-export function ContactsCard({ model, party, actions, editable }: TabProps) {
+/**
+ * F-SA-274 (a customer's People & addresses): `portalEmails` — the e-mails of its people with portal access: a contact with the same
+ * e-mail is tagged "Has portal access" (a hint from two reads: the data holds no link between the two); `inviteHref` — a contact's
+ * ⋯ "Invite to the portal…" (the invitation with its e-mail filled in; null: none offered).
+ */
+export function ContactsCard({ model, party, actions, editable, portalEmails, inviteHref }: TabProps & { portalEmails?: ReadonlySet<string> | undefined; inviteHref?: ((contact: Contact) => string | null) | undefined }) {
   const t = useT('parties')
   const locale = useLocale()
   const held = editable ? null : model.can.manage ? t('held.archived') : t('held.manage')
@@ -428,6 +433,10 @@ export function ContactsCard({ model, party, actions, editable }: TabProps) {
     contact.status === 'ACTIVE'
       ? { id: 'archive', label: t('contact.archive'), onSelect: () => actions?.onContactStatus?.(contact.id, 'ARCHIVED'), disabled: !editable, description: held ?? t('contact.archiveHint') }
       : { id: 'restore', label: t('contact.restore'), onSelect: () => actions?.onContactStatus?.(contact.id, 'ACTIVE'), disabled: !editable, description: held ?? undefined },
+    // F-SA-274: an active contact with an e-mail and no portal access yet.
+    ...(inviteHref && contact.status === 'ACTIVE' && contact.email && !portalEmails?.has(contact.email.trim().toLowerCase()) && inviteHref(contact)
+      ? [{ id: 'invite', label: t('contact.invite'), href: inviteHref(contact) ?? undefined }]
+      : []),
   ]
   const receives = (contact: Contact) => {
     const on = contact.roles.includes('ORDERS')
@@ -495,7 +504,15 @@ export function ContactsCard({ model, party, actions, editable }: TabProps) {
                 <span key="n" className="fw-pty-name">
                   {contact.name}
                 </span>,
-                dash(contact.email),
+                // F-SA-274: "Has portal access" on an exact e-mail match.
+                contact.email && portalEmails?.has(contact.email.trim().toLowerCase()) ? (
+                  <span key="e" className="fw-pty-tags">
+                    <span>{contact.email}</span>
+                    <Tag tone="info">{t('contact.hasPortal')}</Tag>
+                  </span>
+                ) : (
+                  dash(contact.email)
+                ),
                 dash(contact.phone),
                 ...(supplier ? [receives(contact)] : []),
                 contact.roles.length === 0 ? (

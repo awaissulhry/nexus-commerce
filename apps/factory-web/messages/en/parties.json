@@ -556,7 +556,9 @@
       "roles": "Roles",
       "language": "Language",
       "status": "Status"
-    }
+    },
+    "hasPortal": "Has portal access",
+    "invite": "Invite to the portal…"
   },
   "identity": {
     "title": "Tax identity",

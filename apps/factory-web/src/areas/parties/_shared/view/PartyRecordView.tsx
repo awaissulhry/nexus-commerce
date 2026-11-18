@@ -102,6 +102,8 @@ export interface SupplierDepth {
   readonly requirements?: ReactNode
   /** Tax & terms, after the side's own card (Hold, Customer PO number required). */
   readonly tax?: ReactNode
+  /** F-SA-274: a customer's riders and measurement profiles (People & addresses; profiles behind sales.measurements.view). */
+  readonly people?: ReactNode
 }
 
 /**

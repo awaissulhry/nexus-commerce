@@ -556,7 +556,9 @@
       "roles": "Ruoli",
       "language": "Lingua",
       "status": "Stato"
-    }
+    },
+    "hasPortal": "Ha accesso al portale",
+    "invite": "Invita al portale…"
   },
   "identity": {
     "title": "Identità fiscale",

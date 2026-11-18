@@ -242,7 +242,8 @@
     "emptyHint": {
       "customers": "Invita la prima persona: riceve un'e-mail e accede con un codice.",
       "suppliers": "I link funzionano anche senza account. Invita un contatto per dargli il portale."
-    }
+    },
+    "isContact": "Contatto"
   },
   "row": {
     "change": "Cambia accesso…",

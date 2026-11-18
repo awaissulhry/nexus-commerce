@@ -42,6 +42,8 @@ export function CustomerRecordView({
   onAddTask,
   taskDialog,
   supervisor,
+  portalPeople,
+  portalEmails,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -61,11 +63,14 @@ export function CustomerRecordView({
   taskDialog?: ReactNode
   /** F-SA-272: "Who looks after <customer>" on the Overview (CustomerSupervisorCard, drawn by the container or a design case). */
   supervisor?: ReactNode
+  /** F-SA-274: People & addresses' people with portal access (Portal access's people part) and their e-mails (the contacts' tags). */
+  portalPeople?: ReactNode
+  portalEmails?: ReadonlySet<string>
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -84,6 +89,8 @@ interface CustomerProps {
   onAddTask?: (() => void) | undefined
   taskDialog?: ReactNode
   supervisor?: ReactNode
+  portalPeople?: ReactNode
+  portalEmails?: ReadonlySet<string> | undefined
 }
 
 function Customer(props: CustomerProps) {
@@ -121,7 +128,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -195,9 +202,14 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           {/* F-SA-273: Money — key numbers, credit, open invoices, the open orders' deposits and balances, payment terms. */}
           {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} />}
           {tab === 'people' && (
+            // F-SA-274: People & addresses — the contacts ("Has portal access" on an exact e-mail match, ⋯ Invite to the portal…), the
+            // people with portal access (moved as is from Portal settings, "Contact" on the same e-mail), the addresses, the riders and
+            // measurement profiles (moved from the Overview; profiles behind sales.measurements.view), the contacts' personal data.
             <div className="fw-pty-stack">
+              <ContactsCard model={model} party={party} actions={actions} editable={editable} portalEmails={portalEmails} inviteHref={can.partners ? (contact) => (contact.email ? `${recordPath}?tab=people&invite=${encodeURIComponent(contact.email)}&inviteName=${encodeURIComponent(contact.name)}` : null) : undefined} />
+              {portalPeople}
               <AddressesCard model={model} party={party} actions={actions} editable={editable} />
-              <ContactsCard model={model} party={party} actions={actions} editable={editable} />
+              {depth?.people}
               {/* B-W2b-324: consent, lawful basis and the personal-data actions (Sales' depth slot). */}
               {depth?.contacts}
             </div>

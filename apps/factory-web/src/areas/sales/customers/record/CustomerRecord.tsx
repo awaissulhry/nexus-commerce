@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 // F-SA-271: the band's ⋯ "Add task for <customer>…" — the record's ONE New task dialog (the Party record's task).
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -14,6 +14,7 @@ import { useCustomerMoney } from '../money/hooks'
 import { CUSTOMER_MONEY_NAMESPACE } from '../money/model'
 import type { CustomerMoneyModel } from '../money/overview'
 import { PortalAccess } from '../portal/PortalAccess'
+import type { PortalPart } from '../portal/view/PortalAccessView' // F-SA-274
 import { CommercialTerms } from '../terms/CommercialTerms'
 // B-W2b-324: Customer 360 and customers in depth (the glance, requirements, the hold, PO number, consent and personal data).
 import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth'
@@ -51,16 +52,29 @@ function Customer({ partyId }: { partyId: string }) {
   )
 }
 
+/** F-SA-274: what Portal settings draws (People & addresses draws the people). */
+const PORTAL_SETTINGS_PARTS: readonly PortalPart[] = ['settings', 'preview', 'limits', 'requests']
+
 /** Inside the depth provider (its slot reads it). */
 function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: string; money: CustomerMoneyModel }) {
   const record = usePartyRecord('customers', partyId, {
     terms: (party, reload) => <CommercialTerms party={party} onChanged={reload} />,
     // B-W2b-180: Portal access (`?tab=portal`).
-    portal: (party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} />,
+    // F-SA-274: Portal settings draws its settings, preview, limits and requests; the people with access are People & addresses'.
+    portal: (party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={PORTAL_SETTINGS_PARTS} />,
     depth: (party, reload) => customerDepthSlot(party, reload, prefix),
   })
   const task = useCustomerTask(partyId, record.party?.code ?? null)
-  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} />
+  // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
+  const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
+  const contactEmails = useMemo(() => new Set((record.party?.contacts ?? []).filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!.trim().toLowerCase())), [record.party])
+  const party = record.party
+  const portalPeople =
+    party && record.model.tab === 'people' && record.model.can.partners ? (
+      <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={['people']} contactEmails={contactEmails} onPeople={setPortalEmails} />
+    ) : null
+  // ---- end F-SA-274
+  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
 }
 
 /** F-SA-271: a task on the customer itself (the Party record), as every record's "+ Add task" makes one (POST /tasks). */

@@ -8,7 +8,7 @@ import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordVie
 import { WithMessages } from '../../../../record-panels/i18n'
 import { NS } from './model'
 import { useCustomerDepth, type CustomerDepthState } from './use-depth'
-import { GlanceAside, GlanceNow, GlanceStatus, GlanceTileText, type GlanceModel } from './view/GlanceParts'
+import { GlanceAside, GlanceNow, type GlanceNowPart, GlanceStatus, GlanceTileText, type GlanceModel } from './view/GlanceParts'
 import { HoldCard } from './view/HoldCard'
 import { NoticeLine } from './view/parts'
 import { PoNumberCard } from './view/PoNumberCard'
@@ -58,7 +58,9 @@ export function customerDepthSlot(party: Party, reload: () => void, prefix: stri
   const numbers: Metric[] = [tile('credit'), { ...tile('promises'), href: `${prefix}/sales/customers/${encodeURIComponent(party.id)}?tab=work` /* F-SA-271: Work */ }]
   return {
     numbers,
-    now: <NowPart party={party} />,
+    // F-SA-274: samples and repairs stay on the Overview ("Also open"); riders and measurement profiles go to People & addresses.
+    now: <NowPart party={party} parts={['samples', 'repairs']} />,
+    people: <NowPart party={party} parts={['profiles', 'riders']} />,
     status: <StatusPart party={party} />,
     aside: <AsidePart party={party} />,
     tax: <TaxPart party={party} reload={reload} />,
@@ -83,8 +85,8 @@ function useGlanceModel(party: Party): GlanceModel {
   return { read: state.glance.read, ...useAddresses(party) }
 }
 
-function NowPart({ party }: { party: Party }) {
-  return <GlanceNow model={useGlanceModel(party)} />
+function NowPart({ party, parts }: { party: Party; /* F-SA-274 */ parts?: readonly GlanceNowPart[] }) {
+  return <GlanceNow model={useGlanceModel(party)} {...(parts ? { parts } : {})} />
 }
 
 function StatusPart({ party }: { party: Party }) {
