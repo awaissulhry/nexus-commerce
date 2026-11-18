@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
+import { PORTAL_UPLOAD_WORDS } from '@nexus/factory-domain/threads/partner/uploads' // fix-pg-2 (B-TH-085)
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedSalesIntake } from '../../../../../../packages/factory-db/seed/sales-intake'
@@ -141,7 +142,8 @@ afterAll(async () => {
 
 describe('the customer sends a request (B-TH-010, B-TH-012)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('the door is open while the company has request numbering', async () => {
-    expect(await ok(browsers.buyer, 'GET', '/portal/inquiries/open')).toEqual({ open: true, reason: null })
+    // fix-pg-2 (B-TH-085): the door also says whether files go with the request; this buyer has no upload right (partner-upload).
+    expect(await ok(browsers.buyer, 'GET', '/portal/inquiries/open')).toEqual({ open: true, reason: null, files: { open: false, words: PORTAL_UPLOAD_WORDS.NO_UPLOAD.en } })
   })
 
   it("makes an Inquiry of the session's company and party, numbered INQ-…, its words the thread's first message, a receipt with its own number", async () => {
@@ -341,6 +343,16 @@ describe('th-backend-g step 2: the receipt mail goes to the person who sent the 
     const again = await sendRequestReceipt(callerFor(h.database, systemContext(T, `test-${newId()}`)), h.email, { inquiryId: sent.request.id, to: { email: people.buyer, name: 'bea.buyer', language: null }, clock: h.clock })
     expect(again.sent).toBe(true)
     expect((await admin(`SELECT id FROM "EmailOutbound" WHERE "recordId" = $1 AND "templateKey" = 'request.received'`, [sent.request.id])).length).toBe(1)
+  })
+
+  // fix-pg-2: a send that writes nothing (the first receipt found, an address suppressed) is no failed command.
+  it('a suppressed address gets no receipt: said, nothing queued', async () => {
+    const seeded = (await one<{ id: string }>(`SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND number = 'SEED-INQ-0004'`, [T])).id
+    const blocked = 'blocked.receipt.th-g@example.com'
+    await admin(`INSERT INTO "Suppression" (id, "tenantId", address, reason, at) VALUES ($1, $2, $3, 'MANUAL', now())`, [newId(), T, blocked])
+    const outcome = await sendRequestReceipt(callerFor(h.database, systemContext(T, `test-${newId()}`)), h.email, { inquiryId: seeded, to: { email: blocked, name: null, language: null }, clock: h.clock })
+    expect(outcome).toEqual({ sent: false, reason: 'SUPPRESSED' })
+    expect(await admin(`SELECT id FROM "EmailOutbound" WHERE "recordId" = $1 AND "templateKey" = 'request.received'`, [seeded])).toEqual([])
   })
 })
 // ---- end th-backend-g step 2

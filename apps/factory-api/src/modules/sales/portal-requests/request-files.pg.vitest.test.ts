@@ -56,7 +56,7 @@ const office = () => callerFor(h.database, { audience: 'office', tenantId: T, ac
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 let serial = 0
 const call = (who: keyof typeof people, method: 'GET' | 'POST', url: string, body?: unknown): Promise<Answer> =>
-  browsers[who].send(method as 'POST', url, method === 'GET' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `th085-${++serial}` } })
+  browsers[who].send(method as 'POST', url, method === 'GET' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `th085-files-${++serial}` } })
 async function ok(who: keyof typeof people, method: 'GET' | 'POST', url: string, body?: unknown, status = 200): Promise<Json> {
   const answer = await call(who, method, url, body)
   expect(answer.status, `${who} ${method} ${url}: ${JSON.stringify(answer.body)}`).toBe(status)
@@ -169,9 +169,10 @@ describe('B-TH-085 customers attach files after Send', { timeout: SLOW_TEST_TIME
     G.photo = photo.id
     G.sheet = sheet.id
     const rows = await admin<Json>('SELECT id, "recordType", "recordId", "partyId", visibility::text[] AS visibility, category::text AS category, "createdById" FROM "StoredFile" WHERE id = ANY($1::uuid[]) ORDER BY "originalName"', [[photo.id, sheet.id]])
+    // fix-pg-2: in the query's order (by name: made-up-alpha-sizes.pdf before made-up-alpha-sketch.png).
     expect(rows).toEqual([
-      { id: photo.id, recordType: 'Inquiry', recordId: G.request, partyId: partyA, visibility: ['OFFICE', 'PARTNER'], category: null, createdById: null },
       { id: sheet.id, recordType: 'Inquiry', recordId: G.request, partyId: partyA, visibility: ['OFFICE', 'PARTNER'], category: 'MEASUREMENTS', createdById: null },
+      { id: photo.id, recordType: 'Inquiry', recordId: G.request, partyId: partyA, visibility: ['OFFICE', 'PARTNER'], category: null, createdById: null },
     ])
     // Who of the customer sent each: the person's own audit row.
     const audits = await admin<{ recordId: string; actorId: string }>(`SELECT "recordId", "actorId" FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'portal.attachFile' AND "recordId" = ANY($2::uuid[])`, [T, [photo.id, sheet.id]])

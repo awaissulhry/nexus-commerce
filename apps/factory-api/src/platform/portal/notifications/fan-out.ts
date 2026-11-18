@@ -149,11 +149,13 @@ async function mailInstant(caller: CommandCaller, made: readonly Made[], options
     const since = new Date(Date.now() - ALREADY_MAILED_MS)
     const already = await caller.withClient((client) => client.emailOutbound.findFirst({ where: { recordId: row.record.id, to: { has: row.email.toLowerCase() }, createdAt: { gte: since } }, select: { id: true } }))
     let outcome: { outcome: 'SENT' | 'SKIPPED' | 'FAILED'; outboundId: string | null; detail: string | null }
-    if (already) {
-      outcome = { outcome: 'SKIPPED', outboundId: null, detail: "the record's own mail reached this address a moment ago" }
-    } else if (row.messageKey === 'portal.request.received' && (await sentTheRequest(caller, row.record.id, row.userId))) {
+    // fix-pg-2 (th-backend-g step 2): the sender's own reason first — their receipt mail is also "the record's own mail" a moment
+    // ago, and the delivery log says which skip it was.
+    if (row.messageKey === 'portal.request.received' && (await sentTheRequest(caller, row.record.id, row.userId))) {
       // th-backend-g step 2: the person who sent the request gets its receipt mail (modules/sales/inquiries/receipt.ts), not this notice.
       outcome = { outcome: 'SKIPPED', outboundId: null, detail: 'the person who sent the request gets its receipt mail' }
+    } else if (already) {
+      outcome = { outcome: 'SKIPPED', outboundId: null, detail: "the record's own mail reached this address a moment ago" }
     } else {
       const company = await caller.withClient((client) => client.party.findUnique({ where: { id: row.partyId }, select: { code: true } }))
       const companyName = await caller.withClient((client) => client.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } }))
