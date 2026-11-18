@@ -20,6 +20,8 @@ export interface HomeCaseModel {
   tasks: TasksViewModel
   /** The verbs of the approval rows (Approve / Review), in the case's language. */
   verbs: Readonly<Record<string, string>>
+  /** F-PR-15: "All 9 waiting" under the first five (Waiting for you built), else none. */
+  more?: { readonly href: string; readonly label: string } | null
 }
 
 /** A case is drawn in the page's language: its made-up words come in both. */
@@ -32,7 +34,7 @@ export function HomeCase({ model: build }: { model: HomeCaseBuilder }) {
       <PortalShellView model={model.shell}>
         <CustomerHomeView
           model={model.home}
-          tasks={<TasksView model={model.tasks} verbFor={(row) => (approvalOfTask(row) ? { label: model.verbs[row.kind] ?? row.verb, onRun: () => undefined, heldReason: row.held ?? null } : null)} />}
+          tasks={<TasksView model={model.tasks} more={model.more ?? null /* F-PR-15 */} verbFor={(row) => (approvalOfTask(row) ? { label: model.verbs[row.kind] ?? row.verb, onRun: () => undefined, heldReason: row.held ?? null } : null)} />}
         />
       </PortalShellView>
     </WithMessages>

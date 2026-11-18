@@ -1146,7 +1146,8 @@
   "filter": {
     "waitingOn": "Waiting on",
     "health": "Health",
-    "blockedBy": "Blocked by"
+    "blockedBy": "Blocked by",
+    "gate": "Blocked by a gate"
   },
   "waitingChoice": {
     "BRAND": "Customer",
@@ -1373,6 +1374,112 @@
     "sees": {
       "withoutLimits": "What the customer sees is read with its limits.",
       "open": "Open as {name}"
+    }
+  },
+  "ovw": {
+    "hint": "Every customer's production. Each number opens Work orders with the same filter.",
+    "scopeMine": "Your customers only: every figure and the Total are theirs. Each number opens Work orders with the same filter.",
+    "mine": {
+      "label": "Only mine",
+      "hint": "The orders I supervise"
+    },
+    "tile": {
+      "waitingOnUs": "Waiting on us",
+      "waitingOnCustomer": "Waiting on customer",
+      "late": "Late",
+      "atRisk": "At risk",
+      "blocked": "Blocked",
+      "customerRequests": "Customer requests",
+      "requestsHint": "To answer in Home › Approvals"
+    },
+    "failed": "The overview could not be read.",
+    "empty": {
+      "title": "No work in production",
+      "body": "No open work order and no customer request waits.",
+      "mineTitle": "Nothing of yours in production",
+      "mineBody": "No open work order or request of the orders you supervise. Switch Only mine off to see every customer."
+    },
+    "total": "Total",
+    "door": "{what} · {who}: {count} — open in Work orders",
+    "doorApprovals": "{what} · {who}: {count} — open in Home › Approvals",
+    "col": {
+      "customer": "Customer",
+      "inProduction": "In production",
+      "late": "Late",
+      "atRisk": "At risk",
+      "blocked": "Blocked",
+      "onUs": "On us",
+      "onCustomer": "On customer",
+      "onSupplier": "On supplier",
+      "onWorkshop": "On workshop",
+      "onHold": "On hold",
+      "gate": "Gate",
+      "split": "Split needed",
+      "urgent": "Customer urgent",
+      "requests": "Requests"
+    },
+    "exceptions": {
+      "title": "Exceptions by customer",
+      "hint": "Open work orders per customer, then the Total. On us … On workshop: who the order waits on. Gate: not started, its order waits on a gate. Split needed: made before the one-customer rule."
+    },
+    "pieces_one": "{pieces} piece",
+    "pieces_other": "{pieces} pieces",
+    "requestsWaiting": "{count} waiting in all",
+    "wip": {
+      "title": "Work in progress by stage",
+      "hint": "Pieces per stage; a cell opens that row's work orders in that state. Held work counts only under On hold.",
+      "pieces": "In production (pieces)",
+      "notCounted": "not counted here",
+      "stage": {
+        "NOT_RELEASED": "Not released",
+        "RELEASED": "Released",
+        "CUTTING": "Cutting",
+        "SEWING": "Sewing",
+        "AT_WORKSHOP": "At workshop",
+        "QUALITY": "Quality",
+        "FINISHED": "Finished",
+        "ON_HOLD": "On hold"
+      },
+      "sewingNotCounted_one": "{count} started work order does not count sewing here: — under Sewing and Quality.",
+      "sewingNotCounted_other": "{count} started work orders do not count sewing here: — under Sewing and Quality."
+    },
+    "urgent": {
+      "title": "Most urgent",
+      "hint": "Late and at risk, the most urgent first (the Work orders list's risk order).",
+      "none": "Nothing late or at risk",
+      "supervisor": "Supervisor",
+      "shownOf": "{shown} of {count}",
+      "showAll": "Show all in Work orders",
+      "more": "More for {number}",
+      "askFailed": "Ask the supervisor could not open: {reason}"
+    },
+    "issues": {
+      "title": "Open issues",
+      "hint": "Questions and problems that wait for our answer.",
+      "figures": "{open} open · {noReply} no reply sent yet · {escalated} escalated · {mine} for you",
+      "none": "No open issue",
+      "noneMine": "No open issue is yours.",
+      "col": {
+        "record": "Record",
+        "source": "From",
+        "raised": "Raised",
+        "due": "Answer by",
+        "state": "State",
+        "task": "Task"
+      },
+      "source": {
+        "BRAND": "Customer",
+        "OFFICE": "Office"
+      },
+      "state": {
+        "noReply": "No reply sent yet",
+        "escalatedBackup": "Escalated to the backup",
+        "escalatedOwner": "Escalated to Owner and Admin",
+        "waiting": "Waiting on us"
+      },
+      "overdue": "Overdue",
+      "shownOf": "{shown} of {count}, the oldest first",
+      "showMore": "Show more"
     }
   }
 }

@@ -1,0 +1,62 @@
+/*
+ * F-PR-24 — "Report a problem" (the dialog, the chip on an order and its My production row, the order's files card): layout only,
+ * semantic tokens only. On a phone the dialog is a bottom sheet (the DS Modal); every line wraps, nothing scrolls sideways.
+ */
+
+.fw-pprob,
+.fw-pprob-stack,
+.fw-pprob-orders {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pprob {
+  gap: var(--nds-space-12);
+}
+
+.fw-pprob-stack,
+.fw-pprob-orders {
+  gap: var(--nds-space-4);
+}
+
+/* The orders a report names: one per line; 50 of them scroll inside the box, never the sheet. */
+.fw-pprob-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 12rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.fw-pprob-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pprob-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pprob-label {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-pprob-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}

@@ -182,7 +182,10 @@ function metricsOf(tiles: { state: Async; items: readonly Tile[] }, prefix: stri
         ? t('tiles.unknown')
         : tile.amount
           ? [tile.amount.open ? t('tiles.invoicesAmount', { amount: tile.amount.open }) : null, tile.amount.overdue ? t('tiles.invoicesOverdue', { count: tile.amount.overdue }) : null].filter(Boolean).join(' · ') || t(tile.hint)
-          : t(tile.hint)
+          : // F-PR-15: My production's tile says what waits there ("2 waiting on you · 1 at risk"), else its own hint.
+            tile.waiting && tile.waiting.length > 0
+            ? tile.waiting.map((part) => t(part.words, { count: part.count })).join(' · ')
+            : t(tile.hint)
     const accent = tile.tone && (tile.value ?? 0) > 0 ? { accent: tile.tone === 'danger' ? 'var(--nds-danger)' : 'var(--nds-warning)' } : {}
     const base = { label: t(tile.label), value, hint, ...accent }
     return tile.href ? { ...base, href: `${prefix}${tile.href}` } : base

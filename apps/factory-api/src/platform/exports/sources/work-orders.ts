@@ -111,6 +111,8 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
       // B-PR-33: the Overview's "blocked by a gate" and "made before the rule" (the file follows the screen).
       gate: address.get('gate') === 'true' ? true : undefined,
       mixed: address.get('mixed') === 'true' ? true : undefined,
+      // F-PR-04: the Overview's "No customer" row.
+      noCustomer: address.get('noCustomer') === 'true' ? true : undefined,
     }
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
     if (view === 'late') return { late: true, q, due, rush, partyId, ...ranked }

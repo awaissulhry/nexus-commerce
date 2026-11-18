@@ -33,6 +33,8 @@ export interface TileDef {
   readonly permission: string
   readonly href: string | null
   readonly tone?: 'danger' | 'warning'
+  /** F-PR-15: the In production tile opens My production: what waits there is counted in its hint (B-PR-20's counts). */
+  readonly production?: boolean
 }
 
 /** Which of the portal's pages are built now (portal-nav.ts `built`): a tile links only to one of these. */
@@ -40,6 +42,8 @@ export interface BuiltPages {
   readonly orders: boolean
   readonly documents: boolean
   readonly returns: boolean
+  /** F-PR-15: My production (F-PR-11): the In production tile opens it for a person who sees production. */
+  readonly production?: boolean
 }
 
 /**
@@ -52,9 +56,15 @@ export function tilesFor(built: BuiltPages, can: (permission: string) => boolean
   const claims: TileDef = can('portal.returns.view')
     ? { key: 'returns.open', label: 'tiles.claims', hint: 'tiles.claimsHint', permission: 'portal.returns.view', href: built.returns ? '/returns' : null, tone: 'warning' }
     : { key: 'returns.complaints_open', label: 'tiles.complaints', hint: 'tiles.complaintsHint', permission: 'portal.complaints.view', href: built.returns ? '/returns' : null, tone: 'warning' }
+  // F-PR-15 (06-tree B.4 P-HOME-waiting): the In production tile opens My production for a person who may see it (one place for
+  // its list: the same rows, chips and counts), else the orders list's In production chip as before.
+  const myProduction = (built.production ?? false) && can('portal.production.view')
+  const inProduction: TileDef = myProduction
+    ? { key: 'orders.in_production', label: 'tiles.inProduction', hint: 'tiles.inProductionHint', permission: 'portal.salesOrders.view', href: '/production', production: true }
+    : { key: 'orders.in_production', label: 'tiles.inProduction', hint: 'tiles.inProductionHint', permission: 'portal.salesOrders.view', href: orders('IN_PRODUCTION') }
   return [
     { key: 'orders.open', label: 'tiles.open', hint: 'tiles.openHint', permission: 'portal.salesOrders.view', href: orders('OPEN') },
-    { key: 'orders.in_production', label: 'tiles.inProduction', hint: 'tiles.inProductionHint', permission: 'portal.salesOrders.view', href: orders('IN_PRODUCTION') },
+    inProduction,
     { key: 'orders.shipping_this_week', label: 'tiles.shippingWeek', hint: 'tiles.shippingWeekHint', permission: 'portal.salesOrders.view', href: orders('OPEN') },
     { key: 'invoices.to_pay', label: 'tiles.invoices', hint: 'tiles.invoicesHint', permission: 'portal.payments.view', href: built.documents ? '/documents?group=FINANCE' : null },
     claims,
@@ -66,7 +76,32 @@ export interface Tile extends TileDef {
   readonly value: number | null
   /** The Finance tile: what is open and overdue, written per currency (price grain only). */
   readonly amount?: { readonly open: string; readonly overdue: number | null } | null
+  /** F-PR-15: the In production tile's hint — what waits on the customer, at risk, on hold (only the counts above 0; none: its hint). */
+  readonly waiting?: readonly ProductionHintPart[]
 }
+
+// ---- F-PR-15 (B-PR-20's Home source `production`: the SAME read and rules as My production's chips, so a tile and its list agree)
+/** The Home counts of the customer's production, in the order its hint says them. */
+export const PRODUCTION_HINT_COUNTS = [
+  { key: 'production.waiting_on_you', words: 'tiles.productionWaiting' },
+  { key: 'production.at_risk', words: 'tiles.productionAtRisk' },
+  { key: 'production.on_hold', words: 'tiles.productionOnHold' },
+] as const
+export interface ProductionHintPart {
+  /** A key of `portal-customer-home` taking {count}. */
+  readonly words: (typeof PRODUCTION_HINT_COUNTS)[number]['words']
+  readonly count: number
+}
+
+/** "2 waiting on you · 1 at risk · 1 on hold": the counts above 0 (a count not read says nothing: never a made-up 0). */
+export function productionHintOf(home: HomeRead | null): ProductionHintPart[] {
+  const byKey = new Map((home?.counts ?? []).map((count) => [count.key, count.value]))
+  return PRODUCTION_HINT_COUNTS.flatMap((entry) => {
+    const value = byKey.get(entry.key) ?? null
+    return value !== null && value > 0 ? [{ words: entry.words, count: value }] : []
+  })
+}
+// ---- end F-PR-15
 
 /** The tiles this person may open, with their counts (a tile whose page they cannot open is not drawn). */
 export function tilesOf(defs: readonly TileDef[], home: HomeRead | null, can: (permission: string) => boolean, money?: { openItems: OpenItemsRead | null; format: (minor: number, currency: string) => string } | null): Tile[] {
@@ -75,6 +110,11 @@ export function tilesOf(defs: readonly TileDef[], home: HomeRead | null, can: (p
     .filter((def) => can(def.permission))
     .map((def) => {
       const value = byKey.get(def.key) ?? null
+      // F-PR-15: My production's tile says what waits there; anything waiting on the customer, at risk or on hold marks it.
+      if (def.production) {
+        const waiting = productionHintOf(home)
+        return { ...def, value, waiting, ...(waiting.length > 0 ? { tone: 'warning' as const } : {}) }
+      }
       if (def.key !== 'invoices.to_pay') return { ...def, value }
       const overdue = byKey.get('invoices.overdue') ?? null
       const totals = money?.openItems?.byCurrency.filter((row) => row.open !== undefined && row.open > 0) ?? []
@@ -358,6 +398,33 @@ export function messagesCountsOf(card: MessagesCard): { readonly needsYou: numbe
 /** Nothing to show but the account's offer (the card says "No messages yet" above it). */
 export const messagesEmpty = (card: MessagesCard): boolean => card.needsYou.length === 0 && card.projects.length === 0 && card.conversations.length === 0 && card.account.last === null
 // ── end B-TH-238
+
+// ── F-PR-15 (06-tree B.4 P-HOME-waiting): What waits for you shows the first five and "All 9 waiting" ─────────────────────
+/** How many open requests Home shows before "All N waiting" (Waiting for you, F-PR-14, lists them all). */
+export const HOME_WAITING_SHOWN = 5
+
+/**
+ * The first `max` open rows in the list's reading order (its groups in order, each group's rows in order; a row just marked done
+ * stays where it is and counts no more), and how many are open in all. `more`: some are not shown, so "All N waiting" leads to
+ * Waiting for you. The groups keep their own fields; a group left without a row is not drawn.
+ */
+export function firstWaiting<G extends { readonly rows: readonly { readonly done?: unknown }[] }>(groups: readonly G[], max = HOME_WAITING_SHOWN): { readonly groups: G[]; readonly open: number; readonly more: boolean } {
+  let taken = 0
+  let open = 0
+  const shown: G[] = []
+  for (const group of groups) {
+    const rows = group.rows.filter((row) => {
+      if (row.done) return taken < max
+      open += 1
+      if (taken >= max) return false
+      taken += 1
+      return true
+    })
+    if (rows.length > 0) shown.push({ ...group, rows })
+  }
+  return { groups: shown, open, more: open > max }
+}
+// ── end F-PR-15
 
 // ── What waits for you: the rows the Approve pop-up answers ────────────────────────────────────────────────────────────
 const APPROVAL_TASK_KINDS: ReadonlySet<string> = new Set(['APPROVE', 'RECONFIRM_ORDER'])

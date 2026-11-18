@@ -70,10 +70,10 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     ])
   })
 
-  it('workorders.view opens Production › Floor now and Work orders (B-W1-38 part 2), nothing of Admin', () => {
+  it('workorders.view opens Production › Overview (F-PR-04, first), Floor now and Work orders (B-W1-38 part 2), nothing of Admin', () => {
     expect(ids(officeNavFor(permissionCheck(['home.view', 'workorders.view', 'workorders.manage', 'workorders.release'])))).toEqual([
       ['home', ['home-today', 'home-approvals', 'home-tasks', 'home-notifications']],
-      ['production', ['production-floor', 'production-work-orders']],
+      ['production', ['production-overview', 'production-floor', 'production-work-orders']],
     ])
   })
 
