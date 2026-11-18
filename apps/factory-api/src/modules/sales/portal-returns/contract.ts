@@ -196,7 +196,8 @@ const complaintRecord = output({
     via: z.string(),
     description: z.string(),
     item: output({ style: named.nullable(), size: z.string().nullable(), serial: z.string().nullable(), batchNumber: z.string().nullable() }),
-    order: output({ id: id(), number: z.string(), yourRef: z.string().nullable() }).nullable(),
+    // fix-portal-numbers-1 (B-TH-303): the order the complaint is about by the customer's own number and PO, never the office's series.
+    order: output({ id: id(), yourNumber: output({ seq: z.number().int(), words }).nullable(), yourRef: z.string().nullable() }).nullable(),
     shipment: numbered.nullable(),
     photos: z.array(file),
   }),

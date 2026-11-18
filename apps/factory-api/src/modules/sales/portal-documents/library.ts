@@ -26,6 +26,8 @@ import {
 } from '@nexus/factory-domain/sales/portal-documents/library'
 import { PORTAL_CUSTOMER_DOCUMENTS_CONFORMITY, PORTAL_CUSTOMER_DOCUMENTS_FINANCE, PORTAL_CUSTOMER_DOCUMENTS_VIEW } from '@nexus/factory-domain/sales/portal-documents/permissions'
 import { contentWalledFor } from '../../../platform/files/content-wall' // fix-pr-4
+// fix-portal-numbers-1 (B-TH-303): the customer's own order and quote numbers, never the office's series.
+import { customerNumberOf, customerRefOf, type CustomerNumber } from '@nexus/factory-domain/sales/customer-numbers'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import {
   lastVisitOf,
@@ -77,9 +79,19 @@ export const DOWNLOAD_ACTION = 'customerDocuments.download'
 
 export interface OrderRef {
   readonly id: string
+  /** The office's order number (SO-…): only matched by the search, never in what the customer reads (fix-portal-numbers-1). */
   readonly number: string
   readonly customerRef: string | null
+  /** fix-portal-numbers-1 (B-TH-303, plan §0.5): the customer's own order number ("Your order 12"); null: none yet. */
+  readonly yourNumber: CustomerNumber | null
 }
+
+// ---- fix-portal-numbers-1 (B-TH-303; Owner decision PR-06, plan §0.5 "counts do not leak") ---------------------------------
+/** An order's short reference as the customer reads it ("#12"), or null: never the office's SO-… series. */
+const ownOrderRef = (order: OrderRef | null | undefined): string | null => customerRefOf('ORDER', order?.yourNumber?.seq ?? null)
+/** A quote's short reference as the customer reads it ("#3"), or null: never the office's QT-… series. */
+const ownQuoteRef = (quote: { readonly customerSeq: number | null } | null | undefined): string | null => customerRefOf('QUOTE', quote?.customerSeq ?? null)
+// ---- end fix-portal-numbers-1
 
 export interface ForRecord {
   readonly type: string
@@ -223,7 +235,7 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
   const ddtNumber = new Map(ddts.map((row) => [row.id, row.number]))
   const orderRef = (id: string | null | undefined): OrderRef | null => {
     const order = id ? orderOf.get(id) : undefined
-    return order ? { id: order.id, number: order.number, customerRef: order.customerRef } : null
+    return order ? { id: order.id, number: order.number, customerRef: order.customerRef, yourNumber: customerNumberOf('ORDER', order.customerSeq) /* fix-portal-numbers-1 */ } : null
   }
   const orderOfVersion = new Map(own.orders.filter((order) => order.quoteVersionId).map((order) => [order.quoteVersionId!, order]))
 
@@ -259,9 +271,9 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
       kind === 'DDT'
         ? (ddtNumber.get(text(created?.details.documentId) ?? '') ?? null)
         : kind === 'ORDER_CONFIRMATION'
-          ? (forRecord?.order?.number ?? quote?.number ?? null)
+          ? (ownOrderRef(forRecord?.order) ?? ownQuoteRef(quote)) // fix-portal-numbers-1: the customer's own numbers
           : kind === 'QUOTE'
-            ? (quote?.number ?? null)
+            ? ownQuoteRef(quote) // fix-portal-numbers-1
             : (compliance?.number ?? generated?.number ?? null)
     // What it is of: its number or style (and a declaration's revision); a document with neither is named by its file.
     const byFile = kind === 'OTHER' || kind === 'PROOF' || kind === 'FISCAL_DOCUMENT' || (reference === null && style === null)
@@ -289,7 +301,8 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
       withdrawn: compliance?.status === 'WITHDRAWN' ? { replacedBy: null } : null,
       replacedById: null,
       isNew: false,
-      search: [file.originalName, forRecord?.label, forRecord?.order?.number, forRecord?.order?.customerRef, style?.code, style?.name, reference].filter((value): value is string => typeof value === 'string'),
+      // fix-portal-numbers-1: the office's order and quote numbers are only matched (printed on the papers the customer holds).
+      search: [file.originalName, forRecord?.label, forRecord?.order?.number, forRecord?.order?.customerRef, style?.code, style?.name, reference, quote?.number].filter((value): value is string => typeof value === 'string'),
     })
   }
 
@@ -358,7 +371,7 @@ function forOf(
   facts: {
     readonly shipmentOf: Map<string, { readonly number: string; readonly salesOrderId: string }>
     readonly orderRef: (id: string | null | undefined) => OrderRef | null
-    readonly quote: { readonly id: string; readonly number: string } | null
+    readonly quote: { readonly id: string; readonly number: string; readonly customerSeq: number | null } | null
     readonly orderOfQuote: OrderRow | null
     readonly style: { readonly code: string } | null
     /** B-PR-44: the order a file of an order line (or of the quote line it was made from) belongs to. */
@@ -372,7 +385,7 @@ function forOf(
     case 'SalesOrderLine':
     case 'QuoteLine': {
       const order = facts.orderRef(facts.lineOrder)
-      return { ...base, label: order?.number ?? null, order }
+      return { ...base, label: ownOrderRef(order) /* fix-portal-numbers-1: never the office's SO-… */, order }
     }
     // ---- end B-PR-44
     case 'Shipment': {
@@ -381,10 +394,11 @@ function forOf(
     }
     case 'SalesOrder': {
       const order = facts.orderRef(file.recordId)
-      return { ...base, label: order?.number ?? null, order }
+      return { ...base, label: ownOrderRef(order) /* fix-portal-numbers-1 */, order }
     }
     case 'Quote':
-      return { ...base, label: facts.quote?.number ?? null, order: facts.orderOfQuote ? { id: facts.orderOfQuote.id, number: facts.orderOfQuote.number, customerRef: facts.orderOfQuote.customerRef } : null }
+      // fix-portal-numbers-1: the quote and its order by the customer's own numbers.
+      return { ...base, label: ownQuoteRef(facts.quote), order: facts.orderOfQuote ? facts.orderRef(facts.orderOfQuote.id) : null }
     case 'Style':
       return { ...base, label: facts.style?.code ?? null, order: null }
     default:
@@ -410,7 +424,8 @@ function invoiceEntry(
   const kind = kindOfInvoice(invoice.docType)
   const credited = invoice.creditOfId ? facts.invoiceOf.get(invoice.creditOfId) : undefined
   const order = facts.orderRef(invoice.salesOrderId ?? credited?.salesOrderId)
-  const forRecord: ForRecord = credited ? { type: 'Invoice', id: credited.id, label: credited.number, order } : order ? { type: 'SalesOrder', id: order.id, label: order.number, order } : { type: 'Invoice', id: invoice.id, label: invoice.number, order: null }
+  // fix-portal-numbers-1: an invoice keeps its legal number; its order is named by the customer's own number.
+  const forRecord: ForRecord = credited ? { type: 'Invoice', id: credited.id, label: credited.number, order } : order ? { type: 'SalesOrder', id: order.id, label: ownOrderRef(order), order } : { type: 'Invoice', id: invoice.id, label: invoice.number, order: null }
   return [
     {
       id: files[0]!.fileId,
@@ -460,7 +475,8 @@ export function documentView(entry: LibraryEntry, entries: ReadonlyMap<string, L
     kindWords: KIND_RULES[entry.kind].words,
     group: entry.group,
     title: entry.title,
-    for: entry.for ? { ...entry.for, order: entry.for.order ? { ...entry.for.order } : null } : null,
+    // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number; the office's number never leaves.
+    for: entry.for ? { ...entry.for, order: entry.for.order ? { id: entry.for.order.id, customerRef: entry.for.order.customerRef, yourNumber: entry.for.order.yourNumber } : null } : null,
     style: entry.style ? { code: entry.style.code, name: entry.style.name } : null,
     date: toUtcIso(entry.date),
     version: entry.version,

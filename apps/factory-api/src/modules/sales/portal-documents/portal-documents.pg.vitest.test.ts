@@ -230,7 +230,9 @@ describe('the library per account by role (SAL-086)', { timeout: SLOW_TEST_TIMEO
     expect(kinds(list)).toEqual(['CERTIFICATE', 'CERTIFICATE_OF_CONFORMITY', 'DECLARATION_OF_CONFORMITY', 'INSPECTION_REPORT', 'ORDER_CONFIRMATION', 'OTHER', 'USER_INFORMATION'])
     expect(byKind(list, 'CERTIFICATE')).toMatchObject({ group: 'CONFORMITY', for: { type: 'Company', label: null } })
     const doc = byKind(list, 'DECLARATION_OF_CONFORMITY')
-    expect(doc).toMatchObject({ group: 'CONFORMITY', version: 1, language: 'it', current: true, replacedBy: null, new: true, for: { type: 'Shipment', label: 'SEED-SH-0001', order: { number: 'SEED-SO-0002' } } })
+    // fix-portal-numbers-1 (B-TH-303): its order by the customer's own number ("Your order N"), never the office's SEED-SO-….
+    expect(doc).toMatchObject({ group: 'CONFORMITY', version: 1, language: 'it', current: true, replacedBy: null, new: true, for: { type: 'Shipment', label: 'SEED-SH-0001', order: { yourNumber: { seq: expect.any(Number) } } } })
+    expect(doc.for.order.number).toBeUndefined()
     expect(doc.title.en).toMatch(/^EU declaration of conformity · .*SEED-JKT-02 · rev 1$/)
     expect(doc.fingerprint).toBe(doc.sha256.slice(0, 12))
     expect(byKind(list, 'INSPECTION_REPORT')).toMatchObject({ version: 1, language: 'en' })
@@ -356,7 +358,7 @@ describe('conformity per style received (SAL-087) and Home', { timeout: SLOW_TES
     const row = style.received[0]
     expect(row).toMatchObject({
       shipment: { number: 'SEED-SH-0001' },
-      order: { number: 'SEED-SO-0002' },
+      order: { yourNumber: { seq: expect.any(Number) } }, // fix-portal-numbers-1 (B-TH-303): never the office's SEED-SO-0002
       revision: 1,
       state: 'COMPLETE',
       declaration: { kind: 'DECLARATION_OF_CONFORMITY', version: 1, language: 'it' },
@@ -393,8 +395,8 @@ describe('conformity per style received (SAL-087) and Home', { timeout: SLOW_TES
 describe("B-PR-44: an order line's files and its quote line's artwork under the line's order (PW-16)", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it("lists them on the order's tab for the customer's buyer; another customer never sees them", async () => {
     // A line of the customer's made from its quote (the sales seed's SEED-SO-0001), and the file store.
-    const line = await one<{ id: string; orderId: string; quoteLineId: string; number: string }>(
-      `SELECT l.id, l."orderId", l."quoteLineId", o.number FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE l."tenantId" = $1 AND l."partyId" = $2 AND l."quoteLineId" IS NOT NULL ORDER BY o.number, l.seq LIMIT 1`,
+    const line = await one<{ id: string; orderId: string; quoteLineId: string; number: string; customerSeq: number }>(
+      `SELECT l.id, l."orderId", l."quoteLineId", o.number, o."customerSeq" FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE l."tenantId" = $1 AND l."partyId" = $2 AND l."quoteLineId" IS NOT NULL ORDER BY o.number, l.seq LIMIT 1`,
       [T, P1],
     )
     const store = await one<{ id: string }>(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2' ORDER BY code LIMIT 1`, [T])
@@ -414,8 +416,9 @@ describe("B-PR-44: an order line's files and its quote line's artwork under the 
     const quoteFile = await shared('QuoteLine', line.quoteLineId, 'pr2b quote line artwork.pdf')
     const ofOrder = await ok(browsers.buyer, `/portal/customer-documents?orderId=${line.orderId}`)
     const entry = (id: string): Json => (ofOrder.items as Json[]).find((item) => item.id === id) ?? {}
-    expect(entry(lineFile)).toMatchObject({ kind: 'OTHER', group: 'OTHER', for: { type: 'SalesOrderLine', id: line.id, label: line.number, order: { id: line.orderId, number: line.number } } })
-    expect(entry(quoteFile)).toMatchObject({ kind: 'OTHER', group: 'OTHER', for: { type: 'QuoteLine', id: line.quoteLineId, label: line.number, order: { id: line.orderId, number: line.number } } })
+    // fix-portal-numbers-1 (B-TH-303): the line's order by the customer's own number ("#N"), never the office's series.
+    expect(entry(lineFile)).toMatchObject({ kind: 'OTHER', group: 'OTHER', for: { type: 'SalesOrderLine', id: line.id, label: `#${line.customerSeq}`, order: { id: line.orderId, yourNumber: { seq: line.customerSeq } } } })
+    expect(entry(quoteFile)).toMatchObject({ kind: 'OTHER', group: 'OTHER', for: { type: 'QuoteLine', id: line.quoteLineId, label: `#${line.customerSeq}`, order: { id: line.orderId, yourNumber: { seq: line.customerSeq } } } })
     // Another customer: not on the order's tab, not in its library, not by id.
     expect((await ok(browsers.other, `/portal/customer-documents?orderId=${line.orderId}`)).count).toBe(0)
     const theirs = JSON.stringify(await ok(browsers.other, '/portal/customer-documents?versions=all'))
@@ -499,3 +502,62 @@ describe("fix-pr-4: an old copy whose content is another customer's is never lis
   })
 })
 // ---- end fix-pr-4
+
+// ---- fix-portal-numbers-1 (B-TH-303, Owner decision PR-06; end check walk F-PR-16 on SCR-183) -------------------------------------
+// A customer reads ITS OWN running numbers ("Your order 7", "#7") and its own PO, never our shared series (SEED-SO-…, SEED-QT-…), so
+// no customer reads another's volume from it. Fiscal numbers (invoices, DDTs) stay. What Home reads — What waits for you (GET
+// /portal/home, /portal/tasks), the next deliveries, the new documents, the search — and the Documents page carry none of the
+// customer's office numbers (file names are the documents' own and are left out of the scan); the office's read still does.
+describe("fix-portal-numbers-1: the customer's Home reads name its own numbers, never the office's series", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const email = 'pia.numbers@seed-racing.example'
+  let reader: Browser
+  beforeAll(async () => {
+    SESSIONS.numbers = () => ({ audience: 'office', tenantId: T, actorId: qualityActor, grants: [grant(['partners.view', 'partners.tasks.manage'])] })
+    await partnerPerson(email, P1, ['customer-buyer', 'partner-upload'])
+    freshGuard(h)
+    reader = await signedIn(email)
+  }, 600_000)
+
+  /** What the customer reads, without the files' own names (a document's file is named as it was made). */
+  const words = (value: unknown): string => JSON.stringify(value, (key, item) => (key === 'files' || key === 'fileName' ? undefined : item))
+
+  it('What waits for you, the next deliveries, the new documents, the library, conformity, parcels and the search: its own numbers only; the office still reads its own', async () => {
+    const orders = await admin<{ id: string; number: string; customerSeq: number | null }>(`SELECT id, number, "customerSeq" FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2`, [T, P1])
+    const quotes = await admin<{ number: string }>(`SELECT number FROM "Quote" WHERE "tenantId" = $1 AND "partyId" = $2`, [T, P1])
+    const officeNumbers = [...orders.map((row) => row.number), ...quotes.map((row) => row.number)]
+    expect(orders.length).toBeGreaterThan(0)
+    expect(orders.every((row) => row.customerSeq !== null)).toBe(true)
+    const order = orders.find((row) => row.id === shipping.quality.production.salesOrderId)!
+
+    // The office asks the customer for a document on its order: the office's read names the order by the office's number.
+    const ask = await app.inject({ method: 'POST', url: `/partners/${P1}/tasks`, headers: { 'x-test-session': 'numbers', 'idempotency-key': key() }, payload: { kind: 'UPLOAD_DOCUMENT', recordType: 'SalesOrder', recordId: order.id, dueAt: null } })
+    expect(ask.statusCode, ask.body).toBe(200)
+    const officeTasks = await app.inject({ method: 'GET', url: `/partners/${P1}/tasks`, headers: { 'x-test-session': 'numbers' } })
+    expect(officeTasks.statusCode, officeTasks.body).toBe(200)
+    expect(officeTasks.body).toContain(order.number)
+
+    const home = await ok(reader, '/portal/home')
+    const waiting = (home.waiting as Json[]).find((task) => task.record.id === order.id)
+    expect(waiting).toMatchObject({ kind: 'UPLOAD_DOCUMENT', record: { label: `#${order.customerSeq}` }, words: { en: `Upload the document we asked for on #${order.customerSeq}` } })
+    const next = await ok(reader, '/portal/sales-orders?chip=OPEN&limit=5&progress=true')
+    expect((next.items as Json[]).filter((row) => row.kind === 'ORDER').every((row) => row.number === null && row.yourNumber?.seq > 0)).toBe(true)
+    const library = await ok(reader, '/portal/customer-documents?versions=all')
+    expect((library.items as Json[]).filter((item) => item.for?.order).every((item) => item.for.order.yourNumber?.seq > 0 && !('number' in item.for.order))).toBe(true)
+    const reads: Record<string, unknown> = {
+      home,
+      tasks: await ok(reader, '/portal/tasks?state=OPEN'),
+      next,
+      newDocuments: await ok(reader, '/portal/customer-documents?new=true&limit=5'),
+      library,
+      conformity: await ok(reader, '/portal/customer-documents/conformity'),
+      inTransit: await ok(reader, '/portal/sales-orders/in-transit'),
+      // Found by the office's number (printed on the papers it holds) or a delivery's, shown by its own.
+      searchOrder: (await ok(reader, `/portal/search?q=${encodeURIComponent(order.number)}`)).groups,
+      searchShipment: (await ok(reader, '/portal/search?q=SEED-SH-0001')).groups,
+    }
+    expect(JSON.stringify(reads.searchOrder)).toContain(`#${order.customerSeq}`)
+    expect(JSON.stringify(reads.searchShipment)).toContain('SEED-SH-0001')
+    for (const [name, read] of Object.entries(reads)) expect(officeNumbers.filter((number) => words(read).includes(number)), name).toEqual([])
+  })
+})
+// ---- end fix-portal-numbers-1

@@ -1,4 +1,5 @@
 import { definePartnerView, equalsTyped, holdsTyped, idsOf } from '../view'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 
 /**
  * A customer's deliveries (modules/shipping/shipments; the index's ../../indexers/shipment.ts), once shipped: our number,
@@ -21,7 +22,7 @@ export default definePartnerView({
         number: true,
         status: true,
         shippedAt: true,
-        salesOrder: { select: { number: true, customerRef: true } },
+        salesOrder: { select: { number: true, customerRef: true, customerSeq: true /* fix-portal-numbers-1 */ } },
         parcels: { where: { trackingNumber: { not: null } }, select: { trackingNumber: true }, orderBy: { seq: 'asc' }, take: TRACKING },
       },
     })
@@ -30,7 +31,9 @@ export default definePartnerView({
       companyId: row.companyId,
       theirRef: row.salesOrder.customerRef,
       ourRef: row.number,
-      subtitle: row.salesOrder.number,
+      // fix-portal-numbers-1 (B-TH-303, plan §0.5): under it, its order by the customer's OWN number ("#12"); the office's SO-…
+      // number is only matched (printed on the order confirmation), never shown.
+      subtitle: customerRefOf('ORDER', row.salesOrder.customerSeq),
       status: row.status,
       date: row.shippedAt,
       words: [row.salesOrder.number, ...row.parcels.map((parcel) => parcel.trackingNumber)],

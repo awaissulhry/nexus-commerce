@@ -38,7 +38,10 @@ const nextShipment = output({
 })
 
 const row = output({
-  /** ORDER, or REQUEST: a portal order request sent and not decided yet (its number is the request's). */
+  /**
+   * ORDER, or REQUEST: a portal order request sent and not decided yet (its number is the request's). fix-portal-numbers-1
+   * (B-TH-303): an order's `number` is null — the customer reads its own `yourNumber`, never the office's series.
+   */
   kind: z.enum(['ORDER', 'REQUEST']),
   id: id(),
   /** Their purchase order number (first in the row). */
@@ -244,7 +247,8 @@ export const inTransitContract = defineContract({
         output({
           shipmentId: id(),
           number: z.string(),
-          order: output({ id: id(), number: z.string(), customerRef: z.string().nullable() }),
+          // fix-portal-numbers-1 (B-TH-303): its PO and the customer's own number, never the office's series.
+          order: output({ id: id(), customerRef: z.string().nullable(), yourNumber }),
           status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
           words,
           carrierName: z.string().nullable(),

@@ -122,11 +122,14 @@ describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }
     const list = await ok(browsers.buyer, '/portal/sales-orders')
     expect(list).toMatchObject({ seesPrices: true, chip: 'OPEN', count: 3 })
     expect(list).not.toHaveProperty('progressShared') // B-PR-40
+    // fix-portal-numbers-1 (B-TH-303, plan §0.5): an order answers the customer's own number, never the office's series (null).
     expect(list.items.map((row: Json) => [row.customerRef, row.number, row.status])).toEqual([
-      ['SEED-PO-78', 'SEED-SO-0002', 'CONFIRMED'],
-      ['SEED-PO-91', 'SEED-SO-0003', 'CONFIRMED'],
-      ['SEED-PO-77', 'SEED-SO-0001', 'CONFIRMED'],
+      ['SEED-PO-78', null, 'CONFIRMED'],
+      ['SEED-PO-91', null, 'CONFIRMED'],
+      ['SEED-PO-77', null, 'CONFIRMED'],
     ])
+    expect(list.items.every((row: Json) => row.yourNumber?.seq > 0)).toBe(true)
+    expect(JSON.stringify(list)).not.toMatch(/SEED-SO-/)
     const so2 = list.items[0]
     expect(so2).toMatchObject({ kind: 'ORDER', words: { en: 'Confirmed', it: 'Confermato' }, pieces: { ordered: 7, shipped: 2, open: 5 }, promiseMoved: false, movedLately: false, progressPercent: null })
     expect(typeof so2.netAmount).toBe('number')
@@ -137,9 +140,10 @@ describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }
   })
 
   it('finds an order by their PO, our number or a style; a viewer sees no price; the designer and another customer see none', async () => {
-    expect((await ok(browsers.buyer, '/portal/sales-orders?q=po-78')).items.map((row: Json) => row.number)).toEqual(['SEED-SO-0002'])
-    expect((await ok(browsers.buyer, '/portal/sales-orders?q=SO-0001')).items.map((row: Json) => row.number)).toEqual(['SEED-SO-0001'])
-    expect((await ok(browsers.buyer, '/portal/sales-orders?q=SEED-JKT-03')).items.map((row: Json) => row.number)).toEqual(['SEED-SO-0003'])
+    // fix-portal-numbers-1: our number still finds the order (it is printed on its confirmation); the row names it by the customer's PO.
+    expect((await ok(browsers.buyer, '/portal/sales-orders?q=po-78')).items.map((row: Json) => row.customerRef)).toEqual(['SEED-PO-78'])
+    expect((await ok(browsers.buyer, '/portal/sales-orders?q=SO-0001')).items.map((row: Json) => row.customerRef)).toEqual(['SEED-PO-77'])
+    expect((await ok(browsers.buyer, '/portal/sales-orders?q=SEED-JKT-03')).items.map((row: Json) => row.customerRef)).toEqual(['SEED-PO-91'])
     expect((await ok(browsers.buyer, '/portal/sales-orders?q=nothing-like-this')).count).toBe(0)
     const viewer = await ok(browsers.viewer, '/portal/sales-orders')
     expect(viewer.seesPrices).toBe(false)
@@ -186,7 +190,7 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect(JSON.stringify([record, so1Record])).not.toMatch(/tannery|Marco|pays late|createdById|internalNote|costAmount/)
     // The list marks it moved, in the "Date moved" chip.
     const list = await ok(browsers.buyer, '/portal/sales-orders?chip=DATE_MOVED')
-    expect(list.items.map((row: Json) => row.number).sort()).toEqual(['SEED-SO-0001', 'SEED-SO-0002'])
+    expect(list.items.map((row: Json) => row.customerRef).sort()).toEqual(['SEED-PO-77', 'SEED-PO-78']) // fix-portal-numbers-1
   })
 
   it('shows the lines and sizes with what is open; prices only for the buyer; another customer gets 404', async () => {
@@ -315,6 +319,8 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
   it('lists what is on the way across the orders, and counts it on Home', async () => {
     const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
     expect(transit.items.map((row: Json) => [row.number, row.order.customerRef, row.status])).toEqual([['SEED-SH-0001', 'SEED-PO-78', 'IN_TRANSIT']])
+    // fix-portal-numbers-1 (B-TH-303): its order by the customer's own number, never the office's series.
+    expect(transit.items[0].order).toEqual({ id: await orderId('SEED-SO-0002'), customerRef: 'SEED-PO-78', yourNumber: { seq: expect.any(Number), words: expect.any(Object) } })
     expect(transit.items[0].trackingNumbers).toHaveLength(2)
     expect((await ok(browsers.other, '/portal/sales-orders/in-transit')).items).toEqual([])
     // This source's own four counts (other sources also use 'orders.' keys, e.g. approvals-out's orders.to_reconfirm).
