@@ -18,6 +18,8 @@ import type { ExtraTerms } from '../model'
 import type { GroupRows } from './sheet/overall'
 import type { InvoiceDraftsState } from './sheet/overall-parts'
 import type { WaitingMarks } from './sheet/model' // F-SA-275
+import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model' // F-SA-280
+import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model' // F-SA-280
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -150,6 +152,11 @@ export interface OrdersListModel {
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null
   // ---- end F-SA-276
+  // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
+  assign?: AssignSupervisorModel | null
+  note?: NoteDialogModel | null
+  bulkCan?: { readonly supervisor: boolean; readonly note: boolean }
+  // ---- end F-SA-280
 }
 
 export interface OrdersListActions {
@@ -219,4 +226,10 @@ export interface OrdersListActions {
   onAddTask?: (ids: readonly string[]) => void
   /** F-SA-276: the waiting term (null clears it); `rows` with it (the built-in view "Waiting on us": the open ones). */
   onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
+  // ---- F-SA-280 ----
+  onAssignSupervisor?: (ids: readonly string[]) => void
+  supervisor?: AssignSupervisorActions
+  onNote?: (ids: readonly string[]) => void
+  note?: NoteDialogActions
+  // ---- end F-SA-280
 }

@@ -210,3 +210,28 @@ export function supervisorCellOf(row: Pick<OrderRow, 'production'>): SupervisorC
 export const PRODUCTION_COLUMNS: readonly string[] = Object.freeze(['whereItIs', 'waitingOn', 'supervisor'])
 export const PIECES_COLUMNS: readonly string[] = Object.freeze(['progress', 'whereItIs'])
 // ── end F-SA-275 ──
+
+// ── F-SA-280 (sales page plan N5, picks P10, P18; 11-customer-page §3.8): bulk on the sheet's own bar — one customer only ──
+/**
+ * Why the selection's windows are held before any opens (a phrase of this catalogue), or null: the orders of ONE customer only (on
+ * the customer page the lock always holds; on Sales › Orders it says how many customers the ticks span). The server checks each
+ * record again. Export N is a file of the list, not a window: it is never held here.
+ */
+export function oneCustomerHeld(rows: readonly Pick<OrderRow, 'partyId'>[], locked: string | null): Phrase | null {
+  if (rows.length === 0) return null
+  if (locked && rows.some((row) => row.partyId !== locked)) return { key: 'bulk.notThisCustomer' }
+  const customers = new Set(rows.map((row) => row.partyId)).size
+  return customers > 1 ? { key: 'bulk.oneCustomer', params: { count: customers } } : null
+}
+
+/** The orders Assign supervisor… sets (production's one dialog: its pick lists per customer and company). */
+export const supervisorTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName' | 'companyId'>[]) =>
+  rows.map((row) => ({ orderId: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName, companyId: row.companyId }))
+
+/** The records Note to N… writes on: each order's own thread (no work order here: the dialog asks nothing about them). */
+export const noteTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'partyId' | 'partyName' | 'companyId'>[]) => ({
+  workOrders: [] as const,
+  salesOrders: rows.map((row) => ({ type: 'SalesOrder' as const, id: row.id, label: row.number, partyId: row.partyId, partyName: row.partyName, companyId: row.companyId })),
+  withoutOrder: 0,
+})
+// ── end F-SA-280 ──

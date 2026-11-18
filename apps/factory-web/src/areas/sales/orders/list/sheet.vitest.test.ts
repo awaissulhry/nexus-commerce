@@ -245,3 +245,55 @@ describe('made-to-measure in the sheet: the term in the address and every read, 
   })
 })
 // ---- end F-SA-221
+
+// ---- F-SA-280 (sales page plan N5, picks P10, P18; 11-customer-page §3.8): bulk on the sheet's own bar — Set priority for N,
+// Assign supervisor…, Note to N… / Ask the supervisor, Export N — one customer only, checked before any window (the server again).
+describe('F-SA-280: bulk on the Orders sheet\'s own bar', () => {
+  it('the one-customer check: one customer passes; two are held with how many; on a locked page another customer\'s row is held', async () => {
+    const { oneCustomerHeld } = await import('./sheet/model')
+    const alpha = LIST_ROWS[0]!
+    const beta = { ...LIST_ROWS[1]!, partyId: 'b0000000-0000-4000-8000-0000000000b2' }
+    expect(oneCustomerHeld([alpha, { ...alpha, id: 'x' }], null)).toBeNull()
+    expect(oneCustomerHeld([alpha, beta], null)).toEqual({ key: 'bulk.oneCustomer', params: { count: 2 } })
+    expect(oneCustomerHeld([alpha], alpha.partyId)).toBeNull()
+    expect(oneCustomerHeld([beta], alpha.partyId)).toEqual({ key: 'bulk.notThisCustomer' })
+    expect(oneCustomerHeld([], null)).toBeNull()
+  })
+  it('the dialogs get the ticked orders as production\'s own targets (each order\'s own thread; no work order asked about)', async () => {
+    const { noteTargetsOf, supervisorTargetsOf } = await import('./sheet/model')
+    const alpha = LIST_ROWS[0]!
+    expect(supervisorTargetsOf([alpha])).toEqual([{ orderId: alpha.id, number: alpha.number, customerRef: alpha.customerRef, partyId: alpha.partyId, partyName: alpha.partyName, companyId: alpha.companyId }])
+    expect(noteTargetsOf([alpha])).toEqual({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: alpha.id, label: alpha.number, partyId: alpha.partyId, partyName: alpha.partyName, companyId: alpha.companyId }], withoutOrder: 0 })
+    // The note dialog opens on the orders' own threads when no work order is among the records, and asks nothing about them.
+    const hook = readFileSync(new URL('../../../production/_shared/notes/use-note-dialog.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("targets.workOrders.length === 0 ? { ...NEW_DRAFT, on: 'salesOrders' as const } : NEW_DRAFT")
+    const dialog = readFileSync(new URL('../../../production/_shared/notes/view/NoteDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain('model.targets.workOrders.length > 0 && (model.targets.salesOrders.length > 0')
+  })
+  it('the limits are the dialogs\' own (assign 100, note 100, priority 200) and every hold is said in words before the click', async () => {
+    const { ASSIGN_MAX, assignHeld } = await import('../../../_shared/production-supervisor/model')
+    const { NOTE_RECORDS_MAX, openHeld } = await import('../../../production/_shared/notes/model')
+    expect(ASSIGN_MAX).toBe(100)
+    expect(NOTE_RECORDS_MAX).toBe(100)
+    expect(assignHeld({ manage: false }, { targets: [], leftOut: 0 })).toEqual({ key: 'held.noRight' })
+    expect(openHeld(true, 101)).toMatchObject({ key: 'held.tooMany' })
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('heldReason={assignWords}')
+    expect(view).toContain('heldReason={noteWords}')
+    expect(view).toContain('held={oneCustomerWords /* F-SA-280 */}')
+    expect(view).toContain('<AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />')
+    expect(view).toContain('<NoteDialog model={model.note} actions={actions?.note} />')
+    // Export N stays the export job with the picked ids (never held by the customer check: a file of the list).
+    expect(view).toContain('exportSelected: true')
+  })
+  it('the words in both languages (no key left)', () => {
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['bulk.assign', 'bulk.notThisCustomer']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('bulk.note', { count: 2 }), locale).toContain('2')
+      expect(t('bulk.oneCustomer', { count: 2 }), locale).toContain('2')
+    }
+    expect(tFor('it')('bulk.assign')).toBe('Assegna supervisore…')
+  })
+})
+// ---- end F-SA-280

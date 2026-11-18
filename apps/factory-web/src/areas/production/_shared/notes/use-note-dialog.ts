@@ -83,8 +83,10 @@ export function useNoteDialog(api: ApiClient, options: { readonly can: boolean; 
     (targets: NoteTargets, from: NoteFrom) => {
       writeKey.current = null
       setCheck({ status: 'idle' })
-      setState({ from, targets, draft: NEW_DRAFT, people: { status: 'loading' }, busy: false, problem: null, result: null })
-      readPeople(targets, NEW_DRAFT.on)
+      // F-SA-280: records without work orders (the Orders sheet's orders) are written on as they are: their own threads.
+      const draft = targets.workOrders.length === 0 ? { ...NEW_DRAFT, on: 'salesOrders' as const } : NEW_DRAFT
+      setState({ from, targets, draft, people: { status: 'loading' }, busy: false, problem: null, result: null })
+      readPeople(targets, draft.on)
     },
     [readPeople],
   )

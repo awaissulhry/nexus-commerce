@@ -55,6 +55,14 @@ import { answerHrefOf, HEALTH_CHIP, waitingItemsOf, whereLineOf } from '../sheet
 import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
 import { productionWordsFor } from '../../../../../lib/production/words'
 // ---- end F-SA-275
+// ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs, reused in place; one customer only ----
+import { MessageSquareLock, UserCog } from 'lucide-react'
+import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
+import { assignHeld } from '../../../../_shared/production-supervisor/model'
+import { NoteDialog } from '../../../../production/_shared/notes/view/NoteDialog'
+import { NOTES_NS, openHeld } from '../../../../production/_shared/notes/model'
+import { oneCustomerHeld, supervisorTargetsOf } from '../sheet/model'
+// ---- end F-SA-280
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -71,7 +79,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -84,6 +92,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const s = useT(SHEET) // B-TH-225
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const m = useT(SUPERVISOR_NS) // F-SA-275
+  const n = useT(NOTES_NS) // F-SA-280
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -138,6 +147,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   })
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  // ---- F-SA-280: the one-customer check before any window (the server checks each record again), then each window's own holds.
+  const oneCustomer = oneCustomerHeld(picked, model.locked?.party ? (model.customer?.id ?? null) : null)
+  const oneCustomerWords = oneCustomer ? s(oneCustomer.key, oneCustomer.params) : null
+  const assignWait = assignHeld({ manage: !!model.bulkCan?.supervisor }, { targets: supervisorTargetsOf(picked), leftOut: 0 })
+  const noteWait = openHeld(!!model.bulkCan?.note, picked.length)
+  const assignWords = oneCustomerWords ?? (assignWait ? m(assignWait.key, assignWait.params) : null)
+  const noteWords = oneCustomerWords ?? (noteWait ? n(noteWait.key, noteWait.params) : null)
+  // ---- end F-SA-280
   const ownKeys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
     ...(model.can.manage && !model.embedded ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
@@ -430,7 +447,18 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             actions: (
               <>
                 {/* B-W2b-323: Set priority for N (one command over the selection). */}
-                {model.depth && <SetPriorityButton count={picked.length} model={model.depth} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
+                {model.depth && <SetPriorityButton count={picked.length} model={model.depth} held={oneCustomerWords /* F-SA-280 */} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
+                {/* F-SA-280: Assign supervisor… (≤ 100; the customer is never told who) and Note to N… / Ask the supervisor (≤ 100, one batch). */}
+                {actions?.onAssignSupervisor && (
+                  <Button size="sm" aria-label={s('bulk.assign')} heldReason={assignWords} onClick={() => actions.onAssignSupervisor?.(picked.map((row) => row.id))}>
+                    <UserCog size={13} aria-hidden /> <SelectionLabel>{s('bulk.assign')}</SelectionLabel>
+                  </Button>
+                )}
+                {actions?.onNote && (
+                  <Button size="sm" aria-label={s('bulk.note', { count: picked.length })} heldReason={noteWords} onClick={() => actions.onNote?.(picked.map((row) => row.id))}>
+                    <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{s('bulk.note', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                )}
                 {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
                 {model.can.manageInvoices && (
                   <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
@@ -456,6 +484,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
       {/* B-W2b-323: Set priority, Import orders. */}
       {model.depth && <SetPriorityDialog model={model.depth} actions={actions?.depth} />}
+      {/* F-SA-280: production's one assign dialog and one note dialog (their results: changed / unchanged / skipped with why). */}
+      {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
+      {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
       {model.importer && <OrdersImportView model={model.importer} actions={actions?.importActions} />}
 
       {help && (

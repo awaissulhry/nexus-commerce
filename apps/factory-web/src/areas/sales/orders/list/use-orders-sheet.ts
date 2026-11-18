@@ -39,6 +39,11 @@ import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
 import { PIECES_COLUMNS, PRODUCTION_COLUMNS } from './sheet/model' // F-SA-275
 import { orderIdsOfChange, valueTouches, waitingFromAddress } from '../model' // F-SA-276
+// ---- F-SA-280: production's ONE assign dialog and ONE note dialog, reused in place over the sheet's ticked orders ----
+import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
+import { noteTargetsOf, supervisorTargetsOf } from './sheet/model'
+// ---- end F-SA-280
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -548,6 +553,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     // B-TH-244: the grouped view's rows carry the new versions too.
     setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(bump) ?? null }])))
   })
+  // ---- F-SA-280: Assign supervisor… (≤ 100, production.brand.manage) and Note to N… / Ask the supervisor (≤ 100, one batch, threads.post)
+  // over the ticked orders; a Send reads the rows again (their marks). The one-customer check is the bar's, before any window.
+  const assign = useAssignSupervisor(api, () => void load(true))
+  const noteCan = session.permissions.includes('threads.post')
+  const note = useNoteDialog(api, { can: noteCan, onDone: () => void load(true) })
+  const pickedRows = (ids: readonly string[]) => (shownItems ?? []).filter((row) => ids.includes(row.id))
+  // ---- end F-SA-280
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -613,6 +625,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     kind, // F-SA-221
     profile: profile ? { id: profile, name: rider?.id === profile ? rider.name : undefined } : null, // F-SA-222
     waiting, // F-SA-276
+    // ---- F-SA-280 ----
+    assign: assign.model,
+    note: note.model,
+    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan },
     // ---- F-SA-220: the host ----
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
@@ -663,6 +679,12 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */, waiting: null /* F-SA-276 */ }),
     // F-SA-276: the waiting term's chip ✕ and the built-in view "Waiting on us" (with its rows: the open ones).
+    // ---- F-SA-280 ----
+    onAssignSupervisor: (ids) => assign.open(supervisorTargetsOf(pickedRows(ids))),
+    supervisor: assign.actions,
+    onNote: (ids) => note.open(noteTargetsOf(pickedRows(ids)), 'selection'),
+    note: note.actions,
+    // ---- end F-SA-280
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057

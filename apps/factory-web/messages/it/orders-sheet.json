@@ -294,5 +294,12 @@
   "row": {
     "addTask": "Aggiungi attività…",
     "answer": "Rispondi alla richiesta…"
+  },
+  "bulk": {
+    "assign": "Assegna supervisore…",
+    "note_one": "Nota a {count}…",
+    "note_other": "Nota a {count}…",
+    "oneCustomer": "Scegli gli ordini di un solo cliente: questi sono di {count} clienti.",
+    "notThisCustomer": "È spuntato un ordine di un altro cliente: spunta solo gli ordini di questo cliente."
   }
 }
