@@ -271,6 +271,57 @@ export function workshopStepOf(facts: { readonly workshops: number; readonly tol
   return { kind: 'TELL_WORKSHOP', state: done ? 'DONE' : 'TO_DO', team: 'PLANNER', words: APPLY_WORDS.workshop(facts.workshops), why: done ? null : APPLY_WORDS.workshopWhy, mayDoNow: false }
 }
 
+// ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): a design change accepted only for the customer's own
+// private label — one product change request (CR) per style, then product's change order (ECO) ──
+
+/** Why a style takes no design change from a customer's ask (the office reads it; the customer reads our words only). */
+export const DESIGN_HELD = ['OWN_COLLECTION', 'OTHER_LABEL'] as const
+export type DesignHeld = (typeof DESIGN_HELD)[number]
+
+export const DESIGN_HELD_WORDS = {
+  /** A style of our own collection (Style.brandPartyId null): changing it would change other customers' orders. */
+  OWN_COLLECTION: { en: 'This style is in our own collection: a style change would change other customers’ orders. Suggest something else or refuse.', it: 'Questo modello è della nostra collezione: modificarlo cambierebbe gli ordini di altri clienti. Proponi altro o rifiuta.' } as Words,
+  /** A style that is not this customer's own label: never named, never whose. */
+  OTHER_LABEL: { en: 'This style is not this customer’s own label: a style change would change other orders. Suggest something else or refuse.', it: 'Questo modello non è del marchio di questo cliente: modificarlo cambierebbe altri ordini. Proponi altro o rifiuta.' } as Words,
+  /** While no work order makes the line, its options may still change (the line's configurator). */
+  options: { en: 'While no work order makes the line, its options can still be changed on the order.', it: "Finché nessun ordine di lavoro produce la riga, le sue opzioni si possono ancora cambiare sull'ordine." } as Words,
+} as const
+
+/** Whether a style takes a design change from this customer's ask: only its own private label (R3). */
+export const designHeldOf = (style: { readonly brandPartyId: string | null }, partyId: string): DesignHeld | null =>
+  style.brandPartyId === partyId ? null : style.brandPartyId === null ? 'OWN_COLLECTION' : 'OTHER_LABEL'
+
+/** The held words of a style, with the options' hint while no work order makes its lines. */
+export function designHeldWords(held: DesignHeld, inWork: boolean): Words {
+  const base = DESIGN_HELD_WORDS[held]
+  return inWork ? base : { en: `${base.en} ${DESIGN_HELD_WORDS.options.en}`, it: `${base.it} ${DESIGN_HELD_WORDS.options.it}` }
+}
+
+/** The product change request's title: "Customer design change · <their first words>" (at most 200 characters, the database's). */
+export function designTitleOf(words: string): string {
+  const head = 'Customer design change · '
+  const first = words.trim().replace(/\s+/g, ' ')
+  const room = 200 - head.length
+  return head + (first.length <= room ? first : `${first.slice(0, room - 1).trimEnd()}…`)
+}
+
+/** STYLE_CHANGE: before Accept TO_DO (or NOT_POSSIBLE with why: not this customer's own label); after it DONE, the CR raised. */
+export function styleStepOf(facts: { readonly accepted: boolean; readonly style: string; readonly number: string | null; readonly held: Words | null; readonly mayAnswer: boolean }): ApplyStep {
+  const words = APPLY_WORDS.styleChange(facts.style, facts.number)
+  if (facts.accepted) return { kind: 'STYLE_CHANGE', state: 'DONE', team: 'SALES', words, why: null, mayDoNow: false }
+  if (facts.held) return { kind: 'STYLE_CHANGE', state: 'NOT_POSSIBLE', team: 'SALES', words, why: facts.held, mayDoNow: false }
+  return { kind: 'STYLE_CHANGE', state: 'TO_DO', team: 'SALES', words, why: APPLY_WORDS.styleBefore, mayDoNow: facts.mayAnswer }
+}
+
+/** ECO: the raised CR goes to product — waiting while it is open, DONE once its change order is released (the CR DONE), refused. */
+export function ecoStepOf(facts: { readonly style: string; readonly status: string; readonly mayManage: boolean }): ApplyStep {
+  const words = APPLY_WORDS.eco(facts.style)
+  if (facts.status === 'DONE') return { kind: 'ECO', state: 'DONE', team: 'PRODUCT', words, why: null, mayDoNow: false }
+  if (facts.status === 'REJECTED') return { kind: 'ECO', state: 'NOT_POSSIBLE', team: 'PRODUCT', words, why: APPLY_WORDS.ecoRefused, mayDoNow: false }
+  return { kind: 'ECO', state: 'PROPOSED', team: 'PRODUCT', words, why: APPLY_WORDS.ecoWaiting, mayDoNow: facts.mayManage }
+}
+// ── end B-SA-047 ──
+
 /** The plan's steps in order, numbered from 1 by the caller's list order (AMEND first). */
 export function numbered<T extends ApplyStep>(steps: readonly (T | null)[]): (T & { readonly seq: number })[] {
   return steps.filter((step): step is T => step !== null).map((step, index) => ({ ...step, seq: index + 1 }))

@@ -374,6 +374,8 @@ export const acceptContract = defineContract({
         extra: z.array(output({ workOrderSizeId: id(), salesOrderLineId: id(), size: z.string(), count: z.number().int(), words })),
         extraOutcome: z.enum(EXTRA_OUTCOMES).nullable(),
       }),
+      /** B-SA-047: the product change requests an accepted design change raised, one per style of the customer's own label. */
+      styleChanges: z.array(output({ id: id(), number: z.string(), style: output({ id: id(), code: z.string(), name: z.string() }) })),
     }),
   },
 })

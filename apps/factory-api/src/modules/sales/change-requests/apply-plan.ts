@@ -7,6 +7,9 @@ import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/produc
 import {
   amendStepOf,
   APPLY_WORDS,
+  designHeldWords, // B-SA-047
+  ecoStepOf, // B-SA-047
+  styleStepOf, // B-SA-047
   floorStageOf,
   inWorkWords,
   numbered,
@@ -19,6 +22,7 @@ import {
 } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import type { AskedCell, OrderRequestKind, RequestStatus } from '@nexus/factory-domain/sales/change-requests/rules'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
+import { PRODUCT_CHANGES_MANAGE } from '@nexus/factory-domain/product/changes/permissions' // B-SA-047
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { readProposals } from '../../planning/promise-keep/store'
@@ -29,7 +33,7 @@ import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { officeContextOf } from '../orders/access'
 import { dayOrNull, readLines, type LineRecord, type OrderRow } from '../orders/store'
 import { officeProgressFor } from '../portal-orders/progress'
-import { acceptPreviewOf, officeRequest, officeViews, type AcceptPreview } from './office'
+import { acceptPreviewOf, designStylesOf, officeRequest, officeViews, type AcceptPreview } from './office'
 import { keptImpactOf, LIVE_EVENTS, readCells, type OfficeRequestRow, type Reader } from './store'
 
 /**
@@ -224,9 +228,31 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
   const workshop = waiting || accepted ? workshopStepOf({ workshops: outside.length, told }) : null
 
   const extraNone: Omit<PlanStep, keyof ApplyStep | 'seq'> = { person: null, ref: null, workOrder: null, cells: [], extra: 0 }
+
+  // B-SA-047 (R3): a design change — a style change per style of the customer's own label (before Accept: held for any other), then
+  // product's change order, waiting until it is released (the style change DONE) or refused.
+  const designSteps: Draft[] = []
+  if (kind === 'DESIGN' && accepted) {
+    const raised = await db.changeRequest.findMany({ where: { orderChangeRequestId: row.id }, select: { id: true, number: true, status: true, companyId: true, styleId: true, changeOrderId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    const styles = new Map((raised.length > 0 ? await db.style.findMany({ where: { id: { in: unique(raised.map((entry) => entry.styleId)) } }, select: { id: true, code: true } }) : []).map((style) => [style.id, style.code]))
+    const ecoIds = unique(raised.flatMap((entry) => (entry.changeOrderId ? [entry.changeOrderId] : [])))
+    const ecos = new Map((ecoIds.length > 0 ? await db.changeOrder.findMany({ where: { id: { in: ecoIds } }, select: { id: true, number: true } }) : []).map((eco) => [eco.id, eco.number]))
+    for (const entry of raised) {
+      const code = styles.get(entry.styleId) ?? ''
+      const ref = { type: 'ChangeRequest', id: entry.id, number: entry.number }
+      designSteps.push({ ...styleStepOf({ accepted: true, style: code, number: entry.number, held: null, mayAnswer: false }), ...extraNone, ref })
+      const eco = entry.changeOrderId ? { type: 'ChangeOrder', id: entry.changeOrderId, number: ecos.get(entry.changeOrderId) ?? null } : ref
+      designSteps.push({ ...ecoStepOf({ style: code, status: entry.status, mayManage: can(actor, PRODUCT_CHANGES_MANAGE, { companyId: entry.companyId }) }), ...extraNone, ref: eco })
+    }
+  } else if (kind === 'DESIGN' && waiting) {
+    for (const style of await designStylesOf(db, context.tenantId, order, cells)) {
+      designSteps.push({ ...styleStepOf({ accepted: false, style: style.code, number: null, held: style.held ? designHeldWords(style.held, style.inWork) : null, mayAnswer: view?.mayAnswer ?? false }), ...extraNone })
+    }
+  }
+
   const closed = status === 'REFUSED' || status === 'WITHDRAWN'
   const production = isProductionAccept(kind)
-  const next: PlanStep[] = closed || production ? [] : numbered<Draft>([amend, ...workSteps, repromise ? { ...repromise, ...extraNone } : null, workshop ? { ...workshop, ...extraNone } : null])
+  const next: PlanStep[] = closed || production ? [] : numbered<Draft>([amend, ...designSteps, ...workSteps, repromise ? { ...repromise, ...extraNone } : null, workshop ? { ...workshop, ...extraNone } : null])
 
   // The extra pieces (before Accept: planned; after: stored with their outcome).
   const pieces = entries.flatMap((entry) => entry.extra.map((piece) => ({ lineId: piece.salesOrderLineId, seq: seqOf.get(piece.salesOrderLineId) ?? 0, size: piece.size, count: piece.count, words: CHANGE_WORDS.extra(piece.count, piece.size) })))

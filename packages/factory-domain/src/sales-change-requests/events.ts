@@ -81,6 +81,8 @@ export const events = [
       amendmentId: z.uuid().nullable(),
       /** An accepted whole-order cancel cancelled the order. */
       orderCancelled: z.boolean(),
+      /** B-SA-047: the product change requests an accepted design change raised (ids only; left out: none). */
+      changeRequestIds: z.array(z.uuid()).optional(),
     }),
     live: live(['requestId', 'orderId', 'kind', 'answer']),
   }),

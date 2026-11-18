@@ -157,6 +157,11 @@ export const requestView = requestRow.extend({
   moves: z.array(output({ to: z.enum(['IN_REVIEW', 'ACCEPTED', 'REJECTED']), allowed: z.boolean(), refusal: changeRefusal.nullable() })),
   /** The work order's bundles already cut or worked (MES-006); null without a work order or workorders.view. */
   made: workOrderMade.nullable(),
+  /**
+   * B-SA-047 (sales page plan R3; review BW-3, C-9): the customer's design change that raised it — a door to its order, where the
+   * customer's files stay (never copied onto the request); null: raised otherwise, or the reader does not read that order.
+   */
+  fromOrder: output({ requestId: id(), orderId: id(), orderNumber: z.string() }).nullable().optional(),
 })
 export type RequestView = z.output<typeof requestView>
 

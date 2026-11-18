@@ -18,13 +18,16 @@ import { seed as seedSizesDepth } from '../../../../../../packages/factory-db/se
 import { seed as seedStylesDepth } from '../../../../../../packages/factory-db/seed/styles-depth'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
-import { callerFor } from '../../../core/command'
+import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { applyQueued } from '../../../platform/floor-sync/kinds'
 import { fanOut } from '../../../platform/notifications/fan-out'
 import { systemContext } from '../../../platform/outbox/system'
+// B-SA-047: a customer's design change raises a CUSTOMER change request (the accept's command, Sales' module).
+import { designTitleOf } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { raiseCustomerRequestInCommand } from './requests'
 
 /**
  * Change requests and change orders (B-W2b-226; PRD-169, PRD-170, PRD-175, PRD-259, MES-006) through the app's real routes on a
@@ -398,3 +401,56 @@ describe('nobody accepts a change request they raised (B-W2b-GF5, G282)', () => 
     expect(accepted).toMatchObject({ status: 'ACCEPTED', decidedById: PEOPLE.manager })
   })
 })
+
+// ── B-SA-047 (sales page plan R3; review BW-2, BW-3): a customer's DESIGN request raises a CUSTOMER change request of its own label ──
+describe('B-SA-047: raised from a customer\'s design change — only its own private label, only its own request (the database holds it)', () => {
+  /** Rows written whole, the database's rules off for them (as an import would). */
+  async function planted(rows: readonly { sql: string; values: unknown[] }[]): Promise<void> {
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+      for (const row of rows) await h.db.admin.query(row.sql, row.values)
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+  }
+  const copyRow = (table: string, from: string, over: Json) => ({ sql: `INSERT INTO "${table}" SELECT * FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM "${table}" r WHERE r.id = $2::uuid))`, values: [JSON.stringify(over), from] })
+
+  it('numbers it from CHANGE_REQUEST and names the request; an own-collection style or another customer\'s request is refused for every login', async () => {
+    // A DESIGN request of Brand Alpha (P1) on SEED-SO-0001's line of SEED-JKT-01 (P1's own label), written with its line.
+    const order = await one('SELECT id, "companyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SO-0001'])
+    const line = await one('SELECT id, "styleId", quantity FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [order.id])
+    const requestId = newId()
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, reason) VALUES ($1, $2, $3, $4, $5, 'DESIGN', 'Move the logo to the left sleeve.')`, [requestId, T, order.companyId, P1, order.id])
+      await h.db.admin.query(`INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity) VALUES ($1, $2, $3, $4, $5, NULL, $6, $6)`, [newId(), T, P1, requestId, line.id, line.quantity])
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+    const caller = callerFor(h.database, { ...SESSIONS.manager!, requestId: newId() } as never)
+    const { result } = await command(caller, { name: 'test.raiseCustomerRequest', input: { requestId } }, (tools) =>
+      raiseCustomerRequestInCommand(tools, { companyId: order.companyId, partyId: P1, styleId: line.styleId, title: designTitleOf('Move the logo to the left sleeve.'), reason: 'Move the logo to the left sleeve.', orderChangeRequestId: requestId }),
+    )
+    expect(result.number).toMatch(/^CR-/)
+    expect(await one('SELECT source::text AS source, "partyId"::text AS party, "orderChangeRequestId"::text AS asked, status::text AS status, title FROM "ChangeRequest" WHERE id = $1', [result.id])).toEqual({ source: 'CUSTOMER', party: P1, asked: requestId, status: 'OPEN', title: 'Customer design change · Move the logo to the left sleeve.' })
+    // The record's door to the order (where the customer's files stay), for a reader of the order only.
+    const { changeRequest } = await ok('manager', 'GET', `/product/change-requests/${result.id}`)
+    expect(changeRequest.fromOrder ?? null).toBeNull()
+    expect((await admin('SELECT action FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2', ['ChangeRequest', result.id])).map((row) => row.action)).toContain('product.changes.raiseRequest')
+
+    // The database (…_order_apply_guards ChangeRequest_order_ask): a style of our own collection never changes from a customer's ask.
+    const own = newId()
+    const beta = newId()
+    await planted([copyRow('Style', line.styleId, { id: own, code: `T-SA047-OWN-${run}`, brandPartyId: null }), copyRow('Party', P1, { id: beta, code: `T-SA047-BETA-${run}`, legalName: 'Brand Beta S.r.l. (made-up)' })])
+    const again = (over: Json) => h.db.admin.query(`INSERT INTO "ChangeRequest" SELECT * FROM jsonb_populate_record(NULL::"ChangeRequest", (SELECT to_jsonb(r) || $1::jsonb FROM "ChangeRequest" r WHERE r.id = $2::uuid))`, [JSON.stringify({ id: newId(), number: `CR-T-${run}-${++serial}`, ...over }), result.id])
+    await expect(again({ styleId: own })).rejects.toThrow(/private label/)
+    // … nor names another customer's request (the reference holds the party).
+    await expect(again({ partyId: beta })).rejects.toThrow(/design change request of its own customer|foreign key/)
+  })
+})
+// ── end B-SA-047 ──

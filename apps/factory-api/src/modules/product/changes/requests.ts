@@ -13,6 +13,7 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { followInCommand } from '../../../platform/threads/followers'
 import { databaseRefusal, madeOf, may, NOTHING_MADE, officeOf, readRequestFor, refuse, REQUEST_COLUMNS, requestRowsOf, requestWall, type RequestData } from './store'
 import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions' // B-SA-047
 
 /**
  * Change requests from the office (B-W2b-226; PRD-169, MES-006; design products.changes "New change request", changes.grid,
@@ -116,6 +117,58 @@ export async function createRequest(caller: CommandCaller, body: CreateRequestBo
   }).catch(databaseRefusal)
   return readRequest(caller, id)
 }
+
+// ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3): a customer's design change, accepted by Sales, raises the
+// product change request of each style of the customer's own private label INSIDE the accept's command — orders.manage is the
+// accept's right (the Sales template holds no product.changes.request: the customer's own ask, raised by the accept, as a floor
+// request is the floor's). Source CUSTOMER, the customer, the style, numbered from CHANGE_REQUEST at once; their words are its
+// reason; no file is copied onto it (the customer's files stay on the request and the order: readRequest's `fromOrder` is the
+// door). The database (…_order_apply_guards ChangeRequest_order_ask) refuses one about a style that is not that customer's own
+// label, or that names another customer's request. ──
+
+export interface CustomerRaise {
+  readonly companyId: string
+  readonly partyId: string
+  readonly styleId: string
+  /** "Customer design change · <their first words>" (factory-domain sales/change-requests/apply-plan designTitleOf). */
+  readonly title: string
+  /** Their words (1 to 4000). */
+  readonly reason: string
+  readonly orderChangeRequestId: string
+}
+
+/** The CUSTOMER change request raised inside an open command; its number and id. */
+export async function raiseCustomerRequestInCommand(tools: CommandTools, input: CustomerRaise): Promise<{ readonly id: string; readonly number: string }> {
+  const { tx, now } = tools
+  const id = newId()
+  const { formatted: number } = await allocateNumber(tools, { companyId: input.companyId, kind: 'CHANGE_REQUEST' }, { type: 'ChangeRequest', id })
+  const createdById = authorOf(tools)
+  const data = {
+    id,
+    number,
+    companyId: input.companyId,
+    siteId: null,
+    source: 'CUSTOMER' as const,
+    partyId: input.partyId,
+    sampleRoundId: null,
+    styleId: input.styleId,
+    revisionId: null,
+    workOrderId: null,
+    title: input.title,
+    reason: input.reason,
+    priority: 'NORMAL' as const,
+    orderChangeRequestId: input.orderChangeRequestId,
+    createdAt: now,
+    updatedAt: now,
+    createdById,
+  }
+  await tx.changeRequest.create({ data, select: { id: true } })
+  tools.audit({ action: 'product.changes.raiseRequest', recordType: 'ChangeRequest', recordId: id, companyId: input.companyId, siteId: null, after: { ...data, createdAt: toUtcIso(now), updatedAt: undefined, by: 'orders.acceptChangeRequest' } })
+  if (createdById) await followInCommand(tools, { type: 'ChangeRequest', id, companyId: input.companyId, siteId: null }, createdById, 'CREATOR', createdById)
+  tools.emit({ type: 'change_request.raised', subject: id, companyId: input.companyId, siteId: null, payload: { changeRequestId: id, number, styleId: input.styleId, source: 'CUSTOMER', workOrderId: null } })
+  return { id, number }
+}
+// ── end B-SA-047 ──
 
 function refuseForbidden(): never {
   throw new ForbiddenError('Your role does not raise change requests for this company.')
@@ -233,7 +286,12 @@ export async function readRequest(caller: CommandCaller, changeRequestId: string
     const workOrderSite = row.workOrderId ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true, partyId: true } }) : null
     const seesWork = workOrderSite !== null && reachesWorkOrder(actorOf(context), WORKORDERS_VIEW, workOrderSite) // B-PR-10
     const made = seesWork && row.workOrderId ? ((await madeOf(db, [row.workOrderId])).get(row.workOrderId) ?? NOTHING_MADE) : null
-    return { ...base!, photosList: photos.map((photo) => ({ ...photo, availableAt: photo.availableAt ? toUtcIso(photo.availableAt) : null })), moves, made }
+    // B-SA-047: the customer's design change that raised it — its order is the door to the customer's files (no copy here), for a
+    // reader of that order only.
+    const asked = row.orderChangeRequestId ? await db.orderChangeRequest.findUnique({ where: { id: row.orderChangeRequestId }, select: { id: true, orderId: true, companyId: true, partyId: true } }) : null
+    const askedOrder = asked && can(actorOf(context), ORDERS_VIEW, { companyId: asked.companyId, partyId: asked.partyId }) ? await db.salesOrder.findUnique({ where: { id: asked.orderId }, select: { id: true, number: true } }) : null
+    const fromOrder = asked && askedOrder ? { requestId: asked.id, orderId: askedOrder.id, orderNumber: askedOrder.number } : null
+    return { ...base!, photosList: photos.map((photo) => ({ ...photo, availableAt: photo.availableAt ? toUtcIso(photo.availableAt) : null })), moves, made, fromOrder }
   })
 }
 

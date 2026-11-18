@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { planChanges, type WantedLine, type WorkCell } from '../../order-apply/rules'
 import { amendStepOf, APPLY_WORDS, floorStageOf, inWorkWords, isOpenStep, numbered, outcomeOptionsOf, repromiseStepOf, workshopStepOf, workStepOf, type WorkFacts } from './apply-plan'
+// B-SA-047: a design change accepted only for the customer's own private label.
+import { DESIGN_HELD_WORDS, designHeldOf, designHeldWords, designTitleOf, ecoStepOf, styleStepOf } from './apply-plan'
 
 /**
  * B-SA-045: the review window's apply plan, pure — the same plan before Accept (planned) and after it (the stored changes), steps
@@ -109,5 +111,33 @@ describe('On the floor now and the extra pieces (B-SA-045)', () => {
     ])
     expect(options[1]!.words).toEqual({ en: 'Keep as leftover for Brand Alpha', it: 'Tieni come rimanenza di Brand Alpha' })
     expect(outcomeOptionsOf({ customer: 'Brand Alpha', seesPrices: true })[0]!.mayChoose).toBe(true)
+  })
+})
+
+describe('B-SA-047: a design change — only the customer\'s own private label, a style change per style, then product\'s change order', () => {
+  it('holds a style of our own collection or of another label, in words that never name it', () => {
+    expect(designHeldOf({ brandPartyId: 'p1' }, 'p1')).toBeNull()
+    expect(designHeldOf({ brandPartyId: null }, 'p1')).toBe('OWN_COLLECTION')
+    expect(designHeldOf({ brandPartyId: 'p2' }, 'p1')).toBe('OTHER_LABEL')
+    expect(designHeldWords('OWN_COLLECTION', true)).toEqual(DESIGN_HELD_WORDS.OWN_COLLECTION)
+    expect(designHeldWords('OWN_COLLECTION', false).en).toBe(`${DESIGN_HELD_WORDS.OWN_COLLECTION.en} ${DESIGN_HELD_WORDS.options.en}`)
+    for (const words of [DESIGN_HELD_WORDS.OWN_COLLECTION, DESIGN_HELD_WORDS.OTHER_LABEL]) expect(`${words.en} ${words.it}`).not.toMatch(/Brand|Alpha|Beta/)
+  })
+
+  it('titles the change request with their first words, at most 200 characters', () => {
+    expect(designTitleOf('  Move   the logo ')).toBe('Customer design change · Move the logo')
+    const long = designTitleOf('x'.repeat(400))
+    expect(long.length).toBe(200)
+    expect(long.endsWith('…')).toBe(true)
+  })
+
+  it('STYLE_CHANGE: to do before Accept (held: not possible with why), done after; ECO waits for product until released or refused', () => {
+    expect(styleStepOf({ accepted: false, style: 'SEED-JKT-02', number: null, held: null, mayAnswer: true })).toMatchObject({ kind: 'STYLE_CHANGE', state: 'TO_DO', team: 'SALES', words: { en: 'A style change for SEED-JKT-02' }, mayDoNow: true })
+    expect(styleStepOf({ accepted: false, style: 'OWN-01', number: null, held: DESIGN_HELD_WORDS.OWN_COLLECTION, mayAnswer: true })).toMatchObject({ state: 'NOT_POSSIBLE', why: DESIGN_HELD_WORDS.OWN_COLLECTION, mayDoNow: false })
+    expect(styleStepOf({ accepted: true, style: 'SEED-JKT-02', number: 'CR-0031', held: null, mayAnswer: false })).toMatchObject({ state: 'DONE', words: { en: 'Style change CR-0031 for SEED-JKT-02', it: 'Modifica del modello CR-0031 per SEED-JKT-02' } })
+    expect(ecoStepOf({ style: 'SEED-JKT-02', status: 'OPEN', mayManage: false })).toMatchObject({ kind: 'ECO', state: 'PROPOSED', team: 'PRODUCT', why: APPLY_WORDS.ecoWaiting })
+    expect(ecoStepOf({ style: 'SEED-JKT-02', status: 'ACCEPTED', mayManage: true })).toMatchObject({ state: 'PROPOSED', mayDoNow: true })
+    expect(ecoStepOf({ style: 'SEED-JKT-02', status: 'DONE', mayManage: true })).toMatchObject({ state: 'DONE', why: null })
+    expect(ecoStepOf({ style: 'SEED-JKT-02', status: 'REJECTED', mayManage: true })).toMatchObject({ state: 'NOT_POSSIBLE', why: APPLY_WORDS.ecoRefused })
   })
 })

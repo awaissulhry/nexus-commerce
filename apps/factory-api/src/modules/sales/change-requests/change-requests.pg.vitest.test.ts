@@ -23,6 +23,9 @@ import { acceptRequest, officeList, officeRecord, refuseRequest } from './office
 import { getCutoffs, saveCutoffs } from './settings'
 // B-PR-25: the customer's own freeze rule (B-PR-14).
 import { createFreezeRule } from '../order-changes/freeze'
+// B-SA-047: a design change accepted (the review window's plan; our counter-offer of every kind).
+import { counterBrandRequest } from '../../production/brand-requests/answer'
+import { applyPlan } from './apply-plan'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -829,3 +832,76 @@ describe('B-SA-046: a design change of some lines, asked from the portal while t
   })
 })
 // ── end B-SA-046 ──
+
+// ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): accepting a design change ──
+describe('B-SA-047: a design change is accepted only for the customer\'s own private label, as a product change request per style', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const askedDesign = async (design: Awaited<ReturnType<typeof designWorld>>, note = 'Move the logo to the left sleeve.') => {
+    const asked = await designAsk(design.order, { note, lineIds: [design.line10, design.line20], fileIds: [design.file] })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    return asked.body.request as Json
+  }
+
+  it('two styles of its own label: ONE command — the request ACCEPTED and two CUSTOMER change requests, each naming it; no file copied; nothing held', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ cut: 2 })
+    const request = await askedDesign(design)
+    const before = await applyPlan(office(), request.id, h.clock.now())
+    expect(before.next.filter((step) => step.kind === 'STYLE_CHANGE').map((step) => step.state)).toEqual(['TO_DO', 'TO_DO'])
+    const accepted = await acceptRequest(office(), request.id, { version: request.version, answer: 'We take it to product.' }, undefined, h.clock)
+    expect(accepted.request).toMatchObject({ status: 'ACCEPTED', kind: 'DESIGN' })
+    expect(accepted.styleChanges).toHaveLength(2)
+    const raised = await admin('SELECT id::text AS id, number, source::text AS source, "partyId"::text AS party, "orderChangeRequestId"::text AS asked, title, reason, status::text AS status FROM "ChangeRequest" WHERE "orderChangeRequestId" = $1 ORDER BY number', [request.id])
+    expect(raised).toHaveLength(2)
+    for (const row of raised) {
+      expect(row).toMatchObject({ source: 'CUSTOMER', party: P1, asked: request.id, title: 'Customer design change · Move the logo to the left sleeve.', reason: 'Move the logo to the left sleeve.', status: 'OPEN' })
+      expect(row.number).toMatch(/^CR-/)
+    }
+    // BW-3: the customer's files stay on the request and the order — none is copied onto a change request.
+    expect(await admin('SELECT id FROM "StoredFile" WHERE "recordType" = $1 AND "recordId" = ANY($2::uuid[])', ['ChangeRequest', raised.map((row) => row.id)])).toEqual([])
+    // BW-9: accepting holds no work order (the change order's work in progress is decided later, by a person of every customer).
+    expect((await one('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [design.workOrder])).status).toBe('IN_PROGRESS')
+    expect(await admin('SELECT id FROM "WorkOrderHold" WHERE "workOrderId" = $1', [design.workOrder])).toEqual([])
+    const [event] = (await outbox('order_change_request.answered')).filter((row) => row.payload.requestId === request.id)
+    expect(event!.payload).toMatchObject({ kind: 'DESIGN', answer: 'ACCEPTED', amendmentId: null, changeRequestIds: expect.arrayContaining(raised.map((row) => row.id)) })
+    // After Accept the plan: the style changes DONE, product's change orders waiting (Still to do: Waiting for product).
+    const after = await applyPlan(office(), request.id, h.clock.now())
+    expect(after.next.map((step) => [step.kind, step.state])).toEqual([
+      ['AMEND', 'DONE'],
+      ['STYLE_CHANGE', 'DONE'],
+      ['ECO', 'PROPOSED'],
+      ['STYLE_CHANGE', 'DONE'],
+      ['ECO', 'PROPOSED'],
+    ])
+    expect(after.next.filter((step) => step.kind === 'ECO').every((step) => step.team === 'PRODUCT')).toBe(true)
+  })
+
+  it('a style of our own collection holds Accept in words (the record says it first); the database refuses such a change request too', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ ownCollection: true })
+    const request = await askedDesign(design, 'A darker lining.')
+    const record = await officeRecord(office(), request.id, h.clock.now())
+    expect(record.preview!.problems.map((problem: Json) => problem.path)).toEqual(['request/OWN_COLLECTION'])
+    const held = await thrown(acceptRequest(office(), request.id, { version: request.version }, undefined, h.clock))
+    expect(held).toMatchObject({ code: 'invalid_state', issues: [{ path: 'request/OWN_COLLECTION' }] })
+    expect(held.message).toMatch(/^This style is in our own collection: a style change would change other customers’ orders\. Suggest something else or refuse\./)
+    expect(await admin('SELECT id FROM "ChangeRequest" WHERE "orderChangeRequestId" = $1', [request.id])).toEqual([])
+    expect((await one('SELECT status::text AS status FROM "OrderChangeRequest" WHERE id = $1', [request.id])).status).toBe('OPEN')
+    const plan = await applyPlan(office(), request.id, h.clock.now())
+    expect(plan.next.find((step) => step.kind === 'STYLE_CHANGE' && step.state === 'NOT_POSSIBLE')).toBeTruthy()
+    // It is answered as any other kind: refused with words the customer reads.
+    const refused = await refuseRequest(office(), request.id, { version: request.version, answer: 'This model is shared: we can offer a variant next season.' }, undefined, h.clock)
+    expect(refused.request.status).toBe('REFUSED')
+  })
+
+  it('our counter-offer with a fee works as for every kind (the price grain); another customer\'s person does not reach the request', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const request = await askedDesign(design, 'Embroider the rider\'s number.')
+    const priced = callerFor(h.database, { audience: 'office', tenantId: T, actorId: officeId, requestId: newId(), grants: [{ permissions: ['orders.view', 'orders.manage', 'money.price'] as Permission[], companies: 'all', sites: 'all', parties: 'all' }] })
+    const countered = await counterBrandRequest(priced, request.id, { version: request.version, fee: 15000, note: 'Possible from the next order, with a fee.' }, undefined, h.clock)
+    expect(countered.request).toMatchObject({ status: 'COUNTERED', kind: 'DESIGN' })
+    const beta = callerFor(h.database, { audience: 'office', tenantId: T, actorId: officeId, requestId: newId(), grants: [{ permissions: ['orders.view', 'orders.manage'], companies: 'all', sites: 'all', parties: [newId()] }] })
+    expect((await thrown(acceptRequest(beta, request.id, { version: 2 }, undefined, h.clock))).code).toBe('not_found')
+  })
+})
+// ── end B-SA-047 ──
