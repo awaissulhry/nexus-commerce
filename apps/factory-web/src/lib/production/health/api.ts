@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { BRAND_HEALTHS, HEALTH_REASON_CODES, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
-import type { ApiClient } from '../../../../../lib/api/client'
+import type { ApiClient } from '../../api/client'
 
 /**
  * F-PR-05a — the health of a work order's sales order(s) as the office reads and steers it (B-PR-35, apps/factory-api

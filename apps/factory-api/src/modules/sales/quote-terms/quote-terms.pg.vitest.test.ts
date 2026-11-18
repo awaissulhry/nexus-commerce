@@ -191,7 +191,7 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
     expect(version.status).toBe('EXPIRED')
     expect(version.closedAt).not.toBeNull()
     expect((await one(`SELECT status FROM "Quote" WHERE id = $1`, [ended.id])).status).toBe('EXPIRED')
-    expect((await events('quote.expired', ended.id)).map((row) => row.payload)).toEqual([{ quoteId: ended.id, versionId: ended.current.id, number: ended.number, revision: 1, validUntil: addDays(today, -1) }])
+    expect((await events('quote.expired', ended.id)).map((row) => row.payload)).toEqual([{ quoteId: ended.id, versionId: ended.current.id, number: ended.number, revision: 1, validUntil: addDays(today, -1), partyId: P1 /* B-SA-004b: the quote's own customer */ }])
     const terms = await ok('sales', 'GET', `/sales/quotes/${ended.id}/terms`)
     expect(terms.validity).toMatchObject({ state: 'EXPIRED', expiredAt: expect.any(String) })
     await runQuoteValidity({ database: h.database, log, clock })
@@ -221,7 +221,7 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
     const version = await one(`SELECT status, "reminderSentAt" FROM "QuoteVersion" WHERE id = $1`, [ending.current.id])
     expect(version).toMatchObject({ status: 'SENT', reminderSentAt: expect.any(Date) })
     const [reminded] = await events('quote.reminder_sent', ending.id)
-    expect(reminded?.payload).toMatchObject({ quoteId: ending.id, number: ending.number, revision: 1, validUntil: addDays(today, 2) })
+    expect(reminded?.payload).toMatchObject({ quoteId: ending.id, number: ending.number, revision: 1, validUntil: addDays(today, 2), partyId: P1 /* B-SA-004b */ })
     const mail = await one(`SELECT o.status, o.to, o.subject, m."bodyText" FROM "EmailOutbound" o JOIN "Message" m ON m.id = o."messageId" WHERE o.id = $1`, [reminded!.payload.outboundId])
     expect(mail.subject).toBe(`Promemoria: il preventivo ${ending.number} v1 scade presto`)
     expect(mail.to).toEqual([ending.contact.email])
@@ -324,3 +324,24 @@ describe('the order takes the accepted version’s delivery terms and schedule (
     expect(audits).toEqual([{ recordId: made.order.id, after: expect.objectContaining({ deliveries: 1, passed: [] }) }])
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every quote.* event names its quote's own customer (`partyId`, from the quote row the command read; never a caller's value),
+ * so an office person limited to some customers is sent the live changes of their own customers' quotes and never another's.
+ * The commands above: delivery terms, a line's schedule, and the validity job (its expiry and reminder commands read the
+ * quote row themselves: no caller).
+ */
+describe('live: every quote event names its quote’s customer (B-SA-004b)', () => {
+  it('each quote.* row the terms, the schedule and the validity job wrote carries partyId = the quote row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, q."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "Quote" q ON q.id = (e.payload->>'quoteId')::uuid
+        WHERE e.type LIKE 'quote.%'
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['quote.updated', 'quote.lines_changed', 'quote.expired', 'quote.reminder_sent']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

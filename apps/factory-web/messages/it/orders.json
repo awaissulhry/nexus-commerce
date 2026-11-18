@@ -234,12 +234,14 @@
   },
   "tab": {
     "lines": "Righe",
-    "production": "Produzione e date",
-    "shipments": "Spedizioni e fatture",
-    "money": "Fatture e pagamenti",
-    "margin": "Margine",
+    "production": "Produzione",
+    "shipments": "Spedizioni",
+    "money": "Importi",
     "depositOpen": "C'è un acconto aperto",
-    "changes": "Conferma e modifiche"
+    "changes": "Modifiche",
+    "overview": "Panoramica",
+    "attention": "Richiede attenzione: in ritardo o a rischio",
+    "files": "File"
   },
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
@@ -282,8 +284,6 @@
     "tabsLabel": "Sezioni dell'ordine",
     "depositOpen": "Acconto aperto — scade il {date}",
     "depositMissing": "Acconto non chiesto",
-    "late_one": "In ritardo di {count} giorno",
-    "late_other": "In ritardo di {count} giorni",
     "customerRef": "Ordine del cliente {ref}",
     "fromQuote": "Dal preventivo {number} v{revision}",
     "changed": "Questo ordine è cambiato alle {time}",
@@ -295,7 +295,9 @@
     "amended": "Modificato · rev. {revision}",
     "reapproval": "In attesa che il cliente accetti la modifica",
     "typed": "Inserito dall'ufficio",
-    "madeFrom": "Creato da {number} — Apri"
+    "madeFrom": "Creato da {number} — Apri",
+    "madeToMeasure": "Su misura",
+    "changedBy": "Modificato da {name} alle {time}"
   },
   "held": {
     "busy": "Sto salvando l'ultima modifica…",
@@ -345,9 +347,6 @@
     "depositPaid": "{amount} pagati",
     "depositWaived": "Rinunciato",
     "depositOpen": "{amount} entro il {date}",
-    "invoiced": "Fatturato",
-    "paid": "Pagato",
-    "balance": "Saldo da pagare",
     "margin": "Margine stimato",
     "marginValue": "{pct}",
     "marginUnknown": "Non noto: manca un costo",
@@ -355,17 +354,8 @@
     "costIncomplete": "Incompleto"
   },
   "chain": {
-    "title": "Dal preventivo alle fatture",
-    "quote": "Preventivo",
     "quoteValue": "{number} v{revision}",
     "noQuote": "Inserito dall'ufficio",
-    "order": "Ordine",
-    "deposit": "Acconto",
-    "workOrders": "Ordini di lavoro",
-    "shipments": "Spedizioni",
-    "invoices": "Fatture",
-    "count_one": "{count}",
-    "count_other": "{count}",
     "fromRequest": "Creato dalla richiesta {number} (senza preventivo)"
   },
   "gate": {
@@ -384,18 +374,16 @@
     "missing": "L'ordine richiede un acconto, ma non è stato chiesto: la produzione aspetta.",
     "notNeeded": "Nessun acconto necessario: la produzione può partire.",
     "amount": "{amount} come {kind}",
-    "open": "Apri l'acconto"
+    "money": "Importi ›"
   },
   "lines": {
-    "readOnly": "Quello che il cliente ha ordinato, come accettato. Le righe cambiano solo con una modifica (Modifica ordine).",
-    "show": "Mostra",
+    "readOnly": "Cosa ha ordinato il cliente, come accettato. Le modifiche passano da Modifica ordine.",
     "vatNature": "IVA {nature}",
     "orderDate": "Come l'ordine",
     "revision": "Fatto sulla rev. {revision}",
     "noRevision": "Revisione scelta dall'ordine di lavoro",
-    "gridCaption": "{style}: {layer} per colore e taglia",
+    "gridCaption": "{style}: capi ordinati per colore e taglia",
     "pricesOf": "Prezzi di {style}",
-    "madeHint": "I capi fatti per taglia si contano su ogni ordine di lavoro (scheda Produzione).",
     "col": {
       "colour": "Colore",
       "pieces": "Capi",
@@ -407,17 +395,16 @@
       "promise": "Promessa"
     },
     "closedShort_one": "Chiusa in anticipo: {count} pezzo",
-    "closedShort_other": "Chiusa in anticipo: {count} pezzi"
-  },
-  "layer": {
-    "ordered": "Ordinati",
-    "inWorkOrders": "Negli ordini di lavoro",
-    "released": "Rilasciati",
-    "shipped": "Spediti",
-    "toShip": "Da spedire"
+    "closedShort_other": "Chiusa in anticipo: {count} pezzi",
+    "totals": "Totali",
+    "units": "Capi",
+    "artwork_one": "Grafiche ({count})",
+    "artwork_other": "Grafiche ({count})",
+    "closedBy": "Chiuso in meno da {name}, {day}",
+    "note": "Nota: {note}"
   },
   "dates": {
-    "title": "Date",
+    "title": "Date e tappe",
     "ordered": "Ordinato",
     "requested": "Richiesto",
     "promised": "Promesso",
@@ -428,7 +415,7 @@
     "left_other": "tra {count} giorni",
     "linesLabel": "Date per riga",
     "asOrder": "{date} (dell'ordine)",
-    "historyTitle": "Cambi della promessa",
+    "historyTitle": "Spostamenti della promessa",
     "never": "Mai cambiata",
     "neverBody": "La promessa è ancora quella data quando l'ordine è nato.",
     "someone": "Qualcuno dell'ufficio",
@@ -443,7 +430,15 @@
       "who": "Chi",
       "change": "Cambio",
       "reason": "Perché"
-    }
+    },
+    "historyCount_one": "Spostamenti della promessa ({count})",
+    "historyCount_other": "Spostamenti della promessa ({count})",
+    "cutStart": "Inizio taglio",
+    "sewStart": "Inizio confezione",
+    "finish": "Fine",
+    "customerSees": "Il cliente vede {date}",
+    "shippedOn": "Spedito il {shipped}",
+    "shippedDelivered": "Spedito il {shipped} · consegnato il {delivered}"
   },
   "production": {
     "title": "Ordini di lavoro",
@@ -453,18 +448,17 @@
     },
     "uncovered_one": "{count} riga non ancora tutta in produzione",
     "uncovered_other": "{count} righe non ancora tutte in produzione",
-    "noProgressRight": "L'avanzamento del reparto è visibile a chi segue la produzione.",
     "progressLabel": "Avanzamento di {number}: {figure}",
     "notReleased": "Non ancora rilasciato",
     "col": {
       "number": "Ordine di lavoro",
       "style": "Modello",
-      "pieces": "Capi",
       "status": "Stato",
       "progress": "Avanzamento",
       "due": "Scadenza",
-      "site": "Sede",
-      "released": "Rilasciato"
+      "released": "Rilasciato",
+      "own": "Per questo ordine",
+      "materials": "Materiali"
     },
     "notCounted": {
       "cut": "Il taglio non si conta qui",
@@ -475,6 +469,45 @@
       "cut": "Tagliati",
       "sewn": "Cuciti",
       "finished": "Finiti"
+    },
+    "held": "In sospeso",
+    "rush": "Urgente",
+    "progressHeld": "Per l'avanzamento serve il permesso sugli ordini di lavoro",
+    "mtmRow": "{style} · {colour} — Su misura · {units} unità · {workOrders} ordini di lavoro",
+    "own": {
+      "of": "Per questo ordine: {own} di {total}",
+      "all": "Per questo ordine: {own}",
+      "alsoMakes": "fa anche {number}",
+      "alsoMore_one": "e {count} altro ordine di questo cliente",
+      "alsoMore_other": "e altri {count} ordini di questo cliente",
+      "alsoOther": "fa anche lavoro di altri ordini",
+      "cutTogether": "tagliato insieme ad altro lavoro"
+    },
+    "quality": {
+      "title": "Sospensioni, qualità e problemi",
+      "notes": "Note dell'ufficio sulle sospensioni",
+      "officeOnly": "Solo ufficio · dal {date}",
+      "issuesHeld": "Per i problemi serve il permesso sugli ordini di lavoro",
+      "needsAnswer_one": "Serve una risposta: {count}",
+      "needsAnswer_other": "Serve una risposta: {count}",
+      "issue": "Chiesto il {since} · risposta entro il {due}",
+      "escalated_one": "Sollecitato {count} volta",
+      "escalated_other": "Sollecitato {count} volte",
+      "ncrsHeld": "Per le non conformità serve il permesso qualità",
+      "ncrs_one": "{count} non conformità aperta:",
+      "ncrs_other": "{count} non conformità aperte:",
+      "finalHeld": "Per i controlli finali serve il permesso sui controlli",
+      "final": "Controlli finali",
+      "finalRow": "{number} · {checked} controllati",
+      "finalState": {
+        "PASSED": "Superato il {date}",
+        "FAILED": "Non superato il {date}",
+        "WAITING": "In attesa"
+      },
+      "nothing": "Nessuna sospensione, problema o rilievo di qualità"
+    },
+    "specs": {
+      "title": "Specifiche in vigore"
     }
   },
   "woStatus": {
@@ -499,7 +532,8 @@
       "status": "Stato",
       "shipped": "Partita",
       "delivered": "Consegnata"
-    }
+    },
+    "moneyDoor": "Fatture e pagamenti sono in Importi ›"
   },
   "shipStatus": {
     "DRAFT": "Bozza",
@@ -530,6 +564,11 @@
       "sdi": "SDI",
       "gross": "Totale",
       "open": "Aperto"
+    },
+    "section": {
+      "totals": "Totali",
+      "deposit": "Acconto",
+      "margin": "Margine"
     }
   },
   "docType": {
@@ -686,16 +725,11 @@
     "acceptedTitle": "Preventivo accettato",
     "openQuote": "Apri il preventivo {number}",
     "noQuote": {
-      "title": "Inserito dall'ufficio — nessun preventivo",
-      "body": "Questo ordine non viene da un preventivo accettato."
+      "title": "Inserito dall'ufficio — nessun preventivo"
     },
     "noQuoteRight": "Dal preventivo {number} v{revision}. Le sue prove sono visibili a chi vede i preventivi.",
     "noEvidence": "Il preventivo {number} v{revision} non ha prove di accettazione registrate.",
-    "version": "Versione",
     "versionValue": "{number} v{revision}",
-    "signer": "Firmato da",
-    "acceptedAt": "Accettato",
-    "channel": "Come",
     "channelValue": {
       "LINK": "Dal link del cliente",
       "OFFICE": "Registrato dall'ufficio"
@@ -720,7 +754,9 @@
     "amended": "Modifica {revision} applicata.",
     "amendedReaccept": "Modifica {revision} applicata. Il totale imponibile è cambiato: il cliente deve accettare di nuovo l'ordine — avvisalo.",
     "reopened": "Le righe sono state riaperte.",
-    "cancelled": "L'ordine è stato annullato."
+    "cancelled": "L'ordine è stato annullato.",
+    "healthRaised": "Portato a A rischio: il cliente lo legge con il motivo.",
+    "healthCleared": "Segnalazione tolta: parlano di nuovo le date."
   },
   "stepUp": {
     "title": "Conferma che sei tu",
@@ -792,13 +828,13 @@
     "apply": "Applica la modifica",
     "held": {
       "price": "Un prezzo scritto non è un prezzo: controllalo",
-      "workOrders": "Una taglia è sotto quanto gli ordini di lavoro fanno già",
       "empty": "Un ordine tiene almeno una riga: per fermare tutto l'ordine, annullalo",
       "nothing": "Non cambia ancora nulla",
       "reading": "Prima la verifica della modifica",
       "failed": "La verifica non è riuscita: riprova",
       "problems": "Prima sistema ciò che blocca la modifica",
-      "reason": "Scrivi perché l'ordine cambia"
+      "reason": "Scrivi perché l'ordine cambia",
+      "cut": "Una taglia è sotto il già tagliato: portala ai capi tagliati"
     }
   },
   "editor": {
@@ -843,13 +879,14 @@
       "none": "Invariata",
       "empty": "Scrivi le taglie"
     },
-    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno già {made}",
+    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno {made} — l'ordine di lavoro segue la modifica (Ancora da fare)",
     "styleReading": "Lettura del modello…",
     "styleUnread": "Non è stato possibile leggere il modello: solo le taglie dell'ordine",
     "lockedLabel": "Righe tenute come sono",
     "lockedClosed_one": "{colour}: chiusa in anticipo ({count} pezzo): riaprila prima di cambiarla",
     "lockedClosed_other": "{colour}: chiusa in anticipo ({count} pezzi): riaprila prima di cambiarla",
-    "lockedMtm": "{colour}: un capo su misura, tenuto com'è"
+    "lockedMtm": "{colour}: un capo su misura, tenuto com'è",
+    "underCut": "Taglia {size}: {cut} già tagliati — non si scende sotto il tagliato"
   },
   "issue": {
     "state": "Nel suo stato di ora l'ordine non accetta questo cambiamento.",
@@ -1051,23 +1088,12 @@
     }
   },
   "changes": {
-    "title": "Modifiche",
-    "subtitle": "Ogni cambiamento all'ordine confermato, numerato, con l'ordine prima e dopo.",
-    "tableLabel": "Modifiche di questo ordine",
     "empty": {
       "title": "Nessuna modifica dalla conferma",
       "body": "Una modifica compare qui appena applicata (Righe › Modifica ordine).",
       "final": "L'ordine non è mai cambiato dopo la conferma."
     },
-    "waiting": "In attesa che il cliente accetti l'ordine modificato (dal {date}). Il link di accettazione non c'è ancora: avvisa tu il cliente.",
     "col": {
-      "revision": "Revisione",
-      "madeBy": "Fatta da",
-      "reason": "Motivo",
-      "lines": "Righe",
-      "money": "Variazione",
-      "reacceptance": "Cliente",
-      "open": "Istantanea",
       "line": "Riga",
       "change": "Cambiamento",
       "sizes": "Taglie prima → dopo",
@@ -1111,7 +1137,41 @@
     "byAt": "{name}, {date}",
     "reason": "Motivo",
     "money": "Imponibile",
-    "reacceptance": "Nuova accettazione del cliente"
+    "reacceptance": "Nuova accettazione del cliente",
+    "onUs": {
+      "title": "Tocca a noi",
+      "approvals": "Apri Approvazioni ›",
+      "nothing": "Niente aspetta noi",
+      "countered": "Controproposta inviata · aspetta il cliente",
+      "answer": "Rispondi in Approvazioni ›"
+    },
+    "onCustomer": {
+      "title": "Tocca al cliente",
+      "nothing": "Niente aspetta il cliente",
+      "reaccept": "L'ordine modificato aspetta il nuovo sì del cliente",
+      "since": "dal {date}",
+      "due": "entro il {date}"
+    },
+    "confirmation": {
+      "title": "Conferma e sì del cliente",
+      "yes": "Come ha detto sì il cliente"
+    },
+    "history": {
+      "title": "Cronologia",
+      "chipsLabel": "Mostra nella cronologia",
+      "chips": {
+        "all": "Tutto",
+        "requests": "Richieste",
+        "amendments": "Modifiche",
+        "confirmations": "Conferme"
+      },
+      "asked": "Richiesta · {kind}",
+      "by": "di {name}",
+      "priced": "Modifica a pagamento",
+      "made": "Conferma v{version} fatta",
+      "sent": "Conferma v{version} inviata",
+      "noneHere": "Ancora niente di questo tipo"
+    }
   },
   "compare": {
     "title": "Revisione {revision} di {number}: prima → dopo",
@@ -1312,5 +1372,123 @@
       "invalid": "Non inviato così: controlla ciò che hai scritto.",
       "unavailable": "Il server della fabbrica non ha risposto. Riprova."
     }
+  },
+  "menu": {
+    "group": {
+      "next": "Prossimi passi",
+      "edit": "Modifica",
+      "people": "Persone",
+      "goTo": "Vai a",
+      "copy": "Copia"
+    },
+    "assignSupervisor": "Assegna supervisore…",
+    "askSupervisor": "Chiedi al supervisore…"
+  },
+  "overview": {
+    "where": "A che punto è",
+    "progress": "Avanzamento per riga",
+    "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
+    "ahead_one": "{count} riga avanti",
+    "ahead_other": "{count} righe avanti",
+    "bundles_one": "Fasci in lavorazione: {count} a {stage}",
+    "bundles_other": "Fasci in lavorazione: {count} a {stage}",
+    "notInWorkOrders": "Non ancora negli ordini di lavoro",
+    "afterDeposit": "Gli ordini di lavoro si fanno dopo l'acconto",
+    "exFactory": "Franco fabbrica {date}",
+    "exFactoryMovedOnly": "Franco fabbrica {date} · spostata {count} volte",
+    "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
+    "piecesAsOf": "Pezzi alle {time}",
+    "headline": {
+      "waitingDeposit": "Confermato · in attesa dell'acconto",
+      "shipped": "Spedito il {shipped}",
+      "delivered": "Spedito il {shipped} · consegnato il {delivered}"
+    },
+    "fact": {
+      "who": "Chi deve agire",
+      "exFactory": "Franco fabbrica",
+      "health": "Stato",
+      "customer": "Cliente",
+      "inWork": "In lavorazione"
+    },
+    "col": {
+      "line": "Riga"
+    },
+    "lineName": "Riga {seq} · {stage}",
+    "lineNoStage": "Riga {seq}",
+    "lineOpen": "Apri le taglie della riga {seq} · {name}",
+    "total_one": "Totale · {count} riga",
+    "total_other": "Totale · {count} righe",
+    "madeExtra_one": "{count} pezzo fatto in più",
+    "madeExtra_other": "{count} pezzi fatti in più",
+    "sizes": {
+      "label": "Spediti e fine prevista per taglia",
+      "size": "Taglia",
+      "finish": "Fine prevista",
+      "noForecast": "—",
+      "extra": "Fatti in più",
+      "units": "Su misura: un ordine di lavoro per unità — la fase di ogni unità è in Produzione › Ordini di lavoro.",
+      "openLines": "Apri in Righe",
+      "noun": "riga"
+    },
+    "people": {
+      "title": "Persone",
+      "backup": "Sostituto",
+      "answers": "Risponde al cliente",
+      "madeBy": "Creato da",
+      "madeByOn": "{name} · {date}",
+      "where": "Dove si produce",
+      "notPlanned": "Non ancora pianificato",
+      "held": "Chi ci lavora è visibile a chi segue la produzione."
+    },
+    "dates": {
+      "title": "Prossime date",
+      "all": "Tutte le date ›",
+      "none": "Nessuna data ancora: le tappe le fissa la pianificazione"
+    },
+    "requests": {
+      "title": "Richieste e modifiche",
+      "changes": "Modifiche ›",
+      "onUs_one": "Tocca a noi: {count} richiesta",
+      "onUs_other": "Tocca a noi: {count} richieste",
+      "onCustomer_one": "Tocca al cliente: {count}",
+      "onCustomer_other": "Tocca al cliente: {count}",
+      "nothing": "Niente aspetta noi o il cliente",
+      "latest": "Ultima modifica: revisione {revision} · {date}"
+    },
+    "linked": {
+      "title": "Record collegati",
+      "quote": "Preventivo",
+      "workOrders": "Ordini di lavoro",
+      "shipments": "Spedizioni",
+      "invoices": "Fatture",
+      "deposit": "Acconto",
+      "complaints": "Reclami",
+      "returns": "Resi",
+      "sameQuote": "Stesso preventivo",
+      "sameQuoteValue": "{number}",
+      "invoicesHeld": "serve il permesso fatture",
+      "leftOut_one": "{count} ordine di lavoro non mostrato",
+      "leftOut_other": "{count} ordini di lavoro non mostrati"
+    },
+    "facts": {
+      "title": "Dati dell'ordine",
+      "customerRef": "Ordine del cliente",
+      "language": "Lingua",
+      "lang": {
+        "it": "Italiano",
+        "en": "Inglese"
+      },
+      "made": "Creato · modificato",
+      "madeValue": "{made} · {changed}"
+    }
+  },
+  "mtm": {
+    "units_one": "Su misura · {count} unità",
+    "units_other": "Su misura · {count} unità"
+  },
+  "files": {
+    "title": "File",
+    "openFailed": "Impossibile aprire il file: riprova.",
+    "shareFailed": "La condivisione non è riuscita: riprova."
   }
 }

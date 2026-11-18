@@ -184,7 +184,7 @@ export async function addLine(caller: CommandCaller, quoteId: string, body: AddL
       companyId: current.companyId,
       after: { lineId: id, ...lineAudit({ seq, styleId: target.style.id, colourwayId: target.colourway.id, styleRevisionId: target.revisionId, description, note: blankToNull(body.note), ...priced, sizes: grid }), listVersionId: fromList ? listed.versionId : null },
     })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }
@@ -253,7 +253,7 @@ export async function editLine(caller: CommandCaller, quoteId: string, lineId: s
       before: { lineId: line.id, ...lineAudit({ ...line, ...before }) },
       after: { lineId: line.id, ...lineAudit({ seq: line.seq, styleId: line.styleId, colourwayId: target.colourway.id, styleRevisionId: target.revisionId, description, note, ...priced, sizes: grid }) },
     })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }
@@ -269,7 +269,7 @@ export async function removeLine(caller: CommandCaller, quoteId: string, lineId:
     await tx.quoteLine.delete({ where: { id: line.id }, select: { id: true } })
     await refreshVersion(tools, current, version, new Set())
     tools.audit({ action: 'quotes.removeLine', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { lineId: line.id, ...lineAudit({ ...line, unitPrice: decimal(line.unitPrice)!, listUnitPrice: decimal(line.listUnitPrice) }) } })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'removed', lineId: line.id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'removed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }
@@ -291,7 +291,7 @@ export async function recompute(caller: CommandCaller, quoteId: string, body: { 
       before: { netAmount: markMoney('price', version.netAmount), costAmount: markMoney('cost', version.costAmount), marginPct: markMoney('margin', decimal(version.marginPct)) },
       after: { netAmount: markMoney('price', priced.netAmount), costAmount: markMoney('cost', priced.costAmount), marginPct: markMoney('margin', priced.marginPct) },
     })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'recomputed', lineId: null } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'recomputed', lineId: null, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }

@@ -618,3 +618,110 @@ fieldset.fw-so-colours {
 .fw-so-files-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .fw-so-files-list > li { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
 .fw-so-files-sheet { padding-left: var(--nds-space-4); }
+
+/* ── F-SA-230: a section an old address names (#dates, #invoices, #margin, #confirmation) comes into view with room above ── */
+.fw-so-anchor {
+  scroll-margin-top: var(--nds-space-4);
+}
+
+/* ── F-SA-232: Overview — "Where it is now" (one sentence, the facts, the five stages) and "Progress by line" ── */
+.fw-so-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-so-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-so-headline {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-medium);
+}
+/* A line's first cell is the button that opens its sizes: the picture beside its name and stage. */
+.fw-so-lineopen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-so-lineopen:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-sm);
+}
+/* F-SA-233: People · Next dates · Requests & changes · Linked records · Order facts — a card grid that follows the body's width. */
+.fw-so-overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-so-datelist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-so-datelist > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.fw-so-linked {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+/* A linked record is a count button: a real link (⌘-click opens a new tab), its label and its count. */
+.fw-so-countbtn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-4) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--nds-font-size-sm);
+}
+a.fw-so-countbtn:hover {
+  background: var(--nds-surface-hover);
+}
+a.fw-so-countbtn:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+.fw-so-countbtn.is-plain {
+  border-style: dashed;
+}
+/* F-SA-236: the confirmation is a row (it opens in the thread's viewer), never a tall PDF block on the page. */
+.fw-so-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+/* F-SA-231: a line's picture beside its words where nothing opens (Lines' cards and rows). */
+.fw-so-lineopen.is-static {
+  cursor: default;
+}

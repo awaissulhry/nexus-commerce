@@ -312,10 +312,10 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
     await touchReturn(tools, rma, inspected ? { status: 'INSPECTED', inspectedAt: now } : {})
     if (inspected) {
       tools.audit({ action: 'returns.statusChanged', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: rma.status }, after: { status: 'INSPECTED', inspectedAt: toUtcIso(now) } })
-      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'INSPECTED' } })
+      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'INSPECTED', partyId: rma.partyId /* B-SA-004b */ } })
     }
     const lineIds = planned.map((entry) => entry.line.id)
-    tools.emit({ type: 'return.decided', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds, inspected, moveIds: moves.map((move) => move.moveId) } })
+    tools.emit({ type: 'return.decided', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds, inspected, moveIds: moves.map((move) => move.moveId), partyId: rma.partyId /* B-SA-004b */ } })
     const credited = planned.filter((entry) => entry.creditAmount > 0).map((entry) => entry.line.id)
     if (credited.length > 0) tools.emit({ type: 'return.credit_due', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, partyId: rma.partyId, lineIds: credited } })
     const registerEntries = await openSafetyEntries(tools, rma, after.filter((line) => lineIds.includes(line.id)))

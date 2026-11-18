@@ -83,6 +83,10 @@ import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
  *                                advance; sales_order.schedule_changed WAIVED names the step
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
+// B-SA-004b (Sales page plan P17'): every quote.* payload names the quote's customer (`partyId`, livePartyId(): set by the emitter
+// from the quote row read on the server, never from the caller), so an office person limited to some customers is sent their own
+// customers' quote changes live (events/live.ts reachesParties). Never in the live `fields`; optional, so an older event still
+// parses (it names no customer: every-customer viewers only). quote.created and quote.accepted always named it.
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
 // B-SA-001: every sales_order.* payload names the order's customer (`partyId`, the B-PR-09 livePartyId(): set by the emitter from
 // the order row read on the server, never from the caller), so an office person limited to some customers is sent the live
@@ -92,9 +96,14 @@ const orderStatus = z.enum(SALES_ORDER_STATUSES)
 // B-W2a-43: customer returns.
 const returnLive = { permission: 'sales.returns.view', fields: ['returnId', 'number'] } as const
 const returnStatus = z.enum(RETURN_STATUSES)
+// B-SA-004b (Sales page plan P17'): every return.* payload names the RMA's customer (`partyId`, livePartyId(): the RMA row's own,
+// read in the command), so an office person limited to some customers is sent their customers' returns live; never in the live
+// `fields` (the dock's floor rule never reads it); optional, so an older event still parses (every-customer viewers only).
 // B-W2a-57: repairs and alterations.
 const repairLive = { permission: 'sales.repairs.view', fields: ['repairId', 'number'] } as const
 const repairStage = z.enum(REPAIR_STAGES)
+// B-SA-004b (Sales page plan P17'): every repair.* payload names the repair's customer (`partyId`, the repair row's own, read in the
+// command), for the office's live wall only; never in the live fields; optional for an older event (every-customer viewers only).
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
 
 export const events = [
@@ -109,35 +118,35 @@ export const events = [
     type: 'quote.updated',
     context: 'sales',
     description: "A quote's header or its draft version's terms changed.",
-    payload: z.strictObject({ ...ids, fields: z.array(z.string()) }),
+    payload: z.strictObject({ ...ids, fields: z.array(z.string()), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
     type: 'quote.lines_changed',
     context: 'sales',
     description: "A draft quote's lines changed (added, changed, removed) or it was recomputed: totals, costs, VAT and the approval rules follow.",
-    payload: z.strictObject({ ...ids, change: z.enum(['added', 'changed', 'removed', 'recomputed']), lineId: z.uuid().nullable() }),
+    payload: z.strictObject({ ...ids, change: z.enum(['added', 'changed', 'removed', 'recomputed']), lineId: z.uuid().nullable(), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
     type: 'quote.approval_requested',
     context: 'sales',
     description: 'The office asked for an approval of a quote version that breaks a rule (margin floor, discount limit); its lines are frozen while it waits.',
-    payload: z.strictObject({ ...ids, approvalId: z.uuid(), reasons: z.array(z.enum(APPROVAL_REASONS)) }),
+    payload: z.strictObject({ ...ids, approvalId: z.uuid(), reasons: z.array(z.enum(APPROVAL_REASONS)), partyId: livePartyId() /* B-SA-004b */ }),
     live: { permission: 'quotes.view', fields: ['quoteId', 'versionId', 'approvalId', 'reasons'] },
   }),
   defineEvent({
     type: 'quote.approval_decided',
     context: 'sales',
     description: "An approver approved or rejected a quote version's approval request.",
-    payload: z.strictObject({ ...ids, approvalId: z.uuid(), status: z.enum(['APPROVED', 'REJECTED']) }),
+    payload: z.strictObject({ ...ids, approvalId: z.uuid(), status: z.enum(['APPROVED', 'REJECTED']), partyId: livePartyId() /* B-SA-004b */ }),
     live: { permission: 'quotes.view', fields: ['quoteId', 'versionId', 'approvalId', 'status'] },
   }),
   defineEvent({
     type: 'quote.reopened',
     context: 'sales',
     description: 'A quote version waiting for approval, or approved, went back to draft for a change; a waiting request was withdrawn.',
-    payload: z.strictObject({ ...ids, withdrawnApprovalId: z.uuid().nullable() }),
+    payload: z.strictObject({ ...ids, withdrawnApprovalId: z.uuid().nullable(), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
@@ -151,28 +160,28 @@ export const events = [
     type: 'quote.cancelled',
     context: 'sales',
     description: 'The office withdrew a quote: before it was sent, or after (its accept links revoked, with a reason).',
-    payload: z.strictObject(ids),
+    payload: z.strictObject({ ...ids, partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
     type: 'quote.sent',
     context: 'sales',
     description: 'A quote version was frozen and sent to the customer: its PDF stored, its one-off accept link mailed; older sent versions are superseded.',
-    payload: z.strictObject({ ...ids, revision: z.number().int(), number: z.string(), documentFileId: z.uuid(), linkId: z.uuid(), supersededVersionIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ ...ids, revision: z.number().int(), number: z.string(), documentFileId: z.uuid(), linkId: z.uuid(), supersededVersionIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { permission: 'quotes.view', fields: ['quoteId', 'versionId', 'revision', 'number'] },
   }),
   defineEvent({
     type: 'quote.link_sent',
     context: 'sales',
     description: "The office sent the customer a new accept link for the quote's sent version; the older live links were revoked.",
-    payload: z.strictObject({ ...ids, linkId: z.uuid(), revokedLinkIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ ...ids, linkId: z.uuid(), revokedLinkIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
     type: 'quote.revised',
     context: 'sales',
     description: 'A new draft version of a sent (or declined) quote was made from it: its lines, sizes and costs copied.',
-    payload: z.strictObject({ ...ids, fromVersionId: z.uuid(), revision: z.number().int() }),
+    payload: z.strictObject({ ...ids, fromVersionId: z.uuid(), revision: z.number().int(), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
@@ -201,14 +210,14 @@ export const events = [
     type: 'quote.declined',
     context: 'sales',
     description: 'The customer declined a sent quote version through its one-off link.',
-    payload: z.strictObject({ ...ids, revision: z.number().int() }),
+    payload: z.strictObject({ ...ids, revision: z.number().int(), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
     type: 'quote.link_requested',
     context: 'sales',
     description: "The customer asked, through the quote's link, for a new one (the offer ended, or a newer version replaced it).",
-    payload: z.strictObject({ ...ids, linkId: z.uuid(), state: z.enum(LINK_QUOTE_STATES) }),
+    payload: z.strictObject({ ...ids, linkId: z.uuid(), state: z.enum(LINK_QUOTE_STATES), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   // B-W2b-165 (SAL-199): the proofs of an unsent version.
@@ -216,7 +225,7 @@ export const events = [
     type: 'quote.proofs_changed',
     context: 'sales',
     description: "A quote version's proofs changed before it was sent: a proof added, replaced by a new version, removed, or carried over from an earlier version.",
-    payload: z.strictObject({ ...ids, change: z.enum(['added', 'replaced', 'removed', 'carried']), fileIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ ...ids, change: z.enum(['added', 'replaced', 'removed', 'carried']), fileIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
@@ -317,35 +326,35 @@ export const events = [
     type: 'return.lines_changed',
     context: 'sales',
     description: "Lines of a customer return were added, changed or removed before the goods arrived (the dock's expected lines change).",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), change: z.enum(['ADDED', 'CHANGED', 'REMOVED']), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), change: z.enum(['ADDED', 'CHANGED', 'REMOVED']), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'change'] },
   }),
   defineEvent({
     type: 'return.changed',
     context: 'sales',
     description: "A customer return's owner, deadline for the goods, customer reference or internal note changed.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), fields: z.array(z.string()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), fields: z.array(z.string()), partyId: livePartyId() /* B-SA-004b */ }),
     live: returnLive,
   }),
   defineEvent({
     type: 'return.received',
     context: 'sales',
     description: "A customer return's goods arrived at the dock: the receipt (parcels, condition, the customer's DDT) and the pieces of each line.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), receiptId: z.uuid(), lineIds: z.array(z.uuid()), pieces: z.number().int(), first: z.boolean() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), receiptId: z.uuid(), lineIds: z.array(z.uuid()), pieces: z.number().int(), first: z.boolean(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive' },
   }),
   defineEvent({
     type: 'return.graded',
     context: 'sales',
     description: "Received lines of a customer return were graded: the garments' grade, the cause found and their condition.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive' },
   }),
   defineEvent({
     type: 'return.decided',
     context: 'sales',
     description: 'Graded lines of a customer return were decided: what the customer gets and where the goods go (the stock moves it posted); the return is inspected once every received line is decided.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), inspected: z.boolean(), moveIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), inspected: z.boolean(), moveIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'inspected'] },
   }),
   defineEvent({
@@ -359,7 +368,7 @@ export const events = [
     type: 'return.status_changed',
     context: 'sales',
     description: 'A customer return moved: goods received, inspected and decided, more goods came, closed with its finish reason, or cancelled.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), from: returnStatus, to: returnStatus }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), from: returnStatus, to: returnStatus, partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'from', 'to'] },
   }),
   defineEvent({
@@ -388,21 +397,21 @@ export const events = [
     type: 'repair.changed',
     context: 'sales',
     description: "A repair's problem, garment, owner, the customer's transport document or its internal note changed.",
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), fields: z.array(z.string()) }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), fields: z.array(z.string()), partyId: livePartyId() /* B-SA-004b */ }),
     live: repairLive,
   }),
   defineEvent({
     type: 'repair.stage_changed',
     context: 'sales',
     description: 'A repair moved to another stage: the garment arrived, estimated, approved, in repair, repaired, back into repair, shipped back to the customer, or cancelled.',
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), from: repairStage, to: repairStage, workOrderId: z.uuid().nullable(), ddtId: z.uuid().nullable() }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), from: repairStage, to: repairStage, workOrderId: z.uuid().nullable(), ddtId: z.uuid().nullable(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...repairLive, fields: ['repairId', 'number', 'from', 'to'] },
   }),
   defineEvent({
     type: 'repair.safety_checked',
     context: 'sales',
     description: "A repaired protective garment's safety check was signed (seams, abrasion zones, closures, protectors, the certificate still covers it): passed, so it may go back, or failed.",
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), result: z.enum(SAFETY_RESULTS) }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), result: z.enum(SAFETY_RESULTS), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...repairLive, fields: ['repairId', 'number', 'result'] },
   }),
   // B-W2b-16: deposit requests of an order (ids, the step's kind and the fiscal decision; never an amount).

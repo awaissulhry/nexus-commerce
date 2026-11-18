@@ -656,6 +656,7 @@
     "WORK_ORDER_NOT_OPEN": "Quell’ordine di lavoro non è aperto: niente è in corso.",
     "LINE_INVALID": "Quella riga di modifica non è completa.",
     "CANCEL_REASON": "Scrivi perché viene annullato.",
+    "RELEASE_HOLDS": "Rilasciarlo mette in sospeso degli ordini di lavoro: ti serve il permesso di metterli in sospeso, per ciascuno.",
     "EDIT_BLOCKED": "Lo stato del ciclo di vita del modello non consente questa modifica.",
     "NEEDS_NEW_REVISION": "Avvia una nuova revisione per cambiarlo.",
     "NEEDS_CHANGE_ORDER": "Questo modello cambia solo con un ordine di modifica.",

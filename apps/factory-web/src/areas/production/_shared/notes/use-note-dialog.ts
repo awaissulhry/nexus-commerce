@@ -80,11 +80,13 @@ export function useNoteDialog(api: ApiClient, options: { readonly can: boolean; 
 
   /** Opens the dialog over these records (the caller holds a selection over 100 with its words). */
   const open = useCallback(
-    (targets: NoteTargets, from: NoteFrom) => {
+    // F-SA-230: the sales order's "Ask the supervisor…" writes on the order itself (`on` 'salesOrders'); the work order's on itself.
+    (targets: NoteTargets, from: NoteFrom, on: WriteOn = NEW_DRAFT.on) => {
       writeKey.current = null
       setCheck({ status: 'idle' })
-      setState({ from, targets, draft: NEW_DRAFT, people: { status: 'loading' }, busy: false, problem: null, result: null })
-      readPeople(targets, NEW_DRAFT.on)
+      const draft = on === NEW_DRAFT.on ? NEW_DRAFT : { ...NEW_DRAFT, on }
+      setState({ from, targets, draft, people: { status: 'loading' }, busy: false, problem: null, result: null })
+      readPeople(targets, on)
     },
     [readPeople],
   )

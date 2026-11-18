@@ -25,6 +25,8 @@ import { requestWords, saidIn } from '../words/request-words'
 import { useProductionWords } from '../../../../lib/production/words'
 import { isBatchGroup, leadOf, said, teamOf } from '../requests/model'
 import { FollowUpButton, LiftDialog, RequestReview } from '../requests/view/RequestReview'
+// F-SA-245: a work-order change's decide window.
+import { WorkOrderChangeReview } from '../work-order-changes/view/WorkOrderChangeReview'
 import '../approvals.css'
 
 export type { InboxViewModel, InboxActions } from '../model'
@@ -104,6 +106,8 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
   }
   const searchText = (row: InboxRow) => [kindWords(row), sentenceOf(row), recordOf(row).label, askedBy(row)].join(' ')
   const all = model.rows.items
+  // F-SA-240: the ids a review window walks (‹ ›) — every listed row that opens one here, in the list's order.
+  const reviewIds = useMemo(() => (all ?? []).map(openIdOf).filter((id): id is string => id !== null), [all])
   const shown = useMemo(() => (all ? filterRows(all, controls, searchText) : null), [all, controls.kind, controls.q, controls.changed, locale])
   const kinds = useMemo(() => kindsOf(all ?? []), [all])
 
@@ -148,7 +152,8 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
             text
           )}
           {recheck === 'CHANGED' && <span className="fw-apv-sub is-warning">{t('recheck.changedShort')}</span>}
-          {data.source === 'attention' && <span className="fw-apv-sub">{t('row.ownPage')}</span>}
+          {/* F-SA-245: a work-order change's row opens its window here (not "decided on its own page"). */}
+          {data.source === 'attention' && !id && <span className="fw-apv-sub">{t('row.ownPage')}</span>}
           {data.request && <RequestChips row={data} />}
         </span>
       )
@@ -344,7 +349,7 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
             // F-PR-08 (R-23): after an accepted pause "Lift the hold", after a rush of the floor "Clear rush" — never a generic undo.
             model.notice.followUp || actions?.onDismissNotice ? (
               <span className="fw-apv-tags">
-                {model.notice.followUp && <FollowUpButton followUp={model.notice.followUp} offline={model.offline} busy={model.busy} may={model.notice.followUp.kind === 'lift' ? model.can.lift !== false : model.can.rush !== false} actions={actions} />}
+                {model.notice.followUp && <FollowUpButton followUp={model.notice.followUp} offline={model.offline} busy={model.busy} may={model.notice.followUp.kind === 'lift' ? model.can.lift !== false : model.can.rush !== false} onFollowUp={actions?.onFollowUp} />}
                 {actions?.onDismissNotice && (
                   <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
                     {t('dismiss')}
@@ -427,9 +432,12 @@ function Inbox_({ model, actions, mailSwitch, thread }: { model: InboxViewModel;
         />
       )}
       {model.taskReview && <TaskReview model={model} actions={actions} thread={thread} kindWords={kindWords} />}
-      {/* F-PR-08: a customer's request or batch in the review window; Lift the hold's why. */}
-      {model.requestReview && <RequestReview model={model} actions={actions} />}
-      {model.followUpDialog && <LiftDialog followUp={model.followUpDialog.followUp} busy={model.followUpDialog.busy} problem={model.followUpDialog.problem} actions={actions} />}
+      {/* F-PR-08: a customer's request or batch in the review window; Lift the hold's why. F-SA-240: the window's own props — the
+          inbox's rows are this door's list (the ‹ › arrows walk them, as before). */}
+      {model.requestReview && <RequestReview review={model.requestReview} grains={model.grains} offline={model.offline} busy={model.busy} nav={{ ids: reviewIds, onOpen: actions?.onOpen }} actions={actions?.request} />}
+      {model.followUpDialog && <LiftDialog followUp={model.followUpDialog.followUp} busy={model.followUpDialog.busy} problem={model.followUpDialog.problem} onConfirm={actions?.onLiftConfirm} onClose={actions?.onCloseDialog} />}
+      {/* F-SA-245: a work-order change in its decide window; the inbox's rows are its list too. */}
+      {model.changeReview && <WorkOrderChangeReview review={model.changeReview} prefix={model.prefix} offline={model.offline} busy={model.busy} nav={{ ids: reviewIds, onOpen: actions?.onOpen }} actions={actions?.change} />}
       {/* The rules link for a phone: the band's ⋯ holds it too. */}
       {model.can.rules && controls.view === 'waiting' && shown && shown.length === 0 && !filtered && (
         <Button size="sm" variant="quiet" asChild>

@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { z } from 'zod'
 import { id, instant, output } from '@nexus/factory-domain/core/contracts'
 import { ForbiddenError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
@@ -17,6 +17,9 @@ import { processFiles } from '../../../platform/files/service'
 import { hasSmallPreview, smallPreviewAddress } from '../../../platform/files/thumbs/small'
 import { mainPictureThumbnails } from './main-picture'
 import type { Client } from './store'
+// B-SA-035: the order read's line pictures (the colourway's, else the style's main picture).
+import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { isPictureType } from '@nexus/factory-domain/product/images/rules'
 
 /**
  * B-SA-011 (sales page plan N8, picks P13, P18, R9; 12-lists-board §2.5; review C-12, BW-8): the small pictures of a page of
@@ -166,15 +169,8 @@ export async function recordPictures(caller: CommandCaller, source: PictureSourc
     return { records, styles, thumbnails, files }
   })
 
-  // The store is called outside the read: one presign per distinct file with a small preview, a few at a time (each writes its
-  // own gateway ledger row).
-  const wanted = [...found.files.values()].filter((file) => hasSmallPreview(file))
-  const addresses = new Map<string, { url: string; expiresAt: string }>()
-  for (let at = 0; at < wanted.length; at += PRESIGN_AT_ONCE) {
-    const part = wanted.slice(at, at + PRESIGN_AT_ONCE)
-    const made = await Promise.all(part.map((file) => smallPreviewAddress(processFiles(), caller, { storeAccountId: file.storeAccountId, thumbnailKey: file.thumbnailKey!, contentType: file.contentType, originalName: file.originalName })))
-    part.forEach((file, index) => addresses.set(file.id, { url: made[index]!.url, expiresAt: made[index]!.expiresAt }))
-  }
+  // The store is called outside the read (smallAddresses: one presign per distinct file with a small preview, a few at a time).
+  const addresses = await smallAddresses(caller, [...found.files.values()])
 
   const pictures: SmallPicture[] = []
   for (const record of found.records) {
@@ -198,3 +194,75 @@ export async function recordPictures(caller: CommandCaller, source: PictureSourc
   pictures.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
   return { pictures, asOf: toUtcIso(serverClock.now()) }
 }
+
+// ── B-SA-035 (sales page plan N2, N8, picks P2, P13; 10-order-page §2.1 O2, §2.2 L3, §3 F2) ─────────────────────────────────────
+/** A stored file as the presign needs it. */
+export interface PresignFile {
+  readonly id: string
+  readonly contentType: string
+  readonly originalName: string
+  readonly storeAccountId: string
+  readonly thumbnailKey: string | null
+}
+
+/**
+ * The small preview's address of each file that has one: ONE presign per DISTINCT file, at most 8 at a time (each writes its own
+ * gateway ledger row). Called after the database read, never inside it (the batch routes and the order read share it).
+ */
+export async function smallAddresses(caller: CommandCaller, files: readonly PresignFile[]): Promise<Map<string, { url: string; expiresAt: string }>> {
+  const wanted = [...new Map(files.filter((file) => hasSmallPreview(file)).map((file) => [file.id, file])).values()]
+  const addresses = new Map<string, { url: string; expiresAt: string }>()
+  for (let at = 0; at < wanted.length; at += PRESIGN_AT_ONCE) {
+    const part = wanted.slice(at, at + PRESIGN_AT_ONCE)
+    const made = await Promise.all(part.map((file) => smallPreviewAddress(processFiles(), caller, { storeAccountId: file.storeAccountId, thumbnailKey: file.thumbnailKey!, contentType: file.contentType, originalName: file.originalName })))
+    part.forEach((file, index) => addresses.set(file.id, { url: made[index]!.url, expiresAt: made[index]!.expiresAt }))
+  }
+  return addresses
+}
+
+/** The key of one colour line's picture (a style × colourway). */
+export const linePictureKey = (line: { readonly styleId: string; readonly colourwayId: string }): string => `${line.styleId}:${line.colourwayId}`
+
+/** One colour line's picture: its file as the presign needs it (no address yet). */
+export interface LinePictureFile extends PresignFile {
+  readonly styleId: string
+  readonly colourwayId: string
+}
+
+/**
+ * The picture of each colour line of an order (style × colourway): the colourway's own picture (StyleImage.colourwayId — its
+ * main one first, then by its place in the gallery), else the style's main picture (./main-picture.ts) — an AVAILABLE file a
+ * browser shows (JPEG, PNG, WebP). Its file only for a reader holding files.read over the file's company (the list's thumbnail
+ * rule, mainPictureThumbnails): without it, or without any picture, the line is absent (the part draws its placeholder). Keyed by
+ * linePictureKey. A style an order holds is the customer's own (private label) or of our own collection (sales line checks).
+ */
+export async function linePictureFiles(client: Client, actor: Actor, lines: readonly { readonly styleId: string; readonly colourwayId: string }[]): Promise<Map<string, LinePictureFile>> {
+  const out = new Map<string, LinePictureFile>()
+  if (lines.length === 0 || !holds(actor, FILES_READ)) return out
+  const styleIds = unique(lines.map((line) => line.styleId))
+  const colourwayIds = unique(lines.map((line) => line.colourwayId))
+  const own = await client.styleImage.findMany({
+    where: { styleId: { in: styleIds }, colourwayId: { in: colourwayIds } },
+    select: { styleId: true, colourwayId: true, fileId: true },
+    orderBy: [{ isMain: 'desc' }, { seq: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const mains = await client.styleImage.findMany({ where: { styleId: { in: styleIds }, isMain: true }, select: { styleId: true, fileId: true } })
+  const fileIds = unique([...own.map((row) => row.fileId), ...mains.map((row) => row.fileId)])
+  if (fileIds.length === 0) return out
+  // The files the reader may open: AVAILABLE pictures over a company it reads files of (a shared style's file: no company).
+  const files = await client.storedFile.findMany({
+    where: { AND: [scopeWhere(actor, FILES_READ, { company: { field: 'companyId', nullable: true } }) as Prisma.StoredFileWhereInput, { id: { in: fileIds }, status: 'AVAILABLE' }] },
+    select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true },
+  })
+  const byId = new Map(files.filter((file) => isPictureType(file.contentType)).map((file) => [file.id, file]))
+  for (const line of lines) {
+    const key = linePictureKey(line)
+    if (out.has(key)) continue
+    const colour = own.find((row) => row.styleId === line.styleId && row.colourwayId === line.colourwayId && byId.has(row.fileId))
+    const main = mains.find((row) => row.styleId === line.styleId && byId.has(row.fileId))
+    const file = byId.get((colour ?? main)?.fileId ?? '')
+    if (file) out.set(key, { ...file, styleId: line.styleId, colourwayId: line.colourwayId })
+  }
+  return out
+}
+// ── end B-SA-035 ──

@@ -18,13 +18,16 @@ import { seed as seedSizesDepth } from '../../../../../../packages/factory-db/se
 import { seed as seedStylesDepth } from '../../../../../../packages/factory-db/seed/styles-depth'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
-import { callerFor } from '../../../core/command'
+import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { applyQueued } from '../../../platform/floor-sync/kinds'
 import { fanOut } from '../../../platform/notifications/fan-out'
 import { systemContext } from '../../../platform/outbox/system'
+// B-SA-047: a customer's design change raises a CUSTOMER change request (the accept's command, Sales' module).
+import { designTitleOf } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { raiseCustomerRequestInCommand } from './requests'
 
 /**
  * Change requests and change orders (B-W2b-226; PRD-169, PRD-170, PRD-175, PRD-259, MES-006) through the app's real routes on a
@@ -65,11 +68,15 @@ const MANAGE: Permission[] = [
   'product.routing.view',
   'product.routing.manage',
   'workorders.view',
+  // B-SA-049: a release places the holds its HOLD and REWORK lines ask for.
+  'workorders.hold',
   'files.upload',
   'files.read',
   'threads.read',
   'home.view',
 ] as Permission[]
+/** B-SA-049: every right of the area but holding work orders (a release that holds is refused in words). */
+const MANAGE_NO_HOLD = MANAGE.filter((permission) => permission !== 'workorders.hold')
 const grant = (permissions: Permission[], sites: Grant['sites'] = 'all'): Grant => ({ permissions, companies: 'all', sites, parties: 'all' })
 const office = (actorId: string, permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
 const floorAt = (siteId: string): SessionContext => ({ audience: 'floor', tenantId: T, actorId: newId(), siteId, deviceId: newId(), grants: [grant(['floor.work', 'production.scan'] as Permission[], [siteId])] })
@@ -79,6 +86,8 @@ const SESSIONS: Record<string, SessionContext> = {
   quality: office(PEOPLE.quality, ['product.changes.view', 'product.changes.request', 'product.changes.approve', 'workorders.view', 'home.view'] as Permission[]),
   sales: office(PEOPLE.sales, ['product.changes.view', 'product.changes.request', 'home.view'] as Permission[]),
   viewer: office(newId(), ['product.changes.view'] as Permission[]),
+  // B-SA-049
+  noHold: office(PEOPLE.manager, MANAGE_NO_HOLD),
   floor: floorAt(siteA1),
   floorB1: floorAt(siteB1),
 }
@@ -157,6 +166,9 @@ afterAll(async () => {
 
 let floorRequest = ''
 let customerRequest = ''
+// B-SA-049: the change order's other work in progress (WO-0002 to hold; a draft copy to finish on the old spec).
+let wo2 = ''
+let wo3 = ''
 
 describe('a spec problem from the floor (PRD-259)', () => {
   it('inserts a request of its site it cannot read back; a resend answers the first; the office sees it unnumbered', async () => {
@@ -256,9 +268,20 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
     await ok('manager', 'PATCH', `/product/styles/${jacket2}/revisions/${draft.id}/bom/lines/${line.id}`, { version: draft.version, wastagePct: '9' })
     order = (await ok('manager', 'POST', `/product/change-orders/${order.id}/lines`, { version: order.version, recordType: 'BomLine', recordId: line.id, field: 'wastagePct', before: '5', after: '9', note: 'More leather (made-up).' })).changeOrder
     expect(refusal(await no('manager', 'POST', `/product/change-orders/${order.id}/lines`, { version: order.version, recordType: 'bomLine', recordId: line.id, after: 1 }, 409))).toBe('refusal/LINE_INVALID')
-    order = (await ok('manager', 'PUT', `/product/change-orders/${order.id}/work-in-progress`, { version: order.version, lines: [{ workOrderId: wo1, disposition: 'REWORK' }] })).changeOrder
+    // B-SA-049: one line of each kind that its release carries out — REWORK (hold + task), HOLD (hold), FINISH_OLD (nothing).
+    wo2 = await workOrderOf('SEED-WO-0002')
+    wo3 = newId()
+    await h.db.admin.query('BEGIN')
+    await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+    await h.db.admin.query(`INSERT INTO "WorkOrder" SELECT * FROM jsonb_populate_record(NULL::"WorkOrder", (SELECT to_jsonb(r) || $1::jsonb FROM "WorkOrder" r WHERE r.id = $2::uuid))`, [JSON.stringify({ id: wo3, number: `T-SA049-${run}`, status: 'DRAFT', version: 1 }), wo2])
+    await h.db.admin.query('COMMIT')
+    order = (await ok('manager', 'PUT', `/product/change-orders/${order.id}/work-in-progress`, { version: order.version, lines: [{ workOrderId: wo1, disposition: 'REWORK' }, { workOrderId: wo2, disposition: 'HOLD' }, { workOrderId: wo3, disposition: 'FINISH_OLD' }] })).changeOrder
     expect(order.lines).toHaveLength(1)
-    expect(order.workInProgress).toEqual([expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0001', revision: 1 }), disposition: 'REWORK' })])
+    expect(order.workInProgress).toEqual([
+      expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0001', revision: 1 }), disposition: 'REWORK' }),
+      expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0002' }), disposition: 'HOLD' }),
+      expect.objectContaining({ workOrder: expect.objectContaining({ number: `T-SA049-${run}` }), disposition: 'FINISH_OLD' }),
+    ])
     expect(order.openWorkOrders.map((row: Json) => row.number)).toContain('SEED-WO-0002')
   })
 
@@ -294,6 +317,11 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
   })
 
   it('releases its revision through W1’s release: the old one obsolete, the order released, its requests done; people told', async () => {
+    // B-SA-049 (review F-5): releasing holds WO-0001 and WO-0002 — refused in words to a releaser who may not hold work orders.
+    const refused = await no('noHold', 'POST', `/product/change-orders/${order.id}/release`, { version: order.version }, 409)
+    expect(refusal(refused)).toBe('refusal/RELEASE_HOLDS')
+    expect(refused.message).toContain('SEED-WO-0001')
+    expect((await orderOf(order.id)).status).toBe('APPROVED')
     order = (await ok('manager', 'POST', `/product/change-orders/${order.id}/release`, { version: order.version })).changeOrder
     expect(order).toMatchObject({ status: 'RELEASED', releasedById: PEOPLE.manager, toRevision: { revision: 2, status: 'RELEASED' }, fromRevision: { status: 'OBSOLETE' } })
     expect(order.requestsList.map((row: Json) => row.status)).toEqual(['DONE', 'DONE'])
@@ -306,6 +334,19 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
     expect((await noticesOf('quality')).map((row) => row.messageKey)).toContain('notifications.changes.orderReleased')
     expect((await ok('manager', 'GET', '/product/change-orders?tile=RELEASED_THIS_MONTH')).rows.map((row: Json) => row.id)).toContain(order.id)
     expect(refusal(await no('manager', 'POST', `/product/change-orders/${order.id}/cancel`, { version: order.version, reason: 'Too late' }, 409))).toBe('refusal/ORDER_MOVE')
+    // B-SA-049: each work-in-progress decision carried out — REWORK and HOLD a real production hold (CHANGE_ORDER, the customer reads
+    // "In aggiornamento al nuovo design" / its language), REWORK also a task on its work order; FINISH_OLD nothing.
+    const holds = await admin('SELECT "workOrderId"::text AS wo, kind::text AS kind, "reasonCode" AS reason, status::text AS status, "brandWords" AS words, note FROM "WorkOrderHold" WHERE "workOrderId" = ANY($1::uuid[]) AND "reasonCode" = $2 ORDER BY "workOrderId"', [[wo1, wo2, wo3], 'CHANGE_ORDER'])
+    expect(holds.map((row) => row.wo).sort()).toEqual([wo1, wo2].sort())
+    for (const row of holds) expect(row).toMatchObject({ kind: 'PRODUCTION', status: 'ACTIVE', note: expect.stringContaining(order.number) })
+    expect(holds.every((row) => !String(row.words).includes('SEED-WO') && !String(row.words).includes('ECO-'))).toBe(true)
+    expect((await admin('SELECT id, status::text AS status FROM "WorkOrder" WHERE id = ANY($1::uuid[]) ORDER BY id', [[wo1, wo2]])).every((row) => row.status === 'ON_HOLD')).toBe(true)
+    expect((await one('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [wo3])).status).toBe('DRAFT')
+    const tasks = await admin('SELECT "recordId"::text AS wo, title, status::text AS status, "assigneeId"::text AS assignee FROM "Task" WHERE "recordType" = $1 AND "recordId" = ANY($2::uuid[])', ['WorkOrder', [wo1, wo2, wo3]])
+    expect(tasks.filter((row) => row.title.startsWith('Open the rework'))).toEqual([{ wo: wo1, title: 'Open the rework of SEED-WO-0001 to revision 2', status: 'OPEN', assignee: PEOPLE.manager }])
+    expect(tasks.filter((row) => row.wo === wo2 || row.wo === wo3)).toEqual([])
+    // The production hold reason a release places is a standard one (added to the list when it had none).
+    expect(await one('SELECT code, active FROM "ReasonCode" WHERE "tenantId" = $1 AND list = $2 AND code = $3', [T, 'PRODUCTION_HOLD', 'CHANGE_ORDER'])).toMatchObject({ code: 'CHANGE_ORDER', active: true })
   })
 
   it('cancels a draft with why; a change order needs a released revision', async () => {
@@ -398,3 +439,56 @@ describe('nobody accepts a change request they raised (B-W2b-GF5, G282)', () => 
     expect(accepted).toMatchObject({ status: 'ACCEPTED', decidedById: PEOPLE.manager })
   })
 })
+
+// ── B-SA-047 (sales page plan R3; review BW-2, BW-3): a customer's DESIGN request raises a CUSTOMER change request of its own label ──
+describe('B-SA-047: raised from a customer\'s design change — only its own private label, only its own request (the database holds it)', () => {
+  /** Rows written whole, the database's rules off for them (as an import would). */
+  async function planted(rows: readonly { sql: string; values: unknown[] }[]): Promise<void> {
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+      for (const row of rows) await h.db.admin.query(row.sql, row.values)
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+  }
+  const copyRow = (table: string, from: string, over: Json) => ({ sql: `INSERT INTO "${table}" SELECT * FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM "${table}" r WHERE r.id = $2::uuid))`, values: [JSON.stringify(over), from] })
+
+  it('numbers it from CHANGE_REQUEST and names the request; an own-collection style or another customer\'s request is refused for every login', async () => {
+    // A DESIGN request of Brand Alpha (P1) on SEED-SO-0001's line of SEED-JKT-01 (P1's own label), written with its line.
+    const order = await one('SELECT id, "companyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SO-0001'])
+    const line = await one('SELECT id, "styleId", quantity FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [order.id])
+    const requestId = newId()
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, reason) VALUES ($1, $2, $3, $4, $5, 'DESIGN', 'Move the logo to the left sleeve.')`, [requestId, T, order.companyId, P1, order.id])
+      await h.db.admin.query(`INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity) VALUES ($1, $2, $3, $4, $5, NULL, $6, $6)`, [newId(), T, P1, requestId, line.id, line.quantity])
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+    const caller = callerFor(h.database, { ...SESSIONS.manager!, requestId: newId() } as never)
+    const { result } = await command(caller, { name: 'test.raiseCustomerRequest', input: { requestId } }, (tools) =>
+      raiseCustomerRequestInCommand(tools, { companyId: order.companyId, partyId: P1, styleId: line.styleId, title: designTitleOf('Move the logo to the left sleeve.'), reason: 'Move the logo to the left sleeve.', orderChangeRequestId: requestId }),
+    )
+    expect(result.number).toMatch(/^CR-/)
+    expect(await one('SELECT source::text AS source, "partyId"::text AS party, "orderChangeRequestId"::text AS asked, status::text AS status, title FROM "ChangeRequest" WHERE id = $1', [result.id])).toEqual({ source: 'CUSTOMER', party: P1, asked: requestId, status: 'OPEN', title: 'Customer design change · Move the logo to the left sleeve.' })
+    // The record's door to the order (where the customer's files stay), for a reader of the order only.
+    const { changeRequest } = await ok('manager', 'GET', `/product/change-requests/${result.id}`)
+    expect(changeRequest.fromOrder ?? null).toBeNull()
+    expect((await admin('SELECT action FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2', ['ChangeRequest', result.id])).map((row) => row.action)).toContain('product.changes.raiseRequest')
+
+    // The database (…_order_apply_guards ChangeRequest_order_ask): a style of our own collection never changes from a customer's ask.
+    const own = newId()
+    const beta = newId()
+    await planted([copyRow('Style', line.styleId, { id: own, code: `T-SA047-OWN-${run}`, brandPartyId: null }), copyRow('Party', P1, { id: beta, code: `T-SA047-BETA-${run}`, legalName: 'Brand Beta S.r.l. (made-up)' })])
+    const again = (over: Json) => h.db.admin.query(`INSERT INTO "ChangeRequest" SELECT * FROM jsonb_populate_record(NULL::"ChangeRequest", (SELECT to_jsonb(r) || $1::jsonb FROM "ChangeRequest" r WHERE r.id = $2::uuid))`, [JSON.stringify({ id: newId(), number: `CR-T-${run}-${++serial}`, ...over }), result.id])
+    await expect(again({ styleId: own })).rejects.toThrow(/private label/)
+    // … nor names another customer's request (the reference holds the party).
+    await expect(again({ partyId: beta })).rejects.toThrow(/design change request of its own customer|foreign key/)
+  })
+})
+// ── end B-SA-047 ──

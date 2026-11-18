@@ -363,3 +363,43 @@ export function searchThread(api: ApiClient, record: RecordKey, q: string, signa
   return api.get('/search', { query: { q, type: 'Message', recordType: record.type, recordId: record.id, limit: 20 }, schema: threadHits, signal })
 }
 // ---- end B-TH-288
+
+// ── F-SA-237 (sales page plan N9, P14, R7): a sales order's files from its one walled read (the Files tab and this thread's window) ──
+const orderFileRef = z.object({ type: z.string(), id: z.string(), label: z.string() })
+const orderFileSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  category: z.string().nullable(),
+  contentType: z.string(),
+  sizeBytes: z.number(),
+  versionNo: z.number(),
+  at: z.string(),
+  from: orderFileRef,
+  line: z.object({ id: z.string(), seq: z.number() }).nullable(),
+  audience: z.enum(['CUSTOMER_CAN_SEE', 'OFFICE_ONLY']),
+  bodyData: z.boolean(),
+  alsoOn: z.array(orderFileRef),
+  alsoOnOther: z.number(),
+  inThread: z.object({ messageId: z.string() }).nullable(),
+})
+export const orderFilesSchema = z.object({
+  order: z.object({ id: z.string(), number: z.string() }),
+  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), leftOut: z.number(), measurementsLeftOut: z.number() })),
+  total: z.number(),
+  truncated: z.boolean(),
+})
+
+/** GET /sales/orders/:orderId/files — every file of the order by where it comes from (orders.view + files.read per file). */
+export function readOrderFiles(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<z.infer<typeof orderFilesSchema>> {
+  return api.get(`/sales/orders/${enc(orderId)}/files`, { schema: orderFilesSchema, signal })
+}
+
+const openSchema = z.object({ open: z.object({ mode: z.enum(['inline', 'download']), method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }) })
+
+/** POST /sales/orders/:orderId/files/:fileId/open — ONE of them, found again in the same read (body data: the opening is recorded). */
+export async function openOrderFile(api: ApiClient, orderId: string, fileId: string, mode: 'preview' | 'download'): Promise<{ mode: 'inline' | 'download'; url: string }> {
+  const answer = await api.post(`/sales/orders/${enc(orderId)}/files/${enc(fileId)}/open`, { body: { mode }, schema: openSchema, idempotencyKey: globalThis.crypto.randomUUID() })
+  return { mode: answer.open.mode, url: answer.open.url }
+}
+// ── end F-SA-237

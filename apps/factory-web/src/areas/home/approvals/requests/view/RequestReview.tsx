@@ -10,11 +10,14 @@ import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { RequestCard } from '../../../../../lib/production/view/RequestCard'
 import { useProductionWords } from '../../../../../lib/production/words'
-import { money } from '../../../../sales/quotes/model'
-import { openIdOf } from '../../inbox'
-import { DEPTH_NS, type InboxActions, type InboxViewModel } from '../../model'
+import { money, type Grains } from '../../../../sales/quotes/model'
+import { WithMessages } from '../../../../../record-panels/i18n'
+import { DEPTH_NS } from '../../model'
 import type { BrandRequest } from '../api'
 // F-PR-09: "Decide for <customer>" and "Reverse" on our counter-offer's approval (the page's CustomerOverrideProvider draws them).
+// F-SA-240: a door's notice names the request in words as the inbox does.
+import { requestWords } from '../../words/request-words'
+import type { RequestNotice } from '../use-request-review'
 import { CustomerOverrideSlot } from '../../../../_shared/customer-override/slot'
 import {
   answerHeld,
@@ -31,6 +34,7 @@ import {
   teamOf,
   type CounterDraft,
   type FollowUp,
+  type RequestActions,
   type RequestReviewModel,
 } from '../model'
 
@@ -52,17 +56,46 @@ const typing = (target: EventTarget | null): boolean => {
  * urgent / Accept and rush the floor —, Suggest something else, Refuse (R), each held with its reason before the click.
  * `?open=<batch id>`: the batch's orders (each answered alone from its row) and Accept all / Refuse all, each re-checked first.
  * It fetches nothing (Approvals.tsx and use-request-review load it).
+ * F-SA-240 (sales page plan P5, P24; 14-change-flow §3.5): ONE window, four doors — Home › Approvals, the order page, the thread
+ * card, the customer's Work tab. Its props are the window's own (no host's model): the review, the price grain, offline / busy,
+ * the door's own list the ‹ › arrows walk (`nav`), and the window's actions. Approvals passes its rows; the other doors their own
+ * list through use-request-review-door.ts. It brings its own catalogues, so any office page may mount it.
  */
-export function RequestReview({ model, actions }: { model: InboxViewModel; actions?: InboxActions }) {
-  const review = model.requestReview
-  if (!review) return null
-  return review.as === 'batch' ? <BatchReview model={model} review={review} actions={actions} /> : <OneReview model={model} review={review} actions={actions} />
+// ---- F-SA-240: the window's props, the same from every door ----
+/** The door's own list: the ‹ › arrows walk it (Approvals: its rows; the order page: its waiting requests; the Work tab: the customer's). */
+export interface RequestReviewNav {
+  /** The ids the door lists, in its order (a request's id, or a batch's). */
+  readonly ids: readonly string[]
+  /** Open another id of the list, or close the window (null). None (a design case): no arrows, Close does nothing. */
+  readonly onOpen?: ((id: string | null) => void) | undefined
 }
 
-const navOf = (model: InboxViewModel, id: string, onGo: ((id: string | null) => void) | undefined, noun: string) => {
-  const ids = (model.rows.items ?? []).map(openIdOf).filter((entry): entry is string => entry !== null)
-  return ids.length > 1 && ids.includes(id) && onGo ? { ids, current: id, onGo: (next: string) => onGo(next), noun } : undefined
+export interface RequestReviewProps {
+  /** The request or batch the address opens (null: none). */
+  readonly review: RequestReviewModel | null | undefined
+  /** The reader's grains: the price grain sets a counter's fee. */
+  readonly grains: Pick<Grains, 'price'>
+  readonly offline: boolean
+  /** A write of the host or the window runs. */
+  readonly busy?: boolean
+  readonly nav: RequestReviewNav
+  readonly actions?: RequestActions | undefined
 }
+
+const REVIEW_NAMESPACES = [DEPTH_NS, 'approvals', 'sales'] as const
+
+export function RequestReview(props: RequestReviewProps) {
+  const review = props.review
+  if (!review) return null
+  return <WithMessages namespaces={REVIEW_NAMESPACES}>{review.as === 'batch' ? <BatchReview {...props} review={review} /> : <OneReview {...props} review={review} />}</WithMessages>
+}
+
+const navOf = (nav: RequestReviewNav, id: string, noun: string) => {
+  const ids = nav.ids
+  const onGo = nav.onOpen
+  return ids.length > 1 && ids.includes(id) && onGo ? { ids: [...ids], current: id, onGo: (next: string) => onGo(next), noun } : undefined
+}
+// ---- end F-SA-240
 
 /** The words the customer reads: one field for Accept (optional) and Refuse (required), with their preview. */
 function WordsField({ words, onWords, required }: { words: string; onWords: (value: string) => void; required: boolean }) {
@@ -81,7 +114,7 @@ function WordsField({ words, onWords, required }: { words: string; onWords: (val
 
 // ---- one request -------------------------------------------------------------------------------------------------------------
 
-function OneReview({ model, review, actions }: { model: InboxViewModel; review: Extract<RequestReviewModel, { as: 'request' }>; actions?: InboxActions }) {
+function OneReview({ review, grains, offline, busy = false, nav, actions }: RequestReviewProps & { review: Extract<RequestReviewModel, { as: 'request' }> }) {
   const t = useT('approvals')
   const depth = useT(DEPTH_NS)
   const sales = useT('sales')
@@ -94,9 +127,9 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
   useEffect(() => setWords(review.words), [review.id, review.words])
   const onWords = (value: string) => {
     setWords(value)
-    actions?.request?.onWords?.(value)
+    actions?.onWords?.(value)
   }
-  const state = { offline: model.offline, busy: model.busy }
+  const state = { offline, busy }
   const heldKey = (answer: 'accept' | 'refuse' | 'counter') => (request ? answerHeld(request, answer, state, words) : `${CR}.held.reading`)
   const acceptHeld = heldKey('accept')
   const refuseHeld = heldKey('refuse')
@@ -108,11 +141,11 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
   const dialog = review.dialog
   const accept = (rushFloor: boolean) => {
     if (acceptHeld || dialog) return
-    actions?.request?.onAccept?.(rushFloor)
+    actions?.onAccept?.(rushFloor)
   }
   const refuse = () => {
     if (refuseHeld || dialog) return
-    actions?.request?.onRefuse?.()
+    actions?.onRefuse?.()
   }
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -145,7 +178,7 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
         <Button size="sm" variant="danger-outline" heldReason={refuseHeld ? t(refuseHeld) : null} onClick={refuse} aria-keyshortcuts="r">
           <X size={14} aria-hidden /> {t(`${CR}.refuse`)} <Kbd>R</Kbd>
         </Button>
-        <Button size="sm" heldReason={counterHeldKey ? t(counterHeldKey) : null} onClick={() => !counterHeldKey && !dialog && actions?.request?.onCounter?.()}>
+        <Button size="sm" heldReason={counterHeldKey ? t(counterHeldKey) : null} onClick={() => !counterHeldKey && !dialog && actions?.onCounter?.()}>
           <MessageSquareReply size={14} aria-hidden /> {t(`${CR}.counter.open`)}
         </Button>
         {two ? (
@@ -169,7 +202,7 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
     <>
       <DetailModal
         open
-        onClose={() => actions?.onOpen?.(null)}
+        onClose={() => nav.onOpen?.(null)}
         title={title}
         subtitle={subtitle}
         meta={
@@ -180,10 +213,10 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
             </>
           ) : undefined
         }
-        nav={navOf(model, review.id, actions?.onOpen, depth('review.noun'))}
+        nav={navOf(nav, review.id, depth('review.noun'))}
         loading={loading && !request}
         error={error}
-        onRetry={() => actions?.request?.onRetry?.()}
+        onRetry={() => actions?.onRetry?.()}
         actions={footer}
       >
         {request && input && (
@@ -243,14 +276,14 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
             {request.batch && request.batch.count > 1 && request.batchId && (
               <p className="fw-apv-hint">
                 {t(`${CR}.review.batchLine`, { count: request.batch.count, waiting: request.batch.waiting })}{' '}
-                <Button size="sm" variant="link" inline onClick={() => actions?.onOpen?.(request.batchId)}>
+                <Button size="sm" variant="link" inline onClick={() => nav.onOpen?.(request.batchId)}>
                   <Layers size={12} aria-hidden /> {t(`${CR}.review.openBatch`)}
                 </Button>
               </p>
             )}
             {answering && <WordsField words={words} onWords={onWords} required={false} />}
             {lift && (
-              <Button size="sm" onClick={() => actions?.request?.onLift?.(lift)} heldReason={model.offline ? t(`${CR}.held.offline`) : null}>
+              <Button size="sm" onClick={() => actions?.onLift?.(lift)} heldReason={offline ? t(`${CR}.held.offline`) : null}>
                 {t(`${CR}.followUp.lift`)}
               </Button>
             )}
@@ -264,13 +297,13 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
           </div>
         )}
       </DetailModal>
-      {request && dialog?.kind === 'counter' && <CounterDialog request={request} today={review.today} price={model.grains.price} busy={dialog.busy} problem={dialog.problem} initialNote={words} actions={actions} />}
+      {request && dialog?.kind === 'counter' && <CounterDialog request={request} today={review.today} price={grains.price} busy={dialog.busy} problem={dialog.problem} initialNote={words} actions={actions} />}
     </>
   )
 }
 
 /** "Suggest something else" (a counter-offer the customer answers): a date, a fee (price grain only), our words — at least one. */
-function CounterDialog({ request, today, price, busy, problem, initialNote, actions }: { request: BrandRequest; today: string; price: boolean; busy: boolean; problem: string | null; initialNote: string; actions?: InboxActions }) {
+function CounterDialog({ request, today, price, busy, problem, initialNote, actions }: { request: BrandRequest; today: string; price: boolean; busy: boolean; problem: string | null; initialNote: string; actions?: RequestActions | undefined }) {
   const t = useT('approvals')
   const w = useProductionWords()
   const withPrice = price && request.may.counterWithPrice
@@ -278,18 +311,18 @@ function CounterDialog({ request, today, price, busy, problem, initialNote, acti
   const heldKey = counterHeld(draft, { withPrice, today }) ?? (busy ? `${CR}.held.busy` : null)
   const send = () => {
     if (heldKey) return
-    actions?.request?.onCounterSend?.(draft)
+    actions?.onCounterSend?.(draft)
   }
   const currency = request.cancelFee?.currency ?? null
   return (
     <Modal
       open
-      onClose={() => actions?.request?.onCloseDialog?.()}
+      onClose={() => actions?.onCloseDialog?.()}
       title={t(`${CR}.counter.title`, { order: request.orderNumber })}
       size="sm"
       footer={
         <>
-          <Button onClick={() => actions?.request?.onCloseDialog?.()}>{t(`${CR}.back`)}</Button>
+          <Button onClick={() => actions?.onCloseDialog?.()}>{t(`${CR}.back`)}</Button>
           <Button variant="primary" heldReason={heldKey ? t(heldKey) : null} onClick={send}>
             {t(`${CR}.counter.send`)}
           </Button>
@@ -333,7 +366,7 @@ function CounterDialog({ request, today, price, busy, problem, initialNote, acti
 
 // ---- a batch -----------------------------------------------------------------------------------------------------------------
 
-function BatchReview({ model, review, actions }: { model: InboxViewModel; review: Extract<RequestReviewModel, { as: 'batch' }>; actions?: InboxActions }) {
+function BatchReview({ review, offline, busy = false, nav, actions }: RequestReviewProps & { review: Extract<RequestReviewModel, { as: 'batch' }> }) {
   const t = useT('approvals')
   const depth = useT(DEPTH_NS)
   const sales = useT('sales')
@@ -345,9 +378,9 @@ function BatchReview({ model, review, actions }: { model: InboxViewModel; review
   useEffect(() => setWords(review.words), [review.id, review.words])
   const onWords = (value: string) => {
     setWords(value)
-    actions?.request?.onWords?.(value)
+    actions?.onWords?.(value)
   }
-  const state = { offline: model.offline, busy: model.busy }
+  const state = { offline, busy }
   const waiting = (requests ?? []).filter((request) => request.waitingOn === 'US')
   // Accept all / Refuse all: held while none of the batch may be answered so (each is checked again when read before the answer).
   const heldAll = (answer: 'accept' | 'refuse'): string | null => {
@@ -363,7 +396,7 @@ function BatchReview({ model, review, actions }: { model: InboxViewModel; review
   const dialog = review.dialog
   const open = (answer: 'accept' | 'refuse', rushFloor: boolean) => {
     if ((answer === 'accept' ? acceptHeld : refuseHeld) || dialog) return
-    actions?.request?.onBatch?.(answer, rushFloor)
+    actions?.onBatch?.(answer, rushFloor)
   }
   const error = review.batch.status === 'error' ? sales(review.batch.problem) : review.batch.status === 'not_found' ? t(`${CR}.review.notFound`) : review.batch.status === 'forbidden' ? t(`${CR}.review.forbidden`) : undefined
 
@@ -371,14 +404,14 @@ function BatchReview({ model, review, actions }: { model: InboxViewModel; review
     <>
       <DetailModal
         open
-        onClose={() => actions?.onOpen?.(null)}
+        onClose={() => nav.onOpen?.(null)}
         title={lead ? t(`${CR}.batch.title`, { kind, count: requests!.length }) : t(`${CR}.review.titleUnknown`)}
         subtitle={lead ? lead.party.name : undefined}
         meta={lead ? <Tag tone="info">{t(`${CR}.batch.waiting`, { count: waiting.length, total: requests!.length })}</Tag> : undefined}
-        nav={navOf(model, review.id, actions?.onOpen, depth('review.noun'))}
+        nav={navOf(nav, review.id, depth('review.noun'))}
         loading={review.batch.status === 'loading' && !requests}
         error={error}
-        onRetry={() => actions?.request?.onRetry?.()}
+        onRetry={() => actions?.onRetry?.()}
         actions={
           lead && waiting.length > 0 ? (
             <>
@@ -434,7 +467,7 @@ function BatchReview({ model, review, actions }: { model: InboxViewModel; review
                   </Pill>,
                   formatDateTime(request.askedAt, { locale }),
                   request.waitingOn === 'US' ? (
-                    <Button key="a" size="sm" variant="link" inline onClick={() => actions?.onOpen?.(request.id)}>
+                    <Button key="a" size="sm" variant="link" inline onClick={() => nav.onOpen?.(request.id)}>
                       {t(`${CR}.batch.answerAlone`)}
                     </Button>
                   ) : (
@@ -451,7 +484,7 @@ function BatchReview({ model, review, actions }: { model: InboxViewModel; review
           </div>
         )}
       </DetailModal>
-      {lead && dialog?.kind === 'batch' && <BatchAnswerDialog review={review} kind={kind} words={words} offline={model.offline} actions={actions} />}
+      {lead && dialog?.kind === 'batch' && <BatchAnswerDialog review={review} kind={kind} words={words} offline={offline} actions={actions} />}
     </>
   )
 }
@@ -461,7 +494,7 @@ function BatchReview({ model, review, actions }: { model: InboxViewModel; review
  * Accepted", one answered meanwhile, withdrawn or not ours to answer left out with why —, then answered one by one at the version
  * read (each still refused by the API if it moved in between), and the done screen says what became of each, in our words.
  */
-function BatchAnswerDialog({ review, kind, words, offline, actions }: { review: Extract<RequestReviewModel, { as: 'batch' }>; kind: string; words: string; offline: boolean; actions?: InboxActions }) {
+function BatchAnswerDialog({ review, kind, words, offline, actions }: { review: Extract<RequestReviewModel, { as: 'batch' }>; kind: string; words: string; offline: boolean; actions?: RequestActions | undefined }) {
   const t = useT('approvals')
   const locale = useLocale()
   const dialog = review.dialog
@@ -500,7 +533,7 @@ function BatchAnswerDialog({ review, kind, words, offline, actions }: { review: 
   return (
     <ReviewChangesModal
       open
-      onClose={() => actions?.request?.onCloseDialog?.()}
+      onClose={() => actions?.onCloseDialog?.()}
       title={t(accept ? `${CR}.batch.acceptTitle` : `${CR}.batch.refuseTitle`, { count: current.length, kind })}
       summary={words.trim() ? t(`${CR}.words.preview`, { words: words.trim() }) : t(`${CR}.words.none`)}
       changes={current.map((line) => ({ id: line.requestId, where: line.orderNumber, what: kind, now: t(`${CR}.batch.now`), next: verb, ...(line.customerRef ? { note: t(`${CR}.review.po`, { ref: line.customerRef }) } : {}) }))}
@@ -509,8 +542,8 @@ function BatchAnswerDialog({ review, kind, words, offline, actions }: { review: 
       ackLabel={t(`${CR}.batch.ack`)}
       lead={lead}
       state={state}
-      onSave={() => actions?.request?.onBatchConfirm?.()}
-      onRetry={() => actions?.request?.onBatch?.(dialog.answer, dialog.rushFloor)}
+      onSave={() => actions?.onBatchConfirm?.()}
+      onRetry={() => actions?.onBatch?.(dialog.answer, dialog.rushFloor)}
       doneVerb={accept ? t(`${CR}.batch.doneAccepted`) : t(`${CR}.batch.doneRefused`)}
       size="lg"
     />
@@ -519,24 +552,35 @@ function BatchAnswerDialog({ review, kind, words, offline, actions }: { review: 
 
 // ---- after an accept: Lift the hold (R-23) -----------------------------------------------------------------------------------------
 
-/** "Lift the hold": why (the office's own words), then each work order's pause of this request lifted. */
-export function LiftDialog({ followUp, busy, problem, actions }: { followUp: FollowUp; busy: boolean; problem: string | null; actions?: InboxActions }) {
+/**
+ * "Lift the hold": why (the office's own words), then each work order's pause of this request lifted.
+ * F-SA-240: its own callbacks (Approvals and every other door pass theirs) and its own catalogues.
+ */
+export function LiftDialog(props: { followUp: FollowUp; busy: boolean; problem: string | null; onConfirm?: ((reason: string) => void) | undefined; onClose?: (() => void) | undefined }) {
+  return (
+    <WithMessages namespaces={REVIEW_NAMESPACES}>
+      <LiftDialog_ {...props} />
+    </WithMessages>
+  )
+}
+
+function LiftDialog_({ followUp, busy, problem, onConfirm, onClose }: { followUp: FollowUp; busy: boolean; problem: string | null; onConfirm?: ((reason: string) => void) | undefined; onClose?: (() => void) | undefined }) {
   const t = useT('approvals')
   const [reason, setReason] = useState('')
   const heldKey = liftHeld(reason, busy)
   const go = () => {
     if (heldKey) return
-    actions?.onLiftConfirm?.(reason)
+    onConfirm?.(reason)
   }
   return (
     <Modal
       open
-      onClose={() => actions?.onCloseDialog?.()}
+      onClose={() => onClose?.()}
       title={t(`${CR}.lift.title`)}
       size="sm"
       footer={
         <>
-          <Button onClick={() => actions?.onCloseDialog?.()}>{t(`${CR}.back`)}</Button>
+          <Button onClick={() => onClose?.()}>{t(`${CR}.back`)}</Button>
           <Button variant="primary" heldReason={heldKey ? t(heldKey) : null} onClick={go}>
             {t(`${CR}.followUp.lift`)}
           </Button>
@@ -555,12 +599,75 @@ export function LiftDialog({ followUp, busy, problem, actions }: { followUp: Fol
 }
 
 /** The notice's follow-up button: "Lift the hold" / "Clear rush" instead of a generic undo; held without its right (`may`). */
-export function FollowUpButton({ followUp, offline, busy, may, actions }: { followUp: FollowUp; offline: boolean; busy: boolean; may: boolean; actions?: InboxActions }) {
+// F-SA-240: its own callback (every door passes its own).
+export function FollowUpButton({ followUp, offline, busy, may, onFollowUp }: { followUp: FollowUp; offline: boolean; busy: boolean; may: boolean; onFollowUp?: ((followUp: FollowUp) => void) | undefined }) {
   const t = useT('approvals')
   const heldKey = !may ? `${CR}.followUp.held.${followUp.kind}` : offline ? `${CR}.held.offline` : busy ? `${CR}.held.busy` : null
   return (
-    <Button size="sm" heldReason={heldKey ? t(heldKey) : null} onClick={() => !heldKey && actions?.onFollowUp?.(followUp)}>
+    <Button size="sm" heldReason={heldKey ? t(heldKey) : null} onClick={() => !heldKey && onFollowUp?.(followUp)}>
       {t(followUp.kind === 'lift' ? `${CR}.followUp.lift` : `${CR}.followUp.clearRush`)}
     </Button>
   )
 }
+
+// ---- F-SA-240: what a door other than Home › Approvals draws of an answer — its notice (the request in words, what the answer said
+// beside, "Lift the hold" / "Clear rush") and Lift the hold's why. Home › Approvals keeps its inbox notice (InboxView).
+/** The door's own state of the window (use-request-review-door.ts makes it; a design case may pass one). */
+export interface RequestDoorParts {
+  readonly window: RequestReviewProps
+  readonly notice: RequestNotice | null
+  readonly lift: { readonly followUp: FollowUp; readonly busy: boolean; readonly problem: string | null } | null
+  readonly can: { readonly lift: boolean; readonly rush: boolean }
+  readonly actions?: RequestDoorActions | undefined
+}
+
+export interface RequestDoorActions {
+  readonly onDismiss?: () => void
+  readonly onFollowUp?: (followUp: FollowUp) => void
+  readonly onLiftConfirm?: (reason: string) => void
+  readonly onLiftClose?: () => void
+}
+
+/** The window as a door mounts it: the review window, and Lift the hold's why when it is open. */
+export function RequestDoorWindow({ door }: { door: RequestDoorParts }) {
+  return (
+    <>
+      <RequestReview {...door.window} />
+      {door.lift && <LiftDialog followUp={door.lift.followUp} busy={door.lift.busy} problem={door.lift.problem} onConfirm={door.actions?.onLiftConfirm} onClose={door.actions?.onLiftClose} />}
+    </>
+  )
+}
+
+/** The door's notice after an answer, in the page's one banner place (the host puts it there): the request in words, its follow-up. */
+export function RequestDoorNoticeBanner({ door }: { door: RequestDoorParts }) {
+  return door.notice ? (
+    <WithMessages namespaces={REVIEW_NAMESPACES}>
+      <DoorNotice door={door} notice={door.notice} />
+    </WithMessages>
+  ) : null
+}
+
+function DoorNotice({ door, notice }: { door: RequestDoorParts; notice: RequestNotice }) {
+  const t = useT(DEPTH_NS)
+  const locale = useLocale()
+  const followUp = notice.followUp
+  return (
+    <Banner
+      tone={notice.tone}
+      title={t(notice.key, notice.request ? { ...notice.params, request: requestWords(notice.request, locale, t) } : notice.params)}
+      action={
+        <span className="fw-apv-tags">
+          {followUp && <FollowUpButton followUp={followUp} offline={door.window.offline} busy={door.window.busy ?? false} may={followUp.kind === 'lift' ? door.can.lift : door.can.rush} onFollowUp={door.actions?.onFollowUp} />}
+          {door.actions?.onDismiss && (
+            <Button size="sm" variant="quiet" onClick={door.actions.onDismiss}>
+              {t('dismiss')}
+            </Button>
+          )}
+        </span>
+      }
+    >
+      {notice.lines && notice.lines.length > 0 ? notice.lines.map((line) => said(line, locale)).join(' ') : undefined}
+    </Banner>
+  )
+}
+// ---- end F-SA-240

@@ -924,7 +924,8 @@
     "catalogue_other": "{lines} lines · their PO {ref}",
     "change": {
       "CHANGE": "Changes {order}",
-      "CANCEL": "Cancels {order}"
+      "CANCEL": "Cancels {order}",
+      "DESIGN": "Design change on {order}"
     }
   },
   "replies": {

@@ -88,6 +88,8 @@ function reachesParties(viewer: Actor, permission: Permission, record: { readonl
  *   - an event without a live rule: nothing;
  *   - office: only when can(viewer, rule.permission, { company, site }) (a user limited to some companies or sites sees
  *     only theirs) and, for a user limited to some parties, only when every party the message names is theirs (B-W2b-GF1);
+ *     B-SA-004c: a rule with a second office permission (`also`) is passed through either one, each judged whole with its
+ *     own grants (never the company of one and the customers of the other);
  *   - floor: only an event the rule shows on the floor (`rule.floor`), about the device's own site, and only when
  *     can(viewer, rule.floor, { company, site }): the rule's FLOOR permission, one floor roles hold (B-W2a-F5), never
  *     the office permission (no floor role holds planning.view or quality.holds.view, so asking it closed every tablet);
@@ -104,8 +106,9 @@ export function liveViewFor(message: LiveMessage, viewer: Actor, catalogue: Even
     if (!rule.floor || !viewer.siteId || message.siteId !== viewer.siteId) return null
     if (!can(viewer, rule.floor, record)) return null
   } else if (viewer.audience === 'office') {
-    if (!can(viewer, rule.permission, record)) return null
-    if (!reachesParties(viewer, rule.permission, record, message.partyIds ?? [])) return null
+    // B-SA-004c: the rule's permission, or its second office permission when it names one.
+    const permissions = rule.also ? [rule.permission, rule.also] : [rule.permission]
+    if (!permissions.some((permission) => can(viewer, permission, record) && reachesParties(viewer, permission, record, message.partyIds ?? []))) return null
   } else {
     return null
   }

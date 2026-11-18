@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import type { Actor, Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-SA-004b: the office's live wall.
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { liveMessageFor, liveViewFor } from '@nexus/factory-domain/events/live'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
 // The factory-db seeds are no package export: a test reads them where they live.
@@ -416,3 +420,49 @@ describe('B-W2b-F1: one PPE register entry per return, naming every shipment its
     expect(await read()).toMatchObject({ shipmentIds: [shipments['52'], shipments['54']], version: 2 })
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every return.* event (and a return label's) names its RMA's own customer (`partyId`, from the RMA row the command read; never a
+ * caller's value), so an office person limited to some customers is sent the live changes of their own customers' returns and
+ * never another's.
+ * The commands above: the RMA made, a line changed, the dock's receipt and grades, the decision, cancel and close. Then
+ * what each office person's live screen is sent (events/live.ts liveViewFor, the SSE endpoint's function).
+ */
+describe('live: every return event names its RMA’s customer (B-SA-004b)', () => {
+  type Row = { id: string; type: string; version: number; context: string; tenantId: string; companyId: string | null; siteId: string | null; subject: string; correlationId: string; causationId: string | null; source: string; occurredAt: Date; payload: Json }
+  const envelopeOf = (row: Row): EventEnvelope => ({ eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload })
+  /** A made-up second customer, for a person limited to it. */
+  const BETA = newId()
+  const viewer = (parties: Grant['parties']): Actor => ({ audience: 'office', tenantId: T, grants: [{ permissions: ['sales.returns.view'], companies: 'all', sites: 'all', parties }] })
+  const sent = (row: Row, parties: Grant['parties']) => liveViewFor(liveMessageFor(envelopeOf(row), EVENT_CATALOGUE.get(row.type, row.version))!, viewer(parties), EVENT_CATALOGUE)
+
+  it('each return.* row the commands above wrote carries partyId = the RMA row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE (e.type LIKE 'return.%' OR e.type = 'return_label.changed')
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['return.authorised', 'return.lines_changed', 'return.received', 'return.graded', 'return.decided', 'return.status_changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+
+  it("a person limited to another customer is sent none of P1's return events; one limited to P1 all of them; no party reaches the browser", async () => {
+    const rows = await admin<Row>(
+      `SELECT e.* FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE e."tenantId" = $1 AND e.type LIKE 'return.%' AND r."partyId" = $2 ORDER BY e."occurredAt", e.id`,
+      [T, P1],
+    )
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.filter((row) => sent(row, [BETA]) !== null).map((row) => row.type)).toEqual([])
+    expect(rows.filter((row) => sent(row, [P1]) === null).map((row) => row.type)).toEqual([])
+    expect(rows.filter((row) => sent(row, 'all') === null).map((row) => row.type)).toEqual([])
+    for (const row of rows) {
+      const view = sent(row, [P1])!
+      expect(view).not.toHaveProperty('partyIds')
+      expect(view.fields).not.toHaveProperty('partyId')
+    }
+  })
+})
+// ── end B-SA-004b ──

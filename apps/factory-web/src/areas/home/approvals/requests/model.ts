@@ -261,7 +261,11 @@ export const KNOWN_REQUEST_REFUSALS: ReadonlySet<string> = new Set([
   'COUNTER_AGREED',
   'COUNTER_REFUSED',
   'COUNTER_LAPSED',
-  'COLOUR_IN_WORK',
+  // F-SA-240 (sa-5's B-SA-042): a colourway change is held only once something of the line is CUT (request/COLOUR_CUT; the old
+  // COLOUR_IN_WORK is no longer said), and an accept that leaves pieces cut beyond the new figure needs their outcome
+  // (refusal/EXTRA_OUTCOME, the work-order change's own refusal raised inside the accept).
+  'COLOUR_CUT',
+  'EXTRA_OUTCOME',
   'ADDRESS_GONE',
   'SHIPMENT_PREPARED',
   'NOT_KEPT',
@@ -271,10 +275,11 @@ export const KNOWN_REQUEST_REFUSALS: ReadonlySet<string> = new Set([
 ])
 
 /** A refusal's code from the API's issues: `request/<CODE>` (its last part: `request/shipToAddressId/ADDRESS_GONE`), else null. */
+// F-SA-240: also `refusal/<CODE>` — a refusal of the work-order change an accept proposes in the same command (EXTRA_OUTCOME).
 export function requestRefusalOf(issues: readonly ApiIssue[] | undefined): string | null {
   for (const issue of issues ?? []) {
     const path = issuePath(issue)
-    if (path.startsWith('request/')) return path.split('/').at(-1) ?? null
+    if (path.startsWith('request/') || path.startsWith('refusal/')) return path.split('/').at(-1) ?? null
   }
   return null
 }
@@ -412,3 +417,45 @@ export function heldFollowUpOf(request: Pick<BrandRequest, 'id' | 'kind' | 'stat
   const held = impact.workOrders.filter((workOrder) => workOrder.held)
   return held.length > 0 ? { kind: 'lift', requestId: request.id, workOrders: held.map(({ id, number }) => ({ id, number })) } : null
 }
+
+// ---- F-SA-240 (sales page plan P5, P24; 14-change-flow §3.1): the doors of the ONE review window ------------------------------------
+/**
+ * The window opens from four doors — Home › Approvals (its inbox rows), the order page (its waiting requests: band notice,
+ * Overview, Changes), the order's thread (the ask's card) and the customer's Work tab (its requests) —, each by the same address
+ * word on its own page (`?open=<id>`; the order page `?tab=changes&open=<id>`, the Work tab `?tab=work&open=<id>`), and the ‹ ›
+ * arrows walk the door's own list. Approvals keeps its own host (Approvals.tsx); the other doors use use-request-review-door.ts.
+ */
+
+/** The address word that opens the window on a door's page. */
+export const DOOR_PARAM = 'open'
+
+/** A door's list: the ids it shows in its order (a request alone, or a customer's batch), the batches named among them. */
+export interface RequestDoorList {
+  readonly ids: readonly string[]
+  readonly batches?: readonly string[] | undefined
+}
+
+/** The door's list of a set of requests (the order's, the customer's): those waiting for this reader, a batch of 2+ as one entry. */
+export function doorListOf(requests: readonly BrandRequest[]): { readonly ids: string[]; readonly batches: string[] } {
+  const groups = requestGroupsOf(requests)
+  return { ids: groups.map((group) => group.openId), batches: groups.filter(isBatchGroup).map((group) => group.openId) }
+}
+
+/** What an id the address names opens as when the door lists it (a batch it names as one); null: not listed (asked of the API). */
+export function doorTargetOf(list: RequestDoorList, id: string): 'request' | 'batch' | null {
+  if (list.batches?.includes(id)) return 'batch'
+  return list.ids.includes(id) ? 'request' : null
+}
+
+/**
+ * The door page's address with the window opened on `id` (null: closed): every other word kept (its tab, its scroll stays —
+ * the host replaces the address without scrolling), so Esc / Close returns to the same tab. `search` is the page's own query.
+ */
+export function doorAddress(search: string, id: string | null, param: string = DOOR_PARAM): string {
+  const query = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+  if (id) query.set(param, id)
+  else query.delete(param)
+  const text = query.toString()
+  return text ? `?${text}` : ''
+}
+// ---- end F-SA-240

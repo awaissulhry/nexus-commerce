@@ -444,7 +444,10 @@
     "downloadFailed": "The document could not be downloaded. Try again in a moment.",
     "withdrawn": "This version was replaced by a newer one: open the newest in Documents.",
     "noConfirmation": "No order confirmation is shared for this order yet.",
-    "confirmation": "Order confirmation"
+    "confirmation": "Order confirmation",
+    "filesTitle": "Files of this order",
+    "filesNotFound": "Not found.",
+    "versionsTitle": "Document versions"
   },
   "dialog": {
     "close": "Close",

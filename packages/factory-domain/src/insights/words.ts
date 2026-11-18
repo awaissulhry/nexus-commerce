@@ -182,6 +182,8 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'ORDER_CHANGE_REQUEST.RESUME': '{customer} asks to resume order {number}.',
   'ORDER_CHANGE_REQUEST.SPLIT_SHIPMENT': '{customer} asks to ship what is ready of order {number} first.',
   'ORDER_CHANGE_REQUEST.SAMPLE_ROUND': '{customer} asks for another sample round on order {number}.',
+  // B-SA-046: a design change of some lines.
+  'ORDER_CHANGE_REQUEST.DESIGN': '{customer} asks to change the design of order {number}.',
   'ORDER_CHANGE_REQUEST.BATCH_CHANGE_one': '{customer} asks to change {count} order.',
   'ORDER_CHANGE_REQUEST.BATCH_CHANGE_other': '{customer} asks to change {count} orders.',
   'ORDER_CHANGE_REQUEST.BATCH_CANCEL_one': '{customer} asks to cancel {count} order.',
@@ -196,6 +198,9 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'ORDER_CHANGE_REQUEST.BATCH_SPLIT_SHIPMENT_other': '{customer} asks to ship what is ready of {count} orders first.',
   'ORDER_CHANGE_REQUEST.BATCH_SAMPLE_ROUND_one': '{customer} asks for another sample round on {count} order.',
   'ORDER_CHANGE_REQUEST.BATCH_SAMPLE_ROUND_other': '{customer} asks for another sample round on {count} orders.',
+  // B-SA-046
+  'ORDER_CHANGE_REQUEST.BATCH_DESIGN_one': '{customer} asks to change the design of {count} order.',
+  'ORDER_CHANGE_REQUEST.BATCH_DESIGN_other': '{customer} asks to change the design of {count} orders.',
   'ORDER_CHANGE_REQUEST.AGREED': '{customer} said yes to our counter-offer on order {number}: accept the request to carry it out.',
   'ORDER_CHANGE_REQUEST.LAPSED': 'Our counter-offer to {customer} on order {number} lapsed: answer the request.',
   'ORDER_CHANGE_REQUEST.blocks_ask': 'The customer waits for your answer: accept it, suggest something else or refuse it, with words they read.',
@@ -481,7 +486,7 @@ export function orderChangeRequestWords(facts: { readonly number: string; readon
 // group): a customer's request of any kind, a batch of one kind as one row, a countered one that waits on us again ----------
 
 /** The kinds a customer asks (the schema's OrderChangeRequestKind). */
-export type CustomerRequestKind = 'CHANGE' | 'CANCEL' | 'RUSH' | 'HOLD' | 'RESUME' | 'SPLIT_SHIPMENT' | 'SAMPLE_ROUND'
+export type CustomerRequestKind = 'CHANGE' | 'CANCEL' | 'RUSH' | 'HOLD' | 'RESUME' | 'SPLIT_SHIPMENT' | 'SAMPLE_ROUND' | /* B-SA-046 */ 'DESIGN'
 
 /**
  * A customer's request waiting for us: `state` ASKED (an OPEN request), AGREED (the customer said yes to our counter-offer: we

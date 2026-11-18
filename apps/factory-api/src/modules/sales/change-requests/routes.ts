@@ -1,7 +1,8 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { acceptContract, askContract, impactContract, officeListContract, officeRecordContract, partnerListContract, refuseContract, rulesContract, saveSettingsContract, settingsContract, withdrawContract } from './contract'
+import { acceptContract, applyPlanContract, askContract, impactContract, officeListContract, officeRecordContract, partnerListContract, refuseContract, rulesContract, saveSettingsContract, settingsContract, withdrawContract } from './contract'
+import { applyPlan } from './apply-plan' // B-SA-045
 import { manifest } from './manifest'
 import { acceptRequest, officeList, officeRecord, refuseRequest } from './office'
 import { askImpact, askRequest, partnerList, portalRules, withdrawRequest } from './portal'
@@ -34,6 +35,9 @@ export default defineRoutes('sales-change-requests', manifest, async (app) => {
   app.put('/sales/change-requests/settings', { schema: saveSettingsContract }, async (request) => saveCutoffs(request, request.body, idempotencyKeyFrom(request), appClock(app)))
 
   app.get('/sales/change-requests/:requestId', { schema: officeRecordContract }, async (request) => officeRecord(request, request.params.requestId, appClock(app).now()))
+
+  // B-SA-045: the review window's apply plan (On the floor now, Extra pieces, What happens next), before and after Accept.
+  app.get('/sales/change-requests/:requestId/apply-plan', { schema: applyPlanContract }, async (request) => applyPlan(request, request.params.requestId, appClock(app).now()))
 
   app.post('/sales/change-requests/:requestId/accept', { schema: acceptContract }, async (request) => acceptRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))
 

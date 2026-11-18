@@ -5,13 +5,17 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { AmendLineInput } from '@nexus/factory-domain/sales/amendments/amendments'
 import { cancelFeeFor, type CancelFee } from '@nexus/factory-domain/sales/change-requests/fee'
-import { amendmentLinesOf, answerProblems, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
+import { amendmentLinesOf, answerProblems, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind, type Words } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-PR-27a: a line in another colourway (a new line, the old one closed short).
 import { colourCutWords, colourKeepsTotal, colourLinesOf } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-042 (P6', R1): Accept runs the commercial change at once; the gap to the work orders is proposed in the same command.
-import { CHANGE_WORDS, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces } from '@nexus/factory-domain/order-apply/rules'
+import { CHANGE_WORDS, extraOf as extraOfPlanned, type ExtraOutcome, type PlannedChange } from '@nexus/factory-domain/order-apply/rules'
 import { gapOf, proposeGapsInCommand, storedGapLines, workCellsOf } from '../../production/work-order-changes/propose'
-import { plannedExtra } from '../orders/amend'
+import { plannedGap } from '../orders/amend' // B-SA-045
+// B-SA-047 (R3): a design change accepted only for the customer's own private label, raising the product change request per style.
+import { designHeldOf, designHeldWords, designTitleOf, type DesignHeld } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { ASK_RULES } from '@nexus/factory-domain/sales/change-requests/rules'
+import { raiseCustomerRequestInCommand } from '../../product/changes/requests'
 // B-PR-27b: ship what is ready is accepted here too (the order ships as ready, the first part's date proposed to sales).
 import { ACCEPT_DONE_WORDS, isProductionAccept } from '@nexus/factory-domain/production-brand/accept'
 import { acceptProposals, proposeInCommand, type AcceptProposals } from '../../planning/promise-keep/repromise'
@@ -185,7 +189,7 @@ export async function officeList(caller: CommandCaller, query: ListQuery, now: D
 }
 
 /** The request the office may see (else 404), with its order. */
-async function officeRequest(db: Reader, context: ReturnType<typeof officeContextOf>, requestId: string): Promise<{ row: OfficeRequestRow; order: OrderRow }> {
+export async function officeRequest(db: Reader, context: ReturnType<typeof officeContextOf>, requestId: string): Promise<{ row: OfficeRequestRow; order: OrderRow }> {
   const row = await db.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS })
   const order = row ? await readOrder(db, row.orderId) : null
   if (!row || !order || !mayOn(context, ORDERS_VIEW, order)) throw new NotFoundError('Change request not found.')
@@ -230,6 +234,12 @@ function amendmentOf(row: OfficeRequestRow, cells: readonly AskedCell[], order: 
  * cells are proposed lowered in the same change. Null when every such line is free.
  */
 async function colourCutProblem(db: Reader, tenantId: string, cells: readonly AskedCell[]): Promise<Issue | null> {
+  const words = await colourCutOf(db, tenantId, cells)
+  return words ? { path: 'request/COLOUR_CUT', message: words.en } : null
+}
+
+/** B-SA-045: the same in both languages (the apply plan's "why"). */
+async function colourCutOf(db: Reader, tenantId: string, cells: readonly AskedCell[]): Promise<Words | null> {
   const asked = colourLinesOf(cells).map((colour) => colour.fromLineId)
   if (asked.length === 0) return null
   const made = (await workCellsOf(db, tenantId, asked)).filter((cell) => cell.status !== 'CANCELLED')
@@ -238,8 +248,7 @@ async function colourCutProblem(db: Reader, tenantId: string, cells: readonly As
     if (cut === 0) continue
     const line = await db.salesOrderLine.findUnique({ where: { id: lineId }, select: { colourwayId: true } })
     const colour = line ? await db.colourway.findUnique({ where: { id: line.colourwayId }, select: { code: true, name: true } }) : null
-    const words = colourCutWords(colour?.name || colour?.code || '?', cut)
-    return { path: 'request/COLOUR_CUT', message: words.en }
+    return colourCutWords(colour?.name || colour?.code || '?', cut)
   }
   return null
 }
@@ -270,45 +279,11 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
     // B-PR-26: what accepting does, while it may be accepted (OPEN, or the customer said yes to our counter-offer).
     const accepts = officeAnswersOf({ kind: row.kind as OrderRequestKind, status: row.status as RequestStatus }, await counterStateIn(client, row)).accept
     if (view!.mayAnswer && accepts) {
-      const cells = (await readCells(client, [row.id])).get(row.id) ?? []
-      const problems: Issue[] = []
-      let amendment = null
-      let cancel = null
-      let closes = null
-      if (row.kind === 'SPLIT_SHIPMENT') {
-        // B-PR-27b: ship what is ready changes no line: the order ships as ready, the first part's date goes to sales as a re-promise.
-      } else if (row.kind === 'CANCEL' && cells.length === 0 && order.status === 'PARTLY_SHIPPED') {
-        // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short.
-        const plan = closeShortPlan(order.status, shortLinesOf(await readOrderFacts(client, order)), [])
-        if (Array.isArray(plan)) problems.push(...plan)
-        else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
-      } else if (row.kind === 'CANCEL' && cells.length === 0) {
-        const impact = cancelImpact(await readCancelFacts(client, order, await readOrderFacts(client, order)))
-        cancel = impactView(impact)
-        problems.push(...impact.blocks.map((item) => ({ path: `cancel/${item.code}`, message: item.message })))
-      } else if (row.kind === 'CANCEL') {
-        const plan = closeShortPlan(order.status, shortLinesOf(await readOrderFacts(client, order)), cells.map((cell) => cell.orderLineId))
-        if (Array.isArray(plan)) problems.push(...plan)
-        else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
-      } else {
-        // B-PR-27a, B-SA-042: a line asked in another colourway changes only while nothing of it is cut.
-        const inWork = await colourCutProblem(client, context.tenantId, cells)
-        if (inWork) problems.push(inWork)
-        const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
-        if (body) {
-          const plan = await planAmendment(client, order, order.status, await readOrderFacts(client, order), body, now)
-          if (isIssueList(plan)) problems.push(...plan)
-          else amendment = diffView(plan.diff)
-        }
-        if (row.shipToAddressId) {
-          const problem = await shipToProblem(client, order, row.shipToAddressId)
-          if (problem) problems.push(problem)
-        }
-        if (!body && !row.shipToAddressId) problems.push({ path: 'request', message: 'Nothing is left to change: the order already looks like this.' })
-      }
+      // B-SA-045: the same read as the apply plan's (acceptPreviewOf).
+      const { problems, amendment, cancel, closes, changes } = await acceptPreviewOf(client, context.tenantId, row, order, now)
       // B-SA-042 (R1, Round 4): the extra pieces accepting would leave (cut beyond the new figures), shown before Accept; Accept
       // stays held until their outcome is chosen.
-      const extra = await previewExtra(client, context.tenantId, row, order, cells, closes, now)
+      const extra = extraOfPlanned(changes)
       const workOrders = { extra: extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), needsOutcome: extra.length > 0, words: extra.length > 0 ? CHANGE_WORDS.chooseExtra(extra.reduce((sum, entry) => sum + entry.count, 0)) : null }
       preview = { ok: problems.length === 0, problems, amendment, cancel, closes, workOrders }
     }
@@ -360,25 +335,148 @@ export interface AcceptBody {
   readonly extraOutcome?: ExtraOutcome | null | undefined
 }
 
-/**
- * B-SA-042: the extra pieces accepting would leave, read before Accept: a change by its amendment's plan; a cancel of lines (or of
- * what is left of a partly shipped order) by those lines closed (they want what shipped); a whole cancel by every line wanting none.
- */
-async function previewExtra(db: Reader, tenantId: string, row: OfficeRequestRow, order: OrderRow, cells: readonly AskedCell[], closes: readonly { lineId: string }[] | null, now: Date): Promise<ExtraPieces[]> {
-  if (row.kind === 'SPLIT_SHIPMENT') return []
+// ── B-SA-045 (sales page plan P5, P6', R1; 13-backend B4a): what accepting would do, read before Accept — the record's preview and
+// the apply plan (./apply-plan.ts) read the SAME facts: the problems that hold Accept, the amendment's diff, a cancel's impact, the
+// lines a cancel closes, and the work-order changes the Accept would propose (factory-domain order-apply planChanges, as
+// proposeGapsInCommand runs it at the Accept's end). Nothing is written. ──
+
+/** A cancel's lines closed (or the rest of a partly shipped order). */
+type Closing = { lineId: string; seq: number; closedShortQuantity: number }
+
+export interface AcceptPreview {
+  readonly cells: AskedCell[]
+  readonly problems: Issue[]
+  readonly amendment: ReturnType<typeof diffView> | null
+  readonly cancel: ReturnType<typeof impactView> | null
+  readonly closes: Closing[] | null
+  /** The work-order changes the Accept would propose (their extra pieces: the outcome Accept asks for). */
+  readonly changes: PlannedChange[]
+  /** The problems in words, both languages where the rule has them (else the API's sentence in both): the apply plan's "why". */
+  readonly held: Words[]
+}
+
+export async function acceptPreviewOf(db: Reader, tenantId: string, row: OfficeRequestRow, order: OrderRow, now: Date): Promise<AcceptPreview> {
+  const cells = (await readCells(db, [row.id])).get(row.id) ?? []
+  const lines = await readLines(db, order.id)
+  const problems: Issue[] = []
+  let amendment: AcceptPreview['amendment'] = null
+  let cancel: AcceptPreview['cancel'] = null
+  let closes: Closing[] | null = null
+  let changes: PlannedChange[] = []
+  const known = new Map<string, Words>()
+  if (row.kind === 'SPLIT_SHIPMENT') {
+    // B-PR-27b: ship what is ready changes no line: the order ships as ready, the first part's date goes to sales as a re-promise.
+  } else if (row.kind === 'CANCEL' && cells.length === 0 && order.status === 'PARTLY_SHIPPED') {
+    // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short.
+    const plan = closeShortPlan(order.status, shortLinesOf(await readOrderFacts(db, order)), [])
+    if (Array.isArray(plan)) problems.push(...plan)
+    else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
+  } else if (row.kind === 'CANCEL' && cells.length === 0) {
+    const impact = cancelImpact(await readCancelFacts(db, order, await readOrderFacts(db, order)))
+    cancel = impactView(impact)
+    problems.push(...impact.blocks.map((item) => ({ path: `cancel/${item.code}`, message: item.message })))
+  } else if (row.kind === 'CANCEL') {
+    const plan = closeShortPlan(order.status, shortLinesOf(await readOrderFacts(db, order)), cells.map((cell) => cell.orderLineId))
+    if (Array.isArray(plan)) problems.push(...plan)
+    else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
+  } else if (row.kind === 'CHANGE') {
+    // B-PR-27a, B-SA-042: a line asked in another colourway changes only while nothing of it is cut.
+    const cut = await colourCutOf(db, tenantId, cells)
+    if (cut) {
+      problems.push({ path: 'request/COLOUR_CUT', message: cut.en })
+      known.set('request/COLOUR_CUT', cut)
+    }
+    const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
+    if (body) {
+      const facts = await readOrderFacts(db, order)
+      const plan = await planAmendment(db, order, order.status, facts, body, now)
+      if (isIssueList(plan)) problems.push(...plan)
+      else {
+        amendment = diffView(plan.diff)
+        // The old line of a colourway change is closed short after the amendment (it wants what shipped of it).
+        const coloured = colourLinesOf(cells).filter((colour) => colour.sizes.length > 0).map((colour) => colour.fromLineId)
+        const closing = coloured.length > 0 ? await storedGapLines(db, order, coloured, new Set(coloured)) : []
+        changes = await plannedGap(db, tenantId, plan, facts.lines, closing)
+      }
+    }
+    if (row.shipToAddressId) {
+      const problem = await shipToProblem(db, order, row.shipToAddressId)
+      if (problem) problems.push(problem)
+    }
+    if (!body && !row.shipToAddressId) problems.push({ path: 'request', message: 'Nothing is left to change: the order already looks like this.' })
+  } else if (row.kind === 'DESIGN') {
+    // B-SA-047 (R3): only a style of the customer's own private label takes the change; the order still in work.
+    for (const style of await designStylesOf(db, tenantId, order, cells)) {
+      if (style.held === null) continue
+      const words = designHeldWords(style.held, style.inWork)
+      const path = `request/${style.held}`
+      if (!known.has(path)) {
+        problems.push({ path, message: words.en })
+        known.set(path, words)
+      }
+    }
+    const moved = designMovedOn(order)
+    if (moved) {
+      problems.push({ path: 'request/NOT_ASKABLE', message: moved.en })
+      known.set('request/NOT_ASKABLE', moved)
+    }
+  }
   if (row.kind === 'CANCEL') {
+    // A cancel of lines (or of what is left of a partly shipped order): those lines closed (they want what shipped); a whole
+    // cancel: every line wants none.
     const whole = cells.length === 0 && closes === null
     const lineIds = whole ? undefined : (closes ?? []).map((line) => line.lineId)
-    const lines = await storedGapLines(db, { id: order.id, status: whole ? 'CANCELLED' : order.status }, lineIds, whole ? undefined : new Set(lineIds))
-    return extraOfPlanned(gapOf(lines, await workCellsOf(db, tenantId, lines.map((line) => line.id)), new Map()))
+    const gapLines = await storedGapLines(db, { id: order.id, status: whole ? 'CANCELLED' : order.status }, lineIds, whole ? undefined : new Set(lineIds))
+    changes = gapOf(gapLines, await workCellsOf(db, tenantId, gapLines.map((line) => line.id)), new Map())
   }
-  const lines = await readLines(db, order.id)
-  const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
-  if (!body) return []
-  const facts = await readOrderFacts(db, order)
-  const plan = await planAmendment(db, order, order.status, facts, body, now)
-  return isIssueList(plan) ? [] : plannedExtra(db, tenantId, plan, facts.lines)
+  const held = problems.map((problem) => known.get(problem.path) ?? { en: problem.message, it: problem.message })
+  return { cells, problems, amendment, cancel, closes, changes, held }
 }
+// ── end B-SA-045 ──
+
+// ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): the styles a design change names ──
+
+/** One style a design change names: whether it takes the change (only the customer's own private label) and whether it is in work. */
+export interface DesignStyle {
+  readonly styleId: string
+  readonly code: string
+  readonly name: string
+  /** The company the style is numbered in (null: every company's — the order's then). */
+  readonly companyId: string | null
+  /** Its lines' numbers on the order. */
+  readonly seqs: number[]
+  /** Why it takes no change (null: it does). Another label is never named. */
+  readonly held: DesignHeld | null
+  /** A live work order makes one of its lines (the line's options can no longer change). */
+  readonly inWork: boolean
+}
+
+/** The styles of the lines a design change names, in the order's line order. */
+export async function designStylesOf(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'partyId'>, cells: readonly AskedCell[]): Promise<DesignStyle[]> {
+  const lineIds = [...new Set(cells.map((cell) => cell.orderLineId))]
+  if (lineIds.length === 0) return []
+  const lines = await db.salesOrderLine.findMany({ where: { id: { in: lineIds }, orderId: order.id }, select: { id: true, seq: true, styleId: true }, orderBy: { seq: 'asc' } })
+  const styles = new Map((await db.style.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.styleId))] } }, select: { id: true, code: true, name: true, companyId: true, brandPartyId: true } })).map((style) => [style.id, style]))
+  const work = new Set((await workCellsOf(db, tenantId, lineIds)).filter((cell) => cell.status !== 'CANCELLED').map((cell) => cell.salesOrderLineId))
+  const out: DesignStyle[] = []
+  for (const line of lines) {
+    const known = out.find((entry) => entry.styleId === line.styleId)
+    if (known) {
+      known.seqs.push(line.seq)
+      continue
+    }
+    const style = styles.get(line.styleId)
+    out.push({ styleId: line.styleId, code: style?.code ?? '', name: style?.name ?? '', companyId: style?.companyId ?? null, seqs: [line.seq], held: designHeldOf({ brandPartyId: style?.brandPartyId ?? null }, order.partyId), inWork: false })
+  }
+  return out.map((entry) => ({ ...entry, inWork: lines.some((line) => line.styleId === entry.styleId && work.has(line.id)) }))
+}
+
+/** A design change of an order that moved on (shipped, closed, cancelled): no style change is raised from it any more. */
+function designMovedOn(order: Pick<OrderRow, 'status'>): Words | null {
+  if ((ASK_RULES.DESIGN.statuses as readonly string[]).includes(order.status)) return null
+  return { en: `The order is ${order.status.toLowerCase().replace(/_/g, ' ')} now: refuse the request with a word to the customer instead.`, it: "L'ordine non è più in lavorazione: rifiuta la richiesta con una parola al cliente." }
+}
+// ── end B-SA-047 ──
 
 /** B-PR-27b: what ship what is ready did, as the accept's contract sends it (fix-pr-4: its own arrays, not read-only ones). */
 type SplitDone = {
@@ -415,6 +513,8 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     let orderCancelled = false
     // B-PR-27b: what ship what is ready did.
     let split: SplitDone | null = null
+    // B-SA-047: the product change requests a design change raised (one per style of the customer's own label).
+    const styleChanges: { id: string; number: string; style: { id: string; code: string; name: string } }[] = []
     // B-W2b-F14: a cancel's fee as it stands now (before its lines close), kept on the audit rows and shown in the answer:
     // the request has no column for it, and no money moves.
     let cancelFee: CancelFee | null = null
@@ -454,6 +554,24 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     } else if (row.kind === 'CANCEL') {
       // Some lines: closed short with the request's CANCEL code (nothing more is made or shipped of them; never removed).
       for (const line of (await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: cells.map((cell) => cell.orderLineId) }, later)).closed) touched.add(line.lineId)
+    } else if (row.kind === 'DESIGN') {
+      // B-SA-047 (R3): ONE command — the request ACCEPTED and one product change request per style of the customer's own private
+      // label, each naming the request; a style of our own collection or of another label holds Accept in words (the database
+      // refuses it too); nothing of the order or its work orders changes here — accepting never holds a work order (BW-9: the change
+      // order's work-in-progress lines are decided by a person of every customer); the customer's files stay on the request.
+      const moved = designMovedOn((await readOrder(tx, order.id))!)
+      if (moved) throw new InvalidStateError(moved.en)
+      const styles = await designStylesOf(tx, context.tenantId, order, cells)
+      const stop = styles.find((style) => style.held !== null)
+      if (stop) {
+        const words = designHeldWords(stop.held!, stop.inWork)
+        throw new DomainError('invalid_state', words.en, [{ path: `request/${stop.held}`, message: words.en }])
+      }
+      const words = row.reason ?? ''
+      for (const style of styles) {
+        const raised = await raiseCustomerRequestInCommand(tools, { companyId: style.companyId ?? order.companyId, partyId: row.partyId, styleId: style.styleId, title: designTitleOf(words), reason: words, orderChangeRequestId: requestId })
+        styleChanges.push({ id: raised.id, number: raised.number, style: { id: style.styleId, code: style.code, name: style.name } })
+      }
     } else {
       // The order and its lines as they are, read in this transaction: the amendment locks the order at this version.
       const fresh = (await readOrder(tx, order.id))!
@@ -491,17 +609,17 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       data: { status: 'ACCEPTED', answer: blankToNull(body.answer), answeredAt: tools.now, answeredById: context.actorId, amendmentId, updatedAt: tools.now, version: { increment: 1 } },
       select: { id: true },
     })
-    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit, /* B-PR-26 */ ...(row.status === 'COUNTERED' ? { withCounter: row.counterApprovalId } : {}), ...(partlyShipped ? { closedRest: true } : {}) } })
+    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit, /* B-PR-26 */ ...(row.status === 'COUNTERED' ? { withCounter: row.counterApprovalId } : {}), ...(partlyShipped ? { closedRest: true } : {}), /* B-SA-047 */ ...(styleChanges.length > 0 ? { changeRequestIds: styleChanges.map((change) => change.id) } : {}) } })
     tools.audit({ action: 'orders.changeRequestAccepted', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind, amendmentId, orderCancelled, ...feeAudit } })
-    tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'ACCEPTED', amendmentId, orderCancelled } })
+    tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'ACCEPTED', amendmentId, orderCancelled, /* B-SA-047 */ ...(styleChanges.length > 0 ? { changeRequestIds: styleChanges.map((change) => change.id) } : {}) } })
     // The wall (R7): a mixed work order made before the one-customer rule is named only to people who reach every customer.
     const named = gap.proposed.flatMap((change) => (change.workOrderId ? [change.workOrderId] : []))
     const mixed = new Set((named.length > 0 ? await tx.workOrder.findMany({ where: { id: { in: named }, partyId: null }, select: { id: true } }) : []).map((entry) => entry.id))
     const everyCustomer = reachesEveryParty(actorOf(context), WORKORDERS_VIEW, { companyId: order.companyId })
     const workOrders = { proposed: gap.proposed.map((change) => ({ id: change.id, kind: change.kind, workOrderId: change.workOrderId, number: change.workOrderId && mixed.has(change.workOrderId) && !everyCustomer ? null : change.number })), extra: gap.extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), extraOutcome: gap.extra.length > 0 ? (body.extraOutcome ?? null) : null }
-    return { orderCancelled, cancelFee, split, workOrders }
+    return { orderCancelled, cancelFee, split, workOrders, styleChanges }
   }, { ...COMMAND_SETTINGS, clock })
-  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null, /* B-PR-27b */ split: result.split, /* B-SA-042 */ workOrders: result.workOrders }
+  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null, /* B-PR-27b */ split: result.split, /* B-SA-042 */ workOrders: result.workOrders, /* B-SA-047 */ styleChanges: result.styleChanges }
 }
 
 export async function refuseRequest(caller: CommandCaller, requestId: string, body: { readonly version: number; readonly answer: string }, idempotencyKey: string | undefined, clock: Clock) {

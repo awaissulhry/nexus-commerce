@@ -134,7 +134,7 @@ export async function saveTerms(caller: CommandCaller, quoteId: string, body: Te
     if (issues.length > 0) throw new ValidationError(issues.length === 1 ? issues[0]!.message : 'The delivery terms cannot be saved.', issues)
     await tx.quoteVersion.update({ where: { id: version.id }, data: next, select: { id: true } })
     tools.audit({ action: 'quotes.terms', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { versionId: version.id, incoterm: before.incoterm, incotermPlace: before.incotermPlace, shipComplete: before.shipComplete, acceptanceMode: before.acceptanceMode }, after: { versionId: version.id, ...next } })
-    tools.emit({ type: 'quote.updated', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, fields: [...fields] } })
+    tools.emit({ type: 'quote.updated', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, fields: [...fields], partyId: current.partyId /* B-SA-004b */ } })
   })
 }
 
@@ -163,7 +163,7 @@ export async function saveSchedule(caller: CommandCaller, quoteId: string, lineI
       before: { versionId: version.id, lineId: line.id, seq: line.seq, deliveries: before.map((row) => ({ deliveryDate: day(row.deliveryDate), sizes: sizesOf(row.sizeQuantities), quantity: row.quantity, note: row.note })) },
       after: { versionId: version.id, lineId: line.id, seq: line.seq, deliveries },
     })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
   })
 }
 

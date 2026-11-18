@@ -128,7 +128,7 @@ export async function nameGarment(caller: CommandCaller, returnId: string, lineI
     const changed = await writeGarment(tools, rma, line, { garmentSerial: serial, garmentBatch: batch }, 'OFFICE')
     if (changed) {
       await touchReturn(tools, rma)
-      tools.emit({ type: 'return.garment_named', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: [line.id], via: 'OFFICE' } })
+      tools.emit({ type: 'return.garment_named', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: [line.id], via: 'OFFICE', partyId: rma.partyId /* B-SA-004b */ } })
     }
     return { line: { id: line.id, seq: line.seq, garmentSerial: serial, garmentBatch: batch }, changed }
   })
@@ -160,7 +160,7 @@ export async function fillGarments(caller: CommandCaller, returnId: string, body
     }
     if (filled.length > 0) {
       await touchReturn(tools, rma)
-      tools.emit({ type: 'return.garment_named', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: filled.map((entry) => entry.lineId), via: 'OFFICE' } })
+      tools.emit({ type: 'return.garment_named', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: filled.map((entry) => entry.lineId), via: 'OFFICE', partyId: rma.partyId /* B-SA-004b */ } })
     }
     return { filled, toPick }
   })
@@ -198,7 +198,7 @@ export async function scanGarment(caller: CommandCaller, returnId: string, body:
     let version = rma.version
     if (changed) {
       version = (await touchReturn(tools, rma)).version
-      tools.emit({ type: 'return.garment_named', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: [line.id], via: 'DOCK' } })
+      tools.emit({ type: 'return.garment_named', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: [line.id], via: 'DOCK', partyId: rma.partyId /* B-SA-004b */ } })
     }
     return {
       line: { id: line.id, seq: line.seq, garmentSerial: next.garmentSerial, garmentBatch: next.garmentBatch },
