@@ -1,10 +1,13 @@
 import { z } from 'zod'
-import { defineContract, id, instant, output } from '@nexus/factory-domain/core/contracts'
+import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
+// F-SA-247: the tablet's own device (its station's code) when one work order in hand is asked.
+import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 // B-SA-053: an order change's note for the floor and its kind, read now (STOP while held, else CHECK), never stored.
 import { FLOOR_NOTE_KINDS, floorNoteKindOf } from '@nexus/factory-domain/sales/orders/change-notes'
 import type { CommandCaller } from '../../../core/command'
+import type { FloorContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { systemView } from '../scans/access'
 import { floorOf } from './access'
@@ -37,6 +40,12 @@ import { dispatchWorld } from './world'
  * it on the tablet). `check` is read now, never stored: STOP while the work order is on hold (the hold already refuses its scans),
  * else CHECK (the tablet opens it before the next Start). Whether a tablet showed it, or "Got it" was tapped, stays on the tablet:
  * nothing here records who or which station saw it (R2). A plain note is kind NOTE, check null.
+ *
+ * F-SA-247 (R2; 14-change-flow §5.3 "opens before the next Start (or the next cut) on that work order"): `?workOrderId=` reads the
+ * notes of ONE work order in hand — the bundle on the operation screen, the work order at the cutting table — at the tablet's own
+ * site, whether or not its queue or day lists it (a bundle worked off the plan still opens its note before its Start). Another
+ * site's work order, or no such work order, reads as nothing (never a refusal that would say it exists). Read only, as above:
+ * "Got it" stays on the tablet and nothing here takes it.
  */
 
 export const FLOOR_MESSAGES = Object.freeze({
@@ -68,13 +77,23 @@ const messageView = output({
 const isOrderChange = (row: { readonly authorKind: string; readonly authorName: string | null }): boolean => row.authorKind === 'SYSTEM' && row.authorName === null
 
 export const myMessagesContract = defineContract({
+  // F-SA-247: one work order in hand (the operation and cutting screens, before a Start); left out: my work orders.
+  querystring: input({ workOrderId: id().optional() }),
   response: { 200: output({ asOf: instant(), messages: z.array(messageView) }) },
 })
 
-/** GET /production/dispatch/mine/messages. */
-export async function myWorkMessages(caller: CommandCaller) {
-  const context = floorOf(caller)
-  const now = serverClock.now()
+export interface MyMessagesQuery {
+  readonly workOrderId?: string | undefined
+}
+
+/** The work orders whose notes a tablet reads (id → number), and its station's code (its own comments stay out). */
+interface Reach {
+  readonly numbers: ReadonlyMap<string, string>
+  readonly station: string | null
+}
+
+/** My work orders: what the tablet's station queue holds and what the day names the signed-in person for. */
+async function myWorkOrders(caller: CommandCaller, context: FloorContext, now: Date): Promise<Reach> {
   const queue = await stationDispatch(caller, { material: false })
   const person = await caller.withClient(async (db: Reader) => {
     const site = await siteRowOf(db, context.siteId)
@@ -82,10 +101,27 @@ export async function myWorkMessages(caller: CommandCaller) {
     const world = await dispatchWorld(db, site, businessDate(now, site.timezone), now)
     return world.subject === 'WORKER' ? cardsOfPerson(world, context.actorId).cards.map((card) => ({ id: card.workOrder.id, number: card.workOrder.number })) : []
   })
-  const numbers = new Map([...queue.entries.map((entry) => [entry.workOrder.id, entry.workOrder.number] as const), ...person.map((order) => [order.id, order.number] as const)])
+  return { numbers: new Map([...queue.entries.map((entry) => [entry.workOrder.id, entry.workOrder.number] as const), ...person.map((order) => [order.id, order.number] as const)]), station: queue.target?.code ?? null }
+}
+
+// ---- F-SA-247: one work order in hand, at the tablet's own site (else nothing: never a word that it exists elsewhere) -------------
+async function inHand(caller: CommandCaller, context: FloorContext, workOrderId: string): Promise<Reach> {
+  const station = await caller.withClient(async (db: Reader) => {
+    const device = isUuid(context.deviceId) ? await db.device.findUnique({ where: { id: context.deviceId }, select: { stationId: true } }) : null
+    return device?.stationId ? ((await db.station.findUnique({ where: { id: device.stationId }, select: { code: true } }))?.code ?? null) : null
+  })
+  const order = await systemView(caller).withClient((db: Reader) => db.workOrder.findFirst({ where: { id: workOrderId, siteId: context.siteId }, select: { id: true, number: true } }))
+  return { numbers: new Map<string, string>(order ? [[order.id, order.number]] : []), station }
+}
+// ---- end F-SA-247
+
+/** GET /production/dispatch/mine/messages (F-SA-247: `?workOrderId=`, one work order in hand). */
+export async function myWorkMessages(caller: CommandCaller, query: MyMessagesQuery = {}) {
+  const context = floorOf(caller)
+  const now = serverClock.now()
   const answer = { asOf: toUtcIso(now), messages: [] as z.infer<typeof messageView>[] }
+  const { numbers, station } = query.workOrderId ? await inHand(caller, context, query.workOrderId) : await myWorkOrders(caller, context, now)
   if (numbers.size === 0) return answer
-  const station = queue.target?.code ?? null
   return systemView(caller).withClient(async (db: Reader) => {
     const threads = await db.thread.findMany({ where: { recordType: 'WorkOrder', recordId: { in: [...numbers.keys()] }, siteId: context.siteId, status: 'OPEN' }, select: { id: true, recordId: true } })
     if (threads.length === 0) return answer

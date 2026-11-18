@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { COUNTER_STATES } from '@nexus/factory-domain/sales/change-requests/counter'
 import { ORDER_REQUEST_KINDS, REQUEST_STATUSES } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046b: which pieces a design change is for.
+import { DESIGN_APPLIES_TO } from '@nexus/factory-domain/sales/change-requests/rules'
 // F-SA-241: the apply plan's steps, teams and outcomes; the accept's extra pieces.
 import { APPLY_STEP_KINDS, APPLY_STEP_STATES, APPLY_TEAMS, OUTCOME_NEEDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS, type ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
@@ -57,6 +59,8 @@ export const impactSchema = z.object({
   earliest: z.object({ date: z.string().nullable(), partial: z.boolean(), meetsWanted: z.boolean().nullable(), words }).nullable(),
   notes: z.array(words),
   words,
+  // B-SA-046b: a design change: the pieces not started yet, or also the pieces already made (null or left out: another kind).
+  appliesTo: z.enum(DESIGN_APPLIES_TO).nullable().optional(),
 })
 export type RequestImpact = z.infer<typeof impactSchema>
 

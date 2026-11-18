@@ -36,6 +36,10 @@ import { DATE_ONLY_KEYS, dateOnly } from '../../planning/promise/date-only'
 import { ASK_NOT_OPEN_WORDS, DESIGN_ASK_WORDS } from '../../production-brand/words'
 // B-SA-046: a design change.
 import { designCellsOf, designProblems, designVerdict, isDesignOpen, MAX_DESIGN_FILES, MAX_DESIGN_WORDS, type DesignAsk, type DesignFacts } from './rules'
+// B-SA-046b: which pieces a design change is for.
+import { DEFAULT_DESIGN_APPLIES_TO, DESIGN_APPLIES_TO, DESIGN_APPLIES_WORDS, isDesignAppliesTo } from './rules'
+// B-SA-046c: an accepted request's follow-up on the customer's face.
+import { followUpOf, REQUEST_FOLLOW_UPS } from './rules'
 import { suggestedAnswer } from '../inquiries/production-answer'
 import type { FreezeRuleFacts } from '../order-changes/freeze'
 import { acceptedWithCounter, counterAnswerHeld, counterAnswerOf, counteredWords, counterForReader, counterOutcome, counterPriced, counterProblems, counterQuestion, isCounterable } from './counter'
@@ -775,3 +779,49 @@ describe('B-SA-046: a design change of some lines, open while the customer\'s as
   })
 })
 // ── end B-SA-046 ──
+
+// ── B-SA-046b (14-change-flow §2.4): which pieces a design change is for, kept in the impact (no column of its own) ──
+describe('B-SA-046b: a design change applies to the pieces not started yet, or also to the pieces already made', () => {
+  const L1 = 'a1a1a1a1-0000-4000-8000-000000000001'
+  const lines = [{ id: L1, seq: 10, closedShort: false, stage: 'SEWING' as const }]
+  const facts = { lines, orderStage: 'SEWING' as const, rules: [], cancelFeePct: null, earliest: null }
+
+  it('reads the pieces not started yet when left out, carries the choice, and only on a design change', () => {
+    expect(DESIGN_APPLIES_TO).toEqual(['NOT_STARTED', 'ALSO_MADE'])
+    expect(DEFAULT_DESIGN_APPLIES_TO).toBe('NOT_STARTED')
+    expect(impactOf({ kind: 'DESIGN', cells: [{ lineId: L1, size: null }] }, facts).appliesTo).toBe('NOT_STARTED')
+    expect(impactOf({ kind: 'DESIGN', cells: [{ lineId: L1, size: null }], appliesTo: null }, facts).appliesTo).toBe('NOT_STARTED')
+    expect(impactOf({ kind: 'DESIGN', cells: [{ lineId: L1, size: null }], appliesTo: 'ALSO_MADE' }, facts).appliesTo).toBe('ALSO_MADE')
+    for (const kind of ['CHANGE', 'CANCEL', 'RUSH', 'HOLD'] as const) expect(impactOf({ kind, appliesTo: 'ALSO_MADE' }, facts), kind).not.toHaveProperty('appliesTo')
+  })
+
+  it('the kept impact still holds no number (the database keeps words, codes, dates and yes or no only)', () => {
+    const impact = impactOf({ kind: 'DESIGN', cells: [{ lineId: L1, size: null }], appliesTo: 'ALSO_MADE' }, facts)
+    expect(impactKeepable(impact)).toBe(true)
+    expect(JSON.parse(JSON.stringify(impact))).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE', priced: true })
+  })
+
+  it('says the choice in plain words, the same for every reader, in both languages; a code it does not know is no choice', () => {
+    expect(DESIGN_APPLIES_WORDS.NOT_STARTED).toEqual({ it: 'Vale per i pezzi non ancora iniziati', en: 'For the pieces not started yet' })
+    expect(DESIGN_APPLIES_WORDS.ALSO_MADE).toEqual({ it: 'Vale anche per i pezzi già fatti (la rilavorazione può costare)', en: 'Also for the pieces already made (rework may cost)' })
+    for (const words of Object.values(DESIGN_APPLIES_WORDS)) expect(JSON.stringify(words)).not.toMatch(/\d|€|Brand/)
+    expect(isDesignAppliesTo('ALSO_MADE')).toBe(true)
+    expect(isDesignAppliesTo('EVERYTHING')).toBe(false)
+    expect(isDesignAppliesTo(null)).toBe(false)
+  })
+})
+// ── end B-SA-046b ──
+
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): "Accepted · we are carrying it out" / "Accepted · done" ──
+describe('B-SA-046c: an accepted request is carried out, then done; any other state has no follow-up', () => {
+  it('reads the steps left of the order\'s Still to do as a code, and nothing before the request is accepted', () => {
+    expect(REQUEST_FOLLOW_UPS).toEqual(['CARRYING_OUT', 'DONE'])
+    expect(followUpOf('ACCEPTED', true)).toBe('CARRYING_OUT')
+    expect(followUpOf('ACCEPTED', false)).toBe('DONE')
+    for (const status of ['OPEN', 'COUNTERED', 'REFUSED', 'WITHDRAWN']) {
+      expect(followUpOf(status, true), status).toBeNull()
+      expect(followUpOf(status, false), status).toBeNull()
+    }
+  })
+})
+// ── end B-SA-046c ──

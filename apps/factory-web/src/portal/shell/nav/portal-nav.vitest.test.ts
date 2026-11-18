@@ -8,6 +8,8 @@ import { CAPABILITY_ROLE_KEYS } from '@nexus/factory-domain/auth/partners/kinds'
 import { PORTAL_AREAS as TASK_AREAS, taskArea } from '@nexus/factory-domain/portal/tasks/kinds'
 import { bottomBarLayout } from '@nexus/ui/components/BottomBar/index'
 import { CATALOGUE } from '../../../lib/i18n/messages'
+// B-SA-054b: the address the API hands out for a notice's record.
+import { portalRecordPath } from '@nexus/factory-domain/portal/home/links'
 import { PORTAL_AREAS, PORTAL_PENDING_PERMISSIONS, portalChords, portalNavFor, portalNavLabelKeys, portalNavPermissions, portalPlace, recordPageOf, RECORD_PAGES, type PortalAreaDef, type PortalKind } from './portal-nav'
 
 const everything = () => true
@@ -433,3 +435,23 @@ describe('the Production area and Waiting for you (F-PR-10)', () => {
   })
 })
 // ── end F-PR-10 ──
+
+// ── B-SA-054b (sales page plan R8; 14-change-flow §5): the workshop's notice of an order change opens its own job page ────────────
+describe("B-SA-054b: a workshop's \"Order changed — check quantities\" opens its own job, walled to that workshop", () => {
+  it('the notice\'s /open/SubcontractOrder/<id> takes a workshop person to Jobs › the job; no other kind has a page for it', () => {
+    // The API's link (platform/portal/notifications inbox and mail): the portal's /open/ address of the notice's record.
+    expect(portalRecordPath('WS-DEMO', 'SubcontractOrder', 'j1')).toBe('/p/WS-DEMO/open/SubcontractOrder/j1')
+    // The open page (app/(portal)/p/[party]/open/[type]/[id]) sends the person to the record's own page of their kind.
+    expect(recordPageOf(['SUBCONTRACTOR'], 'SubcontractOrder', 'j1')).toBe('/jobs/j1')
+    for (const kind of ['CUSTOMER', 'SUPPLIER', 'GUEST'] as const) expect(recordPageOf([kind], 'SubcontractOrder', 'j1'), kind).toBeNull()
+    expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]/jobs/[id]/page.tsx'))).toBe(true)
+    expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]/open/[type]/[id]/page.tsx'))).toBe(true)
+  })
+
+  it('only a workshop role reads jobs (the notice\'s readers): every holder of portal.jobs.view is of the SUBCONTRACTOR kind', () => {
+    const readers = PARTNER_ROLE_TEMPLATES.filter((template) => template.permissions.includes('portal.jobs.view' as never))
+    expect(readers.length).toBeGreaterThan(0)
+    for (const template of readers) expect(template.kind, template.key).toBe('SUBCONTRACTOR')
+  })
+})
+// ── end B-SA-054b ──

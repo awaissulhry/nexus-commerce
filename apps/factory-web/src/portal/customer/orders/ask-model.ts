@@ -4,6 +4,8 @@ import { askRefusal, cancellableLines, MAX_NOTE, type AskFacts } from './model'
 // F-SA-246 (B-SA-046): the design change — its limits (the database's) and its body; the order's shared files it may name.
 import { MAX_DESIGN_FILES, MAX_DESIGN_WORDS } from '@nexus/factory-domain/sales/change-requests/rules'
 import type { DesignAskBody, PortalOrderFiles, Words } from './api'
+// B-SA-046b: which pieces a design change is for (the pieces not started yet by default).
+import { DEFAULT_DESIGN_APPLIES_TO, DESIGN_APPLIES_TO, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
 import type { HeldFile } from '../../../lib/request-compose/files'
 
 /**
@@ -117,8 +119,14 @@ export interface AskDraft {
   /** F-SA-246: DESIGN: the lines it is for, and the files already on the order it names (its own uploads are the container's). */
   readonly lineIds: readonly string[]
   readonly fileIds: readonly string[]
+  /** B-SA-046b: DESIGN: the pieces not started yet (the default) or also the pieces already made (rework may cost). */
+  readonly appliesTo?: DesignAppliesTo
 }
-export const EMPTY_ASK: AskDraft = { requestedDate: '', note: '', cells: {}, lineId: '', sampleKind: '', lineIds: [], fileIds: [] }
+export const EMPTY_ASK: AskDraft = { requestedDate: '', note: '', cells: {}, lineId: '', sampleKind: '', lineIds: [], fileIds: [], /* B-SA-046b */ appliesTo: DEFAULT_DESIGN_APPLIES_TO }
+
+/** B-SA-046b: the two choices of a design change, in the dialog's order (the default first), and the one a draft holds. */
+export const APPLIES_TO_CHOICES: readonly DesignAppliesTo[] = DESIGN_APPLIES_TO
+export const appliesToOf = (draft: Pick<AskDraft, 'appliesTo'>): DesignAppliesTo => draft.appliesTo ?? DEFAULT_DESIGN_APPLIES_TO
 
 /** The kinds that take a date (RUSH's need-by date, the first part's date). */
 export const takesDate = (kind: ProductionAskKind): boolean => kind === 'RUSH' || kind === 'SPLIT_SHIPMENT'
@@ -254,11 +262,14 @@ export const scanningUploadsOf = (held: readonly Pick<HeldFile, 'state' | 'probl
 export const cleanedUploads = <T extends Pick<HeldFile, 'state' | 'fileId'>>(held: readonly T[], available: ReadonlySet<string>): T[] =>
   held.map((file) => (file.state === 'scanning' && file.fileId && available.has(file.fileId) ? { ...file, state: 'sent' as const } : file))
 
-/** What Send sends for a design change: the order's own lines in its order, their words, the files named (each once). */
-export function designBodyOf(rules: Pick<ChangeRules, 'lines'>, draft: Pick<AskDraft, 'lineIds' | 'note' | 'fileIds'>, uploaded: readonly string[]): DesignAskBody {
+/**
+ * What Send sends for a design change: the order's own lines in its order, their words, the files named (each once). B-SA-046b: and
+ * which pieces it is for, when the draft says it (the dialog always does; left out, the API reads the pieces not started yet).
+ */
+export function designBodyOf(rules: Pick<ChangeRules, 'lines'>, draft: Pick<AskDraft, 'lineIds' | 'note' | 'fileIds' | 'appliesTo'>, uploaded: readonly string[]): DesignAskBody {
   const lineIds = rules.lines.filter((line) => draft.lineIds.includes(line.lineId)).map((line) => line.lineId)
   const fileIds = [...new Set([...draft.fileIds, ...uploaded])]
-  return { kind: 'DESIGN', lineIds, note: draft.note.trim(), ...(fileIds.length > 0 ? { fileIds } : {}) }
+  return { kind: 'DESIGN', lineIds, note: draft.note.trim(), ...(fileIds.length > 0 ? { fileIds } : {}), ...(draft.appliesTo ? { appliesTo: draft.appliesTo } : {}) }
 }
 
 /**

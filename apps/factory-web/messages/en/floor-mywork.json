@@ -151,7 +151,10 @@
     "repairHere_one": "{count} bundle to repair at this station",
     "repairHere_other": "{count} bundles to repair at this station",
     "repairSite_one": "{count} bundle to repair at the site",
-    "repairSite_other": "{count} bundles to repair at the site"
+    "repairSite_other": "{count} bundles to repair at the site",
+    "orderChanges": "Order changes",
+    "orderChangesCount_one": "{count} order change to read",
+    "orderChangesCount_other": "{count} order changes to read"
   },
   "messages": {
     "title": "Messages on your work orders",
@@ -180,6 +183,16 @@
       "title": "This message is no longer open",
       "body": "Go back to the list."
     }
+  },
+  "orderChange": {
+    "kind": "Order change",
+    "on": "Order change on",
+    "title": "Order change on {number}",
+    "readFirst": "Read this before you start.",
+    "gotIt": "Got it",
+    "line": "Order change on this work order: read it before you start.",
+    "open": "Read the order change",
+    "stop": "This work order is on hold: stop and ask your team leader."
   },
   "call": {
     "said": "Help called: material for {number} · Op {seq}.",

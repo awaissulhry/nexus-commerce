@@ -14,6 +14,8 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { earliestAskOf, earliestOf, impactAskOf, impactFrom, impactLinesOf, readImpactFacts } from '../../sales/change-requests/impact'
 import { officeViews } from '../../sales/change-requests/office'
 import { dayOrNull, feeLinesOf, feeView, impactOut, keptImpactOf, LIVE_EVENTS, OFFICE_REQUEST_COLUMNS, readCells, readCounterStates, readCutoffs, type OfficeRequestRow, type Reader } from '../../sales/change-requests/store'
+// B-SA-046b: the pieces a design change is for, as kept at Send.
+import { keptAppliesToOf } from '../../sales/change-requests/store'
 import { readLines, readOrder } from '../../sales/orders/store'
 import { officeContextOf } from '../work-orders/access'
 import { workOrderWhere } from '../work-orders/scope'
@@ -211,7 +213,8 @@ export async function brandRequestImpact(caller: CommandCaller, requestId: strin
     const cells = (await readCells(client, [row.id])).get(row.id) ?? []
     const requestedDate = dayOrNull(row.requestedDate)
     // The impact now, as the customer's Send read it (the customer's own freeze rules, its cells' stages, planning's date only).
-    const ask = impactAskOf(kind, cells, { requestedDate, shipToAddressId: row.shipToAddressId })
+    // B-SA-046b: a design change reads now for the pieces the customer chose (kept in its impact at Send).
+    const ask = impactAskOf(kind, cells, { requestedDate, shipToAddressId: row.shipToAddressId, appliesTo: keptAppliesToOf(row.impact) })
     const reads = await readImpactFacts(client, order, goods.map((line) => line.id))
     const planning = earliestAskOf(kind, cells, requestedDate, goods.filter((line) => line.closedShortQuantity === null).map((line) => line.id))
     const earliest = planning ? await earliestOf(client, { tenantId: context.tenantId, requestId: context.requestId, order, lines: reads.lines, ask: planning, now }) : null

@@ -16,6 +16,8 @@ import {
 } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-046 (sales page plan P7, R3; review C-10): the design change, and the kinds that keep one request waiting between them.
 import { CHANGE_OR_CANCEL, DESIGN_KIND, dayWords, designCellsOf, designProblems, designVerdict, isDesignOpen } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046b: which pieces a design change is for (kept in the impact shown at Send: no column of its own).
+import { DEFAULT_DESIGN_APPLIES_TO, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
 import { DESIGN_ASK_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { contentWalledFor } from '../../../platform/files/content-wall'
 // B-SA-048 (sales page plan P21; review F-6): the customer's ask is also their own message in the order's conversation.
@@ -61,6 +63,13 @@ import { earliestAskOf, earliestOf, freezeOf, impactAskOf, impactFrom, impactLin
 import { feeView, impactOut } from './store'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { partnerOrder, portalReader, type PortalReader } from '../portal-orders/access'
+// B-SA-046c: an accepted request's follow-up, from the order's own Still to do (read as the system: it names no work order).
+import { followUpOf, type RequestFollowUp } from '@nexus/factory-domain/sales/change-requests/rules'
+import { systemContext } from '../../../platform/outbox/system'
+import { stillToDoOf } from '../orders/still-to-do'
+// B-SA-046d: the lines' small pictures, the portal's own walled read (never an office route).
+import { linePictureKey, portalLinePictureFiles, smallAddresses } from '../../product/images/small-pictures'
+import { systemCallerOf } from '../../../platform/files/files'
 import { readLines, type PortalLine, type PortalOrderRow } from '../portal-orders/store'
 import {
   addressesOf,
@@ -247,6 +256,15 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
   const feeLines = feeLinesOf(facts.lines)
   const fees = new Map(cancelFeeFor(feeLines, facts.lines.map((line) => line.id), facts.cancelFeePct, facts.order.currency).lines.map((line) => [line.lineId, line.fee]))
   const whole = cancelFeeFor(feeLines, null, facts.cancelFeePct, facts.order.currency)
+  // B-SA-046d: each goods line's small picture — read in the tenant's scope after the partner read found the order, through the
+  // content wall (product/images/small-pictures portalLinePictureFiles); the small previews presigned after the read, as the system.
+  const goods = facts.lines.filter((line) => line.kind !== 'FEE')
+  const pictureFiles = await reader.inTenant((client) => portalLinePictureFiles(client, reader.session.partyId, goods))
+  const pictureAddresses = pictureFiles.size > 0 ? await smallAddresses(systemCallerOf(request)(reader.session.tenantId), [...pictureFiles.values()]) : new Map<string, { url: string; expiresAt: string }>()
+  const pictureOf = (line: { readonly kind: string; readonly styleId: string; readonly colourwayId: string }) => {
+    const file = line.kind === 'FEE' ? undefined : pictureFiles.get(linePictureKey(line))
+    return file ? { small: pictureAddresses.get(file.id) ?? null } : null
+  }
   return {
     asOf: toUtcIso(now),
     order: {
@@ -288,6 +306,7 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
         samples: ASK_SAMPLE_KINDS.map((sampleKind) => ({ sampleKind, verdict: askLineVerdict('SAMPLE_ROUND', ruleLine, verdictFactsOf(facts, 'SAMPLE_ROUND'), sampleKind) })),
         // B-PR-27a: the other colourways of its style a change may ask it in (a made-to-measure line: none).
         colourways: line.kind === 'SIZE_GRID' ? (facts.colourways.get(line.id) ?? []).map((entry) => ({ id: entry.id, code: entry.code, name: entry.name, sizes: [...entry.sizes] })) : [],
+        picture: pictureOf(line), // B-SA-046d
       }
     }),
     // B-PR-25: no fee at all for a reader without prices (the Production role): neither the amounts nor the percent.
@@ -321,6 +340,8 @@ export interface AskBody {
   readonly colourways?: readonly { readonly lineId: string; readonly colourwayId: string }[] | undefined
   /** B-SA-046: a design change: files of the order or its lines, shared with the customer (uploaded first). */
   readonly fileIds?: readonly string[] | undefined
+  /** B-SA-046b: a design change: the pieces not started yet (left out: the default) or also the pieces already made. */
+  readonly appliesTo?: DesignAppliesTo | undefined
 }
 
 // B-PR-25: a production ask's refusal by the order's state names its code too (body/NOT_OPEN, body/WAITING, …).
@@ -343,6 +364,8 @@ function shapeProblems(body: AskBody): Issue[] {
   if (body.kind !== 'CHANGE' && (body.colourways ?? []).length > 0) issues.push({ path: 'body/colourways', message: 'Only a change asks another colourway.' })
   // B-SA-046: files only on a design change; a design change names lines and its words, nothing else.
   if (body.kind !== DESIGN_KIND && (body.fileIds ?? []).length > 0) issues.push({ path: 'body/fileIds', message: 'Only a design change sends files.' })
+  // B-SA-046b: which pieces it is for: only a design change says it.
+  if (body.kind !== DESIGN_KIND && body.appliesTo !== undefined) issues.push({ path: 'body/appliesTo', message: 'Only a design change says which pieces it is for.' })
   if (body.kind === DESIGN_KIND) {
     if ((body.cells ?? []).length > 0) issues.push({ path: 'body/cells', message: 'A design change names lines, not sizes.' })
     if ((body.requestedDate ?? null) !== null || (body.shipToAddressId ?? null) !== null) issues.push({ path: 'body', message: 'A design change asks no date and no address.' })
@@ -379,6 +402,8 @@ interface PreparedAsk {
   readonly sampleKind: AskSampleKind | null
   /** B-SA-046: a design change's files (none on any other kind). */
   readonly fileIds: readonly string[]
+  /** B-SA-046b: a design change: which pieces it is for (null on every other kind). */
+  readonly appliesTo?: DesignAppliesTo | null
 }
 
 /** B-SA-046: a design change's facts as the domain's rules read them. */
@@ -391,7 +416,7 @@ function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
     const ask = { note: body.note, lineIds: body.lineIds, fileIds: body.fileIds }
     const problems = designProblems(ask, designFactsOf(facts))
     if (problems.length > 0) throw refused(problems)
-    return { cells: designCellsOf(ask, facts.rule), requestedDate: null, shipToAddressId: null, reasonCode: null, reason: blankToNull(body.note), sampleKind: null, fileIds: [...(body.fileIds ?? [])] }
+    return { cells: designCellsOf(ask, facts.rule), requestedDate: null, shipToAddressId: null, reasonCode: null, reason: blankToNull(body.note), sampleKind: null, fileIds: [...(body.fileIds ?? [])], /* B-SA-046b */ appliesTo: body.appliesTo ?? DEFAULT_DESIGN_APPLIES_TO }
   }
   if (isProductionKind(body.kind)) {
     const ask = { kind: body.kind, requestedDate: body.requestedDate ?? null, reasonCode: body.reasonCode ?? null, note: body.note, cells: body.cells, lineId: body.lineId ?? null, sampleKind: body.sampleKind ?? null }
@@ -420,7 +445,7 @@ function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
 async function impactOfAsk(reader: PortalReader, facts: AskFacts, kind: OrderRequestKind, prepared: PreparedAsk, now: Date, requestId: string): Promise<Impact> {
   const goods = facts.lines.filter((line) => line.kind !== 'FEE')
   const open = goods.filter((line) => line.closedShortQuantity === null).map((line) => line.id)
-  const ask = impactAskOf(kind, prepared.cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId })
+  const ask = impactAskOf(kind, prepared.cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId, /* B-SA-046b */ appliesTo: prepared.appliesTo ?? null })
   const planning = earliestAskOf(kind, prepared.cells, prepared.requestedDate, open)
   return reader.inTenant(async (client) => {
     const reads = await readImpactFacts(client, facts.order, goods.map((line) => line.id))
@@ -809,11 +834,31 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   }
 }
 
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): "Accepted · we are carrying it out" / "Accepted · done" on the customer's face ──
+/**
+ * The follow-up of the order's accepted requests: the order's Still to do (the one computation from the records, B-SA-050) read in
+ * the tenant's scope as the SYSTEM — which reaches no work order, so nothing is named — and only whether a step carries each request
+ * out leaves here, as a code. Nothing is read when no request of the order is accepted.
+ */
+async function followUpsOf(reader: PortalReader, order: PortalOrderRow, rows: readonly { readonly id: string; readonly status: string }[]): Promise<Map<string, RequestFollowUp | null>> {
+  const accepted = rows.filter((row) => row.status === 'ACCEPTED')
+  if (accepted.length === 0) return new Map()
+  const open = await reader.inTenant(async (client) => {
+    const facts = await client.salesOrder.findUnique({ where: { id: order.id }, select: { id: true, companyId: true, partyId: true, reapprovalNeededAt: true } })
+    if (!facts) return new Set<string>()
+    const still = await stillToDoOf(client, systemContext(reader.session.tenantId, newId()), facts)
+    return new Set(still.rows.flatMap((row) => (row.requestId ? [row.requestId] : [])))
+  })
+  return new Map(accepted.map((row) => [row.id, followUpOf(row.status, open.has(row.id))]))
+}
+// ── end B-SA-046c ──
+
 async function partnerRequestView(request: FastifyRequest, reader: PortalReader, order: PortalOrderRow, requestId: string) {
   const row = await request.withClient((client) => client.orderChangeRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS }))
   if (!row || row.orderId !== order.id) throw new NotFoundError('Request not found.')
   const { cells, facts } = await viewFacts(request, reader, order, [row])
-  return { ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId }
+  const followUps = await followUpsOf(reader, order, [row]) // B-SA-046c
+  return { ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId, followUp: followUps.get(row.id) ?? null }
 }
 
 export async function partnerList(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
@@ -821,9 +866,10 @@ export async function partnerList(app: FastifyInstance, request: FastifyRequest,
   const order = await partnerOrder(request, reader, orderId)
   const rows = await request.withClient((client) => client.orderChangeRequest.findMany({ where: { orderId: order.id }, select: REQUEST_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 }))
   const { cells, facts } = await viewFacts(request, reader, order, rows)
+  const followUps = await followUpsOf(reader, order, rows) // B-SA-046c
   return {
     asOf: toUtcIso(now),
-    items: rows.map((row) => ({ ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId })),
+    items: rows.map((row) => ({ ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId, followUp: followUps.get(row.id) ?? null })),
     live: { events: [...LIVE_EVENTS] },
   }
 }

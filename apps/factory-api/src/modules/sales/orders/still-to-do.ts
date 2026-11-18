@@ -33,6 +33,10 @@ import type { OrderRow, Reader } from './store'
  *   TELL_WORKSHOP          an open subcontract order of a work order an accepted change changed — closed once a notice is
  *                          written to the workshop on it after the change (B-SA-054)                         waits on PLANNER
  *
+ * `requestId` names the customer's request a row carries out (B-SA-046c: also a work-in-progress task of the change order a DESIGN
+ * request's product change request is carried by); the portal reads only whether one is left per request ("Accepted · we are
+ * carrying it out" / "Accepted · done"), never the rows.
+ *
  * THE WALL: only this order's own records are read (its requests, its WorkOrderChanges, the work orders of its own lines); a work
  * order the reader does not reach (another customer's, a mixed one made before the one-customer rule) reads "a work order", with no
  * door and no number, and is counted in `workOrdersLeftOut`. A read: nothing is written.
@@ -167,6 +171,10 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   const items = ownIds.length > 0 ? await db.changeOrderItem.findMany({ where: { kind: 'WORK_IN_PROGRESS', workOrderId: { in: ownIds }, disposition: { in: [...TASK_DISPOSITIONS] }, changeOrder: { is: { status: 'RELEASED' } } }, select: { changeOrderId: true, workOrderId: true, disposition: true, changeOrder: { select: { toRevisionId: true } } } }) : []
   const taskIds = items.map((item) => wipTaskIdOf(item.changeOrderId, item.workOrderId!))
   const tasks = new Map((taskIds.length > 0 ? await db.task.findMany({ where: { id: { in: taskIds }, status: OPEN_TASK }, select: { id: true, assigneeId: true, createdAt: true } }) : []).map((task) => [task.id, task]))
+  // B-SA-046c: a task a design change's change order left carries that customer's request (its product change request names it),
+  // so the customer reads "we are carrying it out" until the rework or scrap is done.
+  const changeOrderIds = [...new Set(items.map((item) => item.changeOrderId))]
+  const carried = new Map((designIds.length > 0 && changeOrderIds.length > 0 ? await db.changeRequest.findMany({ where: { changeOrderId: { in: changeOrderIds }, orderChangeRequestId: { in: designIds } }, select: { changeOrderId: true, orderChangeRequestId: true } }) : []).flatMap((row) => (row.changeOrderId && row.orderChangeRequestId ? [[row.changeOrderId, row.orderChangeRequestId] as const] : [])))
   const revisionIds = [...new Set(items.flatMap((item) => (item.changeOrder.toRevisionId ? [item.changeOrder.toRevisionId] : [])))]
   const revisions = new Map((revisionIds.length > 0 ? await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true } }) : []).map((row) => [row.id, row.revision]))
   for (const item of items) {
@@ -181,7 +189,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
       since: toUtcIso(task.createdAt),
       waitingOn: 'PLANNER',
       mayAct: workOrder !== null && (task.assigneeId === context.actorId || reachesWorkOrder(actor, WORKORDERS_MANAGE, workOrder)),
-      requestId: null,
+      requestId: carried.get(item.changeOrderId) ?? null, // B-SA-046c
     })
   }
 

@@ -18,6 +18,8 @@ import type { BrandRequest } from '../api'
 // F-PR-09: "Decide for <customer>" and "Reverse" on our counter-offer's approval (the page's CustomerOverrideProvider draws them).
 // F-SA-240: a door's notice names the request in words as the inbox does.
 import { requestWords } from '../../words/request-words'
+// B-SA-046b: which pieces the customer's design change is for, in the same words for every reader.
+import { DESIGN_APPLIES_WORDS } from '@nexus/factory-domain/sales/change-requests/rules'
 import type { RequestNotice } from '../use-request-review'
 import { CustomerOverrideSlot } from '../../../../_shared/customer-override/slot'
 // F-SA-241: the window's new parts (On the floor now, Extra pieces, What happens next, Done · What happens next) for every door; its
@@ -279,8 +281,10 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
             )}
             <RequestCard face="office" request={input} />
             {impact?.now.blocked && <Banner tone="warning" title={t(`${CR}.impact.blocked`)} />}
-            {impact && (impact.now.notes.length > 0 || impact.now.earliest || impact.now.pricedWords) && (
+            {impact && (impact.now.notes.length > 0 || impact.now.earliest || impact.now.pricedWords || impact.now.appliesTo) && (
               <ul className="fw-apv-list">
+                {/* B-SA-046b: a design change says first which pieces the customer asked it for. */}
+                {impact.now.appliesTo && <li>{said(DESIGN_APPLIES_WORDS[impact.now.appliesTo], locale)}</li>}
                 {impact.now.earliest && <li>{said(impact.now.earliest.words, locale)}</li>}
                 {impact.now.pricedWords && <li>{said(impact.now.pricedWords, locale)}</li>}
                 {impact.now.notes.map((note, index) => (

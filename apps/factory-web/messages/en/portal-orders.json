@@ -205,7 +205,11 @@
     "cell": "Line {seq} · {size}: {old} → {new}",
     "date": "Wanted by {date}",
     "shipTo": "Deliver to {address}",
-    "note": "Your note: {note}"
+    "note": "Your note: {note}",
+    "followUp": {
+      "CARRYING_OUT": "Accepted · we are carrying it out",
+      "DONE": "Accepted · done"
+    }
   },
   "progress": {
     "title": "Production progress",
@@ -908,6 +912,15 @@
       "linePieces_other": "{count} pieces ordered",
       "what": "What to change",
       "whatHint": "Say it in your words: the more precise, the faster we can answer.",
+      "appliesTo": {
+        "label": "Which pieces",
+        "NOT_STARTED": "Apply to pieces not started yet",
+        "ALSO_MADE": "Also pieces already made (rework may cost)",
+        "hint": {
+          "NOT_STARTED": "The pieces already made stay as they are.",
+          "ALSO_MADE": "The pieces already made are reworked to the new design: we tell you the cost with our answer."
+        }
+      },
       "files": "Files",
       "filesHint": "Up to {max} files: from your device, or files already on the order.",
       "checked": "Files are checked before we open them.",

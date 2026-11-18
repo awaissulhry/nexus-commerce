@@ -20,6 +20,8 @@ import type { Client } from './store'
 // B-SA-035: the order read's line pictures (the colourway's, else the style's main picture).
 import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { isPictureType } from '@nexus/factory-domain/product/images/rules'
+// B-SA-046d: the portal's own read of its lines' pictures goes through the content wall.
+import { contentWalledFor } from '../../../platform/files/content-wall'
 
 /**
  * B-SA-011 (sales page plan N8, picks P13, P18, R9; 12-lists-board §2.5; review C-12, BW-8): the small pictures of a page of
@@ -237,8 +239,20 @@ export interface LinePictureFile extends PresignFile {
  * linePictureKey. A style an order holds is the customer's own (private label) or of our own collection (sales line checks).
  */
 export async function linePictureFiles(client: Client, actor: Actor, lines: readonly { readonly styleId: string; readonly colourwayId: string }[]): Promise<Map<string, LinePictureFile>> {
+  if (lines.length === 0 || !holds(actor, FILES_READ)) return new Map<string, LinePictureFile>()
+  // The files the reader may open: AVAILABLE pictures over a company it reads files of (a shared style's file: no company).
+  return pictureFilesOf(client, lines, async (fileIds) =>
+    client.storedFile.findMany({
+      where: { AND: [scopeWhere(actor, FILES_READ, { company: { field: 'companyId', nullable: true } }) as Prisma.StoredFileWhereInput, { id: { in: [...fileIds] }, status: 'AVAILABLE' }] },
+      select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true },
+    }),
+  )
+}
+
+/** The pictures of colour lines, the files read by `filesOf` (who may open which): the colourway's own first, else the style's main. */
+async function pictureFilesOf(client: Client, lines: readonly { readonly styleId: string; readonly colourwayId: string }[], filesOf: (fileIds: readonly string[]) => Promise<PresignFile[]>): Promise<Map<string, LinePictureFile>> {
   const out = new Map<string, LinePictureFile>()
-  if (lines.length === 0 || !holds(actor, FILES_READ)) return out
+  if (lines.length === 0) return out
   const styleIds = unique(lines.map((line) => line.styleId))
   const colourwayIds = unique(lines.map((line) => line.colourwayId))
   const own = await client.styleImage.findMany({
@@ -249,11 +263,7 @@ export async function linePictureFiles(client: Client, actor: Actor, lines: read
   const mains = await client.styleImage.findMany({ where: { styleId: { in: styleIds }, isMain: true }, select: { styleId: true, fileId: true } })
   const fileIds = unique([...own.map((row) => row.fileId), ...mains.map((row) => row.fileId)])
   if (fileIds.length === 0) return out
-  // The files the reader may open: AVAILABLE pictures over a company it reads files of (a shared style's file: no company).
-  const files = await client.storedFile.findMany({
-    where: { AND: [scopeWhere(actor, FILES_READ, { company: { field: 'companyId', nullable: true } }) as Prisma.StoredFileWhereInput, { id: { in: fileIds }, status: 'AVAILABLE' }] },
-    select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true },
-  })
+  const files = await filesOf(fileIds)
   const byId = new Map(files.filter((file) => isPictureType(file.contentType)).map((file) => [file.id, file]))
   for (const line of lines) {
     const key = linePictureKey(line)
@@ -266,3 +276,29 @@ export async function linePictureFiles(client: Client, actor: Actor, lines: read
   return out
 }
 // ── end B-SA-035 ──
+
+// ── B-SA-046d (sales page plan R6; 14-change-flow §2.4 "which lines (with picture)"): the portal's OWN walled read of its lines' pictures ─
+/**
+ * The picture of each colour line of a customer's OWN order, for the portal (never an office route: BW-8). Read in the tenant's
+ * scope after the partner read found the order (the caller's job), with the office's choice of picture (the colourway's own,
+ * else the style's main) and three walls of its own:
+ *
+ *   the style    only a style of this customer's own label or of our own collection (an order holds no other: sales line checks;
+ *                held here too) — a line of any other style has no picture
+ *   the content  the content wall (platform/files/content-wall contentWalledFor, the one rule of every portal read of files): a
+ *                picture whose content, or its source's, names another customer is left out, uncounted
+ *   the bytes    only the SMALL preview's address leaves (~320 px, the stripped copy: no EXIF, no position), presigned by the caller
+ *                with smallAddresses as the tenant's system; never the original, never an id the portal could open
+ */
+export async function portalLinePictureFiles(client: Client, partyId: string, lines: readonly { readonly styleId: string; readonly colourwayId: string }[]): Promise<Map<string, LinePictureFile>> {
+  if (lines.length === 0) return new Map<string, LinePictureFile>()
+  const styleIds = unique(lines.map((line) => line.styleId))
+  const allowed = new Set((await client.style.findMany({ where: { id: { in: styleIds }, OR: [{ brandPartyId: null }, { brandPartyId: partyId }] }, select: { id: true } })).map((row) => row.id))
+  const own = lines.filter((line) => allowed.has(line.styleId))
+  return pictureFilesOf(client, own, async (fileIds) => {
+    const files = await client.storedFile.findMany({ where: { id: { in: [...fileIds] }, status: 'AVAILABLE' }, select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true } })
+    const walled = files.length > 0 ? await contentWalledFor(client, partyId, files.map((file) => file.id)) : new Set<string>()
+    return files.filter((file) => !walled.has(file.id))
+  })
+}
+// ── end B-SA-046d ──

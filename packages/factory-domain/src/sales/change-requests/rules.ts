@@ -72,6 +72,19 @@ export const REQUEST_STATUS_WORDS: Readonly<Record<RequestStatus, Words>> = Obje
   COUNTERED: { it: 'Controproposta: in attesa della vostra risposta', en: 'Our counter-offer: waiting for your answer' },
 })
 
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): what an accepted request's customer reads while we carry it out ──
+/**
+ * An accepted request, on the customer's face: CARRYING_OUT while the order's Still to do (modules/sales/orders/still-to-do, the
+ * one computation from the records) holds a step that carries it out, DONE once none does. A code only: never a step, a work
+ * order, a team, a name or a count — the customer reads "Accepted · we are carrying it out" / "Accepted · done".
+ */
+export const REQUEST_FOLLOW_UPS = ['CARRYING_OUT', 'DONE'] as const
+export type RequestFollowUp = (typeof REQUEST_FOLLOW_UPS)[number]
+
+/** The follow-up of one request: null unless accepted. */
+export const followUpOf = (status: string, stepsOpen: boolean): RequestFollowUp | null => (status !== 'ACCEPTED' ? null : stepsOpen ? 'CARRYING_OUT' : 'DONE')
+// ── end B-SA-046c ──
+
 // ---- B-PR-23 (production plan, schema wave 4/5; review fixes R-14, R-50): every kind a request may be ------------------------
 
 /**
@@ -1063,6 +1076,24 @@ export const MAX_DESIGN_FILES = 10
  */
 export const isDesignOpen = (limits: AskLimits): boolean => limits.productionAskKinds.includes(DESIGN_KIND)
 
+// ── B-SA-046b (14-change-flow §2.4 "apply to pieces not started yet (default) or also pieces already made (rework may cost)") ──
+/**
+ * Which pieces a design change is for: the pieces not started yet (the default), or also the pieces already made (they would be
+ * reworked: it may cost). No column of its own (the wave holds none): it is kept in the impact the customer saw at Send
+ * (OrderChangeRequest.impact `appliesTo`, a code: the database's check takes words and codes, never a number).
+ */
+export const DESIGN_APPLIES_TO = ['NOT_STARTED', 'ALSO_MADE'] as const
+export type DesignAppliesTo = (typeof DESIGN_APPLIES_TO)[number]
+export const DEFAULT_DESIGN_APPLIES_TO: DesignAppliesTo = 'NOT_STARTED'
+export const isDesignAppliesTo = (value: unknown): value is DesignAppliesTo => typeof value === 'string' && (DESIGN_APPLIES_TO as readonly string[]).includes(value)
+
+/** The choice in plain words, the same for every reader (the office's window, the request's card). */
+export const DESIGN_APPLIES_WORDS: Readonly<Record<DesignAppliesTo, Words>> = Object.freeze({
+  NOT_STARTED: { it: 'Vale per i pezzi non ancora iniziati', en: 'For the pieces not started yet' },
+  ALSO_MADE: { it: 'Vale anche per i pezzi già fatti (la rilavorazione può costare)', en: 'Also for the pieces already made (rework may cost)' },
+})
+// ── end B-SA-046b ──
+
 /** A design change as the customer sends it (one order). */
 export interface DesignAsk {
   /** What should change, in their words (required). */
@@ -1071,6 +1102,8 @@ export interface DesignAsk {
   readonly lineIds?: readonly string[] | undefined
   /** Files of the order (0 to 10, each once): checked against the order's own files by the API. */
   readonly fileIds?: readonly string[] | undefined
+  /** B-SA-046b: which pieces it is for; left out: the pieces not started yet. */
+  readonly appliesTo?: DesignAppliesTo | null | undefined
 }
 
 export interface DesignFacts {

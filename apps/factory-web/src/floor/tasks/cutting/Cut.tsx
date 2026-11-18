@@ -50,6 +50,9 @@ import {
 import type { AnywayModel } from './view/AnywayDialog'
 import { kindsWords } from './view/check-words'
 import { CutView, unitWord, wordsOf, type CutAction, type CutRefusalModel, type CutStage, type CutViewModel, type HideCardModel, type LastCut, type WorkOrderChip } from './view/CutView'
+// F-SA-247: an order change opens before the next cut on the work order at the table, once per tablet.
+import { useOrderChangeGate } from '../mywork/use-order-change-gate'
+import { OrderChangeGate } from '../mywork/view/OrderChangeGate'
 
 /**
  * The live SCR-094 (`/floor/cut`): the cutting table's work order (scanned or picked; it stays for the visit), then one
@@ -288,6 +291,8 @@ export function FloorCut() {
   )
 
   const workOrderId = view?.workOrder.id ?? null
+  // F-SA-247: an order change on the work order at the table opens before its next cut, once per tablet ("Got it" is never sent).
+  const orderGate = useOrderChangeGate({ api, online, workOrderIds: workOrderId ? [workOrderId] : [], enabled: allowed && me?.permissions.includes('floor.work') === true })
   const entry = hide && workOrderId ? (hide.workOrders.find((order) => order.id === workOrderId) ?? null) : null
   const cells: CutCell[] = entry?.cells ?? []
   const pending = workOrderId ? pendingSets(queueSnapshot.items, workOrderId) : new Map<string, number>()
@@ -562,6 +567,8 @@ export function FloorCut() {
       case 'addSet':
         // B-W2b-110: a card that stops takes no set before the lead's signature; a photo the site asks for comes first.
         if (stops || photoMissing || !picked || !maySet(sizes, picked)) return feedback('warning')
+        // F-SA-247: a CHECK order change not "got" here opens first; after Got it this set is cut as tapped.
+        if (workOrderId && !orderGate.before([workOrderId], () => void onAction({ type: 'addSet' }))) return
         {
           const next = addSet(draft, picked)
           setDraft(next)
@@ -815,5 +822,11 @@ export function FloorCut() {
       }
     : { frame, stage: 'workOrder', noPermission: true }
 
-  return <CutView model={model} onFrame={onFrame} onAction={(action) => void onAction(action)} camera={zxingCamera} />
+  return (
+    <>
+      <CutView model={model} onFrame={onFrame} onAction={(action) => void onAction(action)} camera={zxingCamera} />
+      {/* F-SA-247: the order change before the next cut on this work order. */}
+      <OrderChangeGate open={orderGate.open} onGotIt={() => { feedback('success'); orderGate.gotItNow() }} onBack={orderGate.close} />
+    </>
+  )
 }

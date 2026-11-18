@@ -78,6 +78,9 @@ import { firstPieceHolds, firstPieceLifted, withFirstPiece, type FirstPieceFlag 
 import { useFirstPieceLive } from './use-first-piece'
 import { handInstructions, readInstructionParts, shownFlag, startOpensInstruction } from './instructions'
 import { TASK_ROUTES } from '../routes'
+// F-SA-247: an order change on the bundle's work order opens before the next Start, once per tablet ("Got it" never sent).
+import { useOrderChangeGate } from '../mywork/use-order-change-gate'
+import { fetchWorkOrderNotes } from '../mywork/api'
 import { NO_WORK, OperationView, type CountsStep, type DoneLine, type LastStrip, type OperationAction, type OperationStep, type Work } from './view/OperationView'
 import type { OverrideModel } from './view/OverrideDialog'
 
@@ -123,6 +126,8 @@ export function FloorOperation() {
   const { frame, onFrame } = store.frame('tile.operation', { showHome: true })
   const { me, api, online, queue, queueSnapshot, sessionEnded, device } = store
   const allowed = Boolean(me?.permissions.includes('production.scan'))
+  // F-SA-247: the work order's notes are a floor.work read (every floor role that scans holds it).
+  const mayNotes = Boolean(me?.permissions.includes('floor.work'))
   const mayAdd = Boolean(me?.permissions.includes('production.extraops.add'))
   // What the tablet kept about a bundle speaks of "you": it never reaches the next person on the tablet.
   if (me && me.worker.id !== WORK_PERSON) {
@@ -197,6 +202,12 @@ export function FloorOperation() {
   )
   useFirstPieceLive(firstPieceCard, api, online, onFirstPiece)
 
+  // F-SA-247: the bundle in hand's work order — its newest order change, read with the bundle, live and kept for the visit. The gate
+  // stands only at a Start: a bundle running or paused here is never interrupted (Resume, Pause and Finish never ask it).
+  const handCard = step.kind === 'counts' || step.kind === 'refused' ? step.card : step.kind === 'guard' || step.kind === 'pause' || step.kind === 'pieces' || step.kind === 'note' ? step.from.card : null
+  const orderGate = useOrderChangeGate({ api, online, workOrderIds: handCard ? [handCard.workOrder.id] : [], enabled: allowed && mayNotes })
+  const startNow = useRef<(from: CountsStep) => void>(() => undefined)
+
   /** The rest of the bundle at this operation: read while online (a read that fails leaves that part unknown), else what the tablet kept. */
   const readWork = useCallback(
     async (card: BundleCard, operation: CardOperation): Promise<Work> => {
@@ -207,7 +218,8 @@ export function FloorOperation() {
         return kept.instruction ? { ...kept, instruction: shownFlag(kept.instruction, person) } : kept
       }
       // B-W2b-232: the instruction in force and the newer-spec banner are read beside them (and kept for Spec & instructions).
-      const [state, check, steps, instruction] = await Promise.all([fetchTiming(api, card.bundle.code, operation.id), fetchCheck(api, card.bundle.code, operation.id), fetchSteps(api, card.bundle.code, operation.id), readInstructionParts(api, { code: card.bundle.code, workOrderId: card.workOrder.id, operationId: operation.id, online, workerId: person })])
+      // F-SA-247: and the work order's notes (kept for the visit), so its order change is known before a quick Start.
+      const [state, check, steps, instruction] = await Promise.all([fetchTiming(api, card.bundle.code, operation.id), fetchCheck(api, card.bundle.code, operation.id), fetchSteps(api, card.bundle.code, operation.id), readInstructionParts(api, { code: card.bundle.code, workOrderId: card.workOrder.id, operationId: operation.id, online, workerId: person }), mayNotes ? fetchWorkOrderNotes(api, card.workOrder.id) : null])
       if ([state, check, steps].some((answer) => !answer.ok && answer.problem.kind === 'signedOut') || instruction.signedOut) void sessionEnded()
       const work: Work = {
         ...NO_WORK,
@@ -221,7 +233,7 @@ export function FloorOperation() {
       WORK.keep(key, work)
       return work
     },
-    [api, online, person, sessionEnded],
+    [api, online, person, sessionEnded, mayNotes],
   )
 
   const openOperation = useCallback(
@@ -573,6 +585,12 @@ export function FloorOperation() {
   const members = () => (crew.current.length >= 2 ? { memberIds: crew.current.filter((id) => id !== me?.worker.id) } : {})
 
   const startWork = async (from: CountsStep) => {
+    // F-SA-247: a CHECK order change not "got" on this tablet opens first; after Got it the same bundle's Start goes on (if still on screen).
+    const again = () => {
+      const now = shownStep.current
+      if (now.kind === 'counts' && now.card.bundle.id === from.card.bundle.id && now.operation.id === from.operation.id) startNow.current(now)
+    }
+    if (!orderGate.before([from.card.workOrder.id], again)) return
     // B-W2b-232 (FI9:01, MES-110): a new instruction version opens before this person's Start, once; Back returns to the bundle.
     if (startOpensInstruction(from.work?.instruction, person)) {
       handInstructions({ code: from.card.bundle.code, operationId: from.operation.id, from: 'start', workerId: person, flag: from.work?.instruction ?? null })
@@ -586,6 +604,8 @@ export function FloorOperation() {
     feedback(sent.answer?.qualification ? 'warning' : 'success')
     setStep(next)
   }
+
+  startNow.current = (from) => void startWork(from)
 
   const resumeWork = async (from: CountsStep) => {
     const timing = from.work?.timing
@@ -1150,6 +1170,16 @@ export function FloorOperation() {
         if (step.kind !== 'counts') return
         handInstructions({ code: step.card.bundle.code, operationId: step.operation.id, from: 'operation', workerId: person })
         return router.push(TASK_ROUTES.instructions)
+      // F-SA-247: the order change's line opens it to read; Got it marks it on this tablet only (nothing is sent); Back keeps the bundle.
+      case 'orderChange': {
+        const note = handCard ? (orderGate.notes[handCard.workOrder.id] ?? null) : null
+        return note ? orderGate.show(note) : undefined
+      }
+      case 'orderChangeGotIt':
+        feedback('success')
+        return orderGate.gotItNow()
+      case 'orderChangeBack':
+        return orderGate.close()
     }
   }
 
@@ -1219,6 +1249,9 @@ export function FloorOperation() {
         done: doneLine,
         pauseReasons,
         mayAdd,
+        // F-SA-247
+        orderChange: handCard ? { note: orderGate.notes[handCard.workOrder.id] ?? null, got: orderGate.gotIt.includes(orderGate.notes[handCard.workOrder.id]?.id ?? '') } : null,
+        orderGate: orderGate.open,
         leave: leave && pending ? { bundleCode: pending.card.bundle.code, operationSeq: pending.operation.seq, scrap: scrapOf(pending.counts), rework: reworkOf(pending.counts) } : leave && step.kind === 'correct' ? { bundleCode: step.target.bundleCode, operationSeq: step.target.operation.seq, scrap: scrapOf(step.counts), rework: reworkOf(step.counts) } : null,
       }}
       onFrame={onFrame}

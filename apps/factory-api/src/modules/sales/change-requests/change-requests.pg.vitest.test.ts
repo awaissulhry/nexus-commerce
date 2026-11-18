@@ -29,6 +29,10 @@ import { applyPlan } from './apply-plan'
 // B-SA-048: the ask as the customer's own message; the request's thread points at the order's conversation.
 import { readThread } from '../../../platform/threads/threads'
 import { askMessageText } from './portal'
+// B-SA-046b: the office's impact read of a request (what the customer saw at Send, and the same read now).
+import { brandRequestImpact } from '../../production/brand-requests/read'
+// B-SA-046c: the planner's "Left as is" closes the work-order change an accepted request left.
+import { declineChange } from '../../production/work-order-changes/apply'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -834,7 +838,159 @@ describe('B-SA-046: a design change of some lines, asked from the portal while t
     expect(told.every((row) => row.party === P1 && row.messageKey === 'portal.order.design_received' && row.anchor === `change-request:${asked.body.request.id}`)).toBe(true)
   })
 })
+
+// ── B-SA-046b (14-change-flow §2.4): which pieces a design change is for — kept in the impact shown at Send, no column of its own ──
+describe('B-SA-046b: a design change applies to the pieces not started yet, or also to the pieces already made, kept with what they saw', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the impact before Send says which pieces; left out it reads the pieces not started yet; the kept impact holds the code', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ cut: 2 })
+    const preview = (body: Json) => browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests/impact`, { kind: 'DESIGN', note: 'Rework the logo on the made pieces too.', lineIds: [design.line10], ...body })
+    expect((await preview({})).body.impact).toMatchObject({ kind: 'DESIGN', appliesTo: 'NOT_STARTED' })
+    expect((await preview({ appliesTo: 'ALSO_MADE' })).body.impact).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE', priced: true })
+
+    const asked = await designAsk(design.order, { note: 'Rework the logo on the made pieces too.', lineIds: [design.line10], appliesTo: 'ALSO_MADE' })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    expect(asked.body.request.impact).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE' })
+    // No new column: the code rides in the impact JSON the database already checks (words, codes, dates and yes or no; no number).
+    const stored = await one(`SELECT impact->>'appliesTo' AS "appliesTo", "reasonCode" FROM "OrderChangeRequest" WHERE id = $1`, [asked.body.request.id])
+    expect(stored).toEqual({ appliesTo: 'ALSO_MADE', reasonCode: null })
+    // The customer's list reads it back.
+    const mine = await ok(browsers.buyer, `/portal/sales-orders/${design.order}/change-requests`)
+    expect(mine.items.find((item: Json) => item.id === asked.body.request.id).impact).toMatchObject({ appliesTo: 'ALSO_MADE' })
+  })
+
+  it("the office reads the customer's choice, kept and now (the read now never falls back to the default)", async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ cut: 1 })
+    const asked = await designAsk(design.order, { note: 'Also the pieces already sewn.', lineIds: [design.line10], appliesTo: 'ALSO_MADE' })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const read = (await brandRequestImpact(office(), asked.body.request.id, h.clock.now())) as Json
+    expect(read.kept).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE' })
+    expect(read.now).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE' })
+  })
+
+  it('only a design change says which pieces; an unknown choice is refused in words; other kinds read null', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const cancel = await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME', appliesTo: 'ALSO_MADE' }, { headers: { 'idempotency-key': `design-${newId()}` } })
+    expect(cancel.status).toBe(400)
+    expect(cancel.body.error.issues.map((issue: Json) => issue.path)).toContain('body/appliesTo')
+    const unknown = await designAsk(design.order, { note: 'Move the logo.', lineIds: [design.line10], appliesTo: 'EVERYTHING' })
+    expect(unknown.status).toBe(400)
+    expect(unknown.body.error.issues.map((issue: Json) => issue.path)).toEqual(['body/appliesTo'])
+    const change = await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: design.line10, size: '52', quantity: 3 }] })
+    expect(change.status, JSON.stringify(change.body)).toBe(200)
+    expect(change.body.impact.appliesTo).toBeNull()
+  })
+})
+// ── end B-SA-046b ──
 // ── end B-SA-046 ──
+
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): the customer reads "Accepted · we are carrying it out", then "Accepted · done" ──
+describe('B-SA-046c: an accepted request says on the portal whether we are still carrying it out — a code from Still to do, never the steps', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let made = 0
+  /** An order of Brand Alpha in production, 4 of size 52 made by a work order with nothing cut, and its request for 3 (planted). */
+  async function lowered() {
+    const so2 = await orderOf('SEED-SO-0002')
+    const [line] = await admin<{ id: string; colourwayId: string }>('SELECT id::text AS id, "colourwayId"::text AS "colourwayId" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [so2.id])
+    const [cell] = await admin<{ id: string; workOrderId: string }>('SELECT id::text AS id, "workOrderId"::text AS "workOrderId" FROM "WorkOrderSize" WHERE "salesOrderLineId" = $1 LIMIT 1', [line!.id])
+    const ids = { order: newId(), line: newId(), workOrder: newId(), cell: newId(), request: newId() }
+    const tag = `T-SA046C-${++made}-${ids.order.slice(-4)}`
+    await plantedRows([
+      copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+      copyOf('SalesOrderLine', line!.id, { id: ids.line, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
+      { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line, P1] },
+      copyOf('WorkOrder', cell!.workOrderId, { id: ids.workOrder, number: `${tag}-WO`, batchNumber: `${tag}-BT`, status: 'IN_PROGRESS', version: 1 }),
+      copyOf('WorkOrderSize', cell!.id, { id: ids.cell, workOrderId: ids.workOrder, salesOrderLineId: ids.line, colourwayId: line!.colourwayId, size: '52', quantity: 4, version: 1 }),
+      { sql: `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, version) VALUES ($1, $2, $3, $4, $5, 'CHANGE', 'OPEN', 1)`, values: [ids.request, T, companyA, P1, ids.order] },
+      { sql: `INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity) VALUES ($1, $2, $3, $4, $5, '52', 4, 3)`, values: [newId(), T, P1, ids.request, ids.line] },
+    ])
+    return { ...ids, number: tag }
+  }
+  const theirs = async (orderId: string, requestId: string): Promise<Json> => (await ok(browsers.buyer, `/portal/sales-orders/${orderId}/change-requests`)).items.find((item: Json) => item.id === requestId)
+
+  it('none before the answer; "carrying it out" while the work-order change waits; "done" once the planner decided it', async () => {
+    const world = await lowered()
+    expect((await theirs(world.order, world.request)).followUp).toBeNull()
+    await acceptRequest(office(), world.request, { version: 1 }, undefined, h.clock)
+    const carrying = await theirs(world.order, world.request)
+    expect(carrying).toMatchObject({ status: 'ACCEPTED', followUp: 'CARRYING_OUT' })
+    // A code only: no step, no work order, no team, no count of anything on the customer's face.
+    expect(JSON.stringify(carrying)).not.toContain(`${world.number}-WO`)
+    for (const key of ['stillToDo', 'steps', 'workOrders', 'waitingOn']) expect(carrying, key).not.toHaveProperty(key)
+
+    const change = await one<{ id: string; version: number }>('SELECT id::text AS id, version FROM "WorkOrderChange" WHERE "requestId" = $1', [world.request])
+    await declineChange(office(['orders.view', 'orders.manage', 'workorders.view', 'workorders.manage']), change.id, { version: change.version, words: 'Left as is: the four are made as planned (made-up).' })
+    expect((await theirs(world.order, world.request)).followUp).toBe('DONE')
+  })
+
+  it('a refused or withdrawn request has none; the reads write nothing', async () => {
+    const world = await lowered()
+    await refuseRequest(office(), world.request, { version: 1, answer: 'We cannot change it now (made-up).' }, undefined, h.clock)
+    const before = Number((await one<{ n: string }>('SELECT count(*) AS n FROM "AuditLog" WHERE "tenantId" = $1', [T])).n)
+    expect((await theirs(world.order, world.request)).followUp).toBeNull()
+    expect(Number((await one<{ n: string }>('SELECT count(*) AS n FROM "AuditLog" WHERE "tenantId" = $1', [T])).n)).toBe(before)
+  })
+})
+// ── end B-SA-046c ──
+
+// ── B-SA-046d (14-change-flow §2.4 "which lines (with picture)"): the portal's rules read carries each line's small picture, walled ──
+describe("B-SA-046d: the portal's ask names each line with its picture — the portal's own read, through the content wall", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const store = { id: '' }
+  /** A picture of a style's colourway as the office keeps it (a Style file, office only); `source`: the file it was copied from. */
+  async function stylePicture(lineId: string, source: string | null = null) {
+    if (!store.id) store.id = (await one<{ id: string }>('SELECT id::text AS id FROM "IntegrationAccount" WHERE "tenantId" = $1 LIMIT 1', [T])).id
+    const line = await one<{ styleId: string; colourwayId: string }>('SELECT "styleId"::text AS "styleId", "colourwayId"::text AS "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [lineId])
+    const fileId = newId()
+    await plantedRows([
+      {
+        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility, "sourceFileId") VALUES ($1, $2, 'Style', $3, 'PHOTO', 'front.jpg', 'image/jpeg', 2400, $4, $5, 'AVAILABLE', '{OFFICE}', $6)`,
+        values: [fileId, T, line.styleId, store.id, `test/${fileId}`, source],
+      },
+      { sql: `INSERT INTO "StyleImage" (id, "tenantId", "styleId", "colourwayId", "fileId", kind, seq, "isMain") VALUES ($1, $2, $3, $4, $5, 'PHOTO', 0, false)`, values: [newId(), T, line.styleId, line.colourwayId, fileId] },
+    ])
+    return fileId
+  }
+  const linesOf = async (orderId: string): Promise<Json[]> => (await ok(browsers.buyer, `/portal/sales-orders/${orderId}/change-requests/rules`)).lines
+
+  it("a line of the customer's own style shows its picture — only the small preview's address, never a file id or the original", async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const fileId = await stylePicture(design.line10)
+    const line10 = (await linesOf(design.order)).find((line) => line.lineId === design.line10)!
+    // No small preview made yet: the picture is there, its address not (the part draws the placeholder until it exists).
+    expect(line10.picture).toEqual({ small: null })
+    expect(JSON.stringify(line10)).not.toContain(fileId)
+    expect(JSON.stringify(line10)).not.toMatch(/front\.jpg|storageKey|test\//)
+  })
+
+  it('a picture whose content was copied from another customer is left out (the content wall), uncounted, in the same shape', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const betaFile = newId()
+    await plantedRows([
+      {
+        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility) VALUES ($1, $2, 'Party', $3, 'PHOTO', 'beta-sample.jpg', 'image/jpeg', 2400, (SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $2 LIMIT 1), $4, 'AVAILABLE', '{OFFICE}')`,
+        values: [betaFile, T, world.partyId, `test/${betaFile}`],
+      },
+    ])
+    await stylePicture(design.line20, betaFile)
+    const lines = await linesOf(design.order)
+    const line20 = lines.find((line) => line.lineId === design.line20)!
+    expect(line20.picture).toBeNull()
+    expect(JSON.stringify(lines)).not.toMatch(/beta-sample|Brand Beta/)
+  })
+
+  it('the rules read stays the portal\'s own: the office picture routes refuse a portal session', async () => {
+    const design = await designWorld()
+    for (const [url, body] of [['/sales/orders/pictures', { orderIds: [design.order] }], ['/production/work-orders/pictures', { workOrderIds: [design.workOrder] }]] as const) {
+      const answer = await browsers.buyer.post(url, body)
+      expect(answer.status, url).not.toBe(200)
+      expect(answer.status, url).toBeGreaterThanOrEqual(400)
+    }
+  })
+})
+// ── end B-SA-046d ──
 
 // ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): accepting a design change ──
 describe('B-SA-047: a design change is accepted only for the customer\'s own private label, as a product change request per style', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

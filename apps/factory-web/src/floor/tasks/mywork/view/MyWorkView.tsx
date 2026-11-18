@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, OctagonX, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Wrench, X } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, ScanInput, type CameraScanner, type FloorActions } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
 import { FloorListUpdates } from '@nexus/ui/floor/FloorListUpdates/index'
@@ -26,6 +26,9 @@ import type { InspectorQueue, OpenHeld } from '../inspections/model'
 import { InspectionCard, InspectionList, InspectionsUnread } from '../inspections/view/InspectionViews'
 // B-W2b-308: at the warehouse My work is the task inbox (SCM-274).
 import { InboxView, type InboxViewModel } from '../warehouse/view/InboxView'
+// F-SA-247: an order change's note — first in For your work, its line on the task's card, Got it on this tablet only.
+import { isOrderChange, newOrderChanges, orderChangeOf, orderChangesFirst, stillToRead } from '../order-change-seen'
+import { OrderChangeLine } from './OrderChangeGate'
 import '../mywork.css'
 
 /**
@@ -86,6 +89,8 @@ export interface MyWorkViewModel {
   messages?: MyMessages | null
   /** The ids opened on this tablet. */
   seen?: readonly string[]
+  /** F-SA-247: the order-change notes tapped "Got it" on this tablet (kept on the tablet only; never sent). */
+  gotIt?: readonly string[]
   /** The messages come from this tablet (offline): as of when. */
   messagesAsOf?: string | null
   /** The messages could not be read, and none are kept. */
@@ -153,6 +158,8 @@ export type MyWorkAction =
   // B-W2b-232
   | { type: 'instructions' }
   | { type: 'message'; id: string; workOrderId?: string }
+  // F-SA-247: "Got it" on an order change's note: marked on this tablet only (nothing is sent).
+  | { type: 'gotIt'; id: string }
   | { type: 'help' }
   | { type: 'repair' }
   | { type: 'repairOpen'; reworkId: string }
@@ -277,6 +284,8 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
     const left = leftOf(entry)
     // B-TH-278: this work order's own floor notes, and no other's (the wall agreed with the production lane).
     const notes = messagesOf(model.messages?.messages ?? [], entry.workOrder.id).length
+    // F-SA-247: the newest order change of this work order (the read lists one per work order).
+    const change = orderChangeOf(model.messages?.messages ?? [], entry.workOrder.id)
     return (
       <FloorCard
         icon={<ListTodo />}
@@ -308,6 +317,8 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
         ]}
         labels={ds.floorCard}
       >
+        {/* F-SA-247: an order change on this work order: read it before the start (CHECK), or why the scan is refused (STOP). */}
+        <OrderChangeLine note={change} got={!stillToRead(change, model.gotIt ?? [])} onOpen={change ? () => send({ type: 'message', id: change.id, workOrderId: entry.workOrder.id }) : undefined} />
         <TaskLine tone="info" icon={<ScanLine />}>
           {t('scanToStart')}
         </TaskLine>
@@ -328,8 +339,11 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
 
   const openMessages = model.messages?.messages ?? []
   const unread = unreadCount(openMessages, model.seen ?? [])
-  // B-TH-278: the list a task's card opened holds that work order's notes only.
-  const listed = step.kind === 'messages' || step.kind === 'message' ? messagesOf(openMessages, step.workOrderId) : openMessages
+  // F-SA-247: the order changes not opened here have their own tile, first; the Messages tile counts the other notes.
+  const unreadChanges = newOrderChanges(openMessages, model.seen ?? [])
+  const unreadNotes = unread - unreadChanges
+  // B-TH-278: the list a task's card opened holds that work order's notes only. F-SA-247: the order changes first.
+  const listed = orderChangesFirst(step.kind === 'messages' || step.kind === 'message' ? messagesOf(openMessages, step.workOrderId) : openMessages)
   const listedNumber = step.kind === 'messages' && step.workOrderId !== undefined ? (listed[0]?.workOrder.number ?? null) : null
   // B-W2b-126: the repair queue's tile (this station's repairs, else the site's), hidden at zero.
   const repairCount = repairTile(model.repair ?? null)
@@ -345,7 +359,9 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
           {t('foryou.title')}
         </h2>
         <FloorTileGrid label={t('foryou.title')} columns={2}>
-          {unread > 0 ? <FloorTile icon={<MessageSquareText />} label={t('foryou.messages')} count={formatNumber(unread, locale)} countLabel={t('foryou.messagesCount', { count: unread })} tone="primary" onPress={() => send({ type: 'messages' })} /> : null}
+          {/* F-SA-247: the order changes first. */}
+          {unreadChanges > 0 ? <FloorTile icon={<TriangleAlert />} label={t('foryou.orderChanges')} count={formatNumber(unreadChanges, locale)} countLabel={t('foryou.orderChangesCount', { count: unreadChanges })} tone="warning" onPress={() => send({ type: 'messages' })} /> : null}
+          {unreadNotes > 0 ? <FloorTile icon={<MessageSquareText />} label={t('foryou.messages')} count={formatNumber(unreadNotes, locale)} countLabel={t('foryou.messagesCount', { count: unreadNotes })} tone="primary" onPress={() => send({ type: 'messages' })} /> : null}
           <InstructionsTile count={instructionCount} onPress={() => send({ type: 'instructions' })} />
           {repairCount ? (
             <FloorTile
@@ -418,11 +434,14 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
 
     case 'message': {
       const message = listed.find((row) => row.id === step.id)
-      actions = [back]
+      // F-SA-247: an order change's note: CHECK not got here → read it before you start, and Got it (this tablet only); STOP → stop.
+      const change = message && isOrderChange(message) ? message : null
+      const toGet = change?.check === 'CHECK' && stillToRead(change, model.gotIt ?? [])
+      actions = toGet && change ? [back, { label: t('orderChange.gotIt'), icon: <Check />, onPress: () => send({ type: 'gotIt', id: change.id }) }] : [back]
       body = message ? (
         <FloorCard
-          icon={<MessageSquareText />}
-          kind={t('message.kind')}
+          icon={change ? change.check === 'STOP' ? <OctagonX /> : <TriangleAlert /> : <MessageSquareText />}
+          kind={change ? t('orderChange.on') : t('message.kind')}
           code={message.workOrder.number}
           title={t(`message.from.${message.from}`)}
           facts={[{ id: 'at', label: t('message.at'), value: formatDateTime(message.at, { locale, timeZone }) }]}
@@ -431,6 +450,15 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
           labels={ds.floorCard}
         >
           <div className="fw-floor-stack">
+            {change?.check === 'STOP' ? (
+              <TaskLine tone="danger" icon={<OctagonX />} alert>
+                {t('orderChange.stop')}
+              </TaskLine>
+            ) : toGet ? (
+              <TaskLine tone="warning" icon={<TriangleAlert />}>
+                {t('orderChange.readFirst')}
+              </TaskLine>
+            ) : null}
             {/* B-TH-278: the words as written: never translated, never changed; the screen's own words are the worker's language. */}
             <p className="fw-mywork-text">{message.text}</p>
             <p className="fw-floor-muted">{t('message.asWritten')}</p>
@@ -732,12 +760,22 @@ function Messages({ rows, seen, t, shared, when, send }: { rows: readonly WorkMe
         <FloorList label={t('messages.title')}>
           {rows.map((message) => {
             const unread = !opened.has(message.id)
+            // F-SA-247: an order change says so, first in the list, in its tone (STOP: danger; CHECK: warning while New).
+            const change = isOrderChange(message) ? message : null
             return (
               <FloorListRow
                 key={message.id}
-                icon={unread ? <MessageSquareText /> : <MessageSquare />}
-                tone={unread ? 'primary' : 'neutral'}
-                title={<span className="fw-floor-code">{message.workOrder.number}</span>}
+                icon={change ? change.check === 'STOP' ? <OctagonX /> : <TriangleAlert /> : unread ? <MessageSquareText /> : <MessageSquare />}
+                tone={change?.check === 'STOP' ? 'danger' : change && unread ? 'warning' : unread ? 'primary' : 'neutral'}
+                title={
+                  change ? (
+                    <span>
+                      <span className="fw-floor-code">{message.workOrder.number}</span> · {t('orderChange.kind')}
+                    </span>
+                  ) : (
+                    <span className="fw-floor-code">{message.workOrder.number}</span>
+                  )
+                }
                 meta={[excerptOf(message.text), t(`message.from.${message.from}`), when(message.at)].join(' · ')}
                 status={unread ? t('messages.unread') : undefined}
                 onPress={() => send({ type: 'message', id: message.id })}
