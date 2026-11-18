@@ -287,10 +287,14 @@ describe('a revised order re-confirmed by the customer (SAL-222)', () => {
     const page = await viaLink(token, 'GET', '/link/approval?language=en')
     expect(page.may.withChanges).toBe(false)
     // B-W2b-F16: the revision in both languages (the page shows the reader's; Italian no longer reads "revision").
-    expect(page.request.words).toEqual({ it: `${order.number} · revisione ${amended.amendment.revision}`, en: `${order.number} · revision ${amended.amendment.revision}` })
+    // F-PR-16 (B-TH-303's rule): the customer reads its own order number (the seed's order has none yet: "—"), the office its own.
+    const own = await one<{ customerSeq: number | null }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [order.id])
+    const mine = own.customerSeq === null ? '—' : `#${own.customerSeq}`
+    expect(page.request.words).toEqual({ it: `${mine} · revisione ${amended.amendment.revision}`, en: `${mine} · revision ${amended.amendment.revision}` })
+    expect(JSON.stringify(page)).not.toContain(order.number)
     const office = await as(owner, 'GET', `/approvals-out/${made.request.id}`)
-    expect(office.request.record).toEqual({ type: 'SalesOrderAmendment', id: amended.amendment.id, words: page.request.words })
-    expect(page.content.revisedOrder).toMatchObject({ orderNumber: order.number, revision: amended.amendment.revision })
+    expect(office.request.record).toEqual({ type: 'SalesOrderAmendment', id: amended.amendment.id, words: { it: `${order.number} · revisione ${amended.amendment.revision}`, en: `${order.number} · revision ${amended.amendment.revision}` } })
+    expect(page.content.revisedOrder).toMatchObject({ orderNumber: mine, revision: amended.amendment.revision })
     expect(page.content.revisedOrder.netAmountAfter).toBeGreaterThan(page.content.revisedOrder.netAmountBefore)
     expect(page.content.revisedOrder.lines[0]).toMatchObject({ change: 'CHANGED', style: { code: expect.any(String) } })
     const changes = await viaLink(token, 'POST', '/link/approval/approve', { decision: 'APPROVED_WITH_CHANGES', answer: 'one more', typedName: 'Paolo Demo' }, 400)
@@ -390,3 +394,42 @@ describe('office approvals by e-mail (PLT-089)', () => {
     await as(owner, 'POST', '/approvals/mail-open', { key: `${mailedKey.slice(0, -2)}AA` }, 404)
   })
 })
+
+// ---- F-PR-16 (the browser walk; B-TH-303's rule, the same as the party's tasks: platform/portal/tasks/partner-label.ts) ----------
+describe('F-PR-16 — the customer reads its own order and quote numbers, never the office series (portal and link); the office its own', () => {
+  const OFFICE_SERIES = /\b(?:SEED-)?(?:SO|QT|QU|Q)-\d/
+
+  it('an artwork asked on an order and on a quote: the portal list, the portal page and the link page say "#912" / "#913"', async () => {
+    const orderId = pricing.money.sales.orderId
+    const quoteId = pricing.money.sales.quoteId
+    const order = await one<{ number: string }>('SELECT number FROM "SalesOrder" WHERE id = $1', [orderId])
+    const quote = await one<{ number: string }>('SELECT number FROM "Quote" WHERE id = $1', [quoteId])
+    await admin('UPDATE "SalesOrder" SET "customerSeq" = 912 WHERE id = $1', [orderId])
+    await admin('UPDATE "Quote" SET "customerSeq" = 913 WHERE id = $1', [quoteId])
+    for (const [recordType, recordId, office, mine] of [['SalesOrder', orderId, order.number, '#912'], ['Quote', quoteId, quote.number, '#913']] as const) {
+      const photo = await photoOf(recordType, recordId, `Made-up artwork ${recordType}.png`)
+      const made = await as(owner, 'POST', '/approvals-out', { kind: 'ARTWORK', recordType, recordId, email: BRAND_QA, question: 'Approve the artwork.', fileIds: [photo], send: true, language: 'en' }, 201)
+      const id = made.request.id as string
+      // The office reads the office's number.
+      expect(made.request.record.words).toEqual({ it: office, en: office })
+      const officeRead = (await as(owner, 'GET', `/approvals-out/${id}`)).request
+      expect(officeRead.record.words).toEqual({ it: office, en: office })
+      // The portal: the list and the page.
+      const listed = (await as(quality, 'GET', '/portal/approvals?state=OPEN')).items.find((item: Json) => item.id === id)
+      expect(listed?.words, recordType).toEqual({ it: mine, en: mine })
+      const page = await as(quality, 'GET', `/portal/approvals/${id}`)
+      expect(page.request.words, recordType).toEqual({ it: mine, en: mine })
+      expect(page.request.label, recordType).toBe(mine)
+      // The APPROVAL link (one use; opening uses nothing).
+      const link = await viaLink(tokenOf(textOf(lastMail('approvals.request', BRAND_QA)!.raw)), 'GET', '/link/approval?language=en')
+      expect(link.request.id).toBe(id)
+      expect(link.request.words, recordType).toEqual({ it: mine, en: mine })
+      for (const [where, body] of [['list', listed], ['portal', page], ['link', link]] as const) {
+        expect(JSON.stringify(body), `${recordType} ${where}`).not.toContain(office)
+        expect(JSON.stringify({ words: body.words ?? body.request.words, label: body.request?.label ?? null }), `${recordType} ${where}`).not.toMatch(OFFICE_SERIES)
+      }
+      await as(owner, 'POST', `/approvals-out/${id}/withdraw`, { version: officeRead.version, reason: 'Made-up: asked again later.' })
+    }
+  })
+})
+// ---- end F-PR-16
