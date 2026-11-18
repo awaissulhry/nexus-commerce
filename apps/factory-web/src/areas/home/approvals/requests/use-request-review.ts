@@ -12,6 +12,8 @@ import type { Loaded } from '../../../sales/quotes/record/record-model'
 import type { RequestFacts } from '../words/request-words'
 import { getTask } from '../api'
 import { acceptBatch, acceptProduction, acceptSales, counterRequest, getImpact, getRequest, listBatch, refuseBatch, refuseRequest, type BrandRequest, type RequestImpactRead, type RequestRecord, type Words } from './api'
+// F-SA-245: an id no listed row names may be a work-order change.
+import { getWorkOrderChange } from '../work-order-changes/api'
 import {
   answerProblem,
   batchFactsOf,
@@ -271,7 +273,7 @@ const orderHrefsOf = (requests: readonly Pick<BrandRequest, 'orderId' | 'orderNu
  * approval request of the engine, a customer request, or a customer's batch — asked in that order, each only with its read right. An
  * id none of them knows (or another customer's, PW-H01b: the API's "not found") opens the window's neutral "not found".
  */
-export async function probeOpen(api: ApiClient, id: string, can: { readonly tasks: boolean; readonly requests: boolean }): Promise<'task' | 'request' | 'batch' | 'none'> {
+export async function probeOpen(api: ApiClient, id: string, can: { readonly tasks: boolean; readonly requests: boolean; /* F-SA-245 */ readonly changes?: boolean }): Promise<'task' | 'request' | 'batch' | 'change' | 'none'> {
   if (can.tasks) {
     try {
       await getTask(api, id)
@@ -292,6 +294,15 @@ export async function probeOpen(api: ApiClient, id: string, can: { readonly task
       if ((await listBatch(api, id)).length > 0) return 'batch'
     } catch {
       // Not a batch either.
+    }
+  }
+  // F-SA-245: a work-order change (the bell's link, the work order's band): its decide window; another customer's answers 404.
+  if (can.changes) {
+    try {
+      await getWorkOrderChange(api, id)
+      return 'change'
+    } catch (error) {
+      if (!(isApiError(error) && error.kind === 'not_found')) return 'change'
     }
   }
   return 'none'
