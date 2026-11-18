@@ -49,7 +49,8 @@ let viewerB: Portal
 let buyerA: Portal
 const BUYER_B = 'bea.buyer'
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex')
-const O = {} as Record<'b1' | 'b2' | 'b3' | 'a1', { orderId: string; number: string }>
+// fix-pr-5: + ref, the customer's own PO (its zip names each order by it, never by the office's number).
+const O = {} as Record<'b1' | 'b2' | 'b3' | 'a1', { orderId: string; number: string; ref: string }>
 const R = {} as Record<'bArt' | 'bSample' | 'bPp' | 'aArt' | 'bRevised', string>
 const F = {} as Record<'bDoc' | 'bConfirmation' | 'bOldCopy' | 'aDoc', string>
 let blk = ''
@@ -141,7 +142,7 @@ beforeAll(async () => {
   buyerA = await world.portalPerson('amy.buyer@pr46b-brand-alpha.example.com', world.ids.a, ['customer-buyer', 'partner-approve'])
   for (const [name, partyId, label] of [['b1', world.ids.b, 'ZB1'], ['b2', world.ids.b, 'ZB2'], ['b3', world.ids.b, 'ZB3'], ['a1', world.ids.a, 'ZA1']] as const) {
     const made = await world.addOrder(partyId, label, '2026-10-05')
-    O[name] = { orderId: made.orderId, number: made.number }
+    O[name] = { orderId: made.orderId, number: made.number, ref: (await one<{ ref: string }>('SELECT "customerRef" AS ref FROM "SalesOrder" WHERE id = $1', [made.orderId])).ref }
   }
   blk = (await one<{ colourwayId: string }>('SELECT "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [world.w.a.salesOrderLineId])).colourwayId
 
@@ -309,9 +310,11 @@ describe('B-PR-46b Approve N (POST /portal/production/approvals/answer)', { time
 describe('B-PR-46b Download files of N (POST /portal/production/files/zip)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it("PW-12: B's Production person's zip of its orders with A's order among them — its own shared files only: no file of A, no old copy of A's, no order confirmation", async () => {
     const zip = await zipOf(productionB, [O.b1.orderId, O.a1.orderId, O.b2.orderId])
-    expect(zip.names).toEqual(['index.csv', `${O.b1.number}/Made-up care notes ZB1.pdf`])
-    expect(zip.files.get(`${O.b1.number}/Made-up care notes ZB1.pdf`)!.toString('utf8')).toContain('%PDF-1.4')
-    expect(zip.index).toContain(`${O.b1.number}/Made-up care notes ZB1.pdf`)
+    // fix-pr-5 (lead decision): each order's folder and the index name it by its own PO, never by our SO-… number.
+    expect(zip.names).toEqual(['index.csv', `${O.b1.ref}/Made-up care notes ZB1.pdf`])
+    expect(zip.files.get(`${O.b1.ref}/Made-up care notes ZB1.pdf`)!.toString('utf8')).toContain('%PDF-1.4')
+    expect(zip.index).toContain(`${O.b1.ref}/Made-up care notes ZB1.pdf`)
+    for (const ours of [O.b1.number, O.b2.number]) expect(`${zip.index} ${zip.names.join(' ')} ${zip.disposition}`).not.toContain(ours)
     for (const text of [O.a1.number, 'ZA1', 'old copy', 'order confirmation ZB2', F.aDoc]) expect(zip.index).not.toContain(text)
     expect(zip.disposition).toContain('files_2_orders_')
     // Logged: the file zipped as a download of the library (mode zip), the zip once on the customer.
@@ -326,8 +329,9 @@ describe('B-PR-46b Download files of N (POST /portal/production/files/zip)', { t
 
   it("R-52: the Buyer's zip holds the order confirmation (it sees prices); the library lists it only for roles with prices", async () => {
     const zip = await zipOf(buyerB, [O.b2.orderId])
-    expect(zip.names).toEqual(['index.csv', `${O.b2.number}/Made-up order confirmation ZB2.pdf`])
-    expect(zip.disposition).toContain(`${O.b2.number}_files.zip`)
+    expect(zip.names).toEqual(['index.csv', `${O.b2.ref}/Made-up order confirmation ZB2.pdf`])
+    expect(zip.disposition).toContain(`${O.b2.ref}_files.zip`)
+    expect(`${zip.index} ${zip.disposition}`).not.toContain(O.b2.number)
     expect(zip.index).not.toContain('old copy')
     const kindsFor = async (person: Portal) => ((await ok(person, 'GET', `/portal/customer-documents?orderId=${O.b2.orderId}`)).items as Json[]).filter((entry) => entry.id === F.bConfirmation).map((entry) => entry.kind)
     expect(await kindsFor(buyerB)).toEqual(['ORDER_CONFIRMATION'])
@@ -343,7 +347,7 @@ describe('B-PR-46b Download files of N (POST /portal/production/files/zip)', { t
     await refused(productionB, 'POST', '/portal/production/files/zip', { orderIds: [O.b1.orderId, O.b1.orderId] }, 400)
     // A's own zip is A's alone (the production unit's wall is symmetric).
     const alpha = await zipOf(buyerA, [O.a1.orderId])
-    expect(alpha.names).toEqual(['index.csv', `${O.a1.number}/Made-up care notes ZA1.pdf`])
+    expect(alpha.names).toEqual(['index.csv', `${O.a1.ref}/Made-up care notes ZA1.pdf`])
   })
 })
 

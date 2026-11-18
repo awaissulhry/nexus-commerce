@@ -82,7 +82,7 @@ import { PRODUCTION_CHIPS, type ProductionChip } from './contract'
  *                                     or Us), the marks (on hold, paused at its request, partly shipped, change pending), its
  *                                     urgency (Urgent n, Urgent – asked, Changed by us, set to Regular by us with our reason), the
  *                                     next milestone by level, and the state of the problems it reported ("Waiting on us since
- *                                     16 Nov", "Answered", "Answered in SO-…"). The band: "2 of 3 urgent used" ("4 of 3 · 1 agreed
+ *                                     16 Nov", "Answered", "Answered in your order 13"). The band: "2 of 3 urgent used" ("4 of 3 · 1 agreed
  *                                     with us") over its own open orders only. Chips with counts, search; every row, no page
  *   GET /portal/production?format=csv  the same rows (chip and search) as a CSV file in the person's language ("Export"): all of
  *                                     them, written here in the partner's scope (never the export job), urgency included
@@ -137,7 +137,7 @@ interface ProductionRead {
   readonly planned: ReadonlyMap<string, PlannedDates>
   /** The live facts of an order the keeper has not written a row for yet (stage and who acts next). */
   readonly facts: ReadonlyMap<string, { readonly stage: OrderStage | null; readonly waiting: Waiting }>
-  /** Its own orders named by a problem's answer ("Answered in SO-…"). */
+  /** Its own orders named by a problem's answer ("Answered in your order 13": its own number, else its PO). */
   readonly names: ReadonlyMap<string, { readonly id: string; readonly number: string; readonly customerRef: string | null; readonly customerSeq: number | null }>
 }
 
@@ -282,7 +282,8 @@ function problemOf(read: ProductionRead, orderId: string) {
     since: shown.state === 'WAITING_ON_US' ? shown.since : null,
     on: shown.state === 'WAITING_ON_US' ? null : shown.on,
     inOrder: named ? { id: named.id, number: named.number, customerRef: named.customerRef, yourNumber: customerNumberOf('ORDER', named.customerSeq) } : null,
-    words: problemWords(shown, named?.number ?? null),
+    // fix-pr-5 (lead decision): named by the customer's own number (as the bell), else its PO; never the office's series.
+    words: problemWords(shown, named ? { seq: named.customerSeq, customerRef: named.customerRef } : null),
   }
 }
 

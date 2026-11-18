@@ -65,7 +65,7 @@ export interface AnsweringMessage {
  * R-42 / R-43: whether a message answers a BRAND issue — a SHARED message a person of the office wrote (OUTBOUND, audience
  * PARTNER, author USER) that the customer can read (not held), in the thread of one of its batch's orders, at or after the issue
  * was raised, while the issue is open. The same rule as the customer's own read of "Answered" (brand-portal access.ts
- * officeAnswers). One such message answers every issue of the batch (the others read "Answered in SO-xxxx": `answeredInOrderId`).
+ * officeAnswers). One such message answers every issue of the batch (the others read "Answered in your order N", by the customer's own number: `answeredInOrderId`).
  */
 export function answersBrandIssue(issue: { readonly source: IssueSource; readonly status: IssueStatus; readonly raisedAt: Date }, message: AnsweringMessage): boolean {
   return (

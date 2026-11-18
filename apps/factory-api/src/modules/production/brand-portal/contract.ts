@@ -79,7 +79,7 @@ const marks = output({
   words: z.array(words),
 })
 
-/** The state of the problems it reported on the order ("Waiting on us since 16 Nov", "Answered", "Answered in SO-…"). */
+/** The state of the problems it reported on the order ("Waiting on us since 16 Nov", "Answered", "Answered in your order 13"). */
 const problem = output({
   state: z.enum(['WAITING_ON_US', 'ANSWERED', 'ANSWERED_IN']),
   since: day.nullable(),

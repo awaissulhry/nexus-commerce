@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { DomainError, ForbiddenError, isDomainError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { PRODUCTION_ZIP, PRODUCTION_ZIP_WORDS, productionZipName, productionZipPaths, productionZipProblem, type ProductionZipRefusal } from '@nexus/factory-domain/production-brand/approve-zip'
+import { PRODUCTION_ZIP, PRODUCTION_ZIP_WORDS, productionZipFolders, productionZipName, productionZipPaths, productionZipProblem, type ProductionZipRefusal } from '@nexus/factory-domain/production-brand/approve-zip'
 import { ORDER_NOT_FOUND_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { KIND_RULES as DOCUMENT_KIND_RULES } from '@nexus/factory-domain/sales/portal-documents/library'
 import { requireContext } from '../../../core/context'
@@ -29,7 +29,9 @@ import { partnerOrders, type OwnOrder } from './access'
  *        portal's document library lists for those orders BY ROLE (modules/sales/portal-documents library: what we shared with the
  *        customer on the order, its lines, its shipments and their papers, its invoices for a finance role; an order confirmation
  *        or a quote only with the price grain — a Production person never gets one), the current version of each, in a folder per
- *        order, with an index.csv first (path, what, order, date, SHA-256, bytes, whether the bytes were there) — through the
+ *        order named as the customer knows it (fix-pr-5, lead decision: its PO, else "Your order 13"; never the office's SO-…
+ *        series; the zip's own name and the index the same), with an index.csv first (path, what, order, date, SHA-256, bytes,
+ *        whether the bytes were there) — through the
  *        accountant zip's writer (accounting/guest/zip writeZip) and within its limits (400 files, 100 MB, 25 MB a file: 409 in
  *        words). A picture is zipped as the copy without camera or location data (as every portal download: files thumbs/outside).
  *        Each file zipped is logged as a download of the library (customerDocuments.download, mode zip: "downloads logged", and
@@ -130,12 +132,15 @@ export async function productionZip(app: FastifyInstance, files: FilesRuntime, r
   if (!included.some(Boolean)) throw zipRefusal('FILE_UNAVAILABLE')
 
   const locale = reader.session.person.locale.toLowerCase().startsWith('en') ? 'en' : 'it'
-  const paths = productionZipPaths(picked.map((pick) => ({ folder: pick.order.number, name: pick.file.name })))
+  // fix-pr-5 (lead decision): each order by its own name (its PO, else "Your order 13"), never the office's series.
+  const folders = productionZipFolders(orders, locale)
+  const folderOf = new Map(orders.map((order, at) => [order.orderId, folders[at]!]))
+  const paths = productionZipPaths(picked.map((pick) => ({ folder: folderOf.get(pick.order.orderId)!, name: pick.file.name })))
   const index = indexCsv(
     picked.map((pick, at) => ({
       path: paths[at]!,
       what: `${DOCUMENT_KIND_RULES[pick.entry.kind].words[locale]} · ${pick.entry.title[locale]}`,
-      number: pick.order.number,
+      number: folderOf.get(pick.order.orderId)!,
       date: businessDate(pick.entry.date),
       // The bytes zipped (a picture's copy without location data is not the original's bytes).
       sha256: bytes[at] ? createHash('sha256').update(bytes[at]!).digest('hex') : pick.entry.sha256,
@@ -145,7 +150,7 @@ export async function productionZip(app: FastifyInstance, files: FilesRuntime, r
   )
   const entries: ZipEntry[] = [{ path: 'index.csv', bytes: index }, ...picked.flatMap((_, at) => (bytes[at] ? [{ path: paths[at]!, bytes: bytes[at]! }] : []))]
   const zip = writeZip(entries, now)
-  const name = productionZipName(orders.map((order) => order.number), businessDate(now))
+  const name = productionZipName(folders, businessDate(now))
   const companyId = reader.session.company.id
   const zipped = picked.filter((_, at) => included[at])
   // No Idempotency-Key (as the accountant's zip): a read; a second download is logged again.
