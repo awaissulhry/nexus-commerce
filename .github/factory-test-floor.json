@@ -2,7 +2,7 @@
   "$comment": [
     "The fewest tests each part of a Factory CI run must RUN (passed + failed; skipped and todo do not count), read by scripts/factory/ci-report.mjs summary.",
     "A run whose suites were skipped (a syntax error that stops every file from loading, a set-up that never started, a shard that never reported) falls below its floor and fails, even when every command exited 0.",
-    "endCheck = .github/workflows/factory-end-check.yml (group = its `parts` input).",
+    "endCheck = .github/workflows/factory-end-check.yml (group = its `parts` input); quickCheck = .github/workflows/factory-quick-check.yml (every part, no database).",
     "A part without `min` only has to exit 0. Every part a workflow records needs an entry here, and every entry of a selected group needs a result.",
     "Set from the Mac end check's counts of 2026-11-18, about 3% below them; the golden steps and the browser stages exactly (every step must run). After a green run, raise a floor to the counts its summary prints. Never lower one to make a run pass: fix the tests that stopped running."
   ],
@@ -32,5 +32,16 @@
     "golden-sales-page": { "group": "golden", "min": 11 },
     "golden-production": { "group": "golden", "min": 16 },
     "browser": { "group": "browser", "min": 27, "$comment": "the browser golden flow's stages (01-customer … 16-close, th1a … th7, end checks)" }
+  },
+  "quickCheck": {
+    "typecheck-factory-db": {},
+    "typecheck-factory-domain": {},
+    "typecheck-factory-api": {},
+    "typecheck-factory-web": {},
+    "guards": { "min": 14 },
+    "unit-db": { "min": 100, "$comment": "no database: the *.pg.vitest.test.ts files are left out" },
+    "unit-domain": { "min": 5750 },
+    "unit-api": { "min": 760, "$comment": "no database and no Redis: *.pg.vitest.test.ts and *.redis.vitest.test.ts are left out (802 with the Redis tests)" },
+    "unit-web": { "min": 7850 }
   }
 }

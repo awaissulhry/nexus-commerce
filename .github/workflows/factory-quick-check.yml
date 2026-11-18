@@ -1,0 +1,232 @@
+# The Factory quick check after each merge (build-speed plan, idea 2): a WARNING, never a gate. It runs after a push to
+# main that touches the Factory, so a break shows red on that commit minutes after it lands, not hours later in the end
+# check. It cannot block or delay a merge (it starts after the merge), it must never be made a required check, it never
+# deploys, and it reads no secrets.
+#
+# No database at all (the Owner's rule: database tests only in the end check, factory-end-check.yml):
+#   setup      npm ci (Commerce's node_modules cache entry), shared + events built, the factory-db Prisma client
+#   typecheck  factory-db, factory-domain, factory-api, factory-web
+#   guards     run-guards, check-i18n, check-event-contract
+#   units      factory-db (without *.pg), factory-domain, factory-api (without *.pg and *.redis: no database, no Redis;
+#              its test-database guard reads a loopback factory_test… URL that nothing connects to), factory-web
+#   summary    one table; red when a part failed or ran fewer tests than its floor (.github/factory-test-floor.json,
+#              section quickCheck), so "every unit test skipped" shows red too
+# A newer push to main cancels the older run. Target: under ~8 minutes.
+
+name: Factory quick check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/factory-*/**'
+      - 'packages/factory-*/**'
+      # The factory's own database kit (only factory-db and factory-api use it).
+      - 'packages/db-kit/**'
+      - 'scripts/factory/**'
+      - '.github/workflows/factory-quick-check.yml'
+      - '.github/actions/factory-setup/**'
+      - '.github/factory-test-floor.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: factory-quick-check-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TZ: Europe/Rome
+  FACTORY_QUEUE_PREFIX: ci
+  NEXT_TELEMETRY_DISABLED: '1'
+  CHECKPOINT_DISABLE: '1'
+  PRISMA_HIDE_UPDATE_MESSAGE: '1'
+
+jobs:
+  setup:
+    name: Setup — install, shared + events, Prisma client
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Commerce's key and paths (.github/actions/setup): one lockfile, one node_modules, one cache entry for both.
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json', 'patches/**') }}
+      - name: npm ci (cache miss)
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
+      - name: Save node_modules
+        if: steps.modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
+      - name: Build shared + events; generate the factory-db Prisma client
+        run: |
+          npm run build -w @nexus/shared
+          npm run build -w @nexus/events
+          npm run generate -w @nexus/factory-db
+      - name: Save the built pieces for this run's jobs
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            packages/shared/dist
+            packages/events/dist
+            packages/factory-db/src/generated
+          key: factory-built-${{ github.run_id }}
+
+  typecheck:
+    name: Typecheck — ${{ matrix.workspace }}
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [factory-db, factory-domain, factory-api, factory-web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/factory-setup
+      - name: npm run typecheck -w @nexus/${{ matrix.workspace }}
+        env:
+          NODE_OPTIONS: --max-old-space-size=12288
+          WORKSPACE: ${{ matrix.workspace }}
+        run: |
+          set +e
+          npm run typecheck -w "@nexus/$WORKSPACE" 2>&1 | tee "$RUNNER_TEMP/typecheck.log"
+          rc=${PIPESTATUS[0]}; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part "typecheck-${{ matrix.workspace }}" --kind exit --input "$RUNNER_TEMP/typecheck.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-typecheck-${{ matrix.workspace }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  guards:
+    name: Guards — run-guards, check-i18n, check-event-contract
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/factory-setup
+      - name: Factory guards
+        run: |
+          set +e
+          node scripts/factory/run-guards.mjs 2>&1 | tee "$RUNNER_TEMP/guards.log"; a=${PIPESTATUS[0]}
+          node scripts/factory/check-i18n.mjs 2>&1 | tee -a "$RUNNER_TEMP/guards.log"; b=${PIPESTATUS[0]}
+          node scripts/factory/check-event-contract.mjs 2>&1 | tee -a "$RUNNER_TEMP/guards.log"; c=${PIPESTATUS[0]}
+          rc=$(( a || b || c )); echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part guards --kind guards --input "$RUNNER_TEMP/guards.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-guards
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  units:
+    name: Unit tests (no database) — ${{ matrix.part }}
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: unit-db
+            dir: packages/factory-db
+            args: --exclude '**/*.pg.vitest.test.ts'
+          - part: unit-domain
+            dir: packages/factory-domain
+            args: ''
+          - part: unit-api
+            dir: apps/factory-api
+            args: --exclude '**/*.pg.vitest.test.ts' --exclude '**/*.redis.vitest.test.ts'
+            # Read by factory-api's test-database guard only (loopback, factory_test…). Nothing listens on it here, and
+            # no test of this part connects to it.
+            database-url: postgresql://factory_app@127.0.0.1:5442/factory_test_ci
+          - part: unit-web
+            dir: apps/factory-web
+            args: ''
+            heap: '8192'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/factory-setup
+      - name: vitest run (${{ matrix.dir }})
+        working-directory: ${{ matrix.dir }}
+        env:
+          DATABASE_URL_FOR_GUARD: ${{ matrix.database-url }}
+          HEAP: ${{ matrix.heap }}
+        run: |
+          [ -n "$DATABASE_URL_FOR_GUARD" ] && export FACTORY_DATABASE_URL="$DATABASE_URL_FOR_GUARD"
+          [ -n "$HEAP" ] && export NODE_OPTIONS="--max-old-space-size=$HEAP"
+          set +e
+          npx vitest run ${{ matrix.args }} --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/report.json"
+          rc=$?; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part "${{ matrix.part }}" --kind vitest --input "$RUNNER_TEMP/report.json" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-${{ matrix.part }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  summary:
+    name: Summary — every part passed and ran at least its floor
+    needs: [setup, typecheck, guards, units]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            scripts/factory
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: factory-result-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/results
+      - name: One table; red when a part failed or ran fewer tests than its floor
+        env:
+          SETUP: ${{ needs.setup.result }}
+        run: |
+          echo "setup: $SETUP"
+          node scripts/factory/ci-report.mjs summary --check quickCheck --results "$RUNNER_TEMP/results"
