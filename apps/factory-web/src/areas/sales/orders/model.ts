@@ -828,22 +828,11 @@ export function writeProblem(error: unknown): WriteProblem {
   return { key: 'problem.write.internal', reload: false }
 }
 
-const LIVE_PREFIXES = ['sales_order.', 'deposit_request.', 'payment.', 'invoice.', 'workorder.', 'shipment.', 'order.', 'quote.accepted'] as const
+// F-SA-239: the record's live rule is the server's watch list (record/live.ts); LIVE_PREFIXES and liveTouches went.
 
-/** Every id a live event's fields name (a string, or a list of strings). */
+/** Every id a live event's fields name (a string, or a list of strings): the board's lanes read it. */
 function idsOf(fields: Readonly<Record<string, unknown>>): string[] {
   return Object.values(fields).flatMap((value) => (typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []))
-}
-
-/**
- * Whether a live event concerns the orders (the list: any order, deposit, payment, invoice, work order or shipment
- * event), or this order (the record: one that names the order or a record of its chain). A message is a hint: the page
- * reads again, it never takes data from the message.
- */
-export function liveTouches(change: { type: string; fields: Readonly<Record<string, unknown>> }, known?: ReadonlySet<string>): boolean {
-  if (!LIVE_PREFIXES.some((prefix) => change.type.startsWith(prefix))) return false
-  if (!known) return true
-  return idsOf(change.fields).some((id) => known.has(id))
 }
 
 /**

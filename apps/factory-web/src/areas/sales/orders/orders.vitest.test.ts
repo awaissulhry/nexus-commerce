@@ -82,7 +82,6 @@ import {
   linkHeld,
   listAddress,
   listTouches,
-  liveTouches,
   nextStep,
   parseAmount,
   paymentHeld,
@@ -239,11 +238,7 @@ describe('the record: the next step by state, held with its reason', () => {
     const ids = knownIds(order('SHIPPED'))
     expect(ids.has(order('SHIPPED').id)).toBe(true)
     expect(ids.has(TD02.id)).toBe(true)
-    expect(liveTouches({ type: 'sales_order.status_changed', fields: { orderId: order().id } }, ids)).toBe(true)
-    expect(liveTouches({ type: 'payment.deposit_paid', fields: { depositRequestId: PAID.id } }, ids)).toBe(true)
-    expect(liveTouches({ type: 'sales_order.status_changed', fields: { orderId: 'another' } }, ids)).toBe(false)
-    expect(liveTouches({ type: 'thread.message_posted', fields: { recordId: order().id } }, ids)).toBe(false)
-    expect(liveTouches({ type: 'quote.accepted', fields: {} })).toBe(true)
+    // F-SA-239: which events the record re-reads on is the order read's own watch list (record/live.ts, its own tests).
     expect(listTouches({ type: 'sales_order.created' })).toBe(true)
     expect(listTouches({ type: 'payment.deposit_paid' })).toBe(true)
     expect(listTouches({ type: 'workorder.progress' })).toBe(false)

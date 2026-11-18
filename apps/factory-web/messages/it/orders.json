@@ -296,7 +296,8 @@
     "reapproval": "In attesa che il cliente accetti la modifica",
     "typed": "Inserito dall'ufficio",
     "madeFrom": "Creato da {number} — Apri",
-    "madeToMeasure": "Su misura"
+    "madeToMeasure": "Su misura",
+    "changedBy": "Modificato da {name} alle {time}"
   },
   "held": {
     "busy": "Sto salvando l'ultima modifica…",

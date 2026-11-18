@@ -362,7 +362,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           {model.changed && (
             <Banner
               tone="info"
-              title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
+              title={model.changed.by ? t('record.changedBy', { name: model.changed.by, time: formatTime(model.changed.at, { locale }) }) : t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
               action={
                 <Button size="sm" onClick={() => actions?.onReload?.()}>
                   {t('record.reload')}

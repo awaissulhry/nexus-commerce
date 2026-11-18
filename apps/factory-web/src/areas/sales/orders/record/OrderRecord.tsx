@@ -44,9 +44,11 @@ import {
   type SdiStatus,
   type Settlement,
 } from '../api'
-import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../hooks'
+import { isStepUpCancelled, useLive, useStepUp } from '../hooks'
 import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
-import { abilitiesOf, knownIds, landingOf, liveTouches, readProblem, romeToday, writeProblem } from '../model'
+import { abilitiesOf, landingOf, readProblem, romeToday, writeProblem } from '../model'
+// F-SA-239: the page live part by part (the read's own watch list, one coalesce table, stale tabs, typed work kept).
+import { changedBy, EMPTY_QUEUE, enqueue, nextDue, opened, ORDER_PARTS, partsOf, take, watchedIds, type LiveQueue, type OrderPagePart } from './live'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
 // B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
@@ -148,7 +150,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<OrderRecordModel['notice']>(null)
   const [dialogProblem, setDialogProblem] = useState<OrderRecordModel['dialogProblem']>(null)
-  const [changed, setChanged] = useState<{ at: string } | null>(null)
+  const [changed, setChanged] = useState<{ at: string; parts?: readonly string[]; by?: string | null } | null>(null)
   const [sentLink, setSentLink] = useState<DepositLinkAnswer | null>(null)
   const [recorded, setRecorded] = useState<DepositReceived | null>(null)
   const [amend, setAmend] = useState<AmendState | null>(null)
@@ -251,22 +253,47 @@ function RecordContainer({ orderId }: { orderId: string }) {
     void load()
   }, [load])
 
-  // Live: an event that names this order or a record of its chain; a dialog with typed work open → "changed · Reload".
-  const reread = useCoalesced(() => void load(), 700)
-  const known = order.status === 'ready' ? knownIds(order.value) : null
-  const knownRef = useRef(known)
-  knownRef.current = known
-  // B-TH-214: the tab's live state shows in the shell's band (beside the record's band); here only the re-reads.
-  // F-SA-232: the stream's state for Overview's freshness line ("Live · as of 10:42" only when pushed).
+  // ---- F-SA-239: live, part by part — an event re-reads only the parts the order read's own watch list names for it (and only when it
+  // names one of the order's records), through ONE coalesce table (parts 700 ms; piece counts 3 s trailing, ≤ 1 read / 10 s); Money,
+  // Shipments and Files only while they show (else stale, read when opened); under typed work the order waits for Reload.
+  // B-TH-214: the tab's live state shows in the shell's band; F-SA-232: the stream's state for Overview's freshness line.
+  const queueRef = useRef<LiveQueue>(EMPTY_QUEUE)
+  const [queueTick, setQueueTick] = useState(0)
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const runPartsRef = useRef<(parts: readonly OrderPagePart[]) => void>(() => undefined)
+  const reconnectRef = useRef<() => void>(() => void load())
   const liveState = useLive(
     (change) => {
-      if (!knownRef.current || !liveTouches(change, knownRef.current)) return
-      const open = dialogRef.current
-      if (amendRef.current || (open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')) setChanged({ at: new Date().toISOString() })
-      else reread()
+      const value = current.current
+      if (!value) return
+      const parts = partsOf(change, value.live, watchedIds(value, value.live))
+      if (parts.length === 0) return
+      queueRef.current = enqueue(queueRef.current, change.type, parts, Date.now(), tabRef.current)
+      setQueueTick((count) => count + 1)
     },
-    () => void load(),
+    () => reconnectRef.current(),
   )
+  // One timer for the next due moment; what is due is read, nothing waiting is dropped.
+  useEffect(() => {
+    const due = nextDue(queueRef.current)
+    if (due === null) return
+    const timer = setTimeout(() => {
+      const { read, queue } = take(queueRef.current, Date.now())
+      queueRef.current = queue
+      if (read.length > 0) runPartsRef.current(read)
+      setQueueTick((count) => count + 1)
+    }, Math.max(0, due - Date.now()))
+    return () => clearTimeout(timer)
+  }, [queueTick])
+  // A tab that opens reads its stale parts.
+  useEffect(() => {
+    const { read, queue } = opened(queueRef.current, tab)
+    if (read.length === 0) return
+    queueRef.current = queue
+    runPartsRef.current(read)
+  }, [tab])
+  // ---- end F-SA-239
 
   /** One write; the order it answers (when it answers one) replaces the page's, then the parts are read again. */
   const write = useCallback(
@@ -503,6 +530,39 @@ function RecordContainer({ orderId }: { orderId: string }) {
     onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
   })
   // ---- end F-SA-237
+
+  // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
+  runPartsRef.current = (parts) => {
+    const open = dialogRef.current
+    const typed = !!amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')
+    const orderParts = parts.filter((part) => ORDER_PARTS.includes(part))
+    if (orderParts.length > 0) {
+      // Under typed work the order is not read under it: "Changed by <name> at hh:mm · Reload" (the draft is kept).
+      if (typed) {
+        setChanged({ at: new Date().toISOString(), parts: orderParts })
+        // Who changed it: the order read's own last change, read beside the typed work (never applied under it).
+        getOrder(api, orderId)
+          .then((fresh) => {
+            const by = changedBy(fresh.lastChange, orderParts, locale === 'en' ? 'en' : 'it')
+            setChanged((known) => (known ? { ...known, by: by.name, at: by.at ?? known.at } : known))
+          })
+          .catch(() => undefined)
+      } else void load()
+    }
+    const productionParts = parts.filter((part): part is 'headline' | 'lines' | 'work' | 'dates' | 'quality' | 'people' => ['headline', 'lines', 'work', 'dates', 'quality', 'people'].includes(part))
+    if (productionParts.length > 0) production.again(productionParts.includes('lines') || productionParts.includes('work') ? [...new Set([...productionParts, 'headline' as const])] : productionParts)
+    if (parts.includes('work') && can.viewWorkOrders && current.current && !orderParts.length)
+      listOrderWorkOrders(api, current.current.id)
+        .then((rows) => setWorkOrders(part(rows)))
+        .catch(() => undefined)
+    if (parts.includes('changes') && tabRef.current === 'changes') readRequests()
+    if (parts.includes('files') && tabRef.current === 'files') orderFiles.reload()
+  }
+  reconnectRef.current = () => {
+    void load()
+    production.again()
+  }
+  // ---- end F-SA-239
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323

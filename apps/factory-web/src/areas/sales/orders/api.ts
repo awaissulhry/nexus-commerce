@@ -426,6 +426,9 @@ export const depositRequestSchema = z.object({
 })
 export type DepositRequest = z.infer<typeof depositRequestSchema>
 
+// F-SA-239: who changed a part last — an office person or the order's own customer by name, "the floor", "Nexus" (it + en).
+const lastChangeSchema = z.object({ by: z.object({ kind: z.enum(['OFFICE', 'CUSTOMER', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), words: z.object({ it: z.string(), en: z.string() }) }), at: instant })
+
 export const orderSchema = z.object({
   id: z.string(),
   number: z.string(),
@@ -481,6 +484,18 @@ export const orderSchema = z.object({
   amendments: z.object({ count: z.number(), latestRevision: z.number().nullable(), latestAt: instant.nullable() }).default({ count: 0, latestRevision: null, latestAt: null }),
   /** SAL-209: a confirmed order's lines change only through an amendment. */
   locked: z.boolean().default(true),
+  // ── F-SA-239 (B-SA-034): the page's live watch list (the server's) and who changed each part last; absent in an older answer ──
+  live: z.object({ events: z.array(z.object({ type: z.string(), parts: z.array(z.string()) })), ids: z.record(z.string(), z.array(z.string())) }).optional(),
+  lastChange: z
+    .object({
+      order: lastChangeSchema.nullable(),
+      changes: lastChangeSchema.nullable(),
+      work: lastChangeSchema.nullable(),
+      shipments: lastChangeSchema.nullable(),
+      money: lastChangeSchema.nullable(),
+    })
+    .optional(),
+  // ── end F-SA-239
 })
 export type Order = z.infer<typeof orderSchema>
 export type ChainInvoice = Order['chain']['invoices'][number]

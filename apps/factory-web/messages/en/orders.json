@@ -296,7 +296,8 @@
     "reapproval": "Waiting for the customer to accept the change",
     "typed": "Typed by the office",
     "madeFrom": "Made from {number} — Open",
-    "madeToMeasure": "Made to measure"
+    "madeToMeasure": "Made to measure",
+    "changedBy": "Changed by {name} at {time}"
   },
   "held": {
     "busy": "Working on the last change…",

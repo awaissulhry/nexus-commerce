@@ -99,7 +99,8 @@ export interface OrderRecordModel {
   /** B-TH-228: the source read still runs (the band says neither "Made from" nor "Typed by the office" yet). */
   madeFromReading?: boolean
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
-  changed: { at: string } | null
+  /** F-SA-239: the parts that changed under typed work (their last change names who: the order read's `lastChange`). */
+  changed: { at: string; parts?: readonly string[]; by?: string | null } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   busy: boolean
   dialog: RecordDialog | null
