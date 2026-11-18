@@ -10,7 +10,8 @@ import { listRequests as listPartnerRequests, type PartnerRequest } from '../../
 import { listCustomerReplies, type WaitingRow } from '../../inquiries/api'
 import { listTasks } from '../../../../record-panels/tasks/api'
 import type { TaskItem } from '../../../../record-panels/tasks/model'
-import { getBoard, type OrderBoard } from '../../orders/api'
+import { getBoard, listOrders, type OrderBoard, type OrderRow } from '../../orders/api'
+import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
 import { MERGED_TERMS } from '../../../parties/_shared/model'
@@ -182,6 +183,38 @@ export function sourcesTouched(type: string): Array<keyof WorkReads> {
   if (type.startsWith('task.')) out.push('tasks')
   return out
 }
+
+// ---- F-SA-278: the strip's two windows ---------------------------------------------------------------------------------
+
+/** "Counter-offers waiting for <customer>": our counter-offers they have not answered yet, oldest first. */
+export const counterOffersOf = (requests: readonly BrandRequest[]): BrandRequest[] =>
+  requests.filter((request) => request.waitingOn === 'CUSTOMER').sort((a, b) => a.askedAt.localeCompare(b.askedAt))
+
+/** The dock's pick of a task's record: the record itself; a task on the customer's own record picks the customer's thread (null). */
+export function pickOfTask(task: Pick<TaskItem, 'record' | 'companyId'>): DockPick | null {
+  if (!task.record || task.record.type === 'Party') return null
+  return { type: task.record.type, id: task.record.id, label: task.record.label, companyId: task.companyId }
+}
+
+/** "Changes waiting for <customer>'s new yes": the orders whose change waits for them (`reaccept`), read when the window opens. */
+export function useReacceptOrders(partyId: string, open: boolean, can: boolean): Read<readonly OrderRow[]> {
+  const api = useOfficeApi()
+  const [read, setRead] = useState<Read<readonly OrderRow[]>>(can ? READING : OFF)
+  useEffect(() => {
+    if (!open || !can) return
+    let gone = false
+    setRead(READING)
+    listOrders(api, { partyId, reaccept: true, limit: 50 }).then(
+      (page) => !gone && setRead({ status: 'ready', value: page.orders }),
+      () => !gone && setRead({ status: 'failed' }),
+    )
+    return () => {
+      gone = true
+    }
+  }, [api, partyId, open, can])
+  return read
+}
+// ---- end F-SA-278
 
 // ---- the reads --------------------------------------------------------------------------------------------------------
 

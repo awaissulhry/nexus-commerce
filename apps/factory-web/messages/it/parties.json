@@ -194,6 +194,28 @@
         "general": "{customer} (generale)",
         "generalLine": "La conversazione generale di {customer} è condivisa con {customer}: ciò che invii lì arriva al cliente.",
         "recordLine": "La conversazione di {record} è condivisa con {customer}: ciò che invii lì arriva al cliente."
+      },
+      "window": {
+        "customerTitle": "In attesa di {customer}",
+        "asked": "Abbiamo chiesto a {customer}",
+        "counters": "Controproposte in attesa di {customer}",
+        "reaccept": "Modifiche in attesa di un nuovo sì di {customer}",
+        "none": "Qui non aspetta niente.",
+        "pickTip": "Mostra la conversazione di {record}",
+        "tasksTitle": "Attività aperte di {customer}",
+        "tasksNone": "Nessuna attività aperta sui record di {customer}.",
+        "tasksMore": "Sono mostrate solo le 200 attività più recenti.",
+        "col": {
+          "order": "Ordine",
+          "what": "A che punto è",
+          "asked": "Chiesta il",
+          "ref": "Ordine del cliente",
+          "promised": "Promesso",
+          "task": "Attività",
+          "record": "Record",
+          "for": "Per",
+          "due": "Scadenza"
+        }
       }
     }
   },

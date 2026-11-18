@@ -207,3 +207,39 @@ describe('F-SA-276: words in both languages', () => {
     expect(it('customers.work.strip.us')).toBe('Tocca a noi')
   })
 })
+
+// ---- F-SA-278 (sales page plan N5, N3; picks R5, P10; Round 4): the strip's two windows — Waiting for <customer> (our asks: the
+// portal's requests card as it is; counter-offers; changes waiting for their new yes) and Open tasks; each row picks its record in the dock.
+describe('F-SA-278: the strip\'s two windows', () => {
+  it('counter-offers are the requests that wait on the customer, oldest first', async () => {
+    const { counterOffersOf } = await import('./use-customer-work')
+    const request = (id: string, askedAt: string, waitingOn: 'US' | 'CUSTOMER') => ({ id, askedAt, waitingOn }) as never
+    expect(counterOffersOf([request('c2', '2026-11-18T09:00:00Z', 'CUSTOMER'), request('u1', '2026-11-16T09:00:00Z', 'US'), request('c1', '2026-11-17T09:00:00Z', 'CUSTOMER')]).map((entry: { id: string }) => entry.id)).toEqual(['c1', 'c2'])
+  })
+  it('a task row picks its record in the dock; a task on the customer itself picks the customer\'s own thread', async () => {
+    const { pickOfTask } = await import('./use-customer-work')
+    expect(pickOfTask({ record: { type: 'SalesOrder', id: 'o1', label: 'SO-2026-0142' }, companyId: 'c1' })).toEqual({ type: 'SalesOrder', id: 'o1', label: 'SO-2026-0142', companyId: 'c1' })
+    expect(pickOfTask({ record: { type: 'Party', id: ALPHA, label: 'C-0042' }, companyId: null })).toBeNull()
+    expect(pickOfTask({ record: null, companyId: null })).toBeNull()
+  })
+  it('our asks are the existing requests card through its own container (Cancel the request held there without partners.tasks.manage); limits are not read for it', () => {
+    const dialog = readFileSync(new URL('./view/WaitingForCustomerDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain("<PortalAccess side=\"customers\" party={party} parts={['requests']} />")
+    expect(dialog).toContain('<Modal open') // a centred window, never a drawer
+    const view = readFileSync(new URL('../portal/view/PortalAccessView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const askHeld = !model.can.requests ? heldWords(t, 'right.requests')")
+    const portal = readFileSync(new URL('../portal/PortalAccess.tsx', import.meta.url), 'utf8')
+    expect(portal).toContain("(parts ?? PORTAL_PARTS).includes('limits')")
+    const strip = readFileSync(new URL('./view/WaitingStrip.tsx', import.meta.url), 'utf8')
+    expect(strip).toContain("(tile === 'customer' || tile === 'tasks') && doors.onWindow")
+  })
+  it('every word of the windows in both languages (no key left)', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      for (const key of ['customerTitle', 'asked', 'counters', 'reaccept', 'none', 'pickTip', 'tasksTitle', 'tasksNone', 'tasksMore', ...['order', 'what', 'asked', 'ref', 'promised', 'task', 'record', 'for', 'due'].map((col) => `col.${col}`)])
+        expect(t(`customers.work.window.${key}`, { customer: 'Brand Alpha', record: 'SO-1' }), `${locale} ${key}`).not.toBe(`customers.work.window.${key}`)
+    }
+    expect(createTranslator('it', messagesFor('it', ['parties']).parties!)('customers.work.window.asked', { customer: 'Brand Alpha' })).toBe('Abbiamo chiesto a Brand Alpha')
+  })
+})
+// ---- end F-SA-278

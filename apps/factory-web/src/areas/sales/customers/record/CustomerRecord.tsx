@@ -22,9 +22,13 @@ import { CustomerRecordView } from './view/CustomerRecordView'
 import { CustomerSupervisor } from '../portal/view/CustomerSupervisorCard' // F-SA-272
 import { partyName } from '../../../parties/_shared/model'
 // ---- F-SA-276: the Work tab (the strip's reads, the Orders sheet locked to the customer) and the dock that follows its rows ----
-import { useCustomerWork, type WorkCan } from './use-customer-work'
+import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer-work'
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 // ---- end F-SA-276
+// ---- F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks) ----
+import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
+import { OpenTasksDialog } from './view/OpenTasksDialog'
+// ---- end F-SA-278
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -88,7 +92,18 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   }, [])
   const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
   const dock = named && record.thread ? <CustomerDock customer={named} general={record.thread} pick={pick} scope={scope} onScope={setScope} prefix={prefix} /> : record.thread
-  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={pick} onPick={onPick} /> : null
+  // ---- F-SA-278: the strip's windows — each row picks its record in the dock (the customer's own record: its thread).
+  const [win, setWin] = useState<'customer' | 'tasks' | null>(null)
+  const reaccept = useReacceptOrders(partyId, win === 'customer', can.orders)
+  const pickOrGeneral = (next: DockPick | null) => (next ? onPick(next) : setScope('general'))
+  const windows =
+    named && win === 'customer' ? (
+      <WaitingForCustomerDialog party={{ ...named, companyId: record.party?.companyId ?? null }} can={{ partners: can.partners }} requests={work.reads.requests} reaccept={reaccept} onPick={onPick} onClose={() => setWin(null)} />
+    ) : named && win === 'tasks' ? (
+      <OpenTasksDialog customer={named.name} tasks={work.reads.tasks} onPick={pickOrGeneral} onClose={() => setWin(null)} />
+    ) : null
+  // ---- end F-SA-278
+  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={pick} onPick={onPick} onWindow={setWin /* F-SA-278 */} /> : null
   // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
   const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
@@ -99,7 +114,12 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={['people']} contactEmails={contactEmails} onPeople={setPortalEmails} />
     ) : null
   // ---- end F-SA-274
-  return <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} work={workTab} workCount={work.attention} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+  return (
+    <>
+      {windows /* F-SA-278 */}
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} work={workTab} workCount={work.attention} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+    </>
+  )
 }
 
 /** F-SA-271: a task on the customer itself (the Party record), as every record's "+ Add task" makes one (POST /tasks). */

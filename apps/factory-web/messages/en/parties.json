@@ -194,6 +194,28 @@
         "general": "{customer} (general)",
         "generalLine": "{customer}'s general thread is shared with {customer}: what you send there reaches the customer.",
         "recordLine": "{record}'s thread is shared with {customer}: what you send there reaches the customer."
+      },
+      "window": {
+        "customerTitle": "Waiting for {customer}",
+        "asked": "We asked {customer}",
+        "counters": "Counter-offers waiting for {customer}",
+        "reaccept": "Changes waiting for {customer}'s new yes",
+        "none": "Nothing waits here.",
+        "pickTip": "Show the thread of {record}",
+        "tasksTitle": "Open tasks of {customer}",
+        "tasksNone": "No open task on {customer}'s records.",
+        "tasksMore": "Only the newest 200 tasks are shown.",
+        "col": {
+          "order": "Order",
+          "what": "Where it stands",
+          "asked": "Asked",
+          "ref": "Customer PO",
+          "promised": "Promised",
+          "task": "Task",
+          "record": "Record",
+          "for": "For",
+          "due": "Due"
+        }
       }
     }
   },
