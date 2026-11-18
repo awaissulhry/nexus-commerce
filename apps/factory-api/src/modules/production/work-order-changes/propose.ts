@@ -33,11 +33,13 @@ export class ChangeRefusedError extends ConflictError {
   override name = 'ChangeRefusedError'
   override readonly issues: readonly Issue[]
   constructor(
-    readonly code: ChangeRefusal,
+    // S7 end check: the refusal's code is `refusal` (as the other …RefusedError), never `code` — that one is DomainError's
+    // 'conflict', which mapError turns into the 409.
+    readonly refusal: ChangeRefusal,
     readonly words: Words,
   ) {
     super(words.en)
-    this.issues = [{ path: `refusal/${code}`, message: words.en }]
+    this.issues = [{ path: `refusal/${refusal}`, message: words.en }]
   }
 }
 
