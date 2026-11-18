@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../../../lib/api/client'
+import { FINISH_SOURCES } from '../../depth/api' // F-SA-234b
 
 /**
  * F-SA-232 (sales page plan N2; 10-order-page §3 OR1, OR2) — the order page's reads of production, the office twin of the portal's
@@ -166,7 +167,8 @@ export const datesSchema = z.object({
   next: z.string().nullable(),
   planned: z.object({ cutStart: day.nullable(), sewStart: day.nullable(), finish: day.nullable() }),
   forecast: z
-    .array(z.object({ lineId: z.string(), seq: z.number(), finish: day.nullable(), risk: z.string().nullable(), slackDays: z.number().nullable(), sizes: z.array(z.object({ size: z.string().nullable(), finish: day.nullable(), risk: z.string().nullable() })) }))
+    // F-SA-234b: + source (what sets the day): the by-line finish forecast on Production reads it from here.
+    .array(z.object({ lineId: z.string(), seq: z.number(), finish: day.nullable(), risk: z.string().nullable(), slackDays: z.number().nullable(), source: z.enum(FINISH_SOURCES), sizes: z.array(z.object({ size: z.string().nullable(), finish: day.nullable(), risk: z.string().nullable() })) }))
     .nullable(),
 })
 export type Dates = z.infer<typeof datesSchema>

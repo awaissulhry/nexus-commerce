@@ -28,6 +28,8 @@ import {
   type ComposerMode,
   type SwitchNote,
 } from '../model'
+// F-SA-282a (B-SA-073): the portal's hold of a text that names another customer, and the writer's tick.
+import { draftAfter, namesOtherAsked } from '../model'
 import '../../parts/parts.css'
 import '../composer.css'
 
@@ -149,7 +151,8 @@ export function Composer(props: ComposerProps) {
     )
   }
 
-  const change = (next: Partial<ComposerDraft>) => props.onDraft({ ...draft, ...next }, notes)
+  // F-SA-282a: a change of the words lets the portal's hold and the tick go (the API checks the new words again).
+  const change = (next: Partial<ComposerDraft>) => props.onDraft(draftAfter(draft, next), notes)
   const setMode = (mode: ComposerMode) => {
     const switched = switchMode(draft, mode, context.people)
     props.onDraft(switched.draft, switched.notes)
@@ -308,6 +311,13 @@ export function Composer(props: ComposerProps) {
         </div>
       )}
       {draft.mode === 'portal' && <p className="fw-rt-cx-line">{t('portal.line', { party })}</p>}
+      {/* F-SA-282a (B-SA-073): the API held the text — it names another customer of ours (never whom): the tick, and what it means. */}
+      {namesOtherAsked(draft) && (
+        <div className="fw-rt-cx-tick">
+          <Checkbox label={t('namesOther.tick')} checked={draft.namesNoOtherCustomer === true} onChange={(event) => change({ namesNoOtherCustomer: event.target.checked })} />
+          <p className="fw-rt-cx-line">{t('namesOther.hint')}</p>
+        </div>
+      )}
       {amount && draft.amount !== undefined && (
         <AmountField
           value={draft.amount}

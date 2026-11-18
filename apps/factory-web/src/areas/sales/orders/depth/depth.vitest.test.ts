@@ -68,8 +68,6 @@ import {
   depositKindChoices,
   depthCanOf,
   depthEditHeld,
-  forecastSites,
-  forecastsOf,
   freezeRows,
   frozenCells,
   frozenGroups,
@@ -273,13 +271,6 @@ describe('materials, the confirmation, the tech pack, the forecast', () => {
     expect(packRows({ inquiry: null })).toEqual([])
   })
 
-  it('the forecast of this order’s lines, from the sites its lines name (or the person’s)', () => {
-    const forecasts = forecastsOf(PROMISE_LINES, PROMISE_LINES[1]!.order.id)
-    expect([...forecasts.keys()]).toEqual([PROMISE_LINES[1]!.id])
-    expect(forecastSites(order('IN_PRODUCTION'), [{ id: 's1' }, { id: 's2' }])).toEqual(['s1', 's2'])
-    const withSite = order('IN_PRODUCTION')
-    expect(forecastSites({ lines: withSite.lines.map((line) => ({ ...line, siteId: 's9' })) }, [{ id: 's1' }])).toEqual(['s9'])
-  })
 })
 
 describe('By promise week (never re-ranked)', () => {

@@ -137,7 +137,7 @@ export async function insertBookedInCommand(tools: CommandTools, rma: ReturnRow,
     select: { id: true },
   })
   tools.audit({ action: 'shipping.returnLabel', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, after: { labelId, status: 'BOOKED', carrierCode, bookingReference: booked.trackingNumber, fileId: file.id } })
-  tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'BOOKED', via: 'OFFICE' } }))
+  tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'BOOKED', via: 'OFFICE', partyId: rma.partyId /* B-SA-004b */ } }))
 }
 
 /** Inside a command: an OFFERED label booked by its link (the row FOR UPDATE; still OFFERED, else refused). */
@@ -150,7 +150,7 @@ export async function bookOfferedInCommand(tools: CommandTools, rma: ReturnRow, 
   const file = await recordGeneratedFile(tools, booked.prepared)
   await tx.returnLabel.update({ where: { id: labelId }, data: { status: 'BOOKED', bookingReference: booked.trackingNumber, labelFileId: file.id, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   tools.audit({ action: 'shipping.returnLabelBooked', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: 'OFFERED' }, after: { labelId, status: 'BOOKED', bookingReference: booked.trackingNumber, fileId: file.id, via: 'LINK' } })
-  tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'BOOKED', via: 'LINK' } }))
+  tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'BOOKED', via: 'LINK', partyId: rma.partyId /* B-SA-004b */ } }))
 }
 
 /** The return's row FOR UPDATE (labels of one return are made one at a time), read again. */

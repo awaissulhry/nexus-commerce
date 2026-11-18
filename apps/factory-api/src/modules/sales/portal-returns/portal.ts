@@ -113,7 +113,7 @@ export async function portalCancelReturn(app: FastifyInstance, request: FastifyR
     const statusReason = `Cancelled by the customer${reason ? `: ${reason.slice(0, 400)}` : '.'}`
     await tools.tx.returnAuthorisation.update({ where: { id: seen.id }, data: { status: 'CANCELLED', closedAt: tools.now, statusReason, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'portalReturns.cancel', recordType: RETURN_RECORD, recordId: seen.id, companyId: seen.companyId, siteId: seen.siteId, before: { status: locked.status }, after: { status: 'CANCELLED', statusReason, byPartner: true } })
-    tools.emit({ type: 'return.status_changed', subject: seen.id, companyId: seen.companyId, siteId: seen.siteId, payload: { returnId: seen.id, number: seen.number, from: locked.status, to: 'CANCELLED' } })
+    tools.emit({ type: 'return.status_changed', subject: seen.id, companyId: seen.companyId, siteId: seen.siteId, payload: { returnId: seen.id, number: seen.number, from: locked.status, to: 'CANCELLED', partyId: seen.partyId /* B-SA-004b */ } })
     return null
   })
   return portalReturn(app, request, returnId)

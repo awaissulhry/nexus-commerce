@@ -5,7 +5,14 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { ArrowLeft, MessageSquare, Pencil /* F-SA-246 */ } from 'lucide-react'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../lib/i18n/provider'
-import { messagesButtonWords, PORTAL_DOCK_COLUMNS, PORTAL_DOCK_FROM, portalArrivalCleaned, portalArrivalOf, portalFrameMode, PORTAL_THREAD_PARAM, type PortalFrameMode } from './model'
+import { messagesButtonWords, PORTAL_DOCK_FROM, portalArrivalCleaned, portalArrivalOf, portalFrameMode, PORTAL_THREAD_PARAM, type PortalFrameMode } from './model'
+// ---- F-SA-264: the width menu and Hide / Show (⌘J), kept per person.
+import { Columns2, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { Menu, type MenuItemDef } from '@nexus/ui/components'
+import { ToolbarButton } from '@nexus/ui/primitives'
+import { usePortalPersonId } from '../frame'
+import { DEFAULT_PORTAL_DOCK_WIDTH, isPortalThreadKey, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, readPortalDock, showButtonWords, writePortalDock, type PortalDockWidth } from './model'
+// ---- end F-SA-264
 import './record-frame.css'
 
 /**
@@ -22,6 +29,10 @@ import './record-frame.css'
  *   the full-width view opens first. An old `?tab=messages`, `?thread=new` or `#messages` shows the conversation on arrival (R-8).
  * - Notices stay in the body column, never above the conversation. A page with no conversation for the person (a missing record)
  *   passes `thread={null}`: no dock and no button.
+ * - F-SA-264 (sales page plan N6, R6, P11): docked, the conversation's top row holds the width menu (a third · 40 % · half) and
+ *   "Hide the conversation"; hidden, the body takes the whole width and "Show the conversation" brings it back; ⌘J hides and shows it
+ *   (narrower: opens and closes the full-width view). The width and "hidden" are kept on this device per person (a private window
+ *   keeps nothing). A hidden conversation is not on screen: it marks nothing read.
  */
 
 /** PortalShell's "Ask a question" on a page whose conversation is docked: sent to `#messages`; the frame shows and focuses its box. */
@@ -35,7 +46,8 @@ export interface PortalRecordFrameProps {
   /** The record's body: its tabs' content and its one notice. */
   readonly children: ReactNode
   /** The design review: the docked or the narrow layout whatever the window, the narrow view open, a new-message count. */
-  readonly design?: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number }
+  // F-SA-264: + the dock's width and whether it is hidden.
+  readonly design?: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number; readonly width?: PortalDockWidth; readonly hidden?: boolean }
   // F-SA-246 (sales page plan R6; 14-change-flow §2.0 S1): a door above the conversation to the record's own ask ("Ask for a change"
   // on an order: the page's Ask dialog), held with why (a preview, no right to ask, offline); absent or null: none.
   readonly door?: { readonly label: string; readonly held: string | null; readonly onOpen: () => void } | null
@@ -83,6 +95,15 @@ function focusBox(dock: HTMLElement | null): void {
   dock?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
 }
 
+// F-SA-264: this device's storage, or none (a private window that refuses it, the server).
+const storageOf = (): Storage | null => {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage
+  } catch {
+    return null
+  }
+}
+
 export function PortalRecordFrame({ thread, threadLabel, children, design, door /* F-SA-246 */ }: PortalRecordFrameProps) {
   const t = useT('portal')
   const pathname = usePathname()
@@ -97,6 +118,36 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   const [fresh, setFresh] = useState(design?.newCount ?? 0)
   const [focusAsked, setFocusAsked] = useState(false)
   const scrollKept = useRef<number | null>(null)
+  // ---- F-SA-264: the dock's width and "hidden", as the person left them on this device (read before paint: no flash).
+  const person = usePortalPersonId()
+  // Kept for the signed-in person only (the design review and a page outside the portal layout keep nothing).
+  const keepFor = design ? null : person
+  const [width, setWidth] = useState<PortalDockWidth>(design?.width ?? DEFAULT_PORTAL_DOCK_WIDTH)
+  const [hidden, setHiddenNow] = useState(design?.hidden ?? false)
+  useLayoutEffect(() => {
+    if (!keepFor) return
+    const kept = readPortalDock(storageOf(), keepFor)
+    setWidth(kept.width)
+    setHiddenNow(kept.hidden)
+  }, [keepFor])
+  const setHidden = useCallback(
+    (next: boolean) => {
+      if (keepFor) writePortalDock(storageOf(), keepFor, { hidden: next })
+      setHiddenNow(next)
+    },
+    [keepFor],
+  )
+  const chooseWidth = useCallback(
+    (next: PortalDockWidth) => {
+      if (keepFor) writePortalDock(storageOf(), keepFor, { width: next, hidden: false })
+      setWidth(next)
+      setHiddenNow(false)
+    },
+    [keepFor],
+  )
+  const docked = mode === 'docked'
+  const dockHidden = docked && hidden && hasThread
+  // ---- end F-SA-264
 
   const openView = useCallback(() => {
     const scroller = scrollerOf(root.current)
@@ -119,10 +170,31 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   const showThread = useCallback(
     (focus = false) => {
       if (mode === 'stacked' && !viewOpen) openView()
+      if (mode === 'docked' && hidden) setHidden(false) // F-SA-264: a hidden conversation shows again
       if (focus) setFocusAsked(true)
     },
-    [mode, viewOpen, openView],
+    [mode, viewOpen, openView, hidden, setHidden],
   )
+
+  // ---- F-SA-264: ⌘J (Ctrl J) — docked: hide / show; narrower: open / close the full-width view. Not in the design review.
+  const toggleThread = useCallback(() => {
+    if (mode === 'docked') setHidden(!hidden)
+    else if (viewOpen) closeView()
+    else openView()
+  }, [mode, hidden, setHidden, viewOpen, closeView, openView])
+  const latestToggle = useRef(toggleThread)
+  latestToggle.current = toggleThread
+  useEffect(() => {
+    if (design || !hasThread) return
+    const onKey = (event: KeyboardEvent) => {
+      if (!isPortalThreadKey(event)) return
+      event.preventDefault()
+      latestToggle.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [design, hasThread])
+  // ---- end F-SA-264
 
   // R-8: an old `?tab=messages` (a list's Messages link, a mail), `?thread=new` or `#messages` shows the conversation on arrival.
   useEffect(() => {
@@ -130,6 +202,7 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
     const asked = portalArrivalOf(window.location.search, window.location.hash)
     if (!asked.openThread) return
     const narrow = !window.matchMedia(`(min-width: ${PORTAL_DOCK_FROM}px)`).matches
+    if (!narrow) setHidden(false) // F-SA-264: the address asks for the conversation: a hidden one shows again
     window.history.replaceState(null, '', `${window.location.pathname}${portalArrivalCleaned(window.location.search, narrow)}`)
     if (asked.focus) setFocusAsked(true)
     // Only on arrival.
@@ -148,7 +221,8 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   }, [showThread, hasThread])
 
   // The box takes the focus once it is on screen (after the full-width view opened).
-  const onScreen = mode === 'docked' || viewOpen
+  // F-SA-264: a hidden docked conversation is not on screen (it marks nothing read).
+  const onScreen = (mode === 'docked' && !dockHidden) || viewOpen
   useEffect(() => {
     if (!focusAsked || !onScreen) return
     const timer = setTimeout(() => {
@@ -198,6 +272,24 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   const state = useMemo<PortalRecordFrameState>(() => ({ mode, onScreen, reportNew: setFresh, showThread }), [mode, onScreen, showThread])
 
   const words = messagesButtonWords(fresh)
+  // ---- F-SA-264: hidden, the body's bar brings it back ("Show the conversation (2 new)"); docked, its top row has the width menu and Hide.
+  const showWords = showButtonWords(fresh)
+  const showButton = dockHidden ? (
+    <div className="fw-prf-bar">
+      <Button size="sm" variant={fresh > 0 ? 'primary' : 'secondary'} aria-controls={dockId} aria-expanded={false} aria-keyshortcuts="Meta+J Control+J" title={`${t('record.frame.show')} (⌘J)`} onClick={() => setHidden(false)}>
+        <PanelRightOpen size={14} aria-hidden /> <span>{t(showWords.key, showWords.count === undefined ? undefined : { count: showWords.count })}</span>
+      </Button>
+    </div>
+  ) : null
+  const widthItems: MenuItemDef[] = PORTAL_DOCK_WIDTHS.map((entry) => ({ id: entry, label: t(`record.frame.${entry}`), checked: entry === width, onSelect: () => chooseWidth(entry) }))
+  const tools =
+    hasThread && docked ? (
+      <div className="fw-prf-tools">
+        <Menu align="right" label={<Columns2 size={16} aria-hidden />} items={widthItems} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': t('record.frame.width') }} />
+        <ToolbarButton icon={<PanelRightClose size={16} aria-hidden />} label={t('record.frame.hide')} shortcut="⌘J" tooltipAlign="end" aria-keyshortcuts="Meta+J Control+J" onClick={() => setHidden(true)} />
+      </div>
+    ) : null
+  // ---- end F-SA-264
   const button =
     hasThread && mode === 'stacked' && !viewOpen ? (
       <div className="fw-prf-bar">
@@ -218,13 +310,15 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
     <FrameContext.Provider value={state}>
       <div
         ref={root}
-        className={`fw-prf${hasThread ? ' has-thread' : ''}`}
+        className={`fw-prf${hasThread ? ' has-thread' : ''}${dockHidden ? ' is-hidden' : '' /* F-SA-264 */}`}
         data-mode={mode}
         data-view={mode === 'stacked' && viewOpen ? 'thread' : 'body'}
-        style={{ ['--fw-prf-cols' as string]: PORTAL_DOCK_COLUMNS }}
+        data-width={width /* F-SA-264 */}
+        style={{ ['--fw-prf-cols' as string]: PORTAL_DOCK_COLUMNS_OF[width] /* F-SA-264: the person's width (40 % by default) */ }}
       >
         <div className="fw-prf-body">
           {button}
+          {showButton /* F-SA-264 */}
           {children}
         </div>
         {hasThread ? (
@@ -236,6 +330,7 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
                 </Button>
               </div>
             ) : null}
+            {tools /* F-SA-264 */}
             {/* F-SA-246: the record's own ask, beside its conversation (PartnerThread itself is untouched). */}
             {door ? (
               <div className="fw-prf-back fw-prf-door">

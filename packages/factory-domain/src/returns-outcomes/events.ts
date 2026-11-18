@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004b */ livePartyId } from '../events/define'
 
 /**
  * Remakes, exchanges and closing a return (B-W2b-346; SAL-298, SAL-350, SAL-351, SAL-355, SAL-360). apps/factory-api's
@@ -21,27 +21,28 @@ import { defineEvent } from '../events/define'
  */
 
 const live = { permission: 'sales.returns.view' } as const
+// B-SA-004b (Sales page plan P17'): the RMA's customer (`partyId`, the RMA row's own), for the office's live wall only; optional.
 
 export const events = [
   defineEvent({
     type: 'return.remake_asked',
     context: 'returns-outcomes',
     description: 'A remake was asked with photos for lines of a customer return (made-to-measure fit): by the office, or by the customer in the portal or through a claim link.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), via: z.enum(['OFFICE', 'PORTAL', 'LINK']) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), via: z.enum(['OFFICE', 'PORTAL', 'LINK']), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...live, fields: ['returnId', 'number', 'lineIds', 'via'] },
   }),
   defineEvent({
     type: 'return.line_split',
     context: 'returns-outcomes',
     description: 'A line of a customer return of which only part arrived was split: it keeps the pieces that arrived, and a new line split from it takes the rest, still expected.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineId: z.uuid(), newLineId: z.uuid(), kept: z.number().int(), rest: z.number().int() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineId: z.uuid(), newLineId: z.uuid(), kept: z.number().int(), rest: z.number().int(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...live, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'lineId', 'newLineId', 'kept', 'rest'] },
   }),
   defineEvent({
     type: 'return.sent_back',
     context: 'returns-outcomes',
     description: 'Lines of a customer return go back to the customer as they came, after the inspection, with the return DDT that carries them (or none issued yet).',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), decidedLineIds: z.array(z.uuid()), ddtId: z.uuid().nullable(), ddtNumber: z.string().nullable() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), decidedLineIds: z.array(z.uuid()), ddtId: z.uuid().nullable(), ddtNumber: z.string().nullable(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...live, fields: ['returnId', 'number', 'lineIds', 'ddtId', 'ddtNumber'] },
   }),
   defineEvent({
@@ -53,6 +54,7 @@ export const events = [
       number: z.string(),
       finishReason: z.enum(['COMPLETED', 'CREDITED_WITHOUT_RETURN', 'RETURNED_UNCHANGED', 'GOODS_NOT_RECEIVED', 'CUSTOMER_WITHDREW', 'OTHER']),
       from: z.enum(['AUTHORISED', 'RECEIVED', 'INSPECTED']),
+      partyId: livePartyId() /* B-SA-004b */,
     }),
     live: { ...live, fields: ['returnId', 'number', 'finishReason'] },
   }),

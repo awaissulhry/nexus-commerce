@@ -17,11 +17,15 @@ import { WORK_ORDER_CHANGE_KINDS } from './rules'
  *
  * The wall: each names ONE customer (`partyId`, the order's; livePartyId: the office's live screens send it only to people who
  * reach that customer) and never in the live fields; ids, the kind and the status only — never a person, a figure or words.
- * Live: the office's order screens (orders.view) re-read the order's "Still to do" and its production part. OFFICE ONLY: the
- * portal is never told (portal/notifications/live.ts PARTNER_LIVE_EVENTS does not list them).
+ * Live: the office's order screens (orders.view) re-read the order's "Still to do" and its production part; B-SA-004c: the work
+ * order screens (workorders.view) too. OFFICE ONLY: the portal is never told (portal/notifications/live.ts
+ * PARTNER_LIVE_EVENTS does not list them).
  */
 
-const live = { permission: 'orders.view', fields: ['changeId', 'salesOrderId', 'workOrderId', 'kind'] } as const
+// B-SA-004c: and the production office's work order screens (workorders.view, `also`): the change is read by the order's readers
+// OR its work order's (modules/production/work-order-changes read.ts), so a production person without orders.view is sent a new
+// proposal live too. Each permission with its own grants: a person limited to some customers still gets only theirs (`partyId`).
+const live = { permission: 'orders.view', also: 'workorders.view', fields: ['changeId', 'salesOrderId', 'workOrderId', 'kind'] } as const
 
 const payload = {
   changeId: z.uuid(),

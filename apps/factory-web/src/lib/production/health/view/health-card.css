@@ -1,0 +1,60 @@
+/*
+ * F-SA-235b — the Health card's own look (the work order's Overview and the sales order's Production draw it the same): it moved
+ * to lib/production/health with its card, so it no longer borrows the production area's `fw-pr-*` rules (not loaded on the sales
+ * order's page). The same declarations as the production area's card, head, stack, hint, inline row and dialog had: the work order
+ * page looks exactly as before. Layout only, semantic tokens only.
+ */
+.fw-phc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-phc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-phc-h2 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-phc-stack,
+.fw-phc-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-phc-dialog {
+  gap: var(--nds-space-12);
+}
+
+.fw-phc-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-phc-inline,
+.fw-phc-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

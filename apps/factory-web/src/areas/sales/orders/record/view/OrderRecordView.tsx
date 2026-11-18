@@ -11,7 +11,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
-import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, isWideTab, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
+import { DOCK_DEFAULTS } from '../../model' // F-SA-263
+import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
@@ -275,7 +276,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         thread={thread ?? null}
         printThread={printThread}
         fields={fields /* B-TH-280 */}
-        wide={isWideTab(model.tab)}
+        // F-SA-263: each tab its own default width; a width the person picks is kept for this tab, "hidden" for every order.
+        defaultWidth={DOCK_DEFAULTS[model.tab]}
+        dockTab={model.tab}
         band={{
           back: <Link href={ordersHref(model.prefix)}>{t('record.back')}</Link>,
           title: (

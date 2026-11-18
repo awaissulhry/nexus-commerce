@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Flag } from 'lucide-react'
-import { Banner, Card, EmptyState } from '@nexus/ui/components'
+import { Card, EmptyState } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Spinner, Tag } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../../lib/i18n/ds-parts'
@@ -10,19 +10,20 @@ import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { dayInstant } from '../../model'
-import { MILESTONE_TONE, NAMESPACE, RISK_TONE } from '../model'
-import type { DepthPart, OrderDepthActions, OrderDepthModel } from '../use-order-depth'
+import { MILESTONE_TONE, NAMESPACE, RISK_TONE, type Forecast } from '../model'
+import type { DepthPart } from '../use-order-depth'
 import type { OrderMilestone } from '../api'
 
 /**
  * Production finish forecast (design order.dates.lines "Production finish forecast (from work orders, W2b)"): the day the plan
  * says the line is ready (B-W2b-317's planned finish: the board, a work order's due day, a planned order, the engine), what
  * sets it, and the days to spare or short against the promise. "—" while it reads or nothing says when. Fetches nothing.
+ * F-SA-234b: the part is the order's own production read's `dates.forecast` (record/production `forecastPart`), not a read of every
+ * site's promise lines; a failed read is said once on the tab (its milestones card), the cell only "—".
  */
-export function ForecastCell({ model, lineId }: { model: OrderDepthModel | undefined; lineId: string }) {
+export function ForecastCell({ part, lineId }: { part: DepthPart<ReadonlyMap<string, Forecast>> | null; lineId: string }) {
   const d = useT(NAMESPACE)
   const locale = useLocale()
-  const part = model?.forecasts
   if (!part) return <span className="fw-sod-hint">{d('forecast.noRight')}</span>
   if (!part.value) return <span className="fw-sod-hint">{part.problem ? d('forecast.failed') : d('forecast.reading')}</span>
   const forecast = part.value.get(lineId)
@@ -35,25 +36,6 @@ export function ForecastCell({ model, lineId }: { model: OrderDepthModel | undef
       </span>
       <span className="fw-sod-hint">{d(`finish.${forecast.source}`)}</span>
     </span>
-  )
-}
-
-/** The forecast's read state, said once above the table (failed: Try again). */
-export function ForecastNote({ model, actions }: { model: OrderDepthModel | undefined; actions?: OrderDepthActions }) {
-  const d = useT(NAMESPACE)
-  if (!model?.forecasts?.problem) return null
-  return (
-    <Banner
-      tone="warning"
-      title={d('forecast.failedTitle')}
-      action={
-        <Button size="sm" onClick={() => actions?.onRetry?.('forecasts')}>
-          {d('common.retry')}
-        </Button>
-      }
-    >
-      {d(model.forecasts.problem)}
-    </Banner>
   )
 }
 

@@ -11,6 +11,10 @@ import { WithMessages } from '../../i18n'
 import type { PanelRead } from '../../model'
 import { CHECKLIST_MAX, draftProblem, emptyDraft, type Assignable, type TaskDraft } from '../model'
 import '../tasks.css'
+// ---- F-SA-281: the N-records mode (one task on each record, POST /tasks/batch) ----
+import { CheckCircle2, XCircle } from 'lucide-react'
+import { batchHeld, batchReceipt, nextWorkingDay, withoutSupervisor, type BatchAnswer, type BatchAssignee, type BatchRecord } from '../model'
+// ---- end F-SA-281
 
 export interface TaskNewDialogProps {
   /** The record it is on ("New task on Q-2026-0142"); null: a task of its own. */
@@ -28,6 +32,12 @@ export interface TaskNewDialogProps {
   onCreate?: (draft: TaskDraft) => Promise<boolean> | void
   onRetryPeople?: () => void
   onClose: () => void
+  /**
+   * F-SA-281: many records at once ("Add task to N…"): one task on each (one batch), Assign to each record's supervisor (the default) or
+   * one person of `people`; title, due (the next working day), note; a check line names the records with no supervisor; Send answers
+   * with the receipt ("4 tasks made · 1 left out (…)"). The single mode's checklist is not offered (the batch has none).
+   */
+  batch?: { readonly records: readonly BatchRecord[]; readonly today: string; readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null> } | null
 }
 
 /** "Nobody yet" in the assignee list (the API's null). */
@@ -41,8 +51,8 @@ const NOBODY = '__nobody__'
  */
 export function TaskNewDialog(props: TaskNewDialogProps) {
   return (
-    <WithMessages namespaces={['records']}>
-      <Dialog {...props} />
+    <WithMessages namespaces={props.batch ? ['records', 'home-tasks'] /* F-SA-281 */ : ['records']}>
+      {props.batch ? <BatchDialog {...props} batch={props.batch} /> : <Dialog {...props} />}
     </WithMessages>
   )
 }
@@ -125,3 +135,119 @@ function Dialog({ recordLabel, people, me, held = null, busy = false, initial, o
     </Modal>
   )
 }
+
+// ---- F-SA-281 (sales page plan N5, pick P10; 11-customer-page §3.9): the N-records mode ----------------------------------------
+
+/** The value of "Each record's supervisor" in the Assign to list. */
+const SUPERVISOR = '__supervisor__'
+/** At most this many record labels are listed; the rest are counted. */
+const LISTED = 8
+
+function BatchDialog({ people, held = null, busy = false, onRetryPeople, onClose, batch }: TaskNewDialogProps & { batch: NonNullable<TaskNewDialogProps['batch']> }) {
+  const t = useT('records')
+  const h = useT('home-tasks')
+  const locale = useLocale()
+  const titleId = useId()
+  const [draft, setDraft] = useState<TaskDraft>({ ...emptyDraft(null), dueDate: nextWorkingDay(batch.today) })
+  const [assignee, setAssignee] = useState<BatchAssignee>({ kind: 'SUPERVISOR' })
+  const [sending, setSending] = useState(false)
+  const [answer, setAnswer] = useState<BatchAnswer | null>(null)
+  const set = (change: Partial<TaskDraft>) => setDraft((current) => ({ ...current, ...change }))
+  const records = batch.records
+  const missing = assignee.kind === 'SUPERVISOR' ? withoutSupervisor(records) : []
+  const problem = batchHeld(draft, assignee, records)
+  const heldText = held ? held : busy || sending ? t('tasks.held.busy') : problem ? (problem.key.startsWith('batch.') ? h(problem.key, problem.params) : t(problem.key, problem.params)) : null
+  const send = () => {
+    if (heldText || answer) return
+    setSending(true)
+    void batch.onSend(draft, assignee).then((done) => {
+      setSending(false)
+      if (done) setAnswer(done)
+    })
+  }
+  const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault()
+      send()
+    }
+  }
+  const list = people.status === 'ready' ? people.data : []
+  const labels = records.slice(0, LISTED).map((record) => record.label).join(', ')
+  const receipt = answer ? batchReceipt(answer, locale === 'en' ? 'en' : 'it') : null
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title={h('batch.title', { count: records.length })}
+      footer={
+        <span className="fw-rtask-buttons">
+          <Button variant="secondary" onClick={onClose}>
+            {receipt ? h('batch.close') : t('tasks.new.cancel')}
+          </Button>
+          {!receipt && (
+            <Button variant="primary" heldReason={heldText} onClick={send} aria-keyshortcuts="Meta+Enter Control+Enter">
+              <Plus size={14} aria-hidden /> {h('batch.send', { count: records.length })}
+            </Button>
+          )}
+        </span>
+      }
+    >
+      {receipt ? (
+        <div className="fw-rtask-form" role="status">
+          <Banner tone={receipt.left === 0 ? 'success' : 'warning'} title={receipt.left === 0 ? h('batch.made', { count: receipt.made }) : h('batch.receipt', { made: receipt.made, left: receipt.left })} />
+          {receipt.lines.length > 0 && (
+            <ul className="fw-rtask-receipt">
+              {receipt.lines.map((line) => (
+                <li key={line}>
+                  <XCircle size={14} aria-hidden /> {line}
+                </li>
+              ))}
+            </ul>
+          )}
+          {receipt.made > 0 && (
+            <p className="fw-rtask-hint">
+              <CheckCircle2 size={14} aria-hidden /> {h('batch.where')}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="fw-rtask-form" onKeyDown={onKey}>
+          <p className="fw-rtask-hint">
+            {labels}
+            {records.length > LISTED ? ` ${h('batch.more', { count: records.length - LISTED })}` : ''}
+          </p>
+          <Field label={t('tasks.new.field.title')} required htmlFor={titleId}>
+            <Input id={titleId} value={draft.title} onChange={(event) => set({ title: event.target.value })} autoFocus maxLength={400} placeholder={t('tasks.new.field.titlePlaceholder')} />
+          </Field>
+          <div className="fw-rtask-form-row">
+            <Field label={h('batch.assignee')} hint={h('batch.assigneeHint')}>
+              {people.status === 'loading' ? (
+                <Skeleton height={32} />
+              ) : people.status === 'error' ? (
+                <Banner tone="danger" title={t(people.problem)} action={onRetryPeople ? <Button size="sm" onClick={onRetryPeople}>{t('panels.retry')}</Button> : undefined} />
+              ) : (
+                <Select value={assignee.kind === 'SUPERVISOR' ? SUPERVISOR : assignee.userId} onChange={(event) => setAssignee(event.target.value === SUPERVISOR ? { kind: 'SUPERVISOR' } : { kind: 'PERSON', userId: event.target.value })}>
+                  <option value={SUPERVISOR}>{h('batch.supervisor')}</option>
+                  {list.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.me ? t('tasks.new.field.me', { name: person.name }) : person.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label={t('tasks.new.field.due')} hint={h('batch.dueHint')}>
+              <DateField value={draft.dueDate} onChange={(value) => set({ dueDate: value })} locale={INTL_LOCALE[locale]} clearable clearLabel={t('tasks.new.field.dueClear')} ariaLabel={t('tasks.new.field.due')} />
+            </Field>
+          </div>
+          {missing.length > 0 && <Banner tone="warning" title={h('batch.noSupervisor', { count: missing.length })}>{missing.slice(0, LISTED).map((record) => record.label).join(', ')}</Banner>}
+          <Field label={h('batch.note')}>
+            <Textarea value={draft.description} onChange={(event) => set({ description: event.target.value })} rows={3} />
+          </Field>
+        </div>
+      )}
+    </Modal>
+  )
+}
+// ---- end F-SA-281

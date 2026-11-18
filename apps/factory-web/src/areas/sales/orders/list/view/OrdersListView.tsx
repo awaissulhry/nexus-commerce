@@ -49,6 +49,25 @@ import { figureDoors, groupHref, invoiceShippedHeld, timingKey, totalNameKey } f
 import { FiguresLine, InvoiceDraftsDialog } from '../sheet/overall-parts'
 import type { ExtraTerms } from '../../model'
 import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
+// ---- F-SA-275 (the API's B-SA-070): Where it is, Waiting on, Supervisor (opt-in here, shown by the customer page's views), ⋯ Add task… / Answer request… ----
+import { SupervisorCell, WaitingOnCell, WhereItIsCell } from '../sheet/parts'
+import { answerHrefOf, HEALTH_CHIP, waitingItemsOf, whereLineOf } from '../sheet/model'
+import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
+import { productionWordsFor } from '../../../../../lib/production/words'
+// ---- end F-SA-275
+// ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs, reused in place; one customer only ----
+import { MessageSquareLock, UserCog } from 'lucide-react'
+import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
+import { assignHeld } from '../../../../_shared/production-supervisor/model'
+import { NoteDialog } from '../../../../production/_shared/notes/view/NoteDialog'
+import { NOTES_NS, openHeld } from '../../../../production/_shared/notes/model'
+import { oneCustomerHeld, supervisorTargetsOf } from '../sheet/model'
+// ---- end F-SA-280
+// ---- F-SA-281: the one New task window (one order, or N in one batch) ----
+import { ListPlus } from 'lucide-react'
+import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
+import { BATCH_MAX } from '../../../../../record-panels/tasks/model'
+// ---- end F-SA-281
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -65,7 +84,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */, 'records' /* F-SA-281: the tasks' held words */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -77,6 +96,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const d = useT(DEPTH) // B-W2b-323
   const s = useT(SHEET) // B-TH-225
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
+  const m = useT(SUPERVISOR_NS) // F-SA-275
+  const n = useT(NOTES_NS) // F-SA-280
+  const r = useT('records') // F-SA-281
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -131,6 +153,16 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   })
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  // ---- F-SA-280: the one-customer check before any window (the server checks each record again), then each window's own holds.
+  const oneCustomer = oneCustomerHeld(picked, model.locked?.party ? (model.customer?.id ?? null) : null)
+  const oneCustomerWords = oneCustomer ? s(oneCustomer.key, oneCustomer.params) : null
+  const assignWait = assignHeld({ manage: !!model.bulkCan?.supervisor }, { targets: supervisorTargetsOf(picked), leftOut: 0 })
+  const noteWait = openHeld(!!model.bulkCan?.note, picked.length)
+  const assignWords = oneCustomerWords ?? (assignWait ? m(assignWait.key, assignWait.params) : null)
+  const noteWords = oneCustomerWords ?? (noteWait ? n(noteWait.key, noteWait.params) : null)
+  // ---- end F-SA-280
+  // F-SA-281: Add task to N… — one customer, the tasks' right, at most BATCH_MAX (the dialog and the API check again).
+  const taskWords = oneCustomerWords ?? (model.bulkCan?.task ? r(model.bulkCan.task) : picked.length > BATCH_MAX ? s('bulk.tooMany', { max: BATCH_MAX }) : null)
   const ownKeys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
     ...(model.can.manage && !model.embedded ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
@@ -175,12 +207,13 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
   const cardFields = useMemo(() => cardFieldsOf((row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />), [])
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer: setViewer }),
+    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */],
   )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
+  // F-SA-276: the host's default view is not a narrowing; the waiting term is.
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all' && model.rows !== model.defaultRows) || !!model.waiting || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
   const clearFilters = () => {
     search.reset('') // F-SA-223
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -191,7 +224,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     // F-SA-220: a customer the host locks is the page's own (no chip: the page names it).
     ...(model.customer && !model.locked?.party ? [{ id: 'party', label: model.customer.name === null ? s('switcher.unknown') : s('chips.customer', { name: model.customer.name ?? '…' }), onClear: () => actions?.onCustomer?.(null) }] : []),
     ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
-    ...(statusView ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
+    ...(statusView && statusView !== model.defaultRows /* F-SA-276: the host's own view is no chip */ ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
+    // F-SA-276: the orders waiting on us (the customer page's view "Waiting on us").
+    ...(model.waiting ? [{ id: 'waiting', label: s('chips.waitingUs'), onClear: () => actions?.onWaiting?.(null) }] : []),
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
     // F-SA-221: made-to-measure orders only — removable here, fixed where the page holds it (the Made-to-measure page).
     ...(model.kind ? [{ id: 'kind', label: s('mtm.mark'), onClear: model.locked?.kind ? null : () => actions?.onKind?.(null) }] : []),
@@ -378,6 +413,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           columns={columns}
           count={items ? (count !== null && items.length < count ? s('loadedOf', { loaded: items.length, total: count }) : t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length })) : '—'}
           search={searchField}
+          right={
+            model.toolbarLink ? (
+              // F-SA-276: a real link beside the list ("Work orders of <customer> ›": its own page, its own list).
+              <Link className="fw-sheet-door" href={model.toolbarLink.href}>
+                {model.toolbarLink.label}
+              </Link>
+            ) : undefined
+          }
           tools={
             <>
               {switcher /* B-TH-226 */}
@@ -396,7 +439,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
-          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => (id === MTM_VIEW ? actions?.onKind?.('mtm', 'open') : actions?.onRows?.(id as RowView)) /* F-SA-221 */ }}
+          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
@@ -412,7 +455,24 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             actions: (
               <>
                 {/* B-W2b-323: Set priority for N (one command over the selection). */}
-                {model.depth && <SetPriorityButton count={picked.length} model={model.depth} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
+                {model.depth && <SetPriorityButton count={picked.length} model={model.depth} held={oneCustomerWords /* F-SA-280 */} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
+                {/* F-SA-280: Assign supervisor… (≤ 100; the customer is never told who) and Note to N… / Ask the supervisor (≤ 100, one batch). */}
+                {actions?.onAssignSupervisor && (
+                  <Button size="sm" aria-label={s('bulk.assign')} heldReason={assignWords} onClick={() => actions.onAssignSupervisor?.(picked.map((row) => row.id))}>
+                    <UserCog size={13} aria-hidden /> <SelectionLabel>{s('bulk.assign')}</SelectionLabel>
+                  </Button>
+                )}
+                {/* F-SA-281: Add task to N… (Assign to each order's supervisor by default; one batch, its receipt). */}
+                {actions?.onAddTask && (
+                  <Button size="sm" aria-label={s('bulk.addTask', { count: picked.length })} heldReason={taskWords} onClick={() => actions.onAddTask?.(picked.map((row) => row.id), 'selection')}>
+                    <ListPlus size={13} aria-hidden /> <SelectionLabel>{s('bulk.addTask', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                )}
+                {actions?.onNote && (
+                  <Button size="sm" aria-label={s('bulk.note', { count: picked.length })} heldReason={noteWords} onClick={() => actions.onNote?.(picked.map((row) => row.id))}>
+                    <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{s('bulk.note', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                )}
                 {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
                 {model.can.manageInvoices && (
                   <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
@@ -431,13 +491,29 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           focusRow={model.focusRow}
         />
       )}
-      {model.rows !== 'open' && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
+      {model.rows !== 'open' && model.rows !== model.defaultRows /* F-SA-276 */ && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
       {/* B-W2b-323: Set priority, Import orders. */}
       {model.depth && <SetPriorityDialog model={model.depth} actions={actions?.depth} />}
+      {/* F-SA-280: production's one assign dialog and one note dialog (their results: changed / unchanged / skipped with why). */}
+      {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
+      {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
+      {/* F-SA-281: the one New task window — on one order (a row's ⋯), or on N orders in one batch (the selection). */}
+      {model.task && (
+        <TaskNewDialog
+          recordLabel={model.task.mode === 'one' ? (model.task.records[0]?.label ?? null) : null}
+          people={model.task.people}
+          me={model.me ?? null}
+          busy={model.task.busy}
+          onRetryPeople={actions?.task?.onRetryPeople}
+          onCreate={actions?.task?.onCreate}
+          onClose={() => actions?.task?.onClose()}
+          batch={model.task.mode === 'many' && actions?.task ? { records: model.task.records, today: model.today, onSend: actions.task.onSend } : null}
+        />
+      )}
       {model.importer && <OrdersImportView model={model.importer} actions={actions?.importActions} />}
 
       {help && (
@@ -565,17 +641,32 @@ function LayoutSwitchFor({ model, actions, held }: { model: OrdersListModel; act
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
 // F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
-export function builtInViewsOf(model: Pick<OrdersListModel, 'customer'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
+// F-SA-276: + "Waiting on us" (`waiting=us` with the open orders); a host's `views` names which it offers, in its order.
+export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
   const name = model.customer?.name ?? null
   const hint = name ? { hint: s('views.ofCustomer', { customer: name }) } : {}
-  return [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }]
+  const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }]
+  if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW)
+  return model.views.flatMap((id) => all.filter((view) => view.id === id))
 }
 
 /** F-SA-221: the built-in view "Made-to-measure" (`kind=mtm` + the open orders). */
 export const MTM_VIEW = 'kind:mtm'
+/** F-SA-276: the built-in view "Waiting on us" (`waiting=us` + the open orders: the customer's Work tab). */
+export const WAITING_US_VIEW = 'waiting:us'
 
 /** F-SA-221: the built-in view the address shows: "Made-to-measure" for the open made-to-measure orders, else the rows view. */
-export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind'>): string => (model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows)
+// F-SA-276: "Waiting on us" for the open orders waiting on us; another view with the waiting term is none of them.
+export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind' | 'waiting'>): string | null =>
+  model.waiting === 'us' ? (model.rows === 'open' && !model.kind ? WAITING_US_VIEW : null) : model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows
+
+/** F-SA-276: a built-in view picked — each stands alone (picking Late drops the waiting term; Waiting on us drops nothing else). */
+export function pickBuiltIn(id: string, model: Pick<OrdersListModel, 'waiting'>, actions?: Pick<OrdersListActions, 'onKind' | 'onRows' | 'onWaiting'>): void {
+  if (id === MTM_VIEW) return actions?.onKind?.('mtm', 'open')
+  if (id === WAITING_US_VIEW) return actions?.onWaiting?.('us', 'open')
+  if (model.waiting) return actions?.onWaiting?.(null, id as RowView)
+  actions?.onRows?.(id as RowView)
+}
 // ── end B-TH-243 ──
 
 // ── B-TH-225 (threads plan TH-1a, picture 23; Owner rule 2026-11-16 "every cell is a door"; features grid-F01…F30) ──────────
@@ -608,7 +699,8 @@ const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
   status: { role: 'field' as const },
   promised: { role: 'field' as const },
   madeToMeasure: { role: 'field' as const }, // F-SA-221: the mark on the phone card (never a rider's name)
-  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders'].map((id) => [id, { role: 'hidden' as const }])),
+  whereItIs: { role: 'field' as const }, // F-SA-275: the stage and the health on the phone card
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor'].map((id) => [id, { role: 'hidden' as const }])),
 })
 
 interface ColumnsInput {
@@ -617,6 +709,10 @@ interface ColumnsInput {
   d: Translate
   /** B-TH-230: the New messages column's words. */
   l?: Translate
+  /** F-SA-275: the supervisor marks' words (production-supervisor). */
+  m?: Translate
+  /** F-SA-281: the tasks' words (records). */
+  r?: Translate
   locale: Locale
   model: OrdersListModel
   wide: boolean
@@ -656,8 +752,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, locale, model, wide, latest, onViewer }
+function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -865,9 +961,30 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
           ...(data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
           // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
           ...(model.depth ? [printVerb(data, prefix, d)] : []),
+          // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
+          ...(act()?.onAddTask ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row'), disabled: !!latest.current.model.bulkCan?.task, ...(latest.current.model.bulkCan?.task && r ? { description: r(latest.current.model.bulkCan.task) } : {}) }] : []),
+          ...answerItem(data),
+          // ---- end F-SA-275
         ]}
       />
     ) : null
+  // ---- F-SA-275: the production columns (opt-in on Sales › Orders, shown by the customer page's views; their reads only while shown) ----
+  const now = Date.now()
+  const pw = productionWordsFor(locale)
+  const answerItem = (row: OrderRow) => {
+    const request = waitingItemsOf(row, latest.current.model.marks?.[row.id]).find((item) => item.kind === 'request')
+    return request && request.kind === 'request' ? [{ id: 'answer', label: s('row.answer'), href: answerHrefOf(prefix, row, request, latest.current.model.doorHref) }] : []
+  }
+  const whereText = (row: OrderRow): string => {
+    const line = whereLineOf(row)
+    if (line.kind === 'unread') return ''
+    if (line.kind === 'status') return t(`status.${row.status}`)
+    return [pw(`parts.stage.${line.stage}`), line.health ? pw(`parts.health.${HEALTH_CHIP[line.health]}`) : null].filter(Boolean).join(' · ')
+  }
+  const WhereCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WhereItIsCell row={data} t={t} s={s} /> : null)
+  const WaitingCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WaitingOnCell row={data} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} s={s} now={now} /> : null)
+  const SupervisorColumn = ({ data }: ICellRendererParams<OrderRow>) => (data && m ? <SupervisorCell row={data} s={s} marks={m} /> : null)
+  // ---- end F-SA-275
   const also = (key: string, label: string) => ({ exportWith: [{ key, label }] })
   // ── B-TH-244 (N23, ORD-G08): the later columns — opt-in (hidden until Customise or a view shows them), each the export's own key ──
   const later = (column: ColDef<OrderRow>): ColDef<OrderRow> => ({ ...column, hide: true, sortable: false, context: { ...((column.context as object | undefined) ?? {}), optIn: true } })
@@ -910,12 +1027,16 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
     { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell },
     { colId: 'brand', headerName: s('col.brand'), headerTooltip: s('col.brandHint'), minWidth: 100, flex: 1, sortable: false, cellRenderer: BrandCell },
     { colId: 'status', headerName: t('col.status'), field: 'status', minWidth: 112, flex: 0.9, cellRenderer: StatusCell },
+    // F-SA-275: Where it is — the plain stage + health, this order's own pieces (reads `production` and `progress` while shown).
+    later({ colId: 'whereItIs', headerName: s('col.whereItIs'), headerTooltip: s('col.whereItIsHint'), minWidth: 150, flex: 1, cellRenderer: WhereCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? whereText(data) : '') }),
     // B-TH-230: only for a reader of threads (the API counts only what the reader may open).
     ...(model.unread && l ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 136, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: OrderRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell } as ColDef<OrderRow>] : []),
     { colId: 'deposit', headerName: t('col.deposit'), minWidth: 96, flex: 0.8, cellRenderer: DepositCell },
     { colId: 'units', headerName: t('col.units'), field: 'units', minWidth: 72, flex: 0.5, cellRenderer: UnitsCell },
     { colId: 'orderDate', headerName: t('col.orderDate'), field: 'orderDate', minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: OrderedCell, context: also('requested', s('col.requested')) },
     { colId: 'promised', headerName: t('col.promised'), field: 'promiseDate', minWidth: 108, flex: 0.9, cellRenderer: PromiseCell, context: also('daysLate', s('col.daysLate')) },
+    // F-SA-275: Waiting on — the most urgent of a request to answer, a reply that waits, who acts next ("+1 more").
+    later({ colId: 'waitingOn', headerName: s('col.waitingOn'), headerTooltip: s('col.waitingOnHint'), minWidth: 136, flex: 0.9, cellRenderer: WaitingCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? (waitingItemsOf(data, latest.current.model.marks?.[data.id])[0]?.kind ?? '') : '') }),
     { colId: 'shipped', headerName: t('col.shipped'), minWidth: 84, flex: 0.7, cellRenderer: ShippedCell },
     { colId: 'invoiced', headerName: s('col.invoiced'), headerTooltip: s('col.invoicedHint'), minWidth: 92, flex: 0.7, sortable: false, cellRenderer: InvoicedCell, ...(can.price ? { context: also('invoicedAmount', s('col.invoicedAmount')) } : {}) },
     ...(can.price
@@ -930,9 +1051,18 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
     ...(model.depth ? depthColumns(model.depth, latest.current.actions?.depth, d).map((column) => ({ ...column, minWidth: column.colId === 'season' ? 76 : 108, hide: !wide })) : []),
     { colId: 'quote', headerName: t('col.quote'), minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: QuoteCell },
     ...(companies.length > 1 ? [{ colId: 'company', headerName: s('col.company'), minWidth: 88, flex: 0.8, sortable: false, cellRenderer: CompanyCell }] : []),
+    // F-SA-275: Supervisor — Me / Someone else / Not set, never a name on a list (the work orders' right; held in words without it).
+    later({ colId: 'supervisor', headerName: s('col.supervisor'), headerTooltip: s('col.supervisorHint'), minWidth: 104, flex: 0.6, cellRenderer: SupervisorColumn, valueGetter: ({ data }: { data?: OrderRow }) => data?.production?.supervisorMark ?? '' }),
     ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
-  ] as ColDef<OrderRow>[])
+  ] as ColDef<OrderRow>[]).map((column) => withPreset(column, model.preset ?? null, wide)) // F-SA-276
+}
+
+/** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
+export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean): ColDef<OrderRow> {
+  if (!preset || column.colId === 'more') return column
+  const id = column.colId ?? ''
+  return { ...column, hide: !(preset.shown.includes(id) || (wide && !!preset.wide?.includes(id))) }
 }
 // ── end B-TH-225 ──
 

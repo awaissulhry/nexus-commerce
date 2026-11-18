@@ -14,12 +14,13 @@ import type { Order } from '../../api'
 import { productionWordsFor } from '../../../../../lib/production/words'
 import { dayInstant, daysUntil, depositGate, isFinal, isShippedInFull, linesNotInProduction, nextStep, promiseHeld } from '../../model'
 import { madeForOf, ownProgress } from '../production'
+import { forecastPart } from '../production' // F-SA-234b
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
 import { readOf } from '../overview/model'
 import type { Work } from '../overview/api'
 // ---- B-W2b-323 (orders in depth on screen): the finish forecast per line; the milestones' card, fed by the order's own read ----
-import { ForecastCell, ForecastNote, MilestonesCard } from '../../depth/view/DatesDepth'
+import { ForecastCell, MilestonesCard } from '../../depth/view/DatesDepth'
 import { NAMESPACE as DEPTH } from '../../depth/model'
 // ---- F-SA-235: Holds, quality & problems (the work order record's HealthCard, moved to lib/production/health: one card), Materials
 // (the customer-supplied materials card, moved from Lines), Specs in force (the tech pack in force, moved from the tab's foot) ----
@@ -262,6 +263,7 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
   const gate = depositGate(order)
   const request = gate.request
   const planned = readOf(model.production)?.dates?.planned ?? null
+  const forecast = forecastPart(model.production) // F-SA-234b
   const lateness = (promise: string | null) => {
     if (!promise || isFinal(order) || isShippedInFull(order)) return null // F-SA-201: a Delivered order is not late either
     const days = daysUntil(promise, model.today)
@@ -334,8 +336,6 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
           ...shipped.map((shipment) => ({ label: shipment.number, value: shipment.deliveredAt ? t('dates.shippedDelivered', { shipped: shipment.shippedAt ? formatDate(shipment.shippedAt, { locale }) : '—', delivered: formatDate(shipment.deliveredAt, { locale }) }) : t('dates.shippedOn', { shipped: formatDate(shipment.shippedAt!, { locale }) }) })),
         ]}
       />
-      {/* B-W2b-323: the forecast's read failed (said once). */}
-      <ForecastNote model={model.depth} actions={actions?.depth} />
       <SummaryTable
         label={t('dates.linesLabel')}
         columns={[t('dates.col.line'), t('dates.col.requested'), t('dates.col.promised'), t('dates.col.state'), ...(model.depth ? [d('forecast.col')] : []) /* B-W2b-323 */]}
@@ -347,7 +347,8 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
             line.promiseDate ? day(line.promiseDate) : t('dates.asOrder', { date: day(order.promiseDate) }),
             lateness(line.promiseDate ?? order.promiseDate) ?? '—',
             // B-W2b-323: Production finish forecast (from the plan).
-            ...(model.depth ? [<ForecastCell key="f" model={model.depth} lineId={line.id} />] : []),
+            // F-SA-234b: from the order's own production read (`dates.forecast`), not a read of every site's promise lines.
+            ...(model.depth ? [<ForecastCell key="f" part={forecast} lineId={line.id} />] : []),
           ],
         }))}
         density="roomy"

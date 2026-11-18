@@ -148,7 +148,7 @@ describe('one customer filter: the switcher moved to areas/sales/_shared, a trai
       expect(source, file).toContain('<CustomerSwitcher')
       expect(source, file).not.toContain('trailing=')
     }
-    expect(readFileSync(new URL('../../quotes/list/QuotesPage.tsx', import.meta.url), 'utf8')).toContain("search.set('party', filters.party)")
+    expect(readFileSync(new URL('../../quotes/list/use-quotes-list.ts', import.meta.url), 'utf8')).toContain("search.set('party', filters.party)") // F-SA-277: moved to the hook
     expect(readFileSync(new URL('../../inquiries/view/InquiriesView.tsx', import.meta.url), 'utf8')).toContain("extra={[{ value: PROSPECTS, label: t('list.prospectsOnly') }]}")
   })
 

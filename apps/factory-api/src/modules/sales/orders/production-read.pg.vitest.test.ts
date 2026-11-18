@@ -19,6 +19,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from '../../production/testing/two-brands'
 import { forgetProgress } from '../portal-orders/progress'
+import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one sales order's production (`GET /sales/orders/:orderId/production`) and its
@@ -312,6 +313,8 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
     const full = await ok('office.all', production(w.a.salesOrderId, 'dates'))
     expect(Array.isArray(full.dates.forecast)).toBe(true)
     expect(full.withheld).toEqual([])
+    // F-SA-234b: each line's forecast says what sets its day (the order page's by-line forecast reads it from here).
+    for (const row of full.dates.forecast as Json[]) expect(FINISH_SOURCES as readonly unknown[]).toContain(row.source)
   })
 
   it('GET …/milestones is the dates part alone (orders.view); Beta-limited: 404 as an unknown order', async () => {

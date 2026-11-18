@@ -76,19 +76,20 @@ export function printVerb(row: OrderRow, prefix: string, d: Translate): MenuItem
 }
 
 /** The selection's bulk verb: "Set priority for N" (held with its reason before the click). */
-export function SetPriorityButton({ count, model, onClick }: { count: number; model: ListDepthModel; onClick: () => void }) {
+// F-SA-280: `held` — the host's own reason first, in its words (the Orders sheet's one-customer check), before the selection's own.
+export function SetPriorityButton({ count, model, onClick, held }: { count: number; model: ListDepthModel; onClick: () => void; held?: string | null }) {
   return (
     <WithMessages namespaces={[NAMESPACE]}>
-      <SetButton count={count} model={model} onClick={onClick} />
+      <SetButton count={count} model={model} onClick={onClick} hostHeld={held ?? null} />
     </WithMessages>
   )
 }
 
-function SetButton({ count, model, onClick }: { count: number; model: ListDepthModel; onClick: () => void }) {
+function SetButton({ count, model, onClick, hostHeld }: { count: number; model: ListDepthModel; onClick: () => void; hostHeld: string | null }) {
   const d = useT(NAMESPACE)
   const held = selectionHeld(count, model.can)
   return (
-    <Button size="sm" aria-label={d('list.setPriority', { count })} heldReason={held ? d(held.key, held.params) : null} onClick={onClick}>
+    <Button size="sm" aria-label={d('list.setPriority', { count })} heldReason={hostHeld ?? (held ? d(held.key, held.params) : null)} onClick={onClick}>
       <Flag size={13} aria-hidden /> <SelectionLabel>{d('list.setPriority', { count })}</SelectionLabel>
     </Button>
   )

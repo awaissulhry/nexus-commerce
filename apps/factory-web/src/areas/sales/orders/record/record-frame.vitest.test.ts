@@ -4,6 +4,8 @@ import { createElement, type ComponentType } from 'react'
 import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { canOf } from '../_demo/fixtures'
 import { groupedMenu, landingOf, MENU_GROUPS, MERGED_TABS, recordTabs, tabOf } from '../model'
+import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
+import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-SA-263
 import { designScreen } from './fixtures'
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
@@ -310,3 +312,27 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
   })
 })
 // ── end F-SA-243 ──
+
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): the order's dock, each tab its own default width ----------------------
+describe('F-SA-263 — the order’s dock: each tab its own default width, the person’s choice kept per tab', () => {
+  it('Overview and Money 40 %; Lines, Production, Shipments, Files a third under 1600 px (40 % from 1600); Changes half', () => {
+    expect(Object.keys(DOCK_DEFAULTS).sort()).toEqual([...RECORD_TABS].sort())
+    const at = (viewport: number) => Object.fromEntries(RECORD_TABS.map((tab) => [tab, defaultWidthAt(DOCK_DEFAULTS[tab], viewport)]))
+    expect(at(1440)).toEqual({ overview: 'forty', lines: 'third', production: 'third', changes: 'half', money: 'forty', shipments: 'third', files: 'third' })
+    expect(at(1920)).toEqual({ overview: 'forty', lines: 'forty', production: 'forty', changes: 'half', money: 'forty', shipments: 'forty', files: 'forty' })
+  })
+
+  it('the page draws each tab at its default (nothing chosen yet): Production a third at 1440, Changes half, Money 40 %', () => {
+    expect(draw('thread-docked')).toContain('data-width="third"')
+    expect(draw('documents')).toContain('data-width="half"')
+    expect(draw('money-new')).toContain('data-width="forty"')
+  })
+
+  it('the order names its tab to the frame (the width kept per tab, "hidden" per person on every order)', () => {
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('defaultWidth={DOCK_DEFAULTS[model.tab]}')
+    expect(view).toContain('dockTab={model.tab}')
+    expect(view).not.toContain('isWideTab')
+  })
+})
+// ---- end F-SA-263

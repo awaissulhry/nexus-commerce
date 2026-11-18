@@ -421,8 +421,7 @@
     "spare_one": "{count} day to spare",
     "spare_other": "{count} days to spare",
     "short_one": "{count} day short",
-    "short_other": "{count} days short",
-    "failedTitle": "Couldn’t read the finish forecast"
+    "short_other": "{count} days short"
   },
   "finish": {
     "STOCK": "From stock",

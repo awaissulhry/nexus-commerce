@@ -56,7 +56,7 @@ export async function askApproval(caller: CommandCaller, quoteId: string, body: 
     })
     await moveTo(tools, current, version, 'PENDING_APPROVAL')
     tools.audit({ action: 'quotes.askApproval', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: version.status }, after: { status: 'PENDING_APPROVAL', approvalId, reasons, note: blankToNull(body.note) } })
-    tools.emit({ type: 'quote.approval_requested', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId, reasons } })
+    tools.emit({ type: 'quote.approval_requested', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId, reasons, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }
@@ -95,7 +95,7 @@ export async function approve(caller: CommandCaller, quoteId: string, body: { ve
     await decidingQuote(() => tools.tx.quoteApproval.update({ where: { id: pending.id }, data: { status: 'APPROVED', decidedAt: tools.now, decidedById: actorIdOf(tools), decisionNote: blankToNull(body.note), version: { increment: 1 } }, select: { id: true } }))
     await moveTo(tools, current, version, 'APPROVED')
     tools.audit({ action: 'quotes.approve', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: 'PENDING_APPROVAL', approval: 'PENDING' }, after: { status: 'APPROVED', approvalId: pending.id, approval: 'APPROVED', note: blankToNull(body.note) } })
-    tools.emit({ type: 'quote.approval_decided', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId: pending.id, status: 'APPROVED' } })
+    tools.emit({ type: 'quote.approval_decided', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId: pending.id, status: 'APPROVED', partyId: current.partyId /* B-SA-004b */ } })
     const decision: Decision = { approvalId: pending.id, approval: { from: 'PENDING', to: 'APPROVED' }, status: { from: 'PENDING_APPROVAL', to: 'APPROVED' } }
     return { ...(await detailInCommand(tools, current.id)), decision }
   })
@@ -111,7 +111,7 @@ export async function reject(caller: CommandCaller, quoteId: string, body: { ver
     await decidingQuote(() => tools.tx.quoteApproval.update({ where: { id: pending.id }, data: { status: 'REJECTED', decidedAt: tools.now, decidedById: actorIdOf(tools), decisionNote: reason, version: { increment: 1 } }, select: { id: true } }))
     await moveTo(tools, current, version, 'DRAFT')
     tools.audit({ action: 'quotes.reject', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: 'PENDING_APPROVAL', approval: 'PENDING' }, after: { status: 'DRAFT', approvalId: pending.id, approval: 'REJECTED' }, reason })
-    tools.emit({ type: 'quote.approval_decided', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId: pending.id, status: 'REJECTED' } })
+    tools.emit({ type: 'quote.approval_decided', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId: pending.id, status: 'REJECTED', partyId: current.partyId /* B-SA-004b */ } })
     const decision: Decision = { approvalId: pending.id, approval: { from: 'PENDING', to: 'REJECTED' }, status: { from: 'PENDING_APPROVAL', to: 'DRAFT' } }
     return { ...(await detailInCommand(tools, current.id)), decision }
   })
@@ -131,7 +131,7 @@ export async function reopen(caller: CommandCaller, quoteId: string, body: { ver
     await moveTo(tools, current, version, 'DRAFT')
     const reason = blankToNull(body.reason)
     tools.audit({ action: 'quotes.reopen', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: version.status }, after: { status: 'DRAFT', withdrawnApprovalId: withdrawn }, ...(reason ? { reason } : {}) })
-    tools.emit({ type: 'quote.reopened', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, withdrawnApprovalId: withdrawn } })
+    tools.emit({ type: 'quote.reopened', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, withdrawnApprovalId: withdrawn, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }

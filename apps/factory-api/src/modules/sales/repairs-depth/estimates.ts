@@ -196,7 +196,7 @@ function termsProblems(body: { readonly currency?: string | undefined; readonly 
 async function withdrawInCommand(tools: CommandTools, repair: RepairRow, estimate: EstimateRow, reason: string | null): Promise<void> {
   await touchEstimate(tools, estimate, { status: 'WITHDRAWN', withdrawnAt: tools.now, withdrawnById: actorIdOf(tools) })
   tools.audit({ action: 'repairsDepth.estimateWithdraw', recordType: 'RepairEstimate', recordId: estimate.id, companyId: repair.companyId, siteId: repair.siteId, before: { status: estimate.status }, after: { status: 'WITHDRAWN', repairId: repair.id, revision: estimate.revision }, ...(reason ? { reason } : {}) })
-  tools.emit({ type: 'repair_estimate.withdrawn', subject: repair.id, companyId: repair.companyId, siteId: repair.siteId, payload: { repairId: repair.id, number: repair.number, estimateId: estimate.id, revision: estimate.revision, from: estimate.status as 'DRAFT' | 'SENT' } })
+  tools.emit({ type: 'repair_estimate.withdrawn', subject: repair.id, companyId: repair.companyId, siteId: repair.siteId, payload: { repairId: repair.id, number: repair.number, estimateId: estimate.id, revision: estimate.revision, from: estimate.status as 'DRAFT' | 'SENT', partyId: repair.partyId /* B-SA-004b */ } })
 }
 
 export async function createEstimate(caller: CommandCaller, repairId: string, body: NewEstimateBody, idempotencyKey?: string): Promise<EstimatesView> {

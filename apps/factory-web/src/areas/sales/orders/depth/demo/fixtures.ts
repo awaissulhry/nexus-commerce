@@ -7,7 +7,7 @@ import type { ListDepthModel } from '../../list-depth/use-list-depth'
 import { weekColumns } from '../../week/model'
 import type { WeekModel } from '../../week/use-promise-week'
 import type { Approval, Changes, Confirmation, DepositKinds, Freeze, Materials, OrderDepth, OrderMilestone, PricedPreview, PromiseLine, RowDepth, TechPack } from '../api'
-import { depthCanOf, PRICED_EMPTY, type DepthCan, type Forecast } from '../model'
+import { depthCanOf, PRICED_EMPTY, type DepthCan } from '../model'
 import type { OrderDepthModel } from '../use-order-depth'
 
 /**
@@ -184,11 +184,6 @@ export const MILESTONES = {
   late: 1,
 }
 
-export const FORECASTS: ReadonlyMap<string, Forecast> = new Map([
-  [LINE_BLK, { finish: '2026-12-09', source: 'BOARD' as const, slackDays: 6, risk: 'ON_TIME' as const }],
-  [LINE_RED, { finish: '2026-12-29', source: 'WORK_ORDER_DUE' as const, slackDays: -7, risk: 'AT_RISK' as const }],
-])
-
 const request = (over: Partial<Approval['requests'][number]> = {}): Approval['requests'][number] => ({ id: uid('9696', 1), status: 'PENDING', requestedAt: at(29, 11), requestedBy: 'Anna Esempio', approver: 'Amministrazione', dueAt: null, decidedAt: null, decidedBy: null, reason: null, mine: true, ...over })
 export const APPROVAL_PENDING: Approval = { orderId: ORDER_ID, number: 'SO-2026-0088', status: 'PENDING_APPROVAL', waiting: true, reasons: [{ reason: 'REQUEST_PENDING' }], creditHold: null, requests: [request()], may: { ask: false, withdraw: true } }
 export const APPROVAL_NOBODY: Approval = { ...APPROVAL_PENDING, reasons: [{ reason: 'NO_REQUEST' }], requests: [], may: { ask: true, withdraw: false } }
@@ -233,7 +228,6 @@ export function depthModel(role: Role, over: Partial<OrderDepthModel> = {}): Ord
     confirmation: { value: CONFIRMATION_SENT, problem: null },
     confirmationPdf: { value: demoPdfUrl(), problem: null },
     techPack: can.inquiries ? { value: TECH_PACK, problem: null } : null,
-    forecasts: can.promise ? { value: FORECASTS, problem: null } : null,
     seasons: null,
     depositKinds: DEPOSIT_KINDS_OFF,
     dialog: null,

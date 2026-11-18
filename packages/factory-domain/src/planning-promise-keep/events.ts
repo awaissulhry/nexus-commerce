@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId, /* B-SA-004b */ livePartyIds } from '../events/define'
 
 /**
  * Keeping promises' events (B-W2b-317; PLN-175, PLN-177, PLN-200; the code is factory-domain planning/{promise-keep,backlog}).
@@ -60,6 +60,11 @@ export const events = [
       companyId: z.uuid(),
       mode: z.enum(['BY_HAND', 'BY_RULE']),
       orderIds: z.array(z.uuid()).min(1).max(500),
+      // B-SA-004b (Sales page plan P17'): the customers of EVERY order the ranking moved (partyIdsOf over the order rows read under
+      // the command's lock, beyond the 500 named too), so a planner limited to some customers is sent a ranking of their own
+      // customers' orders only, and one that moved another customer's order reaches people of every customer only. Never in the
+      // live fields; optional for an older event (none: every-customer viewers only).
+      partyIds: livePartyIds(),
     }),
     live: { permission: 'planning.view', fields: ['companyId', 'mode'] },
   }),

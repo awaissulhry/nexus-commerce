@@ -160,6 +160,14 @@ export interface InquiriesModel {
   keysOpen?: boolean
   noticesOpen?: boolean
   viewer?: string | null
+  // ---- F-SA-277: the host (use-inquiries-list.ts) — the customer page's Quotes & incoming draws this list under its own title
+  /** The host draws what sits above the list: no band (title, as of, ⋯, New request), no tiles, no page notices. */
+  embedded?: boolean
+  /** 'host': no SplitPane — the page's dock is the reading pane (a row's click is the host's; Enter and a link open the row's own page). */
+  paneMode?: 'own' | 'host'
+  /** The customer is the host's (in every read, never cleared): no From switcher, no customer chip, not counted as a filter. */
+  locked?: boolean
+  // ---- end F-SA-277
 }
 
 export interface InquiriesActions {
@@ -273,11 +281,13 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const repliesView = model.address.tile === CUSTOMER_REPLIES
   // A pane is open beside the list: a request or a catalogue order (B-TH-233).
   const paneOpen = !!model.detail || !!model.catalogue
+  // F-SA-277: the host's dock is the pane (no SplitPane, no pane keys: c / q / a / d / j k / Esc are the page's own).
+  const hostPane = model.paneMode === 'host'
 
   // c: New request; q / d / a: the focused (or the one selected) request's verb — never while typing or in a dialog.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isPageKey(event) || model.newRequest || model.bulk || paneOpen) return
+      if (!isPageKey(event) || model.newRequest || model.bulk || paneOpen || hostPane /* F-SA-277 */) return
       if (event.key === 'c' && model.can.manage) {
         event.preventDefault()
         latest.current.actions?.onNew?.()
@@ -294,13 +304,14 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [model.newRequest, model.bulk, paneOpen, model.can, offline, selected, byKey])
+  }, [model.newRequest, model.bulk, paneOpen, hostPane, model.can, offline, selected, byKey])
 
   const today = companyToday() // B-TH-290
   const columns = useMemo<ColDef<IncomingRow>[]>(() => {
     const { model: m } = latest.current
     const act = () => latest.current.actions
-    const openHref = (row: Pick<IncomingRow, 'id' | 'kind' | 'opens'>) => rowHref(m.prefix, m.address, row)
+    // F-SA-277: with the host's dock as the pane a request's door is its full page (Incoming's ⌘ rule), any other kind its own place.
+    const openHref = (row: Pick<IncomingRow, 'id' | 'kind' | 'opens'>) => (m.paneMode === 'host' && placeOf(row) === 'request' ? fullPageHref(m.prefix, row.id, m.address) : rowHref(m.prefix, m.address, row))
     // A door that opens the row by its kind: beside the list (the click stays on the page; ⌘-click a new tab), or Home › Approvals.
     const openLink = (row: IncomingRow, children: ReactNode, strong = false) => (
       <Link
@@ -594,7 +605,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     ]
     // The cells read the latest model and actions through `latest`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, !!model.catalogue, wide, l, model.unread /* B-TH-230 */, today /* B-TH-290 */])
+  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, !!model.catalogue, wide, l, model.unread /* B-TH-230 */, today /* B-TH-290 */, model.paneMode /* F-SA-277 */])
 
   // ---- B-TH-233 (list-F14): "Customer replies" — the one office inbox of conversations waiting on us, each opening its record at the message ----
   const replyColumns = useMemo<ColDef<WaitingRow>[]>(() => {
@@ -644,11 +655,14 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
 
   if (!model.can.view) return <NoAccess />
 
-  const filtered = isFiltered(model.address)
+  // F-SA-277: a locked customer is the host's — never a filter of the list (no chip, no "Clear filters" for it).
+  const narrowing = model.locked ? { ...model.address, party: null } : model.address
+  const filtered = isFiltered(narrowing)
   const reach = bulkReach(rows ?? [], selected)
   // B-TH-233: J / K walk the rows that open beside the list (a change request opens Home › Approvals).
   const navIds = (rows ?? []).filter((row) => placeOf(row) !== 'approvals').map((row) => row.id)
-  const ownKeys: ListKey[] = [
+  // F-SA-277: with the host's dock as the pane, the keys are the frame's own (the pane's and New request's are not this page's).
+  const ownKeys: ListKey[] = hostPane ? [] : [
     { keys: ['c'], does: t('keys.new') },
     { keys: ['q'], does: t('keys.quote') },
     { keys: ['a'], does: t('keys.assign') },
@@ -690,8 +704,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   ) : undefined
 
   const partyName = model.address.party ? (model.customers?.find((party) => party.id === model.address.party)?.tradeName ?? model.customers?.find((party) => party.id === model.address.party)?.legalName ?? rows?.find((row) => row.party?.id === model.address.party)?.party?.name ?? null) : null
-  const chips = chipsOf(model.address, partyName, companyName(model.address.company))
-  const notices = pageNotices(model.list, new Set(model.dismissed), model.noticeFacts)
+  const chips = chipsOf(narrowing /* F-SA-277 */, partyName, companyName(model.address.company))
+  const notices: ReturnType<typeof pageNotices> = model.embedded ? [] : pageNotices(model.list, new Set(model.dismissed), model.noticeFacts) // F-SA-277: the page's notices are Incoming's own
   // F-SA-224: the From switcher's own search (in the customers read) and the chosen customer.
   const fromCustomer = model.address.party ? ((model.customers ?? []).find((party) => party.id === model.address.party) ?? null) : null
   const exportWords = exportPhrases(model.address.tile, model.can)
@@ -724,8 +738,9 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           </option>
         ))}
       </Select>}
-      {/* F-SA-224: "From" is the Sales lists' one customer filter (`?party=`), with the prospects (no customer yet) as a choice. */}
-      <CustomerSwitcher
+      {/* F-SA-224: "From" is the Sales lists' one customer filter (`?party=`), with the prospects (no customer yet) as a choice.
+          F-SA-277: none for a customer the host locks. */}
+      {!model.locked && <CustomerSwitcher
         state={localSwitcherState((model.customers ?? []).map((party) => ({ id: party.id, code: party.code, name: party.tradeName ?? party.legalName })), fromQuery)}
         party={model.address.prospect ? null : model.address.party}
         partyName={model.address.party ? (fromCustomer?.tradeName ?? fromCustomer?.legalName ?? null) : undefined}
@@ -741,7 +756,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         allLabel={t('list.allFrom')}
         recent={0}
         subject="list"
-      />
+      />}
     </>
   )
 
@@ -753,46 +768,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     active: model.address.tile === id,
   })
   const viewerRow = viewer ? (byId.get(viewer)?.request ?? null) : null
-
-  return (
-    <div className="fw-inq">
-      {/* B-TH-216 (band-F01): Incoming · 41 open · as of 10:42 — the count is the Rows ▾ choice's, in words. */}
-      <div className="fw-inq-listband">
-        <div className="fw-sheet-band">
-          <h2 className="fw-sheet-title">{t('page.title')}</h2>
-          <span className="fw-sheet-count">{say(bandCount(model.list, model.address.tile, !!model.problem))}</span>
-          <span className="fw-inq-asof" role="status">
-            {model.asOf ? t('band.asOf', { time: formatTime(model.asOf, { locale }) }) : t('common.notYet')}
-            {' · '}
-            {t(`live.${model.live}`)}
-          </span>
-        </div>
-        <span className="fw-inq-actions">
-          {/* B-TH-285 (band-F05): while the orders@ door is not open the band says so (the addresses wait for live mail receiving). */}
-          {model.addresses?.door && (
-            <span title={model.addresses.door.key === 'addresses.door.notLive' ? t('addresses.door.notLiveBody') : undefined}>
-              <Tag tone="warning">{say(model.addresses.door)}</Tag>
-            </span>
-          )}
-          <Menu
-            label={<MoreHorizontal size={16} aria-hidden />}
-            align="right"
-            triggerProps={{ 'aria-label': t('list.more') }}
-            items={[
-              // B-TH-285 (band-F04): the addresses whose mail becomes a request by itself (read by every reader, changed with sales settings).
-              ...(model.addresses ? [{ id: 'addresses', label: t('addresses.menu'), description: t('addresses.menuHint'), onSelect: () => actions?.addresses?.onOpen?.() }] : []),
-              { id: 'rules', label: t('list.rulesLater'), disabled: true, description: t('list.rulesLaterHint') },
-            ]}
-          />
-          {newButton}
-        </span>
-      </div>
-      <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      {/* B-TH-217 (PL2): the list ~35 % and the request ~65 % beside it; nothing but the band sits above the pane. */}
-      <SplitPane
-        labels={{ pane: t('pane.label'), close: t('pane.back') }}
-        onClose={() => actions?.onOpen?.(null)}
-        list={
+  // F-SA-277: the list column — beside the reading pane (SplitPane), or alone when the host's dock is the pane.
+  const listColumn = (
           <div className="fw-inq-listcol">
           {/* One notice at most (notice-F01), the most serious first; the rest behind "N more notices". */}
           {notices.length > 0 && (
@@ -807,7 +784,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               )}
             </div>
           )}
-          {paneOpen ? (
+          {/* F-SA-277: an embedding host draws no tiles (it draws what sits above the list). */}
+          {model.embedded ? null : paneOpen ? (
         // Beside the reading pane the tiles are counting chips (the same saved filters; nothing but the band sits above the pane).
         <div className="fw-inq-tilechips" role="group" aria-label={t('tile.label')}>
           {DESIGN_TILES.map((id) => (
@@ -906,7 +884,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
             keys={ownKeys}
             keysOpen={model.keysOpen}
-            onOpen={(row) => actions?.onOpenRow?.(row, false)}
+            // F-SA-277: with the host's dock as the pane, Enter opens the row's own page (the click is the dock's).
+            onOpen={(row) => (hostPane ? actions?.onOpen?.(row.id) : actions?.onOpenRow?.(row, false))}
             state={state}
             withheld={model.can.price ? [] : [{ label: t('col.targetPrice'), reason: t('list.withheldPrice') }]}
             // On a phone a card opens the request's full page (B-TH-219), the list kept for Back; any other kind its own place.
@@ -914,7 +893,52 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           />
           )}
           </div>
-        }
+  )
+
+  return (
+    <div className="fw-inq">
+      {/* B-TH-216 (band-F01): Incoming · 41 open · as of 10:42 — the count is the Rows ▾ choice's, in words.
+          F-SA-277: an embedding host draws its own title and no band. */}
+      {!model.embedded && (
+      <div className="fw-inq-listband">
+        <div className="fw-sheet-band">
+          <h2 className="fw-sheet-title">{t('page.title')}</h2>
+          <span className="fw-sheet-count">{say(bandCount(model.list, model.address.tile, !!model.problem))}</span>
+          <span className="fw-inq-asof" role="status">
+            {model.asOf ? t('band.asOf', { time: formatTime(model.asOf, { locale }) }) : t('common.notYet')}
+            {' · '}
+            {t(`live.${model.live}`)}
+          </span>
+        </div>
+        <span className="fw-inq-actions">
+          {/* B-TH-285 (band-F05): while the orders@ door is not open the band says so (the addresses wait for live mail receiving). */}
+          {model.addresses?.door && (
+            <span title={model.addresses.door.key === 'addresses.door.notLive' ? t('addresses.door.notLiveBody') : undefined}>
+              <Tag tone="warning">{say(model.addresses.door)}</Tag>
+            </span>
+          )}
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': t('list.more') }}
+            items={[
+              // B-TH-285 (band-F04): the addresses whose mail becomes a request by itself (read by every reader, changed with sales settings).
+              ...(model.addresses ? [{ id: 'addresses', label: t('addresses.menu'), description: t('addresses.menuHint'), onSelect: () => actions?.addresses?.onOpen?.() }] : []),
+              { id: 'rules', label: t('list.rulesLater'), disabled: true, description: t('list.rulesLaterHint') },
+            ]}
+          />
+          {newButton}
+        </span>
+      </div>
+      )}
+      <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
+      {/* B-TH-217 (PL2): the list ~35 % and the request ~65 % beside it; nothing but the band sits above the pane.
+          F-SA-277: pane 'host' — no SplitPane, the page's dock is the reading pane: the list alone. */}
+      {hostPane ? listColumn : (
+      <SplitPane
+        labels={{ pane: t('pane.label'), close: t('pane.back') }}
+        onClose={() => actions?.onOpen?.(null)}
+        list={listColumn}
         pane={
           model.detail ? (
             <div className="fw-inq-pane">
@@ -951,6 +975,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           ) : null
         }
       />
+      )}
       {viewerRow && <ViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} />}
       {model.addresses?.open && <AddressesDialog model={model.addresses.model} prefix={model.prefix} actions={actions?.addresses} />}
       {model.newRequest && <NewRequestDialog model={model.newRequest} me={model.me} can={model.can} prefix={model.prefix} actions={actions?.newRequest} />}

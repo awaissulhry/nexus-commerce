@@ -166,7 +166,7 @@ describe('split lines on a partial receipt (SAL-350) and the credit note of a li
     ])
     expect(JSON.stringify(split)).not.toMatch(/unitPrice|creditAmount/)
     expect(await lineRow(childId)).toMatchObject({ seq: 11, quantity: 1, receivedQuantity: 0, parentLineId: parentId, disposition: null })
-    expect((await events('return.line_split', splitRma.id))[0]?.payload).toEqual({ returnId: splitRma.id, number: splitRma.number, lineId: parentId, newLineId: childId, kept: 1, rest: 1 })
+    expect((await events('return.line_split', splitRma.id))[0]?.payload).toEqual({ returnId: splitRma.id, number: splitRma.number, lineId: parentId, newLineId: childId, kept: 1, rest: 1, partyId: P1 /* B-SA-004b */ })
     const outcomes = await outcomesOf(splitRma.id)
     expect(outcomes.lines.find((line: Json) => line.id === parentId)).toMatchObject({ splitLineIds: [childId], split: { allowed: false, held: 'Every piece of line 10 arrived: there is nothing to split off.' } })
     expect(outcomes.lines.find((line: Json) => line.id === childId)).toMatchObject({ parentLineId: parentId, split: { allowed: false, held: 'Nothing of line 11 arrived yet: it waits for its goods as it is.' } })
@@ -203,7 +203,7 @@ describe('split lines on a partial receipt (SAL-350) and the credit note of a li
     const finished = await ok('sales', 'POST', `/sales/returns/${splitRma.id}/finish`, { version: outcomes.version, finishReason: 'CREDITED_WITHOUT_RETURN' })
     expect(finished.return.finish).toMatchObject({ finishReason: 'CREDITED_WITHOUT_RETURN', held: 'The return is closed already.' })
     expect(await rmaRow(splitRma.id)).toMatchObject({ status: 'CLOSED', finishReason: 'CREDITED_WITHOUT_RETURN', statusReason: 'Credited without the goods coming back' })
-    expect((await events('return.finished', splitRma.id))[0]?.payload).toEqual({ returnId: splitRma.id, number: splitRma.number, finishReason: 'CREDITED_WITHOUT_RETURN', from: 'INSPECTED' })
+    expect((await events('return.finished', splitRma.id))[0]?.payload).toEqual({ returnId: splitRma.id, number: splitRma.number, finishReason: 'CREDITED_WITHOUT_RETURN', from: 'INSPECTED', partyId: P1 /* B-SA-004b */ })
     expect((await events('return.status_changed', splitRma.id)).at(-1)?.payload).toMatchObject({ to: 'CLOSED' })
     expect((await refused('sales', 'POST', `/sales/returns/${splitRma.id}/finish`, { version: finished.return.version, finishReason: 'COMPLETED' }, 409)).code).toBe('invalid_state')
   })
@@ -267,7 +267,7 @@ describe('back unchanged after inspection, with the return DDT (SAL-355)', () =>
     expect((ddt.lines as Json[]).map((line) => line.sourceLineId)).toEqual([lineId])
     expect(sent.return.sendBack).toMatchObject({ allowed: false, ddts: [{ id: sent.ddt.id, number: sent.ddt.number, packages: 1, transportBy: 'SENDER', lineIds: [lineId] }] })
     expect(sent.return.lines[0].sendBack).toMatchObject({ allowed: false, ddtNumber: sent.ddt.number })
-    expect((await events('return.sent_back', rma.id))[0]?.payload).toEqual({ returnId: rma.id, number: rma.number, lineIds: [lineId], decidedLineIds: [lineId], ddtId: sent.ddt.id, ddtNumber: sent.ddt.number })
+    expect((await events('return.sent_back', rma.id))[0]?.payload).toEqual({ returnId: rma.id, number: rma.number, lineIds: [lineId], decidedLineIds: [lineId], ddtId: sent.ddt.id, ddtNumber: sent.ddt.number, partyId: P1 /* B-SA-004b */ })
     expect((await events('return.decided', rma.id)).at(-1)?.payload).toMatchObject({ lineIds: [lineId], inspected: true, moveIds: [] })
     // REFUSED: it travels back already.
     expect((await refused('desk', 'POST', `/sales/returns/${rma.id}/send-back`, { version: await versionOf(rma.id), lineIds: [lineId] }, 400)).message).toBe(`Line 10 travels back with DDT ${sent.ddt.number} already.`)
@@ -292,7 +292,7 @@ describe('a remake asked with photos, from the office (SAL-298)', () => {
     const asked = await ok('sales', 'POST', `/sales/returns/${rma.id}/remake`, { version: rma.version, lineIds: [lineId], fit: 'Made-up: the sleeves are 3 cm long.' })
     expect(asked.return.remake).toMatchObject({ asked: true, via: 'OFFICE', lineIds: [lineId], fit: 'Made-up: the sleeves are 3 cm long.', photos: [{ lineId, count: 0, needed: 2 }] })
     expect(asked.return.lines[0].remake).toBe(true)
-    expect((await events('return.remake_asked', rma.id))[0]?.payload).toEqual({ returnId: rma.id, number: rma.number, lineIds: [lineId], via: 'OFFICE' })
+    expect((await events('return.remake_asked', rma.id))[0]?.payload).toEqual({ returnId: rma.id, number: rma.number, lineIds: [lineId], via: 'OFFICE', partyId: P1 /* B-SA-004b */ })
     // REFUSED: asked once per return.
     expect((await refused('sales', 'POST', `/sales/returns/${rma.id}/remake`, { version: asked.return.version, lineIds: [lineId], fit: 'Made-up: again.' }, 409)).message).toBe('A remake was asked on this return already.')
     // The customer changed their mind: closed before the goods came (the facts' reason is offered with the others).
@@ -308,3 +308,24 @@ describe('a remake asked with photos, from the office (SAL-298)', () => {
     await ok('sales', 'POST', `/sales/returns/${rma.id}/cancel`, { version: rma.version, reason: 'Made-up: not needed.' })
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every return.* event (and a return label's) names its RMA's own customer (`partyId`, from the RMA row the command read; never a
+ * caller's value), so an office person limited to some customers is sent the live changes of their own customers' returns and
+ * never another's.
+ * The commands above: a line split, a size exchange, lines sent back unchanged, a remake asked by the office, a close.
+ */
+describe('live: every return event names its RMA’s customer (B-SA-004b)', () => {
+  it('each return.* row the split, the size exchange, the send-back, the remake and the close wrote carries partyId = the RMA row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE (e.type LIKE 'return.%' OR e.type = 'return_label.changed')
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['return.line_split', 'return.finished', 'return.sent_back', 'return.remake_asked', 'return.status_changed', 'return.decided']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

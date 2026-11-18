@@ -179,7 +179,7 @@ function ReadyRecord({ order, model, actions, thread, printThread }: { order: Su
         threadLabel={t('band.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
-        wide={isWideTab(model.tab)}
+        defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={`${model.prefix}/purchasing/subcontracting`}>{t('band.back')}</Link>,
           title: (

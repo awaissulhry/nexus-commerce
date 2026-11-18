@@ -55,8 +55,8 @@ export async function finishReturn(caller: CommandCaller, returnId: string, body
       reason: words,
     })
     const from = rma.status as Extract<ReturnStatus, 'AUTHORISED' | 'RECEIVED' | 'INSPECTED'>
-    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from, to: 'CLOSED' } })
-    tools.emit({ type: 'return.finished', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, finishReason: body.finishReason, from } })
+    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from, to: 'CLOSED', partyId: rma.partyId /* B-SA-004b */ } })
+    tools.emit({ type: 'return.finished', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, finishReason: body.finishReason, from, partyId: rma.partyId /* B-SA-004b */ } })
     return { warnings }
   })
   return { return: await outcomesOf(caller, seen.id), warnings: result.warnings }
