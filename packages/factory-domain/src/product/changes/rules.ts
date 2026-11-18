@@ -141,6 +141,8 @@ export const CHANGE_REFUSALS = [
   'WORK_ORDER_NOT_OPEN',
   'LINE_INVALID',
   'CANCEL_REASON',
+  // B-SA-049 (review F-5): releasing holds work orders the releaser may not hold.
+  'RELEASE_HOLDS',
 ] as const
 export type ChangeRefusalCode = (typeof CHANGE_REFUSALS)[number]
 
@@ -451,3 +453,30 @@ export const REQUEST_TILE_STATUSES: Readonly<Record<RequestTile, readonly Change
 
 /** The first day of the month of a business date (RELEASED_THIS_MONTH). */
 export const monthStart = (today: string): string => `${today.slice(0, 7)}-01`
+
+// ── B-SA-049 (sales page plan R3, P7; 13-backend B6; review F-5): a change order's work-in-progress decisions carried out on its
+// release — HOLD places a real production hold (reason CHANGE_ORDER), REWORK the same hold and a task to the work order's
+// supervisor, SCRAP a task only (scrap keeps its own approval), FINISH_OLD nothing (the frozen revision stays). ──
+
+/** The dispositions that hold their work order on release. */
+export const HOLDING_DISPOSITIONS: readonly WipDisposition[] = Object.freeze(['HOLD', 'REWORK'])
+/** The dispositions that leave a task for a person on release. */
+export const TASK_DISPOSITIONS: readonly WipDisposition[] = Object.freeze(['REWORK', 'SCRAP'])
+/** The production hold reason a release places (factory-domain reasons/standard PRODUCTION_HOLD). */
+export const CHANGE_ORDER_HOLD_REASON = 'CHANGE_ORDER'
+
+/** What the customer reads of such a hold (its portal), in its language — never the change order or another work order. */
+export const CHANGE_ORDER_HOLD_WORDS = Object.freeze({ it: 'In aggiornamento al nuovo design', en: 'Being updated to the new design' })
+
+/** "Releasing holds WO-0042: you need the right to hold work orders." */
+export function releaseHoldsRefusal(numbers: readonly string[]): ChangeRefusal {
+  const list = numbers.join(', ')
+  return refusal('RELEASE_HOLDS', `Releasing holds ${list}: you need the right to hold work orders (workorders.hold) over ${numbers.length === 1 ? 'it' : 'them'}.`)
+}
+
+/** The task a REWORK or SCRAP line leaves on its work order (the words of its title, in the office's English). */
+export function wipTaskTitle(disposition: WipDisposition, workOrder: string, revision: number | null): string {
+  const to = revision !== null ? ` to revision ${revision}` : ''
+  return disposition === 'REWORK' ? `Open the rework of ${workOrder}${to}` : `Scrap what is made of ${workOrder}, with its own approval`
+}
+// ── end B-SA-049 ──

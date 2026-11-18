@@ -7,6 +7,8 @@ import { BLOCKER_KINDS, WAITING_ON } from '@nexus/factory-domain/production-bran
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
+// B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
+import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -253,6 +255,25 @@ export const peopleView = output({
 export const changesView = output({
   /** The customer's requests still waiting (open, or countered and waiting on the customer). */
   openRequests: z.array(output({ id: id(), kind: z.string(), status: z.string(), since: instant(), batchId: id().nullable() })),
+  /**
+   * B-SA-050 (R1, P6; review C-8): what is still to do after the accepted changes, computed from the records — each row names the
+   * record that closes it (a work order the reader does not reach: no door, counted in `workOrdersLeftOut`).
+   */
+  stillToDo: output({
+    rows: z.array(
+      output({
+        kind: z.enum(STILL_KINDS),
+        ref: output({ type: z.string(), id: id(), number: z.string().nullable() }).nullable(),
+        words,
+        since: instant(),
+        waitingOn: z.enum(APPLY_TEAMS),
+        mayAct: z.boolean(),
+        requestId: id().nullable(),
+      }),
+    ),
+    count: z.number().int(),
+    workOrdersLeftOut: z.number().int(),
+  }),
 })
 
 export const productionAnswer = output({

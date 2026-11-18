@@ -90,6 +90,20 @@ export const designScreen = defineDesignScreen<ComposerCaseModel>({
       note: 'The note corrected is on the tablets: “For the floor” is on and stays on, so the floor reads the correction too.',
     },
     // ---- end B-TH-236 / B-TH-237
+    // ---- F-SA-282a (B-SA-073): the API held a portal text that names another customer of ours; the tick lets it go again.
+    {
+      id: 'names-other',
+      label: 'In the portal: the text names another customer (held)',
+      model: { ...base, context: { ...SALES_ORDER, portal: true }, draft: { mode: 'portal', body: 'Yes: the same trims as on the earlier order of this season.', forFloor: false, namesOther: true, namesNoOtherCustomer: false } },
+      note: 'The factory held the message: its text names another customer of ours (never which). Change the text, or tick “This text names no other customer”; then Post goes again with the tick.',
+    },
+    {
+      id: 'names-other-ticked',
+      label: 'In the portal: “This text names no other customer” ticked',
+      model: { ...base, context: { ...SALES_ORDER, portal: true }, draft: { mode: 'portal', body: 'Yes: the same trims as on the earlier order of this season.', forFloor: false, namesOther: true, namesNoOtherCustomer: true } },
+      note: 'Ticked: Post to Brand Alpha may go; a change of the text takes the tick off again (the factory checks the new text).',
+    },
+    // ---- end F-SA-282a
     { id: 'brand-beta', label: 'Brand Beta’s copy (brand wall)', model: { ...base, context: { ...SALES_ORDER, recordLabel: BRAND_BETA.numbers.order, party: { name: BRAND_BETA.tradeName } }, draft: { mode: 'reply', body: '', forFloor: false } }, note: '“Reply to Brand Beta”: the reply names only this record’s customer.' },
   ],
 })

@@ -159,7 +159,7 @@ async function offerByLink(request: FastifyRequest, actorId: string, tenantId: s
     tools.audit({ action: 'links.create', recordType: 'OneOffLink', recordId: linkId, companyId: rma.companyId, siteId: rma.siteId, after: { purpose: 'RETURN_LABEL', recordType: 'ReturnAuthorisation', recordId: rma.id, partyId: rma.partyId, email: going[0]?.email ?? null, expiresAt: toUtcIso(expiresAt), maxUses: 1 } })
     await tx.returnLabel.create({ data: { id: labelId, companyId: rma.companyId, siteId: rma.siteId, partyId: rma.partyId, returnId: rma.id, carrierCode, status: 'OFFERED', linkId, createdAt: now, updatedAt: now, createdById: actorId }, select: { id: true } })
     tools.audit({ action: 'shipping.returnLabel', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, after: { labelId, status: 'OFFERED', carrierCode, linkId, mailed: going.length } })
-    tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'OFFERED', via: 'OFFICE' } }))
+    tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'OFFERED', via: 'OFFICE', partyId: rma.partyId /* B-SA-004b */ } }))
     const mails: Array<{ outboundId: string; locale: 'it' | 'en' }> = []
     if (going.length > 0) {
       const identity = await sendingIdentity(tx, rma.companyId, null, 'CONVERSATION')
@@ -205,7 +205,7 @@ export async function cancelReturnLabel(request: FastifyRequest, returnId: strin
       if (count === 1) tools.audit({ action: 'links.revoke', recordType: 'OneOffLink', recordId: row.linkId, companyId: rma.companyId, after: { revokedAt: toUtcIso(now), by: 'shipping.cancelReturnLabel' } })
     }
     tools.audit({ action: 'shipping.cancelReturnLabel', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: row.status }, after: { labelId, status: 'CANCELLED' }, ...(reason ? { reason } : {}) })
-    tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'CANCELLED', via: 'OFFICE' } }))
+    tools.emit(eventFor(labelChanged, { subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, labelId, status: 'CANCELLED', via: 'OFFICE', partyId: rma.partyId /* B-SA-004b */ } }))
     return { labelId }
   })
   return { labels: await getReturnLabels(request, rma.id) }

@@ -29,6 +29,8 @@ import { productionReader } from './production' // B-PR-31
 const KEYS: Readonly<Record<OrderRequestKind, Readonly<Record<'ACCEPTED' | 'REFUSED', PartnerMessageKey>>>> = Object.freeze({
   CHANGE: { ACCEPTED: 'portal.order.change_accepted', REFUSED: 'portal.order.change_refused' },
   CANCEL: { ACCEPTED: 'portal.order.cancel_accepted', REFUSED: 'portal.order.cancel_refused' },
+  // B-SA-046: a design change (order news, as a change).
+  DESIGN: { ACCEPTED: 'portal.order.design_accepted', REFUSED: 'portal.order.design_refused' },
   // B-PR-31: the production asks (B-PR-24 widened the event's kinds).
   RUSH: { ACCEPTED: 'portal.production.rush_accepted', REFUSED: 'portal.production.rush_refused' },
   HOLD: { ACCEPTED: 'portal.production.hold_accepted', REFUSED: 'portal.production.hold_refused' },
@@ -39,6 +41,7 @@ const KEYS: Readonly<Record<OrderRequestKind, Readonly<Record<'ACCEPTED' | 'REFU
 
 const answered = changeRequestEvents.find((event) => event.type === 'order_change_request.answered')!
 const countered = changeRequestEvents.find((event) => event.type === 'order_change_request.countered')! // B-PR-31
+const asked = changeRequestEvents.find((event) => event.type === 'order_change_request.asked')! // B-SA-046
 
 /** Who reads a request's news: a change or cancel the people who see the orders; a production ask the people who see production. */
 function readersOf(kind: OrderRequestKind, place: { readonly companyId: string; readonly partyId: string }): (reader: PartnerReader) => boolean {
@@ -103,4 +106,31 @@ export const CHANGE_REQUEST_RULES: readonly PartnerRule[] = Object.freeze([
     },
   },
   // ---- end B-PR-31
+  // ---- B-SA-046 (sales page plan P7, R3): a design change is told as received — "Your design change request on your order 12
+  // was received" — to the customer's people who see its orders (the request by its own row: still waiting, its own customer).
+  {
+    name: 'portalNews.designChangeReceived',
+    events: ['order_change_request.asked'],
+    async drafts(context, raw) {
+      const event = asked.payload.parse(raw) as { requestId: string; orderId: string; partyId: string; kind: OrderRequestKind }
+      if (event.kind !== 'DESIGN') return []
+      const request = await context.tx.orderChangeRequest.findUnique({ where: { id: event.requestId }, select: { id: true, orderId: true, partyId: true, kind: true, status: true } })
+      if (!request || request.kind !== 'DESIGN' || request.orderId !== event.orderId || (request.status !== 'OPEN' && request.status !== 'COUNTERED')) return []
+      const order = await context.tx.salesOrder.findUnique({ where: { id: request.orderId }, select: { id: true, companyId: true, partyId: true, customerSeq: true } })
+      if (!order || order.partyId !== request.partyId) return []
+      const named = orderNamed(order)
+      return [
+        {
+          partyId: order.partyId,
+          companyId: order.companyId,
+          record: named.record,
+          messageKey: 'portal.order.design_received',
+          params: named.params,
+          anchor: `change-request:${request.id}`,
+          forReader: readersOf('DESIGN', { companyId: order.companyId, partyId: order.partyId }),
+        },
+      ]
+    },
+  },
+  // ---- end B-SA-046
 ])

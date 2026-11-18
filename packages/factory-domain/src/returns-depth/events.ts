@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004b */ livePartyId } from '../events/define'
 
 /**
  * Returns in depth (B-W2b-341; SAL-336, SAL-337, SAL-338, SAL-342, SAL-343, SAL-346). apps/factory-api's
@@ -25,6 +25,7 @@ import { defineEvent } from '../events/define'
  */
 
 const live = { permission: 'sales.returns.view' } as const
+// B-SA-004b (Sales page plan P17'): the RMA's customer (`partyId`, the RMA row's own), for the office's live wall only; optional.
 const channel = z.enum(['B2B', 'CONSUMER_DISTANCE'])
 
 export const events = [
@@ -46,14 +47,14 @@ export const events = [
     type: 'return.policy_checked',
     context: 'returns-depth',
     description: "A customer return was checked against its company's return policy for its channel: the policy it names, whether it is a consumer's withdrawal, the deadline for the goods that follows, and whether a line was outside the window.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), policyId: z.uuid(), channel, withdrawal: z.boolean(), goodsDueBy: z.iso.date().nullable(), outsideWindow: z.boolean() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), policyId: z.uuid(), channel, withdrawal: z.boolean(), goodsDueBy: z.iso.date().nullable(), outsideWindow: z.boolean(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...live, fields: ['returnId', 'number', 'policyId', 'withdrawal', 'goodsDueBy'] },
   }),
   defineEvent({
     type: 'return.garment_named',
     context: 'returns-depth',
     description: 'The serial and the lot of ours were named on lines of a customer return: from the shipment by the office, or scanned at the dock.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), via: z.enum(['OFFICE', 'DOCK']) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), via: z.enum(['OFFICE', 'DOCK']), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...live, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'lineIds', 'via'] },
   }),
   defineEvent({
@@ -67,7 +68,7 @@ export const events = [
     type: 'return.scan_code_set',
     context: 'returns-depth',
     description: 'A customer return got the scan code printed as a barcode on its RMA sheet and box label (the dock scans it to open the return).',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), scanCode: z.string() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), scanCode: z.string(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...live, fields: ['returnId', 'number', 'scanCode'] },
   }),
 ] as const

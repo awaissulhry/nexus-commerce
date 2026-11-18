@@ -34,6 +34,7 @@ import { mayOnThread, resolveRecord, type RecordScope } from './records'
 import { mayShare, notShareableRefusal } from './records' // B-PR-08a
 import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
 import { livePartyOf } from './records' // B-SA-002
+import { threadPlaceOf } from './records' // B-SA-048
 // ---- B-TH-027 / B-TH-028: the reader's own read mark; the office's head (who answers, what waits).
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
@@ -59,6 +60,8 @@ import { clearDraftInCommand } from './draft-keys'
 import { doneOf, reopenOnSharedMessage, type DoneView } from './work-state'
 // ---- fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) never reaches a portal or a link.
 import { contentWalledFor, walledForOutside } from '../files/content-wall'
+// ---- B-SA-061: what a message is about (a part of its order), checked in words before the database's own guard.
+import { aboutOf, aboutProblems, aboutShapeProblems, aboutsHeldBack, NONE_HELD, OFFICE_ONLY_ABOUT_KINDS, ABOUT_THREAD_TYPE, type About } from './about'
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -127,6 +130,9 @@ const MESSAGE_OFFICE = {
   // ---- B-TH-050: the message it answers or corrects.
   replyToMessageId: true,
   correctsMessageId: true,
+  // ---- B-SA-061: the part of its order it is about (the office's read; a portal or link reader is not given it here).
+  aboutKind: true,
+  aboutId: true,
 } as const satisfies Prisma.MessageSelect
 type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_COMMON }> & {
   authorId?: string | null
@@ -136,6 +142,8 @@ type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_COMMON }> & 
   amountCurrency?: string | null
   replyToMessageId?: string | null
   correctsMessageId?: string | null
+  aboutKind?: string | null // B-SA-061
+  aboutId?: string | null // B-SA-061
 }
 
 const FILE_COMMON = {
@@ -229,8 +237,11 @@ export function threadViewOf(row: SeenThread): ThreadView {
   }
 }
 
-/** `workerShown`: the site's PERFORMANCE gate lets the office read who wrote a floor note; without it the note says a person did (B-W2b-F4). */
-function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true, links: MessageLinks = NO_LINKS): MessageView {
+/**
+ * `workerShown`: the site's PERFORMANCE gate lets the office read who wrote a floor note; without it the note says a person did (B-W2b-F4).
+ * B-SA-061 `aboutHeld`: the messages whose about this reader may not read (a work order it does not reach): null for them.
+ */
+function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true, links: MessageLinks = NO_LINKS, aboutHeld: ReadonlySet<string> = NONE_HELD): MessageView {
   const authorHidden = row.authorKind === 'WORKER' && !workerShown
   return {
     id: row.id,
@@ -253,6 +264,8 @@ function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, Attachm
     ...('amount' in row ? { amount: asMoney('price', row.amount === null || row.amount === undefined || !row.amountCurrency ? null : { value: row.amount, currency: row.amountCurrency }) } : {}),
     // ---- B-TH-050: what it answers or corrects, and the newest correction of it, as far as the reader may see them.
     ...linksOf(row, links),
+    // ---- B-SA-061: the part of its order it is about, as far as the reader may read it (the office's read only).
+    ...('aboutKind' in row ? { about: aboutHeld.has(row.id) ? null : aboutOf(row) } : {}),
     at: toUtcIso(row.at),
   }
 }
@@ -404,6 +417,8 @@ export interface ThreadPage {
   readonly waitingMail?: WaitingMail | null
   // ---- B-TH-093: the office's only — marked done (null: open work).
   readonly done?: DoneView | null
+  // ---- B-SA-048: the record whose thread this is, when the one asked has none of its own (a change request: its order).
+  readonly place?: { readonly type: string; readonly id: string } | null
 }
 
 /** B-TH-079: a message as the page shows it, told erased (privacy) and, for the office, with an inbound mail's skipped files. */
@@ -416,6 +431,12 @@ const EMPTY: ThreadPage = Object.freeze({ thread: null, messages: [], nextCursor
 
 /** GET /threads/<type>/<id>: the thread and one page of its messages the caller may see, newest first. */
 export async function readThread(caller: CommandCaller, record: RecordRef, page: { readonly cursor?: string | undefined; readonly limit: number; /* B-TH-079 */ readonly audience?: FeedAudience | undefined }): Promise<ThreadPage> {
+  // ---- B-SA-048 (review F-6): a record whose conversation is another record's (a change request's: its order's) answers that
+  // thread, naming it as the place; the wall is the place's own (the same company and customer).
+  // A one-off link opens exactly its own record: it is never moved.
+  const place = caller.factoryContext?.audience === 'link' ? null : await caller.withClient((client) => threadPlaceOf(client, record))
+  if (place) return { ...(await readThread(caller, place, page)), place }
+  // ---- end B-SA-048
   const context = contextOf(caller)
   const actor = actorOf(context)
   const cursor = cursorOf(page.cursor)
@@ -473,9 +494,11 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const erased = office ? await erasedAmong(client, shown) : new Set<string>()
     const skipped = office ? await skippedPartsOf(client, shown) : new Map<string, SkippedPart[]>()
     const waitingMail = office ? await waitingMailOf(client, actor, thread.id) : undefined
+    // ---- B-SA-061: a message about a work order this reader does not reach is read without it (the wall).
+    const aboutHeld = office ? await aboutsHeldBack(client, actor, shown) : NONE_HELD
     return {
       thread: threadViewOf(thread),
-      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links), erased, skipped)),
+      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links, aboutHeld), erased, skipped)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
       reading,
       ...(head ? { head } : {}),
@@ -593,6 +616,10 @@ export interface MessageInput {
   // `orderId` is the order changed (on its own thread: that order); `stillToDo` the steps still to do after it, when counted.
   readonly change?: { readonly causedById: string | null; readonly orderId: string; readonly stillToDo?: number }
   // ---- end B-SA-051
+  // ---- B-SA-061: the part of its order the message is about (checked first: aboutProblems; the database checks it again). A
+  // message of a sales order's thread only; a message shared with the customer never about a work order (office only).
+  readonly about?: About | null | undefined
+  // ---- end B-SA-061
 }
 
 // ---- B-SA-051: a change note is a SYSTEM internal note on a sales order's thread (of that order) or on a work order's thread.
@@ -627,6 +654,8 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   if (input.amount && (input.direction !== 'INTERNAL_NOTE' || forFloor)) throw new ApiError('internal_error', forFloor ? AMOUNT_WORDS.FLOOR.en : AMOUNT_WORDS.SHARED.en)
   // ---- end B-TH-049
   if (changeNoteProblem(thread, input)) throw new ApiError('internal_error', CHANGE_NOTE_REFUSAL) // B-SA-051
+  // ---- B-SA-061: an about only on a sales order's thread, and never an office-only kind on a shared message (the routes say it first).
+  if (input.about && (thread.recordType !== ABOUT_THREAD_TYPE || (audience === 'PARTNER' && OFFICE_ONLY_ABOUT_KINDS.has(input.about.kind)))) throw new ApiError('internal_error', 'A message is about a part of its own sales order, and a message to the customer never about a work order.')
   const id = newId()
   const at = input.at ?? tools.now
   const row = await tools.tx.message.create({
@@ -652,6 +681,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
       ...(input.amount ? { amount: input.amount.value, amountCurrency: input.amount.currency } : {}), // B-TH-049
       ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}), // B-TH-050
       ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}), // B-TH-050
+      ...(input.about ? { aboutKind: input.about.kind, aboutId: input.about.id } : {}), // B-SA-061
     },
     select: MESSAGE_OFFICE,
   })
@@ -681,6 +711,8 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
       // B-TH-050: what it answers or corrects.
       ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
       ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
+      // B-SA-061: what it is about.
+      ...(input.about ? { about: { kind: input.about.kind, id: input.about.id } } : {}),
     },
   })
   // B-TH-045: the batch rides on both events (absent for a message of its own).
@@ -803,6 +835,8 @@ export interface NoteInput {
   // ---- B-TH-050: the message it answers or corrects (one at most).
   readonly replyToMessageId?: string | undefined
   readonly correctsMessageId?: string | undefined
+  // ---- B-SA-061: the part of its order the note is about (a sales order's note only).
+  readonly about?: About | undefined
 }
 
 // ---- B-TH-049: a note for the floor whose words look like a price is held (409 refusal/FLOOR_PRICE, the reason named).
@@ -814,12 +848,17 @@ export function floorPriceHeld(bodyText: string): DomainError | null {
 
 /** POST /threads/<type>/<id>/notes (threads.postNote): an internal note, the thread made with the first one. */
 export async function postNote(caller: CommandCaller, record: RecordRef, input: NoteInput, idempotencyKey?: string): Promise<{ thread: ThreadView; message: MessageView }> {
+  // ---- B-SA-048 (review F-6): a note on a change request goes into its order's conversation (one place to talk).
+  const place = await caller.withClient((client) => threadPlaceOf(client, record))
+  if (place) return postNote(caller, place, input, idempotencyKey)
+  // ---- end B-SA-048
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   const draft = { bodyText: cleanBody(input.body), mentions: uniqueIds(input.mentions), attachments: uniqueIds(input.attachments), forFloor: input.forFloor ?? false }
-  // ---- B-TH-049: the amount's own problems (a whole number of cents, ISO 4217, never for the floor).
-  const problems = [...noteProblems(draft), ...(input.amount ? amountProblems(input.amount, { forFloor: draft.forFloor }) : [])]
+  // ---- B-TH-049: the amount's own problems (a whole number of cents, ISO 4217, never for the floor). B-SA-061: an about only on a
+  // sales order's note.
+  const problems = [...noteProblems(draft), ...(input.amount ? amountProblems(input.amount, { forFloor: draft.forFloor }) : []), ...aboutShapeProblems(record.type, input.about, 'OFFICE')]
   if (problems.length > 0) throw new ValidationError('The note is not valid.', problems)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
   if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
@@ -833,7 +872,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
 
   const { result } = await command(
     caller,
-    { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft, amount: input.amount ?? null, ...links } },
+    { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft, amount: input.amount ?? null, ...links, /* B-SA-061 */ about: input.about ?? null } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides (B-PR-08a part 2: with its wall party).
@@ -843,6 +882,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
         ...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'OFFICE')),
         ...(await mentionProblems(tools.tx, context, thread, draft.mentions, tools.now)),
         ...(await messageLinkProblems(tools.tx, thread, links, { direction: 'INTERNAL_NOTE', channel: 'APP', forFloor: draft.forFloor })), // B-TH-050
+        ...(await aboutProblems(tools.tx, actor, thread, input.about, 'OFFICE')), // B-SA-061
       ]
       if (issues.length > 0) throw new ValidationError('The note is not valid.', issues)
       const author = await tools.tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true } })
@@ -856,6 +896,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
         forFloor: draft.forFloor,
         ...(input.amount ? { amount: input.amount } : {}), // B-TH-049
         ...links, // B-TH-050
+        ...(input.about ? { about: input.about } : {}), // B-SA-061
       })
       await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
