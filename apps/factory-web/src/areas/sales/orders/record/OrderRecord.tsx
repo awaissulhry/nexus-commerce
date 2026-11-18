@@ -46,7 +46,7 @@ import {
 } from '../api'
 import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../hooks'
 import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
-import { abilitiesOf, knownIds, landingOf, liveTouches, readProblem, romeToday, writeProblem, type SizeLayer } from '../model'
+import { abilitiesOf, knownIds, landingOf, liveTouches, readProblem, romeToday, writeProblem } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
 // B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
@@ -151,7 +151,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [changed, setChanged] = useState<{ at: string } | null>(null)
   const [sentLink, setSentLink] = useState<DepositLinkAnswer | null>(null)
   const [recorded, setRecorded] = useState<DepositReceived | null>(null)
-  const [sizeLayer, setSizeLayer] = useState<SizeLayer>('ordered')
   const [amend, setAmend] = useState<AmendState | null>(null)
   const amendRef = useRef<AmendState | null>(null)
   amendRef.current = amend
@@ -539,7 +538,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     sentLink,
     recorded,
     stepUp,
-    sizeLayer,
     amend,
     schedule,
     amendments,
@@ -704,7 +702,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
             'notice.sdiSent',
           )
         },
-        onSizeLayer: setSizeLayer,
         // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------
         onAmendStart: startAmend,
         onAmendDiscard: () => {

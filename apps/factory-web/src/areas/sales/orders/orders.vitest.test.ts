@@ -54,6 +54,8 @@ import {
   reviewHeld,
   sizesText,
   underWorkOrders,
+  cutFloorsOf, // F-SA-231
+  underCut, // F-SA-231
   withCells,
   type DraftLine,
 } from './daily-model'
@@ -472,12 +474,26 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
     // Every line at 0: an order keeps at least one line.
     expect(reviewHeld(withCells(draftOf(value), { [black.id]: {}, [red.id]: {} }), value, {}, { changed: false })?.key).toBe('amend.held.empty')
   })
-  it('never under what work orders make: the cell says so and Review waits', () => {
+  // F-SA-231 (lead note after B-SA-042, R1): a size may go under what work orders make (the work order follows as "Still to do"), never
+  // under what is already CUT.
+  it('under what work orders make: said in words, Review stays open; under what is cut: an error and Review waits', () => {
     const production = order('IN_PRODUCTION')
     const black = lineOf(production, 10)
     const draft = withCells(draftOf(production), { [black.id]: { '48': 1, '50': 2, '52': 2, '54': 2 } })
     expect(underWorkOrders(draft, minimumsOf(production))).toEqual([{ key: black.id, size: '48', made: 2 }])
-    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false })?.key).toBe('amend.held.workOrders')
+    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false })).toBeNull()
+    // 2 already cut in 48: 1 is under the cut floor — held, and not also said as "under work orders".
+    const floors = cutFloorsOf([{ lineId: black.id, sizes: [{ size: '48', cut: 2 }, { size: '50', cut: null }, { size: '52', cut: 0 }] }])
+    expect(floors).toEqual({ [black.id]: { '48': 2 } })
+    expect(underCut(draft, floors)).toEqual([{ key: black.id, size: '48', cut: 2 }])
+    expect(underWorkOrders(draft, minimumsOf(production), floors)).toEqual([])
+    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false }, floors)?.key).toBe('amend.held.cut')
+    // At the cut floor: open again.
+    expect(reviewHeld(withCells(draftOf(production), { [black.id]: { '48': 2, '50': 2, '52': 2, '54': 1 } }), production, minimumsOf(production), { changed: false }, floors)).toBeNull()
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['amend.held.cut', 'editor.underCut', 'editor.underWorkOrders']) expect(t(key, { size: '48', cut: 2, made: 2 }), `${locale}: ${key}`).not.toBe(key)
+    }
   })
   it('a closed-short line stays as it is (sent by id only) and is not in the grid', () => {
     const partly = order('IN_PRODUCTION')
@@ -864,3 +880,25 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
   })
 })
 // ---- end F-SA-236
+
+// ---- F-SA-231: Lines = the commercial truth — the totals strip, no layer switch, pictures and artwork ----------------------------
+describe('F-SA-231: Lines — totals by grain instead of the rail, no layer switch, the picture part and the artwork', () => {
+  it('no layer switch: Lines draws the ordered pieces only; its rail and record chain left (Money, Overview)', () => {
+    const source = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('SegmentedControl')
+    expect(source).not.toContain('SummaryRail')
+    expect(source).toContain("gridOf(group, 'ordered')")
+    expect(source).toContain('<RecordPicture')
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    expect(model).not.toContain('SIZE_LAYERS')
+  })
+
+  it('the totals by grain and the words in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['lines.totals', 'lines.units', 'lines.readOnly', 'lines.note', 'lines.closedBy', 'lines.gridCaption']) expect(t(key, { name: 'x', day: 'y', note: 'z', style: 's' }), `${locale}: ${key}`).not.toBe(key)
+      expect(t('lines.artwork', { count: 2 })).toMatch(/2/)
+    }
+  })
+})
+// ---- end F-SA-231

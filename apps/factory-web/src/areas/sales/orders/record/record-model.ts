@@ -4,7 +4,7 @@ import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLi
 import type { DraftLine } from '../daily-model'
 import type { MarginTabModel } from './margin/model'
 import type { StepUpState } from '../hooks'
-import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
+import type { OrderAbilities, Phrase, RecordTab } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
 import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-depth' // B-W2b-323
 import type { LinksActions, LinksModel } from './links/model' // B-TH-256
@@ -110,7 +110,6 @@ export interface OrderRecordModel {
   /** The payment just recorded (the dialog shows what followed: PAID, the TD02). */
   recorded: DepositReceived | null
   stepUp: StepUpState
-  sizeLayer: SizeLayer
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------
   /** The Lines tab as an amendment draft; null: read-only. */
   amend: AmendState | null
@@ -191,7 +190,6 @@ export interface OrderRecordActions {
   onSendLink?: (requestId: string, message: string) => void
   onRecordPayment?: (requestId: string, input: PaymentInput) => void
   onSendSdi?: (invoiceId: string) => void
-  onSizeLayer?: (layer: SizeLayer) => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------

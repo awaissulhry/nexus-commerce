@@ -346,9 +346,6 @@
     "depositPaid": "{amount} paid",
     "depositWaived": "Waived",
     "depositOpen": "{amount} due {date}",
-    "invoiced": "Invoiced",
-    "paid": "Paid",
-    "balance": "Balance due",
     "margin": "Estimated margin",
     "marginValue": "{pct}",
     "marginUnknown": "Not known: a cost is missing",
@@ -379,15 +376,13 @@
     "money": "Money ›"
   },
   "lines": {
-    "readOnly": "What the customer ordered, as accepted. The lines change only through an amendment (Amend order).",
-    "show": "Show",
+    "readOnly": "What the customer ordered, as accepted. Changes go through Amend order.",
     "vatNature": "VAT {nature}",
     "orderDate": "As the order",
     "revision": "Made to rev {revision}",
     "noRevision": "Revision chosen by the work order",
-    "gridCaption": "{style}: {layer} by colour and size",
+    "gridCaption": "{style}: ordered pieces by colour and size",
     "pricesOf": "Prices of {style}",
-    "madeHint": "Pieces made per size are counted on each work order (Production tab).",
     "col": {
       "colour": "Colour",
       "pieces": "Pieces",
@@ -399,14 +394,13 @@
       "promise": "Promise"
     },
     "closedShort_one": "Closed short: {count} piece",
-    "closedShort_other": "Closed short: {count} pieces"
-  },
-  "layer": {
-    "ordered": "Ordered",
-    "inWorkOrders": "In work orders",
-    "released": "Released",
-    "shipped": "Shipped",
-    "toShip": "Left to ship"
+    "closedShort_other": "Closed short: {count} pieces",
+    "totals": "Totals",
+    "units": "Units",
+    "artwork_one": "Artwork ({count})",
+    "artwork_other": "Artwork ({count})",
+    "closedBy": "Closed short by {name}, {day}",
+    "note": "Note: {note}"
   },
   "dates": {
     "title": "Dates & milestones",
@@ -835,13 +829,13 @@
     "apply": "Apply amendment",
     "held": {
       "price": "A typed price is not a price: check it",
-      "workOrders": "A size is below what work orders already make",
       "empty": "An order keeps at least one line: to stop the whole order, cancel it",
       "nothing": "Nothing changes yet",
       "reading": "Checking the amendment first",
       "failed": "The check failed: try again",
       "problems": "Fix what stops the amendment first",
-      "reason": "Say why the order changes"
+      "reason": "Say why the order changes",
+      "cut": "A size is under what is already cut: raise it to the pieces cut"
     }
   },
   "editor": {
@@ -886,13 +880,14 @@
       "none": "Unchanged",
       "empty": "Type its sizes"
     },
-    "underWorkOrders": "Size {size}: work orders already make {made}",
+    "underWorkOrders": "Size {size}: work orders make {made} — the work order follows the change (Still to do)",
     "styleReading": "Reading the style…",
     "styleUnread": "The style could not be read: only its sizes on the order",
     "lockedLabel": "Lines kept as they are",
     "lockedClosed_one": "{colour}: closed short ({count} piece): reopen it first to change it",
     "lockedClosed_other": "{colour}: closed short ({count} pieces): reopen it first to change it",
-    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is"
+    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is",
+    "underCut": "Size {size}: {cut} already cut — it never goes under what is cut"
   },
   "issue": {
     "state": "The order does not take this change in its state now.",

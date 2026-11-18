@@ -721,3 +721,7 @@ a.fw-so-countbtn:focus-visible {
   gap: var(--nds-space-8) var(--nds-space-16);
   min-width: 0;
 }
+/* F-SA-231: a line's picture beside its words where nothing opens (Lines' cards and rows). */
+.fw-so-lineopen.is-static {
+  cursor: default;
+}

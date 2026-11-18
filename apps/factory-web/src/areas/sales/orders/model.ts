@@ -659,12 +659,14 @@ export function styleGroups(lines: Order['lines']): StyleGroup[] {
   return [...groups.values()]
 }
 
-/** What a size grid shows: ordered, in work orders, released by quality, shipped, or still to ship. */
-export const SIZE_LAYERS = ['ordered', 'inWorkOrders', 'released', 'shipped', 'toShip'] as const
-export type SizeLayer = (typeof SIZE_LAYERS)[number]
+/**
+ * What a size grid shows: the ordered pieces (Lines) or what is still to ship (Shipments). F-SA-231: Lines' layer switch went — what
+ * is made is on Overview (the order's own pieces), Production (its work orders) and Shipments (left to ship).
+ */
+export type GridLayer = 'ordered' | 'toShip'
 
 /** A style group's grid shape and values for one layer (colour rows × the sizes in the style's range order). */
-export function gridOf(group: StyleGroup, layer: SizeLayer): { sizes: { key: string; label: string }[]; colours: { key: string; label: string; offered: string[] }[]; value: Record<string, Record<string, number>> } {
+export function gridOf(group: StyleGroup, layer: GridLayer): { sizes: { key: string; label: string }[]; colours: { key: string; label: string; offered: string[] }[]; value: Record<string, Record<string, number>> } {
   const sizes: string[] = []
   for (const line of group.lines) for (const size of line.sizes) if (size.size !== null && !sizes.includes(size.size)) sizes.push(size.size)
   const value: Record<string, Record<string, number>> = {}

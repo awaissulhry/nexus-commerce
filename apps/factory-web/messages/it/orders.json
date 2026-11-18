@@ -346,9 +346,6 @@
     "depositPaid": "{amount} pagati",
     "depositWaived": "Rinunciato",
     "depositOpen": "{amount} entro il {date}",
-    "invoiced": "Fatturato",
-    "paid": "Pagato",
-    "balance": "Saldo da pagare",
     "margin": "Margine stimato",
     "marginValue": "{pct}",
     "marginUnknown": "Non noto: manca un costo",
@@ -379,15 +376,13 @@
     "money": "Importi ›"
   },
   "lines": {
-    "readOnly": "Quello che il cliente ha ordinato, come accettato. Le righe cambiano solo con una modifica (Modifica ordine).",
-    "show": "Mostra",
+    "readOnly": "Cosa ha ordinato il cliente, come accettato. Le modifiche passano da Modifica ordine.",
     "vatNature": "IVA {nature}",
     "orderDate": "Come l'ordine",
     "revision": "Fatto sulla rev. {revision}",
     "noRevision": "Revisione scelta dall'ordine di lavoro",
-    "gridCaption": "{style}: {layer} per colore e taglia",
+    "gridCaption": "{style}: capi ordinati per colore e taglia",
     "pricesOf": "Prezzi di {style}",
-    "madeHint": "I capi fatti per taglia si contano su ogni ordine di lavoro (scheda Produzione).",
     "col": {
       "colour": "Colore",
       "pieces": "Capi",
@@ -399,14 +394,13 @@
       "promise": "Promessa"
     },
     "closedShort_one": "Chiusa in anticipo: {count} pezzo",
-    "closedShort_other": "Chiusa in anticipo: {count} pezzi"
-  },
-  "layer": {
-    "ordered": "Ordinati",
-    "inWorkOrders": "Negli ordini di lavoro",
-    "released": "Rilasciati",
-    "shipped": "Spediti",
-    "toShip": "Da spedire"
+    "closedShort_other": "Chiusa in anticipo: {count} pezzi",
+    "totals": "Totali",
+    "units": "Capi",
+    "artwork_one": "Grafiche ({count})",
+    "artwork_other": "Grafiche ({count})",
+    "closedBy": "Chiuso in meno da {name}, {day}",
+    "note": "Nota: {note}"
   },
   "dates": {
     "title": "Date e tappe",
@@ -835,13 +829,13 @@
     "apply": "Applica la modifica",
     "held": {
       "price": "Un prezzo scritto non è un prezzo: controllalo",
-      "workOrders": "Una taglia è sotto quanto gli ordini di lavoro fanno già",
       "empty": "Un ordine tiene almeno una riga: per fermare tutto l'ordine, annullalo",
       "nothing": "Non cambia ancora nulla",
       "reading": "Prima la verifica della modifica",
       "failed": "La verifica non è riuscita: riprova",
       "problems": "Prima sistema ciò che blocca la modifica",
-      "reason": "Scrivi perché l'ordine cambia"
+      "reason": "Scrivi perché l'ordine cambia",
+      "cut": "Una taglia è sotto il già tagliato: portala ai capi tagliati"
     }
   },
   "editor": {
@@ -886,13 +880,14 @@
       "none": "Invariata",
       "empty": "Scrivi le taglie"
     },
-    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno già {made}",
+    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno {made} — l'ordine di lavoro segue la modifica (Ancora da fare)",
     "styleReading": "Lettura del modello…",
     "styleUnread": "Non è stato possibile leggere il modello: solo le taglie dell'ordine",
     "lockedLabel": "Righe tenute come sono",
     "lockedClosed_one": "{colour}: chiusa in anticipo ({count} pezzo): riaprila prima di cambiarla",
     "lockedClosed_other": "{colour}: chiusa in anticipo ({count} pezzi): riaprila prima di cambiarla",
-    "lockedMtm": "{colour}: un capo su misura, tenuto com'è"
+    "lockedMtm": "{colour}: un capo su misura, tenuto com'è",
+    "underCut": "Taglia {size}: {cut} già tagliati — non si scende sotto il tagliato"
   },
   "issue": {
     "state": "Nel suo stato di ora l'ordine non accetta questo cambiamento.",
