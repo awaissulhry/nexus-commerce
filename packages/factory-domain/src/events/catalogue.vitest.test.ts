@@ -136,3 +136,78 @@ describe('order events declare their customer (B-SA-004)', () => {
   })
 })
 // ── end B-SA-004 ──
+
+// ── B-SA-004b ──
+/**
+ * B-SA-004b (Sales page plan P17'; the rest of B-SA-004): the same rule for quotes and returns, and for the events that name
+ * several orders. Every event shown to quotes.view, sales.returns.view or orders.view, and every event that names a quote, a
+ * customer return, an order or several orders (quoteId, returnId, orderId, salesOrderId, orderIds) declares a party key
+ * (LIVE_PARTY_KEYS), set by its emitter from the record read on the server — so an office person limited to some customers is sent
+ * their own customers' quote and return changes live, and never another customer's. A record of the company that no customer owns
+ * is named below with its reason; a new event of these is held to the rule by itself.
+ */
+describe('quote, return and order events declare their customer (B-SA-004b)', () => {
+  const NO_CUSTOMER: Readonly<Record<string, string>> = {
+    'season.changed': "a season is the company's own, of no customer",
+    'sales_settings.changed': "the company's (or the tenant's) quote rules, of no customer",
+    'quote_template.changed': "a quote template is the company's start of quotes, of no customer",
+    'size_curve.changed': "a size curve is the company's own, of no customer",
+    'return_policy.changed': "the company's (or the tenant's) return policy, of no customer",
+    'return_policy.saved': "the company's return policy for a channel, of no customer",
+    'return_fee_rule.changed': "the company's restocking or handling fee rule, of no customer",
+    'inventory.returned': "its returnId is stock that came back from a work order to a store location, not a customer's return",
+  }
+  const RULES = new Set(['quotes.view', 'sales.returns.view', 'orders.view'])
+  const NAMES = ['quoteId', 'returnId', 'orderId', 'salesOrderId', 'orderIds']
+  const keysOf = (definition: (typeof EVENT_DEFINITIONS)[number]): string[] => Object.keys(definition.payload.shape)
+  const namesARecord = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => NAMES.includes(key))
+  const namesAParty = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))
+  const ruled = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => RULES.has(definition.live?.permission ?? '') || namesARecord(definition)
+
+  it('every event shown to quotes.view, sales.returns.view or orders.view, or that names a quote, a return or orders, declares a party key', () => {
+    const missing = EVENT_DEFINITIONS.filter((definition) => ruled(definition) && !Object.hasOwn(NO_CUSTOMER, definition.type) && !namesAParty(definition)).map((definition) => definition.type)
+    expect(missing).toEqual([])
+  })
+
+  it('every quote.* and return.* event declares a party key (no exemption in these families)', () => {
+    const missing = EVENT_DEFINITIONS.filter((definition) => /^(quote|return)\./.test(definition.type) && !namesAParty(definition)).map((definition) => definition.type)
+    expect(missing).toEqual([])
+  })
+
+  it('an exemption is real: a declared event that names no party, and none is a quote.* or return.* event', () => {
+    for (const type of Object.keys(NO_CUSTOMER)) {
+      const definition = EVENT_CATALOGUE.get(type, 1)
+      expect(namesAParty(definition), type).toBe(false)
+      expect(type, type).not.toMatch(/^(quote|return)\./)
+    }
+  })
+
+  it('the keys this step added are ids only (optional, nullable) and never copied to the browser', () => {
+    const ADDED = [
+      'quote.updated', 'quote.lines_changed', 'quote.approval_requested', 'quote.approval_decided', 'quote.reopened', 'quote.cancelled', 'quote.sent', 'quote.link_sent', 'quote.revised', 'quote.declined', 'quote.link_requested', 'quote.proofs_changed', 'quote.expired', 'quote.reminder_sent', 'quote.season_changed',
+      'return.lines_changed', 'return.changed', 'return.received', 'return.graded', 'return.decided', 'return.status_changed', 'return.remake_asked', 'return.line_split', 'return.sent_back', 'return.finished', 'return.policy_checked', 'return.garment_named', 'return.scan_code_set', 'return_label.changed',
+    ]
+    for (const type of ADDED) {
+      const definition = EVENT_CATALOGUE.get(type, 1)
+      const field = definition.payload.shape.partyId
+      expect(field, type).toBeDefined()
+      expect(field!.safeParse('0190a000-0000-7000-8000-0000000000b1').success, type).toBe(true)
+      expect(field!.safeParse(null).success, type).toBe(true)
+      expect(field!.safeParse(undefined).success, type).toBe(true)
+      expect(field!.safeParse('Brand Alpha').success, type).toBe(false)
+      expect(definition.live!.fields ?? [], type).not.toContain('partyId')
+    }
+  })
+
+  it('backlog.ranked names its orders’ customers as a list of ids (optional for an older event), never copied to the browser', () => {
+    const definition = EVENT_CATALOGUE.get('backlog.ranked', 1)
+    const field = definition.payload.shape.partyIds
+    expect(field).toBeDefined()
+    expect(field!.safeParse(['0190a000-0000-7000-8000-0000000000b1', '0190a000-0000-7000-8000-0000000000b2']).success).toBe(true)
+    expect(field!.safeParse([]).success).toBe(true)
+    expect(field!.safeParse(undefined).success).toBe(true)
+    expect(field!.safeParse(['Brand Alpha']).success).toBe(false)
+    expect(definition.live!.fields ?? []).not.toContain('partyIds')
+  })
+})
+// ── end B-SA-004b ──

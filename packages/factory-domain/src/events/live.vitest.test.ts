@@ -549,3 +549,77 @@ describe('the portal learns of its own request’s answer live (B-SA-055)', () =
   })
 })
 // ── end B-SA-055 ──
+
+// ── B-SA-004b ──
+/**
+ * B-SA-004b (Sales page plan P17'): every quote.* and return.* event (and a return's label) names the record's customer
+ * (`partyId`, from the quote or RMA row the command read), and backlog.ranked the customers of every order it moved
+ * (`partyIds`), so an office person limited to some customers gets the live hint of their own customers' quotes, returns and
+ * rankings (they got none before: a message naming no customer fails closed) and never another customer's. The party ids never
+ * reach the browser. The dock's floor rule (a return's site) is unchanged: a tablet is the factory's, of every customer.
+ */
+describe('quote, return and ranking events name their customer (B-SA-004b)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  /** Every quote.* and return.* type the catalogue declares (a new one is held to the rule by itself), and the return label. */
+  const ONE = [...EVENT_CATALOGUE.types().filter((type) => /^(quote|return)\./.test(type)), 'return_label.changed']
+  const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
+  const messageOf = (type: string, payload: Record<string, unknown>) => {
+    const definition = definitionOf(type)
+    return { ...liveMessageFor(envelope(definition, payload), definition)!, subject: 'a-record-of-a-brand' }
+  }
+
+  it('covers the quote and return events of every module (W1, quotes in depth, seasons, W2a, outcomes, returns in depth, labels)', () => {
+    expect(ONE).toEqual(expect.arrayContaining(['quote.updated', 'quote.lines_changed', 'quote.sent', 'quote.expired', 'quote.reminder_sent', 'quote.season_changed', 'return.received', 'return.decided', 'return.status_changed', 'return.finished', 'return.line_split', 'return.policy_checked', 'return.scan_code_set', 'return_label.changed']))
+  })
+
+  it.each(ONE)('%s declares partyId (an id only) and never copies it to the browser', (type) => {
+    const definition = definitionOf(type)
+    const field = definition.payload.shape.partyId
+    expect(field, `${type} names its record's customer`).toBeDefined()
+    expect(field!.safeParse(ALPHA).success).toBe(true)
+    expect(field!.safeParse('Brand Alpha').success).toBe(false)
+    expect(['quotes.view', 'sales.returns.view']).toContain(definition.live?.permission)
+    expect(definition.live!.fields ?? []).not.toContain('partyId')
+  })
+
+  it.each(ONE)("%s: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
+    const ofAlpha = messageOf(type, { quoteId: 'Q-A', returnId: 'RMA-A', partyId: ALPHA })
+    const ofBeta = messageOf(type, { quoteId: 'Q-B', returnId: 'RMA-B', partyId: BETA })
+    expect(ofAlpha.partyIds).toEqual([ALPHA])
+    expect(liveViewFor(ofAlpha, viewerOf(type, [BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofAlpha, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)!.fields).not.toHaveProperty('partyId')
+  })
+
+  it.each(ONE)('%s without a party (an event written before): every-customer viewers only (fails closed)', (type) => {
+    const older = messageOf(type, { quoteId: 'Q-OLD', returnId: 'RMA-OLD' })
+    expect(older.partyIds).toEqual([])
+    expect(liveViewFor(older, viewerOf(type, [ALPHA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(older, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+  })
+
+  it("the dock's tablet (floor rule) still receives a return's goods event of any customer at its own site", () => {
+    const received = definitionOf('return.received')
+    const tablet = floor(SITE, [{ permissions: [received.live!.floor!], companies: 'all', sites: 'all', parties: 'all' }])
+    expect(liveViewFor(messageOf('return.received', { returnId: 'RMA-A', partyId: ALPHA }), tablet, EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(messageOf('return.received', { returnId: 'RMA-A', partyId: ALPHA }), tablet, EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+  })
+
+  it("backlog.ranked: one customer's ranking reaches that customer's planners; a ranking of two reaches only who reaches both", () => {
+    const viewer = (parties: Grant['parties']) => viewerOf('backlog.ranked', parties)
+    const ranking = (partyIds?: string[]) => messageOf('backlog.ranked', { companyId: COMPANY, mode: 'BY_HAND', orderIds: ['SO-1'], ...(partyIds ? { partyIds } : {}) })
+    expect(liveViewFor(ranking([ALPHA]), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ranking([BETA]), viewer([BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ranking(partyIdsOf([BETA, ALPHA])), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ranking(partyIdsOf([BETA, ALPHA])), viewer([ALPHA, BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ranking(partyIdsOf([BETA, ALPHA])), viewer('all'), EVENT_CATALOGUE)).not.toBeNull()
+    // An older event (no partyIds): every-customer viewers only. The view: the company and the mode, never a party or an order.
+    expect(liveViewFor(ranking(), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ranking([BETA]), viewer([BETA]), EVENT_CATALOGUE)!.fields).toEqual({ companyId: COMPANY, mode: 'BY_HAND' })
+  })
+})
+// ── end B-SA-004b ──

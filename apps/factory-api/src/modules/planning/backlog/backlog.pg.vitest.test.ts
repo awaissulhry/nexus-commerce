@@ -5,7 +5,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import type { Actor, Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-SA-004b: the office's live wall (what each person's live screen is sent of a ranking).
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { liveMessageFor, liveViewFor } from '@nexus/factory-domain/events/live'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed/calendar'
@@ -234,3 +238,64 @@ describe("B-PR-22b the customer's urgency in the backlog: the brand-slot pass (P
   })
 })
 // ── end B-PR-22b ──
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * backlog.ranked names the customers of every order the ranking moved (`partyIds`, read from the order rows under the command's
+ * lock), so a planner limited to some customers is sent a ranking of their own customers' orders only; one that moved another
+ * customer's order too reaches people of every customer only (the B-PR-09 rule; it reached none of them before). The parties are
+ * for the server's filter only: the view a browser gets carries no party id. Made after the tests above (B-PR-22b's orders: three
+ * of A = the seeds' P1, two of the made-up Beta; a1 hand-ranked, the others by the rule).
+ */
+describe('live: a ranking names the customers of the orders it moved (B-SA-004b)', { timeout: 120_000 }, () => {
+  const P1 = seedUuid(ns, 'party:P1')
+  type Row = { id: string; type: string; version: number; context: string; tenantId: string; companyId: string | null; siteId: string | null; subject: string; correlationId: string; causationId: string | null; source: string; occurredAt: Date; payload: Json }
+  const envelopeOf = (row: Row): EventEnvelope => ({ eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload })
+  const viewer = (parties: Grant['parties']): Actor => ({ audience: 'office', tenantId: tenant, grants: [{ permissions: ['planning.view', 'orders.view'], companies: 'all', sites: 'all', parties }] })
+  const sent = (row: Row, parties: Grant['parties']) => liveViewFor(liveMessageFor(envelopeOf(row), EVENT_CATALOGUE.get(row.type, row.version))!, viewer(parties), EVENT_CATALOGUE)
+  const newest = async (): Promise<Row> => (await admin<Row>(`SELECT * FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'backlog.ranked' ORDER BY "occurredAt" DESC, id DESC LIMIT 1`, [tenant]))[0]!
+  const orderOf = async (prefix: string) => (await admin<{ id: string; backlogRank: number | null }>(`SELECT id, "backlogRank" FROM "SalesOrder" WHERE number LIKE $1`, [`${prefix}-%`]))[0]!
+  const rank = (orders: readonly { id: string; backlogRank: number | null }[], to: number) =>
+    ok('planner', 'PUT', '/planning/backlog/ranks', { companyId: A.company, ranks: orders.map((order, index) => ({ orderId: order.id, from: order.backlogRank, to: to + index })) }, key())
+
+  it("one customer's orders: A's ranking reaches A and the factory, never Beta; Beta's reaches Beta", async () => {
+    await rank([await orderOf('T-BKL-A2')], 7)
+    const ofA = await newest()
+    expect(ofA.payload).toMatchObject({ mode: 'BY_HAND', partyIds: [P1] })
+    expect(sent(ofA, [BETA])).toBeNull()
+    expect(sent(ofA, [P1])).not.toBeNull()
+    expect(sent(ofA, 'all')).not.toBeNull()
+    await rank([await orderOf('T-BKL-B1')], 8)
+    const ofBeta = await newest()
+    expect(ofBeta.payload.partyIds).toEqual([BETA])
+    expect(sent(ofBeta, [BETA])).not.toBeNull()
+    expect(sent(ofBeta, [P1])).toBeNull()
+    // The view carries no party id and no order id (the live fields: the company and the mode).
+    const view = sent(ofBeta, [BETA])!
+    expect(view).not.toHaveProperty('partyIds')
+    expect(view.fields).toEqual({ companyId: A.company, mode: 'BY_HAND' })
+  })
+
+  it('a ranking of two customers names both and reaches only people of both (or every) customer', async () => {
+    await rank([await orderOf('T-BKL-B2'), await orderOf('T-BKL-A3')], 9)
+    const both = await newest()
+    expect(both.payload.partyIds).toEqual([P1, BETA].sort())
+    expect(sent(both, [BETA])).toBeNull()
+    expect(sent(both, [P1])).toBeNull()
+    expect(sent(both, [P1, BETA])).not.toBeNull()
+    expect(sent(both, 'all')).not.toBeNull()
+  })
+
+  it('every backlog.ranked row this file wrote (by hand and by the rule) names exactly the customers of the orders it names', async () => {
+    const rows = await admin<{ id: string; mode: string; named: string[] | null; own: string[] }>(
+      `SELECT e.id, e.payload->>'mode' AS mode,
+              (SELECT array_agg(p ORDER BY p) FROM jsonb_array_elements_text(e.payload->'partyIds') p) AS named,
+              (SELECT array_agg(DISTINCT o."partyId"::text ORDER BY o."partyId"::text) FROM "SalesOrder" o WHERE o.id::text IN (SELECT jsonb_array_elements_text(e.payload->'orderIds'))) AS own
+         FROM "OutboxEvent" e WHERE e."tenantId" = $1 AND e.type = 'backlog.ranked'`,
+      [tenant],
+    )
+    expect(new Set(rows.map((row) => row.mode))).toEqual(new Set(['BY_HAND', 'BY_RULE']))
+    expect(rows.filter((row) => JSON.stringify(row.named) !== JSON.stringify(row.own))).toEqual([])
+  })
+})
+// ── end B-SA-004b ──
