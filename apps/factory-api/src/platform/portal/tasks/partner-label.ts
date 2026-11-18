@@ -36,34 +36,45 @@ const WORDS = {
 const ref = (kind: 'ORDER' | 'QUOTE' | 'REQUEST', seq: number | null | undefined): string => customerRefOf(kind, seq) ?? NO_NUMBER
 const idsOf = (pairs: readonly { type: string; id: string }[], type: string): string[] => [...new Set(pairs.filter((pair) => pair.type === type).map((pair) => pair.id))]
 
-/** The partner's label of each task (by task id) of ONE party; a task not listed keeps its own label. */
-export async function partnerLabelsOf(client: Client, partyId: string, tasks: readonly Labelled[]): Promise<Map<string, string>> {
-  const own = tasks.filter((task) => task.partyId === partyId)
-  const approvalIds = [...new Set(own.filter((task) => task.recordType === APPROVAL_RECORD).map((task) => task.recordId))]
-  const approvals = approvalIds.length === 0 ? [] : await client.approvalRequest.findMany({ where: { id: { in: approvalIds }, partyId }, select: { id: true, kind: true, recordType: true, recordId: true } })
-  const pairs = [...own.map((task) => ({ type: task.recordType, id: task.recordId })), ...approvals.map((row) => ({ type: row.recordType, id: row.recordId }))].filter((pair) => CUSTOMER_RECORDS.has(pair.type))
-  if (pairs.length === 0 && approvals.length === 0) return new Map()
+// ---- F-PR-16 (the browser walk): the customer's own references, read ONCE for the tasks below and for the partner's approval page
+// (platform/approvals-out/page.ts — the portal's and the APPROVAL link's reads), so both follow the same rule.
+/** What a party reads instead of the office's label of its own records (B-TH-303's rule). */
+export interface PartnerRefs {
+  /** A customer record's label in a language; null: not one whose label changes (or it is no longer found). */
+  readonly labelOf: (type: string, id: string, locale: ApprovalLocale) => string | null
+  /** A counter-offer's request (OrderChangeRequest): its order by the customer's own number; null: not found. */
+  readonly counterOrderOf: (requestId: string) => string | null
+  /** Words that quote the office's number of one of these records' orders or quotes, with the customer's own number instead. */
+  readonly own: (text: string) => string
+}
+
+const escapeRe = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * The references of ONE party's records (`pairs`: customer records, see CUSTOMER_RECORDS; `counterIds`: counter-offers' change
+ * requests): only rows of that party are read, whatever a pair names.
+ */
+export async function partnerRefsOf(client: Client, partyId: string, records: readonly { type: string; id: string }[], counterIds: readonly string[] = []): Promise<PartnerRefs> {
+  const pairs = records.filter((pair) => CUSTOMER_RECORDS.has(pair.type))
   const found = async <Row extends { id: string }>(type: string, read: (ids: string[]) => Promise<Row[]>): Promise<Map<string, Row>> => {
     const ids = idsOf(pairs, type)
     return new Map((ids.length === 0 ? [] : await read(ids)).map((row) => [row.id, row]))
   }
-  const orders = await found('SalesOrder', (ids) => client.salesOrder.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, customerSeq: true } }))
-  const quotes = await found('Quote', (ids) => client.quote.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, customerSeq: true } }))
+  const orders = await found('SalesOrder', (ids) => client.salesOrder.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, number: true, customerSeq: true } }))
+  const quotes = await found('Quote', (ids) => client.quote.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, number: true, customerSeq: true } }))
   const requests = await found('Inquiry', (ids) => client.inquiry.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, customerSeq: true } }))
-  const shipments = await found('Shipment', (ids) => client.shipment.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, salesOrder: { select: { customerSeq: true } } } }))
-  const lines = await found('SalesOrderLine', (ids) => client.salesOrderLine.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, seq: true, order: { select: { customerSeq: true } } } }))
-  const amendments = await found('SalesOrderAmendment', (ids) => client.salesOrderAmendment.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, revision: true, order: { select: { customerSeq: true } } } }))
+  const shipments = await found('Shipment', (ids) => client.shipment.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, salesOrder: { select: { number: true, customerSeq: true } } } }))
+  const lines = await found('SalesOrderLine', (ids) => client.salesOrderLine.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, seq: true, order: { select: { number: true, customerSeq: true } } } }))
+  const amendments = await found('SalesOrderAmendment', (ids) => client.salesOrderAmendment.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, revision: true, order: { select: { number: true, customerSeq: true } } } }))
   const concessions = await found('NcrConcession', (ids) => client.ncrConcession.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, seq: true } }))
   // ---- B-PR-31 (threads plan §0.5; production plan B-PR-26's counter-offer, "waiting on you"): a counter-offer's approval is about
   // the customer's request (OrderChangeRequest), whose order the customer reads by its own number: "Counter-offer · #12", never the
   // label it was asked with ("Counter-offer · SO-2026-0042"). Its own party's requests only.
-  const counterIds = [...new Set(approvals.filter((row) => row.recordType === COUNTER_OFFER_RECORD).map((row) => row.recordId))]
-  const counterOrders = new Map(
-    (counterIds.length === 0 ? [] : await client.orderChangeRequest.findMany({ where: { id: { in: counterIds }, partyId }, select: { id: true, order: { select: { customerSeq: true } } } })).map((row) => [row.id, row.order.customerSeq] as const),
+  const counters = new Map(
+    (counterIds.length === 0 ? [] : await client.orderChangeRequest.findMany({ where: { id: { in: [...new Set(counterIds)] }, partyId }, select: { id: true, order: { select: { number: true, customerSeq: true } } } })).map((row) => [row.id, row.order] as const),
   )
   // ---- end B-PR-31
 
-  /** A customer record's label in a language; null: not one whose label changes (or it is no longer found). */
   const labelOf = (type: string, id: string, locale: ApprovalLocale): string | null => {
     switch (type) {
       case 'SalesOrder':
@@ -91,6 +102,32 @@ export async function partnerLabelsOf(client: Client, partyId: string, tasks: re
     }
   }
 
+  // Each office order or quote number these records name → the customer's own ("SO-2026-0042" → "#12"), longest first.
+  const numbers = new Map<string, string>()
+  const add = (number: string, mine: string) => (number ? numbers.set(number, mine) : numbers)
+  for (const order of [...orders.values(), ...[...shipments.values()].map((row) => row.salesOrder), ...[...lines.values()].map((row) => row.order), ...[...amendments.values()].map((row) => row.order), ...counters.values()]) add(order.number, ref('ORDER', order.customerSeq))
+  for (const quote of quotes.values()) add(quote.number, ref('QUOTE', quote.customerSeq))
+  const pattern = numbers.size === 0 ? null : new RegExp(`(?<![A-Za-z0-9-])(?:${[...numbers.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join('|')})(?![A-Za-z0-9-])`, 'g')
+  const own = (text: string): string => (pattern ? text.replace(pattern, (number) => numbers.get(number) ?? number) : text)
+
+  return {
+    labelOf,
+    counterOrderOf: (requestId) => (counters.has(requestId) ? ref('ORDER', counters.get(requestId)!.customerSeq) : null),
+    own,
+  }
+}
+// ---- end F-PR-16
+
+/** The partner's label of each task (by task id) of ONE party; a task not listed keeps its own label. */
+export async function partnerLabelsOf(client: Client, partyId: string, tasks: readonly Labelled[]): Promise<Map<string, string>> {
+  const own = tasks.filter((task) => task.partyId === partyId)
+  const approvalIds = [...new Set(own.filter((task) => task.recordType === APPROVAL_RECORD).map((task) => task.recordId))]
+  const approvals = approvalIds.length === 0 ? [] : await client.approvalRequest.findMany({ where: { id: { in: approvalIds }, partyId }, select: { id: true, kind: true, recordType: true, recordId: true } })
+  const pairs = [...own.map((task) => ({ type: task.recordType, id: task.recordId })), ...approvals.map((row) => ({ type: row.recordType, id: row.recordId }))].filter((pair) => CUSTOMER_RECORDS.has(pair.type))
+  if (pairs.length === 0 && approvals.length === 0) return new Map()
+  const counterIds = approvals.filter((row) => row.recordType === COUNTER_OFFER_RECORD).map((row) => row.recordId) // B-PR-31
+  const { labelOf, counterOrderOf } = await partnerRefsOf(client, partyId, pairs, counterIds) // F-PR-16
+
   const approvalOf = new Map(approvals.map((row) => [row.id, row]))
   const labels = new Map<string, string>()
   for (const task of own) {
@@ -102,7 +139,7 @@ export async function partnerLabelsOf(client: Client, partyId: string, tasks: re
       if (!approval || (!counter && !CUSTOMER_RECORDS.has(approval.recordType))) continue
       const name = APPROVAL_KINDS[approval.kind as ApprovalKind].name
       const locale: ApprovalLocale = task.recordLabel.startsWith(`${name.it} · `) && !task.recordLabel.startsWith(`${name.en} · `) ? 'it' : 'en'
-      const record = counter ? (counterOrders.has(approval.recordId) ? ref('ORDER', counterOrders.get(approval.recordId)) : null) : labelOf(approval.recordType, approval.recordId, locale)
+      const record = counter ? counterOrderOf(approval.recordId) : labelOf(approval.recordType, approval.recordId, locale)
       labels.set(task.id, record ? `${name[locale]} · ${record}` : name[locale])
     } else if (CUSTOMER_RECORDS.has(task.recordType)) {
       labels.set(task.id, labelOf(task.recordType, task.recordId, 'en') ?? NO_NUMBER)

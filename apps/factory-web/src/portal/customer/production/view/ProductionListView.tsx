@@ -402,6 +402,9 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
         rows={model.state === 'error' ? [] : rows}
         rowId={(row) => row.id}
         columns={columns}
+        // F-PR-16 (the walk): a row's cells stack three lines (the stage strip, its step and the next milestone; the date, its move
+        // and the health): the DS's stacked row height, so no cell runs into the next row.
+        rowKind="media"
         count={read && rows ? t('list.count', { count: read.count }) : ''}
         search={
           <Input
