@@ -51,7 +51,7 @@ export async function setScanCode(caller: CommandCaller, returnId: string, body:
     if (!code) throw new DomainError('conflict', `No free scan code for return ${rma.number}: every code made from its number is taken.`)
     await touchReturn(tools, rma, { scanCode: code })
     tools.audit({ action: 'returnsDepth.setScanCode', recordType: RETURN_RECORD, recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { scanCode: null }, after: { scanCode: code } })
-    tools.emit({ type: 'return.scan_code_set', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, scanCode: code } })
+    tools.emit({ type: 'return.scan_code_set', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, scanCode: code, partyId: rma.partyId /* B-SA-004b */ } })
     return { scanCode: code, created: true }
   })
   return result

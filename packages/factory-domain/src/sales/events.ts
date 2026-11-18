@@ -96,6 +96,9 @@ const orderStatus = z.enum(SALES_ORDER_STATUSES)
 // B-W2a-43: customer returns.
 const returnLive = { permission: 'sales.returns.view', fields: ['returnId', 'number'] } as const
 const returnStatus = z.enum(RETURN_STATUSES)
+// B-SA-004b (Sales page plan P17'): every return.* payload names the RMA's customer (`partyId`, livePartyId(): the RMA row's own,
+// read in the command), so an office person limited to some customers is sent their customers' returns live; never in the live
+// `fields` (the dock's floor rule never reads it); optional, so an older event still parses (every-customer viewers only).
 // B-W2a-57: repairs and alterations.
 const repairLive = { permission: 'sales.repairs.view', fields: ['repairId', 'number'] } as const
 const repairStage = z.enum(REPAIR_STAGES)
@@ -321,35 +324,35 @@ export const events = [
     type: 'return.lines_changed',
     context: 'sales',
     description: "Lines of a customer return were added, changed or removed before the goods arrived (the dock's expected lines change).",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), change: z.enum(['ADDED', 'CHANGED', 'REMOVED']), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), change: z.enum(['ADDED', 'CHANGED', 'REMOVED']), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'change'] },
   }),
   defineEvent({
     type: 'return.changed',
     context: 'sales',
     description: "A customer return's owner, deadline for the goods, customer reference or internal note changed.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), fields: z.array(z.string()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), fields: z.array(z.string()), partyId: livePartyId() /* B-SA-004b */ }),
     live: returnLive,
   }),
   defineEvent({
     type: 'return.received',
     context: 'sales',
     description: "A customer return's goods arrived at the dock: the receipt (parcels, condition, the customer's DDT) and the pieces of each line.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), receiptId: z.uuid(), lineIds: z.array(z.uuid()), pieces: z.number().int(), first: z.boolean() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), receiptId: z.uuid(), lineIds: z.array(z.uuid()), pieces: z.number().int(), first: z.boolean(), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive' },
   }),
   defineEvent({
     type: 'return.graded',
     context: 'sales',
     description: "Received lines of a customer return were graded: the garments' grade, the cause found and their condition.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive' },
   }),
   defineEvent({
     type: 'return.decided',
     context: 'sales',
     description: 'Graded lines of a customer return were decided: what the customer gets and where the goods go (the stock moves it posted); the return is inspected once every received line is decided.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), inspected: z.boolean(), moveIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), inspected: z.boolean(), moveIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'inspected'] },
   }),
   defineEvent({
@@ -363,7 +366,7 @@ export const events = [
     type: 'return.status_changed',
     context: 'sales',
     description: 'A customer return moved: goods received, inspected and decided, more goods came, closed with its finish reason, or cancelled.',
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), from: returnStatus, to: returnStatus }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), from: returnStatus, to: returnStatus, partyId: livePartyId() /* B-SA-004b */ }),
     live: { ...returnLive, floor: 'sales.returns.receive', fields: ['returnId', 'number', 'from', 'to'] },
   }),
   defineEvent({

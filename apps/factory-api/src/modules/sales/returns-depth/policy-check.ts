@@ -202,7 +202,7 @@ export async function applyPolicyInCommand(tools: CommandTools, rma: RmaRow, bod
     after: { policyId: live.id, channel: check.channel, withdrawal, goodsDueBy, outsideWindow: check.lines.filter((line) => !line.window.inWindow).map((line) => line.seq) },
     ...(reason ? { reason } : {}),
   })
-  tools.emit({ type: 'return.policy_checked', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, policyId: live.id, channel: check.channel, withdrawal, goodsDueBy, outsideWindow: check.outsideWindow } })
+  tools.emit({ type: 'return.policy_checked', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, policyId: live.id, channel: check.channel, withdrawal, goodsDueBy, outsideWindow: check.outsideWindow, partyId: rma.partyId /* B-SA-004b */ } })
   const policy = (await livePolicyOf(tx, rma.companyId, check.channel))!
   return { check: { ...check, goodsDueBy }, policy }
 }

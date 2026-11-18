@@ -279,9 +279,9 @@ export async function receiveReturn(caller: CommandCaller, returnId: string, bod
     await touchReturn(tools, rma, { ...(moved ? { status: to } : {}), ...(first ? { receivedAt: now } : {}), ...(rma.status === 'INSPECTED' ? { inspectedAt: null } : {}) })
     if (moved) {
       tools.audit({ action: 'returns.statusChanged', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: rma.status }, after: { status: to, ...(first ? { receivedAt: toUtcIso(now) } : {}) } })
-      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to } })
+      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to, partyId: rma.partyId /* B-SA-004b */ } })
     }
-    tools.emit({ type: 'return.received', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, receiptId, lineIds: body.lines.map((entry) => entry.lineId), pieces, first } })
+    tools.emit({ type: 'return.received', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, receiptId, lineIds: body.lines.map((entry) => entry.lineId), pieces, first, partyId: rma.partyId /* B-SA-004b */ } })
     return { receiptId }
   })
   return { return: await dockOf(caller, seen.id), receiptId: result.receiptId }
@@ -324,7 +324,7 @@ export async function gradeReturn(caller: CommandCaller, returnId: string, body:
       tools.audit({ action: 'returns.gradeLine', recordType: 'ReturnLine', recordId: line.id, companyId: rma.companyId, siteId: rma.siteId, before: { grade: line.grade, cause: line.cause, conditionNote: line.conditionNote }, after })
     }
     await touchReturn(tools, rma)
-    tools.emit({ type: 'return.graded', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: body.lines.map((entry) => entry.lineId) } })
+    tools.emit({ type: 'return.graded', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: body.lines.map((entry) => entry.lineId), partyId: rma.partyId /* B-SA-004b */ } })
     return { graded: body.lines.length }
   })
   return { return: await dockOf(caller, seen.id) }

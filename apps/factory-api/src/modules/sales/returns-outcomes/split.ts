@@ -69,7 +69,7 @@ export async function splitLine(caller: CommandCaller, returnId: string, lineId:
     const by = { audience: context.audience, actorId: context.actorId }
     tools.audit({ action: 'returnsOutcomes.splitLine', recordType: 'ReturnLine', recordId: line.id, companyId: rma.companyId, siteId: rma.siteId, before: { quantity: line.quantity, receivedQuantity: line.receivedQuantity }, after: { quantity: line.receivedQuantity, newLineId, newSeq: seq, rest, by } })
     tools.audit({ action: 'returnsOutcomes.splitOff', recordType: 'ReturnLine', recordId: newLineId, companyId: rma.companyId, siteId: rma.siteId, after: { seq, parentLineId: line.id, quantity: rest, reasonCode: line.reasonCode, by } })
-    tools.emit({ type: 'return.line_split', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineId: line.id, newLineId, kept: line.receivedQuantity, rest } })
+    tools.emit({ type: 'return.line_split', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineId: line.id, newLineId, kept: line.receivedQuantity, rest, partyId: rma.partyId /* B-SA-004b */ } })
     return { line: { id: line.id, seq: line.seq, quantity: line.receivedQuantity }, newLine: { id: newLineId, seq, quantity: rest } }
   })
   return { ...(await getDock(caller, seen.id)), line: result.line, newLine: result.newLine }
