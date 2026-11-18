@@ -340,3 +340,24 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
     for (const body of seenByB) expect(findMarkers(body, aMarkers)).toEqual([])
   })
 })
+
+// ── B-SA-043 (sales page plan R1; review P6-4): extra pieces told honestly, office only ──
+describe('B-SA-043: the order’s lines name the pieces made extra per size (office only)', { timeout: 60_000 }, () => {
+  it('a line lowered under what is already cut reads its extra pieces per size, in words', async () => {
+    // Alpha's work order in progress, with 20 of SO-A1's size 50 on a cut order; SO-A1 now wants 15 of it (a change after cutting).
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       UPDATE "WorkOrder" SET status = 'IN_PROGRESS', "releasedAt" = now(), "startedAt" = now() WHERE id = ${lit(alpha.workOrderId)};
+       UPDATE "SalesOrderLineSize" SET quantity = 15 WHERE "lineId" = ${lit(alpha.line1)} AND size = '50';
+       COMMIT;`,
+    )
+    forgetProgress()
+    const answer = await ok('office.all', production(alpha.so1, 'lines'))
+    const line = (answer.lines as Json[])[0]!
+    expect(line).toMatchObject({ lineId: alpha.line1, madeExtra: 5 })
+    expect((line.sizes as Json[]).find((size) => size.size === '50')).toMatchObject({ madeExtra: 5, madeExtraWords: { en: 'Made extra: 5 50', it: 'Fatti in più: 5 50' } })
+    expect((line.sizes as Json[]).find((size) => size.size === '52')).toMatchObject({ madeExtra: 0, madeExtraWords: null })
+  })
+})
+// ── end B-SA-043 ──

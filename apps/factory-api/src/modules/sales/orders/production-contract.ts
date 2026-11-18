@@ -108,7 +108,13 @@ export const headlineView = output({
   }),
 })
 
-const sizeView = output({ size: z.string().nullable(), ...pieces })
+const sizeView = output({
+  size: z.string().nullable(),
+  ...pieces,
+  /** B-SA-043 (office only): pieces cut of the order's own cells beyond what the size now wants ("Made extra: 4 M"); 0: none. */
+  madeExtra: z.number().int(),
+  madeExtraWords: words.nullable(),
+})
 
 export const lineView = output({
   lineId: id(),
@@ -122,6 +128,8 @@ export const lineView = output({
   /** No live work order makes the line yet. */
   notInWorkOrders: z.boolean(),
   sizes: z.array(sizeView),
+  /** B-SA-043 (office only): the line's extra pieces, all sizes together (a change lowered it after cutting). */
+  madeExtra: z.number().int(),
 })
 
 const ownShare = output({ cells: z.number().int(), pieces: z.number().int(), cut: z.number().int().nullable(), sewn: z.number().int().nullable(), checked: z.number().int().nullable() })
