@@ -192,6 +192,12 @@ afterAll(async () => {
 }, 60_000)
 
 /** What the session reads of a record's files: its list, and the file by id, download and preview. */
+// fix-pr-3: a refusal's words without its own request id (every answer carries a fresh requestId): "404 as a wrong id".
+const refusalOf = (body: Json): Json => {
+  const { requestId: _requestId, ...error } = (body.error ?? {}) as Json
+  return error
+}
+
 async function reads(session: keyof typeof SESSIONS, entry: Case) {
   const list = await call(session, 'GET', `/files?recordType=${entry.recordType}&recordId=${entry.recordId}`)
   expect(list.status, `${session} list ${entry.name}: ${JSON.stringify(list.body)}`).toBe(200)
@@ -213,7 +219,7 @@ describe('B-PR-08b PW-05 (files): the files of production records honour the bra
       } else {
         expect(read.listed, entry.name).toEqual([])
         expect(read.statuses, entry.name).toEqual([404, 404, 404])
-        expect(read.byId.body, entry.name).toEqual(unknown.body)
+        expect(refusalOf(read.byId.body), entry.name).toEqual(refusalOf(unknown.body)) // fix-pr-3: the words, not the request id
       }
     }
   })
