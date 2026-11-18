@@ -12,6 +12,7 @@ import { assertMayChangeList, claimVersion, dayText, dayValue, ENTRY_COLUMNS, en
 import { officeContextOf, type Reader } from '../quotes/store'
 import { getVersion } from '../pricelists/versions'
 import { assertDraft, assertListActive, BREAK_COLUMNS, invalid, readVersionFor, rulesViewOf, SURCHARGE_COLUMNS, surchargeViewOf } from './store'
+import { can } from '@nexus/factory-domain/core/permissions'
 
 /**
  * Price lists in depth (B-W2b-325), the writes. Each is ONE command that locks the list's row first, then compares and
@@ -203,8 +204,11 @@ async function writeSurcharges(tools: CommandTools, scope: { readonly versionId:
 
 /** A style the caller may see with pricelists.view over its company (a style of every company: any such grant), else 404. */
 async function styleFor(caller: CommandCaller, styleId: string) {
-  const style = isUuid(styleId) ? await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: { id: true, code: true, name: true, companyId: true, status: true, sizes: true } })) : null
-  if (!style || !mayOnList(officeContextOf(caller), PRICE_LISTS_VIEW, style.companyId)) throw new NotFoundError('Style not found.')
+  const found = isUuid(styleId) ? await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: { id: true, code: true, name: true, companyId: true, status: true, sizes: true, brandPartyId: true } })) : null
+  if (!found || !mayOnList(officeContextOf(caller), PRICE_LISTS_VIEW, found.companyId)) throw new NotFoundError('Style not found.')
+  // fix-pr-8 (the brand wall): another customer's private-label style is not found (as an unknown id).
+  if (!can(actorOf(officeContextOf(caller)), PRICE_LISTS_VIEW, { partyId: found.brandPartyId })) throw new NotFoundError('Style not found.')
+  const { brandPartyId: _brand, ...style } = found
   return style
 }
 

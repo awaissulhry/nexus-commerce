@@ -12,6 +12,7 @@ import type { StoredAcceptanceMode } from '@nexus/factory-domain/sales/quote-ter
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeContextOf, type Reader } from '../quotes/store'
+import { styleBrandWhere } from '../../product/styles/store'
 
 /**
  * Quote templates' reads and who may act on one (B-W2b-294; SAL-144, SAL-252; factory-db sales-pricing.prisma QuoteTemplate,
@@ -82,10 +83,19 @@ export async function readTemplate(db: Reader, templateId: string): Promise<Temp
   return db.quoteTemplate.findUnique({ where: { id: templateId }, select: TEMPLATE_COLUMNS })
 }
 
+/**
+ * fix-pr-8 (the brand wall; the B-PR-10 sweep of every office route): a template with a line of a customer's private-label style
+ * is that customer's — a person limited to other customers neither lists nor finds it (it would start their quote with it).
+ */
+export function templateBrandWhere(context: OfficeContext): Prisma.QuoteTemplateWhereInput {
+  const brand = styleBrandWhere(actorOf(context), QUOTES_VIEW)
+  return Object.keys(brand).length === 0 ? {} : { lines: { every: { style: { is: brand } } } }
+}
+
 /** The template the office may read (else 404). */
 export async function officeTemplate(caller: CommandCaller, templateId: string): Promise<{ context: OfficeContext; template: TemplateRow }> {
   const context = officeContextOf(caller)
-  const template = await caller.withClient((client) => readTemplate(client, templateId))
+  const template = await caller.withClient(async (client) => (isUuid(templateId) && (await client.quoteTemplate.count({ where: { AND: [{ id: templateId }, templateBrandWhere(context)] } })) > 0 ? readTemplate(client, templateId) : null)) // fix-pr-8
   if (!template || !mayRead(context, template)) throw new NotFoundError('Quote template not found.')
   return { context, template }
 }

@@ -12,6 +12,7 @@ import { refuse } from '../service/open'
 import { LOG_WORDS, officeOf, officeReport } from './access'
 import { asDay, dayOf, LOG_COLUMNS, lockReport, peopleOf, revisionsOf, revisionView, touchReport } from './store'
 import { reportRecordOf, type ReportView } from './view'
+import { optionalStyleWall } from '../../product/styles/store'
 
 /**
  * The accident log (B-W2b-351; SAL-423; GPSR, Reg. (EU) 2023/988 art. 20; design compliance.register "Accident log (W2b)",
@@ -43,7 +44,8 @@ export async function accidentLog(caller: CommandCaller, query: LogQuery) {
   const limit = Math.min(query.limit ?? SAFETY_LIMITS.list, SAFETY_LIMITS.list)
   if (query.from && query.to && query.from > query.to) throw new ValidationError('The period ends before it starts.', [{ path: 'querystring/to', message: 'On or after from.' }])
   return caller.withClient(async (client) => {
-    const scope = scopeWhere(actorOf(context), SALES_SAFETY_VIEW, SCOPE) as Prisma.ProductSafetyReportWhereInput
+    // fix-pr-8 (the brand wall): a report about a garment of another customer's private-label style is that customer's.
+    const scope = { AND: [scopeWhere(actorOf(context), SALES_SAFETY_VIEW, SCOPE), optionalStyleWall(actorOf(context), SALES_SAFETY_VIEW)] } as Prisma.ProductSafetyReportWhereInput
     const rows = await client.accidentLogEntry.findMany({
       where: { report: { AND: [scope, query.companyId ? { companyId: query.companyId } : {}] } },
       select: { ...LOG_COLUMNS, report: { select: { number: true, status: true, style: { select: { id: true, code: true, name: true } } } } },

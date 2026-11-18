@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PARTIES_MANAGE } from '@nexus/factory-domain/parties/permissions'
 import { listCodeOf, listFieldProblems, validityProblems, type PriceListKind, type PriceListState } from '@nexus/factory-domain/sales/pricelists/pricelists'
@@ -271,7 +271,8 @@ export async function setCustomers(caller: CommandCaller, listId: string, action
     for (const [index, partyId] of ids.entries()) {
       const party = parties.find((row) => row.id === partyId)
       const at = `body/partyIds/${index}`
-      if (!party) issues.push({ path: at, message: 'No such customer.' })
+      // fix-pr-8 (the brand wall): a customer the person is not given reads as no customer at all (its code is never named).
+      if (!party || !can(actorOf(context), PARTIES_MANAGE, { partyId: party.id })) issues.push({ path: at, message: 'No such customer.' })
       else if (!mayWriteParty(actorOf(context), PARTIES_MANAGE, party)) issues.push({ path: at, message: `You may not change ${party.code}.` })
       else if (party.status === 'ARCHIVED') issues.push({ path: at, message: `${party.code} is archived.` })
       else if (action === 'add') {

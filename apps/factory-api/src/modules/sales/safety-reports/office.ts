@@ -28,6 +28,7 @@ import { held, mayOn, officeOf, officeReport } from './access'
 import { intakeInCommand, safetyOwnerProblems, type IntakeBody } from './intake'
 import { asDay, dayOrNull, lockReport, peopleOf, REPORT_COLUMNS, touchReport } from './store'
 import { reportRecordOf, rowFacts, rowView, type ReportView } from './view'
+import { optionalStyleWall } from '../../product/styles/store'
 
 /**
  * The office's product-safety reports (B-W2b-351; SAL-414): a report typed from a call, a visit or a mail (the public and portal
@@ -79,7 +80,8 @@ export interface ListQuery {
 }
 
 const SCOPE = { company: 'companyId', party: { field: 'partyId', nullable: true } } as const
-const scopeOfCaller = (caller: CommandCaller) => scopeWhere(actorOf(officeOf(caller)), SALES_SAFETY_VIEW, SCOPE) as Prisma.ProductSafetyReportWhereInput
+// fix-pr-8 (the brand wall): a report about a garment of another customer's private-label style is that customer's.
+const scopeOfCaller = (caller: CommandCaller) => ({ AND: [scopeWhere(actorOf(officeOf(caller)), SALES_SAFETY_VIEW, SCOPE), optionalStyleWall(actorOf(officeOf(caller)), SALES_SAFETY_VIEW)] }) as Prisma.ProductSafetyReportWhereInput
 
 function viewWhere(view: SavedView): Prisma.ProductSafetyReportWhereInput {
   switch (view) {
