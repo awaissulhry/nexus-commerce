@@ -536,7 +536,10 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   return { ...scanView(row, operations, locked.bundle.code, work.lines), scrapWaits: await scrapWaitsInCommand(tools, { id, siteId: workOrder.siteId, scrapQuantity: row.scrapQuantity, createdById: subject.workerId ? context.actorId : null }) }
 }
 
-export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE' | 'SYSTEM') {
+// B-SA-003 (Sales page plan P17', R7): the scan names its work order's customer (the work order's row read on the server, readHeader:
+// WorkOrder.partyId; null for a work order of no customer, one mixed before the rule) for the office's live wall only — never in the
+// live fields, so a party id never reaches the browser (a page filters by its own record ids).
+export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId' | 'partyId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE' | 'SYSTEM') {
   return {
     type: 'production.scan_recorded',
     subject: workOrder.id,
@@ -555,6 +558,7 @@ export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'company
       scrapQuantity: scan.scrapQuantity,
       reworkQuantity: scan.reworkQuantity,
       postedBy,
+      partyId: workOrder.partyId, // B-SA-003
     },
   }
 }

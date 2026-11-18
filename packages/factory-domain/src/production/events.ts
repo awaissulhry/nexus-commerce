@@ -347,6 +347,9 @@ export const events = [
       scrapQuantity: z.number().int().min(0),
       reworkQuantity: z.number().int().min(0),
       postedBy: postedBy(),
+      // B-SA-003 (Sales page plan P17'; review BW-7): the work order's customer (the B-PR-09 livePartyId(): null for a work order
+      // of no customer), for the office's live wall only: never in the live fields, so it never reaches the browser.
+      partyId: livePartyId(),
     }),
     live: scanLive,
   }),

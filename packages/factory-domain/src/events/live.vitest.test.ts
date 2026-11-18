@@ -431,3 +431,33 @@ describe('thread, follower and file events name their record’s customer (B-SA-
   })
 })
 // ── end B-SA-002 ──
+
+// ── B-SA-003 ──
+/** B-SA-003 (Sales page plan P17'; review BW-7): a scan names its work order's customer for the office's live wall only. */
+describe('a scan names its work order’s customer (B-SA-003)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  const definition = EVENT_CATALOGUE.get('production.scan_recorded', 1)
+  const viewer = (parties: Grant['parties']): Actor => office([{ permissions: [definition.live!.permission], companies: 'all', sites: 'all', parties }])
+  const scan = (partyId?: string | null) => liveMessageFor(envelope(definition, { workOrderId: 'WO-1', number: 'WO-1', bundleId: 'B-1', ...(partyId === undefined ? {} : { partyId }) }), definition)!
+
+  it('declares an optional, nullable partyId, never in the live fields', () => {
+    const field = definition.payload.shape.partyId
+    expect(field).toBeDefined()
+    for (const value of [ALPHA, null, undefined]) expect(field!.safeParse(value).success).toBe(true)
+    expect(field!.safeParse('Brand Alpha').success).toBe(false)
+    expect(definition.live!.fields ?? []).not.toContain('partyId')
+  })
+
+  it("a person limited to Brand Beta gets no scan of Alpha's work order and does get Beta's; a work order of no customer reaches every customer only", () => {
+    expect(liveViewFor(scan(ALPHA), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(scan(BETA), viewer([BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(scan(ALPHA), viewer('all'), EVENT_CATALOGUE)).not.toBeNull()
+    for (const none of [scan(null), scan()]) {
+      expect(liveViewFor(none, viewer([ALPHA]), EVENT_CATALOGUE)).toBeNull()
+      expect(liveViewFor(none, viewer('all'), EVENT_CATALOGUE)).not.toBeNull()
+    }
+    expect(liveViewFor(scan(BETA), viewer([BETA]), EVENT_CATALOGUE)!.fields).toEqual({ workOrderId: 'WO-1', number: 'WO-1', bundleId: 'B-1' })
+  })
+})
+// ── end B-SA-003 ──
