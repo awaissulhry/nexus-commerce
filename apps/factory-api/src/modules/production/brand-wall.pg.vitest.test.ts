@@ -238,6 +238,13 @@ describe('B-PR-10 the brand-wall sweep', () => {
     expect(sweeper.scanForA(JSON.stringify(changes))).toEqual([])
   })
 
+  // fix-pr-7 (found by the B-PR-36 golden flow's sweep: a person limited to B read the sign-in and order mails of A's people, their
+  // records and addresses): the mail log and the blocked addresses are every customer's mail.
+  it('fix-pr-7: the mail log and the blocked addresses need every customer', async () => {
+    await everyCustomerOnly('/email/delivery')
+    await everyCustomerOnly('/email/blocked')
+  })
+
   it('the warehouse is one stock for every customer: its ledger, stock and their exports need every customer; a work order’s own kit stays its customer’s', async () => {
     await everyCustomerOnly(`/inventory/ledger?siteId=${w.siteId}`)
     await everyCustomerOnly(`/inventory/stock?siteId=${w.siteId}`)
