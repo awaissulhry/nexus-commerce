@@ -117,6 +117,8 @@ export interface OrdersListModel {
   collapsed?: readonly string[]
   /** "Invoice shipped goods for N" (finance only): the drafts it would open in Finance; null: closed. */
   invoiceDrafts?: InvoiceDraftsState | null
+  /** F-SA-221: made-to-measure orders only (`?kind=mtm`): its chip (fixed when the host locks it), the Riders column shown. */
+  kind?: 'mtm' | null
   // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
   /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
   listKey?: string
@@ -183,6 +185,8 @@ export interface OrdersListActions {
   // ---- B-TH-245 (threads plan TH-4: the sheet's cells edit) ----
   /** A cell (or Edit N) saved: the row's new note and version (custom values stay in the list frame). */
   onCellSaved?: (id: string, after: Readonly<Record<string, string | number | null>>, version: number) => void
+  /** F-SA-221: made-to-measure orders only, or every kind (null); `rows` with it (the built-in view Made-to-measure: the open ones). */
+  onKind?: (kind: 'mtm' | null, rows?: RowView) => void
   /** F-SA-214: a board card has the focus or its picture is open large (true): live re-reads wait behind "N updates · Show". */
   onBoardHold?: (held: boolean) => void
 }

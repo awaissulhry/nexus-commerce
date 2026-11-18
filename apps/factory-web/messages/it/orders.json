@@ -199,6 +199,7 @@
     "cardPieces_other": "{count} pezzi",
     "cardPromised": "promesso il {date}",
     "cardNoPromise": "nessuna data promessa",
+    "cardMtm": "su misura",
     "cardNew_one": "{count} nuovo messaggio",
     "cardNew_other": "{count} nuovi messaggi",
     "promise": "Promesso il {date}",
@@ -222,7 +223,7 @@
   "waits": {
     "yes": "Aspetta un sì",
     "credit": "Aspetta il fido",
-    "review": "Aspetta la revisione della fabbrica"
+    "review": "Aspetta il controllo della fabbrica"
   },
   "offBoard": {
     "delivered_one": "{count} consegnato · Vedilo nell'elenco",

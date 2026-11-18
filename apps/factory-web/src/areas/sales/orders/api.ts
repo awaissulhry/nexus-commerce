@@ -152,6 +152,11 @@ export const orderRowSchema = z.object({
   priority: z.object({ level: z.enum(ORDER_PRIORITY_LEVELS), number: z.number(), urgentReason: z.string().nullable() }).optional(),
   /** F-SA-214 (the API's B-SA-012): why a PENDING_APPROVAL order waits; null for every other order (absent from an older answer). */
   waits: z.array(z.enum(WAIT_REASONS)).nullable().optional(),
+  /**
+   * F-SA-221 (the API's B-SA-020): its made-to-measure units (null: none) — owed, waiting for the factory review, and the riders (the
+   * first names and how many in all) only in the answer of a reader of measurements (null otherwise). Never a measurement.
+   */
+  madeToMeasure: z.object({ units: z.number(), waitingReview: z.number(), riders: z.object({ names: z.array(z.string()), count: z.number() }).nullable() }).nullable().optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -185,6 +190,8 @@ export interface OrderQuery {
   /** Count each row's production progress (only while the Progress column is shown: it reads the floor's records). */
   progress?: boolean
   // ── end B-TH-244 ──
+  /** F-SA-221: made-to-measure orders only (`?kind=mtm`: the list, the board, the totals, the switcher's counts, the file). */
+  kind?: 'mtm' | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -211,6 +218,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       cf: query.cf?.trim() || undefined, // B-TH-057
       ...doorQueryOf(query), // B-TH-244
       progress: query.progress ? 'true' : undefined, // B-TH-244
+      kind: query.kind ?? undefined, // F-SA-221
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -229,9 +237,9 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced'> /* B-TH-244 */ = {}): Promise<OrderBoard> {
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */> = {}): Promise<OrderBoard> {
   return api.get('/sales/orders/board', {
-    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */ },
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */ },
     schema: boardSchema,
     signal,
   })
@@ -285,6 +293,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       companyId: query.companyId ?? undefined,
       cf: query.cf?.trim() || undefined,
       ...doorQueryOf(query),
+      kind: query.kind ?? undefined, // F-SA-221
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },
@@ -328,8 +337,8 @@ const customersSchema = z.object({ customers: z.array(orderCustomerSchema), tota
 export type OrderCustomers = z.infer<typeof customersSchema>
 
 /** The customers with orders the reader may see, most recent order first, with their open and late orders. */
-export function listOrderCustomers(api: ApiClient, query: { q?: string; companyId?: string | null; limit?: number }, signal?: AbortSignal): Promise<OrderCustomers> {
-  return api.get('/sales/orders/customers', { query: { q: query.q?.trim() || undefined, companyId: query.companyId ?? undefined, limit: query.limit ?? 50 }, schema: customersSchema, signal })
+export function listOrderCustomers(api: ApiClient, query: { q?: string; companyId?: string | null; kind?: 'mtm' | null /* F-SA-221 */; limit?: number }, signal?: AbortSignal): Promise<OrderCustomers> {
+  return api.get('/sales/orders/customers', { query: { q: query.q?.trim() || undefined, companyId: query.companyId ?? undefined, kind: query.kind ?? undefined /* F-SA-221 */, limit: query.limit ?? 50 }, schema: customersSchema, signal })
 }
 // ── end B-TH-226 ──
 

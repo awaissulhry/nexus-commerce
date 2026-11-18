@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { EmptyState, ProgressBar } from '@nexus/ui/components'
 import { GridCard, GridFooterSpacer, GridFooterStrip, GridSearchSlot, GridToolbar } from '@nexus/ui/grid'
 import { Button, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Ruler } from 'lucide-react' // F-SA-221: the made-to-measure mark
 import { ListKeysInfo } from '../../../../../list-frame/ListKeysInfo'
 import { isListKey, type ListKey } from '../../../../../list-frame/model'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -93,11 +94,13 @@ export function cardFacts(row: OrderRow, can: Pick<OrderAbilities, 'makeWorkOrde
 }
 
 /** The card's name for a screen reader: number, customer, pieces, the promise, and the reader's new messages when there are any. */
-export function cardName(t: Translate, row: Pick<OrderRow, 'number' | 'partyName' | 'units' | 'promiseDate'>, locale: Locale, newMessages: number): string {
+// F-SA-221: + "made to measure" for an order with a made-to-measure unit (never a rider's name).
+export function cardName(t: Translate, row: Pick<OrderRow, 'number' | 'partyName' | 'units' | 'promiseDate' | 'madeToMeasure'>, locale: Locale, newMessages: number): string {
   const parts = [
     t('board.cardLabel', { number: row.number, customer: row.partyName || '—' }),
     t('board.cardPieces', { count: row.units }),
     row.promiseDate ? t('board.cardPromised', { date: formatDate(dayInstant(row.promiseDate), { locale }) }) : t('board.cardNoPromise'),
+    ...(row.madeToMeasure ? [t('board.cardMtm')] : []),
     ...(newMessages > 0 ? [t('board.cardNew', { count: newMessages })] : []),
   ]
   return parts.join(', ')
@@ -340,8 +343,15 @@ function BoardCard({ row, model, actions, newMessages, onPicture }: { row: Order
             )}
           </span>
         )}
-        {(fresh || facts.priority || facts.customerUrgent) && (
+        {(fresh || facts.priority || facts.customerUrgent || row.madeToMeasure) && (
           <span className="fw-so-card-line">
+            {/* F-SA-221: the made-to-measure mark (and its units waiting for the factory review); never a rider's name. */}
+            {row.madeToMeasure && (
+              <Tag tone="neutral">
+                <Ruler size={12} aria-hidden /> {s('mtm.mark')}
+              </Tag>
+            )}
+            {row.madeToMeasure && row.madeToMeasure.waitingReview > 0 && <Tag tone="warning">{s('mtm.waitingReview', { count: row.madeToMeasure.waitingReview })}</Tag>}
             {fresh && <LastMessageCell unread={fresh} href={`${href}?thread=new`} record={row.number} />}
             {facts.priority && <Tag tone={facts.priority === 'URGENT' ? 'danger' : facts.priority === 'HIGH' ? 'warning' : 'neutral'}>{t('board.priority', { level: d(`priority.level.${facts.priority}`) })}</Tag>}
             {facts.customerUrgent && <Tag tone="warning">{t('board.customerUrgent')}</Tag>}

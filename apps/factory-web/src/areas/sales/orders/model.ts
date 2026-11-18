@@ -159,6 +159,11 @@ export function partyFromAddress(params: { get(name: string): string | null } | 
 
 // B-TH-226: the chip "Customer: <name>" of TH-0 went: the sheet's own chips (list/sheet) name every narrowing.
 
+// ── F-SA-221 (sales page plan N7, pick P12; 12-lists-board §4.1): made-to-measure orders, `?kind=mtm` ──
+/** The made-to-measure term of the address: `mtm`, or null (another value narrows nothing: the sheet never guesses). */
+export const kindFromAddress = (params: { get(name: string): string | null } | null): 'mtm' | null => (params?.get('kind') === 'mtm' ? 'mtm' : null)
+// ── end F-SA-221 ──
+
 // ── B-TH-225: Brand and Company narrow the sheet (`?brand=<party id>|own`, `?company=<id>`) ──
 /** The label on the garment the address narrows the sheet to: a brand party's id, `own` (our own collection), or null. */
 export function brandFromAddress(params: { get(name: string): string | null } | null): string | null {
@@ -185,6 +190,8 @@ export interface Narrowing {
   readonly extra?: ExtraTerms | null
   /** B-TH-244: count each row's production progress (the Progress column is shown). */
   readonly progress?: boolean
+  /** F-SA-221: made-to-measure orders only (`?kind=mtm`). */
+  readonly kind?: 'mtm' | null
 }
 // ── end B-TH-225 ──
 
@@ -238,7 +245,7 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */ }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */ }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -254,6 +261,7 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   if (next.party) query.set('party', next.party) // B-TH-201
   if (next.brand) query.set('brand', next.brand) // B-TH-225
   if (next.company) query.set('company', next.company) // B-TH-225
+  if (next.kind) query.set('kind', next.kind) // F-SA-221
   if (next.cf) query.set('cf', next.cf) // B-TH-057
   if (next.sort) query.set('sort', next.sort) // B-TH-057
   if (next.q.trim()) query.set('q', next.q.trim())
@@ -314,6 +322,7 @@ const narrowingOf = (narrow: Narrowing): OrderQuery => ({
   ...(narrow.sort ? { sort: narrow.sort } : {}),
   ...extraQueryOf(narrow.extra ?? null),
   ...(narrow.progress ? { progress: true } : {}),
+  ...(narrow.kind ? { kind: narrow.kind } : {}), // F-SA-221
 })
 
 /**
@@ -407,6 +416,8 @@ export function boardRereadOf(change: { type: string; fields: Readonly<Record<st
   const keep = (statuses: readonly unknown[]): BoardLane[] => (BOARD_LANES as readonly BoardLane[]).filter((lane) => shown.includes(lane) && statuses.includes(lane))
   if (change.type === 'sales_order.status_changed') return keep([change.fields.from, change.fields.to])
   if (change.type === 'sales_order.created' || change.type === 'quote.accepted') return keep(NEW_ORDER_LANES)
+  // F-SA-221: a rider's review changes the waiting cards' "waiting for review" (and its confirm moves an order: status_changed follows).
+  if (change.type.startsWith('measurement_profile.')) return keep(['PENDING_APPROVAL'])
   const named = new Set(idsOf(change.fields))
   return keep(lanes.filter((lane) => (lane.items ?? []).some((row) => named.has(row.id))).map((lane) => lane.status))
 }
@@ -761,8 +772,9 @@ export function liveTouches(change: { type: string; fields: Readonly<Record<stri
  * Whether a live event changes what the list shows (a new order, a state or promise that moved, a deposit paid or
  * waived): floor scans and invoice events do not, so they never count as "updates".
  */
+// F-SA-221: + a rider profile's event (a review moves a row's "waiting for review"; its confirm lets a waiting order go on).
 export const listTouches = (change: { type: string }): boolean =>
-  change.type.startsWith('sales_order.') || (change.type.startsWith('deposit_request.') && change.type !== 'deposit_request.link_sent') || change.type === 'payment.deposit_paid' || change.type === 'quote.accepted'
+  change.type.startsWith('sales_order.') || (change.type.startsWith('deposit_request.') && change.type !== 'deposit_request.link_sent') || change.type === 'payment.deposit_paid' || change.type === 'quote.accepted' || change.type.startsWith('measurement_profile.')
 
 /** The ids a record's live events may name: the order and every record of its chain. */
 export function knownIds(order: Order): Set<string> {
@@ -889,7 +901,7 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
   if (!rowsTerm && filter.open !== 'true') query.set('rows', 'all')
   if (filter.partyId) query.set('party', filter.partyId)
   if (filter.companyId) query.set('company', filter.companyId)
-  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
+  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }
@@ -898,8 +910,8 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
  * rows views (Invoiced, At risk, the currency, the customer's mark, "Shipped, not invoiced" beside another view). The rows view itself
  * stays the tiles' and lanes' own, as before.
  */
-export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced'> {
+export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' | 'kind' /* F-SA-221 */> {
   const extra = narrow.extra ?? {}
-  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced }
+  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null }
 }
 // ── end B-TH-244 ──

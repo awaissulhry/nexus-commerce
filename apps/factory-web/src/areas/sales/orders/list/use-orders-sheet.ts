@@ -11,6 +11,7 @@ import type { OrderRow } from '../api' // B-TH-245
 import { useCoalesced, useLive } from '../hooks'
 import { boardRereadOf } from '../model' // F-SA-214
 import type { BoardLane } from '../api' // F-SA-214
+import { kindFromAddress } from '../model' // F-SA-221
 import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
 import type { OrderSort } from '../api' // B-TH-057
 import { newOrderAddress } from '../new/new-model'
@@ -92,10 +93,9 @@ function keptTerms(host: Pick<OrdersSheetHost, 'keep'>, params: Params): Array<[
 
 /** The address the sheet writes: its own terms (listAddress), the host's locks over them, the host's own terms after them. */
 export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1]): string {
-  const written = listAddress(base, { ...next, ...(host.locked?.party ? { party: host.locked.party } : {}) })
+  const written = listAddress(base, { ...next, ...(host.locked?.party ? { party: host.locked.party } : {}), ...(host.locked?.kind ? { kind: host.locked.kind } : {}) })
   const [path, qs = ''] = written.split('?')
   const query = new URLSearchParams(qs)
-  if (host.locked?.kind) query.set('kind', host.locked.kind)
   for (const [name, value] of keptTerms(host, params)) query.append(name, value)
   const text = query.toString()
   return `${path}${text ? `?${text}` : ''}`
@@ -133,6 +133,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // B-TH-225: the label on the garment and the company narrow every read too (the address keeps them).
   const brand = brandFromAddress(params)
   const company = companyFromAddress(params)
+  // F-SA-221: made-to-measure orders only (`?kind=mtm`); the host's lock wins.
+  const kind = host.locked?.kind ?? kindFromAddress(params)
   // B-TH-057 (TH-4): the server sort and the custom field filter are address terms too (a saved view and the file keep them).
   const sort = sortFromAddress(params)
   const cf = cfFromAddress(params)
@@ -141,7 +143,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const extraKey = JSON.stringify(extraFromAddress(params, rows))
   const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
   const [progressShown, setProgressShown] = useState(false)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown }), [brand, company, cf, sort, extra, progressShown])
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */ }), [brand, company, cf, sort, extra, progressShown, kind])
   const grouped = layout === 'list' && group === 'party' && !party
   const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
@@ -159,7 +161,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
         sheetAddress(base, host, params, {
@@ -173,9 +175,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
           cf: next.cf === undefined ? cf : next.cf, // B-TH-057
           group: next.group === undefined ? group : next.group, // B-TH-244
           extra: next.extra === undefined ? extra : next.extra, // B-TH-244
+          kind: next.kind === undefined ? kind : next.kind, // F-SA-221
         }),
       ),
-    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra],
+    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind],
   )
 
   // ── B-TH-244: the view's figures from the server (the grouped view's headers and grand total, the honest count of a door's view) ──
@@ -336,11 +339,11 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   useEffect(() => {
     const abort = new AbortController()
     setCustomers((current) => ({ ...current, customers: searched ? null : current.customers, problem: null }))
-    listOrderCustomers(api, { q: searched || undefined, companyId: company, limit: 50 }, abort.signal)
+    listOrderCustomers(api, { q: searched || undefined, companyId: company, kind /* F-SA-221: "3 open · 1 late" counts what the rows show */, limit: 50 }, abort.signal)
       .then((answer) => !abort.signal.aborted && setCustomers({ customers: answer.customers, total: answer.total, limited: answer.limited, problem: null }))
       .catch((error: unknown) => !abort.signal.aborted && setCustomers({ customers: [], total: 0, limited: false, problem: readProblem(error) }))
     return () => abort.abort()
-  }, [api, searched, company, customersTick])
+  }, [api, searched, company, kind, customersTick])
   // ── end B-TH-226 (the switcher's read) ──
 
   // ── B-TH-201: the customer's name for the chip — from the rows read, else the customer's record (404 when the person may
@@ -531,6 +534,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     depth: listDepth.model,
     week: { state: week.state, sites: week.sites, siteId: week.siteId },
     importer: { held: importer.held, sheet: importer.model, memory: importer.memory /* B-TH-293 */ },
+    kind, // F-SA-221
     // ---- F-SA-220: the host ----
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
@@ -571,8 +575,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onCustomerSearch: setCustomerQuery,
     onCustomerRetry: () => setCustomersTick((tick) => tick + 1),
     onBrand: (next) => go({ brand: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+    // F-SA-221: the made-to-measure mark's funnel, its chip's ✕ and the built-in view (with its rows); By promise week cannot narrow: the list.
+    onKind: (next, view) => go({ kind: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */ }),
+    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */ }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057
     readPictures, // F-SA-212

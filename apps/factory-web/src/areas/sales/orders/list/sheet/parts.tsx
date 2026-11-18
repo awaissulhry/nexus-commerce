@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { ChevronDown, Filter, X } from 'lucide-react'
 import { AsyncListboxPanel, DetailPopover, type ListboxOption } from '@nexus/ui/components'
-import { Button, FilterChip } from '@nexus/ui/primitives'
+import { Button, FilterChip, Tag } from '@nexus/ui/primitives'
 import { switcherFace, switcherLines, type Door, type Phrase, type SwitcherState } from './model'
 import './sheet.css'
 
@@ -183,20 +183,29 @@ export function PeekCard({ title, rows, note, open }: { title: ReactNode; rows: 
 export interface SheetChip {
   readonly id: string
   readonly label: string
-  readonly onClear: () => void
+  /** F-SA-221: none — the page holds the term (the Made-to-measure page's "Made to measure"): a fixed chip without ✕. */
+  readonly onClear?: (() => void) | null
 }
 
 /** Every narrowing as a chip with ✕ (grid-F25: nothing filters the sheet that is not a chip); Clear all from two on. */
+// F-SA-221: a term the page holds is a fixed chip (said, never removable); Clear all counts the removable ones and keeps it.
 export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip[]; t: Translate; onClearAll: () => void }) {
   if (chips.length === 0) return null
+  const removable = chips.filter((chip) => chip.onClear)
   return (
     <div className="fw-sheet-chips" role="group" aria-label={t('chips.label')}>
-      {chips.map((chip) => (
-        <FilterChip key={chip.id} pressed onClick={chip.onClear} aria-label={t('chips.remove', { name: chip.label })}>
-          {chip.label} <X size={12} aria-hidden />
-        </FilterChip>
-      ))}
-      {chips.length > 1 && (
+      {chips.map((chip) =>
+        chip.onClear ? (
+          <FilterChip key={chip.id} pressed onClick={chip.onClear} aria-label={t('chips.remove', { name: chip.label })}>
+            {chip.label} <X size={12} aria-hidden />
+          </FilterChip>
+        ) : (
+          <Tag key={chip.id} tone="info">
+            {chip.label}
+          </Tag>
+        ),
+      )}
+      {removable.length > 1 && (
         <Button size="sm" variant="link" onClick={onClearAll}>
           {t('chips.clearAll')}
         </Button>

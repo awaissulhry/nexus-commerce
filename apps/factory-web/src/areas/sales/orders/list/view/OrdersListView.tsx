@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Filter, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Ruler } from 'lucide-react' // F-SA-221: the made-to-measure mark
 import { Banner, EmptyState, Menu, MetricStrip, ProgressBar } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
@@ -184,10 +185,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const columns = useMemo<ColDef<OrderRow>[]>(
     () => sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */],
+    [t, s, d, l, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */],
   )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 // B-TH-201, B-TH-225, B-TH-057, B-TH-244
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221
   const clearFilters = () => {
     setQuery('')
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -200,6 +201,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
     ...(statusView ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
+    // F-SA-221: made-to-measure orders only — removable here, fixed where the page holds it (the Made-to-measure page).
+    ...(model.kind ? [{ id: 'kind', label: s('mtm.mark'), onClear: model.locked?.kind ? null : () => actions?.onKind?.(null) }] : []),
     // B-TH-057 (SHEET-G05): a custom field filter of the address is a chip too (the list, its counts and its file apply it).
     ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
     // B-TH-244: the terms a total's door added (never a hidden filter).
@@ -234,6 +237,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   ) : items && items.length === 0 && model.rows === 'uninvoiced' && !groupsShown ? (
     // B-TH-244 (SHEET.overall-F06): nothing shipped waits to be invoiced.
     <EmptyState title={s('uninvoiced.none')} description={s('uninvoiced.noneBody')} />
+  ) : items && items.length === 0 && !groupsShown && model.kind && !model.can.measurements ? (
+    // F-SA-221 (GATE-MTM): made-to-measure orders for a reader without the riders' right: the view's words, no gate detail.
+    <EmptyState title={s('empty.mtmNoRight')} />
   ) : items && items.length === 0 && !groupsShown ? (
     narrowed ? (
       <EmptyState title={t('list.noMatch.title')} description={t('list.noMatch.body')} action={<Button size="sm" onClick={clearFilters}>{t('list.clearFilters')}</Button>} />
@@ -285,7 +291,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           <span className="fw-so-actions">
             <LayoutSwitchFor model={model} actions={actions} held={null} /* F-SA-220: the one layout switch (a host's band draws it too) */ />
             <Button size="sm" variant="quiet" asChild>
-              <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}${model.brand ? `&brand=${encodeURIComponent(model.brand.value)}` : ''}${model.company ? `&company=${encodeURIComponent(model.company.id)}` : '' /* B-TH-225 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
+              <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}${model.brand ? `&brand=${encodeURIComponent(model.brand.value)}` : ''}${model.company ? `&company=${encodeURIComponent(model.company.id)}` : '' /* B-TH-225 */}${model.kind ? `&kind=${model.kind}` : '' /* F-SA-221 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
                 <ExternalLink size={14} aria-hidden /> <span>{t('board.newTab')}</span>
               </a>
             </Button>
@@ -372,7 +378,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
-          builtInViews={{ items: builtInViewsOf(model, t, s), active: model.rows, onPick: (id) => actions?.onRows?.(id as RowView) }}
+          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => (id === MTM_VIEW ? actions?.onKind?.('mtm', 'open') : actions?.onRows?.(id as RowView)) /* F-SA-221 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
@@ -430,6 +436,46 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     </div>
   )
 }
+
+// ── F-SA-221 (sales page plan N7, pick P12; 12-lists-board §4.3): the made-to-measure mark ──
+/** "Made to measure · 3 units" (and "· 1 waiting for review") — the units and the review, never a rider's name; "" without units. */
+export function mtmText(row: Pick<OrderRow, 'madeToMeasure'>, s: Translate): string {
+  const mark = row.madeToMeasure
+  if (!mark) return ''
+  return `${s('mtm.units', { count: mark.units })}${mark.waitingReview > 0 ? ` ${s('mtm.waitingReview', { count: mark.waitingReview })}` : ''}`
+}
+
+/** The Riders cell: the names the API gave (only to a reader of measurements) and how many more ("Rider A, Rider B +1"); "" else. */
+export function ridersText(row: Pick<OrderRow, 'madeToMeasure'>): string {
+  const riders = row.madeToMeasure?.riders
+  if (!riders || riders.names.length === 0) return ''
+  const more = riders.count - riders.names.length
+  return `${riders.names.join(', ')}${more > 0 ? ` +${more}` : ''}`
+}
+
+/** The mark under the order number: a funnel door to the made-to-measure orders (plain where the sheet shows only them). */
+function MtmMark({ row, s, onNarrow }: { row: OrderRow; s: Translate; onNarrow?: () => void }) {
+  const mark = row.madeToMeasure
+  if (!mark) return null
+  const units = (
+    <>
+      <Ruler size={12} aria-hidden /> {s('mtm.units', { count: mark.units })}
+    </>
+  )
+  return (
+    <>
+      {onNarrow ? (
+        <FunnelButton tip={s('mtm.filter')} onClick={onNarrow}>
+          {units}
+        </FunnelButton>
+      ) : (
+        <span className="fw-sheet-sub">{units}</span>
+      )}
+      {mark.waitingReview > 0 && <Tag tone="warning">{s('mtm.waitingReview', { count: mark.waitingReview })}</Tag>}
+    </>
+  )
+}
+// ── end F-SA-221 ──
 
 // ── F-SA-220: the parts of the band an embedding host draws itself (the sheet draws none of them then) ──
 /** The tiles (each a saved rows view, its count the board's under the same narrowing); a customer's sheet names the customer. */
@@ -500,10 +546,18 @@ function LayoutSwitchFor({ model, actions, held }: { model: OrdersListModel; act
 
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
+// F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
 export function builtInViewsOf(model: Pick<OrdersListModel, 'customer'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
   const name = model.customer?.name ?? null
-  return ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...(name ? { hint: s('views.ofCustomer', { customer: name }) } : {}) }))
+  const hint = name ? { hint: s('views.ofCustomer', { customer: name }) } : {}
+  return [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }]
 }
+
+/** F-SA-221: the built-in view "Made-to-measure" (`kind=mtm` + the open orders). */
+export const MTM_VIEW = 'kind:mtm'
+
+/** F-SA-221: the built-in view the address shows: "Made-to-measure" for the open made-to-measure orders, else the rows view. */
+export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind'>): string => (model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows)
 // ── end B-TH-243 ──
 
 // ── B-TH-225 (threads plan TH-1a, picture 23; Owner rule 2026-11-16 "every cell is a door"; features grid-F01…F30) ──────────
@@ -535,7 +589,8 @@ const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
   brand: { role: 'field' as const },
   status: { role: 'field' as const },
   promised: { role: 'field' as const },
-  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency'].map((id) => [id, { role: 'hidden' as const }])),
+  madeToMeasure: { role: 'field' as const }, // F-SA-221: the mark on the phone card (never a rider's name)
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders'].map((id) => [id, { role: 'hidden' as const }])),
 })
 
 interface ColumnsInput {
@@ -624,7 +679,15 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
         >
           {data.number}
         </PeekLink>
-        <span className="fw-sheet-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
+        {data.madeToMeasure ? (
+          // F-SA-221: the made-to-measure mark under the number — a funnel door to the made-to-measure orders (never a rider's name).
+          <span className="fw-so-inline">
+            <span className="fw-sheet-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
+            <MtmMark row={data} s={s} onNarrow={latest.current.model.kind ? undefined : () => act()?.onKind?.('mtm')} />
+          </span>
+        ) : (
+          <span className="fw-sheet-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
+        )}
       </span>
     )
   }
@@ -817,6 +880,10 @@ function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: Col
     later({ colId: 'note', headerName: s('col.note'), headerTooltip: s('col.noteHint'), minWidth: 160, flex: 1.2, valueGetter: ({ data }: { data?: OrderRow }) => data?.internalNote ?? '' }),
     later({ colId: 'atRisk', headerName: s('col.atRisk'), headerTooltip: s('col.atRiskHint'), minWidth: 120, flex: 0.8, cellRenderer: AtRiskCell }),
     later({ colId: 'customerUrgency', headerName: s('col.customerUrgency'), headerTooltip: s('col.customerUrgencyHint'), minWidth: 120, flex: 0.8, cellRenderer: UrgencyCell }),
+    // F-SA-221: made to measure and its riders (the riders only for a reader of measurements: the API names them to no one else) —
+    // opt-in, shown at once when the sheet shows made-to-measure orders only (the built-in view, the Made-to-measure page).
+    { ...later({ colId: 'madeToMeasure', headerName: s('mtm.mark'), minWidth: 150, flex: 0.9, valueGetter: ({ data }: { data?: OrderRow }) => (data ? mtmText(data, s) : '') }), hide: !model.kind },
+    ...(can.measurements ? [{ ...later({ colId: 'riders', headerName: s('col.riders'), minWidth: 140, flex: 1, valueGetter: ({ data }: { data?: OrderRow }) => (data ? ridersText(data) : '') }), hide: !model.kind }] : []),
   ]
   // ── end B-TH-244 ──
   return serverSorted(model.sort ?? null, [

@@ -29,7 +29,8 @@
     "atRisk": "Vicino alla data promessa",
     "atRiskHint": "La promessa è vicina e l’ordine è ancora in lavorazione (i giorni della regola di avviso)",
     "customerUrgency": "Segno del cliente",
-    "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)"
+    "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)",
+    "riders": "Piloti"
   },
   "door": {
     "order": "Apri l'ordine {number} · la conversazione a destra",
@@ -169,7 +170,8 @@
   },
   "views": {
     "suggest": "{customer} — monitoraggio",
-    "ofCustomer": "Ordini di {customer}"
+    "ofCustomer": "Ordini di {customer}",
+    "mtm": "Su misura"
   },
   "group": {
     "label": "Raggruppa le righe",
@@ -253,5 +255,15 @@
     "nounOne": "ordine",
     "nounOther": "ordini",
     "noManage": "Modificare le celle richiede il permesso di modificare gli ordini."
+  },
+  "mtm": {
+    "mark": "Su misura",
+    "units_one": "Su misura · {count} unità",
+    "units_other": "Su misura · {count} unità",
+    "waitingReview": "· {count} da controllare",
+    "filter": "Mostra solo gli ordini su misura (filtra il foglio)"
+  },
+  "empty": {
+    "mtmNoRight": "Nessun ordine su misura in questa vista."
   }
 }

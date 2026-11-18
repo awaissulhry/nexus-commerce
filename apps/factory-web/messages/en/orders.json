@@ -199,6 +199,7 @@
     "cardPieces_other": "{count} pieces",
     "cardPromised": "promised {date}",
     "cardNoPromise": "no promise",
+    "cardMtm": "made to measure",
     "cardNew_one": "{count} new message",
     "cardNew_other": "{count} new messages",
     "promise": "Promised {date}",

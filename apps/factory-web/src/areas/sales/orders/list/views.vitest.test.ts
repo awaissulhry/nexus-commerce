@@ -40,7 +40,7 @@ describe('one Views menu: the built-in views on top (ORD-G10)', () => {
   const builtIns = { items: builtInViewsOf({ customer: null }, orders, sheet), active: 'late', onPick: () => undefined }
 
   it('the Orders\' rows views are the built-ins, in the rows\' order, each named by the orders catalogue', () => {
-    expect(builtIns.items.map((item) => item.id)).toEqual([...ROW_VIEWS])
+    expect(builtIns.items.map((item) => item.id)).toEqual([...ROW_VIEWS, 'kind:mtm']) // F-SA-221: + Made-to-measure
     expect(builtIns.items.find((item) => item.id === 'open')?.label).toBe(orders('rows.open'))
     // On a customer's sheet each says whose orders it shows.
     expect(builtInViewsOf({ customer: { id: ALPHA, name: 'Brand Alpha' } }, orders, sheet)[0]?.hint).toBe('Orders of Brand Alpha')
