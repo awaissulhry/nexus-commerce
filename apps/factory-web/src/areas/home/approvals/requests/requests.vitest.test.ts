@@ -417,7 +417,7 @@ describe('every word of the customer request window exists in it and en, with th
   })
 
   it('the inbox’s own words (approvals-depth): the kind, the rows, who answers, the notices — in both languages', () => {
-    const depth = ['kind.ORDER_CHANGE_REQUEST', 'row.request', 'row.batch', 'row.orders', 'row.requestAsker', 'row.chip.frozen', 'row.chip.priced', 'row.chip.earliest', 'inbox.held.answerAlone']
+    const depth = ['kind.ORDER_CHANGE_REQUEST', 'row.request', 'row.batch', 'row.orders', 'row.requestAsker', 'row.chip.frozen', 'row.chip.priced', 'row.chip.earliest', 'inbox.held.answerAlone', /* fix-pr-6: the window's nav noun */ 'review.noun']
     for (const team of ['sales', 'production', 'samples', 'other']) depth.push(`rule.team.${team}`)
     for (const notice of ['requestAccepted', 'requestRushed', 'requestRefused', 'requestCountered', 'batchAccepted', 'batchRefused', 'holdLifted', 'holdNotLifted', 'holdNothing', 'rushCleared', 'rushNotCleared']) depth.push(`notice.${notice}`)
     for (const locale of LOCALES) expect(depth.filter((key) => !((CATALOGUE[locale]['approvals-depth'] ?? {})[key]?.trim())), locale).toEqual([])

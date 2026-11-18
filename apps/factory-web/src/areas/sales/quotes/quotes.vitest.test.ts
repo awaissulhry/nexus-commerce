@@ -319,7 +319,9 @@ describe('every key the quote screens name exists in it and en', () => {
   })
   it('approvals', () => {
     // B-W2b-307: the inbox in depth (its container, its views and its rules) speaks `approvals-depth` (tested in inbox.vitest).
-    const depth = /home[\\/]approvals[\\/](Approvals\.tsx|api\.ts|inbox\.ts|view[\\/](InboxView|TaskReview|BulkApprove)\.tsx)$/
+    // fix-pr-6: F-PR-08's customer requests (`requests/`) speak `approvals` by `customerRequest.*` and `approvals-depth` by `notice.*` and
+    // `review.noun`, both tested in requests/requests.vitest.
+    const depth = /home[\\/]approvals[\\/](Approvals\.tsx|api\.ts|inbox\.ts|view[\\/](InboxView|TaskReview|BulkApprove)\.tsx|requests[\\/].*)$/
     const keys = [...literalKeys(['areas/home/approvals'], ['tile', 'tableLabel', 'empty', 'col', 'sentence', 'held', 'heldShort', 'review', 'rule', 'rejectDialog', 'notice'], depth), ...approvalsBuilt]
     expect(keys.length).toBeGreaterThan(50)
     expect(keys.filter((key) => !has('approvals', key))).toEqual([])
