@@ -68,11 +68,15 @@ const MANAGE: Permission[] = [
   'product.routing.view',
   'product.routing.manage',
   'workorders.view',
+  // B-SA-049: a release places the holds its HOLD and REWORK lines ask for.
+  'workorders.hold',
   'files.upload',
   'files.read',
   'threads.read',
   'home.view',
 ] as Permission[]
+/** B-SA-049: every right of the area but holding work orders (a release that holds is refused in words). */
+const MANAGE_NO_HOLD = MANAGE.filter((permission) => permission !== 'workorders.hold')
 const grant = (permissions: Permission[], sites: Grant['sites'] = 'all'): Grant => ({ permissions, companies: 'all', sites, parties: 'all' })
 const office = (actorId: string, permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
 const floorAt = (siteId: string): SessionContext => ({ audience: 'floor', tenantId: T, actorId: newId(), siteId, deviceId: newId(), grants: [grant(['floor.work', 'production.scan'] as Permission[], [siteId])] })
@@ -82,6 +86,8 @@ const SESSIONS: Record<string, SessionContext> = {
   quality: office(PEOPLE.quality, ['product.changes.view', 'product.changes.request', 'product.changes.approve', 'workorders.view', 'home.view'] as Permission[]),
   sales: office(PEOPLE.sales, ['product.changes.view', 'product.changes.request', 'home.view'] as Permission[]),
   viewer: office(newId(), ['product.changes.view'] as Permission[]),
+  // B-SA-049
+  noHold: office(PEOPLE.manager, MANAGE_NO_HOLD),
   floor: floorAt(siteA1),
   floorB1: floorAt(siteB1),
 }
@@ -160,6 +166,9 @@ afterAll(async () => {
 
 let floorRequest = ''
 let customerRequest = ''
+// B-SA-049: the change order's other work in progress (WO-0002 to hold; a draft copy to finish on the old spec).
+let wo2 = ''
+let wo3 = ''
 
 describe('a spec problem from the floor (PRD-259)', () => {
   it('inserts a request of its site it cannot read back; a resend answers the first; the office sees it unnumbered', async () => {
@@ -259,9 +268,20 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
     await ok('manager', 'PATCH', `/product/styles/${jacket2}/revisions/${draft.id}/bom/lines/${line.id}`, { version: draft.version, wastagePct: '9' })
     order = (await ok('manager', 'POST', `/product/change-orders/${order.id}/lines`, { version: order.version, recordType: 'BomLine', recordId: line.id, field: 'wastagePct', before: '5', after: '9', note: 'More leather (made-up).' })).changeOrder
     expect(refusal(await no('manager', 'POST', `/product/change-orders/${order.id}/lines`, { version: order.version, recordType: 'bomLine', recordId: line.id, after: 1 }, 409))).toBe('refusal/LINE_INVALID')
-    order = (await ok('manager', 'PUT', `/product/change-orders/${order.id}/work-in-progress`, { version: order.version, lines: [{ workOrderId: wo1, disposition: 'REWORK' }] })).changeOrder
+    // B-SA-049: one line of each kind that its release carries out — REWORK (hold + task), HOLD (hold), FINISH_OLD (nothing).
+    wo2 = await workOrderOf('SEED-WO-0002')
+    wo3 = newId()
+    await h.db.admin.query('BEGIN')
+    await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+    await h.db.admin.query(`INSERT INTO "WorkOrder" SELECT * FROM jsonb_populate_record(NULL::"WorkOrder", (SELECT to_jsonb(r) || $1::jsonb FROM "WorkOrder" r WHERE r.id = $2::uuid))`, [JSON.stringify({ id: wo3, number: `T-SA049-${run}`, status: 'DRAFT', version: 1 }), wo2])
+    await h.db.admin.query('COMMIT')
+    order = (await ok('manager', 'PUT', `/product/change-orders/${order.id}/work-in-progress`, { version: order.version, lines: [{ workOrderId: wo1, disposition: 'REWORK' }, { workOrderId: wo2, disposition: 'HOLD' }, { workOrderId: wo3, disposition: 'FINISH_OLD' }] })).changeOrder
     expect(order.lines).toHaveLength(1)
-    expect(order.workInProgress).toEqual([expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0001', revision: 1 }), disposition: 'REWORK' })])
+    expect(order.workInProgress).toEqual([
+      expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0001', revision: 1 }), disposition: 'REWORK' }),
+      expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0002' }), disposition: 'HOLD' }),
+      expect.objectContaining({ workOrder: expect.objectContaining({ number: `T-SA049-${run}` }), disposition: 'FINISH_OLD' }),
+    ])
     expect(order.openWorkOrders.map((row: Json) => row.number)).toContain('SEED-WO-0002')
   })
 
@@ -297,6 +317,11 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
   })
 
   it('releases its revision through W1’s release: the old one obsolete, the order released, its requests done; people told', async () => {
+    // B-SA-049 (review F-5): releasing holds WO-0001 and WO-0002 — refused in words to a releaser who may not hold work orders.
+    const refused = await no('noHold', 'POST', `/product/change-orders/${order.id}/release`, { version: order.version }, 409)
+    expect(refusal(refused)).toBe('refusal/RELEASE_HOLDS')
+    expect(refused.message).toContain('SEED-WO-0001')
+    expect((await orderOf(order.id)).status).toBe('APPROVED')
     order = (await ok('manager', 'POST', `/product/change-orders/${order.id}/release`, { version: order.version })).changeOrder
     expect(order).toMatchObject({ status: 'RELEASED', releasedById: PEOPLE.manager, toRevision: { revision: 2, status: 'RELEASED' }, fromRevision: { status: 'OBSOLETE' } })
     expect(order.requestsList.map((row: Json) => row.status)).toEqual(['DONE', 'DONE'])
@@ -309,6 +334,19 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
     expect((await noticesOf('quality')).map((row) => row.messageKey)).toContain('notifications.changes.orderReleased')
     expect((await ok('manager', 'GET', '/product/change-orders?tile=RELEASED_THIS_MONTH')).rows.map((row: Json) => row.id)).toContain(order.id)
     expect(refusal(await no('manager', 'POST', `/product/change-orders/${order.id}/cancel`, { version: order.version, reason: 'Too late' }, 409))).toBe('refusal/ORDER_MOVE')
+    // B-SA-049: each work-in-progress decision carried out — REWORK and HOLD a real production hold (CHANGE_ORDER, the customer reads
+    // "In aggiornamento al nuovo design" / its language), REWORK also a task on its work order; FINISH_OLD nothing.
+    const holds = await admin('SELECT "workOrderId"::text AS wo, kind::text AS kind, "reasonCode" AS reason, status::text AS status, "brandWords" AS words, note FROM "WorkOrderHold" WHERE "workOrderId" = ANY($1::uuid[]) AND "reasonCode" = $2 ORDER BY "workOrderId"', [[wo1, wo2, wo3], 'CHANGE_ORDER'])
+    expect(holds.map((row) => row.wo).sort()).toEqual([wo1, wo2].sort())
+    for (const row of holds) expect(row).toMatchObject({ kind: 'PRODUCTION', status: 'ACTIVE', note: expect.stringContaining(order.number) })
+    expect(holds.every((row) => !String(row.words).includes('SEED-WO') && !String(row.words).includes('ECO-'))).toBe(true)
+    expect((await admin('SELECT id, status::text AS status FROM "WorkOrder" WHERE id = ANY($1::uuid[]) ORDER BY id', [[wo1, wo2]])).every((row) => row.status === 'ON_HOLD')).toBe(true)
+    expect((await one('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [wo3])).status).toBe('DRAFT')
+    const tasks = await admin('SELECT "recordId"::text AS wo, title, status::text AS status, "assigneeId"::text AS assignee FROM "Task" WHERE "recordType" = $1 AND "recordId" = ANY($2::uuid[])', ['WorkOrder', [wo1, wo2, wo3]])
+    expect(tasks.filter((row) => row.title.startsWith('Open the rework'))).toEqual([{ wo: wo1, title: 'Open the rework of SEED-WO-0001 to revision 2', status: 'OPEN', assignee: PEOPLE.manager }])
+    expect(tasks.filter((row) => row.wo === wo2 || row.wo === wo3)).toEqual([])
+    // The production hold reason a release places is a standard one (added to the list when it had none).
+    expect(await one('SELECT code, active FROM "ReasonCode" WHERE "tenantId" = $1 AND list = $2 AND code = $3', [T, 'PRODUCTION_HOLD', 'CHANGE_ORDER'])).toMatchObject({ code: 'CHANGE_ORDER', active: true })
   })
 
   it('cancels a draft with why; a change order needs a released revision', async () => {
