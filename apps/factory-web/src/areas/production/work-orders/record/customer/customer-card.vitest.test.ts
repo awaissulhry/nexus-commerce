@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ComponentType } from 'react'
-import { describe, expect, it } from 'vitest'
+import { createElement, type ComponentType } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 import { URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import { leftKeys, renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { LOCALES } from '../../../../../lib/i18n/locales'
@@ -31,6 +31,14 @@ import {
   waitingRushOf,
 } from './model'
 import { ApiError } from '../../../../../lib/api/errors'
+
+// The DS Modal draws only after it mounts in a browser: here a plain section, so a dialog's words are read on the server too (as the
+// other dialog tests do).
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, children, footer }: { open: boolean; title?: unknown; children?: unknown; footer?: unknown }) => (open ? createElement('section', { role: 'dialog', 'data-modal': '' }, createElement('h2', null, title as never), children as never, footer as never) : null)
+  return { ...actual, Modal }
+})
 
 /**
  * F-PR-05b — the work order record's Customer card (production plan §3, §5; 06-tree A.4 O-WO-brand; 17-web-r2 §1.7): its requests with
