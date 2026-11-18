@@ -11,6 +11,8 @@ import { COUNTED_STEPS, madeForOf, ownProgress, productionProgress } from './pro
 import { forecastPart } from './production'
 import { FAILED_STATE, LOADING_STATE, ready, WORK_READ } from './overview/fixtures'
 import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
+// F-SA-235b
+import { designScreen as workOrderScreen } from '../../../production/work-orders/record/fixtures'
 
 /**
  * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
@@ -151,3 +153,60 @@ describe('F-SA-234b — the by-line finish forecast from the order’s own produ
   })
 })
 // ---- end F-SA-234b
+
+// ---- F-SA-235b (sa-7's follow-up): the moved HealthCard draws the same on the sales order as on the work order — its look moved with
+// it into lib/production/health (its own classes, the same declarations), so the production area's stylesheet is not needed ---------
+describe('F-SA-235b — the Health card’s look lives with the card (lib/production/health), the same on both pages', () => {
+  /** The final declarations of each single-class rule of a stylesheet (grouped selectors spread; a later rule wins). */
+  const rulesOf = (css: string): Map<string, Map<string, string>> => {
+    const out = new Map<string, Map<string, string>>()
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selectors = match[1]!.split(',').map((part) => part.trim())
+      const declarations = match[2]!.split(';').map((part) => part.trim()).filter(Boolean).map((part) => [part.slice(0, part.indexOf(':')).trim(), part.slice(part.indexOf(':') + 1).trim()] as const)
+      for (const selector of selectors) {
+        if (!/^\.[a-z0-9-]+$/.test(selector)) continue
+        const known = out.get(selector) ?? new Map<string, string>()
+        for (const [name, value] of declarations) known.set(name, value)
+        out.set(selector, known)
+      }
+    }
+    return out
+  }
+  const card = readFileSync(new URL('../../../../lib/production/health/view/HealthCard.tsx', import.meta.url), 'utf8')
+  const own = rulesOf(readFileSync(new URL('../../../../lib/production/health/view/health-card.css', import.meta.url), 'utf8'))
+  const area = rulesOf(readFileSync(new URL('../../../production/_shared/production.css', import.meta.url), 'utf8'))
+
+  it('the card imports its own stylesheet and uses no class of the production area’s stylesheet', () => {
+    expect(card).toContain("import './health-card.css'")
+    expect(card).not.toMatch(/className="fw-pr-/)
+  })
+
+  it('each of its classes has exactly the declarations the production area’s rule had (the work order page looks as before)', () => {
+    const pairs: [string, string][] = [
+      ['.fw-phc-card', '.fw-pr-card'],
+      ['.fw-phc-head', '.fw-pr-card-head'],
+      ['.fw-phc-h2', '.fw-pr-h2'],
+      ['.fw-phc-stack', '.fw-pr-stack'],
+      ['.fw-phc-dialog', '.fw-pr-dialog'],
+      ['.fw-phc-hint', '.fw-pr-hint'],
+      ['.fw-phc-inline', '.fw-pr-inline'],
+      ['.fw-phc-actions', '.fw-pr-actions'],
+    ]
+    for (const [mine, theirs] of pairs) {
+      expect(own.get(mine), mine).toBeDefined()
+      expect(Object.fromEntries(own.get(mine)!), mine).toEqual(Object.fromEntries(area.get(theirs)!))
+    }
+    // Semantic tokens only: no raw colour of its own.
+    const css = readFileSync(new URL('../../../../lib/production/health/view/health-card.css', import.meta.url), 'utf8')
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i)
+  })
+
+  it('the work order’s Health card draws with its own classes (and the office note keeps the shared parts’ look)', () => {
+    const html = renderView(workOrderScreen.view as ComponentType<{ model: unknown }>, workOrderScreen.cases.find((item) => item.id === 'health-raised')!.model, 'en')
+    expect(html).toContain('fw-phc-card')
+    expect(html).toContain('class="fw-phc-head"')
+    expect(html).toContain('class="fw-prp-office-note"')
+  })
+})
+// ---- end F-SA-235b

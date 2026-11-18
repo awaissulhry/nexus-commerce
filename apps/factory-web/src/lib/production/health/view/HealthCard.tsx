@@ -13,6 +13,7 @@ import { HealthPill } from '../../view/HealthPill'
 import { WaitingOnPill } from '../../view/WaitingOnPill'
 import type { BrandHealthView } from '../api'
 import { clearHeld, healthInputOf, healthStateOf, raiseHeld, raiseOpenHeld, type HealthActions, type HealthModel, type HealthPart } from '../model'
+import './health-card.css' // F-SA-235b: its own look, the same on the work order and the sales order
 
 const day = (value: string, locale: 'it' | 'en') => formatDate(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value, { locale })
 
@@ -26,17 +27,17 @@ export function HealthCard({ model, daysLate, actions }: { model: HealthModel; d
   const t = useT('production')
   if (model.orders.length === 0) return null
   return (
-    <Card padded className="fw-pr-card">
-      <div className="fw-pr-card-head">
-        <h2 className="fw-pr-h2">{t('health.title')}</h2>
+    <Card padded className="fw-phc-card">
+      <div className="fw-phc-head">
+        <h2 className="fw-phc-h2">{t('health.title')}</h2>
       </div>
       {model.problem && !model.dialog && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
-      <div className="fw-pr-stack">
+      <div className="fw-phc-stack">
         {model.orders.map((part) => (
           <OrderHealth key={part.orderId} part={part} many={model.orders.length > 1} model={model} daysLate={daysLate} actions={actions} />
         ))}
       </div>
-      <p className="fw-pr-hint">{t('health.customerReads')}</p>
+      <p className="fw-phc-hint">{t('health.customerReads')}</p>
       {model.dialog && <RaiseDialog model={model} actions={actions} />}
     </Card>
   )
@@ -72,7 +73,7 @@ function OrderHealth({ part, many, model, daysLate, actions }: { part: HealthPar
     return (
       <div>
         {head}
-        <p className="fw-pr-hint">{t('health.notKept')}</p>
+        <p className="fw-phc-hint">{t('health.notKept')}</p>
       </div>
     )
   }
@@ -81,15 +82,15 @@ function OrderHealth({ part, many, model, daysLate, actions }: { part: HealthPar
   const clearWait = clearHeld(view, model.can, model.busy)
   const computed = healthStateOf(view.computed)
   return (
-    <div className="fw-pr-stack">
+    <div className="fw-phc-stack">
       {head}
-      <span className="fw-pr-inline">
+      <span className="fw-phc-inline">
         <HealthPill face="office" {...healthInputOf(view, daysLate)} explain={false} />
         {view.waitingOn && <WaitingOnPill face="office" who={view.waitingOn} since={view.waitingSince} />}
       </span>
-      <p className="fw-pr-hint">{computed ? t('health.computed', { health: t(`parts.health.${computed}`) }) : t('parts.health.none')}</p>
+      <p className="fw-phc-hint">{computed ? t('health.computed', { health: t(`parts.health.${computed}`) }) : t('parts.health.none')}</p>
       {raise && (
-        <div className="fw-pr-stack">
+        <div className="fw-phc-stack">
           <p>
             <AlertTriangle size={13} aria-hidden /> {t('health.raised', { reason: PROMISE_REASON_WORDS[raise.reasonCode][locale] })}
           </p>
@@ -101,10 +102,10 @@ function OrderHealth({ part, many, model, daysLate, actions }: { part: HealthPar
               <p className="fw-prp-pop-line">{raise.setBy ? t('parts.health.note', { by: raise.setBy.name, date: day(raise.setAt, locale), note: raise.note }) : raise.note}</p>
             </div>
           )}
-          <p className="fw-pr-hint">{t('health.until', { date: day(raise.until, locale) })}</p>
+          <p className="fw-phc-hint">{t('health.until', { date: day(raise.until, locale) })}</p>
         </div>
       )}
-      <span className="fw-pr-actions">
+      <span className="fw-phc-actions">
         <Button size="sm" heldReason={openHeld ? t(openHeld.key, openHeld.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.(part.orderId)}>
           <AlertTriangle size={13} aria-hidden /> {raise ? t('health.change') : t('health.raise')}
         </Button>
@@ -137,7 +138,7 @@ export function RaiseDialog({ model, actions }: { model: HealthModel; actions?: 
       title={t('raise.title', { number: part.number })}
       size="md"
       footer={
-        <span className="fw-pr-actions">
+        <span className="fw-phc-actions">
           <Button size="sm" variant="quiet" onClick={() => actions?.onDialog?.(null)}>
             {t('common.cancel')}
           </Button>
@@ -148,7 +149,7 @@ export function RaiseDialog({ model, actions }: { model: HealthModel; actions?: 
       }
     >
       <form
-        className="fw-pr-dialog"
+        className="fw-phc-dialog"
         onSubmit={(event) => {
           event.preventDefault()
           go?.()
@@ -175,7 +176,7 @@ export function RaiseDialog({ model, actions }: { model: HealthModel; actions?: 
         <Field label={t('raise.note')} hint={t('raise.noteHint', { max: HEALTH_NOTE_MAX })}>
           <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={HEALTH_NOTE_MAX} />
         </Field>
-        <p className="fw-pr-hint">{t('raise.days')}</p>
+        <p className="fw-phc-hint">{t('raise.days')}</p>
       </form>
     </Modal>
   )
