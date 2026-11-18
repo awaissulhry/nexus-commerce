@@ -3,6 +3,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { notMoney } from '@nexus/factory-domain/money/marked'
 import { RECORD_TYPE } from '@nexus/factory-domain/threads/rules'
 import { BULK_ACTIONS, BULK_MAX, CHECKLIST_MAX, CHECKLIST_TEXT_MAX, DESCRIPTION_MAX, DUE_TIME, TASK_STATUSES, TASK_TILES, TITLE_MAX } from '@nexus/factory-domain/tasks/rules'
+import { BATCH_MAX, BATCH_SKIPS } from '@nexus/factory-domain/tasks/rules' // B-SA-071
 
 /**
  * The tasks' contracts (B-W2a-20; COL-037; design home.tasks, shell.panels popup task-new). Dates are business days
@@ -147,3 +148,31 @@ export const taskAssigneesContract = defineContract({
     }),
   },
 })
+
+// ── B-SA-071 (sales page plan N5, pick P10; 11-customer-page §3.9 "Add task to N"): one task on each of many records, one batch ──
+const recordRef = output({ type: z.string(), id: id() })
+
+export const batchTasksContract = defineContract({
+  body: input({
+    title: z.string().max(TITLE_MAX * 2),
+    /** The records (types with a thread), each once: one task on each. */
+    records: z.array(input({ type: z.string().regex(RECORD_TYPE), id: id() })).min(1).max(BATCH_MAX),
+    /** One person, or SUPERVISOR: each record's production supervisor (a sales order's own, else its customer's default). */
+    assignee: z.union([z.literal('SUPERVISOR'), input({ userId: id() })]),
+    /** The note: the same words on every task. */
+    description: fields.description,
+    dueDate: fields.dueDate,
+    dueTime: fields.dueTime,
+  }),
+  response: {
+    200: output({
+      /** The batch the assignees' events carry (each assignee's bell: one item). */
+      batchId: id(),
+      /** One task per record made, in the order sent. */
+      made: z.array(output({ record: recordRef, task: taskView })),
+      /** Each record without a task, with why in words (it, en); the label only of a record the maker reads. */
+      skipped: z.array(output({ record: recordRef, label: z.string().nullable(), code: z.enum(BATCH_SKIPS), words: output({ it: z.string(), en: z.string() }) })),
+    }),
+  },
+})
+// ── end B-SA-071 ──
