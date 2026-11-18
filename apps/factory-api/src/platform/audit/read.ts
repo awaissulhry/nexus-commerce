@@ -1,5 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
-import { scopeWhere, type Actor, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
+import { isUuid } from '@nexus/factory-domain/core/ids'
+import { reachesEveryParty, scopeWhere, type Actor, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
+import { mayOnThread, resolveRecord } from '../threads/records'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { parseInstant } from '@nexus/factory-domain/core/time'
@@ -25,8 +27,32 @@ export interface AuditHistoryQuery {
   readonly limit: number
 }
 
+// ── fix-pr-8 (the brand wall; the B-PR-10 sweep of every office route) ─────────────────────────────────────────────────────
+/**
+ * The audit rows a person reads. Many rows name no party (a command about a work order, a style), so a person limited to some
+ * customers reads only the rows stamped with a customer it reaches — never one of no party, which may be another customer's
+ * record. One record's history is read through the record itself (auditHistoryScope).
+ */
+export function auditScope(actor: Actor): Prisma.AuditLogWhereInput {
+  if (reachesEveryParty(actor, AUDIT_READ)) return scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  return scopeWhere(actor, AUDIT_READ, { ...AUDIT_SCOPE_COLUMNS, party: 'partyId' }) as Prisma.AuditLogWhereInput
+}
+
+/**
+ * One record's history: a person limited to some customers reads every row of it (a row of no party too) when it reaches the
+ * record (its resolver's scope; a work order's customer as its thread's wall); else — a record it does not reach, an unknown
+ * one, a type no resolver knows (a setting) — the rows the log shows it (auditScope).
+ */
+async function auditHistoryScope(client: FactoryClient, actor: Actor, recordType: string, recordId: string): Promise<Prisma.AuditLogWhereInput> {
+  const wide = scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  if (reachesEveryParty(actor, AUDIT_READ)) return wide
+  const record = isUuid(recordId) ? await resolveRecord(client, recordType, recordId) : null
+  return record && mayOnThread(actor, AUDIT_READ, recordType, record) ? wide : auditScope(actor)
+}
+// ── end fix-pr-8 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 export async function readAuditHistory(client: FactoryClient, actor: Actor, query: AuditHistoryQuery): Promise<AuditEntryView[]> {
-  const scope = scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  const scope = await auditHistoryScope(client, actor, query.recordType, query.recordId) // fix-pr-8
   const rows = await client.auditLog.findMany({
     where: { AND: [scope, { recordType: query.recordType, recordId: query.recordId }] },
     orderBy: [{ at: 'desc' }, { id: 'desc' }],
@@ -129,7 +155,7 @@ export async function listAudit(
   actor: Actor,
   query: AuditListQuery,
 ): Promise<{ entries: AuditListEntryView[]; nextBefore: string | null; counts: Record<AuditViewName, number> | null }> {
-  const scope = scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  const scope = auditScope(actor) // fix-pr-8
   const from = instantOf(query.from, 'from')
   const to = instantOf(query.to, 'to')
   const window: Prisma.AuditLogWhereInput = from || to ? { at: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}
