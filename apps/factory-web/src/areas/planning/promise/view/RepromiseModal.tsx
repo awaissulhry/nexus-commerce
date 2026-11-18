@@ -11,6 +11,8 @@ import { certificateWords, dayWords, decisionHolds, formHeld, formProblems, move
 import type { CustomerAnswerRead } from '../api'
 import { acceptLabelKey, CUSTOMER_ANSWER_TONE } from '../model'
 // ---- end F-PR-20
+// F-PR-09: "Decide for <customer>" and "Reverse" on the customer's answer to the new date (the page's CustomerOverrideProvider draws them).
+import { CustomerOverrideSlot } from '../../../_shared/customer-override/slot'
 import type { PromiseActions, PromiseModel, RepromiseDialog } from '../view-model'
 import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
@@ -354,7 +356,7 @@ function DoneView({ dialog, draft, actions, words }: { dialog: RepromiseDialog; 
           <span className="fw-pdt-hint">{t('link.once')}</span>
         </Banner>
       ) : null}
-      {answer ? <CustomerAnswerPart answer={answer} words={words} /> : null}
+      {answer ? <CustomerAnswerPart answer={answer} customer={draft.customer.name} words={words} /> : null}
     </div>
   )
 }
@@ -362,7 +364,7 @@ function DoneView({ dialog, draft, actions, words }: { dialog: RepromiseDialog; 
 // ---- F-PR-20: the customer's answer on a proposal ------------------------------------------------------------------------------
 
 /** The customer's answer to the new date: its state, when, its own words, the name it signed with, the follow-up task (ours). */
-function CustomerAnswerPart({ answer, words }: { answer: CustomerAnswerRead; words: Words }) {
+function CustomerAnswerPart({ answer, customer, words }: { answer: CustomerAnswerRead; customer: string; words: Words }) {
   const { t, locale } = words
   return (
     <section className="fw-pdt-dialog-part" aria-label={t('answer.title')}>
@@ -374,6 +376,8 @@ function CustomerAnswerPart({ answer, words }: { answer: CustomerAnswerRead; wor
       {answer.answer ? <p className="fw-pdt-text">{t('answer.words', { words: answer.answer })}</p> : null}
       {answer.typedName ? <p className="fw-pdt-hint">{t('answer.signed', { name: answer.typedName })}</p> : null}
       {answer.followUp ? <p className="fw-pdt-hint">{t(`answer.followUp.${answer.followUp.status}`)}</p> : null}
+      {/* F-PR-09: decide it for the customer while it waits; reverse its answer (the date stands: they are asked again). */}
+      <CustomerOverrideSlot source={{ requestId: answer.requestId }} customer={customer} version={`${answer.state}:${answer.at ?? ''}`} />
     </section>
   )
 }
@@ -388,7 +392,7 @@ function OpenedProposal({ proposal, words }: { proposal: Proposal; words: Words 
       <Banner tone="info" title={t('opened.title', { order: proposal.order.number, line: proposal.line.seq, state: t(`proposal.${proposal.state}`) })}>
         {decision ? (decision.by ? t('opened.decided', { time: formatDateTime(decision.at, { locale }), name: decision.by.name }) : t('opened.decidedNoName', { time: formatDateTime(decision.at, { locale }) })) : null}
       </Banner>
-      {answer ? <CustomerAnswerPart answer={answer} words={words} /> : <p className="fw-pdt-hint">{t('opened.notAsked')}</p>}
+      {answer ? <CustomerAnswerPart answer={answer} customer={proposal.customer.name} words={words} /> : <p className="fw-pdt-hint">{t('opened.notAsked')}</p>}
     </>
   )
 }

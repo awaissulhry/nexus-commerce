@@ -85,9 +85,14 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
       data: { id: newId(), companyId: companyA, kind: 'NOTIFICATION', domain, fromAddress: `noreply@${domain}`, displayName: 'Seed A', displayNamePolicy: 'COMPANY', replyDomain: `reply.${namespace}.example.com`, accountId, verificationStatus: 'SUCCESS', dkimStatus: 'SUCCESS', isDefault: true },
     })
   })
+  // fix-pr-4: the harness's file store at test rates (the seeded R2 account keeps the production burst of 10: Approve N's world
+  // stores and copies more files than that in its first minute — "the file store is not available right now").
+  await h.db.admin.query(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider = 'R2'`, [T])
+  // fix-pr-4: the test sessions' app carries the harness's office sign-in (the sessions stay the test's): the portal and production
+  // routes read the app's clock from it (platform/portal/tasks/clock appClock) and answered 503 "Office sign-in is not configured".
   const officeApp = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
-    { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session']) as keyof typeof sessions] ?? null) },
+    { database: h.database, officeAuth: h.auth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session']) as keyof typeof sessions] ?? null) },
   )
   const w = await productionTwoBrands({ db: h.db, database: h.database, app: officeApp, namespace })
 

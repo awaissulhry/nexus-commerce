@@ -39,6 +39,10 @@ export const DOCUMENT_KINDS = [
   'FISCAL_DOCUMENT',
   'ORDER_CONFIRMATION',
   'QUOTE',
+  // fix-pr-4: the other documents that carry prices (only for a role that sees prices).
+  'PROFORMA',
+  'COMMERCIAL_INVOICE',
+  'PRICE_LIST',
   'PROOF',
   'OTHER',
 ] as const

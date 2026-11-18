@@ -426,3 +426,76 @@ describe("B-PR-44: an order line's files and its quote line's artwork under the 
   })
 })
 // ---- end B-PR-44
+
+// ---- fix-pr-4 (the brand wall; the pr3m findings): an old copy of another customer's content, and the documents that carry prices -----
+describe("fix-pr-4: an old copy whose content is another customer's is never listed or opened; a proforma only for a role with prices", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  /** Rows written as an older build wrote them (before the copy rule and the content wall), the database's rules off for them. */
+  async function replica(statements: readonly { readonly sql: string; readonly values?: unknown[] }[]): Promise<void> {
+    await admin('BEGIN')
+    try {
+      await admin('SET LOCAL session_replication_role = replica')
+      for (const statement of statements) await admin(statement.sql, statement.values ?? [])
+      await admin('COMMIT')
+    } catch (error) {
+      await admin('ROLLBACK')
+      throw error
+    }
+  }
+  /** A made-up file of a record, as the office's files panel keeps it (shared with the customer when `partyId` is given). */
+  async function fileOn(recordType: string, recordId: string, originalName: string, partyId: string | null): Promise<string> {
+    const store = await one<{ id: string }>(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2' ORDER BY code LIMIT 1`, [T])
+    const id = newId()
+    const at = new Date()
+    await h.database.withScope({ audience: 'office', tenantId: T, actorId: qualityActor }, (client) =>
+      client.storedFile.create({
+        data: seedFile(T, { id, companyId: companyA, recordType, recordId, kind: 'DOCUMENT', originalName, contentType: 'application/pdf', sizeBytes: 2048, storeAccountId: store.id, storageKey: `t/${T}/c/${companyA}/2026/${newId()}`, status: 'AVAILABLE', availableAt: at, visibility: partyId ? ['OFFICE', 'PARTNER'] : ['OFFICE'], partyId, createdAt: at, updatedAt: at }),
+        select: { id: true },
+      }),
+    )
+    return id
+  }
+
+  it("leaves out of the library, by id and from a download a copy shared with the customer whose source is another customer's; its own copy stays", async () => {
+    const order = shipping.quality.production.salesOrderId
+    // The source: a file of the other customer's own record (office only).
+    const theirs = await fileOn('Party', world.partyId, 'fix-pr-4 their price sheet.pdf', null)
+    const ours = await fileOn('Party', P1, 'fix-pr-4 our own sheet.pdf', null)
+    // Two old copies shared with this customer on its order: of the other customer's file, and of its own.
+    const walled = await fileOn('SalesOrder', order, 'fix-pr-4 old copy.pdf', P1)
+    const own = await fileOn('SalesOrder', order, 'fix-pr-4 own copy.pdf', P1)
+    await replica([
+      { sql: `UPDATE "StoredFile" SET "sourceFileId" = $2 WHERE id = $1`, values: [walled, theirs] },
+      { sql: `UPDATE "StoredFile" SET "sourceFileId" = $2 WHERE id = $1`, values: [own, ours] },
+    ])
+    const all = await ok(browsers.buyer, '/portal/customer-documents?versions=all')
+    const listed = (all.items as Json[]).map((item) => item.id)
+    expect(listed).toContain(own)
+    expect(listed).not.toContain(walled)
+    expect(JSON.stringify(await ok(browsers.buyer, `/portal/customer-documents?orderId=${order}&versions=all`))).not.toContain(walled)
+    // By id and on a download: not found, as a wrong id (never a word that another customer exists).
+    const byId = await browsers.buyer.get(`/portal/customer-documents/${walled}`)
+    expect(byId.status).toBe(404)
+    const download = await browsers.buyer.post(`/portal/customer-documents/${walled}/download`, {})
+    expect(download.status).toBe(404)
+    for (const answer of [byId, download]) expect(JSON.stringify(answer.body)).not.toMatch(/their price sheet|another customer/i)
+    expect((await browsers.buyer.get(`/portal/customer-documents/${own}`)).status).toBe(200)
+  })
+
+  it('a proforma shared on the shipment is a "Proforma invoice" of the priced group for the buyer; the quality person (no prices) never lists, opens or downloads it', async () => {
+    const file = await fileOn('Shipment', shipping.shipmentId, 'fix-pr-4 proforma.pdf', P1)
+    await replica([
+      {
+        sql: `INSERT INTO "GeneratedDocument" (id, "tenantId", "companyId", "recordType", "recordId", kind, version, fingerprint, language, number, "fileId", "createdAt") VALUES ($1, $2, $3, 'Shipment', $4, 'PROFORMA', 1, $5, 'en', 'PF-T-0001', $6, now())`,
+        values: [newId(), T, companyA, shipping.shipmentId, 'c'.repeat(64), file],
+      },
+    ])
+    const buyer = await ok(browsers.buyer, '/portal/customer-documents?group=ORDERS')
+    expect((buyer.items as Json[]).find((item) => item.id === file)).toMatchObject({ kind: 'PROFORMA', group: 'ORDERS', title: { en: 'Proforma invoice · PF-T-0001', it: 'Fattura proforma · PF-T-0001' } })
+    const quality = await ok(browsers.quality, '/portal/customer-documents?versions=all')
+    expect((quality.items as Json[]).map((item) => item.id)).not.toContain(file)
+    expect(kinds(quality)).not.toContain('PROFORMA')
+    expect((await browsers.quality.get(`/portal/customer-documents/${file}`)).status).toBe(404)
+    expect((await browsers.quality.post(`/portal/customer-documents/${file}/download`, {})).status).toBe(404)
+  })
+})
+// ---- end fix-pr-4

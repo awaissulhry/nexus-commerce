@@ -6,7 +6,7 @@ import { render, textOf } from '../../../lib/record-thread/parts/testing'
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import type { AskImpact, AskVerdict, ChangeRequest, ChangeRules } from './api'
-import { askBodyOf, askChoicesOf, askHeld, askProblem, EMPTY_ASK, impactHeld, impactViewOf, productionAskRefusal, splitIsWhole, verdictKey } from './ask-model'
+import { askBodyOf, askChoicesOf, askHeld, askProblem, EMPTY_ASK, impactHeld, impactViewOf, productionAskRefusal, splitIsWhole, verdictKey, type AskDraft } from './ask-model'
 import { orderBandOf, type OrderBandFacts } from './band'
 import { at, dayAt, orderRecord, orderWords, PREFIX, requestsOf, rulesOf, TODAY } from './design-data'
 import { AskDialogBody, type AskDialogModel } from './view/AskDialog'
@@ -103,7 +103,8 @@ describe('step 2: the details, and what Send sends (only its own order’s lines
   })
 
   it('ship what is ready: the first part, at most the pieces ordered, never the whole order; a foreign line is never named (PW-P06)', () => {
-    const own = { ...EMPTY_ASK, cells: { [line2()]: { '50': 9, '48': 2 }, 'a1a1a1a1-0000-4000-8000-000000000999': { '50': 3 } } }
+    const cells: AskDraft['cells'] = { [line2()]: { '50': 9, '48': 2 }, 'a1a1a1a1-0000-4000-8000-000000000999': { '50': 3 } }
+    const own = { ...EMPTY_ASK, cells }
     expect(askBodyOf('SPLIT_SHIPMENT', rules(), own)).toEqual({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: line2(), size: '48', quantity: 2 }, { lineId: line2(), size: '50', quantity: 6 }] })
     expect(askProblem('SPLIT_SHIPMENT', rules(), EMPTY_ASK, TODAY)).toBe('ask.problem.splitNothing')
     const everything = Object.fromEntries(rulesOf().lines.map((line) => [line.lineId, Object.fromEntries(line.sizes.map((size) => [size.size, size.quantity]))]))

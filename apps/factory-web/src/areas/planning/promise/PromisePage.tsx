@@ -34,6 +34,7 @@ import { acceptBodyOf, openedProposalOf } from './model' // F-PR-20
 import type { Proposal } from './api' // F-PR-20
 import type { CalculatorDialog, HistoryPopover, Loaded, PromiseModel, PromiseNotice, PromiseSite, RepromiseDialog } from './view-model'
 import { PromiseView } from './view/PromiseView'
+import { CustomerOverrideProvider } from '../../_shared/customer-override/CustomerOverride' // F-PR-09
 
 /** What moves a promise, a planned finish or a re-promise: read the lines again ("N updates · Show"). */
 const PROMISE_EVENTS = ['order_promise.', 'backlog.ranked', 'supply_late.checked', 'planning.schedule_changed', 'planning.capacity_changed', 'workorder.', 'sales_order.', 'purchase_order.', 'certificate.']
@@ -393,9 +394,26 @@ function PromiseContainer() {
 
   // F-PR-20: the opened proposal joins its own line's modal only.
   const repromiseView = repromise ? { ...repromise, opened: openedProposalOf(opened, repromise.lineId) } : null
+  // ---- F-PR-09: "Decide for <customer>" / "Reverse" on the customer's answer to the new date: the proposals the modal shows read again
+  // (their customer's answer; a reversed answer asks the customer again), then the list.
+  const shownRef = useRef({ opened, done: repromise?.done ?? null })
+  shownRef.current = { opened, done: repromise?.done ?? null }
+  const overrideDone = useCallback(() => {
+    const { opened: openedNow, done } = shownRef.current
+    if (openedNow)
+      getRepromise(api, openedNow.id)
+        .then((proposal) => setOpened(proposal.state === 'WAITING' ? null : proposal))
+        .catch(() => undefined)
+    if (done)
+      getRepromise(api, done.proposal.id)
+        .then((proposal) => setRepromise((now) => (now?.done && now.done.proposal.id === proposal.id ? { ...now, done: { ...now.done, proposal } } : now)))
+        .catch(() => undefined)
+    void loadList()
+  }, [api, loadList])
+  // ---- end F-PR-09
   const model: PromiseModel = { prefix, can, me, sites, siteId, controls, list, history, styles, atp, repromise: repromiseView, calculator, live, updates, notice, dialog, built: OFFICE_PAGES }
 
-  return (
+  const page = (
     <PromiseView
       model={model}
       actions={{
@@ -471,4 +489,5 @@ function PromiseContainer() {
       }}
     />
   )
+  return <CustomerOverrideProvider onDone={overrideDone}>{page}</CustomerOverrideProvider> // F-PR-09
 }

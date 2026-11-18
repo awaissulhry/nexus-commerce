@@ -17,6 +17,11 @@ import { listSchema, rowsOf, togetherWords } from './model' // B-TH-239
 import { rowWords } from './words' // B-TH-239
 import { notificationKeys } from './view/NotificationsView'
 import { sentenceWords } from './words'
+// ---- F-PR-09: a customer's Approve N folded into one row; the bell's words of every customer action
+import { scanText } from '../../../lib/testing/brand-scan'
+import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
+import { CUSTOMER_APPROVED_KEYS, foldCustomerApprovals } from './model'
+// ---- end F-PR-09
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -373,3 +378,76 @@ describe('grouped notices and the preferences around Incoming (B-TH-239)', () =>
   })
 })
 // ── end B-TH-239 ──
+
+// ── F-PR-09 (production plan F-PR-09 "office bell words for every customer action (also urgency marks, urgent asks, Approve N, a batch
+// of asks)"; B-PR-32's sentences, B-PR-46b's Approve N; wall PW-04, PW-09) ──
+describe('F-PR-09 — a customer’s Approve N is ONE bell row, and every customer action has its words', () => {
+  const approved = (n: number, minute: number, customer: string, extra: Partial<Notification> = {}): Notification => ({
+    ...base,
+    id: `a${n}`,
+    category: 'APPROVAL',
+    eventType: 'approval_request.answered',
+    messageKey: n % 2 === 0 ? 'notifications.production.customerApprovedFabric' : 'notifications.production.customerApprovedSample',
+    record: { type: 'SampleRound', id: `sr${n}`, label: `SR-2026-020${n}` },
+    anchor: null,
+    params: { customer },
+    actor: null,
+    people: {},
+    createdAt: `2026-11-18T09:${String(minute).padStart(2, '0')}:00.000Z`,
+    group: { key: `a${n}`, count: 1, ids: [`a${n}`] },
+    ...extra,
+  })
+  const en = createTranslator('en', CATALOGUE.en['home-notifications']!)
+  const it_ = createTranslator('it', CATALOGUE.it['home-notifications']!)
+
+  it('one customer’s plain approvals that came together are one row: its name, how many, the newest record; it acts on every notice', () => {
+    const rows = rowsOf([approved(1, 40, BRAND_BETA.legalName), approved(2, 40, BRAND_BETA.legalName), approved(3, 39, BRAND_BETA.legalName), base], '/w/DEMO', OFFICE_PAGES)
+    expect(rows).toHaveLength(2)
+    const folded = rows[0]!
+    expect(folded.fold).toEqual({ requests: 3, oldest: '2026-11-18T09:39:00.000Z', kind: 'CUSTOMER_APPROVED', customer: BRAND_BETA.legalName })
+    expect(idsOf(rows, [folded.id])).toEqual(['a1', 'a2', 'a3'])
+    expect(folded.group.count).toBe(3)
+    expect(folded.record.label).toBe('SR-2026-0201')
+    expect(rowWords(folded, en, 'en')).toBe(`${BRAND_BETA.legalName} approved 3 samples and materials at once, among them SR-2026-0201`)
+    expect(rowWords(folded, it_, 'it')).toBe(`${BRAND_BETA.legalName} ha approvato in una volta 3 tra campioni e materiali, tra cui SR-2026-0201`)
+    expect(togetherWords(folded)).toBeNull()
+    expect(rows[1]!.fold).toBeUndefined()
+  })
+
+  it('PW-04 / PW-09: two customers never fold together, and a row names only its own; changes, refusals, another state or a gap stay apart', () => {
+    const mixed = rowsOf([approved(1, 40, BRAND_BETA.legalName), approved(2, 40, BRAND_ALPHA.legalName), approved(3, 39, BRAND_BETA.legalName)], '', OFFICE_PAGES)
+    expect(mixed.map((row) => row.fold?.requests ?? 1)).toEqual([1, 1, 1])
+    const beta = rowsOf([approved(1, 40, BRAND_BETA.legalName), approved(3, 39, BRAND_BETA.legalName)], '', OFFICE_PAGES)
+    expect(beta).toHaveLength(1)
+    for (const locale of LOCALES) expect(scanText(rowWords(beta[0]!, locale === 'en' ? en : it_, locale), BRAND_ALPHA)).toEqual([])
+    const changes = approved(2, 40, BRAND_BETA.legalName, { messageKey: 'notifications.production.customerApprovedSampleChanges' })
+    expect(rowsOf([approved(1, 40, BRAND_BETA.legalName), changes, approved(3, 39, BRAND_BETA.legalName)], '', OFFICE_PAGES)).toHaveLength(3)
+    const refused = approved(2, 40, BRAND_BETA.legalName, { messageKey: 'notifications.production.customerRefusedSample' })
+    expect(rowsOf([approved(1, 40, BRAND_BETA.legalName), refused], '', OFFICE_PAGES)).toHaveLength(2)
+    expect(rowsOf([approved(1, 40, BRAND_BETA.legalName), approved(3, 39, BRAND_BETA.legalName, { read: true })], '', OFFICE_PAGES)).toHaveLength(2)
+    expect(rowsOf([approved(1, 50, BRAND_BETA.legalName), approved(3, 20, BRAND_BETA.legalName)], '', OFFICE_PAGES)).toHaveLength(2)
+    // A notice that names no customer (an older one) never folds.
+    expect(rowsOf([approved(1, 40, BRAND_BETA.legalName, { params: {} }), approved(3, 39, BRAND_BETA.legalName, { params: {} })], '', OFFICE_PAGES)).toHaveLength(2)
+    expect(foldCustomerApprovals([])).toEqual([])
+  })
+
+  it('the bell says every customer action in both languages: urgency marks, urgent asks, a batch of asks, Approve N, answers, problems', () => {
+    const keys = [
+      'customerUrgent', 'customerUrgentMany', 'customerRegular', 'customerRegularMany', 'customerUndid', 'customerUndidMany', 'customerReordered',
+      'customerAskedRush', 'customerAskedHold', 'customerAskedResume', 'customerAskedCancel', 'customerAskedCancelLines', 'customerAskedChange', 'customerAskedSplit', 'customerAskedSampleRound',
+      'customerAskedRushMany', 'customerAskedHoldMany', 'customerAskedResumeMany', 'customerAskedCancelMany',
+      'customerWithdrew', 'customerWithdrewMany', 'customerCounterAccepted', 'customerCounterRefused',
+      'customerApprovedSample', 'customerApprovedSampleChanges', 'customerRefusedSample', 'customerRefusedTop',
+      'customerApprovedFabric', 'customerApprovedFabricChanges', 'customerRefusedFabric', 'customerApprovedTrim', 'customerApprovedTrimChanges', 'customerRefusedTrim',
+      'customerRefusedNewDate', 'problemReported', 'problemReportedMany',
+    ]
+    for (const key of keys) {
+      const full = `notifications.production.${key}`
+      expect(full in MESSAGE_TEMPLATES, full).toBe(true)
+      for (const locale of LOCALES) expect(CATALOGUE[locale]['home-notifications']![`w.${full}`], `${locale} ${full}`).toBeTruthy()
+    }
+    for (const key of CUSTOMER_APPROVED_KEYS) expect(key in MESSAGE_TEMPLATES, key).toBe(true)
+    for (const t of [en, it_]) expect(t('fold.customerApproved', { customer: 'x', count: 2, record: 'y' })).not.toBe('fold.customerApproved')
+  })
+})
+// ── end F-PR-09 ──

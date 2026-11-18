@@ -48,7 +48,9 @@ function production(over: Partial<ProductionOrder> = {}): ProductionOrder {
   }
 }
 
-const betaRecord = (): OrderRecord => orderRecord({ number: BRAND_BETA.numbers.order, yourNumber: customerNumberOf('ORDER', 4), customerRef: BRAND_BETA.customerRef, status: 'IN_PRODUCTION' })
+// fix-pr-4: Brand Beta's own delivery address (the design data's default is Brand Alpha's warehouse: the facts draw it).
+const betaRecord = (): OrderRecord =>
+  orderRecord({ number: BRAND_BETA.numbers.order, yourNumber: customerNumberOf('ORDER', 4), customerRef: BRAND_BETA.customerRef, status: 'IN_PRODUCTION', shipTo: { name: `${BRAND_BETA.legalName} — Lager`, ...BRAND_BETA.address, contactName: 'Wareneingang' } })
 
 function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): OrderRecordViewModel {
   return {

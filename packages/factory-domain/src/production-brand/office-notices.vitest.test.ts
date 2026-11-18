@@ -23,6 +23,7 @@ import {
   URGENCY_OFFICE_KEYS,
   urgencyOfficeNotice,
   WITHDRAWN_OFFICE_KEYS,
+  withdrawnOfficeNotice, // fix-pr-4: the test used it without its import
 } from './office-notices'
 
 /**

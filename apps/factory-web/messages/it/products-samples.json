@@ -512,7 +512,8 @@
       "pick": "Scegli la decisione.",
       "comments": "Spiega il perché nei commenti.",
       "long": "Al massimo {max} caratteri."
-    }
+    },
+    "decideForLink": "Decidi per il cliente sul suo giro"
   },
   "record": {
     "back": "Campionature e prototipi",
@@ -674,7 +675,8 @@
       "sent": "Inviato",
       "decision": "Decisione",
       "actions": "Azioni"
-    }
+    },
+    "decideForNotAsked": "Decidi per {customer} è disponibile dopo che gli hai chiesto di approvarlo (Chiedi al cliente)."
   },
   "ship": {
     "cellFailed": "Non salvato: vedi il messaggio sopra.",

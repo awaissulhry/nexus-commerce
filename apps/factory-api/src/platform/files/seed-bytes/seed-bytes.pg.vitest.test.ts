@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seedFileBytes } from '@nexus/factory-db/seed-files'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { isStrippable, stripImageMetadata } from '@nexus/factory-domain/files/thumbs/strip'
 import { seedUuid, type SeedContext } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { callerFor } from '../../../core/command'
@@ -14,6 +15,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { forgetPictureBytes } from '../../../modules/product/images/bytes'
 import { startHarness, type Harness } from '../../auth/sessions/testing/harness'
 import { systemContext } from '../../outbox/system'
+import { makeSmallPreview, smallKeyOf } from '../thumbs/small'
 import { putSeedFileBytes } from './seed-bytes'
 
 /**
@@ -21,7 +23,8 @@ import { putSeedFileBytes } from './seed-bytes'
  * (the runtime login: row-level security and the …_files_guards trigger are real), EVERY seed file run in name order as the
  * seed CLI runs them, the harness's local file store (FAKE R2 accounts) behind the real gateway, and the real app's routes.
  * putSeedFileBytes puts each seeded file's bytes through files.put; then a colour library picture (the brand's logo), the
- * floor's data sheet and every other seeded file read back 200 with the bytes their rows name. Every name is made up. Run
+ * floor's data sheet and every other seeded file read back 200 with the bytes their rows name; fix-thumbs-1: every seeded
+ * picture gets its stripped copy and small preview (B-TH-063), so an order's Picture cell serves it. Every name is made up. Run
  * with `node scripts/factory/run-pg-tests.mjs platform/files/seed-bytes`.
  */
 
@@ -39,6 +42,8 @@ const grant = (permissions: Permission[], extra: Partial<Grant> = {}): Grant => 
 const SESSIONS: Record<string, () => SessionContext> = {
   viewer: () => ({ audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['product.styles.view', 'files.read', 'files.upload'])] }),
   tabletA1: () => ({ audience: 'floor', tenantId: T.tenant, actorId: newId(), siteId: T.siteA1, deviceId: newId(), grants: [grant(['floor.work'], { companies: [T.companyA], sites: [T.siteA1] })] }),
+  // fix-thumbs-1: a reader of Sales › Orders and of its files (the Picture cell, B-TH-017).
+  orders: () => ({ audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['orders.view', 'files.read'])] }),
 }
 const call = (session: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
   app.inject({ method, url, headers: { 'x-test-session': session }, ...(payload === undefined ? {} : { payload: payload as object }) })
@@ -57,6 +62,11 @@ interface Row {
 }
 const available = () =>
   admin<Row>(`SELECT id, "originalName", "contentType", "sizeBytes", sha256, "storageKey", "thumbnailKey", "sourceFileId" FROM "StoredFile" WHERE "tenantId" = $1 AND status = 'AVAILABLE' ORDER BY id`, [T.tenant])
+// fix-thumbs-1: the copies the job recorded (files.recordStrippedCopy audit rows) and every file's copy key.
+const recordedCopies = async (): Promise<number> =>
+  (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'files.recordStrippedCopy'`, [T.tenant]))[0]!.n
+const copyKeys = async (): Promise<Map<string, string | null>> =>
+  new Map((await admin<{ id: string; thumbnailKey: string | null }>(`SELECT id, "thumbnailKey" FROM "StoredFile" WHERE "tenantId" = $1 ORDER BY id`, [T.tenant])).map((row) => [row.id, row.thumbnailKey]))
 
 beforeAll(async () => {
   h = await startHarness('w2bf59_seed_bytes')
@@ -81,16 +91,30 @@ afterAll(async () => {
 }, 60_000)
 
 describe('the seeded files get their bytes (B-W2b-F59)', () => {
-  it('puts every seeded file and its stripped copies through files.put, under the rows’ own keys; a second run writes the same', async () => {
+  it('puts every seeded file, and every seeded picture’s stripped copy and small preview, through files.put; a second run writes the same and changes no row', async () => {
     const rows = await available()
     expect(rows.length).toBeGreaterThan(100)
-    const before = (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "IntegrationCall" WHERE "tenantId" = $1 AND operation = 'files.put'`, [T.tenant]))[0]!.n
+    // fix-thumbs-1 (B-TH-063): every seeded picture gets its copy and small preview, not only the two rows that name a copy.
+    const pictures = rows.filter((row) => isStrippable(row.contentType))
+    const named = pictures.filter((row) => row.thumbnailKey)
+    expect(named.length).toBe(2)
+    expect(pictures.length).toBeGreaterThan(named.length)
+    const puts = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "IntegrationCall" WHERE "tenantId" = $1 AND operation = 'files.put'`, [T.tenant]))[0]!.n
+    const before = await puts()
+    const copiesBefore = await recordedCopies()
     const outcome = await putSeedFileBytes(h.files, system())
-    expect(outcome).toEqual({ written: rows.length, thumbnails: rows.filter((row) => row.thumbnailKey).length, notSeeded: 0 })
-    expect(outcome.thumbnails).toBe(2)
-    const after = (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "IntegrationCall" WHERE "tenantId" = $1 AND operation = 'files.put'`, [T.tenant]))[0]!.n
-    expect(after - before).toBe(outcome.written + outcome.thumbnails)
-    expect(await putSeedFileBytes(h.files, system())).toEqual(outcome)
+    expect(outcome).toEqual({ written: rows.length, thumbnails: pictures.length, smallPreviews: pictures.length, made: pictures.length - named.length, noCopy: 0, notSeeded: 0 })
+    expect(await puts()).toBe(before + outcome.written + outcome.thumbnails + outcome.smallPreviews)
+    // The copies were made by the app's own command, one audit row each; every picture now names its copy.
+    expect(await recordedCopies()).toBe(copiesBefore + outcome.made)
+    expect((await available()).filter((row) => isStrippable(row.contentType) && row.thumbnailKey)).toHaveLength(pictures.length)
+    const keys = await copyKeys()
+
+    const again = await putSeedFileBytes(h.files, system())
+    expect(again).toEqual({ ...outcome, made: 0 })
+    expect(await puts()).toBe(before + 2 * (outcome.written + outcome.thumbnails + outcome.smallPreviews))
+    expect(await recordedCopies()).toBe(copiesBefore + outcome.made)
+    expect(await copyKeys()).toEqual(keys)
   })
 
   it('stores for every seeded file exactly the bytes its row names (size, type and SHA-256), a copy its source’s', async () => {
@@ -104,6 +128,50 @@ describe('the seeded files get their bytes (B-W2b-F59)', () => {
     const copy = (await available()).find((row) => row.sourceFileId)!
     const source = (await available()).find((row) => row.id === copy.sourceFileId)!
     expect(copy.sha256).toBe(source.sha256)
+  })
+
+  // fix-thumbs-1 (B-TH-063 with B-TH-017): the Owner's test server showed only placeholders in the Orders sheet's Picture column.
+  it('gives every seeded picture its stripped copy and small preview, so the Orders sheet’s Picture column shows SEED-JKT-01’s and SEED-JKT-02’s', async () => {
+    for (const row of (await available()).filter((file) => isStrippable(file.contentType))) {
+      expect(row.thumbnailKey, row.originalName).not.toBeNull()
+      const stripped = stripImageMetadata(seedFileBytes({ ...row, sizeBytes: Number(row.sizeBytes) }), row.contentType)
+      expect(stripped.ok, row.originalName).toBe(true)
+      const copy = await h.files.storage.read(system(), T.store, row.thumbnailKey!, 50_000_000)
+      expect(copy && Buffer.from(stripped.ok ? stripped.bytes : []).equals(copy), row.originalName).toBe(true)
+      const small = await h.files.storage.read(system(), T.store, smallKeyOf(row.thumbnailKey!), 50_000_000)
+      expect(small && Buffer.from(makeSmallPreview(copy!, row.contentType).bytes).equals(small), row.originalName).toBe(true)
+    }
+
+    const mains = await admin<{ code: string; fileId: string }>(
+      `SELECT s.code, i."fileId" FROM "StyleImage" i JOIN "Style" s ON s.id = i."styleId" WHERE s."tenantId" = $1 AND i."isMain" AND s.code IN ('SEED-JKT-01', 'SEED-JKT-02') ORDER BY s.code`,
+      [T.tenant],
+    )
+    expect(mains.map((main) => main.code)).toEqual(['SEED-JKT-01', 'SEED-JKT-02'])
+    for (const main of mains) {
+      // Recorded by the job's own command: the copy and how its small preview was made (the seed's 32 × 32 JPEG, copied).
+      const audit = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'files.recordStrippedCopy'`, [main.fileId])
+      expect(audit, main.code).toHaveLength(1)
+      expect(audit[0]!.after).toMatchObject({ strippedCopy: true, smallPreview: { made: 'COPIED', width: 32, height: 32 } })
+    }
+
+    // The Picture cell of an order whose first line is one of them: a presigned address of the small preview, which serves it.
+    const [order] = await admin<{ id: string; fileId: string }>(
+      `SELECT o.id, i."fileId" FROM "SalesOrder" o
+         JOIN LATERAL (SELECT l."styleId" FROM "SalesOrderLine" l WHERE l."orderId" = o.id ORDER BY l.seq LIMIT 1) first ON true
+         JOIN "StyleImage" i ON i."styleId" = first."styleId" AND i."isMain"
+       WHERE o."tenantId" = $1 AND i."fileId" = ANY($2::uuid[]) ORDER BY o.number LIMIT 1`,
+      [T.tenant, mains.map((main) => main.fileId)],
+    )
+    expect(order).toBeDefined()
+    const answer = await call('orders', 'GET', `/sales/orders/${order!.id}/picture`)
+    expect(answer.statusCode, answer.body).toBe(200)
+    const { picture } = answer.json() as Json
+    expect(picture).toMatchObject({ fileId: order!.fileId, contentType: 'image/jpeg', small: { method: 'GET', url: expect.any(String) } })
+    const fetched = await h.app.inject({ method: 'GET', url: picture.small.url })
+    expect(fetched.statusCode).toBe(200)
+    const [file] = await admin<{ thumbnailKey: string }>(`SELECT "thumbnailKey" FROM "StoredFile" WHERE id = $1`, [order!.fileId])
+    expect(fetched.rawPayload.equals((await h.files.storage.read(system(), T.store, smallKeyOf(file!.thumbnailKey), 50_000_000))!)).toBe(true)
+    expect(fetched.rawPayload.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))).toBe(true)
   })
 
   it('shows the colour library’s picture (the brand’s logo) to the office: 200, the PNG the row names', async () => {

@@ -54,6 +54,8 @@ import { addSwatchHeld, type SwatchModel } from '../view/SwatchDialog'
 // ---- B-TH-262: the docked thread on the round (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
+// ---- F-PR-09: Decide for the customer and Reverse on the round's and its swatches' approvals (the view's slots)
+import { CustomerOverrideProvider } from '../../../_shared/customer-override/CustomerOverride'
 
 const LIVE_TYPES = ['sample_round.', 'sample_shipment.', 'sample_swatch.'] as const
 const EMPTY_COMMENT: FitState['comment'] = { pointOfMeasureId: '', bodyArea: '', text: '', busy: false, notice: null }
@@ -499,7 +501,7 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     ) : null
   const printThread = round && record ? <ThreadPrint record={record} title={title} party={round.party ? { id: round.party.id, name: round.party.name } : null} /> : null
 
-  return (
+  const page = (
     <SampleRecordView
       model={model}
       thread={thread}
@@ -642,6 +644,17 @@ export function SampleRecord({ roundId }: { roundId: string }) {
         },
       }}
     />
+  )
+  // F-PR-09: the Approval tab's "Decide for <customer>" and "Reverse" read the round and its approval again once done.
+  return (
+    <CustomerOverrideProvider
+      onDone={() => {
+        void load()
+        void readApprovalNow()
+      }}
+    >
+      {page}
+    </CustomerOverrideProvider>
   )
 }
 

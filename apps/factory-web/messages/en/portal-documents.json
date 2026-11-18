@@ -78,6 +78,9 @@
     "FISCAL_DOCUMENT": "Fiscal document",
     "ORDER_CONFIRMATION": "Order confirmation",
     "QUOTE": "Quote",
+    "PROFORMA": "Proforma invoice",
+    "COMMERCIAL_INVOICE": "Commercial invoice",
+    "PRICE_LIST": "Price list",
     "PROOF": "Proof",
     "OTHER": "Document"
   },
