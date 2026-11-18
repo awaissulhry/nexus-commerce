@@ -10,7 +10,7 @@ import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { decimalOf, QUANTITY_SCALE } from '@nexus/factory-domain/product/units/units'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import { latestDoneRun, readReservations, withQualityHolds } from '../inputs'
 import { livePlanOf, type LivePlan } from '../readiness/service'
 import { lotFactsOf, readLots, readPurchases, readStock, type Reader, type SiteRow } from '../store'
@@ -87,7 +87,7 @@ const delayViewOf = (entry: DelayedPart, words: string) => ({
 
 /** planning.view: the item's requirement profile, week by week (PLN-084). */
 export async function readItemProfile(caller: CommandCaller, query: ItemProfileQuery) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // fix-pr-8: the material plan pegs every customer's orders
   const asOf = serverClock.now()
   return caller.withClient(async (db) => {
     const item = await db.item.findUnique({ where: { id: query.itemId }, select: ITEM_VIEW })
@@ -183,7 +183,7 @@ export async function readItemProfile(caller: CommandCaller, query: ItemProfileQ
 
 /** planning.view: every demand of the site whose material cannot be there in time, the latest first (PLN-082). */
 export async function readDelays(caller: CommandCaller, query: { readonly siteId: string }) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // fix-pr-8: the material plan pegs every customer's orders
   const asOf = serverClock.now()
   return caller.withClient(async (db) => {
     const live = await livePlanOf(db, site)

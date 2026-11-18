@@ -13,6 +13,8 @@ import { auditValuesOf, ITEM_PLANNING_SELECT, ITEM_SELECT, itemDefaultsOf, itemP
 import { changedRules, mergeItemRules } from '@nexus/factory-domain/planning/lot-sizing/parameters'
 import { assertMayPlanLevel, refuseRules, rulePatchOf } from '../lot-sizing/parameters'
 import { itemRulesOf } from './store'
+import { itemBrandWhere } from '../../product/styles/store'
+import { actorOf } from '../../../core/context'
 
 /**
  * Item planning parameters (B-W2a-16; PLN-005) and reorder rules (PLN-099; design planning.settings "Item parameters",
@@ -136,6 +138,7 @@ export async function listItemParameters(caller: CommandCaller, query: ListItemP
     const where: Prisma.ItemWhereInput = {
       AND: [
         { status: 'ACTIVE', OR: [{ companyId: null }, { companyId: site.companyId }] },
+        itemBrandWhere(actorOf(officeContextOf(caller)), PLANNING_VIEW), // fix-pr-8: an item of another customer's private-label SKU
         query.q ? { OR: [{ code: { contains: query.q, mode: 'insensitive' } }, { name: { contains: query.q, mode: 'insensitive' } }] } : {},
         query.kind ? { kind: query.kind } : {},
         query.method || query.configured === true ? { itemPlannings: { some: atSite } } : query.configured === false ? { itemPlannings: { none: { siteId: site.id } } } : {},
