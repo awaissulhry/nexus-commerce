@@ -28,6 +28,8 @@ import { floorPriceRefused, NOT_SHAREABLE_TYPES, portalRefusal, undoRefusalKey }
 import { amountBody, floorPriceFound } from '../../../lib/record-thread/helpers/amount'
 import { correctionWay } from '../../../lib/record-thread/card/model'
 import { floorLocked, type ComposerMode, type DraftLink } from '../../../lib/record-thread/composer/model'
+// F-SA-282a (B-SA-073): the API held a portal text that names another customer: the box holds it with the tick, then it goes again.
+import { heldForNamesOther, namesNoOtherCustomerOf } from '../../../lib/record-thread/composer/model'
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
 // B-TH-229: the person's own read mark (B-TH-027).
 import { markThreadRead } from './api'
@@ -743,10 +745,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
 
   // ---- B-TH-237 (B-TH-044): a message the customer reads in its portal, no e-mail -------------------------------------------------
-  const sendPortal = async (item: { key: string; idempotencyKey: string; body: string; attachments: string[]; links?: MessageLinks; snapshot: Work }) => {
+  const sendPortal = async (item: { key: string; idempotencyKey: string; body: string; attachments: string[]; links?: MessageLinks; snapshot: Work; /* F-SA-282a */ namesNoOtherCustomer?: boolean }) => {
     setSending(true)
     try {
-      const messageId = await postPortalReplyKeyed(api, key, { body: item.body, attachments: item.attachments, ...item.links }, item.idempotencyKey)
+      const messageId = await postPortalReplyKeyed(api, key, { body: item.body, attachments: item.attachments, ...item.links, ...(item.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {}) }, item.idempotencyKey)
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, messageId } : entry)) }))
       setNotice({ ns: 'record-thread', key: 'notice.portalPosted', tone: 'success' })
       if (item.snapshot.followUp && item.snapshot.draft.mode === 'portal') void setFollowUp(messageId) // B-TH-289
@@ -759,7 +761,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         const noPortal = refusal === 'notice.portal.NO_PORTAL'
         if (noPortal) setPortalRefused(true)
         const back: ComposerMode = noPortal ? (can.email && party ? 'reply' : 'note') : snapshot.draft.mode
-        setWork((now) => ({ ...now, draft: { ...snapshot.draft, mode: back, ...(noPortal && snapshot.draft.link?.kind === 'correct' ? { link: undefined } : {}) }, files: snapshot.files, outbox: now.outbox.filter((entry) => entry.key !== item.key) }))
+        // F-SA-282a: the text names another customer — back in the portal box, held, with the tick "This text names no other customer".
+        const namesOther = refusal === 'notice.portal.NAMES_OTHER_CUSTOMER'
+        const returned: ComposerDraft = namesOther ? heldForNamesOther(snapshot.draft) : { ...snapshot.draft, mode: back, ...(noPortal && snapshot.draft.link?.kind === 'correct' ? { link: undefined } : {}) }
+        setWork((now) => ({ ...now, draft: returned, files: snapshot.files, outbox: now.outbox.filter((entry) => entry.key !== item.key) }))
         setNotice({ ns: 'record-thread', key: refusal, tone: 'danger' })
       } else {
         setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, state: 'failed', reason: sendReason(error) } : entry)) }))
@@ -785,7 +790,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // ---- B-TH-237: in the portal — ours, on the PORTAL channel, no mail.
     if (now.draft.mode === 'portal') {
       const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [] }
-      const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now }
+      const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now, /* F-SA-282a */ namesNoOtherCustomer: namesNoOtherCustomerOf(now.draft) }
       retries.current.set(outboxKey, () => sendPortal(item))
       setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], followUp: false /* B-TH-289 */, outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
       forgetDraft()

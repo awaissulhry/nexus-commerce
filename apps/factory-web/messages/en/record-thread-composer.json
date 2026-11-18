@@ -34,7 +34,8 @@
     "tooLong": "Cut {count} characters to send it",
     "amount": "Fix the amount first: a number, at most two decimals",
     "amountFloor": "An amount stays in the office: untick “For the floor” or take the amount off",
-    "floorPrice": "Held: “{found}” looks like a price, and the floor never sees money. Take it out, or write it as an office note’s amount"
+    "floorPrice": "Held: “{found}” looks like a price, and the floor never sees money. Take it out, or write it as an office note’s amount",
+    "namesOther": "The text names another customer: change it, or tick “This text names no other customer”."
   },
   "box": {
     "closed": "Closed by {who}, {date}. The customer cannot write here.",
@@ -83,5 +84,9 @@
   },
   "amount": {
     "add": "Amount"
+  },
+  "namesOther": {
+    "tick": "This text names no other customer",
+    "hint": "Change the text, or tick this when the name is no customer here."
   }
 }
