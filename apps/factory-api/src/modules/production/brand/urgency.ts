@@ -72,8 +72,9 @@ import { isKeptState, KEEPER_ORDER_STATES } from './facts'
  *   the mark    factory-domain production-brand/urgency markDecision over the row as read under the lock and the LIVE cut facts
  *               read in the command (a cut of leather logged or a bundle made of one of the order's cells: sales/change-requests
  *               readCuts; never BrandOrderProduction.stage, which the keeper writes later: R-61): at once inside the quota and
- *               before Cutting; over the quota or from Cutting it is refused with the words "Ask us" until B-PR-46a turns it
- *               into an "Urgent – asked"; back to Regular is always free; refused while we locked the order
+ *               before Cutting; over the quota or from Cutting it is an "Urgent – asked" — B-PR-46a: the portal asks it as a RUSH
+ *               request of its own batch after this command (brand-portal/bulk.ts); back to Regular is always free; refused
+ *               while we locked the order
  *   the batch   every changed row is stamped with the command's batch (urgencyBatchId) and its state before (urgency,
  *               urgentRank) is kept in the command's ONE audit row (`before.orders`); an Undo reads that row and puts back only
  *               the rows whose batch is still this one (R-49); the drag of the Urgent list the same (the moved rows)
@@ -360,7 +361,7 @@ export interface UrgencyResult {
   readonly outcome: UrgencyOutcome
   readonly done: boolean
   readonly words: Words | null
-  /** "Ask us" beside an over-quota or at-Cutting mark (the way to "Urgent – asked"; B-PR-46a). */
+  /** "Ask us" beside an over-quota or at-Cutting mark (B-PR-46a: the portal asks it as "Urgent – asked" when the person may ask). */
   readonly ask: Words | null
   /** The order's urgency and place in the customer's own list after the command (null: not known). */
   readonly urgency: BrandUrgency | null
@@ -390,6 +391,23 @@ export interface UrgencyOutcomeView {
   readonly results: readonly UrgencyResult[]
   readonly use: (UrgentUse & { readonly words: Words }) | null
 }
+
+// ── B-PR-46a: a mark over the quota or from Cutting becomes "Urgent – asked" ───────────────────────────────────────────────────
+
+/** The outcomes of a mark that becomes an ask (a RUSH request we answer, B-PR-46a). */
+export const isAskOutcome = (outcome: UrgencyOutcome): outcome is 'ASK_CUT' | 'ASK_OVER_QUOTA' => outcome === 'ASK_CUT' || outcome === 'ASK_OVER_QUOTA'
+
+/**
+ * A mark of which no order changed at once but some become "Urgent – asked": thrown out of the command (it writes nothing, so it
+ * records nothing) with the command's results, so the portal asks those orders in the customer's own scope.
+ */
+export class OnlyAsked extends Error {
+  override name = 'OnlyAsked'
+  constructor(readonly view: UrgencyOutcomeView) {
+    super('production urgency: no order changed at once; the asks follow')
+  }
+}
+// ── end B-PR-46a ──
 
 /** The refusal of a command that changed nothing: every row in words at its place in the body (409). */
 function nothingChanged(results: readonly UrgencyResult[], orders: readonly NamedOrder[], fallback: Words): DomainError {
@@ -452,7 +470,12 @@ export async function markInCommand(tools: CommandTools, input: MarkInput): Prom
     }
     results.push({ orderId: order.orderId, number: order.number, customerRef: order.customerRef, outcome: 'DONE', done: true, words: null, ask: null, urgency: input.urgency, urgentRank: null })
   }
-  if (urgency.size === 0) throw nothingChanged(results, input.orders, URGENCY_NOT_OPEN_WORDS)
+  if (urgency.size === 0) {
+    // B-PR-46a: nothing at once, but rows that become "Urgent – asked": nothing is written here (every write is audited, and there
+    // is none); the asks follow in the customer's own scope (brand-portal/bulk.ts), with these results.
+    if (results.some((result) => isAskOutcome(result.outcome))) throw new OnlyAsked({ batchId: null, results, use: useOf(rows, input.partyId, settings.max) })
+    throw nothingChanged(results, input.orders, URGENCY_NOT_OPEN_WORDS)
+  }
 
   const batchId = newId()
   const urgentList = [...urgentListOf(rows).filter((orderId) => !unmarked.has(orderId)), ...marked]
