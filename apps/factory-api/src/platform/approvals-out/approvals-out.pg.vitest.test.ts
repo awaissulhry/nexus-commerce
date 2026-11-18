@@ -18,6 +18,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../auth/roles/system-
 import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../auth/sessions/testing/harness'
 import { storeGeneratedFile } from '../files/files'
 import { systemContext } from '../outbox/system'
+import { CONCESSION_ADAPTER } from '../../modules/quality/ncr/concession-answer' // fix-pr-10
 import { sweepApprovals } from './sweep'
 
 /**
@@ -241,11 +242,53 @@ describe('the customer\'s concession answered in the portal (QHS-085; AP1:01)', 
     expect(list.items.map((item: Json) => item.id)).toContain(requestId)
     // B-W2b-F16: the concession in both languages, the kind and state as codes.
     const item = list.items.find((entry: Json) => entry.id === requestId)
-    expect(item).toMatchObject({ kind: 'CONCESSION', status: 'OPEN', words: { it: expect.stringMatching(/ · concessione \d+$/), en: expect.stringMatching(/ · concession \d+$/) } })
+    // fix-pr-10 (B-TH-303): the concession as its task reads it, never the office's NCR number.
+    expect(item).toMatchObject({ kind: 'CONCESSION', status: 'OPEN', words: { it: expect.stringMatching(/^concessione \d+$/), en: expect.stringMatching(/^concession \d+$/) } })
     for (const field of ['kindName', 'stateWords', 'dueWords', 'label']) expect(item).not.toHaveProperty(field)
-    const page = await as(viewer, 'GET', `/portal/approvals/${requestId}`)
+    // ---- fix-pr-10: a plain "Quality concession" (the NCR's title) and the customer's OWN number of the order its work order makes,
+    // never the office's NCR number. The seed's asked concession is of a material NCR (no work order): for these reads it names
+    // WO-0001, which makes P1's order (its own number, or "—" while the order has none), and none of it again after.
+    const ncr = await one<{ number: string; title: string }>('SELECT number, title FROM "Nonconformance" WHERE id = $1', [capa.ncrId])
+    const orders = await admin<{ seq: number | null; number: string }>(
+      `SELECT DISTINCT so."customerSeq" AS seq, so.number FROM "WorkOrderSize" c JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" JOIN "SalesOrder" so ON so.id = l."orderId" WHERE c."workOrderId" = $1 AND c."partyId" = $2`,
+      [production.workOrderId, P1],
+    )
+    expect(orders.length).toBeGreaterThan(0)
+    const ownOrders = [...new Set(orders.map((row) => (row.seq === null ? '—' : `#${row.seq}`)))].sort().join(', ')
+    const ncrWorkOrder = async (workOrderId: string | null) => {
+      await h.db.admin.query('BEGIN')
+      try {
+        await h.db.admin.query('SET LOCAL session_replication_role = replica')
+        await h.db.admin.query('UPDATE "Nonconformance" SET "workOrderId" = $2 WHERE id = $1', [capa.ncrId, workOrderId])
+        await h.db.admin.query('COMMIT')
+      } catch (error) {
+        await h.db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    const ref = { id: requestId, companyId: '', kind: 'CONCESSION' as const, recordType: 'NcrConcession', recordId: capa.concessionId, partyId: P1, status: 'OPEN', answer: null, typedName: null, answeredAt: null }
+    await ncrWorkOrder(production.workOrderId)
+    let page: Json
+    let italian: Awaited<ReturnType<typeof CONCESSION_ADAPTER.content>>
+    try {
+      page = await as(viewer, 'GET', `/portal/approvals/${requestId}`)
+      italian = await h.database.withScope({ audience: 'office', tenantId: tenant, actorId: newId() }, (client) => CONCESSION_ADAPTER.content(client as never, ref, 'it'))
+    } finally {
+      await ncrWorkOrder(null)
+    }
     expect(page.may.answer).toBe(false)
-    expect(page.content.facts.map((fact: Json) => fact.label)).toEqual(['Nonconformance', 'The deviation', 'What we propose'])
+    expect(page.content.facts).toEqual([
+      { label: 'Quality concession', value: ncr.title },
+      { label: 'Your order', value: ownOrders },
+      expect.objectContaining({ label: 'The deviation' }),
+      expect.objectContaining({ label: 'What we propose' }),
+    ])
+    expect(italian.facts.map((fact) => fact.label)).toEqual(['Concessione di qualità', 'Il vostro ordine', 'La deviazione', 'Cosa proponiamo'])
+    for (const read of [list, page, italian]) {
+      expect(JSON.stringify(read)).not.toContain(ncr.number)
+      for (const order of orders) expect(JSON.stringify(read)).not.toContain(order.number)
+    }
+    // ---- end fix-pr-10
     await as(viewer, 'POST', `/portal/approvals/${requestId}/answer`, { decision: 'APPROVED', typedName: 'Vera Viewer', version: page.request.version }, 403)
     await as(owner, 'POST', '/approvals-out', { kind: 'CONCESSION', recordType: 'NcrConcession', recordId: capa.concessionId, question: 'Again.', send: false }, 409)
   })

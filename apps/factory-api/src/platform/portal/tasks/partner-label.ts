@@ -118,6 +118,15 @@ export async function partnerRefsOf(client: Client, partyId: string, records: re
 }
 // ---- end F-PR-16
 
+// ---- fix-pr-10: the words a party reads of the record of one of its approvals — on its approval page (portal and link), in the
+// receipt mail of its answer and in its answer on a thread it shares (platform/approvals-out page.ts, settle.ts): its own order and
+// quote numbers ("#12 · revision 2"), a concession as its task reads it ("concession 2", never the office's NCR number).
+export function partnerRecordWords(refs: PartnerRefs, record: { readonly type: string; readonly id: string }, words: { readonly it: string; readonly en: string }): { it: string; en: string } {
+  const theirs = (locale: ApprovalLocale): string => (record.type === 'NcrConcession' ? (refs.labelOf(record.type, record.id, locale) ?? NO_NUMBER) : refs.own(words[locale]))
+  return { it: theirs('it'), en: theirs('en') }
+}
+// ---- end fix-pr-10
+
 /** The partner's label of each task (by task id) of ONE party; a task not listed keeps its own label. */
 export async function partnerLabelsOf(client: Client, partyId: string, tasks: readonly Labelled[]): Promise<Map<string, string>> {
   const own = tasks.filter((task) => task.partyId === partyId)
