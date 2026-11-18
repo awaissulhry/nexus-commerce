@@ -217,7 +217,7 @@ function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLi
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
-        wide={isWideTab(model.tab)}
+        defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={`${model.prefix}/warehouse/shipments`}>{t('record.back')}</Link>,
           title: (

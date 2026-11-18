@@ -311,7 +311,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       thread={thread ?? null}
       printThread={printThread}
       fields={fields /* B-TH-280 */}
-      wide={isWideTab(model.tab)}
+      defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
       band={{
         back: <Link href={`${model.prefix}/production/work-orders`}>{t('record.back')}</Link>,
         title: (

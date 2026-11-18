@@ -21,11 +21,26 @@
     "atLeast": "at least {count}",
     "unknown": "Not available now",
     "partial": "You have more than 500 tasks here: only the newest were counted.",
-    "OVERDUE": { "label": "Overdue", "hint": "open, due before today" },
-    "TODAY": { "label": "Today", "hint": "open, due today" },
-    "THIS_WEEK": { "label": "This week", "hint": "open, due in the next 7 days" },
-    "NO_DATE": { "label": "No date", "hint": "open, without a due day" },
-    "DONE_7D": { "label": "Done in 7 days", "hint": "marked done in the last 7 days" }
+    "OVERDUE": {
+      "label": "Overdue",
+      "hint": "open, due before today"
+    },
+    "TODAY": {
+      "label": "Today",
+      "hint": "open, due today"
+    },
+    "THIS_WEEK": {
+      "label": "This week",
+      "hint": "open, due in the next 7 days"
+    },
+    "NO_DATE": {
+      "label": "No date",
+      "hint": "open, without a due day"
+    },
+    "DONE_7D": {
+      "label": "Done in 7 days",
+      "hint": "marked done in the last 7 days"
+    }
   },
   "scope": {
     "label": "Whose tasks",
@@ -167,5 +182,29 @@
     "reassigned_other": "{count} tasks reassigned.",
     "dueSet_one": "Due day set for {count} task.",
     "dueSet_other": "Due day set for {count} tasks."
+  },
+  "batch": {
+    "title_one": "New task on {count} order",
+    "title_other": "New task on {count} orders",
+    "assignee": "Assign to",
+    "assigneeHint": "Each order's supervisor, or one person who may read this customer's records.",
+    "supervisor": "Each order's supervisor",
+    "dueHint": "The next working day, unless you change it.",
+    "note": "Note",
+    "noSupervisor_one": "{count} order has no supervisor: pick a person.",
+    "noSupervisor_other": "{count} orders have no supervisor: pick a person.",
+    "more": "+{count} more",
+    "send_one": "Make {count} task",
+    "send_other": "Make {count} tasks",
+    "made_one": "{count} task made",
+    "made_other": "{count} tasks made",
+    "receipt": "{made} tasks made · {left} left out",
+    "where": "Each task is on its own order: in its thread, in the assignee's Home › Tasks and in the customer's open tasks.",
+    "close": "Close",
+    "held": {
+      "none": "Tick the orders first.",
+      "tooMany": "At most {max} orders at once.",
+      "assignee": "Pick who gets the tasks."
+    }
   }
 }

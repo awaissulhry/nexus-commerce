@@ -92,3 +92,27 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--nds-space-12);
 }
+
+/* ---- F-SA-281: the N-records mode — the records listed, the receipt's lines left out ---- */
+.fw-rtask-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rtask-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rtask-receipt li {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

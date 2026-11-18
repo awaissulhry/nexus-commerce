@@ -211,7 +211,7 @@ describe('the policy check of a return and its deadline (SAL-338, SAL-337)', () 
     expect(bound).toMatchObject({ goodsDueBy: addDays(TODAY, 10), return: { policy: { named: { id: livePolicy.id }, current: true, withdrawal: false, followsSalesSettings: false }, deadline: { goodsDueBy: addDays(TODAY, 10), arrival: { state: 'WAITING' } }, feesApply: true } })
     const row = await one<Json>(`SELECT "policyId", withdrawal, "goodsDueBy"::text AS "goodsDueBy" FROM "ReturnAuthorisation" WHERE id = $1`, [sampleRma.id])
     expect(row).toEqual({ policyId: livePolicy.id, withdrawal: false, goodsDueBy: addDays(TODAY, 10) })
-    expect((await events('return.policy_checked', sampleRma.id))[0]?.payload).toEqual({ returnId: sampleRma.id, number: sampleRma.number, policyId: livePolicy.id, channel: 'B2B', withdrawal: false, goodsDueBy: addDays(TODAY, 10), outsideWindow: true })
+    expect((await events('return.policy_checked', sampleRma.id))[0]?.payload).toEqual({ returnId: sampleRma.id, number: sampleRma.number, policyId: livePolicy.id, channel: 'B2B', withdrawal: false, goodsDueBy: addDays(TODAY, 10), outsideWindow: true, partyId: P1 /* B-SA-004b */ })
     const [audit] = await admin<Json>(`SELECT reason FROM "AuditLog" WHERE "recordId" = $1 AND action = 'returnsDepth.checkPolicy'`, [sampleRma.id])
     expect(audit?.reason).toBe('Made-up: a good customer, a courtesy.')
     // Now that an RMA names it, its terms stay.
@@ -265,7 +265,7 @@ describe('a scan code on the RMA papers that the dock reads (SAL-346)', () => {
     expect(coded).toMatchObject({ scanCode: redRma.number, created: true, return: { scanCode: redRma.number, papers: { printable: true } } })
     current = coded.return
     expect(await ok('sales', 'POST', `/sales/returns/${redRma.id}/scan-code`, { version: current.version })).toMatchObject({ scanCode: redRma.number, created: false })
-    expect((await events('return.scan_code_set', redRma.id))[0]?.payload).toEqual({ returnId: redRma.id, number: redRma.number, scanCode: redRma.number })
+    expect((await events('return.scan_code_set', redRma.id))[0]?.payload).toEqual({ returnId: redRma.id, number: redRma.number, scanCode: redRma.number, partyId: P1 /* B-SA-004b */ })
     const papers = await call('sales', 'GET', `/sales/returns/${redRma.id}/papers?language=en`)
     expect(papers.status).toBe(200)
     expect(String(papers.body.type)).toBe('application/pdf')
@@ -376,3 +376,24 @@ describe('credit without a return, within the approval limit (SAL-342)', () => {
     await ok('owner', 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version + 1, active: false })
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every return.* event (and a return label's) names its RMA's own customer (`partyId`, from the RMA row the command read; never a
+ * caller's value), so an office person limited to some customers is sent the live changes of their own customers' returns and
+ * never another's.
+ * The commands above: the policy check, garments named by the office and scanned at the dock, the scan code.
+ */
+describe('live: every return event names its RMA’s customer (B-SA-004b)', () => {
+  it('each return.* row the policy check, the garments named and scanned and the scan code wrote carries partyId = the RMA row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE (e.type LIKE 'return.%' OR e.type = 'return_label.changed')
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['return.policy_checked', 'return.garment_named', 'return.scan_code_set']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

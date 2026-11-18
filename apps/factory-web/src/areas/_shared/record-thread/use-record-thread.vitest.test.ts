@@ -533,3 +533,45 @@ describe('F-SA-260 — ThreadPick: which ONE thread the dock shows, and the one 
   })
 })
 // ── end F-SA-260
+
+// ── F-SA-282a (sales page plan R7; B-SA-073): the office's portal reply held because its text names another customer of ours ─────────
+import { postPortalReplyKeyed } from './api'
+import { portalRefusal } from './state'
+
+describe('F-SA-282a — a portal reply whose text names another customer: back in the box with why and the tick, then it goes again', () => {
+  const held = new ApiError('conflict', 409, 'conflict', 'The text names another customer', null, [{ path: 'refusal/NAMES_OTHER_CUSTOMER', message: 'x' }])
+
+  it('the API’s refusal is said in this app’s words, in both languages (never whom the text named)', () => {
+    expect(portalRefusal(held)).toBe('notice.portal.NAMES_OTHER_CUSTOMER')
+    // The other refusals keep their words; an unknown one stays "other".
+    expect(portalRefusal(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/NO_PORTAL', message: 'x' }]))).toBe('notice.portal.NO_PORTAL')
+    expect(portalRefusal(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SOMETHING_NEW', message: 'x' }]))).toBe('notice.portal.other')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread'])['record-thread']!)
+      expect(t('notice.portal.NAMES_OTHER_CUSTOMER'), locale).not.toBe('notice.portal.NAMES_OTHER_CUSTOMER')
+      expect(t('notice.portal.NAMES_OTHER_CUSTOMER'), locale).toContain(locale === 'it' ? 'Questo testo non nomina altri clienti' : 'This text names no other customer')
+    }
+  })
+
+  it('the tick goes with the reply only when it is set; a first try never carries it', async () => {
+    const calls: Array<{ path: string; body?: unknown }> = []
+    const api = { post: async (path: string, options: { body?: unknown; schema: { parse: (v: unknown) => unknown } }) => (calls.push({ path, body: options.body }), options.schema.parse({ message: { id: 'm1' } })) } as unknown as ApiClient
+    await postPortalReplyKeyed(api, { type: 'SalesOrder', id: 'o1' }, { body: 'Same trims as last season.', attachments: [] }, 'key-1')
+    await postPortalReplyKeyed(api, { type: 'SalesOrder', id: 'o1' }, { body: 'Same trims as last season.', attachments: [], namesNoOtherCustomer: true }, 'key-2')
+    expect(calls).toEqual([
+      { path: '/threads/SalesOrder/o1/replies', body: { body: 'Same trims as last season.', attachments: [] } },
+      { path: '/threads/SalesOrder/o1/replies', body: { body: 'Same trims as last season.', attachments: [], namesNoOtherCustomer: true } },
+    ])
+  })
+
+  it('the container puts the text back held in the portal box and sends the tick on the next try (the docked thread draws the same)', () => {
+    const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain("const namesOther = refusal === 'notice.portal.NAMES_OTHER_CUSTOMER'")
+    expect(container).toContain('namesOther ? heldForNamesOther(snapshot.draft)')
+    expect(container).toContain('namesNoOtherCustomer: namesNoOtherCustomerOf(now.draft)')
+    expect(container).toContain('...(item.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {})')
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('<RecordThread model={shownModel} actions={threadActions}')
+  })
+})
+// ── end F-SA-282a

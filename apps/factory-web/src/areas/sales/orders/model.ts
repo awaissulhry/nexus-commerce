@@ -22,6 +22,7 @@ import {
   type TileKey,
 } from './api'
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
+import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 
 /**
  * The sales order screens' pure rules (SCR-038 list and board, SCR-039 the order studio; B-W1-25 part 2): what a person
@@ -164,6 +165,11 @@ export function partyFromAddress(params: { get(name: string): string | null } | 
 export const kindFromAddress = (params: { get(name: string): string | null } | null): 'mtm' | null => (params?.get('kind') === 'mtm' ? 'mtm' : null)
 // ── end F-SA-221 ──
 
+// ── F-SA-276 (sales page plan R5; the API's B-SA-070): the customer's Work tab's "Waiting on us", `?waiting=us` ──
+/** The waiting term of the address: `us` (the keeper says the order waits on us, or a customer request on it is OPEN), or null. */
+export const waitingFromAddress = (params: { get(name: string): string | null } | null): 'us' | null => (params?.get('waiting') === 'us' ? 'us' : null)
+// ── end F-SA-276 ──
+
 // ── F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.2): a rider's orders, `?profile=<id>` ──
 /** The rider term of the address (a profile id: any revision of the rider's garment profile), or null. */
 export function profileFromAddress(params: { get(name: string): string | null } | null): string | null {
@@ -202,6 +208,10 @@ export interface Narrowing {
   readonly kind?: 'mtm' | null
   /** F-SA-222: a rider's orders (`?profile=<id>`, the rider list's Open orders door). */
   readonly profile?: string | null
+  /** F-SA-275: read each row's production part (a production column is shown). */
+  readonly production?: boolean
+  /** F-SA-276: the orders waiting on us (`?waiting=us`: the list, the board's counts, the totals and the file alike). */
+  readonly waiting?: 'us' | null
 }
 // ── end B-TH-225 ──
 
@@ -255,7 +265,7 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */ }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */ }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -273,6 +283,7 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   if (next.company) query.set('company', next.company) // B-TH-225
   if (next.kind) query.set('kind', next.kind) // F-SA-221
   if (next.profile) query.set('profile', next.profile) // F-SA-222
+  if (next.waiting) query.set('waiting', next.waiting) // F-SA-276
   if (next.cf) query.set('cf', next.cf) // B-TH-057
   if (next.sort) query.set('sort', next.sort) // B-TH-057
   if (next.q.trim()) query.set('q', next.q.trim())
@@ -335,6 +346,8 @@ const narrowingOf = (narrow: Narrowing): OrderQuery => ({
   ...(narrow.progress ? { progress: true } : {}),
   ...(narrow.kind ? { kind: narrow.kind } : {}), // F-SA-221
   ...(narrow.profile ? { profile: narrow.profile } : {}), // F-SA-222
+  ...(narrow.production ? { production: true } : {}), // F-SA-275
+  ...(narrow.waiting ? { waiting: narrow.waiting } : {}), // F-SA-276
 })
 
 /**
@@ -487,8 +500,19 @@ export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilitie
 /** The tabs a person sees: every tab (each part inside says what its right holds back, never an empty tab with zeros). */
 export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
 
-/** A tab whose body is a wide grid (size grids, the work orders, the shipments): the docked thread takes one third under 1600 px. */
-export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'production' || tab === 'shipments' || tab === 'files'
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): each tab its own dock width when the person chose none — Overview and
+// Money 40 %; the grid tabs (Lines, Production, Shipments, Files) a third under 1600 px and 40 % from 1600; Changes half (one column
+// of the story beside the thread). A width the person picks is kept for that tab (RecordFrame `dockTab`).
+export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.freeze({
+  overview: 'forty',
+  lines: 'grid',
+  production: 'grid',
+  changes: 'half',
+  money: 'forty',
+  shipments: 'grid',
+  files: 'grid',
+})
+// ---- end F-SA-263
 
 /** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
 export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>): number | null {
@@ -836,6 +860,20 @@ function idsOf(fields: Readonly<Record<string, unknown>>): string[] {
  * waived): floor scans and invoice events do not, so they never count as "updates".
  */
 // F-SA-221: + a rider profile's event (a review moves a row's "waiting for review"; its confirm lets a waiting order go on).
+// ── F-SA-276 (rule 37: values in place, rows never jump): an event that changes what a row SHOWS, not where it sits — the keeper's
+// stage / health / waiting / supervisor / hold, a customer request, a work-order change — reads only the rows on screen it names. ──
+export const valueTouches = (change: { type: string }): boolean =>
+  change.type.startsWith('brand_production.') || change.type.startsWith('order_change_request.') || change.type.startsWith('work_order_change.')
+
+/** The order ids an event's live fields name (`orderId`, `orderIds`, `salesOrderId`): matched against the rows on screen, never a party. */
+export function orderIdsOfChange(fields: Readonly<Record<string, unknown>>): string[] {
+  const out = new Set<string>()
+  for (const key of ['orderId', 'salesOrderId']) if (typeof fields[key] === 'string') out.add(fields[key] as string)
+  if (Array.isArray(fields.orderIds)) for (const id of fields.orderIds) if (typeof id === 'string') out.add(id)
+  return [...out]
+}
+// ── end F-SA-276 ──
+
 export const listTouches = (change: { type: string }): boolean =>
   change.type.startsWith('sales_order.') || (change.type.startsWith('deposit_request.') && change.type !== 'deposit_request.link_sent') || change.type === 'payment.deposit_paid' || change.type === 'quote.accepted' || change.type.startsWith('measurement_profile.')
 
@@ -973,8 +1011,8 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
  * rows views (Invoiced, At risk, the currency, the customer's mark, "Shipped, not invoiced" beside another view). The rows view itself
  * stays the tiles' and lanes' own, as before.
  */
-export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */> {
+export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */ | 'waiting' /* F-SA-276 */> {
   const extra = narrow.extra ?? {}
-  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null, profile: narrow.profile ?? null }
+  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null, profile: narrow.profile ?? null, waiting: narrow.waiting ?? null }
 }
 // ── end B-TH-244 ──

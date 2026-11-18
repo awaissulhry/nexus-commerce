@@ -159,6 +159,37 @@ describe('the order waits for the factory review, in words (XF1:02)', { timeout:
   })
 })
 
+// ---- B-SA-035b (sales page plan N7; 10-order-page §2.2 L3): the order read names a made-to-measure line's rider ONLY under
+// sales.measurements.view over the customer — the rider's name, the garment type, the profile's revision; never a measurement --------
+describe('the order read names the unit’s rider only with the measurements right (B-SA-035b)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const ORDERS_ONLY = 'ordersOnly' as Person
+  const OTHER_CUSTOMER = 'measurementsOfAnother' as Person
+  beforeAll(() => {
+    SESSIONS[ORDERS_ONLY] = { audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: ['orders.view'], companies: 'all', sites: 'all', parties: 'all' }] }
+    // Measurements of another customer only (the order itself read under an all-customers orders right): still no rider here.
+    SESSIONS[OTHER_CUSTOMER] = { audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: ['orders.view'], companies: 'all', sites: 'all', parties: 'all' }, { permissions: ['sales.measurements.view'], companies: 'all', sites: 'all', parties: [newId()] }] }
+  })
+  const linesOf = async (person: Person) => ((await ok(person, 'GET', `/sales/orders/${orderId}`)).order.lines as Json[])
+
+  it('with sales.measurements.view: the unit line’s rider by name, garment and revision; the grid line none; no measurement in the read', async () => {
+    const lines = await linesOf('sales')
+    const unit = lines.find((line) => line.id === unitLine)!
+    expect(unit.rider).toEqual({ profileId: rev1, name: RIDER, garmentType: 'JACKET', revision: expect.any(Number) })
+    expect(lines.find((line) => line.id === gridLine)!.rider).toBeNull()
+    expect(Object.keys(unit.rider).sort()).toEqual(['garmentType', 'name', 'profileId', 'revision'])
+    expect(JSON.stringify(unit)).not.toMatch(/"(measurements|fitNotes|internalNote|chest|waist|sleeve)"/)
+  })
+
+  it('without it (or with it for another customer only): rider null — the line says only "Made to measure"', async () => {
+    for (const person of [ORDERS_ONLY, OTHER_CUSTOMER]) {
+      const lines = await linesOf(person)
+      expect(lines.find((line) => line.id === unitLine)!.rider, person).toBeNull()
+      expect(JSON.stringify(lines), person).not.toContain(RIDER)
+    }
+  })
+})
+// ---- end B-SA-035b
+
 describe('the worksheet PDF is made once per revision (XF1:05)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('two people keeping the same new version at once get ONE version and ONE stored PDF', async () => {
     const [first, second] = await Promise.all([ok('sales', 'POST', `/sales/mtm/profiles/${rev1}/worksheets`, { companyId: companyA, language: 'en' }), ok('admin', 'POST', `/sales/mtm/profiles/${rev1}/worksheets`, { companyId: companyA, language: 'en' })])

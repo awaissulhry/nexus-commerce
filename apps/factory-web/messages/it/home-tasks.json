@@ -21,11 +21,26 @@
     "atLeast": "almeno {count}",
     "unknown": "Ora non disponibile",
     "partial": "Qui hai più di 500 attività: sono state contate solo le più recenti.",
-    "OVERDUE": { "label": "In ritardo", "hint": "aperte, scadute prima di oggi" },
-    "TODAY": { "label": "Oggi", "hint": "aperte, scadono oggi" },
-    "THIS_WEEK": { "label": "Questa settimana", "hint": "aperte, scadono nei prossimi 7 giorni" },
-    "NO_DATE": { "label": "Senza data", "hint": "aperte, senza scadenza" },
-    "DONE_7D": { "label": "Fatte in 7 giorni", "hint": "segnate fatte negli ultimi 7 giorni" }
+    "OVERDUE": {
+      "label": "In ritardo",
+      "hint": "aperte, scadute prima di oggi"
+    },
+    "TODAY": {
+      "label": "Oggi",
+      "hint": "aperte, scadono oggi"
+    },
+    "THIS_WEEK": {
+      "label": "Questa settimana",
+      "hint": "aperte, scadono nei prossimi 7 giorni"
+    },
+    "NO_DATE": {
+      "label": "Senza data",
+      "hint": "aperte, senza scadenza"
+    },
+    "DONE_7D": {
+      "label": "Fatte in 7 giorni",
+      "hint": "segnate fatte negli ultimi 7 giorni"
+    }
   },
   "scope": {
     "label": "Di chi sono",
@@ -167,5 +182,29 @@
     "reassigned_other": "{count} attività riassegnate.",
     "dueSet_one": "Scadenza impostata per {count} attività.",
     "dueSet_other": "Scadenza impostata per {count} attività."
+  },
+  "batch": {
+    "title_one": "Nuova attività su {count} ordine",
+    "title_other": "Nuova attività su {count} ordini",
+    "assignee": "Assegna a",
+    "assigneeHint": "Il supervisore di ogni ordine, o una persona che può leggere i record di questo cliente.",
+    "supervisor": "Il supervisore di ogni ordine",
+    "dueHint": "Il prossimo giorno lavorativo, se non la cambi.",
+    "note": "Nota",
+    "noSupervisor_one": "{count} ordine non ha un supervisore: scegli una persona.",
+    "noSupervisor_other": "{count} ordini non hanno un supervisore: scegli una persona.",
+    "more": "+{count} altri",
+    "send_one": "Crea {count} attività",
+    "send_other": "Crea {count} attività",
+    "made_one": "{count} attività creata",
+    "made_other": "{count} attività create",
+    "receipt": "{made} attività create · {left} escluse",
+    "where": "Ogni attività è sul suo ordine: nella sua conversazione, in Home › Attività di chi la riceve e nelle attività aperte del cliente.",
+    "close": "Chiudi",
+    "held": {
+      "none": "Spunta prima gli ordini.",
+      "tooMany": "Al massimo {max} ordini alla volta.",
+      "assignee": "Scegli chi riceve le attività."
+    }
   }
 }

@@ -175,7 +175,7 @@ function Body({ model, actions, thread, printThread }: { model: SampleRecordMode
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
-        wide={model.tab === 'fit'}
+        defaultWidth={model.tab === 'fit' ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={list}>{t('record.back')}</Link>,
           title: (

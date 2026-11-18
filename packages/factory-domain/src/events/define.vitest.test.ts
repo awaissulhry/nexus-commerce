@@ -81,3 +81,23 @@ describe('defineEvent', () => {
     eventFor(quoteSent, { subject: 'q-1', payload: { quoteId: 1 } })
   })
 })
+
+// ── B-SA-004c ──
+/** B-SA-004c: a live rule may name a second office permission (`also`): kept on the definition, checked like the first. */
+describe('a second office permission on a live rule (B-SA-004c)', () => {
+  const spec = { type: 'change.proposed', context: 'sales', description: 'x', payload: z.strictObject({ changeId: z.string() }) }
+
+  it('keeps it on the definition; a rule without one has no `also` key at all', () => {
+    expect(defineEvent({ ...spec, live: { permission: 'orders.view', also: 'workorders.view', fields: ['changeId'] } }).live).toEqual({ permission: 'orders.view', also: 'workorders.view', floor: null, fields: ['changeId'] })
+    expect(defineEvent({ ...spec, live: { permission: 'orders.view' } }).live).not.toHaveProperty('also')
+  })
+
+  it.each<[string, Record<string, unknown>, RegExp]>([
+    ['an `also` that is not <module>.<action>', { permission: 'orders.view', also: 'workorders' }, /live.also is not <module>.<action>/],
+    ['an `also` that names the permission again', { permission: 'orders.view', also: 'orders.view' }, /live.also names live.permission again/],
+  ])('refuses %s', (_name, live, message) => {
+    expect(() => defineEvent({ ...spec, live } as never)).toThrow(EventDefinitionError)
+    expect(() => defineEvent({ ...spec, live } as never)).toThrow(message)
+  })
+})
+// ── end B-SA-004c ──

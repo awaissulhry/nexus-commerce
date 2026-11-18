@@ -130,14 +130,18 @@ export async function sendReplyKeyed(
 }
 
 // ---- B-TH-237 (B-TH-044): a reply the customer reads in its portal, no e-mail ----------------------------------------------------
-/** POST …/replies with the caller's key: OUTBOUND on the PORTAL channel; files already shared with the record's customer. */
-export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, input: { body: string; attachments: readonly string[] } & MessageLinks, idempotencyKey: string): Promise<string> {
+/**
+ * POST …/replies with the caller's key: OUTBOUND on the PORTAL channel; files already shared with the record's customer.
+ * F-SA-282a (B-SA-073): `namesNoOtherCustomer` — the writer ticked "This text names no other customer" after the API held the text.
+ */
+export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, input: { body: string; attachments: readonly string[]; namesNoOtherCustomer?: boolean } & MessageLinks, idempotencyKey: string): Promise<string> {
   const answer = await api.post(`${threadPath(record)}/replies`, {
     body: {
       body: input.body,
       attachments: [...input.attachments],
       ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
       ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
+      ...(input.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {}), // F-SA-282a
     },
     schema: posted,
     idempotencyKey,

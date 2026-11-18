@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { CUSTOMER_ORDER_STATUSES, CUSTOMER_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-orders/status'
@@ -8,6 +9,8 @@ import { render, textOf } from '../../../lib/record-thread/parts/testing'
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import { portalArrivalOf } from '../../shell/record/model'
+// F-SA-264
+import { DEFAULT_PORTAL_DOCK_WIDTH, isPortalThreadKey, PORTAL_DOCK_COLUMNS, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, portalHiddenKey, portalWidthKey, readPortalDock, showButtonWords, writePortalDock } from '../../shell/record/model'
 import type { OrderRecord } from './api'
 import { orderBandOf, type OrderBandFacts } from './band'
 import { documentsRead, orderRecord, orderWords, progressRead, requestsOf, shellOf, shipmentsRead, threadOf, words } from './design-data'
@@ -213,3 +216,106 @@ describe('the words exist in both languages with the same placeholders', () => {
     }
   })
 })
+
+// ---- F-SA-264 (sales page plan N6, R6, P11, P20): the portal frame gets the width menu (a third · 40 % · half) and Hide / Show (⌘J),
+// kept on this device per person like the office's; PartnerThread untouched -----------------------------------------------------
+describe('F-SA-264 — the customer’s conversation: width menu, Hide / Show, remembered per person', () => {
+  const memory = () => {
+    const store = new Map<string, string>()
+    return { store, storage: { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } }
+  }
+
+  it('three widths as the office’s dock (a third · 40 % · half), 40 % by default; the 40 % columns are the frame’s old ones', () => {
+    expect([...PORTAL_DOCK_WIDTHS]).toEqual(['third', 'forty', 'half'])
+    expect(DEFAULT_PORTAL_DOCK_WIDTH).toBe('forty')
+    expect(PORTAL_DOCK_COLUMNS_OF.forty).toBe(PORTAL_DOCK_COLUMNS)
+    expect(PORTAL_DOCK_COLUMNS_OF.third).toBe('minmax(0, 2fr) minmax(0, 1fr)')
+    expect(PORTAL_DOCK_COLUMNS_OF.half).toBe('minmax(0, 1fr) minmax(0, 1fr)')
+  })
+
+  it('kept per person on this device: another person keeps their own; 40 % and "shown" forget; a private window keeps nothing', () => {
+    const { store, storage } = memory()
+    const beta = BRAND_BETA.portalPerson.email
+    expect(readPortalDock(storage, 'u-beta')).toEqual({ width: 'forty', hidden: false })
+    writePortalDock(storage, 'u-beta', { width: 'half' })
+    writePortalDock(storage, 'u-beta', { hidden: true })
+    expect(readPortalDock(storage, 'u-beta')).toEqual({ width: 'half', hidden: true })
+    expect(readPortalDock(storage, 'u-other')).toEqual({ width: 'forty', hidden: false })
+    // Keyed by the person's id, never by a name or an e-mail.
+    expect([...store.keys()].sort()).toEqual([portalHiddenKey('u-beta'), portalWidthKey('u-beta')].sort())
+    expect([...store.keys()].join(' ')).not.toContain(beta)
+    writePortalDock(storage, 'u-beta', { width: 'forty', hidden: false })
+    expect(store.size).toBe(0)
+    const closed = { getItem: () => { throw new Error('closed') }, setItem: () => { throw new Error('closed') }, removeItem: () => { throw new Error('closed') } }
+    expect(readPortalDock(closed, 'u-beta')).toEqual({ width: 'forty', hidden: false })
+    expect(() => writePortalDock(closed, 'u-beta', { width: 'third', hidden: true })).not.toThrow()
+  })
+
+  it('⌘J / Ctrl J hides and shows it, never with Alt or Shift (the page’s own J / K walk is without ⌘)', () => {
+    const key = (more: Partial<{ key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: 'j', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...more })
+    expect(isPortalThreadKey(key({ metaKey: true }))).toBe(true)
+    expect(isPortalThreadKey(key({ ctrlKey: true, key: 'J' }))).toBe(true)
+    expect(isPortalThreadKey(key({ metaKey: true, altKey: true }))).toBe(false)
+    expect(isPortalThreadKey(key({ ctrlKey: true, shiftKey: true }))).toBe(false)
+    expect(isPortalThreadKey(key({}))).toBe(false)
+    const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("if ((event.key !== 'j' && event.key !== 'k') || event.metaKey || event.ctrlKey || event.altKey) return")
+  })
+
+  it('docked: the conversation’s top row has the width menu and "Hide the conversation" (⌘J); the chosen width draws its columns', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw(betaCase(betaRecord(), 'status', { frame: { mode: 'docked', width: 'half' } }), locale)
+      expect(html).toContain('class="fw-prf-tools"')
+      expect(html).toContain(`aria-label="${locale === 'en' ? 'Width' : 'Larghezza'}"`)
+      expect(html).toContain(`aria-label="${locale === 'en' ? 'Hide the conversation' : 'Nascondi la conversazione'}"`)
+      expect(html).toContain('aria-keyshortcuts="Meta+J Control+J"')
+      expect(html).toContain('data-width="half"')
+      expect(html).toContain('--fw-prf-cols:minmax(0, 1fr) minmax(0, 1fr)')
+      expect(html).not.toContain('is-hidden')
+      expect(scanText(html, BRAND_ALPHA)).toEqual([])
+    }
+  })
+
+  it('hidden: the body takes the whole width, "Show the conversation (2 new)" brings it back; the conversation stays mounted, not on screen', () => {
+    const html = draw(betaCase(betaRecord(), 'lines', { frame: { mode: 'docked', hidden: true, newCount: 2 } }), 'en')
+    expect(html).toContain('class="fw-prf has-thread is-hidden"')
+    expect(textOf(html)).toContain('Show the conversation (2 new)')
+    expect(html.match(/<aside/g)?.length).toBe(1)
+    const it = textOf(draw(betaCase(betaRecord(), 'lines', { frame: { mode: 'docked', hidden: true } }), 'it'))
+    expect(it).toContain('Mostra la conversazione')
+    expect(showButtonWords(0)).toEqual({ key: 'record.frame.show' })
+    expect(showButtonWords(3)).toEqual({ key: 'record.frame.showNew', count: 3 })
+    expect(showButtonWords(140)).toEqual({ key: 'record.frame.showMany', count: 99 })
+    // A hidden docked conversation marks nothing read (it is not on screen).
+    const frame = readFileSync(new URL('../../shell/record/PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain("const onScreen = (mode === 'docked' && !dockHidden) || viewOpen")
+  })
+
+  it('narrower than 1280 px: no width menu, no Hide (the "Messages" button and the full-width view as before)', () => {
+    const html = draw(betaCase(betaRecord(), 'status', { frame: { mode: 'stacked', newCount: 2 } }), 'en')
+    expect(html).not.toContain('fw-prf-tools')
+    expect(textOf(html)).toContain('Messages (2 new)')
+    expect(textOf(html)).not.toContain('Show the conversation')
+  })
+
+  it('factory code only: PartnerThread (packages/ui) is not touched; the frame keeps the person’s choices, the design review none', () => {
+    const frame = readFileSync(new URL('../../shell/record/PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('const keepFor = design ? null : person')
+    expect(frame).toContain('if (keepFor) writePortalDock(storageOf(), keepFor, { hidden: next })')
+    expect(frame).toContain('if (keepFor) writePortalDock(storageOf(), keepFor, { width: next, hidden: false })')
+    // "Ask a question", `?tab=messages` / `#messages` show a hidden conversation again.
+    expect(frame).toContain("if (mode === 'docked' && hidden) setHidden(false)")
+    expect(frame).toContain('if (!narrow) setHidden(false)')
+  })
+
+  it('the words in both languages ("voi" pages, the catalogue’s "conversazione")', () => {
+    const en = CATALOGUE.en.portal!
+    const it = CATALOGUE.it.portal!
+    expect([en['record.frame.width'], en['record.frame.third'], en['record.frame.forty'], en['record.frame.half']]).toEqual(['Width', 'A third', '40 %', 'Half'])
+    expect([it['record.frame.width'], it['record.frame.third'], it['record.frame.forty'], it['record.frame.half']]).toEqual(['Larghezza', 'Un terzo', '40 %', 'Metà'])
+    expect([en['record.frame.hide'], en['record.frame.show']]).toEqual(['Hide the conversation', 'Show the conversation'])
+    expect([it['record.frame.hide'], it['record.frame.show']]).toEqual(['Nascondi la conversazione', 'Mostra la conversazione'])
+    for (const words of [en, it]) for (const key of ['record.frame.showNew_one', 'record.frame.showNew_other', 'record.frame.showMany']) expect(words[key], key).toContain('{count}')
+  })
+})
+// ---- end F-SA-264

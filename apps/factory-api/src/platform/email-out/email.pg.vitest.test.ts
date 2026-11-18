@@ -16,6 +16,7 @@ import { systemContext } from '../outbox/system'
 import { SECRET_PURPOSES, storeSecret } from '../secrets/store'
 import { useThreadRecords, type RecordScope } from '../threads/records'
 import { deliverOutbound, emailSendHandler, threadMailBuilder } from './outbound'
+import { ABOUT_WORDS } from '../threads/about' // B-SA-061
 import { createEmailRuntime } from './service'
 
 /**
@@ -559,3 +560,19 @@ describe('sign-in mail through email out', () => {
     expect(await first(`SELECT status, "lastError" FROM "EmailOutbound" WHERE "to" @> ARRAY['blocked.hire@example.com']`)).toMatchObject({ status: 'FAILED', lastError: expect.stringMatching(/^suppressed/) })
   })
 })
+
+// ── B-SA-061 ("Discuss"; R10 item 6): a mail from a thread may say which part of its sales order it is about — never a work order ──
+describe('B-SA-061: what a mail is about', () => {
+  it('only a sales order’s mail is about a part of it, and a mail to the customer is never about a work order: refused in words, nothing written', async () => {
+    const before = await admin(`SELECT id FROM "Thread" WHERE "recordId" = $1`, [quoteNew])
+    const onQuote = await send(sales, quoteNew, { to: ['ok@example.com'], subject: 'X', body: 'Made-up: about line 2.', about: { kind: 'SalesOrderLine', id: newId() } })
+    expect(onQuote.status).toBe(400)
+    expect(onQuote.body.error.issues).toEqual([{ path: 'body/about', message: ABOUT_WORDS.NOT_PART.en }])
+    const workOrder = await send(sales, quoteNew, { to: ['ok@example.com'], subject: 'X', body: 'Made-up: about the work order.', about: { kind: 'WorkOrder', id: newId() } })
+    expect(workOrder.status).toBe(400)
+    expect(workOrder.body.error.issues).toEqual([{ path: 'body/about', message: ABOUT_WORDS.NOT_PART.en }])
+    expect(await admin(`SELECT id FROM "Thread" WHERE "recordId" = $1`, [quoteNew])).toEqual(before)
+    expect(await admin(`SELECT id FROM "Message" WHERE "bodyText" LIKE 'Made-up: about %'`)).toEqual([])
+  })
+})
+// ── end B-SA-061 ──

@@ -22,7 +22,8 @@
       "NO_PORTAL": "Non pubblicato: nessuno di questo cliente legge questo record nel portale ora. Rispondi via e-mail; il tuo testo è di nuovo nel riquadro.",
       "CLOSED": "Non pubblicato: questa conversazione è chiusa. Riaprila per rispondere; il tuo testo è di nuovo nel riquadro.",
       "NOT_SHAREABLE": "Non pubblicato: la conversazione di questo record resta in fabbrica e non si condivide mai con un cliente. Scrivi una nota d'ufficio; il tuo testo è di nuovo nel riquadro.",
-      "other": "Non pubblicato nel portale: la fabbrica lo ha rifiutato così com'è. Il tuo testo è di nuovo nel riquadro."
+      "other": "Non pubblicato nel portale: la fabbrica lo ha rifiutato così com'è. Il tuo testo è di nuovo nel riquadro.",
+      "NAMES_OTHER_CUSTOMER": "Non pubblicato: il testo nomina un altro cliente. Cambialo, oppure spunta «Questo testo non nomina altri clienti»; il tuo testo è di nuovo nel riquadro."
     },
     "pinned": "Fissato per tutti su questo record.",
     "unpinned": "Tolto dai fissati: il messaggio resta nella conversazione.",

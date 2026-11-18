@@ -218,7 +218,7 @@ export async function completeProof(files: FilesRuntime, caller: CommandCaller, 
       companyId: quote.companyId,
       after: { versionId: version.id, revision: version.revision, fileId, name: file.originalName, sha256: file.sha256, versionNo: file.versionNo ?? 1, status: file.status },
     })
-    tools.emit({ type: 'quote.proofs_changed', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, change: (file.versionNo ?? 1) > 1 ? 'replaced' : 'added', fileIds: [fileId] } })
+    tools.emit({ type: 'quote.proofs_changed', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, change: (file.versionNo ?? 1) > 1 ? 'replaced' : 'added', fileIds: [fileId], partyId: quote.partyId /* B-SA-004b */ } })
     return { fileId }
   })
   return listProofs(caller, quoteId)
@@ -241,7 +241,7 @@ export async function removeProof(files: FilesRuntime, caller: CommandCaller, qu
     }
     const ids = rows.map((row) => row.id)
     tools.audit({ action: 'quotes.removeProof', recordType: 'Quote', recordId: quote.id, companyId: quote.companyId, before: { versionId: version.id, revision: version.revision, name: named.originalName, fileIds: ids } })
-    tools.emit({ type: 'quote.proofs_changed', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, change: 'removed', fileIds: ids } })
+    tools.emit({ type: 'quote.proofs_changed', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, change: 'removed', fileIds: ids, partyId: quote.partyId /* B-SA-004b */ } })
     return rows.map((row) => ({ storeAccountId: row.storeAccountId, key: row.storageKey, legalHold: row.legalHold, retainUntil: row.retainUntil === null ? null : toUtcIso(row.retainUntil) }))
   })
   for (const object of result) {
@@ -286,7 +286,7 @@ export async function carryProofs(files: FilesRuntime, caller: CommandCaller, qu
       made.push(file.id)
     }
     tools.audit({ action: 'quotes.carryProofs', recordType: 'Quote', recordId: quote.id, companyId: quote.companyId, after: { versionId: version.id, revision: version.revision, fromVersionId: from.id, fromRevision: from.revision, fileIds: made, sourceFileIds: sources.map((source) => source.id) } })
-    tools.emit({ type: 'quote.proofs_changed', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, change: 'carried', fileIds: made } })
+    tools.emit({ type: 'quote.proofs_changed', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, change: 'carried', fileIds: made, partyId: quote.partyId /* B-SA-004b */ } })
     return { fileIds: made }
   })
   return listProofs(caller, quoteId)

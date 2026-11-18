@@ -420,7 +420,8 @@ describe('every design case draws in both languages with no key left on screen',
   it('a role without the grain sees no amount at all', () => {
     const html = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'quotes-orders-no-price')!.model, 'en')
     expect(html).not.toMatch(/€/)
-    const withPrice = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'quotes-orders-all')!.model, 'en')
+    // F-SA-276: Work is the Orders sheet now (its money columns are absent without the grain); the amounts of the grain show on Money.
+    const withPrice = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'tab-money')!.model, 'en')
     expect(withPrice).toMatch(/€/)
     const supplier = render(supplierRecordScreen as DesignScreen<unknown>, supplierRecordScreen.cases.find((item) => item.id === 'orders-no-cost')!.model, 'it')
     expect(supplier).not.toMatch(/€/)

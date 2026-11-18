@@ -9,6 +9,8 @@ import { threadButtonWords } from './model'
 // B-TH-264 follow-up
 import { askedFiles } from './model'
 import { RecordFrame } from './RecordFrame'
+// F-SA-263
+import { defaultWidthAt, showsOnArrival } from './model'
 import { RecordNotices } from './RecordNotices'
 // B-TH-280: the print view of the custom fields
 import { PrintModeProvider } from '../../../shell/print/print-mode'
@@ -25,12 +27,13 @@ describe('where the thread sits, and how wide', () => {
     expect(frameMode(375)).toBe('stacked')
   })
 
+  // F-SA-263: the `wide` boolean became the tab's own default (`grid` = today's wide-tab rule): every other page draws as before.
   it('40 % by default; one third on a wide grid tab under 1600 px; a chosen width always wins', () => {
-    expect(dockWidth({ chosen: 'forty', remembered: false, wideTab: false, viewport: 1440 })).toBe('forty')
-    expect(dockWidth({ chosen: 'forty', remembered: false, wideTab: true, viewport: 1440 })).toBe('third')
-    expect(dockWidth({ chosen: 'forty', remembered: false, wideTab: true, viewport: THIRD_BELOW })).toBe('forty')
-    expect(dockWidth({ chosen: 'forty', remembered: true, wideTab: true, viewport: 1440 })).toBe('forty')
-    expect(dockWidth({ chosen: 'half', remembered: true, wideTab: false, viewport: 1920 })).toBe('half')
+    expect(dockWidth({ chosen: null, viewport: 1440 })).toBe('forty')
+    expect(dockWidth({ chosen: null, defaultWidth: 'grid', viewport: 1440 })).toBe('third')
+    expect(dockWidth({ chosen: null, defaultWidth: 'grid', viewport: THIRD_BELOW })).toBe('forty')
+    expect(dockWidth({ chosen: 'forty', defaultWidth: 'grid', viewport: 1440 })).toBe('forty')
+    expect(dockWidth({ chosen: 'half', viewport: 1920 })).toBe('half')
   })
 
   it('the 3 : 2 grid gives the picture’s numbers: 519 px at 1440, 711 px at 1920 (design kit §2)', () => {
@@ -259,3 +262,81 @@ describe('B-TH-280 — the custom fields at the end of the body column', () => {
   })
 })
 // ---- end B-TH-280
+
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5, §6.3): each tab its own default width; a chosen width kept per tab, "hidden"
+// kept per person + record type; every other record page keeps its behaviour (RecordFrame's defaults).
+describe('F-SA-263 — the dock adapts per tab and remembers', () => {
+  it('a tab’s default: a width is itself at every viewport; `grid` is a third under 1600 px and 40 % from 1600', () => {
+    for (const viewport of [1280, 1440, 1599, 1600, 1920]) {
+      expect(defaultWidthAt('forty', viewport)).toBe('forty')
+      expect(defaultWidthAt('half', viewport)).toBe('half')
+      expect(defaultWidthAt('third', viewport)).toBe('third')
+    }
+    expect(defaultWidthAt('grid', 1440)).toBe('third')
+    expect(defaultWidthAt('grid', 1599)).toBe('third')
+    expect(defaultWidthAt('grid', 1600)).toBe('forty')
+    expect(defaultWidthAt('grid', 1920)).toBe('forty')
+    // A chosen width wins over any tab's default; none chosen → the tab's (Changes half at 1440 and 1920).
+    expect(dockWidth({ chosen: null, defaultWidth: 'half', viewport: 1440 })).toBe('half')
+    expect(dockWidth({ chosen: 'third', defaultWidth: 'half', viewport: 1920 })).toBe('third')
+  })
+
+  it('the address shows a hidden dock again: ?tab=activity, panel=approvals, any ?thread= (new, open, a scope); nothing else does', () => {
+    for (const search of ['?tab=activity', '?panel=approvals', '?thread=new', '?thread=open', '?thread=general', 'thread=wo:w1']) expect(showsOnArrival(search), search).toBe(true)
+    for (const search of ['?tab=lines', '', '?message=m1']) expect(showsOnArrival(search), search).toBe(false)
+    expect(showsOnArrival(null)).toBe(false)
+    expect(showsOnArrival(new URLSearchParams('thread=all'))).toBe(true)
+  })
+
+  it('the frame keeps the width per tab and "hidden" only for a page that names its tab (`dockTab`); ⌘J and the band button toggle it, ?thread= shows it', () => {
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain("tab: dockTab ?? null, rememberHidden: dockTab !== undefined")
+    expect(frame).toContain('const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })')
+    // The `wide` boolean is gone (no page passes it any more).
+    expect(frame).not.toMatch(/readonly wide\?: boolean/)
+    // ⌘J and the band's button go through the same toggle (the hook writes "hidden" for a page that keeps it).
+    expect(frame).toMatch(/if \(isThreadKey\(event\)\) \{\s*event\.preventDefault\(\)\s*latest\.current\.toggle\(\)/)
+    expect(frame).toMatch(/const toggle = useCallback\(\(\) => \{\s*if \(mode === 'docked'\) sizes\.toggle\(\)/)
+    expect(frame).toContain('onClick={toggle}')
+    // Arrival: any ?thread= shows a docked thread the person had hidden.
+    expect(frame).toMatch(/showsOnArrival\(window\.location\.search\) && window\.matchMedia\(`\(min-width: \$\{DOCK_FROM\}px\)`\)\.matches\) sizes\.show\(\)/)
+  })
+
+  it('every other record page keeps its behaviour: no page passes `wide`; a page’s wide tabs pass `grid`; only the sales order names its tab', () => {
+    const root = new URL('../../', import.meta.url)
+    const pages = [
+      'compliance/techfiles/record/view/TechFileRecordView.tsx',
+      'production/work-orders/record/view/WorkOrderRecordView.tsx',
+      'products/samples/record/view/SampleRecordView.tsx',
+      'products/styles/record/view/StyleRecordView.tsx',
+      'purchasing/orders/record/view/OrderRecordView.tsx',
+      'purchasing/subcontracting/record/view/SubcontractRecordView.tsx',
+      'sales/pricelists/record/view/PriceListRecordView.tsx',
+      'sales/quotes/record/view/QuoteRecordView.tsx',
+      'sales/returns/record/view/RmaRecordView.tsx',
+      'warehouse/lots/record/view/LotRecordView.tsx',
+      'warehouse/receipts/record/view/ReceiptRecordView.tsx',
+      'warehouse/shipments/record/view/ShipmentRecordView.tsx',
+    ]
+    for (const page of pages) {
+      const source = readFileSync(new URL(page, root), 'utf8')
+      expect(source, page).not.toMatch(/^\s+wide=\{/m)
+      expect(source, page).toMatch(/defaultWidth=\{.+ \? 'grid' : undefined \/\* F-SA-263 \*\/\}/)
+      expect(source, page).not.toContain('dockTab=')
+    }
+    const order = readFileSync(new URL('sales/orders/record/view/OrderRecordView.tsx', root), 'utf8')
+    expect(order).toContain('defaultWidth={DOCK_DEFAULTS[model.tab]}')
+    expect(order).toContain('dockTab={model.tab}')
+  })
+
+  it('a page with no `defaultWidth` draws the 40 % columns (SSR: nothing chosen yet), with the dock open', () => {
+    const band = { back: createElement('a', { href: '/w/demo/sales/quotes' }, 'Quotes'), title: 'QT-2026-0088 · Brand Alpha' }
+    const html = render(createElement(RecordFrame, { recordType: 'Quote', personId: 'u1', band, thread: createElement('div', null, 'messages'), threadLabel: 'The quote’s thread', children: createElement('p', null, 'The body') }))
+    expect(html).toContain('data-width="forty"')
+    expect(html).toContain('class="fw-rcf has-thread"')
+    const half = render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: createElement('div', null, 'messages'), threadLabel: 'The order’s thread', defaultWidth: 'half', dockTab: 'changes', children: createElement('p', null, 'Changes') }))
+    expect(half).toContain('data-width="half"')
+    expect(half).not.toContain('is-hidden')
+  })
+})
+// ---- end F-SA-263

@@ -1,5 +1,10 @@
 import { progressFigure, type ProgressFigure } from '../../../../lib/production/model'
 import type { OrderWorkOrder } from '../api'
+// F-SA-234b
+import { RISK_STATES, type RiskState } from '../depth/api'
+import type { Forecast } from '../depth/model'
+import type { DepthPart } from '../depth/use-order-depth'
+import type { ProductionState } from './overview/model'
 
 /**
  * Lead fix (production-page lane): the order's Production tab showed `sewn ?? 0` — "0 sewn" where the site does not scan
@@ -51,3 +56,47 @@ export function madeForOf(own: OwnShare, total: number | null, also: { readonly 
   return out
 }
 // ── end F-SA-234
+
+// ── F-SA-234b (sales page plan N2, P16; sa-7's follow-up): the by-line finish forecast from the order's OWN production read ─────────
+/**
+ * The finish forecast per line, from the production read's `dates.forecast` (planning.promise.view; the API reads the plan for this
+ * order's own lines only) — no longer a wide read of every site's promise lines. Null: the reader has no promise right (withheld) or
+ * the page has not asked the production read; reading / failed as the read is (its one failure is said once on the tab).
+ */
+export function forecastPart(state: ProductionState | null | undefined): DepthPart<ReadonlyMap<string, Forecast>> | null {
+  if (!state) return null
+  if (state.status === 'loading') return { value: null, problem: null }
+  if (state.status === 'failed') return { value: null, problem: state.problem }
+  const forecast = state.read.dates?.forecast ?? null
+  if (state.read.withheld.includes('dates.forecast') || forecast === null) return null
+  const risks = new Set<string>(RISK_STATES)
+  return { value: new Map(forecast.map((line) => [line.lineId, { finish: line.finish, source: line.source, slackDays: line.slackDays, risk: line.risk && risks.has(line.risk) ? (line.risk as RiskState) : null }])), problem: null }
+}
+
+// ── F-SA-231b (sa-7's follow-up; 10-order-page §2.2 L3): a style card's artwork chip ───────────────────────────────────────────────
+/** One artwork file a line shows that the reader may open (the order read's `lines[].artwork`, files.read). */
+export interface ArtworkFile {
+  readonly fileId: string
+  readonly name: string
+  readonly contentType: string
+  readonly sizeBytes: number
+}
+
+/**
+ * The artwork of a style's colour lines for its chip: the files the order read names (each once, in the lines' order — the viewer
+ * walks them), and how many — the files' number, else the count the read gave (an older read names no files: the chip then opens the
+ * order's Files tab). Never a file the read did not name.
+ */
+export function artworkOfGroup(lines: readonly { readonly artwork?: readonly ArtworkFile[]; readonly artworkCount?: number }[]): { readonly files: readonly ArtworkFile[]; readonly count: number } {
+  const seen = new Set<string>()
+  const files: ArtworkFile[] = []
+  for (const line of lines) {
+    for (const file of line.artwork ?? []) {
+      if (seen.has(file.fileId)) continue
+      seen.add(file.fileId)
+      files.push(file)
+    }
+  }
+  const counted = lines.reduce((sum, line) => sum + (line.artworkCount ?? 0), 0)
+  return { files, count: files.length > 0 ? files.length : counted }
+}

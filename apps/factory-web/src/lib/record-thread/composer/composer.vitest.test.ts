@@ -331,3 +331,77 @@ describe('th-backend-g step 1: a saved reply names the office’s numbers in a n
   })
 })
 // ---- end th-backend-g step 1
+
+// ---- F-SA-282a (sales page plan R7; B-SA-073; the production notes' R-47 rule): a portal text that names another customer of ours ----
+import { NAMES_NO_OTHER_CUSTOMER } from '@nexus/factory-domain/production-brand/notes'
+import { REPLY_REFUSAL_WORDS } from '@nexus/factory-domain/threads/replies'
+import { draftAfter, heldForNamesOther, namesNoOtherCustomerOf, namesOtherAsked, withoutNamesOther } from './model'
+import { createTranslator as translatorFor, messagesFor as wordsFor } from '../../i18n/messages'
+
+describe('F-SA-282a: the portal’s hold of a text that names another customer, and the tick “This text names no other customer”', () => {
+  const PORTAL: ComposerContext = { ...ORDER, portal: true }
+  const HELD = heldForNamesOther(draft({ mode: 'portal', body: 'Same trims as last season.' }))
+  const words = (locale: 'en' | 'it') => translatorFor(locale, wordsFor(locale, ['record-thread-composer'])['record-thread-composer']!)
+
+  it('the text comes back held in the portal box: Send waits with the reason until the writer ticks it, then the tick goes with it', () => {
+    expect(HELD).toEqual({ mode: 'portal', body: 'Same trims as last season.', forFloor: false, namesOther: true, namesNoOtherCustomer: false })
+    expect(namesOtherAsked(HELD)).toBe(true)
+    expect(heldReason(HELD, PORTAL)).toEqual({ key: 'held.namesOther' })
+    expect(namesNoOtherCustomerOf(HELD)).toBe(false)
+    const ticked = draftAfter(HELD, { namesNoOtherCustomer: true })
+    expect(heldReason(ticked, PORTAL)).toBeNull()
+    expect(namesNoOtherCustomerOf(ticked)).toBe(true)
+    // Offline, an empty box and the rest still come first.
+    expect(heldReason(HELD, { ...PORTAL, offline: true })).toEqual({ key: 'held.offline' })
+    // Nothing asked: nothing held, no tick sent (a first try never carries it).
+    expect(heldReason(draft({ mode: 'portal', body: 'x' }), PORTAL)).toBeNull()
+    expect(namesNoOtherCustomerOf(draft({ mode: 'portal', body: 'x', namesNoOtherCustomer: true }))).toBe(false)
+  })
+
+  it('a change of the words lets the hold and the tick go (the API checks the new words); leaving the portal or a saved reply too', () => {
+    const ticked = draftAfter(HELD, { namesNoOtherCustomer: true })
+    expect(draftAfter(ticked, { body: 'Same trims as before.' })).toEqual({ mode: 'portal', body: 'Same trims as before.', forFloor: false })
+    expect(draftAfter(ticked, { body: ticked.body })).toEqual(ticked)
+    expect(switchMode(ticked, 'note', OFFICE_PEOPLE).draft).toEqual({ mode: 'note', body: 'Same trims as last season.', forFloor: false })
+    expect(switchMode(ticked, 'reply', OFFICE_PEOPLE).draft).toEqual({ mode: 'reply', body: 'Same trims as last season.', forFloor: false })
+    expect(withSavedReply(ticked, { body: 'Kind regards.' })).toEqual({ mode: 'portal', body: 'Same trims as last season.\n\nKind regards.', forFloor: false })
+    expect(withoutNamesOther(draft({ body: 'x' }))).toEqual(draft({ body: 'x' }))
+    // Only the portal is checked this way: an office note or a mail never shows the tick.
+    expect(namesOtherAsked({ ...HELD, mode: 'note' })).toBe(false)
+    expect(heldReason({ ...HELD, mode: 'reply' }, PORTAL)).toBeNull()
+  })
+
+  it('the box says it in words and shows the tick, in both languages; ticked, Post may go; it never names whom', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const t = words(locale)
+      const held = textOf(composer(PORTAL, HELD, locale))
+      expect(held, locale).toContain(t('held.namesOther'))
+      expect(held, locale).toContain(t('namesOther.tick'))
+      expect(held, locale).toContain(t('namesOther.hint'))
+      expect(scanText(held, BRAND_BETA), locale).toEqual([])
+      const ticked = composer(PORTAL, draftAfter(HELD, { namesNoOtherCustomer: true }), locale)
+      expect(textOf(ticked), locale).not.toContain(t('held.namesOther'))
+      expect(ticked, locale).toMatch(/type="checkbox"[^>]*checked=""|checked=""[^>]*type="checkbox"/)
+      // Before the API held it there is no tick.
+      expect(textOf(composer(PORTAL, draft({ mode: 'portal', body: 'x' }), locale)), locale).not.toContain(t('namesOther.tick'))
+    }
+  })
+
+  it('one rule, one sentence: the production notes’ words (R-47) and the API’s refusal, never a new synonym', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const t = words(locale)
+      const notes = translatorFor(locale, wordsFor(locale, ['production-notes'])['production-notes']!)
+      expect(t('namesOther.tick'), locale).toBe(NAMES_NO_OTHER_CUSTOMER[locale])
+      expect(t('namesOther.hint'), locale).toBe(notes('check.namesOtherHint'))
+      expect(t('held.namesOther'), locale).toBe(notes('held.namesOther'))
+      // The API's sentence, its quotes aside.
+      expect(t('held.namesOther').replace(/[“”]/g, '"'), locale).toBe(REPLY_REFUSAL_WORDS.NAMES_OTHER_CUSTOMER[locale])
+    }
+  })
+
+  it('the design cases draw with no key left on screen, in both languages', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) if (id.startsWith('names-other')) expect(leftKeys(html, ['held', 'namesOther', 'portal', 'mark', 'send']), `${locale} ${id}`).toEqual([])
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['names-other', 'names-other-ticked']))
+  })
+})
+// ---- end F-SA-282a

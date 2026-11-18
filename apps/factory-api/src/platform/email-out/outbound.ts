@@ -53,6 +53,8 @@ import {
 } from '../threads/threads'
 // B-TH-050: a mail names the shared message it answers, or the mail of ours it corrects.
 import { messageLinkProblems } from '../threads/threads'
+// B-SA-061: what a mail from the thread is about (a part of its order; never a work order: office only).
+import { aboutProblems, aboutShapeProblems, type About } from '../threads/about'
 import type { EmailView } from './contract'
 import { processEmail, type EmailRuntime } from './service'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
@@ -270,6 +272,8 @@ export interface ThreadMailInput {
   // ---- B-TH-050: the shared message it answers ("Reply"), or the mail of ours it corrects ("Correct"), one at most.
   readonly replyToMessageId?: string | null | undefined
   readonly correctsMessageId?: string | null | undefined
+  // ---- B-SA-061: the part of its order the mail is about (a sales order's mail only; never a work order).
+  readonly about?: About | null | undefined
 }
 
 export interface ThreadMailResult {
@@ -311,6 +315,8 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
   // B-TH-050: what it answers or corrects (a message of this conversation shared with the party; a mail corrects a mail).
   const links = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null }
   problems.push(...(await messageLinkProblems(tx, thread, links, { direction: 'OUTBOUND', channel: 'EMAIL' })))
+  // B-SA-061: what it is about — a part of this order (one neutral sentence otherwise), never a work order.
+  if (input.about) problems.push(...(await aboutProblems(tx, actorOf(context), thread, input.about, 'PARTNER')))
   if (problems.length > 0) throw new ValidationError('The mail is not valid.', problems)
   // B-TH-004: one recipient rule for every mail on a party's record (the thread's party is the record's).
   const sentOutside = await checkRecipientRule(tx, { recordParty: thread.partyId, to: recipients.to, cc: recipients.cc, bcc: recipients.bcc, sendOutside: input.sendOutside })
@@ -337,6 +343,7 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
     emailMessageId,
     ...(sendAfter ? { held: true } : {}), // B-TH-048
     ...links, // B-TH-050
+    ...(input.about ? { about: input.about } : {}), // B-SA-061
   })
   const outbound = await tx.emailOutbound.create({
     data: {
@@ -403,6 +410,8 @@ export interface SendRouteBody {
   // ---- B-TH-050
   readonly replyToMessageId?: string | undefined
   readonly correctsMessageId?: string | undefined
+  // ---- B-SA-061: what it is about (a sales order's mail only; never a work order).
+  readonly about?: About | undefined
 }
 
 /** POST /threads/<type>/<id>/emails (email.send): the signed-in person sends a mail from the record's thread. */
@@ -413,6 +422,9 @@ export async function sendFromThread(caller: CommandCaller, record: RecordRef, b
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
   if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
   if (!can(actor, EMAIL_SEND, scope)) throw new ForbiddenError()
+  // ---- B-SA-061: a mail's about only on a sales order's mail, never a work order (office only): said before anything is written.
+  const aboutShape = aboutShapeProblems(record.type, body.about, 'PARTNER')
+  if (aboutShape.length > 0) throw new ValidationError('The mail is not valid.', aboutShape)
 
   const { result } = await command(caller, { name: 'email.send', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...body } }, async (tools) => {
     const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })

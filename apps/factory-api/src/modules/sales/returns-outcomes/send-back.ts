@@ -108,9 +108,9 @@ export async function sendBack(files: FilesRuntime, caller: CommandCaller, retur
     await touchReturn(tools, rma, inspected ? { status: 'INSPECTED', inspectedAt: now } : {})
     if (inspected) {
       tools.audit({ action: 'returns.statusChanged', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: rma.status }, after: { status: 'INSPECTED', inspectedAt: toUtcIso(now) } })
-      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'INSPECTED' } })
+      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'INSPECTED', partyId: rma.partyId /* B-SA-004b */ } })
     }
-    if (decided.length > 0) tools.emit({ type: 'return.decided', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: decided, inspected, moveIds: [] } })
+    if (decided.length > 0) tools.emit({ type: 'return.decided', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: decided, inspected, moveIds: [], partyId: rma.partyId /* B-SA-004b */ } })
 
     // The return DDT under the RMA's row lock this command holds (issueSourceDdtInCommand locks it again: the same row).
     let ddt: { id: string; number: string } | null = null
@@ -119,7 +119,7 @@ export async function sendBack(files: FilesRuntime, caller: CommandCaller, retur
       ddt = { id: issued.ddtId, number: issued.number }
     }
     tools.audit({ action: 'returnsOutcomes.sendBack', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, after: { lineIds: named, decidedLineIds: decided, ddtId: ddt?.id ?? null, ddtNumber: ddt?.number ?? null, note } })
-    tools.emit({ type: 'return.sent_back', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: named, decidedLineIds: decided, ddtId: ddt?.id ?? null, ddtNumber: ddt?.number ?? null } })
+    tools.emit({ type: 'return.sent_back', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: named, decidedLineIds: decided, ddtId: ddt?.id ?? null, ddtNumber: ddt?.number ?? null, partyId: rma.partyId /* B-SA-004b */ } })
     return { decided, ddt }
   })
   const printed = result.ddt ? await printSourceDdt(files, caller, result.ddt.id, onPdfError) : null

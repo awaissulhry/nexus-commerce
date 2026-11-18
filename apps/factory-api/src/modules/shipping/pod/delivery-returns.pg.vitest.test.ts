@@ -413,3 +413,25 @@ describe('return labels (LOG-112, TK1:01)', () => {
     expect(rows.filter((row) => row.status === 'USED').every((row) => row.usedAt !== null)).toBe(true)
   }, SLOW_TEST_TIMEOUT_MS)
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every return.* event (and a return label's) names its RMA's own customer (`partyId`, from the RMA row the command read; never a
+ * caller's value), so an office person limited to some customers is sent the live changes of their own customers' returns and
+ * never another's.
+ * The commands above: return labels offered, booked (office and link), cancelled, and used when the goods arrived (the
+ * worker's handler reads the label rows: their party is the RMA's, fixed when the label was made).
+ */
+describe('live: every return event names its RMA’s customer (B-SA-004b)', () => {
+  it('each return_label.changed row (offered, booked, cancelled, used at the dock) carries partyId = the RMA row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE (e.type LIKE 'return.%' OR e.type = 'return_label.changed')
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['return_label.changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

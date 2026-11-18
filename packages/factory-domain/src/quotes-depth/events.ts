@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004b */ livePartyId } from '../events/define'
 import { TEMPLATE_CHANGES } from '../sales/quote-templates/rules'
 
 /**
@@ -16,6 +16,8 @@ import { TEMPLATE_CHANGES } from '../sales/quote-templates/rules'
  */
 
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId', 'number'] } as const
+// B-SA-004b (Sales page plan P17'): the quote's customer (`partyId`, the quote row's own, read in the job's command), so an office
+// person limited to some customers is sent their customers' expiries and reminders live; never in the live fields; optional.
 
 export const events = [
   defineEvent({
@@ -29,14 +31,14 @@ export const events = [
     type: 'quote.expired',
     context: 'quotes-depth',
     description: 'A sent quote version passed its last day without an answer and is EXPIRED; a new version of the quote revives it.',
-    payload: z.strictObject({ quoteId: z.uuid(), versionId: z.uuid(), number: z.string(), revision: z.number().int(), validUntil: z.iso.date() }),
+    payload: z.strictObject({ quoteId: z.uuid(), versionId: z.uuid(), number: z.string(), revision: z.number().int(), validUntil: z.iso.date(), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
   defineEvent({
     type: 'quote.reminder_sent',
     context: 'quotes-depth',
     description: 'The customer was reminded, a few days before its last day, that a sent quote ends (a mail on the quote thread).',
-    payload: z.strictObject({ quoteId: z.uuid(), versionId: z.uuid(), number: z.string(), revision: z.number().int(), validUntil: z.iso.date(), outboundId: z.uuid() }),
+    payload: z.strictObject({ quoteId: z.uuid(), versionId: z.uuid(), number: z.string(), revision: z.number().int(), validUntil: z.iso.date(), outboundId: z.uuid(), partyId: livePartyId() /* B-SA-004b */ }),
     live,
   }),
 ] as const

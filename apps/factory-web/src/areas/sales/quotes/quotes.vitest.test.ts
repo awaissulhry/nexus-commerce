@@ -49,6 +49,13 @@ import {
 } from './model'
 import { designScreen as recordScreen, belowFloor, CAN, pending, PEOPLE, quote, SENT_VERSION, STYLE, version } from './record/fixtures'
 import { PASSING_CHECKS, sendItems } from './record/send-model'
+// ---- F-SA-277: the Quotes list lifted for the customer's Quotes & incoming ----
+import { createTranslator } from '../../../lib/i18n/messages'
+import type { ListToolsTransport } from '../../../list-frame/tools/transport'
+import { scopedTransport } from '../_shared/scoped-list-tools/ScopedListTools'
+import { NO_FILTERS, type ListFilters } from './model'
+import { filtersOf, QUOTES_LIST_KEY, quotesAddress, quotesFiltersFor, quotesFromQuery, quotesReadOf, quotesTileReadOf, quotesToolsQuery, searchOf } from './list/use-quotes-list'
+// ---- end F-SA-277
 
 /**
  * The quote screens' rules (SCR-030, 034, 035, 037, 099): the next step and why it is held, four eyes, the grid → line
@@ -395,3 +402,87 @@ describe('Sales › Quotes mounts the ONE picture part (F-SA-212)', () => {
   })
 })
 // ---- end F-SA-212
+
+// ---- F-SA-277 (sales page plan R5, P18; 11-customer-page §3.6): the ONE Quotes list (use-quotes-list.ts), lifted for the customer's
+// Quotes & incoming — a locked host's every read carries the customer, Sales › Quotes reads and writes as before, a list in memory
+// writes no address and its frame's tools take its own terms (the file is the screen). Pure helpers and sources: no DOM.
+describe('F-SA-277: the Quotes list lifted — the locked container, the page unchanged, a list in memory with its own tools', () => {
+  const LOCK = '0190f0e2-0000-7000-8000-00000000a1a1'
+  const OTHER = '0190f0e2-0000-7000-8000-00000000b2b2'
+  const locked = { locked: { party: LOCK } }
+  const narrowed: ListFilters = { status: 'SENT', mine: true, expiring: true, q: 'Q-7', party: OTHER }
+  const hook = readFileSync(new URL('./list/use-quotes-list.ts', import.meta.url), 'utf8')
+
+  it('every read of a locked host carries the customer — the rows, each tile, the tools\' query — whatever the filters hold; Clear all keeps it', () => {
+    for (const filters of [NO_FILTERS, narrowed, { ...NO_FILTERS, party: OTHER }]) {
+      expect(quotesReadOf(locked, filters).partyId).toBe(LOCK)
+      for (const tile of QUOTE_TILES) expect(quotesTileReadOf(locked, filters, tile).partyId, tile).toBe(LOCK)
+      expect(new URLSearchParams(quotesToolsQuery(locked, filters)).get('party')).toBe(LOCK)
+    }
+    // The view's Clear all (NO_FILTERS) reads the customer's quotes still.
+    expect(quotesReadOf(locked, quotesFiltersFor(locked, NO_FILTERS))).toEqual({ status: undefined, mine: false, q: '', partyId: LOCK })
+    // The view never holds the lock (no switcher chip, no "Clear all" for it, not counted as a filter); a saved view's other customer is dropped.
+    expect(quotesFiltersFor(locked, narrowed).party).toBeNull()
+    expect(quotesFromQuery(locked, `status=SENT&party=${OTHER}`)).toEqual({ ...NO_FILTERS, status: 'SENT', party: null })
+    expect(hook).toContain('switcher: lock ? null :')
+    expect(hook).toContain('if (lock) return // F-SA-277: a locked customer has no switcher')
+  })
+
+  it('Sales › Quotes reads and writes as before: the chosen customer, its own terms on its own path, Quote speed under the list', () => {
+    expect(quotesReadOf({}, narrowed)).toEqual({ status: 'SENT', mine: true, q: 'Q-7', partyId: OTHER })
+    expect(quotesReadOf({}, NO_FILTERS)).toEqual({ status: undefined, mine: false, q: '' })
+    expect(quotesTileReadOf({}, NO_FILTERS, 'myDrafts')).toEqual({ status: 'DRAFT', mine: true })
+    expect(quotesTileReadOf({}, { party: OTHER }, 'accepted')).toEqual({ status: 'ACCEPTED', mine: undefined, partyId: OTHER })
+    expect(quotesAddress('/w/DEMO/sales/quotes', narrowed)).toBe(`/w/DEMO/sales/quotes?status=SENT&mine=1&expiring=1&q=Q-7&party=${OTHER}`)
+    expect(quotesAddress('/w/DEMO/sales/quotes', NO_FILTERS)).toBe('/w/DEMO/sales/quotes')
+    expect(filtersOf(new URLSearchParams(searchOf(narrowed).slice(1)))).toEqual(narrowed)
+    const source = readFileSync(new URL('./list/QuotesPage.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('useQuotesList({ basePath: QUOTES_PATH })')
+    expect(source).toContain('<QuoteSpeed />')
+    expect(source.split('\n').length).toBeLessThan(40)
+  })
+
+  it('the moved body keeps its reads (New messages, the pictures, `?party=`); the prefix is the session\'s; a row\'s click is the host\'s', () => {
+    expect(hook).toContain("const readsThreads = session.permissions.includes('threads.read')")
+    expect(hook).toContain("recordType: 'Quote'")
+    expect(hook).toContain('useUnread(readsThreads ? readUnreadWith(api) : null')
+    expect(hook).toContain('unread: readsThreads ? unread : null')
+    expect(hook).toContain('const readPictures = useMemo(() => pictureReader(api), [api])')
+    expect(hook).toContain("search.set('party', filters.party)")
+    expect(hook).toContain("companyPrefix(session.company?.code ?? '')")
+    expect(hook).not.toContain('usePathname')
+    expect(hook).toContain('if (host.onRowClick && row) return host.onRowClick(row, newTab)')
+    // Enter (and the number's link) open the quote on every host.
+    expect(hook).toContain('onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`)')
+  })
+
+  it('a list in memory writes no address (the page\'s own terms stay); its frame\'s tools take its own terms and its lock', () => {
+    expect(hook).toContain('memory ? setKept(quotesFiltersFor(lockHost, next)) : router.replace(quotesAddress(base, next))')
+    expect(hook).toContain("const [newQuote, setNewQuote] = useState<NewQuoteModel | null>(!memory && params?.get('new') === '1'")
+    const parent = { pageKey: null, query: 'q=incoming-words&tab=quotes', linked: { view: 'view-1', export: 'job-1' }, goTo: () => undefined } as unknown as ListToolsTransport
+    const written: string[] = []
+    const scoped = scopedTransport(parent, { listKey: QUOTES_LIST_KEY, page: '/w/DEMO/sales/quotes', query: quotesToolsQuery(locked, { ...NO_FILTERS, q: 'Q-7' }), goTo: (query) => written.push(query) })
+    expect(scoped.pageKey).toBe('sales.quotes')
+    expect(scoped.query).toBe(`party=${LOCK}&q=Q-7`)
+    expect(scoped.linked).toEqual({ view: null, export: null })
+    scoped.goTo('status=SENT')
+    expect(written).toEqual(['status=SENT'])
+  })
+
+  // The words live in parties.json (customers.quotesTab, merged from the step's words file): the same words as the catalogue's titles.
+  it('the tab\'s words exist in it and en, no key left, and its titles are the catalogue\'s own (never a new synonym)', () => {
+    for (const locale of LOCALES) {
+      const words = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      const incoming = createTranslator(locale, messagesFor(locale, ['sales-inquiries'])['sales-inquiries']!)
+      expect(words('customers.quotesTab.quotes'), locale).toBe(words('deals.titleQuotes'))
+      expect(words('customers.quotesTab.incoming'), locale).toBe(incoming('page.title'))
+      for (const key of ['customers.quotesTab.noQuotes', 'customers.quotesTab.noRequests']) {
+        const line = words(key, { customer: 'Brand Alpha' })
+        expect(line, `${locale} ${key}`).not.toBe(key)
+        expect(line, `${locale} ${key}`).toContain('Brand Alpha')
+        expect(line, `${locale} ${key}`).not.toContain('{')
+      }
+    }
+  })
+})
+// ---- end F-SA-277

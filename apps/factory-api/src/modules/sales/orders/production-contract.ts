@@ -6,6 +6,7 @@ import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
 import { BLOCKER_KINDS, WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
+import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 // B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 
@@ -224,6 +225,8 @@ export const datesView = output({
         finish: businessDate().nullable(),
         risk: z.string().nullable(),
         slackDays: z.number().int().nullable(),
+        // F-SA-234b: what sets the day (the board, a work order's due day, a planned order, …): the order page's by-line forecast says it.
+        source: z.enum(FINISH_SOURCES),
         sizes: z.array(output({ size: z.string().nullable(), finish: businessDate().nullable(), risk: z.string().nullable() })),
       }),
     )

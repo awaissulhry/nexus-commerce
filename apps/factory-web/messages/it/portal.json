@@ -210,7 +210,16 @@
       "messagesMany": "Messaggi ({count}+ nuovi)",
       "messagesNewLabel_one": "Messaggi, {count} nuovo",
       "messagesNewLabel_other": "Messaggi, {count} nuovi",
-      "back": "Indietro"
+      "back": "Indietro",
+      "width": "Larghezza",
+      "third": "Un terzo",
+      "forty": "40 %",
+      "half": "Metà",
+      "hide": "Nascondi la conversazione",
+      "show": "Mostra la conversazione",
+      "showNew_one": "Mostra la conversazione ({count} nuovo)",
+      "showNew_other": "Mostra la conversazione ({count} nuovi)",
+      "showMany": "Mostra la conversazione ({count}+ nuovi)"
     },
     "summary": {
       "title": "Su questa pratica",

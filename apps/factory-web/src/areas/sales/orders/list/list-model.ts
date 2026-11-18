@@ -17,6 +17,11 @@ import type { OrderSummary } from '../api'
 import type { ExtraTerms } from '../model'
 import type { GroupRows } from './sheet/overall'
 import type { InvoiceDraftsState } from './sheet/overall-parts'
+import type { WaitingMarks } from './sheet/model' // F-SA-275
+import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model' // F-SA-280
+import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model' // F-SA-280
+import type { Assignable, BatchAnswer, BatchAssignee, BatchRecord, TaskDraft } from '../../../../record-panels/tasks/model' // F-SA-281
+import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -131,6 +136,33 @@ export interface OrdersListModel {
   embedded?: boolean
   /** The terms the host holds (in every read and in the address): no switcher or chip ✕ for them, Clear all keeps them. */
   locked?: { readonly party: boolean; readonly kind: boolean }
+  // ---- F-SA-275 (the production columns): the host's ----
+  /** What the host knows of each order beside its row (the customer page: its requests and replies that wait on us), by order id. */
+  marks?: WaitingMarks | null
+  /** The review window's address on the host's page for a request (the customer page's door); absent: the order's Changes tab. */
+  doorHref?: ((requestId: string) => string) | null
+  // ---- end F-SA-275
+  // ---- F-SA-276 (the customer's Work tab) ----
+  /** `?waiting=us`: the orders waiting on us (a chip with ✕; the customer page's built-in view "Waiting on us"). */
+  waiting?: 'us' | null
+  /** The host's built-in views, in its order (ids of builtInViewsOf; absent: every one of the sheet's). */
+  views?: readonly string[] | null
+  /** The host's default rows view, written into the address on entry: not a narrowing (no chip, no "Viewing …" line). */
+  defaultRows?: RowView | null
+  /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
+  preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
+  /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
+  toolbarLink?: { readonly href: string; readonly label: string } | null
+  // ---- end F-SA-276
+  // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
+  assign?: AssignSupervisorModel | null
+  note?: NoteDialogModel | null
+  bulkCan?: { readonly supervisor: boolean; readonly note: boolean; /** F-SA-281: why a task is held (a `records` key), or null. */ readonly task?: string | null }
+  // ---- end F-SA-280
+  // ---- F-SA-281: the New task window while open — on one order, or on N (one batch) — and who the person is ("Me") ----
+  task?: { readonly mode: 'one' | 'many'; readonly records: readonly BatchRecord[]; readonly people: PanelRead<readonly Assignable[]>; readonly busy: boolean } | null
+  me?: string | null
+  // ---- end F-SA-281
 }
 
 export interface OrdersListActions {
@@ -196,4 +228,16 @@ export interface OrdersListActions {
   onProfile?: (profile: null) => void
   /** F-SA-214: a board card has the focus or its picture is open large (true): live re-reads wait behind "N updates · Show". */
   onBoardHold?: (held: boolean) => void
+  /** F-SA-275 / F-SA-281: Add task… on these orders (a row's ⋯: one order; the selection's Add task to N…: one batch); absent: no such door. */
+  onAddTask?: (ids: readonly string[], from?: 'row' | 'selection') => void
+  /** F-SA-281: the New task window's own actions. */
+  task?: { readonly onCreate: (draft: TaskDraft) => Promise<boolean>; readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
+  /** F-SA-276: the waiting term (null clears it); `rows` with it (the built-in view "Waiting on us": the open ones). */
+  onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
+  // ---- F-SA-280 ----
+  onAssignSupervisor?: (ids: readonly string[]) => void
+  supervisor?: AssignSupervisorActions
+  onNote?: (ids: readonly string[]) => void
+  note?: NoteDialogActions
+  // ---- end F-SA-280
 }

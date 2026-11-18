@@ -201,7 +201,7 @@ describe('seasons per company (SAL-277)', () => {
   })
 
   it("a quote's draft names an open season; a closed one is refused in words; a copy keeps it", async () => {
-    const q2 = await one<Json>(`SELECT q.id, q.version FROM "Quote" q WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0002'`, [A.tenant])
+    const q2 = await one<Json>(`SELECT q.id, q.version, q."partyId" FROM "Quote" q WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0002'`, [A.tenant])
     const set = await ok('sales', 'PUT', `/sales/quotes/${q2.id}/season`, { version: q2.version, seasonId: S.ss28 })
     expect(set.season).toMatchObject({ quoteId: q2.id, seasonId: S.ss28, code: 'SS28' })
     const closed = await no('sales', 'PUT', `/sales/quotes/${q2.id}/season`, { version: q2.version + 1, seasonId: S.fw26 }, 409)
@@ -210,7 +210,7 @@ describe('seasons per company (SAL-277)', () => {
     const copy = await ok('sales', 'POST', `/sales/quotes/${q2.id}/duplicate`, {}, 201)
     const copied = await one<Json>(`SELECT v."seasonId" FROM "QuoteVersion" v JOIN "Quote" q ON q.id = v."quoteId" WHERE q.id = $1`, [copy.quote.id])
     expect(copied.seasonId).toBe(S.ss28)
-    expect(await outbox('quote.season_changed', q2.id)).toEqual([expect.objectContaining({ seasonId: S.ss28, code: 'SS28' })])
+    expect(await outbox('quote.season_changed', q2.id)).toEqual([expect.objectContaining({ seasonId: S.ss28, code: 'SS28', partyId: q2.partyId /* B-SA-004b: the quote's own customer */ })])
   })
 })
 

@@ -259,7 +259,7 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
         thread={thread ?? null}
         printThread={printThread}
         fields={fields /* B-TH-280 */}
-        wide={isWideTab(model.tab)}
+        defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={quotesHref(model.prefix)}>{t('record.back')}</Link>,
           title: (

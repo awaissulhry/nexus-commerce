@@ -83,7 +83,8 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
     partyId: party.id,
     companyId: party.companyId ?? session.company?.id ?? null,
     companyName: party.companyId === null || party.companyId === session.company?.id ? (session.company?.name ?? null) : null,
-    enabled: can.view && access !== null && limitsApply(side, access.kinds),
+    // F-SA-278: only where the limits are drawn (the customer's Work window mounts the requests alone; People & addresses the people).
+    enabled: can.view && access !== null && limitsApply(side, access.kinds) && (parts ?? PORTAL_PARTS).includes('limits'),
     guard, // F-SA-272: the supervisor moved to the customer's Overview
     onNotice: setNotice,
   })

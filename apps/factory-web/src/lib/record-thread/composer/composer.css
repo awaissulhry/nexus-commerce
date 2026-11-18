@@ -150,7 +150,9 @@
   gap: 4px 8px;
 }
 
-.fw-rt-cx-floor {
+.fw-rt-cx-floor,
+/* F-SA-282a: the tick "This text names no other customer" sits like the floor's tick. */
+.fw-rt-cx-tick {
   display: flex;
   flex-direction: column;
   gap: 2px;

@@ -21,6 +21,7 @@ import { systemContext } from '../outbox/system'
 import { partnerFanOut } from '../portal/notifications/fan-out'
 import { textOf } from '../../adapters/ses/fake' // th-backend-g step 2
 import { unsubscribeKeyOf } from '../portal/notifications/mail'
+import { ABOUT_WORDS } from './about' // B-SA-061
 
 /**
  * B-TH-044 (threads plan TH-3, G15; wall test T08 / W08; Owner rule 2026-11-16: "One brand must not be able to see anything related
@@ -328,3 +329,37 @@ describe('B-SA-073: Reply to N on the server, and the mis-send text check on a r
   })
 })
 // ── end B-SA-073 ──
+
+// ── B-SA-061 ("Discuss"; R10 item 6): a reply in the portal says which part of its order it is about — a part of THAT order only ──
+describe('B-SA-061: what a portal reply is about', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const NOT_PART = [{ path: 'body/about', message: ABOUT_WORDS.NOT_PART.en }]
+  const lines = { own: '', otherOrder: '', otherCustomer: '' }
+  const stored = async (body: string) => (await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Message" WHERE "bodyText" = $1', [body]))[0]!.n
+  beforeAll(async () => {
+    const order = orders[0]!.id
+    lines.own = (await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY id LIMIT 1', [order]))[0]!.id
+    lines.otherOrder = (await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "tenantId" = $1 AND "partyId" = $2 AND "orderId" <> $3 ORDER BY id LIMIT 1', [T, partyA, order]))[0]!.id
+    lines.otherCustomer = (await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "tenantId" = $1 AND "partyId" <> $2 ORDER BY id LIMIT 1', [T, partyA]))[0]!.id
+  })
+
+  it('a reply about a line of its order is written with it; A’s portal person still reads the reply', async () => {
+    const order = orders[0]!
+    const made = await reply('writer', 'SalesOrder', order.id, { body: 'Made-up: your line is sewn.', about: { kind: 'SalesOrderLine', id: lines.own } })
+    expect(made.message).toMatchObject({ channel: 'PORTAL', audience: 'PARTNER', about: { kind: 'SalesOrderLine', id: lines.own } })
+    expect((await admin<Json>('SELECT "partyId", "aboutKind", "aboutId" FROM "Message" WHERE id = $1', [made.message.id]))[0]).toEqual({ partyId: partyA, aboutKind: 'SalesOrderLine', aboutId: lines.own })
+    const seen = await browsers.aBuyer.get(`/portal/threads/SalesOrder/${order.id}`)
+    expect(seen.status, JSON.stringify(seen.body)).toBe(200)
+    expect(seen.body.messages.map((message: Json) => message.body)).toContain('Made-up: your line is sewn.')
+  })
+
+  it('another order’s line or another customer’s line: one neutral sentence, nothing written, nothing for anyone', async () => {
+    const order = orders[0]!
+    for (const [label, id] of [['another order', lines.otherOrder], ['another customer', lines.otherCustomer]] as const) {
+      const body = `Made-up: about ${label}’s line.`
+      const refused = await reply('writer', 'SalesOrder', order.id, { body, about: { kind: 'SalesOrderLine', id } }, 400)
+      expect((refused.error?.issues ?? []) as Json[], label).toEqual(NOT_PART)
+      expect(await stored(body), label).toBe(0)
+    }
+  })
+})
+// ── end B-SA-061 ──

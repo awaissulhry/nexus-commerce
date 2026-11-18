@@ -37,6 +37,19 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
+import { PIECES_COLUMNS, PRODUCTION_COLUMNS } from './sheet/model' // F-SA-275
+import { orderIdsOfChange, valueTouches, waitingFromAddress } from '../model' // F-SA-276
+// ---- F-SA-280: production's ONE assign dialog and ONE note dialog, reused in place over the sheet's ticked orders ----
+import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
+import { noteTargetsOf, supervisorTargetsOf } from './sheet/model'
+// ---- end F-SA-280
+// ---- F-SA-281: Add task… on one order and Add task to N… (one batch: POST /tasks/batch) ----
+import { newIdempotencyKey } from '../../../../lib/api/client'
+import { createTask, createTasks, listAssignees, taskReadProblem } from '../../../../record-panels/tasks/api'
+import { addTaskHeld, batchBody, createBody, type Assignable, type BatchAnswer, type BatchAssignee, type BatchRecord, type TaskDraft } from '../../../../record-panels/tasks/model'
+import type { PanelRead } from '../../../../record-panels/model'
+// ---- end F-SA-281
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -139,6 +152,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const kind = host.locked?.kind ?? kindFromAddress(params)
   // F-SA-222: a rider's orders (`?profile=`: the rider list's Open orders door).
   const profile = profileFromAddress(params)
+  // F-SA-276: the orders waiting on us (`?waiting=us`: the customer's Work tab's view "Waiting on us").
+  const waiting = waitingFromAddress(params)
   // B-TH-057 (TH-4): the server sort and the custom field filter are address terms too (a saved view and the file keep them).
   const sort = sortFromAddress(params)
   const cf = cfFromAddress(params)
@@ -147,7 +162,9 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const extraKey = JSON.stringify(extraFromAddress(params, rows))
   const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
   const [progressShown, setProgressShown] = useState(false)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile])
+  // F-SA-275: the rows' production part only while a production column is shown (Where it is, Waiting on, Supervisor).
+  const [productionShown, setProductionShown] = useState(false)
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */, production: productionShown /* F-SA-275 */, waiting /* F-SA-276 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile, productionShown, waiting])
   const grouped = layout === 'list' && group === 'party' && !party
   const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
@@ -165,7 +182,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
         sheetAddress(base, host, params, {
@@ -181,9 +198,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
           extra: next.extra === undefined ? extra : next.extra, // B-TH-244
           kind: next.kind === undefined ? kind : next.kind, // F-SA-221
           profile: next.profile === undefined ? profile : next.profile, // F-SA-222
+          waiting: next.waiting === undefined ? waiting : next.waiting, // F-SA-276
         }),
       ),
-    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile],
+    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile, waiting],
   )
 
   // ── B-TH-244: the view's figures from the server (the grouped view's headers and grand total, the honest count of a door's view) ──
@@ -424,8 +442,34 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     if (statuses.length > 0) void readLanes(statuses)
   }, 900)
   // ── end F-SA-214 ──
+  // ── F-SA-276 (rule 37): values in place — a production or request event naming an order on screen reads only those rows again
+  // (`ids=`, ≤ 50, coalesced 800 ms) and swaps their values where they stand: a row never moves, is never added or removed here (a row
+  // that no longer fits the view stays until "N updates · Show"). ──
+  const onScreen = useRef<readonly string[]>([])
+  onScreen.current = (list.items ?? []).map((row) => row.id)
+  const stale = useRef(new Set<string>())
+  const rereadRows = useCoalesced(() => {
+    const ids = [...stale.current].slice(0, 50)
+    stale.current.clear()
+    if (ids.length === 0) return
+    const id = readId.current
+    listOrders(api, { ids, production: productionShown, progress: progressShown, limit: 50 })
+      .then((page) => {
+        if (id !== readId.current) return
+        const fresh = new Map(page.orders.map((row) => [row.id, row]))
+        setList((current) => ({ ...current, items: current.items?.map((row) => fresh.get(row.id) ?? row) ?? null }))
+      })
+      .catch(() => undefined)
+  }, 800)
+  // ── end F-SA-276 ──
   const live = useLive(
     (change) => {
+      // F-SA-276: the values of the rows on screen, in place (the list layout).
+      if (layout === 'list' && valueTouches(change)) {
+        const named = orderIdsOfChange(change.fields).filter((id) => onScreen.current.includes(id))
+        for (const id of named) stale.current.add(id)
+        if (named.length > 0) rereadRows()
+      }
       if (!listTouches(change)) return
       // F-SA-214: the board's lanes one by one (above); the counts follow at once.
       if (layout === 'board') {
@@ -515,6 +559,71 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     // B-TH-244: the grouped view's rows carry the new versions too.
     setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(bump) ?? null }])))
   })
+  // ---- F-SA-280: Assign supervisor… (≤ 100, production.brand.manage) and Note to N… / Ask the supervisor (≤ 100, one batch, threads.post)
+  // over the ticked orders; a Send reads the rows again (their marks). The one-customer check is the bar's, before any window.
+  const assign = useAssignSupervisor(api, () => void load(true))
+  const noteCan = session.permissions.includes('threads.post')
+  const note = useNoteDialog(api, { can: noteCan, onDone: () => void load(true) })
+  const pickedRows = (ids: readonly string[]) => (shownItems ?? []).filter((row) => ids.includes(row.id))
+  // ---- end F-SA-280
+  // ---- F-SA-281: the one New task window — on one order (a row's ⋯: its people, "Me" first) or on N orders (the selection: one task
+  // on each, Assign to each order's supervisor by default or one person who may read the customer's records; one batch, its receipt).
+  const [task, setTask] = useState<OrdersListModel['task']>(null)
+  const taskKey = useRef<string | null>(null)
+  const taskHeld = addTaskHeld(new Set(session.permissions), true)
+  const readTaskPeople = useCallback(
+    (record: { type: string; id: string }) => {
+      setTask((now) => (now ? { ...now, people: { status: 'loading' } } : now))
+      listAssignees(api, record).then(
+        (people) => setTask((now) => (now ? { ...now, people: { status: 'ready', data: people } } : now)),
+        (error: unknown) => setTask((now) => (now ? { ...now, people: { status: 'error', problem: taskReadProblem(error) } } : now)),
+      )
+    },
+    [api],
+  )
+  const openTask = (ids: readonly string[], from: 'row' | 'selection') => {
+    const rows = pickedRows(ids)
+    if (rows.length === 0 || taskHeld) return
+    taskKey.current = newIdempotencyKey()
+    const records: BatchRecord[] = rows.map((row) => ({ type: 'SalesOrder', id: row.id, label: row.number, supervisor: row.production && !row.production.withheld.includes('supervisorMark') && row.production.supervisorMark !== null ? row.production.supervisorMark !== 'NOT_SET' : null }))
+    const many = from === 'selection'
+    const people: PanelRead<readonly Assignable[]> = { status: 'loading' }
+    setTask({ mode: many ? 'many' : 'one', records, people, busy: false })
+    // N orders of one customer: the people who may read this customer's records; one order: its own.
+    readTaskPeople(many ? { type: 'Party', id: rows[0]!.partyId } : { type: 'SalesOrder', id: rows[0]!.id })
+  }
+  const taskActions: NonNullable<OrdersListActions['task']> = {
+    onCreate: async (draft: TaskDraft) => {
+      const record = task?.records[0]
+      if (!record) return false
+      setTask((now) => (now ? { ...now, busy: true } : now))
+      try {
+        await createTask(api, createBody(draft, record))
+        setTask(null)
+        return true
+      } catch {
+        setTask((now) => (now ? { ...now, busy: false } : now))
+        return false
+      }
+    },
+    onSend: async (draft: TaskDraft, assignee: BatchAssignee): Promise<BatchAnswer | null> => {
+      if (!task) return null
+      try {
+        const answer = await createTasks(api, batchBody(draft, assignee, task.records), taskKey.current ?? newIdempotencyKey())
+        void load(true)
+        return answer
+      } catch (error) {
+        setNotice({ tone: 'danger', words: { key: readProblem(error) } })
+        return null
+      }
+    },
+    onRetryPeople: () => {
+      const first = task?.records[0]
+      if (task && first) readTaskPeople(task.mode === 'many' ? { type: 'Party', id: pickedRows([first.id])[0]?.partyId ?? '' } : { type: first.type, id: first.id })
+    },
+    onClose: () => setTask(null),
+  }
+  // ---- end F-SA-281
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -579,6 +688,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     importer: { held: importer.held, sheet: importer.model, memory: importer.memory /* B-TH-293 */ },
     kind, // F-SA-221
     profile: profile ? { id: profile, name: rider?.id === profile ? rider.name : undefined } : null, // F-SA-222
+    waiting, // F-SA-276
+    // ---- F-SA-280 ----
+    assign: assign.model,
+    note: note.model,
+    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */ },
+    task, // F-SA-281
+    me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
@@ -596,7 +712,11 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onSummaryRetry: () => readSummary(readId.current),
     onClearExtra: (key) => go({ extra: key === null ? null : withoutExtra(extra, key) }),
     onExtra: (next) => go({ extra: { ...extra, ...next } }),
-    onShownColumns: (ids) => setProgressShown(ids.includes('progress')),
+    // F-SA-275: Where it is reads the pieces too; the production columns read the rows' production part.
+    onShownColumns: (ids) => {
+      setProgressShown(ids.some((id) => PIECES_COLUMNS.includes(id)))
+      setProductionShown(ids.some((id) => PRODUCTION_COLUMNS.includes(id)))
+    },
     onInvoiceShipped: invoiceShipped,
     onInvoiceShippedRetry: () => invoiceShipped(invoiceAsked.current),
     onCloseInvoiceDrafts: () => setInvoiceDrafts(null),
@@ -623,7 +743,17 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onKind: (next, view) => go({ kind: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onProfile: (next) => go({ profile: next }), // F-SA-222: the rider chip's ✕
     onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */ }),
+    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */, waiting: null /* F-SA-276 */ }),
+    // F-SA-276: the waiting term's chip ✕ and the built-in view "Waiting on us" (with its rows: the open ones).
+    // ---- F-SA-280 ----
+    onAssignSupervisor: (ids) => assign.open(supervisorTargetsOf(pickedRows(ids))),
+    supervisor: assign.actions,
+    onNote: (ids) => note.open(noteTargetsOf(pickedRows(ids)), 'selection'),
+    note: note.actions,
+    onAddTask: (ids, from = 'row') => openTask(ids, from), // F-SA-281
+    task: taskActions, // F-SA-281
+    // ---- end F-SA-280
+    onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057
     readPictures, // F-SA-212
