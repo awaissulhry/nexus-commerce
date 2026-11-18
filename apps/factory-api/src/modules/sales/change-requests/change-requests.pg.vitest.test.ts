@@ -397,9 +397,10 @@ describe('the cancel fee (B-W2b-F14, SalesSettings.cancelFeePct): shown, never c
     expect(made.status, JSON.stringify(made.body)).toBe(201)
     const fee = { pct: '15', currency: 'EUR', lines: [{ lineId: free!.id, seq: 20, fee: feeOf(net, 15) }], totalFee: feeOf(net, 15) }
     expect(made.body.request.cancelFee).toMatchObject(fee)
-    // The viewer reads the request and the percent, never the amounts (no price grain).
+    // B-PR-25 (fix-pr-4): a reader without prices (the viewer) reads the request but no fee at all — neither the amounts nor the percent.
     const seen = (await ok(browsers.viewer, `/portal/sales-orders/${so2.id}/change-requests`)).items[0]
-    expect(seen.cancelFee).toEqual({ pct: '15', words: { en: "Fee 15% of the cancelled lines' value", it: 'Penale del 15% sul valore delle righe annullate' }, currency: 'EUR', lines: [{ lineId: free!.id, seq: 20 }] })
+    expect(seen).toMatchObject({ id: made.body.request.id, kind: 'CANCEL' })
+    expect(seen.cancelFee).toBeNull()
     const record = await officeRecord(office(), made.body.request.id, h.clock.now())
     expect(record.request.cancelFee).toMatchObject(fee)
     const accepted = await acceptRequest(office(), made.body.request.id, { version: 1 }, undefined, h.clock)
