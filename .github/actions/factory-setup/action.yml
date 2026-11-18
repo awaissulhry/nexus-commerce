@@ -1,0 +1,76 @@
+name: Factory workspace (restored) and its local stack
+description: >-
+  For the jobs of factory-end-check.yml and factory-quick-check.yml after their setup job: Node 22, node_modules
+  and the built pieces (shared + events dist, the factory-db Prisma client) restored from the caches the setup job
+  wrote for THIS run (a miss fails: a job never runs on missing pieces). Optionally PostgreSQL 17 and Redis on the
+  local factory stack's ports (127.0.0.1:5442 and :6399, infra/factory/docker-compose.yml), so every default of the
+  test kit, the golden flows and the browser flow works unchanged. The database lives on tmpfs with durability off
+  (the PostgreSQL 17 "non-durable settings"), throwaway by construction: nothing of it outlives the job.
+
+inputs:
+  postgres:
+    description: "'true' starts PostgreSQL 17 (postgres:17-alpine, as the local stack) on 127.0.0.1:5442"
+    default: 'false'
+  redis:
+    description: "'true' starts Redis 7 (redis:7-alpine, as the local stack) on 127.0.0.1:6399"
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    # Start the containers first: their image pulls overlap the cache restores below.
+    - name: PostgreSQL 17 on 127.0.0.1:5442 (tmpfs; fsync, synchronous_commit, full_page_writes off)
+      if: inputs.postgres == 'true'
+      shell: bash
+      # A plain container, not a service: a service container cannot take server options (actions/runner #2139),
+      # and max_connections (300, as the local stack) needs a restart that would wipe the tmpfs.
+      run: |
+        docker run -d --name factory-pg -p 127.0.0.1:5442:5432 --shm-size=1g \
+          --tmpfs /var/lib/postgresql/data:rw -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine \
+          -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=300 > /dev/null
+
+    - name: Redis 7 on 127.0.0.1:6399
+      if: inputs.redis == 'true'
+      shell: bash
+      run: docker run -d --name factory-redis -p 127.0.0.1:6399:6379 redis:7-alpine > /dev/null
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    # The same key and paths as Commerce's .github/actions/setup: one lockfile, one node_modules, one cache entry.
+    - name: Restore node_modules
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+        key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json', 'patches/**') }}
+        fail-on-cache-miss: true
+
+    - name: Restore the built pieces of this run (shared + events dist, factory-db Prisma client)
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          packages/shared/dist
+          packages/events/dist
+          packages/factory-db/src/generated
+        key: factory-built-${{ github.run_id }}
+        fail-on-cache-miss: true
+
+    - name: Wait for PostgreSQL
+      if: inputs.postgres == 'true'
+      shell: bash
+      # TCP inside the container: the image's first-start init server listens on the socket only, so this waits for
+      # the real server.
+      run: |
+        for _ in $(seq 1 90); do docker exec factory-pg pg_isready -q -h 127.0.0.1 -U postgres && break; sleep 1; done
+        docker exec factory-pg psql -h 127.0.0.1 -U postgres -Atc "SELECT 'PostgreSQL ' || current_setting('server_version') || ', fsync ' || current_setting('fsync') || ', max_connections ' || current_setting('max_connections')"
+
+    - name: Wait for Redis
+      if: inputs.redis == 'true'
+      shell: bash
+      run: |
+        for _ in $(seq 1 60); do [ "$(docker exec factory-redis redis-cli ping 2>/dev/null)" = PONG ] && break; sleep 1; done
+        [ "$(docker exec factory-redis redis-cli ping)" = PONG ] && echo "Redis ready on 127.0.0.1:6399"

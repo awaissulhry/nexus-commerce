@@ -1,0 +1,36 @@
+{
+  "$comment": [
+    "The fewest tests each part of a Factory CI run must RUN (passed + failed; skipped and todo do not count), read by scripts/factory/ci-report.mjs summary.",
+    "A run whose suites were skipped (a syntax error that stops every file from loading, a set-up that never started, a shard that never reported) falls below its floor and fails, even when every command exited 0.",
+    "endCheck = .github/workflows/factory-end-check.yml (group = its `parts` input).",
+    "A part without `min` only has to exit 0. Every part a workflow records needs an entry here, and every entry of a selected group needs a result.",
+    "Set from the Mac end check's counts of 2026-11-18, about 3% below them; the golden steps and the browser stages exactly (every step must run). After a green run, raise a floor to the counts its summary prints. Never lower one to make a run pass: fix the tests that stopped running."
+  ],
+  "endCheck": {
+    "typecheck-factory-db": { "group": "fast" },
+    "typecheck-factory-domain": { "group": "fast" },
+    "typecheck-factory-api": { "group": "fast" },
+    "typecheck-factory-web": { "group": "fast" },
+    "guards": { "group": "fast", "min": 14, "$comment": "run-guards: 14 of 14 factory guards (check-migrations-replay runs in migrate)" },
+    "unit-db": { "group": "fast", "min": 100, "$comment": "factory-db without its *.pg.vitest.test.ts files (those are pg-db): 7,309 - 7,168 = about 141" },
+    "unit-domain": { "group": "fast", "min": 5750, "$comment": "5,951 on 11-18" },
+    "unit-api": { "group": "fast", "min": 770, "$comment": "802 on 11-18, the Redis tests (*.redis.vitest.test.ts) included" },
+    "unit-web": { "group": "fast", "min": 7850, "$comment": "8,139 on 11-18" },
+    "migrate": { "group": "pg", "$comment": "fresh migrate, seed twice, check-migrations-replay" },
+    "pg-db": { "group": "pg", "min": 6950, "$comment": "7,168 on 11-18" },
+    "pg-api": { "group": "pg", "min": 5800, "$comment": "the sum of every shard; 6,544 on 11-18 with the golden-flow files, about 5,990 without them (they run as the golden-* parts)" },
+    "golden-w1": { "group": "golden", "min": 45 },
+    "golden-daily": { "group": "golden", "min": 114 },
+    "golden-followups": { "group": "golden", "min": 25 },
+    "golden-people": { "group": "golden", "min": 33 },
+    "golden-quality": { "group": "golden", "min": 49 },
+    "golden-portal": { "group": "golden", "min": 44 },
+    "golden-product": { "group": "golden", "min": 29 },
+    "golden-sales-depth": { "group": "golden", "min": 40 },
+    "golden-money-depth": { "group": "golden", "min": 37 },
+    "golden-threads": { "group": "golden", "min": 81 },
+    "golden-sales-page": { "group": "golden", "min": 11 },
+    "golden-production": { "group": "golden", "min": 16 },
+    "browser": { "group": "browser", "min": 27, "$comment": "the browser golden flow's stages (01-customer … 16-close, th1a … th7, end checks)" }
+  }
+}
