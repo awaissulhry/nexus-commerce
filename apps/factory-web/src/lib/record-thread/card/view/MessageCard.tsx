@@ -35,6 +35,7 @@ import {
   type CardMessage,
 } from '../model'
 import { bodyKind, skippedLine } from '../model' // B-TH-255
+import { askChip, changeChip, type CardAsk, type CardChange } from '../model' // F-SA-244
 import '../card.css'
 
 export interface CardActions {
@@ -60,6 +61,16 @@ export interface CardActions {
   // ---- end B-TH-286
   // ---- F-SA-265: "Show on the page" — a message about a part of its record jumps back to that row (the record page's own door).
   onShowOnPage?: (messageId: string) => void
+  // ---- F-SA-244: the conversation side of a change — the record page's doors (absent: not offered).
+  /** Answer… on the customer's ask: the ONE review window opens on its request (the record frame's answer door). */
+  onAnswer?: (requestId: string) => void
+  /** Answer…'s own address (a real link: ⌘-click opens it in a new tab); null: the page has none. */
+  answerHref?: (requestId: string) => string | null
+  /** Who was told… on a change's line. */
+  onWhoWasTold?: (messageId: string) => void
+  /** "Still to do: N" on a change's line: the page's Still to do. */
+  onStillToDo?: (messageId: string) => void
+  // ---- end F-SA-244
 }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
@@ -201,6 +212,9 @@ export function MessageCard({ message, context, actions, remind, readOnly = fals
         </p>
       )}
       {movedMarks.length > 0 && <p className="fw-rt-details">{movedMarks.map((mark) => t(mark.key, { party })).join(' · ')}</p>}
+      {/* F-SA-244: their ask's live chip and Answer…; a change's line: its Still to do, when the floor and the workshop were told. */}
+      {!readOnly && message.ask && <AskLine ask={message.ask} actions={actions} />}
+      {!readOnly && message.change && <ChangeLine messageId={message.id} change={message.change} actions={actions} />}
 
       {message.kind === 'note' && names.length > 0 && (
         <p className="fw-rt-details">
@@ -325,6 +339,68 @@ export function MessageCard({ message, context, actions, remind, readOnly = fals
         </p>
       )}
     </article>
+  )
+}
+
+// ── F-SA-244 ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** "Request · waiting on us · Answer…" under the customer's ask (the chip lives: it reads the request as the page reads it now). */
+function AskLine({ ask, actions }: { ask: CardAsk; actions?: CardActions | undefined }) {
+  const t = useT('record-thread-card')
+  const chip = askChip(ask)
+  const href = actions?.answerHref?.(ask.requestId) ?? null
+  const onAnswer = actions?.onAnswer
+  return (
+    <p className="fw-rt-details fw-rt-change">
+      <Pill tone={chip.tone}>{t(chip.key, chip.params)}</Pill>
+      {ask.answer && onAnswer && href ? (
+        <Button size="xs" variant="primary" asChild>
+          <a
+            href={href}
+            onClick={(event) => {
+              // A plain click stays on the page (the window opens over it); ⌘ / Ctrl / Shift / the middle button open a new tab.
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+              event.preventDefault()
+              onAnswer(ask.requestId)
+            }}
+          >
+            {t('ask.answer')}
+          </a>
+        </Button>
+      ) : ask.answer && onAnswer ? (
+        <Button size="xs" variant="primary" onClick={() => onAnswer(ask.requestId)}>
+          {t('ask.answer')}
+        </Button>
+      ) : null}
+    </p>
+  )
+}
+
+/** "Still to do: 2 · Told the floor at 10:42 · Told the workshop at 10:44 · Who was told…" under a change's line (never who read it). */
+function ChangeLine({ messageId, change, actions }: { messageId: string; change: CardChange; actions?: CardActions | undefined }) {
+  const t = useT('record-thread-card')
+  const locale = useLocale()
+  const chip = changeChip(change)
+  const onStill = actions?.onStillToDo
+  const onTold = actions?.onWhoWasTold
+  if (!chip && !change.floorAt && !change.workshopAt && !onTold) return null
+  return (
+    <p className="fw-rt-details fw-rt-change">
+      {chip && chip.door && onStill ? (
+        <Button size="xs" variant="warning" onClick={() => onStill(messageId)}>
+          {t(chip.key, chip.params)}
+        </Button>
+      ) : chip ? (
+        <Pill tone={chip.tone}>{t(chip.key, chip.params)}</Pill>
+      ) : null}
+      {change.floorAt && <span>{t('change.floor', { time: timeOf(change.floorAt, locale) })}</span>}
+      {change.workshopAt && <span>{t('change.workshop', { time: timeOf(change.workshopAt, locale) })}</span>}
+      {onTold && (
+        <Button size="xs" variant="link" onClick={() => onTold(messageId)}>
+          {t('change.whoWasTold')}
+        </Button>
+      )}
+    </p>
   )
 }
 

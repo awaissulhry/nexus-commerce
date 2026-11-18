@@ -279,6 +279,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         // F-SA-263: each tab its own default width; a width the person picks is kept for this tab, "hidden" for every order.
         defaultWidth={DOCK_DEFAULTS[model.tab]}
         dockTab={model.tab}
+        // F-SA-244: the thread's ask cards open this page's ONE review window (the frame's answer door; the same `?open=` address).
+        {...(model.requestDoor?.open ? { answer: { open: model.requestDoor.open, href: model.requestDoor.hrefOf } } : {})}
         band={{
           back: <Link href={ordersHref(model.prefix)}>{t('record.back')}</Link>,
           title: (

@@ -115,6 +115,8 @@ export const brandRequestSchema = z.object({
   standing: words,
   may: z.object({ accept: z.boolean(), refuse: z.boolean(), counter: z.boolean(), counterWithPrice: z.boolean() }),
   batch: z.object({ id: z.string(), count: z.number(), waiting: z.number() }).nullable(),
+  // F-SA-244 (B-SA-048): the ask's own message in the order's conversation (null: asked before it) — its card draws the live chip.
+  askMessageId: z.string().nullable().optional(),
 })
 export type BrandRequest = z.infer<typeof brandRequestSchema>
 

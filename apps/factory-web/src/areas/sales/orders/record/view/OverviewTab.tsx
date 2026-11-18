@@ -332,6 +332,8 @@ function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecor
           )}
           {withheld && <p className="fw-so-hint">{t('overview.people.held')}</p>}
           <KeyValue dense labelCase="sentence" items={items} />
+          {/* F-SA-244 (P8, R2): how many office people were told about this order's changes (each once) — never who read anything. */}
+          {model.told?.value && model.told.value.changes.length > 0 && <p className="fw-so-hint">{t('told.aboutChanges', { count: model.told.value.people })}</p>}
           {/* F-SA-265 / F-SA-266: who is told about this order — the thread's followers (the frame's door). */}
           <FollowersDoor />
         </div>

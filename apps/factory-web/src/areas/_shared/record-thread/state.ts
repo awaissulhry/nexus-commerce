@@ -30,6 +30,8 @@ export interface ServerThread {
   waitingMail?: WaitingMail | null
   /** B-TH-288 (B-TH-093, T1-F13): marked done — when and by whom (null: open work; undefined: the read did not say). Office only. */
   done?: ThreadDone | null
+  /** F-SA-244 (B-SA-048): the record whose conversation this is, when it is another record's (a change request's: its order's). */
+  place?: { type: string; id: string } | null
 }
 
 export interface Work {
@@ -52,7 +54,7 @@ const byTime = (a: ApiMessage, b: ApiMessage) => (a.at === b.at ? a.id.localeCom
  * The newest page read again (on arrival, after a send, on a live hint): the newest messages are replaced, the older pages the
  * person already loaded stay; the work is not part of it.
  */
-export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly OfficeMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead; /* B-TH-255 */ waitingMail?: WaitingMail | null; /* B-TH-288 */ done?: ThreadDone | null }): ServerThread {
+export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly OfficeMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead; /* B-TH-255 */ waitingMail?: WaitingMail | null; /* B-TH-288 */ done?: ThreadDone | null; /* F-SA-244 */ place?: { type: string; id: string } | null }): ServerThread {
   const fresh = new Map(page.messages.map((message) => [message.id, message]))
   const oldestFresh = page.messages.length > 0 ? [...page.messages].sort(byTime)[0].at : null
   const kept = server.status === 'ready' && oldestFresh !== null ? server.messages.filter((message) => !fresh.has(message.id) && message.at < oldestFresh) : []
@@ -71,6 +73,8 @@ export function applyNewest(server: ServerThread, page: { thread: ServerThread['
     waitingMail: page.waitingMail === undefined ? server.waitingMail : page.waitingMail,
     // B-TH-288: the same for Done.
     done: page.done === undefined ? server.done : page.done,
+    // F-SA-244: every read says where the conversation is (none named: its own).
+    place: page.place ?? null,
   }
 }
 

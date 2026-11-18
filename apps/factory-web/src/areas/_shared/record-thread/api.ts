@@ -54,6 +54,9 @@ const page = z.object({
   head: headSchema.optional(),
   waitingMail: waitingMailSchema.nullable().optional() /* B-TH-255 */,
   done: doneSchema.nullable().optional() /* B-TH-288 */,
+  // F-SA-244 (B-SA-048): a record whose conversation is another record's (a customer's change request: its order's) answers that
+  // thread and names it — the docked thread shows a door to it.
+  place: z.object({ type: z.string(), id: z.string() }).optional(),
 })
 export type ThreadPageAnswer = z.infer<typeof page>
 

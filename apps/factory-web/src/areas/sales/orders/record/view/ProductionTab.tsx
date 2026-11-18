@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { CalendarClock, CheckCircle2, Clock, Factory, XCircle } from 'lucide-react'
 import { Card, Disclosure, EmptyState, KeyValue, ProgressBar, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
-import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatTime /* F-SA-244 */ } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
@@ -52,6 +52,7 @@ const WORK_ORDERS_NS = 'production-work-orders'
 // F-SA-266: Discuss on Production's rows — the work orders, holds and quality in office notes only (never a reply), a line's dates by
 // its reference; each row its anchor ("Show on the page").
 import { DiscussDoor } from './Discuss'
+import { floorToldAt } from '../told' // F-SA-244: "Told the floor at hh:mm" per work order (never who saw it)
 import { rowAnchor } from '../dock/discuss'
 
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
@@ -167,12 +168,14 @@ function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderR
   const totals = new Map((model.workOrders?.value ?? []).map((row) => [row.id, row.pieces]))
   const readiness = new Map((model.readiness?.value ?? []).map((row) => [row.workOrderId, row]))
   const named = (entry: { code: string; name: string } | null) => (entry ? entry.name || entry.code : null)
+  const toldChanges = model.told?.value?.changes ?? [] // F-SA-244
   const rows = work.workOrders.map((row) => {
     const { figure, notCounted } = ownProgress(row.own, row.status)
     const figureWords = words(figure.words.key, figure.words.params)
     const where = [named(row.site), named(row.line), ...row.workshops.map((shop) => shop.name)].filter((part): part is string => !!part).join(' · ')
     const madeFor = madeForOf(row.own, totals.get(row.id) ?? null, row.alsoMakes, row.sharedWithOtherCustomers, row.cutWithOtherWork)
     const ready = readiness.get(row.id) ?? null
+    const floorAt = floorToldAt(toldChanges, row.id) // F-SA-244
     return {
       id: row.id,
       cells: [
@@ -189,6 +192,8 @@ function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderR
             {row.held && <Tag tone="warning">{t('production.held')}</Tag>}
             {row.rush && <Tag tone="danger">{t('production.rush')}</Tag>}
           </span>
+          {/* F-SA-244 (R2): when the floor of this work order was last told about a change of the order — never who saw it. */}
+          {floorAt && <span className="fw-so-cell-sub">{t('told.floorAt', { time: formatTime(floorAt, { locale }) })}</span>}
         </span>,
         <span key="st" className="fw-so-cell">
           <span>{row.style?.code ?? '—'}</span>

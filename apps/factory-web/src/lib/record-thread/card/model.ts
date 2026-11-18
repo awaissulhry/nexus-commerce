@@ -100,6 +100,10 @@ export interface CardMessage {
   // ---- end B-TH-255
   // ---- F-SA-265 (B-SA-061): office only — the part of its order the message is about; the card offers "Show on the page".
   about?: { kind: string; id: string } | null
+  // ---- F-SA-244: office only, filled by the record page — the customer's ask (its request's live chip, Answer…) and a change's
+  // system line (its live Still to do, when the floor and the workshop were told, Who was told).
+  ask?: CardAsk | null
+  change?: CardChange | null
   // ---- B-TH-286 (B-TH-091; T3-F12): pinned for everyone on the record (the files line's "2 pinned" lists it).
   pinned?: boolean
   // ---- end B-TH-286
@@ -408,3 +412,63 @@ export function cardDepth(message: { readonly erased?: boolean | undefined; read
     ...(message.skippedAttachments && message.skippedAttachments.length > 0 ? { skipped: message.skippedAttachments.map((file) => ({ name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes, reason: file.reason })) } : {}),
   }
 }
+
+// ---- F-SA-244 (sales page plan P5, P8', P21, R2, R7; 14-change-flow §3.1 "the ask message's card Answer…", §4.1 "its card draws a
+// live chip from the follow-ups read"; review WP-1, WP-2) -----------------------------------------------------------------------
+/**
+ * The conversation side of a change, office only and filled by the record page (the order page knows its requests, its Still to do
+ * and who was told; every other host fills nothing and the card draws as before):
+ *
+ *   the customer's ask   their message (the request's askMessageId): the live chip "Request · waiting on us" → "Request · accepted ·
+ *                        2 still to do" → "Request · accepted", and Answer… while it waits for this reader (the ONE review window,
+ *                        through the record frame's answer door)
+ *   a change's line      the system's office note: "Still to do: 2" (a door to the page's Still to do) → "Done"; "Told the floor at
+ *                        10:42" · "Told the workshop at 10:44"; Who was told… — who was TOLD, never who read anything (R2)
+ * A work order's number is never on the card: the line's own words name a mixed one "a work order" (B-SA-052, R7).
+ */
+export const ASK_STATES = ['OPEN', 'COUNTERED', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const
+export type AskState = (typeof ASK_STATES)[number]
+
+export interface CardAsk {
+  readonly requestId: string
+  /** The request's status now (OPEN waits on us; COUNTERED waits for the customer's answer to our counter-offer). */
+  readonly state: AskState
+  /** Accepted: the Still to do rows it left for this reader's page (0: none left). */
+  readonly stillToDo: number
+  /** The reader may answer it now (it waits on us and the reader's team answers its kind): the card offers Answer…. */
+  readonly answer: boolean
+}
+
+export interface CardChange {
+  /** The change's Still to do as the page counts it now (null: not counted for this reader — the card claims nothing). */
+  readonly stillToDo: number | null
+  /** When the floor notes were written (null: no floor note). */
+  readonly floorAt: string | null
+  /** When the first workshop was told (null: none). */
+  readonly workshopAt: string | null
+}
+
+/** The ask's chip: its words (a key of record-thread-card) and its tone. */
+export function askChip(ask: Pick<CardAsk, 'state' | 'stillToDo'>): { readonly key: string; readonly params?: { readonly count: number }; readonly tone: Tone } {
+  if (ask.state === 'OPEN') return { key: 'ask.chip.OPEN', tone: 'warning' }
+  if (ask.state === 'COUNTERED') return { key: 'ask.chip.COUNTERED', tone: 'info' }
+  if (ask.state === 'ACCEPTED') return ask.stillToDo > 0 ? { key: 'ask.chip.acceptedStill', params: { count: ask.stillToDo }, tone: 'info' } : { key: 'ask.chip.ACCEPTED', tone: 'success' }
+  return { key: `ask.chip.${ask.state}`, tone: 'neutral' }
+}
+
+/** The line's chip: "Still to do: N" while rows are left, "Done" once none is; null: not counted for this reader (no claim). */
+export function changeChip(change: Pick<CardChange, 'stillToDo'>): { readonly key: string; readonly params?: { readonly count: number }; readonly tone: Tone; readonly door: boolean } | null {
+  if (change.stillToDo === null) return null
+  return change.stillToDo > 0 ? { key: 'change.still', params: { count: change.stillToDo }, tone: 'warning', door: true } : { key: 'change.done', tone: 'success', door: false }
+}
+
+/** The card's facts by message (the record page's), set on the feed's messages; a message it does not name keeps none. */
+export function withChangeSide(message: CardMessage, facts: { readonly asks: ReadonlyMap<string, CardAsk>; readonly changes: ReadonlyMap<string, CardChange> } | null | undefined): CardMessage {
+  if (!facts) return message
+  // Their ask is the customer's own message; a change's line is the system's office note — any other message keeps nothing.
+  const ask = message.kind === 'theirs' ? facts.asks.get(message.id) : undefined
+  const change = message.kind === 'note' && message.authorKind === 'SYSTEM' ? facts.changes.get(message.id) : undefined
+  if (!ask && !change) return message
+  return { ...message, ...(ask ? { ask } : {}), ...(change ? { change } : {}) }
+}
+// ---- end F-SA-244

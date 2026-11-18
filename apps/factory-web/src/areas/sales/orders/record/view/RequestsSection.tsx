@@ -255,7 +255,7 @@ function Still({ order, model }: { order: Order; model: OrderRecordModel }) {
   if (!still) return null
   const extra = (read?.lines ?? []).flatMap((line) => line.sizes.flatMap((size) => (size.madeExtraWords ? [{ key: `${line.lineId}:${size.size ?? ''}`, seq: line.seq, words: size.madeExtraWords }] : [])))
   return (
-    <section id="still-to-do" className="fw-so-anchor" aria-labelledby="fw-so-still-title">
+    <section id="still-to-do" className="fw-so-anchor" aria-labelledby="fw-so-still-title" tabIndex={-1 /* F-SA-244: a change line's "Still to do: N" lands here with the focus */}>
       <Card padded>
         <div className="fw-so-card-head">
           <h2 className="fw-so-h2" id="fw-so-still-title">

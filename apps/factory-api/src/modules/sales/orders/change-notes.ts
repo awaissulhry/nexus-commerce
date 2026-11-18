@@ -718,6 +718,8 @@ async function writeNotes(tools: CommandTools, tenantId: string, spoken: Spoken,
       at: at.toISOString(),
       causedById: composed.causedById,
       stillToDo,
+      // F-SA-244: the customer's request the change carries out (null: the office's own) — the line's card counts its Still to do rows.
+      requestId: composed.requestId ?? null,
       people: people.length,
       alreadyTold,
       floor: floorWritten,

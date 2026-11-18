@@ -177,7 +177,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       // B-TH-229: the reading on arrival draws "New since your last visit" for the whole visit (marking read does not move it).
       setArrival((seen) => seen ?? { firstNewId: page.reading?.firstNewMessageId ?? null, newCount: page.reading?.newCount ?? 0 })
       setServer((current) => {
-        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head, waitingMail: page.waitingMail /* B-TH-255 */, done: page.done /* B-TH-288 */ })
+        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head, waitingMail: page.waitingMail /* B-TH-255 */, done: page.done /* B-TH-288 */, place: page.place ?? null /* F-SA-244 */ })
         setWork((now) => afterRead(now, next))
         return next
       })

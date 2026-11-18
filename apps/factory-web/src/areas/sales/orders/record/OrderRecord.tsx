@@ -99,6 +99,10 @@ import { CustomerOverrideProvider } from '../../../_shared/customer-override/Cus
 // F-SA-242: the Amend review's tick writes the customer's words through the thread's own portal send.
 import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { portalRefusal } from '../../../_shared/record-thread/state'
+// F-SA-244: the conversation side of a change — the told lines of the order's changes, the cards' facts, Who was told.
+import { askFactsOf, changeFactsOf, readToldChanges, type ToldChanges } from './told'
+import { stillRowsOf } from './changes/model'
+import { WhoWasToldDialog } from './view/WhoWasToldDialog'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -272,11 +276,14 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const tabRef = useRef(tab)
   tabRef.current = tab
   const runPartsRef = useRef<(parts: readonly OrderPagePart[]) => void>(() => undefined)
+  const toldSoonRef = useRef<() => void>(() => undefined) // F-SA-244
   const reconnectRef = useRef<() => void>(() => void load())
   const liveState = useLive(
     (change) => {
       const value = current.current
       if (!value) return
+      // F-SA-244: a new message on the order's conversation may be a change's line: its told lines are read again (a moment later).
+      if (change.type === 'thread.message_posted' && change.fields.recordType === 'SalesOrder' && change.fields.recordId === value.id) toldSoonRef.current()
       const parts = partsOf(change, value.live, watchedIds(value, value.live))
       if (parts.length === 0) return
       queueRef.current = enqueue(queueRef.current, change.type, parts, Date.now(), tabRef.current)
@@ -531,7 +538,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // F-SA-243: read on every tab while the production read says a request waits or a change has steps left — the band notice and
   // Overview name them (none waiting: no read at all, as before).
   const changesPart = production.state?.status === 'ready' ? production.state.read.changes : undefined
-  const wantsRequests = tab === 'changes' || (changesPart?.openRequests.length ?? 0) > 0 || (changesPart?.stillToDo?.rows.length ?? 0) > 0
+  // F-SA-244: and while the order's own conversation is on the page (the dock, by default): its asks' cards draw their live chips.
+  const mayThread = session.permissions.includes('threads.read')
+  const wantsRequests = tab === 'changes' || (changesPart?.openRequests.length ?? 0) > 0 || (changesPart?.stillToDo?.rows.length ?? 0) > 0 || mayThread
   const wantsRef = useRef(wantsRequests)
   wantsRef.current = wantsRequests
   useEffect(() => {
@@ -549,6 +558,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     onChanged: () => {
       readRequests()
       production.again(['changes', 'headline'])
+      toldSoonRef.current() // F-SA-244: the change's line comes a moment after the answer
     },
   })
   // ---- end F-SA-243
@@ -593,6 +603,45 @@ function RecordContainer({ orderId }: { orderId: string }) {
     return () => cancelAnimationFrame(handle)
   }, [focusRow])
   // ---- end F-SA-266
+  // ---- F-SA-244 (14-change-flow §4.1, §5.2): the told lines of every change of the order (ONE read for the thread's cards, History,
+  // Production and Overview), again after an answer and a moment after a new message on the order's conversation; Who was told of
+  // one change in its window. Only with the conversation's read right (else nothing is claimed).
+  const [told, setTold] = useState<Part<ToldChanges> | null>(null)
+  const [toldOpen, setToldOpen] = useState<string | null>(null)
+  const readTold = useCallback(() => {
+    if (!readyId || !mayThread) return
+    setTold((known) => known ?? PART_LOADING)
+    readToldChanges(api, readyId)
+      .then((answer) => setTold(part(answer)))
+      .catch((error: unknown) => setTold((known) => (known?.value ? known : { value: null, problem: readProblem(error) })))
+  }, [api, readyId, mayThread])
+  useEffect(() => readTold(), [readTold, readyVersion])
+  const toldTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  toldSoonRef.current = () => {
+    if (toldTimer.current) clearTimeout(toldTimer.current)
+    toldTimer.current = setTimeout(() => readTold(), 1_500)
+  }
+  useEffect(() => () => void (toldTimer.current && clearTimeout(toldTimer.current)), [])
+  // The cards' facts: the customer's asks by their message (the requests read), each change's line (its Still to do as read now).
+  const stillRead = production.state?.status === 'ready' ? production.state.read : null
+  const stillRows = useMemo(() => (stillRead?.changes?.stillToDo ? stillRowsOf(stillRead) : null), [stillRead])
+  const changeSide = useMemo(
+    () => ({
+      asks: askFactsOf(requests?.value ?? [], stillRows ?? []),
+      changes: changeFactsOf(told?.value?.changes ?? [], stillRows),
+      onWhoWasTold: (messageId: string) => setToldOpen(messageId),
+      onStillToDo: () => {
+        const next = new URLSearchParams(window.location.search)
+        next.set('tab', 'changes')
+        // Narrower than the dock: the full-width conversation gives way to the page (Back still holds the way to it).
+        if (next.get('thread') === 'open') next.delete('thread')
+        router.replace(`${pathname}?${next.toString()}#still-to-do`, { scroll: false })
+        setFocusRow({ anchor: 'still-to-do', at: Date.now() })
+      },
+    }),
+    [requests, stillRows, told, router, pathname],
+  )
+  // ---- end F-SA-244
 
   // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
   runPartsRef.current = (parts) => {
@@ -649,7 +698,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     readiness, // F-SA-234
     health: healthOwner ? health.model : null, // F-SA-235
     requests, // F-SA-236
-    requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id) }, // F-SA-243
+    requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id), open: (id: string) => door.open(id) /* F-SA-244 */ }, // F-SA-243
+    told, // F-SA-244
     files: tab === 'files' ? orderFiles.model : null, // F-SA-237
     askedOfCustomer,
     overviewLine,
@@ -714,6 +764,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               prefix={prefix}
               printHref={printHref(pathname, params?.toString() ?? '')}
               showOnPage={showOnPage /* F-SA-266 */}
+              changeSide={changeSide /* F-SA-244 */}
             />
           ) : (
             <OfficeRecordThread
@@ -910,8 +961,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
           ),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
+        onWhoWasTold: (messageId) => setToldOpen(messageId), // F-SA-244: History's Told line
       }}
     />
+    {/* F-SA-244: Who was told of one change (its line's card, History's Told line) — never who read it. */}
+    {toldOpen && readyId && <WhoWasToldDialog orderId={readyId} messageId={toldOpen} onClose={() => setToldOpen(null)} />}
     </CustomerOverrideProvider>
   )
 }

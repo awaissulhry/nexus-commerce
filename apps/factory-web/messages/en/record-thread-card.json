@@ -147,5 +147,27 @@
   },
   "pin": {
     "pinned": "Pinned for everyone on this record"
+  },
+  "ask": {
+    "chip": {
+      "OPEN": "Request · waiting on us",
+      "COUNTERED": "Request · counter-offer sent",
+      "ACCEPTED": "Request · accepted",
+      "acceptedStill": "Request · accepted · {count} still to do",
+      "REFUSED": "Request · refused",
+      "WITHDRAWN": "Request · withdrawn"
+    },
+    "answer": "Answer…"
+  },
+  "change": {
+    "still": "Still to do: {count}",
+    "done": "Done",
+    "floor": "Told the floor at {time}",
+    "workshop": "Told the workshop at {time}",
+    "whoWasTold": "Who was told"
+  },
+  "place": {
+    "line": "The talk is in the order's conversation",
+    "open": "Open"
   }
 }

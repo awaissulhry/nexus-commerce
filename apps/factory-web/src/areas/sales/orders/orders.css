@@ -754,3 +754,10 @@ a.fw-so-countbtn:focus-visible {
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
 }
+
+/* ---- F-SA-244: a change's Told line under its History row (layout only). */
+.fw-so-told {
+  display: block;
+  margin-top: 2px;
+}
+/* ---- end F-SA-244 */
