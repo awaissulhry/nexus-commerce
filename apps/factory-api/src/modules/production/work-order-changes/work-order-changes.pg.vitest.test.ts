@@ -240,7 +240,7 @@ describe('a work-order change: proposed, applied, left as is, stale (B-SA-041)',
       [amendmentId, A.tenant, A.companyA, order.orderId, A.brand],
     )
     const waiting = (await propose(lowering(order, workOrder, '52', 1, { amendmentId }))).change
-    const planner = callerFor(database, SESSIONS.planner!)
+    const planner = callerFor(database, { ...(SESSIONS.planner as Extract<SessionContext, { audience: 'office' }>), requestId: newId() })
     const { result } = await command(planner, { name: 'orders.putBackChange', input: { amendmentId } }, (tools) => staleChangesInCommand(tools, { amendmentId }))
     expect(result).toBe(1)
     expect((await ok('planner', 'GET', `/production/work-order-changes/${waiting.id}`)).change).toMatchObject({ status: 'STALE', decidedBy: { id: A.actor } })
@@ -269,6 +269,31 @@ describe('a work-order change: proposed, applied, left as is, stale (B-SA-041)',
     const [proposed] = await admin(`SELECT id::text AS id, type FROM "OutboxEvent" WHERE subject = $1 AND type = 'work_order_change.proposed'`, [change.id])
     await fanOut(system, { eventId: proposed!.id, type: proposed!.type, payload: { changeId: change.id, salesOrderId: order.orderId, workOrderId: workOrder.id, partyId: A.brand, kind: 'LOWER_TO_ORDER', requestId: null, amendmentId: null, hasExtra: false } } as never)
     expect(await admin(`SELECT "userId", category::text AS category, "messageKey" FROM "Notification" WHERE "eventId" = $1`, [proposed!.id])).toEqual([{ userId: A.actor, category: 'ASSIGNMENT', messageKey: 'notifications.production.workOrderChangeProposed' }])
+  })
+
+  // S7 end check: the rule read the resolver's `supervisorId`, which it never had (its person is `userId`), so a supervisor who
+  // did not follow the work order was never told. Here nobody follows it: the customer's default supervisor alone is told.
+  it("tells the work order's production supervisor (the customer's default), who does not follow it", async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderOf(order)
+    const before = await admin<{ productionSupervisorId: string | null }>(`SELECT "productionSupervisorId" FROM "PortalSettings" WHERE id = $1`, [A.brand])
+    // As PUT /production/brands/:partyId/supervisor writes it: one PortalSettings row per party, its id the party's (B-PR-42a).
+    await admin(
+      `INSERT INTO "PortalSettings" (id, "tenantId", "partyId", "portalOn", "productionSupervisorId", "productionSupervisorSetAt", "createdAt", "updatedAt")
+       VALUES ($1, $2, $1, false, $3, now(), now(), now())
+       ON CONFLICT (id) DO UPDATE SET "productionSupervisorId" = EXCLUDED."productionSupervisorId", "productionSupervisorSetAt" = EXCLUDED."productionSupervisorSetAt", version = "PortalSettings".version + 1, "updatedAt" = now()`,
+      [A.brand, A.tenant, A.actor],
+    )
+    try {
+      const { change } = await propose(lowering(order, workOrder, '52', 2))
+      const system = callerFor(database, systemContext(A.tenant, newId()))
+      const [proposed] = await admin(`SELECT id::text AS id, type FROM "OutboxEvent" WHERE subject = $1 AND type = 'work_order_change.proposed'`, [change.id])
+      await fanOut(system, { eventId: proposed!.id, type: proposed!.type, payload: { changeId: change.id, salesOrderId: order.orderId, workOrderId: workOrder.id, partyId: A.brand, kind: 'LOWER_TO_ORDER', requestId: null, amendmentId: null, hasExtra: false } } as never)
+      expect(await admin(`SELECT "userId", category::text AS category, "messageKey" FROM "Notification" WHERE "eventId" = $1`, [proposed!.id])).toEqual([{ userId: A.actor, category: 'ASSIGNMENT', messageKey: 'notifications.production.workOrderChangeProposed' }])
+    } finally {
+      if (before.length === 0) await admin(`DELETE FROM "PortalSettings" WHERE id = $1`, [A.brand])
+      else await admin(`UPDATE "PortalSettings" SET "productionSupervisorId" = $2::uuid, "productionSupervisorSetAt" = CASE WHEN $2::uuid IS NULL THEN NULL ELSE now() END WHERE id = $1`, [A.brand, before[0]!.productionSupervisorId])
+    }
   })
 })
 
