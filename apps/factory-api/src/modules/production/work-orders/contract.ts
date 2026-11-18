@@ -22,6 +22,7 @@ import { SUPERVISOR_MARKS, SUPERVISOR_SOURCES } from '@nexus/factory-domain/prod
 import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
 // F-PR-18: the Customer urgency column's state and filter.
 import { CUSTOMER_URGENCY_STATES } from '@nexus/factory-domain/production-brand/urgency-state'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-074
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -639,3 +640,9 @@ export const lowerContract = defineContract({
   },
 })
 // ── end B-SA-040 ──
+
+// ── B-SA-074 (sales page plan N7, N8, R9; review OW-4): the small pictures of a page of work orders in ONE read (the one helper of
+// modules/product/images/small-pictures.ts and its one answer shape): each work order's style picture, absent for an id the reader
+// does not reach (walled as the list).
+export const workOrderPicturesReadContract = defineContract({ body: input({ workOrderIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ── end B-SA-074 ──

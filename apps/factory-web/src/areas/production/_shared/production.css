@@ -147,15 +147,8 @@ p.fw-pr-hint[role='status'] {
   background: var(--nds-warning);
 }
 
-/* B-TH-265: the work order's dock picks ONE thread (its own notes, or one of its orders'), the pick above the thread (RecordFrame
-   docks the thread itself: the old narrow dock and its grid went). */
-.fw-pr-threadpick {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  min-width: 0;
-}
+/* B-TH-265's thread pick (.fw-pr-threadpick) moved with WorkOrderThreads into the shared ThreadPick (F-SA-260:
+   areas/_shared/record-thread/thread-pick.css, the same rules). */
 
 .fw-pr-main,
 .fw-pr-stack,

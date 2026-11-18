@@ -8,8 +8,11 @@
  * reader may not see is simply absent from the answer (the part draws its neutral placeholder — never "no right"). Office only.
  */
 
-/** The record kinds a picture is read for (the batch route of each: orders, quotes, inquiries). */
-export type PictureSource = 'order' | 'quote' | 'request'
+/**
+ * The record kinds a picture is read for (the batch route of each: orders, quotes, inquiries; F-SA-283: work orders — Production ›
+ * Work orders and the planning board, by the production lane's yes, R9; never a floor or TV screen).
+ */
+export type PictureSource = 'order' | 'quote' | 'request' | 'workorder'
 
 /** Where the part is drawn: a list cell, a board card, a phone card, an order line (small or large). */
 export type PictureSize = 'cell' | 'board' | 'phone' | 'line' | 'lineLarge'

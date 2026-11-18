@@ -359,3 +359,52 @@ describe('F-PR-04 — the Overview’s flags: blocked by a gate, made before the
   })
 })
 // ---- end F-PR-04
+
+// ── F-SA-283 (sales page plan N7, N8, R9; review OW-4): the ONE picture part on Production › Work orders ─────────────────────────────
+describe('F-SA-283 — Work orders: the style picture as a 76 px column and on the phone card (the one picture part)', () => {
+  const risk = designScreen.cases.find((item) => item.id === 'risk')!.model
+  const asCards = (locale: (typeof LOCALES)[number]) => renderView(view, { ...risk, list: { ...risk.list, mode: 'cards' as const } }, locale)
+
+  it('each card draws its work order’s picture part (phone size) — the design reads nothing: the neutral placeholder; the number still titles it', () => {
+    for (const locale of LOCALES) {
+      const html = asCards(locale)
+      expect(html, locale).toContain('fw-rp fw-rp-phone')
+      for (const entry of RISK_OPEN) {
+        expect(html, `${locale} ${entry.number}`).toContain(locale === 'en' ? `aria-label="${entry.number} has no picture yet"` : `aria-label="${entry.number} non ha ancora un&#x27;immagine"`)
+        expect(textOf(html), `${locale} ${entry.number}`).toContain(entry.number)
+      }
+      expect(html, locale).not.toContain('Reading the picture of')
+    }
+  })
+
+  it('the column: first, 76 px, the part at its cell size with its own header word; the card’s aside; the viewer opens the work order and the style', () => {
+    const source = readFileSync(new URL('../view/WorkOrdersListView.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("{ colId: 'picture', headerName: tp('column'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell }")
+    expect(source.indexOf("colId: 'picture'")).toBeLessThan(source.indexOf("colId: 'number'"))
+    expect(source).toContain('<RecordPicture source="workorder" recordId={row.id} number={row.number} size={size} read={latest.current.actions?.readPictures} onOpen={() => setViewer(row.id)} />')
+    expect(source).toContain("picture: { role: 'aside' as const, draw: (row: WorkOrderRow) => pictureOf(row, 'phone') }")
+    expect(source).toContain('<PictureViewer source="workorder"')
+    // The board mode's cards keep their number as their name (the picture column has no text).
+    expect(source).toContain('label: row.number, // F-SA-283')
+    // The page gives the one batch read (POST /production/work-orders/pictures, walled as this list: B-SA-074).
+    const page = readFileSync(new URL('../WorkOrdersPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('const readPictures = useMemo(() => pictureReader(api), [api]) // F-SA-283')
+    const contract = readFileSync(new URL('../../../../../../factory-api/src/modules/production/work-orders/contract.ts', import.meta.url), 'utf8')
+    expect(contract).toContain('workOrderPicturesReadContract = defineContract({ body: input({ workOrderIds: pictureIds() })')
+  })
+
+  it('the header word is the picture part’s own, in both languages (one word for every list: no new synonym)', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-picture'])['record-picture']!)
+      expect(t('column'), locale).toBe(locale === 'en' ? 'Picture' : 'Immagine')
+    }
+  })
+
+  it('PW-02: a person limited to one customer — each card’s picture part names its own work order only', () => {
+    const limited = designScreen.cases.find((item) => item.id === 'risk-limited')!.model
+    const html = renderView(view, { ...limited, list: { ...limited.list, mode: 'cards' as const } }, 'en')
+    const shown: readonly WorkOrderRow[] = limited.list.rows.items ?? []
+    for (const entry of RISK_OPEN.filter((candidate) => !shown.some((own) => own.id === candidate.id))) expect(html, entry.number).not.toContain(`aria-label="${entry.number} has no picture yet"`)
+  })
+})
+// ── end F-SA-283
