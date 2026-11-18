@@ -16,13 +16,16 @@ import type { PickBody } from '../quotes/record/configurator/api'
 // B-TH-244: the customer's own mark on an order (apps/factory-api modules/sales/orders/customer-urgency).
 export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
 export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
+// F-SA-213: the office's priority levels (as depth/api PRIORITY_LEVELS, which reads this file: kept here so no import goes round).
+export const ORDER_PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
 export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 /** The board's lanes (closed and cancelled are counted beside them). */
-export const BOARD_LANES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly OrderStatus[]
+// B-SA-012: the first lane is Waiting for approval (the domain's BOARD_LANES, in its order).
+export const BOARD_LANES = ['PENDING_APPROVAL', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly OrderStatus[]
 export type BoardLane = (typeof BOARD_LANES)[number]
 export const DEPOSIT_STATES = ['NOT_NEEDED', 'MISSING', 'OPEN', 'PAID', 'WAIVED'] as const
 export type DepositState = (typeof DEPOSIT_STATES)[number]
@@ -62,7 +65,8 @@ export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number]
 export const LINE_CHANGES = ['ADDED', 'REMOVED', 'CHANGED'] as const
 export type LineChange = (typeof LINE_CHANGES)[number]
 // B-W2b-323: + waitingForCustomer (a change the customer must accept: the order's reapprovalNeededAt).
-export const TILE_KEYS = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
+// B-SA-012: + waitingForApproval (the board answer names it; its tile is drawn with the lane's words, F-SA-214).
+export const TILE_KEYS = ['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 // B-TH-225: the Invoiced column (factory-domain sales/orders/invoiced.ts INVOICED_STATES).
 export const INVOICED_STATES = ['NONE', 'PART', 'ALL'] as const
@@ -141,6 +145,8 @@ export const orderRowSchema = z.object({
   /** The customer's own mark (read-only); null: none known. */
   customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable().optional(),
   // ── end B-TH-244 ──
+  /** F-SA-213: the office's own priority (its level; the API's words are not drawn: the screen says its own). */
+  priority: z.object({ level: z.enum(ORDER_PRIORITY_LEVELS), number: z.number(), urgentReason: z.string().nullable() }).optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -322,16 +328,7 @@ export function listOrderCustomers(api: ApiClient, query: { q?: string; companyI
 }
 // ── end B-TH-226 ──
 
-// ── B-TH-225: the Picture cell's small preview (GET /sales/orders/:orderId/picture, B-TH-017 / B-TH-063) ──
-const pictureSchema = z.object({
-  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
-})
-export type OrderPicture = z.infer<typeof pictureSchema>['picture']
-
-export async function getOrderPicture(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<OrderPicture> {
-  return (await api.get(`/sales/orders/${encodeURIComponent(orderId)}/picture`, { schema: pictureSchema, signal })).picture
-}
-// ── end B-TH-225 ──
+// F-SA-212: the Picture cell's small previews are the one picture part's batch read (lib/record-picture/api.ts).
 
 // ---- the record ----------------------------------------------------------------------------------------------------------
 

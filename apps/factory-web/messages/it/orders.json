@@ -190,6 +190,17 @@
     "seeClosed": "Vedi gli ordini chiusi",
     "keyWalk": "Scheda precedente o successiva",
     "cardLabel": "{number}, {customer}",
+    "priority": "Priorità · {level}",
+    "customerUrgent": "Urgente (cliente)",
+    "held": {
+      "deposit": "Aspetta l'acconto"
+    },
+    "cardPieces_one": "{count} pezzo",
+    "cardPieces_other": "{count} pezzi",
+    "cardPromised": "promesso il {date}",
+    "cardNoPromise": "nessuna data promessa",
+    "cardNew_one": "{count} nuovo messaggio",
+    "cardNew_other": "{count} nuovi messaggi",
     "promise": "Promesso il {date}",
     "promiseLate_one": "{date} · {count} giorno di ritardo",
     "promiseLate_other": "{date} · {count} giorni di ritardo",

@@ -5,9 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLiveChanges } from '../../../../record-panels/live'
 import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../api'
-// TH-6 part B (B-TH-257 follow-up; grid-F01): the Picture cell's small preview.
-import { readQuotePicture } from '../api'
-import type { PictureLoader } from '../../inquiries/view/cells'
+// F-SA-212: the Picture cell is the ONE picture part (its batch read; #1649's browserAddress kept there).
+import { pictureReader } from '../../../../lib/record-picture/api'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { abilitiesOf, filtersOfTile, grainsOf, quotesCsv, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -22,7 +21,6 @@ import { QuoteSpeed } from '../speed/QuoteSpeed'
 // ---- B-TH-257 (X-SAL-QUO-LIST.grid-F03): the New messages column, B-TH-230's one read per page ----
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
-import { browserAddress } from '../../../../lib/api/browser-address'
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -300,14 +298,8 @@ function QuotesContainer() {
     return failed === 0
   }
 
-  // TH-6 part B (grid-F01): a row's small preview (never the original); none yet or out of reach: the placeholder.
-  const loadPicture = useCallback<PictureLoader>(
-    async (quoteId) => {
-      const picture = await readQuotePicture(api, quoteId)
-      return picture.small ? { url: browserAddress(picture.small.url) /* end check: the local store's path through /api */, expiresAt: picture.small.expiresAt } : null
-    },
-    [api],
-  )
+  // F-SA-212: a page's pictures in ONE call (never the original); none yet or out of reach: the placeholder.
+  const readPictures = useMemo(() => pictureReader(api), [api])
 
   const exportCsv = (ids: readonly string[]) => {
     const chosen = (rows.items ?? []).filter((row) => ids.includes(row.id))
@@ -355,7 +347,7 @@ function QuotesContainer() {
         onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`),
         onExport: exportCsv,
         onCancelMany: cancelMany,
-        loadPicture, // TH-6 part B
+        readPictures, // F-SA-212
         ...duplicate.actions,
         onDuplicateStart: (row) => duplicate.open({ id: row.id, number: row.number, partyId: row.partyId, partyName: row.partyName, revision: row.revision, versions: [] }),
         ...newFrom.actions,

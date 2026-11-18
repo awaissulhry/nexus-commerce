@@ -26,7 +26,7 @@
     "site": "Site",
     "note": "Order note",
     "noteHint": "The office’s own note: the customer never sees it",
-    "atRisk": "At risk",
+    "atRisk": "Close to promise",
     "atRiskHint": "The promise is near and the order is still being made (the alert rule’s days)",
     "customerUrgency": "Customer’s mark",
     "customerUrgencyHint": "The customer’s own mark, read-only (Priority stays the office’s)"
@@ -72,19 +72,6 @@
     "filter": "Show only {name} (filters the sheet)",
     "unknown": "a company"
   },
-  "picture": {
-    "open": "Show the picture of {number} large · {style}",
-    "noneOf": "{number} has no picture yet",
-    "alt": "{style} main picture",
-    "more": "+{count}",
-    "viewerOf": "The picture of {number}",
-    "close": "Close",
-    "openStyle": "Open style",
-    "none": "No picture yet",
-    "small": "A small preview. The full picture is on the style.",
-    "moreStyles_one": "The order has {count} more style: open its lines",
-    "moreStyles_other": "The order has {count} more styles: open its lines"
-  },
   "peek": {
     "customer": "About the customer",
     "order": "About the order",
@@ -115,7 +102,7 @@
     "reaccept": "Waiting for the customer",
     "uninvoiced": "Shipped, not invoiced",
     "invoiced": "Invoiced: {state}",
-    "atRisk": "At risk",
+    "atRisk": "Close to promise",
     "currency": "Currency: {currency}",
     "urgency": "Customer’s mark: {urgency}"
   },
@@ -199,9 +186,9 @@
     "filter": "Show only the orders the customer marks {urgency}"
   },
   "atRisk": {
-    "filter": "Show only the orders at risk",
-    "days_one": "At risk · {count} day left",
-    "days_other": "At risk · {count} days left"
+    "filter": "Show only the orders close to their promise",
+    "days_one": "Close to promise · {count} day left",
+    "days_other": "Close to promise · {count} days left"
   },
   "progress": {
     "none": "Not in work yet",
@@ -214,7 +201,7 @@
     "shipped": "{n} shipped",
     "open": "{n} still open",
     "late": "Late {n}",
-    "atRisk": "At risk {n}",
+    "atRisk": "Close to promise {n}",
     "invoiced": {
       "NONE": "Not invoiced {n}",
       "PART": "Invoiced in part {n}",

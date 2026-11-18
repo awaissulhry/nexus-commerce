@@ -1,6 +1,7 @@
-import type { Prisma } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { isUuid } from '@nexus/factory-domain/core/ids' // B-SA-033
 import { can, NO_ROWS, scopeWhere, type Actor, type ScopeColumns, type WhereClause } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
@@ -19,7 +20,7 @@ import type { SupervisorMark } from '@nexus/factory-domain/production-brand/supe
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { excerptOf } from '@nexus/factory-domain/threads/rules'
-import type { CommandCaller } from '../../../core/command'
+import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayOnThread } from '../../../platform/threads/records'
 import { officeContextOf } from '../work-orders/access'
@@ -52,6 +53,8 @@ const LIVE = { events: ['production_issue.raised', 'production_issue.answered', 
 
 export interface IssueListQuery {
   readonly partyId?: string | undefined
+  /** B-SA-033: one sales order's issues (on it, or on its live work orders). */
+  readonly salesOrderId?: string | undefined
   readonly status: IssueStatus | 'ALL'
   readonly mine?: boolean | undefined
   readonly limit: number
@@ -95,6 +98,42 @@ const ISSUE_SELECT = {
 
 const isMove = (value: string): value is IssueTaskMove => (ISSUE_TASK_MOVES as readonly string[]).includes(value)
 
+// ── B-SA-033 (Sales page plan P2: the order page's Quality section; 13-backend B3) ──────────────────────────────────────────────
+/** The order a list is narrowed to and its live work orders (the cells of its own lines; not a repair, not cancelled). */
+export interface OrderFilter {
+  readonly id: string
+  readonly workOrderIds: readonly string[]
+}
+
+/**
+ * One sales order as a list's filter (the issues here, the NCRs of quality/ncr): checked with orders.view over its company and
+ * customer FIRST — an order the reader does not reach is "Sales order not found.", the words of an id that names nothing, so a
+ * person limited to another customer learns nothing (no list, no count). Its live work orders: every work order with a cell of
+ * its lines (a legacy mixed one included: the list's own wall decides what of it is shown).
+ */
+export async function orderFilterOf(db: FactoryClient | CommandTx, actor: Actor, salesOrderId: string): Promise<OrderFilter> {
+  const order = isUuid(salesOrderId) ? await db.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true, companyId: true, partyId: true } }) : null
+  if (!order || !can(actor, ORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
+  const cells = await db.workOrderSize.findMany({
+    where: { salesOrderLine: { orderId: order.id }, workOrder: { kind: { not: 'REPAIR' }, status: { not: 'CANCELLED' } } },
+    select: { workOrderId: true },
+    distinct: ['workOrderId'],
+  })
+  return { id: order.id, workOrderIds: [...new Set(cells.map((cell) => cell.workOrderId))].sort() }
+}
+
+/** The issues of the order: on the order itself, or on one of its live work orders (always ANDed with the reader's wall). */
+export function issuesOfOrderWhere(order: OrderFilter): Prisma.ProductionIssueWhereInput {
+  return {
+    OR: [
+      { salesOrderId: order.id },
+      { recordType: 'SalesOrder', recordId: order.id },
+      ...(order.workOrderIds.length > 0 ? [{ recordType: 'WorkOrder', recordId: { in: [...order.workOrderIds] } }] : []),
+    ],
+  }
+}
+// ── end B-SA-033 ──
+
 export async function listIssues(caller: CommandCaller, query: IssueListQuery, now: Date) {
   const context = officeContextOf(caller)
   const actor = actorOf(context)
@@ -103,7 +142,9 @@ export async function listIssues(caller: CommandCaller, query: IssueListQuery, n
   if (query.partyId && !reachesCustomer(actor, query.partyId)) throw new NotFoundError('Customer not found.')
   const me = context.actorId
   return caller.withClient(async (db) => {
-    const filter: Prisma.ProductionIssueWhereInput = { AND: [reach, ...(query.partyId ? [{ partyId: query.partyId }] : [])] }
+    // B-SA-033: the order first (orders.view, else as unknown), then its issues behind the same wall.
+    const order = query.salesOrderId ? await orderFilterOf(db, actor, query.salesOrderId) : null
+    const filter: Prisma.ProductionIssueWhereInput = { AND: [reach, ...(query.partyId ? [{ partyId: query.partyId }] : []), ...(order ? [issuesOfOrderWhere(order)] : [])] }
     // One after another: a scoped client is one transaction (no Promise.all on it).
     const rows = await db.productionIssue.findMany({ where: filter, select: ISSUE_SELECT, orderBy: [{ raisedAt: 'desc' }, { id: 'desc' }], take: READ_CAP + 1 })
     const capped = rows.length > READ_CAP

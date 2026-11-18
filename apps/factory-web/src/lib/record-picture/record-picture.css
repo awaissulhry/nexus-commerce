@@ -1,0 +1,121 @@
+/* F-SA-211 (sales page plan N8, picks P13, P18; 12-lists-board §2.3): the ONE picture part — layout only, design-system tokens.
+   A cell crops (today's look); a board card, a phone card and an order line fit (a garment photo is portrait). */
+
+.fw-rp {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--fw-rp-size);
+  height: var(--fw-rp-size);
+  border-radius: var(--nds-radius-md);
+  border: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+  overflow: visible;
+  vertical-align: middle;
+}
+button.fw-rp {
+  cursor: zoom-in;
+}
+.fw-rp:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+.fw-rp img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--fw-rp-fit);
+  border-radius: inherit;
+}
+
+.fw-rp-cell {
+  --fw-rp-size: 36px;
+  --fw-rp-fit: cover;
+}
+.fw-rp-board {
+  --fw-rp-size: 64px;
+  --fw-rp-fit: contain;
+  align-self: start;
+}
+@media (min-width: 1680px) {
+  .fw-rp-board {
+    --fw-rp-size: 72px;
+  }
+}
+.fw-rp-phone {
+  --fw-rp-size: 48px;
+  --fw-rp-fit: contain;
+}
+.fw-rp-line {
+  --fw-rp-size: 40px;
+  --fw-rp-fit: contain;
+}
+.fw-rp-line-large {
+  --fw-rp-size: 56px;
+  --fw-rp-fit: contain;
+}
+
+.fw-rp-wait {
+  opacity: 0.4;
+}
+.fw-rp-none {
+  color: var(--nds-placeholder);
+}
+.fw-rp-files {
+  color: var(--nds-text-link);
+  cursor: pointer;
+}
+.fw-rp-more {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  padding: 0 4px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
+  color: var(--nds-text-strong);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-rp-viewer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.fw-rp-viewer img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: var(--nds-radius-md);
+}
+.fw-rp-viewer-none {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-muted);
+}
+.fw-rp-note {
+  margin: var(--nds-space-8) 0 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rp-door {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+  text-decoration: none;
+}
+.fw-rp-door:hover,
+.fw-rp-door:focus-visible {
+  text-decoration: underline;
+}

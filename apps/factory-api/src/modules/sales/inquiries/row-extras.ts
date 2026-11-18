@@ -1,12 +1,9 @@
 import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { can } from '@nexus/factory-domain/core/permissions'
-import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { processFiles } from '../../../platform/files/service'
-import { hasSmallPreview, smallPreviewAddress } from '../../../platform/files/thumbs/small'
+import { hasSmallPreview } from '../../../platform/files/thumbs/small'
 import { mainPictureThumbnails } from '../../product/images/main-picture'
-import { officeInquiry, type InquiryData, type LineData, type Reader } from './store'
+import type { InquiryData, LineData, Reader } from './store'
 
 /**
  * B-TH-216 (threads plan TH-1b, Sales › Incoming; features O-SAL-INQ-LIST.list-F01, -F02): what an Incoming row carries beside
@@ -14,7 +11,7 @@ import { officeInquiry, type InquiryData, type LineData, type Reader } from './s
  *
  *   picture     the first line that names a style: that style's main picture (modules/product/images/main-picture.ts), its
  *               file only with files.read over the file's company (as the Orders sheet's, B-TH-017); `small` says its ~320 px
- *               preview exists, which GET /sales/inquiries/:inquiryId/picture serves: the list never loads the original. No
+ *               preview exists, which POST /sales/inquiries/pictures serves (B-SA-011): the list never loads the original. No
  *               style named: null (the cell shows the kind of files with their count). `styleCount`: the distinct styles.
  *   files       the request's own files and its mail's kept attachments (not deleted), as photos and documents — counts only,
  *               no names — for a reader with files.read over the request's company; null without it ("—").
@@ -90,26 +87,4 @@ export async function inquiryRowExtras(db: Reader, context: OfficeContext, rows:
     })
   }
   return out
-}
-
-/**
- * GET /sales/inquiries/:inquiryId/picture (B-TH-216 with B-TH-063; O-SAL-INQ-LIST.list-F02): a presigned GET (60 seconds) of the
- * SMALL preview (~320 px) of the main picture of the style the request's first style line names — the picture its row names —
- * never the original. The request as the list shows it (sales.inquiries.view over its company and customer, else 404), the file
- * with files.read over its company (else 404: the row names no file then). `small` is null while the preview does not exist yet.
- */
-export async function inquiryPicture(caller: CommandCaller, inquiryId: string) {
-  const { context } = await officeInquiry(caller, inquiryId)
-  const found = await caller.withClient(async (db) => {
-    const first = await db.inquiryLine.findFirst({ where: { inquiryId, styleId: { not: null } }, orderBy: { seq: 'asc' }, select: { styleId: true } })
-    const styleId = first?.styleId ?? null
-    const thumbnail = styleId ? (await mainPictureThumbnails(db, actorOf(context), [styleId])).get(styleId) : undefined
-    const file = thumbnail ? await db.storedFile.findUnique({ where: { id: thumbnail.fileId }, select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true } }) : null
-    return styleId && file ? { styleId, file } : null
-  })
-  if (!found) throw new NotFoundError('This request has no picture to show.')
-  const { styleId, file } = found
-  // The store is called outside the read (the gateway writes its own ledger row).
-  const small = hasSmallPreview(file) ? await smallPreviewAddress(processFiles(), caller, { storeAccountId: file.storeAccountId, thumbnailKey: file.thumbnailKey!, contentType: file.contentType, originalName: file.originalName }) : null
-  return { picture: { fileId: file.id, styleId, contentType: file.contentType, small } }
 }

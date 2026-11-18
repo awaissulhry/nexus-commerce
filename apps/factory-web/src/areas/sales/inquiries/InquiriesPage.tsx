@@ -16,7 +16,6 @@ import {
   listAssignees,
   listCustomers,
   mailToSortCount,
-  readPicture,
   // B-TH-233: Incoming's one read, paged; the Customer replies view.
   INCOMING_PAGE,
   listCustomerReplies,
@@ -61,9 +60,8 @@ import { useInquiry } from './use-inquiry'
 // B-TH-228: which receipts stay on the page when the queue moves on.
 import { receiptStays } from './model'
 import { useNewRequest } from './use-new-request'
-import type { PictureLoader } from './view/cells'
 import { InquiriesView, type BulkDialog } from './view/InquiriesView'
-import { browserAddress } from '../../../lib/api/browser-address'
+import { pictureReader } from '../../../lib/record-picture/api' // F-SA-212: the one picture part's batch read
 
 const readDismissed = (): string[] => {
   try {
@@ -201,10 +199,8 @@ export function InquiriesPage() {
         .catch(() => undefined)
     return () => controller.abort()
   }, [api, can.view, mayNumbering, maySort, companies])
-  const loadPicture = useCallback<PictureLoader>(async (inquiryId) => {
-    const picture = await readPicture(api, inquiryId)
-    return picture.small ? { url: browserAddress(picture.small.url) /* end check: the local store's path through /api */, expiresAt: picture.small.expiresAt } : null
-  }, [api])
+  // F-SA-212: a page's pictures in ONE call (lib/record-picture; #1649's browserAddress kept there).
+  const readPictures = useMemo(() => pictureReader(api), [api])
   // ---- end B-TH-216 ----
 
   const live = useLiveBus(
@@ -428,7 +424,7 @@ export function InquiriesPage() {
         },
         onMore: () => void readMore(),
         onGo: (href, newTab) => (newTab ? void window.open(href, '_blank', 'noopener') : router.push(href)),
-        loadPicture,
+        readPictures, // F-SA-212
         // B-TH-217: the pane's own acts.
         pane: {
           onNext: () => {

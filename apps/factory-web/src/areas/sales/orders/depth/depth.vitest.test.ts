@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-SA-215
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -21,7 +22,7 @@ import { designScreen as importScreen } from '../import/fixtures'
 import { designScreen as pdfScreen } from '../confirmation/fixtures'
 import { designScreen as listScreen } from '../list/fixtures'
 import { designScreen as recordScreen } from '../record/fixtures'
-import { isoWeek, mondayOf, siteOf, weekColumns } from '../week/model'
+import { isoWeek, mondayOf, pictureOf /* F-SA-215 */, siteOf, weekColumns, weekOrderIds /* F-SA-215 */ } from '../week/model'
 import { pricedProblemWords } from './view/DepthDialogs'
 import {
   CHANGE_YES_STATES,
@@ -436,3 +437,26 @@ describe('the confirmation’s send carries the outside tick only when ticked (t
     expect(outsideRefusalOf(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal.HIDDEN_OUTSIDE', message: 'x' }]))?.hidden).toBe(true)
   })
 })
+
+// ---- F-SA-215 (sales page plan N8, pick P13; 12-lists-board §3.6): By promise week cards with the photo -----------------------------
+describe('By promise week: each card\'s photo is its order\'s, read by the cards\' orders (F-SA-215)', () => {
+  const columns = weekColumns(PROMISE_LINES, TODAY)
+  it('a card names its order as the picture\'s record (the batch read names the style and the file)', () => {
+    for (const card of columns.flatMap((column) => column.cards)) expect(pictureOf(card)).toEqual({ source: 'order', recordId: card.orderId, number: card.number })
+  })
+  it('the board asks each order once, in reading order, however many weeks hold its pieces', () => {
+    const ids = weekOrderIds(columns)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).toEqual([...new Set(columns.flatMap((column) => column.cards.map((card) => card.orderId)))])
+    expect(ids.length).toBeLessThanOrEqual(200)
+  })
+  it('the card mounts the ONE picture part at its board size, and the columns are as wide as the Sales board\'s lanes', () => {
+    const view = readFileSync(new URL('../week/view/WeekBoard.tsx', import.meta.url), 'utf8')
+    const css = readFileSync(new URL('./depth.css', import.meta.url), 'utf8')
+    expect(view).toContain('size="board"')
+    expect(view).toContain("t('board.priority', { level:")
+    expect(css).toMatch(/\.fw-sod-week \{\s*flex: 1 0 260px;/)
+    expect(css).toMatch(/\.fw-sod-week\.is-empty \{\s*flex: 0 0 160px;/)
+  })
+})
+// ---- end F-SA-215

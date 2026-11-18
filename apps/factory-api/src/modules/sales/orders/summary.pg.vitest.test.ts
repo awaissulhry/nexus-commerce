@@ -83,7 +83,7 @@ async function copyOrder(number: string, partyId: string, promiseDate: string, f
      UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
      UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL,
        "orderDate" = '${TODAY}', "promiseDate" = '${promiseDate}', "originalPromiseDate" = '${promiseDate}', currency = '${fields.currency ?? 'EUR'}',
-       status = 'CONFIRMED', "cancelReason" = NULL, "closedAt" = NULL, "createdAt" = now(), "updatedAt" = now();
+       status = '${fields.status === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'CONFIRMED' /* B-SA-012: made waiting (nothing moves INTO it) */}', "cancelReason" = NULL, "closedAt" = NULL, "createdAt" = now(), "updatedAt" = now();
      INSERT INTO "SalesOrder" SELECT * FROM o;
      INSERT INTO "SalesOrderLine" SELECT * FROM l;
      INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
@@ -279,3 +279,35 @@ describe('the brand wall (T30): a person limited to one customer', { timeout: SL
     expect(JSON.stringify(answer)).not.toContain(C1)
   })
 })
+
+// ---- B-SA-012 (sales page plan N8, picks P12, P13; 12-lists-board §3.4): the "Waiting for approval" tile and lane -----------------
+describe('the board\'s "Waiting for approval" lane and tile (B-SA-012)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the first lane is PENDING_APPROVAL; its tile (second place) counts exactly what the lane lists, under the same terms', async () => {
+    await copyOrder('T058-B-WAITING', R1, addDays(TODAY, 20), { status: 'PENDING_APPROVAL' })
+    const board = await ok('all', '/sales/orders/board')
+    expect(board.lanes).toEqual(['PENDING_APPROVAL', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'])
+    expect((board.tiles as Json[]).map((tile) => tile.key)).toEqual(['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'])
+    const tile = (board.tiles as Json[]).find((entry) => entry.key === 'waitingForApproval')!
+    expect(tile.filter).toEqual({ status: 'PENDING_APPROVAL' })
+    const lane = await opened('all', tile.filter)
+    expect(tile.count).toBe(lane.length)
+    expect(tile.count).toBe((board.byStatus as Json[]).find((entry) => entry.status === 'PENDING_APPROVAL')!.count)
+    expect(lane.map((row) => row.number)).toContain('T058-B-WAITING')
+    // The view's own terms carry into it (the customer's term: B's only).
+    const forB = await ok('all', `/sales/orders/board?partyId=${R1}`)
+    expect((forB.tiles as Json[]).find((entry) => entry.key === 'waitingForApproval')!.count).toBe(lane.filter((row) => row.partyId === R1).length)
+  })
+
+  it('the wall: a reader limited to A counts none of B\'s waiting orders; one limited to B counts B\'s only', async () => {
+    const waitingOf = async (session: string) => ((await ok(session, '/sales/orders/board')).tiles as Json[]).find((entry) => entry.key === 'waitingForApproval')!.count as number
+    const [mineA] = await admin<{ count: string }>(`SELECT count(*) FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2 AND status = 'PENDING_APPROVAL'`, [tenant, C1])
+    const [mineB] = await admin<{ count: string }>(`SELECT count(*) FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2 AND status = 'PENDING_APPROVAL'`, [tenant, R1])
+    expect(await waitingOf('onlyA')).toBe(Number(mineA!.count))
+    expect(await waitingOf('onlyB')).toBe(Number(mineB!.count))
+    expect(Number(mineB!.count)).toBeGreaterThan(0)
+    const lane = (await ok('onlyA', '/sales/orders?status=PENDING_APPROVAL&limit=200')).orders as Json[]
+    expect(lane.every((row) => row.partyId === C1)).toBe(true)
+    expect(JSON.stringify(lane)).not.toContain('T058-B-WAITING')
+  })
+})
+// ---- end B-SA-012

@@ -304,11 +304,12 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports',
       '/home/kpis',
       '/home/alerts',
-      '/sales/customers',
+      // F-SA-210 (sales plan N1): Sales opens on Orders — Orders · Incoming · Quotes · Customers.
+      '/sales/orders',
       // B-W2b-322: Sales › Inquiries; B-TH-216: renamed Sales › Incoming.
       '/sales/incoming',
       '/sales/quotes',
-      '/sales/orders',
+      '/sales/customers',
       // B-W2b-362: Sales › Special orders › Made-to-measure (sales.measurements.view).
       '/sales/made-to-measure',
       '/sales/returns',
@@ -361,7 +362,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   // template change that adds or removes one of these reads changes this table on purpose).
   it('the W2b-5 rows per role: Sales, Planning, Purchasing, Warehouse, Home › Approvals, Admin › Approval rules', () => {
     // B-W2b-362: Special orders › Made-to-measure after Orders (sales.measurements.view: owner, sales, production manager, admin).
-    const allSales = ['customers', /* B-TH-216 */ 'incoming', 'quotes', 'orders', /* B-W2b-362 */ 'made-to-measure', 'returns', 'service', 'price-lists', 'reports', 'settings']
+    // F-SA-210 (sales plan N1): Orders first — Orders · Incoming · Quotes · Customers.
+    const allSales = ['orders', /* B-TH-216 */ 'incoming', 'quotes', 'customers', /* B-W2b-362 */ 'made-to-measure', 'returns', 'service', 'price-lists', 'reports', 'settings']
     const allPlanning = ['mrp', 'leather', 'board', 'capacity', 'allocation', 'exceptions', 'promise', 'milestones', 'demand', 'mps', 'reports', 'settings']
     const allPurchasing = ['suppliers', 'requests', 'orders', 'subcontracting', 'sourcing', 'claims', 'reports', 'settings']
     const allWarehouse = ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'counts', 'shipments', 'reports', 'locations', 'shipping', 'settings']
@@ -372,9 +374,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       sales: { sales: allSales, planning: ['promise'], purchasing: ['suppliers', 'requests'], warehouse: ['shipments'], approvals: true, rules: false },
       planner: { sales: ['orders'], planning: allPlanning, purchasing: without(allPurchasing, 'suppliers'), warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: false },
       buyer: { sales: ['customers'], planning: without(allPlanning, 'promise'), purchasing: allPurchasing, warehouse: without(allWarehouse, 'counts', 'shipments', 'shipping'), approvals: true, rules: false },
-      warehouse: { sales: ['customers', 'orders', 'returns'], planning: [], purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
+      warehouse: { sales: ['orders', 'customers', 'returns'], planning: [], purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
       finance: { sales: without(allSales, 'incoming', /* B-W2b-362 */ 'made-to-measure'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
-      production_manager: { sales: ['customers', /* B-TH-014 (Owner ask P7): the production manager reads Incoming */ 'incoming', 'orders', /* B-W2b-362: the factory review */ 'made-to-measure', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
+      production_manager: { sales: ['orders', /* B-TH-014 (Owner ask P7): the production manager reads Incoming */ 'incoming', 'customers', /* B-W2b-362: the factory review */ 'made-to-measure', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
       quality_inspector: { sales: ['customers', 'returns', 'service'], planning: [], purchasing: ['suppliers', 'requests'], warehouse: without(allWarehouse, 'counts', 'reports', 'shipping'), approvals: true, rules: false },
       floor_supervisor: { sales: [], planning: [], purchasing: ['requests'], warehouse: ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'locations', 'settings'], approvals: true, rules: false },
     }
@@ -769,10 +771,23 @@ describe('renamed pages keep their old addresses (B-TH-216)', () => {
       expect(OFFICE_PAGES.has(from), from).toBe(false)
       expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/(office)/w/[company]', from, 'page.tsx')), from).toBe(false)
     }
-    // Incoming sits where Inquiries was: right after Customers, with the tree's words.
+    // F-SA-210 (sales plan N1): Incoming sits right after Orders (Sales opens on Orders), with the tree's words.
     const sales = OFFICE.find((area) => area.id === 'sales')!.groups[0]!.pages
-    expect(sales.map((page) => page.href)).toEqual(['/sales/customers', '/sales/incoming', '/sales/quotes', '/sales/orders'])
+    expect(sales.map((page) => page.href)).toEqual(['/sales/orders', '/sales/incoming', '/sales/quotes', '/sales/customers'])
     expect(sales[1]).toMatchObject({ title: 'Incoming', titleIt: 'In arrivo' })
   })
 })
 // ── end B-TH-216 ──
+
+// ── F-SA-210 (sales plan N1, pick P1): Sales opens on Orders; Incoming carries the "waiting on us" badge ──
+describe('Sales opens on Orders; Incoming declares its badge (F-SA-210)', () => {
+  it('the Incoming row names the badge key the shell counts (shell/office/use-nav-counts.ts)', () => {
+    const sales = OFFICE_NAV.areas.find((area) => area.id === 'sales')!
+    const main = sales.sections!.find((section) => section.id === 'sales-main')!
+    expect(main.items.map((item) => item.id)).toEqual(['sales-orders', 'sales-incoming', 'sales-quotes', 'sales-customers'])
+    expect(main.items.find((item) => item.id === 'sales-incoming')!.badge).toBe('sales.incoming.waiting')
+    // No other Sales row carries a badge.
+    expect(main.items.filter((item) => item.badge).map((item) => item.id)).toEqual(['sales-incoming'])
+  })
+})
+// ── end F-SA-210 ──

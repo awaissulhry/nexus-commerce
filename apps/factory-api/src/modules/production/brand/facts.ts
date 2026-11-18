@@ -84,6 +84,9 @@ export interface OrderProductionFacts {
   readonly promiseOnly: boolean
   /** The planning risk of each open goods line the health was computed from (empty: read without health). */
   readonly risks: ReadonlyMap<string, LineRisk>
+  // B-SA-031 (Sales page plan P2): what `waiting` was read from, for the office's own order read (each blocker in words). Office
+  // only: the customer's reads keep `waiting` alone.
+  readonly blockers: readonly Blocker[]
 }
 
 export interface FactsOptions {
@@ -306,6 +309,7 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
     held: live.some((row) => row.status === 'ON_HOLD'),
     promiseOnly,
     risks: used,
+    blockers, // B-SA-031
   }
 }
 

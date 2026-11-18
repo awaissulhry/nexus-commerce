@@ -20,6 +20,12 @@ export const listIssuesContract = defineContract({
   querystring: input({
     /** One customer (the Customer card); none: every customer the reader reaches (the Overview). */
     partyId: id().optional(),
+    /**
+     * B-SA-033 (Sales page plan P2, the order page's Quality section): one sales order's issues — on the order itself, or on one
+     * of its live work orders (not a repair, not cancelled). The order is checked with orders.view first: one the reader does not
+     * reach is "Sales order not found." (the words of an unknown id); the counts are then over that order's issues only.
+     */
+    salesOrderId: id().optional(),
     /** OPEN by default (oldest first); ANSWERED, CANCELLED or ALL newest first. */
     status: z.enum(ISSUE_LIST_STATUSES).default('OPEN'),
     /** Only the issues whose open task (the batch's, or an escalation's) is the reader's. */

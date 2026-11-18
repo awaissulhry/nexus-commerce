@@ -728,7 +728,7 @@
     "LOW": "Bassa",
     "NORMAL": "Normale",
     "HIGH": "Alta",
-    "URGENT": "Urgente"
+    "URGENT": "Massima"
   },
   "outcome": {
     "ON_TIME": "In tempo",

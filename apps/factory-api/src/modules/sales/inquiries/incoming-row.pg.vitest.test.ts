@@ -23,7 +23,7 @@ import { startHarness, type Harness } from '../../../platform/auth/sessions/test
  * B-TH-216 (threads plan TH-1b, Sales › Incoming; features O-SAL-INQ-LIST.list-F01, -F02; wall check W19): an Incoming row
  * carries the Picture cell (the main picture of the style its first style line names, the file only with files.read) and the
  * Files cell (the request's files and its mail's kept attachments, counted by kind, only with files.read), and
- * GET /sales/inquiries/:inquiryId/picture serves only the small preview of a request the reader may see — through the app's
+ * POST /sales/inquiries/pictures (B-SA-011/013) names only the picture of a request the reader may see — through the app's
  * real routes on a throwaway PostgreSQL 17 database from the migrations, on the seeds up to the sales intake and the styles'
  * pictures (SEED-INQ-0004: P1's line for its own private-label jacket SEED-JKT-01, whose black colourway photo is the main
  * picture; SEED-INQ-0003: made from a mail whose tech pack is attached; SEED-INQ-0001: a prospect's lines in words). Made-up
@@ -112,21 +112,29 @@ describe('the Picture and Files cells of Sales › Incoming (B-TH-216)', () => {
     expect(byNumber(blind, 'SEED-INQ-0004')!.picture).toMatchObject({ styleCode: 'SEED-JKT-01', fileId: null, contentType: null, small: false })
   })
 
-  it('the picture route serves the small preview of a visible request only (W19), never the original', async () => {
+  // B-SA-013: the one-row picture route went; the page's pictures are POST /sales/inquiries/pictures (B-SA-011; its own wall cases
+  // in modules/sales/orders/pictures.pg).
+  it('the batch read names the picture of a visible request only (W19), never the original', async () => {
+    const pictures = async (session: string, inquiryIds: string[]): Promise<Json[]> => {
+      const response = await app.inject({ method: 'POST', url: '/sales/inquiries/pictures', payload: { inquiryIds }, headers: { 'x-test-session': session, 'x-run': run } })
+      expect(response.statusCode, response.body).toBe(200)
+      return (response.json() as Json).pictures as Json[]
+    }
     const quoted = byNumber(await rowsOf('sales'), 'SEED-INQ-0004')!
-    const answer = await get('sales', `/sales/inquiries/${quoted.id}/picture`)
-    expect(answer.picture).toMatchObject({ fileId: quoted.picture.fileId, styleId: quoted.picture.styleId, small: null })
+    const [answer] = await pictures('sales', [quoted.id])
+    expect(answer).toMatchObject({ id: quoted.id, fileId: quoted.picture.fileId, styleId: quoted.picture.styleId, small: null })
     expect(JSON.stringify(answer)).not.toMatch(/"url":"[^"]*original/i)
 
+    // A request in words names no style: absent. Without files.read: the style, no file.
     const prospect = byNumber(await rowsOf('sales'), 'SEED-INQ-0001')!
-    expect((await call('sales', `/sales/inquiries/${prospect.id}/picture`)).statusCode).toBe(404)
-    expect((await call('noFiles', `/sales/inquiries/${quoted.id}/picture`)).statusCode).toBe(404)
+    expect(await pictures('sales', [prospect.id])).toEqual([])
+    expect((await pictures('noFiles', [quoted.id]))[0]).toMatchObject({ fileId: null, small: null })
 
     // W19: a person limited to P3 never sees P1's request, its row, its counts or its picture.
     const limited = await rowsOf('onlyP3')
     expect(byNumber(limited, 'SEED-INQ-0004')).toBeUndefined()
     expect(limited.every((row) => row.party === null || row.party.id === P3)).toBe(true)
     expect(JSON.stringify(limited)).not.toContain(P1)
-    expect((await call('onlyP3', `/sales/inquiries/${quoted.id}/picture`)).statusCode).toBe(404)
+    expect(await pictures('onlyP3', [quoted.id])).toEqual([])
   })
 })

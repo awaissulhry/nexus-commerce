@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-SA-212
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -553,3 +554,25 @@ describe('th-backend-g step 2: the decline’s message starts from the mail temp
   })
 })
 // ---- end th-backend-g step 2
+
+// ---- F-SA-212 (sales page plan N8, picks P13, P18): Incoming's Picture is the ONE picture part, with its file-kinds fallback -------
+describe('Sales › Incoming mounts the ONE picture part (F-SA-212)', () => {
+  const view = readFileSync(new URL('./view/InquiriesView.tsx', import.meta.url), 'utf8')
+  const cells = readFileSync(new URL('./view/cells.tsx', import.meta.url), 'utf8')
+  it('the cell with the file-kinds fallback, the pane\'s row 1 and the picture large come from lib/record-picture; one width, 76 px', () => {
+    expect(view).toContain('source="request"')
+    expect(view).toContain('fallback={files}')
+    expect(view).toContain("useRecordPicture({ source: 'request'")
+    expect(view).toContain('<PictureViewer')
+    expect(view.match(/colId: 'picture', headerName: t\('col\.picture'\), minWidth: (\d+), maxWidth: (\d+)/g)?.every((line) => line.includes('minWidth: 76, maxWidth: 76'))).toBe(true)
+  })
+  it('the old copy is gone: no own cache, cell or viewer; the Files column keeps its own words', () => {
+    for (const gone of ['SMALL_CACHE', 'useRequestPicture', 'PictureCell', 'PictureViewer']) expect(cells, gone).not.toContain(gone)
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['sales-inquiries'] ?? {}
+      expect(Object.keys(words).filter((key) => key.startsWith('picture.')), locale).toEqual([])
+      expect(words['files.photos_other'], locale).toBeTruthy()
+    }
+  })
+})
+// ---- end F-SA-212

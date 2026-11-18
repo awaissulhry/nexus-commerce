@@ -11,7 +11,10 @@ import { MAX_TEXT, SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory
 import { ORDER_SORTS } from './sort' // B-TH-057
 // B-TH-058 / B-TH-059: the office's priority levels, the customer's own urgency (read-only).
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
+// B-SA-012: why a waiting order waits.
+import { WAIT_WORDS, type WaitReason } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { CUSTOMER_URGENCIES } from './customer-urgency'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -20,6 +23,8 @@ import { CUSTOMER_URGENCIES } from './customer-urgency'
  */
 
 const version = z.number().int().min(1)
+/** B-SA-012: why a waiting order waits (factory-domain orders-depth WAIT_WORDS' codes). */
+const WAIT_REASONS = Object.keys(WAIT_WORDS) as [WaitReason, ...WaitReason[]]
 const reason = z.string().trim().min(1).max(MAX_REASON)
 const json = z.record(z.string(), z.unknown())
 const status = z.enum(SALES_ORDER_STATUSES)
@@ -114,6 +119,17 @@ const settlementView = output({
   source: z.string(),
 })
 
+// ── B-SA-034: the parts of the order page a live message re-reads, and those whose last change the order read names ──
+export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files'] as const
+export type OrderPagePart = (typeof ORDER_PAGE_PARTS)[number]
+export const LAST_CHANGE_PARTS = ['order', 'changes', 'work', 'shipments', 'money'] as const
+export type LastChangePart = (typeof LAST_CHANGE_PARTS)[number]
+const lastChangeView = output({
+  by: output({ kind: z.enum(['OFFICE', 'CUSTOMER', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), words: output({ it: z.string(), en: z.string() }) }),
+  at: instant(),
+})
+// ── end B-SA-034 ──
+
 export const orderView = output({
   id: id(),
   number: z.string(),
@@ -181,6 +197,23 @@ export const orderView = output({
   amendments: output({ count: z.number().int(), latestRevision: z.number().int().nullable(), latestAt: instant().nullable() }),
   /** SAL-209: a confirmed order's lines change only through an amendment. */
   locked: z.boolean(),
+  // ── B-SA-034 (Sales page plan P17): the order page's live watch list, the server's, and who changed each part last ──
+  live: output({
+    /** Each declared event type the page listens to, and the parts it re-reads on it (matched by the ids below). */
+    events: z.array(output({ type: z.string(), parts: z.array(z.enum(ORDER_PAGE_PARTS)) })),
+    /** The order's own records (work orders: only those the reader reaches). No party id ever. */
+    ids: output({
+      workOrderIds: z.array(id()),
+      shipmentIds: z.array(id()),
+      invoiceIds: z.array(id()),
+      depositRequestIds: z.array(id()),
+      requestIds: z.array(id()),
+      changeIds: z.array(id()),
+    }),
+  }),
+  /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */
+  lastChange: output({ order: lastChangeView.nullable(), changes: lastChangeView.nullable(), work: lastChangeView.nullable(), shipments: lastChangeView.nullable(), money: lastChangeView.nullable() }),
+  // ── end B-SA-034 ──
 })
 
 const one = output({ order: orderView })
@@ -269,7 +302,7 @@ export const listOrdersContract = defineContract({
           // ── B-TH-017 (threads plan TH-1a, pictures 23 + 24): the sheet's columns and the ids its doors open ─────────────
           /**
            * The main picture of the first line's style: its file only with files.read (null: the placeholder); `small`: its
-           * ~320 px preview exists (GET /sales/orders/:orderId/picture serves it; the sheet never loads the original).
+           * ~320 px preview exists (POST /sales/orders/pictures serves it, B-SA-011; the sheet never loads the original).
            */
           picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
           /** The order's distinct styles ("+2" beside the picture). */
@@ -313,6 +346,8 @@ export const listOrdersContract = defineContract({
           /** The customer's own mark, read-only (Sales › Orders' Priority stays the office's); null: none known. */
           customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable(),
           // ── end B-TH-059 ──────────────────────────────────────────────────────────────────────────────────────────────
+          /** B-SA-012: why a PENDING_APPROVAL order waits (a yes asked, credit, the factory review, a yes nobody asked); null otherwise. */
+          waits: z.array(z.enum(WAIT_REASONS)).nullable(),
         }),
       ),
       /** B-TH-057: the next page's cursor (an id newest first; an opaque sort key and id in a server sort). */
@@ -330,7 +365,8 @@ export const boardContract = defineContract({
       lanes: z.array(status),
       /** Each tile's count is the list's total under its filter (the same query parameters). */
       // B-W2b-323: + waitingForCustomer (design sec:orders.tiles "Waiting for the customer to accept a change").
-      tiles: z.array(output({ key: z.enum(['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer']), count: z.number().int(), filter: z.record(z.string(), z.string()) })),
+      // B-SA-012: + waitingForApproval (status PENDING_APPROVAL: the board's first lane).
+      tiles: z.array(output({ key: z.enum(['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer']), count: z.number().int(), filter: z.record(z.string(), z.string()) })),
       asOf: instant(),
     }),
   },
@@ -366,22 +402,9 @@ export const closeContract = defineContract({
   response: { 200: one },
 })
 
-// ── B-TH-017 / B-TH-063: the Picture cell's small preview ─────────────────────────────────────────────────────────────
-export const orderPictureContract = defineContract({
-  params: orderParams,
-  response: {
-    200: output({
-      picture: output({
-        fileId: id(),
-        styleId: id(),
-        contentType: z.string(),
-        /** A presigned GET of the ~320 px preview (60 seconds); null until it exists (the cell's placeholder). */
-        small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
-      }),
-    }),
-  },
-})
-// ── end B-TH-017 / B-TH-063 ───────────────────────────────────────────────────────────────────────────────────────────
+// ── B-SA-011 (sales page plan N8): the small pictures of a page of orders in ONE read (modules/product/images/small-pictures.ts) ──
+export const orderPicturesReadContract = defineContract({ body: input({ orderIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ── end B-SA-011 ──
 
 // ── B-TH-019: the Customer switcher's numbers ─────────────────────────────────────────────────────────────────────────
 export const customersContract = defineContract({

@@ -32,7 +32,7 @@
       "LOW": "Bassa",
       "NORMAL": "Normale",
       "HIGH": "Alta",
-      "URGENT": "Urgente"
+      "URGENT": "Massima"
     },
     "means": {
       "LOW": "Servito dopo gli altri quando la capacità è poca.",
@@ -41,13 +41,13 @@
       "URGENT": "Pianificato per primo; scrivi il motivo in una riga."
     },
     "title": "Priorità di {number}",
-    "titleOne": "Urgente: perché?",
+    "titleOne": "Massima: perché?",
     "legend": "Priorità",
     "go": "Imposta priorità",
-    "reason": "Perché è urgente",
+    "reason": "Perché ha la priorità massima",
     "reasonHint": "Una riga, al massimo {max} caratteri; la vedono il pianificatore e la bacheca.",
     "problem": {
-      "reason": "Scrivi perché è urgente (una riga).",
+      "reason": "Scrivi perché ha la priorità massima (una riga).",
       "long": "Il motivo è troppo lungo (al massimo 500 caratteri).",
       "oneLine": "Il motivo è una riga sola."
     }

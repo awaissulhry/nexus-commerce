@@ -296,14 +296,7 @@
   white-space: nowrap;
 }
 
-.fw-inq-thumb-kind {
-  color: var(--nds-text-link);
-  cursor: pointer;
-}
-
-.fw-inq-thumb-none {
-  color: var(--nds-placeholder);
-}
+/* F-SA-212: the Picture cell (with its file-kinds fallback) is the ONE picture part (lib/record-picture/record-picture.css). */
 /* ── end B-TH-216 ── */
 
 /* ── B-TH-217 (threads plan TH-1b, PL2): the list column and the reading pane beside it ── */

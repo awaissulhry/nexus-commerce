@@ -3,11 +3,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { ChevronDown, Filter, Shirt, X } from 'lucide-react'
+import { ChevronDown, Filter, X } from 'lucide-react'
 import { AsyncListboxPanel, DetailPopover, type ListboxOption } from '@nexus/ui/components'
 import { Button, FilterChip } from '@nexus/ui/primitives'
-import { Modal } from '../../../../../lib/i18n/ds-parts'
-import type { OrderRow } from '../../api'
 import { switcherFace, switcherLines, type Door, type Phrase, type SwitcherState } from './model'
 import './sheet.css'
 
@@ -18,8 +16,8 @@ const say = (t: Translate, phrase: Phrase) => t(phrase.key, phrase.params)
  * B-TH-225 / B-TH-226 — the parts of the Orders sheet the design system does not have (Owner yes on decision 2: they live in
  * factory-web): the door (a real link in the link colour, or plain words with the reason when the reader may not open it), the
  * peek card (a link that shows a small card after half a second of rest or on focus; Space opens it at once), the funnel
- * button (a value that narrows the sheet, never a page), the Picture cell and its viewer, the chips row and the Customer
- * switcher. Words: the `orders-sheet` catalogue.
+ * button (a value that narrows the sheet, never a page), the chips row and the Customer switcher. Words: the `orders-sheet`
+ * catalogue. F-SA-212: the Picture cell and its viewer are the ONE picture part (lib/record-picture).
  */
 
 // ---- doors -------------------------------------------------------------------------------------------------------------------
@@ -177,100 +175,6 @@ export function PeekCard({ title, rows, note, open }: { title: ReactNode; rows: 
         </Link>
       </p>
     </>
-  )
-}
-
-// ---- the Picture cell and its viewer -----------------------------------------------------------------------------------------
-
-/** A small preview's address, kept until shortly before it expires (the cell re-reads it after). */
-const SMALL_CACHE = new Map<string, { url: string; until: number }>()
-
-export type PictureLoader = (orderId: string) => Promise<{ url: string; expiresAt: string } | null>
-
-/** The small preview of a row: undefined while read, null for the placeholder (none, no right, or the store has none). */
-export function useSmallPicture(row: OrderRow, load: PictureLoader | undefined, demo: string | undefined): string | null | undefined {
-  const wanted = !!row.picture?.small && !!row.picture.fileId
-  const cached = SMALL_CACHE.get(row.id)
-  const [src, setSrc] = useState<string | null | undefined>(demo ?? (!wanted || !load ? null : cached && cached.until > Date.now() ? cached.url : undefined))
-  useEffect(() => {
-    if (demo !== undefined) return setSrc(demo)
-    if (!wanted || !load) return setSrc(null)
-    const known = SMALL_CACHE.get(row.id)
-    if (known && known.until > Date.now()) return setSrc(known.url)
-    let gone = false
-    load(row.id)
-      .then((answer) => {
-        if (gone) return
-        if (!answer) return setSrc(null)
-        SMALL_CACHE.set(row.id, { url: answer.url, until: Date.parse(answer.expiresAt) - 5_000 })
-        setSrc(answer.url)
-      })
-      .catch(() => !gone && setSrc(null))
-    return () => {
-      gone = true
-    }
-  }, [row.id, wanted, load, demo])
-  return src
-}
-
-/** The Picture cell: the style's main picture as a small preview ("+2" when the order has more styles), else a placeholder. */
-export function PictureThumb({ row, src, onOpen, t }: { row: OrderRow; src: string | null | undefined; onOpen: () => void; t: Translate }) {
-  const [broken, setBroken] = useState(false)
-  useEffect(() => setBroken(false), [src])
-  const picture = row.picture
-  const style = picture ? `${picture.styleCode} ${picture.styleName}` : null
-  const more = Math.max(0, row.styleCount - 1)
-  const name = style ? t('picture.open', { number: row.number, style }) : t('picture.noneOf', { number: row.number })
-  return (
-    <button type="button" className="fw-sheet-thumb" onClick={onOpen} aria-label={name} title={name} disabled={!picture}>
-      {src && !broken ? <img src={src} alt={t('picture.alt', { style: style ?? row.number })} loading="lazy" onError={() => setBroken(true)} /> : <Shirt size={18} aria-hidden className={src === undefined ? 'fw-sheet-thumb-wait' : undefined} />}
-      {more > 0 && <span className="fw-sheet-thumb-more">{t('picture.more', { count: more })}</span>}
-    </button>
-  )
-}
-
-/**
- * The picture large (grid-F02): the small preview — the sheet never loads the original — with the style's code and name, Open
- * style (a real link) and, for an order of several styles, the way to its lines. Esc closes and returns to the cell.
- */
-export function PictureViewer({ row, src, prefix, t, onClose }: { row: OrderRow; src: string | null | undefined; prefix: string; t: Translate; onClose: () => void }) {
-  const picture = row.picture
-  const more = Math.max(0, row.styleCount - 1)
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      size="md"
-      title={picture ? `${picture.styleCode} ${picture.styleName}` : row.number}
-      subtitle={t('picture.viewerOf', { number: row.number })}
-      footer={
-        <>
-          <Button onClick={onClose}>{t('picture.close')}</Button>
-          {picture && (
-            <Button variant="primary" asChild>
-              <Link href={`${prefix}/products/styles/${encodeURIComponent(picture.styleId)}`}>{t('picture.openStyle')}</Link>
-            </Button>
-          )}
-        </>
-      }
-    >
-      <div className="fw-sheet-viewer">
-        {src ? <img src={src} alt={t('picture.alt', { style: picture ? `${picture.styleCode} ${picture.styleName}` : row.number })} /> : (
-          <span className="fw-sheet-viewer-none">
-            <Shirt size={40} aria-hidden />
-            {t('picture.none')}
-          </span>
-        )}
-      </div>
-      <p className="fw-sheet-viewer-note">{t('picture.small')}</p>
-      {more > 0 && (
-        <p className="fw-sheet-viewer-note">
-          <Link className="fw-sheet-door" href={`${prefix}/sales/orders/${encodeURIComponent(row.id)}?tab=lines`}>
-            {t('picture.moreStyles', { count: more })}
-          </Link>
-        </p>
-      )}
-    </Modal>
   )
 }
 

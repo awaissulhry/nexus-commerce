@@ -163,10 +163,11 @@ describe('the seeded files get their bytes (B-W2b-F59)', () => {
       [T.tenant, mains.map((main) => main.fileId)],
     )
     expect(order).toBeDefined()
-    const answer = await call('orders', 'GET', `/sales/orders/${order!.id}/picture`)
+    // B-SA-013: through the page's batch read (POST /sales/orders/pictures, B-SA-011).
+    const answer = await call('orders', 'POST', '/sales/orders/pictures', { orderIds: [order!.id] })
     expect(answer.statusCode, answer.body).toBe(200)
-    const { picture } = answer.json() as Json
-    expect(picture).toMatchObject({ fileId: order!.fileId, contentType: 'image/jpeg', small: { method: 'GET', url: expect.any(String) } })
+    const [picture] = (answer.json() as Json).pictures as Json[]
+    expect(picture).toMatchObject({ id: order!.id, fileId: order!.fileId, contentType: 'image/jpeg', small: { url: expect.any(String), expiresAt: expect.any(String) } })
     const fetched = await h.app.inject({ method: 'GET', url: picture.small.url })
     expect(fetched.statusCode).toBe(200)
     const [file] = await admin<{ thumbnailKey: string }>(`SELECT "thumbnailKey" FROM "StoredFile" WHERE id = $1`, [order!.fileId])

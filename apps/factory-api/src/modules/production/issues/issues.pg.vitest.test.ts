@@ -528,6 +528,40 @@ describe('B-PR-45 the office’s issue list (GET /production/issues)', { timeout
   })
 })
 
+// ── B-SA-033 (Sales page plan P2, the order page's Quality section; 13-backend B3) ─────────────────────────────────────────────
+describe('B-SA-033 one sales order’s issues (GET /production/issues?salesOrderId=)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('narrows to the order’s issues — on the order, or on one of its live work orders; the counts follow the order; Alpha’s order to a Beta-limited reader is an unknown order (404: no list, no count)', async () => {
+    // An issue on B's work order of SEED-SO-B001 (a work order's issue names no order when its cells make several): CANCELLED and
+    // of a task of its own, so the escalation, the task moves and the answers below never meet it.
+    const onWorkOrder = newId()
+    await replica([
+      {
+        sql: `INSERT INTO "ProductionIssue" SELECT (jsonb_populate_record(NULL::"ProductionIssue", to_jsonb(i) || jsonb_build_object('id', $1::text, 'recordType', 'WorkOrder', 'recordId', $2::text, 'salesOrderId', NULL, 'batchId', NULL, 'taskId', $4::text, 'status', 'CANCELLED'))).* FROM "ProductionIssue" i WHERE i.id = $3`,
+        values: [onWorkOrder, w.b.workOrderId, w.production.issue.id, newId()],
+      },
+    ])
+    const order = await ok('office.all', `/production/issues?salesOrderId=${w.b.salesOrderId}&status=ALL&limit=200`)
+    expect(order.issues.map((issue: Json) => issue.id)).toEqual(expect.arrayContaining([w.production.issue.id, onWorkOrder]))
+    for (const issue of order.issues) expect(issue.salesOrder?.id === w.b.salesOrderId || (issue.record.type === 'WorkOrder' && issue.record.id === w.b.workOrderId), issue.id).toBe(true)
+    expect(order.counts.open).toBe(order.issues.filter((issue: Json) => issue.status === 'OPEN').length)
+    // Every customer's list holds more (A's own reports): the filter narrows it.
+    expect((await ok('office.all', '/production/issues?status=ALL&limit=200')).issues.length).toBeGreaterThan(order.issues.length)
+    // B's own person reads B's order's issues the same way.
+    expect((await ok('office.p2', `/production/issues?salesOrderId=${w.b.salesOrderId}&status=ALL&limit=200`)).issues.map((issue: Json) => issue.id)).toEqual(expect.arrayContaining([w.production.issue.id, onWorkOrder]))
+    // The wall: A's order to B's person is as unknown as a made-up id — the same words, no list, no count, nothing of A.
+    for (const url of [`/production/issues?salesOrderId=${w.a.salesOrderId}`, `/production/issues?salesOrderId=${newId()}`, `/production/issues?salesOrderId=${w.a.salesOrderId}&partyId=${ids.b}`]) {
+      const refused = await call('office.p2', url)
+      expect([refused.status, refused.body.error?.message], url).toEqual([404, 'Sales order not found.'])
+      expect(refused.body.counts).toBeUndefined()
+      expect(findMarkers(refused.body, aMarkers)).toEqual([])
+    }
+    expect((await call('office.p1', `/production/issues?salesOrderId=${w.b.salesOrderId}`)).status).toBe(404)
+    // No read right at all: 403 before the order is read.
+    expect((await call('office.none', `/production/issues?salesOrderId=${w.b.salesOrderId}`)).status).toBe(403)
+  })
+})
+// ── end B-SA-033 ──
+
 describe('B-PR-45 escalation (cron production.issueEscalation)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   let clock: { dueOn: string; backupAt: Date; ownerAt: Date }
   const escalationTasks = () =>

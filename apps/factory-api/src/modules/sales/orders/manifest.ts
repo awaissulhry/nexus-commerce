@@ -37,10 +37,18 @@ export const manifest = defineManifest({
   'GET /sales/orders/:orderId/deliveries': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-019: the Customer switcher's numbers (the customers with orders the reader may see; scopeWhere like the list).
   'GET /sales/orders/customers': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
-  // B-TH-017 / B-TH-063: the Picture cell's small preview (the order checked with can(), the file with files.read).
-  'GET /sales/orders/:orderId/picture': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-SA-011: the small pictures of a page of orders (scopeWhere like the list in one query; each file with files.read).
+  'POST /sales/orders/pictures': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-058: the overall view's totals (scopeWhere like the list: a customer-limited person reads only its customers' figures).
   'GET /sales/orders/summary': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-077: what points at the order (can() on the order; complaints, returns and the gates' events each by their own right).
   'GET /sales/orders/:orderId/links': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-SA-031 / B-SA-032 (Sales page plan P2, P16): one order's production as the office reads it (can() on the order; each part by
+  // its own right, named in `withheld` without it), and its dates alone (gates, milestones, the published plan; no action).
+  'GET /sales/orders/:orderId/production': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'GET /sales/orders/:orderId/milestones': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-SA-036 (Sales page plan N9, P14): every file of the order by source group (can() on the order; files.read over each file's
+  // record, its group's right, body data with sales.measurements.view), and the walled opening of one (body data recorded).
+  'GET /sales/orders/:orderId/files': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'POST /sales/orders/:orderId/files/:fileId/open': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })
