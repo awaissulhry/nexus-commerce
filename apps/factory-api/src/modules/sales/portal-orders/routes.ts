@@ -9,6 +9,8 @@ import { inTransit, orderShipments } from './shipments'
 import { sheetContract, sheetDownloadContract } from './contract'
 import { orderSheet, orderSheetFile } from './sheet'
 import { attachmentDisposition } from '../../../platform/files/rules'
+// B-SA-037: the order's files shared with the customer.
+import { portalOrderFiles, portalOrderFilesContract } from './files'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075 status in customer words, SAL-076 production progress per customer
@@ -33,4 +35,7 @@ export default defineRoutes('portal-sales-orders', manifest, async (app) => {
   app.get('/portal/sales-orders/:orderId/progress', { schema: progressContract }, async (request) => orderProgressView(app, request, request.params.orderId, appClock(app).now()))
 
   app.get('/portal/sales-orders/:orderId/shipments', { schema: shipmentsContract }, async (request) => orderShipments(app, request, request.params.orderId, appClock(app).now()))
+
+  // B-SA-037 (Sales page plan N9, P14): the order's Documents tab, grouped as the office's Files tab.
+  app.get('/portal/sales-orders/:orderId/files', { schema: portalOrderFilesContract }, async (request) => portalOrderFiles(app, request, request.params.orderId, appClock(app).now()))
 })

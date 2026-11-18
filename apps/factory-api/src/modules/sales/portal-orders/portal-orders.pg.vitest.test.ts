@@ -16,6 +16,11 @@ import { startHarness, type Browser, type Harness, type TestTenant } from '../..
 import { systemContext } from '../../../platform/outbox/system'
 import { changePromise, followOrder } from '../orders/moves'
 import { forgetProgress } from './progress'
+// B-SA-030: the one reader of the order's own cells (the office's order read shares it).
+import { isUuid } from '@nexus/factory-domain/core/ids'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { readLines as readOrderLines } from '../orders/store'
+import { officeProgressFor, readCellCounts, readStageCounts, stageCountsOf } from './progress'
 import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
@@ -252,6 +257,31 @@ describe('production progress per customer switch (SAL-076, C1)', { timeout: SLO
     expect((await browsers.other.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(404)
   })
 })
+
+// ── B-SA-030 (Sales page plan P2, P16, P17): the office's order read counts the same cells, kept under the same key ──────────
+describe('B-SA-030 one reader of the order’s own cells', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('readStageCounts is the fold of readCellCounts, each cell with its work order; the office and the portal share the kept minute', async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    forgetProgress()
+    const caller = office()
+    const lines = await caller.withClient((client) => readOrderLines(client, so2))
+    const cells = await caller.withClient((client) => readCellCounts(client, so2, lines))
+    // The fold is what the portal has always answered (its expectations above are unchanged).
+    expect(await caller.withClient((client) => readStageCounts(client, so2, lines))).toEqual(stageCountsOf(lines, cells))
+    const lineIds = new Set(lines.map((line) => line.id))
+    expect(cells.cells.length).toBeGreaterThan(0)
+    expect(cells.cells.every((cell) => lineIds.has(cell.lineId) && isUuid(cell.workOrderId) && cell.quantity > 0)).toBe(true)
+    // One key per tenant and order: the office's read is the portal's next minute (and the other way round).
+    const officeAnswer = await caller.withClient((client) => officeProgressFor(client, T, so2, lines, h.clock.now()))
+    await setShared(true)
+    const portal = await ok(browsers.buyer, `/portal/sales-orders/${so2}/progress`)
+    expect(portal.asOf).toBe(toUtcIso(officeAnswer.computedAt))
+    expect(portal.whole).toEqual(officeAnswer.view.whole)
+    await setShared(false)
+    forgetProgress()
+  })
+})
+// ── end B-SA-030 ──
 
 // B-PR-14: the progress read asks the customer's share level (PROGRESS or more). B-PR-40: the record says the level itself (the
 // old progressShared switch is dropped from the database and from every answer).

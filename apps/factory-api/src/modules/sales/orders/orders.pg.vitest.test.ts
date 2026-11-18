@@ -22,6 +22,8 @@ import { systemContext } from '../../../platform/outbox/system'
 import { afterAccept, afterAcceptanceHandler } from '../quotes/after-acceptance'
 import { orderHandlers } from './handlers'
 import { moneySettlementPort, useOrderSettlement } from './settlement'
+// B-SA-034: the order read's live watch list is made of declared events only.
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -88,6 +90,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   'e.otherParty': office('e', [...MANAGE, 'orders.close'], 'all', [idIn('e', 'party:P3')]),
   'a.floor': () => ({ audience: 'floor', tenantId: T.a, actorId: newId(), siteId: siteA, deviceId: newId(), grants: [{ permissions: ['floor.work', ...MANAGE], companies: [companyA], sites: [siteA], parties: 'all' }] }),
   'a.partner': () => ({ audience: 'partner', tenantId: T.a, actorId: newId(), partyId: P1, grants: [{ permissions: MANAGE, companies: 'all', sites: 'all', parties: [P1] }] }),
+  // B-SA-034: the order page's readers of production (work orders), every customer and P1 only.
+  'a.production': office('a', ['orders.view', 'workorders.view']),
+  'a.production.p1': office('a', ['orders.view', 'workorders.view'], 'all', [P1]),
 }
 
 async function call(session: string, method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown) {
@@ -727,3 +732,71 @@ describe('live: every order event names its order’s customer (B-SA-001)', () =
   })
 })
 // ---- end B-SA-001
+
+// ---- B-SA-034 (Sales page plan P17): the order read names its own live watch list and who changed each part last ------------
+describe('live: the order read names its own watch list and its last change per part (B-SA-034)', () => {
+  const order = () => seeded.a.quality.production.salesOrderId
+  const workOrder = () => seeded.a.quality.production.workOrderId
+  // Later than anything the seeds or the commands above wrote (the seeds' future follows the calendar by a few days).
+  const later = (days: number) => `now() + interval '${days} days'`
+  let customerName = ''
+  let officePerson = { id: '', name: '' }
+
+  beforeAll(async () => {
+    customerName = (await one<{ name: string }>(`SELECT COALESCE("tradeName", "legalName") AS name FROM "Party" WHERE id = $1`, [P1])).name
+    officePerson = await one<{ id: string; name: string }>(`SELECT id, "displayName" AS name FROM "User" WHERE "tenantId" = $1 AND email = 'olga.orders@seed-a.example.com'`, [T.a])
+    // The newest rows of each part: the customer itself on the order (then another partner, later, who is never named), the floor on
+    // the work order, an office person on the shipment.
+    const row = (audience: string, actorId: string, recordType: string, recordId: string, at: string, partyId: string | null) =>
+      `INSERT INTO "AuditLog" (id, "tenantId", "companyId", "partyId", at, audience, "actorId", action, "recordType", "recordId", "requestId")
+       VALUES ('${newId()}', '${T.a}', '${companyA}', ${partyId ? `'${partyId}'` : 'NULL'}, ${at}, '${audience}', '${actorId}', 'test.sa034', '${recordType}', '${recordId}', 'sa034');`
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       ${row('PARTNER', newId(), 'SalesOrder', order(), later(30), P1)}
+       ${row('PARTNER', newId(), 'SalesOrder', order(), later(31), P3)}
+       ${row('FLOOR', newId(), 'WorkOrder', workOrder(), later(30), null)}
+       ${row('OFFICE', officePerson.id, 'Shipment', seeded.a.shipmentId, later(30), null)}
+       COMMIT;`,
+    )
+  })
+
+  it('live.events: declared types only, each with the parts it re-reads (orders, pieces, holds, dates, money, files)', async () => {
+    const { live } = (await ok('a.production', 'GET', orderUrl(order()))).order
+    const declared = new Set(EVENT_CATALOGUE.types())
+    const types = live.events.map((entry: Json) => entry.type)
+    expect(types.every((type: string) => declared.has(type))).toBe(true)
+    expect(new Set(types).size).toBe(types.length)
+    const partsOf = (type: string) => live.events.find((entry: Json) => entry.type === type)?.parts
+    expect(partsOf('sales_order.status_changed')).toEqual(['order', 'lines', 'changes'])
+    expect(partsOf('production.scan_recorded')).toEqual(['lines', 'headline'])
+    expect(partsOf('file.available')).toEqual(['files'])
+    expect(partsOf('shipment.status_changed')).toEqual(['money', 'shipments'])
+    expect(partsOf('brand_production.stage_reached')).toEqual(['headline', 'people'])
+  })
+
+  it('live.ids: the order’s own records; work orders only for a reader who reaches them; never a party id', async () => {
+    const production = (await ok('a.production', 'GET', orderUrl(order()))).order
+    expect(production.live.ids.shipmentIds).toContain(seeded.a.shipmentId)
+    expect(production.live.ids.workOrderIds).toContain(workOrder())
+    expect((await ok('a.production.p1', 'GET', orderUrl(order()))).order.live.ids.workOrderIds).toContain(workOrder())
+    // Without workorders.view the page names no work order to listen to (it shows none either).
+    expect((await ok('a.sales', 'GET', orderUrl(order()))).order.live.ids.workOrderIds).toEqual([])
+    expect(JSON.stringify(production.live)).not.toContain(P1)
+    // Another customer's person: the words of an unknown order, no watch list.
+    expect((await call('a.otherParty', 'GET', orderUrl(order()))).status).toBe(404)
+  })
+
+  it('lastChange: the order’s own customer by name (another partner never), "the floor" (never a worker), an office person by name', async () => {
+    const { lastChange } = (await ok('a.production', 'GET', orderUrl(order()))).order
+    expect(lastChange.order.by).toEqual({ kind: 'CUSTOMER', name: customerName, words: { it: customerName, en: customerName } })
+    const customerRow = await one<{ at: Date }>(`SELECT at FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND "recordId" = $1 AND "partyId" = $2 AND action = 'test.sa034'`, [order(), P1])
+    expect(lastChange.order.at).toBe(customerRow.at.toISOString())
+    expect(lastChange.work.by).toEqual({ kind: 'FLOOR', name: null, words: { it: 'Il reparto', en: 'The floor' } })
+    expect(lastChange.shipments.by).toEqual({ kind: 'OFFICE', name: officePerson.name, words: { it: officePerson.name, en: officePerson.name } })
+    // Who changed it never names a work order the reader does not reach: no work part without workorders.view.
+    expect((await ok('a.sales', 'GET', orderUrl(order()))).order.lastChange.work).toBeNull()
+    expect(JSON.stringify(lastChange)).not.toMatch(/worker|operator|station/i)
+  })
+})
+// ---- end B-SA-034

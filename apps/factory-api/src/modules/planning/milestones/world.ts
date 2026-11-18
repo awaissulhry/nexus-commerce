@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { BUSINESS_TIME_ZONE, businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { PLANNING_MILESTONES_MANAGE, PLANNING_MILESTONES_OVERRIDE } from '@nexus/factory-domain/planning/milestones/permissions'
@@ -256,13 +256,22 @@ function milestonesOf(order: OrderRow, gates: readonly GateView[], facts: OrderF
   return rows.sort(milestoneOrder)
 }
 
+// ── B-SA-030 (Sales page plan P16): the order page reads its own order's gates under orders.view (the Sales template holds no
+// planning.view); Time & action keeps planning.view, the default. Only the orders the permission reaches are read (company and
+// customer), so a person limited to some customers reads none of another's.
+export interface WorldOptions {
+  /** The permission the orders are read with (default planning.view). */
+  readonly permission?: Permission
+}
+// ── end B-SA-030 ──
+
 /** The orders' gates, milestones and the tiles, as the page reads them (see above). */
-export async function readWorld(db: Reader, world: WorldContext, filter: WorldFilter): Promise<{ today: BusinessDate; timeZone: string; tiles: ReturnType<typeof tileCounts>; orders: OrderView[]; truncated: boolean }> {
+export async function readWorld(db: Reader, world: WorldContext, filter: WorldFilter, options: WorldOptions = {}): Promise<{ today: BusinessDate; timeZone: string; tiles: ReturnType<typeof tileCounts>; orders: OrderView[]; truncated: boolean }> {
   const today = businessDate(world.now)
   const q = filter.q?.trim()
   const where: Prisma.SalesOrderWhereInput = {
     AND: [
-      scopeWhere(world.actor, PLANNING_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput,
+      scopeWhere(world.actor, options.permission ?? PLANNING_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput, // B-SA-030
       filter.orderIds ? { id: { in: [...filter.orderIds] } } : { status: { in: [...OPEN_ORDER_STATUSES] } },
       filter.companyId ? { companyId: filter.companyId } : {},
       q ? { OR: [{ number: { contains: q, mode: 'insensitive' } }, { customerRef: { contains: q, mode: 'insensitive' } }] } : {},

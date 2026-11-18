@@ -37,6 +37,12 @@ import { orderCustomers } from './customers'
 import { orderSummary } from './summary'
 // B-TH-077: what points at the order (its complaints and returns, planning's open re-promises, the gates' refusals).
 import { orderLinks, recordLinksContract } from './record-links'
+// B-SA-031 / B-SA-032: one order's production as the office reads it, and its dates alone.
+import { orderMilestonesContract, orderProductionContract } from './production-contract'
+import { orderMilestones, orderProduction } from './production-read'
+// B-SA-036: every file of the order, and the walled opening of one.
+import { orderFiles, orderFilesContract } from './order-files'
+import { openOrderFile, openOrderFileContract } from './order-files-open'
 // B-SA-011: the small pictures of a page of orders in one read.
 import { orderPicturesReadContract } from './contract'
 import { recordPictures } from '../../product/images/small-pictures'
@@ -129,4 +135,12 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-TH-077: what points at the order, for its record (W27: only its own customer's).
   app.get('/sales/orders/:orderId/links', { schema: recordLinksContract }, async (request) => orderLinks(request, request.params.orderId))
+
+  // B-SA-031 / B-SA-032 (Sales page plan P2, P16): the order page's production read (parts by right) and its milestones.
+  app.get('/sales/orders/:orderId/production', { schema: orderProductionContract }, async (request) => orderProduction(request, request.params.orderId, request.query))
+  app.get('/sales/orders/:orderId/milestones', { schema: orderMilestonesContract }, async (request) => orderMilestones(request, request.params.orderId))
+
+  // B-SA-036 (Sales page plan N9, P14): the order's files by source group, and the walled opening of one.
+  app.get('/sales/orders/:orderId/files', { schema: orderFilesContract }, async (request) => orderFiles(request, request.params.orderId))
+  app.post('/sales/orders/:orderId/files/:fileId/open', { schema: openOrderFileContract }, async (request) => openOrderFile(request, request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
 })
