@@ -17,6 +17,7 @@ import type { AssignSupervisorActions, AssignSupervisorModel } from '../../_shar
 import type { CustomerUrgencyState } from '../_shared/api'
 // F-PR-22: "Note to N…" and a row's "Office note…" (THE note dialog, areas/production/_shared/notes).
 import type { NoteDialogActions, NoteDialogModel, NoteFrom } from '../_shared/notes/model'
+import type { ReadPictures } from '../../../lib/record-picture/cache' // F-SA-283
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -134,6 +135,10 @@ export interface WorkOrdersListActions {
   onNote?: (ids: readonly string[], from: Exclude<NoteFrom, 'band'>) => void
   note?: NoteDialogActions
   // ── end F-PR-22
+  // ── F-SA-283 ──
+  /** The page's batch picture read (POST /production/work-orders/pictures through the one picture part); none: the placeholder. */
+  readPictures?: ReadPictures | null
+  // ── end F-SA-283
 }
 
 export type { BulkReleaseModel }

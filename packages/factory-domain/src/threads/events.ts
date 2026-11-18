@@ -34,6 +34,21 @@ export const events = [
       // then only people of every customer receive it. Set by the API from the thread row, never a caller's value; never in the
       // live fields (party ids never reach the browser); optional, so an older event still parses.
       partyId: livePartyId(),
+      // ---- B-SA-051 (Sales page plan R9 "ONE bell mechanism", P8; 13-backend B7; review C-7): a CHANGE NOTE — a SYSTEM office note
+      // about a change of a sales order (the system line on the order's thread, B-SA-052; its floor note on each open work order,
+      // B-SA-053). The followers' bell (platform/notifications/rules/threads.ts) tells everyone on the order of it, folded into ONE
+      // item per reader and change (notifications/rules.ts orderChangeBatch), and never the person who made it. Set by the API from
+      // the writing command (platform/threads/threads.ts writeMessage `change`), never a caller's value; none of them in the live
+      // fields (no person, no count reaches a screen through the live channel); optional, so an older event still parses.
+      //   causedById  the office person whose command made the change; null: nobody of the office (the customer withdrew, the
+      //               system moved it). Present (even null) exactly on a change note.
+      //   orderId     the sales order changed: the thread's own record on the order's thread; on a work order's thread the order
+      //               whose change it carries (its followers read "WO-0142: its order SO-0142 changed — …").
+      //   stillToDo   the steps still to do after the change (Still to do, counted by the writer): "2 steps still to do".
+      causedById: z.uuid().nullable().optional(),
+      orderId: z.uuid().optional(),
+      stillToDo: z.number().int().min(0).optional(),
+      // ---- end B-SA-051
     }),
     live: { permission: 'threads.read', fields: ['threadId', 'messageId', 'recordType', 'recordId'] },
   }),

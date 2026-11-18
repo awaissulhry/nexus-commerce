@@ -21,6 +21,10 @@ import {
   snoozeProblem,
   stateOf,
   TAB_CATEGORIES,
+  // B-SA-051
+  CHANGE_WHAT_MAX,
+  changeWhatOf,
+  orderChangeBatch,
 } from './rules'
 
 const NOW = new Date('2026-10-30T09:00:00.000Z')
@@ -115,3 +119,63 @@ describe('the notification centre (B-W2a-20: PLT-138, PLT-142, PLT-152)', () => 
     expect(EVENT_CATALOGUE.get('notification.digest_sent', 1).live).toBeNull()
   })
 })
+
+// ── B-SA-051 ──
+/**
+ * B-SA-051 (Sales page plan R9 "ONE bell mechanism per change", P8; review C-7): a change of a sales order is ONE bell item per
+ * reader and change — the batch of the command and the order; its sentence says what changed (the change note's first line) and
+ * the steps still to do; a work order's followers read it as their work order's order. thread.message_posted names who made it,
+ * the order and the count, never in its live fields.
+ */
+describe('one bell item per change of an order (B-SA-051)', () => {
+  const ORDER = '0190f0e2-0000-7000-8000-0000000005a1'
+  const OTHER = '0190f0e2-0000-7000-8000-0000000005a2'
+
+  it('names one batch per command and order: the same for the system line, the floor notes and the order’s own move', () => {
+    expect(orderChangeBatch('req-1', ORDER)).toBe(orderChangeBatch('req-1', ORDER))
+    expect(orderChangeBatch('req-1', ORDER)).not.toBe(orderChangeBatch('req-2', ORDER))
+    expect(orderChangeBatch('req-1', ORDER)).not.toBe(orderChangeBatch('req-1', OTHER))
+    expect(batchGroupKey(orderChangeBatch('req-1', ORDER), 'FOLLOWING')).toBe(`batch:order-change:req-1:${ORDER}:FOLLOWING`)
+  })
+
+  it('quotes what changed: the first line, trimmed, without its closing stop, cut at 120 characters', () => {
+    expect(changeWhatOf('Change accepted · Bea Esempio · 10:42\nBrand Alpha asked (portal, 10:05): line 2 · M 40 → 36.')).toBe('Change accepted · Bea Esempio · 10:42')
+    expect(changeWhatOf('\n  Done: order amended (revision 3).  \nNext: …')).toBe('Done: order amended (revision 3)')
+    expect(changeWhatOf('')).toBe('')
+    const long = changeWhatOf(`Order changed: ${'line 2 · M 40 → 36 · '.repeat(10)}`)
+    expect(long.length).toBeLessThanOrEqual(CHANGE_WHAT_MAX)
+    expect(long.startsWith('Order changed: line 2 · M 40 → 36')).toBe(true)
+    expect(long.endsWith('…')).toBe(true)
+  })
+
+  it('says it in both languages, with the steps still to do, and on a work order’s face names its order', () => {
+    const base = { recordLabel: 'SO-0142', actorId: null }
+    expect(sentenceOf({ ...base, messageKey: 'notifications.following.change', params: { what: 'Refused · Bea Esempio · 10:42' } }, names, 'en')).toBe('SO-0142 changed: Refused · Bea Esempio · 10:42.')
+    expect(sentenceOf({ ...base, messageKey: 'notifications.following.changeStep', params: { what: 'Change accepted' } }, names, 'it')).toBe('SO-0142 cambiato: Change accepted. Ancora 1 passo da fare.')
+    expect(sentenceOf({ ...base, messageKey: 'notifications.following.changeSteps', params: { what: 'Change accepted', count: 2 } }, names, 'en')).toBe('SO-0142 changed: Change accepted. 2 steps still to do.')
+    expect(sentenceOf({ ...base, messageKey: 'notifications.following.changeSteps', params: { what: 'Modifica accettata', count: 3 } }, names, 'it')).toBe('SO-0142 cambiato: Modifica accettata. Ancora 3 passi da fare.')
+    expect(sentenceOf({ recordLabel: 'WO-0142', actorId: null, messageKey: 'notifications.following.orderChange', params: { what: 'size M now 36', number: 'SO-0142' } }, names, 'en')).toBe('WO-0142: its order SO-0142 changed — size M now 36.')
+    expect(sentenceOf({ recordLabel: 'WO-0142', actorId: null, messageKey: 'notifications.following.orderChange', params: { what: 'taglia M ora 36', number: 'SO-0142' } }, names, 'it')).toBe('WO-0142: il suo ordine SO-0142 è cambiato — taglia M ora 36.')
+    // A change's words never name the person who made it (he is not told; the others read the change, not a name in the sentence).
+    for (const key of ['notifications.following.change', 'notifications.following.changeStep', 'notifications.following.changeSteps', 'notifications.following.orderChange'] as const) {
+      expect(MESSAGE_KEYS).toContain(key)
+      for (const locale of ['en', 'it'] as const) expect(MESSAGE_TEMPLATES[key][locale]).not.toContain('{actor}')
+    }
+  })
+
+  it('thread.message_posted names who made the change (or nobody of the office), the order and the count, never on a screen', () => {
+    const posted = EVENT_CATALOGUE.get('thread.message_posted', 1)
+    const shape = posted.payload.shape
+    for (const value of [ORDER, null, undefined]) expect(shape.causedById!.safeParse(value).success).toBe(true)
+    expect(shape.causedById!.safeParse('Bea Esempio').success).toBe(false)
+    expect(shape.orderId!.safeParse(ORDER).success).toBe(true)
+    expect(shape.orderId!.safeParse(undefined).success).toBe(true)
+    expect(shape.stillToDo!.safeParse(2).success).toBe(true)
+    expect(shape.stillToDo!.safeParse(-1).success).toBe(false)
+    expect(shape.stillToDo!.safeParse(1.5).success).toBe(false)
+    for (const key of ['causedById', 'orderId', 'stillToDo']) expect(posted.live!.fields).not.toContain(key)
+    // An older message (no change keys) still parses.
+    expect(posted.payload.safeParse({ threadId: ORDER, messageId: OTHER, recordType: 'SalesOrder', recordId: ORDER, direction: 'INTERNAL_NOTE', audience: 'OFFICE' }).success).toBe(true)
+  })
+})
+// ── end B-SA-051 ──

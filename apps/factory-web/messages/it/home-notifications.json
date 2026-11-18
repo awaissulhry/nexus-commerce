@@ -218,7 +218,11 @@
         "mail_out": "{actor} ha inviato un messaggio su {record}, che segui",
         "view": "{record}, una vista salvata che segui, è cambiata: {entered} entrati, {left} usciti (ora {count})",
         "viewCount": "{record}, una vista salvata che segui, è cambiata (ora {count})",
-        "changed": "{record}, che segui, è cambiato"
+        "changed": "{record}, che segui, è cambiato",
+        "change": "{record} cambiato: {what}.",
+        "changeStep": "{record} cambiato: {what}. Ancora 1 passo da fare.",
+        "changeSteps": "{record} cambiato: {what}. Ancora {count} passi da fare.",
+        "orderChange": "{record}: il suo ordine {number} è cambiato — {what}."
       },
       "assigned": {
         "today": "{actor} ti ha assegnato {record} su Oggi ({kind})",

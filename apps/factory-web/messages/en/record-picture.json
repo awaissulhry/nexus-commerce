@@ -1,4 +1,5 @@
 {
+  "column": "Picture",
   "open": "Show the picture of {number} large",
   "noneOf": "{number} has no picture yet",
   "reading": "Reading the picture of {number}",

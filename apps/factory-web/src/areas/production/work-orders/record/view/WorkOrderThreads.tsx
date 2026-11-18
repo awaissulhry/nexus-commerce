@@ -1,9 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { SegmentedControl } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
-import type { OrderThreadChoice, ThreadPick } from '../order-files/model'
+import type { OrderThreadChoice, ThreadPick as OrderFilesPick } from '../order-files/model'
+// F-SA-260: THE pick of a record's dock, lifted from here (the order page and the customer page use it too).
+import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 
 /**
  * B-TH-265 (agreement T9; PL1 "ONE thread per page"): the work order's dock holds ONE thread at a time — the work order's own notes
@@ -11,26 +12,19 @@ import type { OrderThreadChoice, ThreadPick } from '../order-files/model'
  * threads (shared with that order's customer). The pick sits at the dock's top only when an order's thread may be read; under it one
  * line says whose the picked order thread is, so nobody writes to a customer believing it stays in the office. The dock's children
  * are the picked thread (the office's OfficeRecordThread docked, or a design case's).
+ *
+ * F-SA-260: drawn by the shared ThreadPick (areas/_shared/record-thread) with the work order's own words — the same choices, the same
+ * value (an order not among them shows the work order's notes), the same line, the same look.
  */
-export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: ThreadPick; onPick?: (pick: ThreadPick) => void; children: ReactNode }) {
+export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick?: (pick: OrderFilesPick) => void; children: ReactNode }) {
   const t = useT('production')
-  const picked = choices.find((choice) => choice.orderId === pick) ?? null
+  const threads: ThreadChoice[] = [
+    { value: 'workOrder', label: t('thread.workOrder'), title: t('thread.workOrderHint'), line: t('thread.workOrderHint') },
+    ...choices.map((choice) => ({ value: choice.orderId, label: `${choice.number} · ${choice.party.name}`, line: t('thread.orderShared', { number: choice.number, customer: choice.party.name }) })),
+  ]
   return (
-    <>
-      {choices.length > 0 && (
-        <div className="fw-pr-threadpick">
-          <SegmentedControl
-            size="sm"
-            wrap
-            ariaLabel={t('thread.pickLabel')}
-            value={picked ? picked.orderId : 'workOrder'}
-            onChange={(value) => onPick?.(value)}
-            options={[{ value: 'workOrder', label: t('thread.workOrder'), title: t('thread.workOrderHint') }, ...choices.map((choice) => ({ value: choice.orderId, label: `${choice.number} · ${choice.party.name}` }))]}
-          />
-          <p className="fw-pr-hint">{picked ? t('thread.orderShared', { number: picked.number, customer: picked.party.name }) : t('thread.workOrderHint')}</p>
-        </div>
-      )}
+    <ThreadPick label={t('thread.pickLabel')} choices={threads} value={pick} onPick={onPick}>
       {children}
-    </>
+    </ThreadPick>
   )
 }
