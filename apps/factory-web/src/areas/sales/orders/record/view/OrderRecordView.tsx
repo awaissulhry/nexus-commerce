@@ -15,7 +15,6 @@ import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, i
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
-import { DatesTab } from './DatesTab'
 import { DocumentsTab } from './DocumentsTab'
 import { LinesTab } from './LinesTab'
 import { MoneyTab } from './MoneyTab'
@@ -379,13 +378,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         <div className="fw-so-main">
           {model.tab === 'overview' && <OverviewTab order={order} model={model} actions={actions} />}
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
-          {/* F-SA-230: Production — the work orders, then the dates (#dates), then the tech pack in force. */}
+          {/* F-SA-230 / F-SA-234: Production — the work orders with the order's own pieces, the dates and milestones (#dates), then the
+              tech pack in force. */}
           {model.tab === 'production' && (
             <div className="fw-so-merged">
               <ProductionTab order={order} model={model} actions={actions} />
-              <section id="dates" className="fw-so-anchor" aria-label={t('dates.title')}>
-                <DatesTab order={order} model={model} actions={actions} />
-              </section>
               <TechPackCard model={model.depth} actions={actions?.depth} />
             </div>
           )}

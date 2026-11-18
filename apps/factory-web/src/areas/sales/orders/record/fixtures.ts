@@ -63,7 +63,7 @@ import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
-import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, ready } from './overview/fixtures'
+import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ready, WORK_READ } from './overview/fixtures'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
@@ -270,9 +270,9 @@ const W2B_323 = [
   { id: 'w2b-323-changes-no-rules', label: 'W2b · Sales · Changes: the company keeps no freeze rule; no priced change yet', model: d323('sales', production, { tab: 'changes' }, { freeze: { value: FREEZE_NONE, problem: null }, changes: { value: CHANGES_NONE, problem: null } }) },
   { id: 'w2b-323-changes-manager', label: 'W2b · Production manager · Changes: no money column; Put back held', model: d323('manager', amended(production), { tab: 'changes' }) },
   { id: 'w2b-323-put-back', label: 'W2b · Sales · Put back revision 2 (turned down)', model: d323('sales', amended(production), { tab: 'changes' }, { dialog: { kind: 'putBack', changeId: CHANGES.changes[1]!.id, reason: 'Respinta dall’amministrazione.' } }) },
-  { id: 'w2b-323-dates', label: 'W2b · Owner · Production: Production finish forecast per line (6 days to spare; 7 days short) and the milestones', model: d323('owner', production, { tab: 'production' }) },
-  { id: 'w2b-323-dates-sales', label: 'W2b · Sales · Production: the forecast (the milestones are the planner’s)', model: d323('sales', production, { tab: 'production' }) },
-  { id: 'w2b-323-dates-error', label: "W2b · Sales · Production: the forecast couldn't be read (said once, Try again)", model: d323('sales', production, { tab: 'production' }, { forecasts: { value: null, problem: 'problem.read.unavailable' } }) },
+  { id: 'w2b-323-dates', label: 'W2b · Owner · Production: Production finish forecast per line (6 days to spare; 7 days short) and the milestones', model: d323('owner', production, { tab: 'production', production: ready(WORK_READ) }) },
+  { id: 'w2b-323-dates-sales', label: 'W2b · Sales · Production: the forecast (the milestones are the planner’s)', model: d323('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
+  { id: 'w2b-323-dates-error', label: "W2b · Sales · Production: the forecast couldn't be read (said once, Try again)", model: d323('sales', production, { tab: 'production', production: ready(WORK_READ) }, { forecasts: { value: null, problem: 'problem.read.unavailable' } }) },
   { id: 'w2b-323-documents', label: 'W2b · Sales · Changes: the confirmation (v2, sent) in the PDF viewer; the brand tech pack in force (a newer version)', model: d323('sales', production, { tab: 'changes' }) },
   { id: 'w2b-323-documents-none', label: 'W2b · Sales · Changes: no confirmation yet — Make confirmation', model: d323('sales', production, { tab: 'changes' }, { confirmation: { value: CONFIRMATION_NONE, problem: null }, confirmationPdf: null }) },
   { id: 'w2b-323-documents-outdated', label: 'W2b · Sales · Changes: the order changed since v2 — Make version 3', model: d323('sales', production, { tab: 'changes' }, { confirmation: { value: CONFIRMATION_OUTDATED, problem: null } }) },
@@ -335,14 +335,14 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'deposit-no-td02', label: 'Finance · An EU business deposit: paid, no deposit invoice (its VAT rule)', model: base('finance', noTd02, { tab: 'money' }) },
     { id: 'no-deposit', label: 'Sales · An order that needs no deposit', model: base('sales', noDeposit, { tab: 'money' }) },
     { id: 'manager-money', label: 'Production manager · Money without money or invoices', model: base('manager', paidNotSent, { tab: 'money' }) },
-    { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production' }) },
-    { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production' }) },
-    { id: 'production-progress', label: 'Sales · Production: two work orders with their floor progress', model: base('sales', production, { tab: 'production' }) },
-    { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production' }) },
-    { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', workOrders: { value: null, problem: 'problem.read.unavailable' } }) },
-    { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production' }) },
-    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'production', dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
-    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
+    { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production', production: ready(WORK_READ) }) },
+    { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },
+    { id: 'production-progress', label: 'Sales · Production: the work orders with this order’s own pieces (where, made for this order, also makes, held, a shared cut), 12 made-to-measure units as one row, 1 not shown', model: base('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
+    { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
+    { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
+    { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(WORK_READ) }) },
+    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
+    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
     { id: 'ready-dialog', label: 'Sales · Mark ready (quality release not used for this order)', model: base('sales', production, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
     { id: 'shipments', label: 'Sales · Shipments: left to ship per size, two shipments', model: base('sales', shipped, { tab: 'shipments' }) },
     { id: 'shipments-empty', label: 'Sales · Shipments: nothing shipped yet', model: base('sales', production, { tab: 'shipments' }) },

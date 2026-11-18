@@ -16,3 +16,38 @@ export function productionProgress(row: Pick<OrderWorkOrder, 'progress' | 'piece
   const notCounted = released && row.progress ? COUNTED_STEPS.filter((step) => row.progress![step] === null) : []
   return { figure, notCounted }
 }
+
+// ── F-SA-234 (sales page plan N2, picks P2, P3, P12; 10-order-page §2.3 P1) ───────────────────────────────────────────────────────
+/** What a work order makes for THIS order (the production read's own share: its cells of this order's lines; null where not counted). */
+export interface OwnShare {
+  readonly cells: number
+  readonly pieces: number
+  readonly cut: number | null
+  readonly sewn: number | null
+  readonly checked: number | null
+}
+
+/**
+ * ONE figure of the order's OWN cells on a work order (never the work order's total): the furthest step reached — cut, sewn, or
+ * checked (released by quality) — its words and its bar from the same number (rule R5); a step its site does not count is listed
+ * as "not counted here", never 0. Not released: no figure.
+ */
+export function ownProgress(own: OwnShare, status: string): { readonly figure: ProgressFigure; readonly notCounted: readonly CountedStep[] } {
+  const released = status !== 'DRAFT'
+  const counts = { cut: own.cut, bundled: null, sewn: own.sewn, finished: own.checked }
+  const figure = progressFigure(counts, own.pieces, released)
+  const notCounted = released ? COUNTED_STEPS.filter((step) => counts[step] === null) : []
+  return { figure, notCounted }
+}
+
+/** "Made for this order": its own pieces of the work order's whole (when the whole is read), and what else it makes, in words. */
+export function madeForOf(own: OwnShare, total: number | null, also: { readonly orders: readonly { readonly number: string }[]; readonly more: number }, shared: boolean, cutTogether: boolean): { readonly key: string; readonly params: Record<string, string | number> }[] {
+  const out: { key: string; params: Record<string, string | number> }[] = [total !== null && total > own.pieces ? { key: 'production.own.of', params: { own: own.pieces, total } } : { key: 'production.own.all', params: { own: own.pieces } }]
+  if (also.orders.length > 0) out.push({ key: 'production.own.alsoMakes', params: { number: also.orders.map((order) => order.number).join(', ') } })
+  if (also.more > 0) out.push({ key: 'production.own.alsoMore', params: { count: also.more } })
+  // A work order made before the one-customer rule: "also makes work of other orders" — no number, no name, no count of theirs.
+  if (shared) out.push({ key: 'production.own.alsoOther', params: {} })
+  if (cutTogether) out.push({ key: 'production.own.cutTogether', params: {} })
+  return out
+}
+// ── end F-SA-234

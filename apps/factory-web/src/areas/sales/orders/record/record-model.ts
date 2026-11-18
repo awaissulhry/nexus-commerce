@@ -14,6 +14,7 @@ import type { NoteDialogActions, NoteDialogModel } from '../../../production/_sh
 // F-SA-232: Overview's production read (the order's own pieces) and the live stream's state.
 import type { ProductionState } from './overview/model'
 import type { LiveState } from '../hooks'
+import type { ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -143,6 +144,8 @@ export interface OrderRecordModel {
   people?: { readonly mayAssign: boolean; readonly mayNote: boolean; readonly assign: AssignSupervisorModel | null; readonly note: NoteDialogModel | null }
   /** F-SA-232: the order's production read (OR1: stage, health, waiting, own pieces per line …); absent: not read here (a design case). */
   production?: ProductionState | null
+  /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
+  readiness?: Part<ReadinessRow[]> | null
   /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
   overviewLine?: string | null
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */

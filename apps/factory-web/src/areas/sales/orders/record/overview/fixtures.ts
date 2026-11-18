@@ -1,5 +1,6 @@
-import { LINE_BLK, LINE_RED, ORDER_ID } from '../../_demo/fixtures'
-import type { Headline, OrderProduction, ProductionLine } from './api'
+import { LINE_BLK, LINE_RED, ORDER_ID, WORK_ORDERS } from '../../_demo/fixtures'
+import { MILESTONES } from '../../depth/demo/fixtures'
+import type { Headline, OrderProduction, ProductionLine, Work } from './api'
 import type { ProductionState } from './model'
 
 /**
@@ -71,7 +72,8 @@ export const PRODUCTION_READ: OrderProduction = {
   headline: HEADLINE,
   lines: LINES,
   work: null,
-  dates: { gates: [], milestones: [], late: 0, next: null, planned: { cutStart: '2026-11-10', sewStart: '2026-11-13', finish: '2026-12-10' }, forecast: [{ lineId: LINE_BLK, seq: 10, finish: '2026-12-08', risk: 'ON_TIME', slackDays: 7, sizes: [{ size: '48', finish: '2026-12-05', risk: 'ON_TIME' }, { size: '50', finish: '2026-12-08', risk: 'ON_TIME' }] }] },
+  // F-SA-234: the order's gates and milestones under its own right (the planner's demo milestones: two gates done, one late; start; shipping).
+  dates: { gates: [], milestones: MILESTONES.milestones.map((row) => ({ ...row, gateId: null, owner: null })), late: MILESTONES.late, next: MILESTONES.next, planned: { cutStart: '2026-11-10', sewStart: '2026-11-13', finish: '2026-12-10' }, forecast: [{ lineId: LINE_BLK, seq: 10, finish: '2026-12-08', risk: 'ON_TIME', slackDays: 7, sizes: [{ size: '48', finish: '2026-12-05', risk: 'ON_TIME' }, { size: '50', finish: '2026-12-08', risk: 'ON_TIME' }] }] },
   quality: { issues: null, ncrs: null, final: null },
   people: null,
   changes: { openRequests: [] },
@@ -84,6 +86,25 @@ export const CONFIRMED_READ: OrderProduction = {
   headline: { ...HEADLINE, stage: null, inWork: { bundles: 0, pieces: { cutting: 0, sewing: 0, checking: 0, packing: 0 } }, health: null, waiting: { on: 'BRAND', words: w('Waiting on customer', 'Tocca al cliente'), since: '2026-10-28T15:00:00Z', blockers: [{ kind: 'DEPOSIT', on: 'BRAND', words: w('The deposit', "L'acconto"), since: '2026-10-28T15:00:00Z' }] }, urgency: { ...HEADLINE.urgency, customer: null } },
   lines: LINES.map((line) => ({ ...line, cut: 0, sewn: 0, checked: 0, packed: 0, inWorkOrders: 0, notInWorkOrders: true, sizes: line.sizes.map((entry) => ({ ...entry, cut: 0, sewn: 0, checked: 0, packed: 0 })) })),
 }
+
+/**
+ * F-SA-234: the work behind it — WO-00021 makes this order's black jackets (8 of a run of 20, also SO-2026-0151 of the same
+ * customer; one site counts sewing), WO-00022 the red (6, not cut yet, a cut shared with other work), and 12 made-to-measure units
+ * in black as one group. No other customer named or counted.
+ */
+const named = (code: string, name: string) => ({ code, name })
+export const WORK: Work = {
+  workOrders: [
+    { id: WORK_ORDERS[0]!.id, number: 'WO-00021', status: 'IN_PROGRESS', held: false, rush: false, style: named('DEMO-JKT-01', 'Giacca pelle demo'), colourways: [named('BLK', 'Nero')], site: named('STAB-N', 'Stabilimento Nord'), line: named('L2', 'Linea 2'), workshops: [], own: { cells: 4, pieces: 8, cut: 8, sewn: 5, checked: 2 }, alsoMakes: { orders: [{ id: '0190f0e2-5151-7000-8000-000000000151', number: 'SO-2026-0151' }], more: 0 }, sharedWithOtherCustomers: false, cutWithOtherWork: false, due: '2026-12-05', daysLate: 0 },
+    { id: WORK_ORDERS[1]!.id, number: 'WO-00022', status: 'RELEASED', held: true, rush: false, style: named('DEMO-JKT-01', 'Giacca pelle demo'), colourways: [named('RED', 'Rosso')], site: named('STAB-N', 'Stabilimento Nord'), line: null, workshops: [{ name: 'Laboratorio Esempio' }], own: { cells: 3, pieces: 6, cut: 0, sewn: null, checked: 0 }, alsoMakes: { orders: [], more: 0 }, sharedWithOtherCustomers: false, cutWithOtherWork: true, due: '2026-12-12', daysLate: 0 },
+  ],
+  mtm: [{ style: named('DEMO-JKT-01', 'Giacca pelle demo'), colourway: named('BLK', 'Nero'), units: 12, workOrders: 12, byStatus: [{ status: 'IN_PROGRESS', count: 8 }, { status: 'RELEASED', count: 4 }], own: { cells: 12, pieces: 12, cut: 12, sewn: 6, checked: 0 } }],
+  workOrdersLeftOut: 1,
+  notInProduction: { lines: 0, pieces: 0 },
+}
+export const WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: WORK }
+/** Without workorders.view: the work part withheld (the chain's numbers only). */
+export const NO_WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: null, people: null, withheld: ['work', 'people', 'headline.notes'] }
 
 export const ready = (read: OrderProduction = PRODUCTION_READ): ProductionState => ({ status: 'ready', read })
 export const LOADING_STATE: ProductionState = { status: 'loading' }

@@ -375,7 +375,7 @@
     "missing": "The order needs a deposit, but none was asked: production waits.",
     "notNeeded": "No deposit needed: production may start.",
     "amount": "{amount} as {kind}",
-    "open": "Open the deposit"
+    "money": "Money ›"
   },
   "lines": {
     "readOnly": "What the customer ordered, as accepted. The lines change only through an amendment (Amend order).",
@@ -408,7 +408,7 @@
     "toShip": "Left to ship"
   },
   "dates": {
-    "title": "Dates",
+    "title": "Dates & milestones",
     "ordered": "Ordered",
     "requested": "Requested",
     "promised": "Promised",
@@ -419,7 +419,7 @@
     "left_other": "in {count} days",
     "linesLabel": "Dates by line",
     "asOrder": "{date} (the order's)",
-    "historyTitle": "Promise changes",
+    "historyTitle": "Promise moves",
     "never": "Never changed",
     "neverBody": "The promise is still the one given when the order was made.",
     "someone": "Someone in the office",
@@ -434,7 +434,15 @@
       "who": "Who",
       "change": "Change",
       "reason": "Why"
-    }
+    },
+    "historyCount_one": "Promise moves ({count})",
+    "historyCount_other": "Promise moves ({count})",
+    "cutStart": "Cut start",
+    "sewStart": "Sew start",
+    "finish": "Finish",
+    "customerSees": "Customer sees {date}",
+    "shippedOn": "Shipped {shipped}",
+    "shippedDelivered": "Shipped {shipped} · delivered {delivered}"
   },
   "production": {
     "title": "Work orders",
@@ -444,7 +452,6 @@
     },
     "uncovered_one": "{count} line not fully in production",
     "uncovered_other": "{count} lines not fully in production",
-    "noProgressRight": "Floor progress is shown to people who follow production.",
     "progressLabel": "Progress of {number}: {figure}",
     "notReleased": "Not released yet",
     "col": {
@@ -455,7 +462,9 @@
       "progress": "Progress",
       "due": "Due",
       "site": "Site",
-      "released": "Released"
+      "released": "Released",
+      "own": "Made for this order",
+      "materials": "Materials"
     },
     "notCounted": {
       "cut": "Cutting not counted here",
@@ -466,6 +475,19 @@
       "cut": "Cut",
       "sewn": "Sewn",
       "finished": "Finished"
+    },
+    "held": "On hold",
+    "rush": "Urgent",
+    "progressHeld": "Progress needs the work orders right",
+    "mtmRow": "{style} · {colour} — Made to measure · {units} units · {workOrders} work orders",
+    "own": {
+      "of": "Made for this order: {own} of {total}",
+      "all": "Made for this order: {own}",
+      "alsoMakes": "also makes {number}",
+      "alsoMore_one": "and {count} more order of this customer",
+      "alsoMore_other": "and {count} more orders of this customer",
+      "alsoOther": "also makes work of other orders",
+      "cutTogether": "cut together with other work"
     }
   },
   "woStatus": {

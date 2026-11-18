@@ -375,7 +375,7 @@
     "missing": "L'ordine richiede un acconto, ma non è stato chiesto: la produzione aspetta.",
     "notNeeded": "Nessun acconto necessario: la produzione può partire.",
     "amount": "{amount} come {kind}",
-    "open": "Apri l'acconto"
+    "money": "Importi ›"
   },
   "lines": {
     "readOnly": "Quello che il cliente ha ordinato, come accettato. Le righe cambiano solo con una modifica (Modifica ordine).",
@@ -408,7 +408,7 @@
     "toShip": "Da spedire"
   },
   "dates": {
-    "title": "Date",
+    "title": "Date e tappe",
     "ordered": "Ordinato",
     "requested": "Richiesto",
     "promised": "Promesso",
@@ -419,7 +419,7 @@
     "left_other": "tra {count} giorni",
     "linesLabel": "Date per riga",
     "asOrder": "{date} (dell'ordine)",
-    "historyTitle": "Cambi della promessa",
+    "historyTitle": "Spostamenti della promessa",
     "never": "Mai cambiata",
     "neverBody": "La promessa è ancora quella data quando l'ordine è nato.",
     "someone": "Qualcuno dell'ufficio",
@@ -434,7 +434,15 @@
       "who": "Chi",
       "change": "Cambio",
       "reason": "Perché"
-    }
+    },
+    "historyCount_one": "Spostamenti della promessa ({count})",
+    "historyCount_other": "Spostamenti della promessa ({count})",
+    "cutStart": "Inizio taglio",
+    "sewStart": "Inizio confezione",
+    "finish": "Fine",
+    "customerSees": "Il cliente vede {date}",
+    "shippedOn": "Spedito il {shipped}",
+    "shippedDelivered": "Spedito il {shipped} · consegnato il {delivered}"
   },
   "production": {
     "title": "Ordini di lavoro",
@@ -444,7 +452,6 @@
     },
     "uncovered_one": "{count} riga non ancora tutta in produzione",
     "uncovered_other": "{count} righe non ancora tutte in produzione",
-    "noProgressRight": "L'avanzamento del reparto è visibile a chi segue la produzione.",
     "progressLabel": "Avanzamento di {number}: {figure}",
     "notReleased": "Non ancora rilasciato",
     "col": {
@@ -455,7 +462,9 @@
       "progress": "Avanzamento",
       "due": "Scadenza",
       "site": "Sede",
-      "released": "Rilasciato"
+      "released": "Rilasciato",
+      "own": "Per questo ordine",
+      "materials": "Materiali"
     },
     "notCounted": {
       "cut": "Il taglio non si conta qui",
@@ -466,6 +475,19 @@
       "cut": "Tagliati",
       "sewn": "Cuciti",
       "finished": "Finiti"
+    },
+    "held": "In sospeso",
+    "rush": "Urgente",
+    "progressHeld": "Per l'avanzamento serve il permesso sugli ordini di lavoro",
+    "mtmRow": "{style} · {colour} — Su misura · {units} unità · {workOrders} ordini di lavoro",
+    "own": {
+      "of": "Per questo ordine: {own} di {total}",
+      "all": "Per questo ordine: {own}",
+      "alsoMakes": "fa anche {number}",
+      "alsoMore_one": "e {count} altro ordine di questo cliente",
+      "alsoMore_other": "e altri {count} ordini di questo cliente",
+      "alsoOther": "fa anche lavoro di altri ordini",
+      "cutTogether": "tagliato insieme ad altro lavoro"
     }
   },
   "woStatus": {

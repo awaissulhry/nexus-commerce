@@ -81,6 +81,7 @@ import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog
 import { NOTES_NS } from '../../../production/_shared/notes/model'
 // ---- end F-SA-230
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
+import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -438,6 +439,20 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const production = useOrderProduction(api, order.status === 'ready' ? order.value.id : null)
   const [overviewLine, setOverviewLine] = useState<string | null>(null)
   // ---- end F-SA-232
+  // ---- F-SA-234: the materials' readiness of the work orders the production read names (Production › Work orders, while it shows) ----
+  const [readiness, setReadiness] = useState<Part<ReadinessRow[]> | null>(null)
+  const readWork = production.state?.status === 'ready' ? production.state.read.work : null
+  const workIds = (readWork?.workOrders ?? []).map((row) => row.id).join(',')
+  useEffect(() => {
+    if (tab !== 'production' || workIds === '') return setReadiness(null)
+    const abort = new AbortController()
+    setReadiness((known) => known ?? PART_LOADING)
+    getReadiness(api, workIds.split(','), abort.signal)
+      .then((rows) => !abort.signal.aborted && setReadiness(part(rows)))
+      .catch((error: unknown) => !abort.signal.aborted && setReadiness({ value: null, problem: readProblem(error) }))
+    return () => abort.abort()
+  }, [api, tab, workIds])
+  // ---- end F-SA-234
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -458,6 +473,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     links: links.model, // B-TH-256
     people, // F-SA-230
     production: production.state, // F-SA-232
+    readiness, // F-SA-234
     overviewLine,
     liveState,
     changed,
