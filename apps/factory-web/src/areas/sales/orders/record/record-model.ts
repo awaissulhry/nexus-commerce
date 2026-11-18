@@ -15,6 +15,7 @@ import type { NoteDialogActions, NoteDialogModel } from '../../../production/_sh
 import type { ProductionState } from './overview/model'
 import type { LiveState } from '../hooks'
 import type { ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234
+import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: the one HealthCard
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -146,6 +147,8 @@ export interface OrderRecordModel {
   production?: ProductionState | null
   /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
   readiness?: Part<ReadinessRow[]> | null
+  /** F-SA-235: the order's health on Production (the work order record's HealthCard; workorders.view); absent: not read. */
+  health?: HealthModel | null
   /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
   overviewLine?: string | null
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
@@ -204,6 +207,8 @@ export interface OrderRecordActions {
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
   links?: LinksActions
+  /** F-SA-235: the HealthCard's Raise to At risk, Clear, Try again. */
+  health?: HealthActions
   /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
   onRetryProduction?: () => void
   onOpenLine?: (rowId: string | null) => void

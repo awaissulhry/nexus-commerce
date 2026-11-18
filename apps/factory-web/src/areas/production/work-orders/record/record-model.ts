@@ -17,7 +17,7 @@ import type { VarianceModel } from '../labour/variance/model'
 // B-TH-265: the work order on RecordFrame — "Order files (n)" and the orders' threads beside the work order's own notes.
 import type { OrderFilesActions, OrderFilesModel, OrderThreadChoice } from './order-files/model'
 // F-PR-05a: the band facts' health (each order's, B-PR-35) with Raise to At risk, and the Overview's Gates & readiness.
-import type { HealthActions, HealthModel } from './health/model'
+import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: moved to lib (one card)
 import type { GatesPart } from './gates/use-gates'
 // F-PR-21: the supervisor fact's Change… opens THE assign dialog (areas/_shared/production-supervisor).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'

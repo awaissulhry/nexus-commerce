@@ -74,7 +74,7 @@ export const PRODUCTION_READ: OrderProduction = {
   work: null,
   // F-SA-234: the order's gates and milestones under its own right (the planner's demo milestones: two gates done, one late; start; shipping).
   dates: { gates: [], milestones: MILESTONES.milestones.map((row) => ({ ...row, gateId: null, owner: null })), late: MILESTONES.late, next: MILESTONES.next, planned: { cutStart: '2026-11-10', sewStart: '2026-11-13', finish: '2026-12-10' }, forecast: [{ lineId: LINE_BLK, seq: 10, finish: '2026-12-08', risk: 'ON_TIME', slackDays: 7, sizes: [{ size: '48', finish: '2026-12-05', risk: 'ON_TIME' }, { size: '50', finish: '2026-12-08', risk: 'ON_TIME' }] }] },
-  quality: { issues: null, ncrs: null, final: null },
+  quality: { issues: [], ncrs: [], final: [] },
   people: null,
   changes: { openRequests: [] },
 }
@@ -104,7 +104,18 @@ export const WORK: Work = {
 }
 export const WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: WORK }
 /** Without workorders.view: the work part withheld (the chain's numbers only). */
-export const NO_WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: null, people: null, withheld: ['work', 'people', 'headline.notes'] }
+export const NO_WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: null, people: null, quality: { issues: null, ncrs: null, final: null }, withheld: ['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final'] }
+
+/** F-SA-235: a quality hold on WO-00022 with the office's note, one open problem, one NCR, a final inspection waiting. */
+export const QUALITY_READ: OrderProduction = {
+  ...WORK_READ,
+  headline: { ...HEADLINE, held: true, holds: [{ kind: 'QUALITY', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14' }], holdNotes: [{ workOrderId: WORK_ORDERS[1]!.id, number: 'WO-00022', kind: 'QUALITY', note: 'Lotto pelle in verifica col fornitore.', since: '2026-11-14T08:30:00Z' }] },
+  quality: {
+    issues: [{ id: '0190f0e2-7171-7000-8000-000000000301', source: 'FLOOR', recordType: 'WorkOrder', since: '2026-11-16T10:00:00Z', dueOn: '2026-11-19', escalation: 1 }],
+    ncrs: [{ id: '0190f0e2-7272-7000-8000-000000000041', number: 'NCR-2026-0041', stage: 'OPEN', severity: 'MINOR', sharedWorkOrder: false }],
+    final: [{ workOrderId: WORK_ORDERS[0]!.id, number: 'FI-2026-0088', status: 'OPEN', sampleSize: 8, on: null }],
+  },
+}
 
 export const ready = (read: OrderProduction = PRODUCTION_READ): ProductionState => ({ status: 'ready', read })
 export const LOADING_STATE: ProductionState = { status: 'loading' }

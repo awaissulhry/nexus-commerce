@@ -1,10 +1,25 @@
 import { healthRank, HEALTH_NOTE_MAX, HEALTH_REASON_CODES, type BrandHealth, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
 import { WAITING_ON, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
-import { isApiError } from '../../../../../lib/api/errors'
-import type { HealthInput, HealthState, WaitingInput } from '../../../../../lib/production/model'
-import type { WorkOrder } from '../../../_shared/api'
-import type { Phrase } from '../../../_shared/model'
+import { isApiError } from '../../api/errors'
+import type { HealthInput, HealthState, Phrase, WaitingInput } from '../model'
 import type { BrandHealthView } from './api'
+
+// F-SA-235 (sales page plan N2, P2; lane agreement "HealthCard moves to fw/lib/production/health"): moved here from the work order
+// record (areas/production/work-orders/record/health) so the sales order's Production tab mounts the SAME card — never a fork. The
+// words stay the `production` catalogue's (`health.*`, `raise.*`, `error.*`).
+
+/** The records whose orders' health a card shows: a work order (its orders) or one sales order (itself). */
+export interface HealthOwner {
+  readonly orders: readonly { readonly id: string; readonly number: string }[]
+}
+
+/** A failed read in the `production` catalogue's words (the work order record's own rule). */
+export function healthReadProblem(error: unknown): string {
+  if (!isApiError(error)) return 'error.read'
+  if (error.kind === 'forbidden') return 'error.forbidden'
+  if (error.kind === 'unavailable') return 'error.offline'
+  return 'error.read'
+}
 
 /**
  * F-PR-05a — the work order's health, without a screen (production plan §4 "Health: computed; a person may raise it to At risk
@@ -51,7 +66,7 @@ export interface HealthActions {
 }
 
 /** The orders whose health this work order shows: its own (one customer per work order), each once, in its order. */
-export function healthOrdersOf(workOrder: Pick<WorkOrder, 'orders'>): Array<{ orderId: string; number: string }> {
+export function healthOrdersOf(workOrder: HealthOwner): Array<{ orderId: string; number: string }> {
   return workOrder.orders.filter((order, index) => workOrder.orders.findIndex((other) => other.id === order.id) === index).map((order) => ({ orderId: order.id, number: order.number }))
 }
 

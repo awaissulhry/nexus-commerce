@@ -17,7 +17,7 @@ import {
   raiseOpenHeld,
   raiseProblem,
   type HealthPart,
-} from '../health/model'
+} from '../../../../../lib/production/health/model' // F-SA-235: the card moved to lib (one card)
 import { customerFactOf, doneFact, previewHeld, previewRecord, progressCell, progressTableOf, reportFirst } from './model'
 
 /**

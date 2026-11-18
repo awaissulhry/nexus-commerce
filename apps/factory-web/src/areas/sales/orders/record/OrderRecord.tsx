@@ -82,6 +82,7 @@ import { NOTES_NS } from '../../../production/_shared/notes/model'
 // ---- end F-SA-230
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
 import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
+import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: the one HealthCard (moved to lib)
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -453,6 +454,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
     return () => abort.abort()
   }, [api, tab, workIds])
   // ---- end F-SA-234
+  // ---- F-SA-235: the order's health (raise to At risk / clear: production.brand.manage), read while Production shows (workorders.view) ----
+  const healthOwner = useMemo(
+    () => (order.status === 'ready' && tab === 'production' && can.viewWorkOrders ? { orders: [{ id: order.value.id, number: order.value.number }], version: order.value.version } : null),
+    [order, tab, can.viewWorkOrders],
+  )
+  const health = useBrandHealth(api, healthOwner, session.permissions, (words) => setNotice({ tone: 'success', words: { key: words.key === 'health.clearedNotice' ? 'notice.healthCleared' : 'notice.healthRaised' } }))
+  // ---- end F-SA-235
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -474,6 +482,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     people, // F-SA-230
     production: production.state, // F-SA-232
     readiness, // F-SA-234
+    health: healthOwner ? health.model : null, // F-SA-235
     overviewLine,
     liveState,
     changed,
@@ -552,6 +561,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         links: links.actions, // B-TH-256
         // ---- F-SA-232 ----
         onRetryProduction: () => production.again(),
+        health: health.actions, // F-SA-235
         onOpenLine: setOverviewLine,
         // ---- F-SA-230: the ⋯ People (the production lane's dialogs) ----
         people: {

@@ -56,8 +56,8 @@ describe('the order on RecordFrame', () => {
     expect(html).toContain('id="dates"')
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
     expect(tab).toMatch(/<WorkOrdersCard order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<section id="dates"/)
-    const source = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
-    expect(source).toMatch(/<ProductionTab order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<TechPackCard model=\{model\.depth\} actions=\{actions\?\.depth\} \/>/)
+    // F-SA-235: the tech pack in force is Production's "Specs in force" (inside the tab, no longer at its foot).
+    expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
     // F-SA-234: today's Dates card merged into Production and deleted.
     expect(() => readFileSync(new URL('./view/DatesTab.tsx', import.meta.url), 'utf8')).toThrow()
   })

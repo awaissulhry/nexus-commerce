@@ -488,6 +488,32 @@
       "alsoMore_other": "e altri {count} ordini di questo cliente",
       "alsoOther": "fa anche lavoro di altri ordini",
       "cutTogether": "tagliato insieme ad altro lavoro"
+    },
+    "quality": {
+      "title": "Sospensioni, qualità e problemi",
+      "notes": "Note dell'ufficio sulle sospensioni",
+      "officeOnly": "Solo ufficio · dal {date}",
+      "issuesHeld": "Per i problemi serve il permesso sugli ordini di lavoro",
+      "needsAnswer_one": "Serve una risposta: {count}",
+      "needsAnswer_other": "Serve una risposta: {count}",
+      "issue": "Chiesto il {since} · risposta entro il {due}",
+      "escalated_one": "Sollecitato {count} volta",
+      "escalated_other": "Sollecitato {count} volte",
+      "ncrsHeld": "Per le non conformità serve il permesso qualità",
+      "ncrs_one": "{count} non conformità aperta:",
+      "ncrs_other": "{count} non conformità aperte:",
+      "finalHeld": "Per i controlli finali serve il permesso sui controlli",
+      "final": "Controlli finali",
+      "finalRow": "{number} · {checked} controllati",
+      "finalState": {
+        "PASSED": "Superato il {date}",
+        "FAILED": "Non superato il {date}",
+        "WAITING": "In attesa"
+      },
+      "nothing": "Nessuna sospensione, problema o rilievo di qualità"
+    },
+    "specs": {
+      "title": "Specifiche in vigore"
     }
   },
   "woStatus": {
@@ -739,7 +765,9 @@
     "amended": "Modifica {revision} applicata.",
     "amendedReaccept": "Modifica {revision} applicata. Il totale imponibile è cambiato: il cliente deve accettare di nuovo l'ordine — avvisalo.",
     "reopened": "Le righe sono state riaperte.",
-    "cancelled": "L'ordine è stato annullato."
+    "cancelled": "L'ordine è stato annullato.",
+    "healthRaised": "Portato a A rischio: il cliente lo legge con il motivo.",
+    "healthCleared": "Segnalazione tolta: parlano di nuovo le date."
   },
   "stepUp": {
     "title": "Conferma che sei tu",

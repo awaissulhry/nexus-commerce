@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
+import type { ComponentType } from 'react'
 import { describe, expect, it } from 'vitest'
+import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
+import { designScreen } from './fixtures'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { productionWordsFor } from '../../../../lib/production/words'
@@ -72,3 +76,32 @@ describe('F-SA-234: Production › Work orders — the order’s own pieces', ()
   })
 })
 // ---- end F-SA-234
+
+const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(designScreen.view as ComponentType<{ model: unknown }>, designScreen.cases.find((item) => item.id === id)!.model, locale)
+
+// ---- F-SA-235: Holds, quality & problems; Materials; Specs in force (the HealthCard moved to lib, one card) -------------------------
+describe('F-SA-235: Production’s holds, quality & problems — each block held in words without its right', () => {
+  it('a quality hold in plain words, the office note marked office only, a problem that needs an answer, the NCR, the final inspection', () => {
+    const text = textOf(draw('production-quality'))
+    for (const words of ['Holds, quality & problems', 'On hold since', 'Shade difference on the leather', 'Goes back to In progress when quality releases it.', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer: 1', 'Escalated 1×', 'NCR-2026-0041', 'FI-2026-0088', 'Specs in force']) expect(text, words).toContain(words)
+    expect(text).not.toContain('No holds, problems or quality findings')
+  })
+
+  it('without the rights: each block says what it needs (never "none"); everything read and empty: one sentence', () => {
+    const held = textOf(draw('production-no-right'))
+    for (const words of ['Problems need the work orders right', 'Nonconformities need the quality right', 'Final inspections need the inspections right', 'Progress needs the work orders right']) expect(held, words).toContain(words)
+    expect(held).not.toContain('No holds, problems or quality findings')
+    expect(textOf(draw('production-progress'))).toContain('No holds, problems or quality findings')
+  })
+
+  it('the work order record’s HealthCard is the one card (moved to lib/production/health); Materials and the tech pack moved to Production', () => {
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("import { HealthCard } from '../../../../../lib/production/health/view/HealthCard'")
+    expect(tab).toContain('<MaterialsCard order={order} model={model.depth}')
+    expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
+    const workOrder = readFileSync(new URL('../../../production/work-orders/record/view/OverviewTab.tsx', import.meta.url), 'utf8')
+    expect(workOrder).toContain("from '../../../../../lib/production/health/view/HealthCard'")
+    expect(readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')).not.toContain('<MaterialsCard')
+  })
+})
+// ---- end F-SA-235

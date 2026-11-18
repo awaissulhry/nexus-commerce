@@ -24,7 +24,6 @@ import { ShipmentsTab } from './ShipmentsTab'
 import { depthMenuItems, DepthNotice, DepthPills, WaitingBanner } from '../../depth/view/DepthBand'
 import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import { NAMESPACE as DEPTH } from '../../depth/model'
-import { TechPackCard } from '../../confirmation/view/ConfirmationCard'
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
@@ -378,12 +377,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         <div className="fw-so-main">
           {model.tab === 'overview' && <OverviewTab order={order} model={model} actions={actions} />}
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
-          {/* F-SA-230 / F-SA-234: Production — the work orders with the order's own pieces, the dates and milestones (#dates), then the
-              tech pack in force. */}
+          {/* F-SA-230 / F-SA-234 / F-SA-235: Production — the work orders with the order's own pieces, the dates and milestones (#dates),
+              holds, quality & problems, the specs in force (the tech pack), the customer's materials. */}
           {model.tab === 'production' && (
             <div className="fw-so-merged">
               <ProductionTab order={order} model={model} actions={actions} />
-              <TechPackCard model={model.depth} actions={actions?.depth} />
             </div>
           )}
           {/* F-SA-230: Changes — the confirmation and the customer's yes (#confirmation), then the amendments. */}

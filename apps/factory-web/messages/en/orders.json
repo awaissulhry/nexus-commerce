@@ -488,6 +488,32 @@
       "alsoMore_other": "and {count} more orders of this customer",
       "alsoOther": "also makes work of other orders",
       "cutTogether": "cut together with other work"
+    },
+    "quality": {
+      "title": "Holds, quality & problems",
+      "notes": "Office notes on the holds",
+      "officeOnly": "Office only · since {date}",
+      "issuesHeld": "Problems need the work orders right",
+      "needsAnswer_one": "Needs an answer: {count}",
+      "needsAnswer_other": "Needs an answer: {count}",
+      "issue": "Asked {since} · answer by {due}",
+      "escalated_one": "Escalated {count}×",
+      "escalated_other": "Escalated {count}×",
+      "ncrsHeld": "Nonconformities need the quality right",
+      "ncrs_one": "{count} open nonconformity:",
+      "ncrs_other": "{count} open nonconformities:",
+      "finalHeld": "Final inspections need the inspections right",
+      "final": "Final inspections",
+      "finalRow": "{number} · {checked} checked",
+      "finalState": {
+        "PASSED": "Passed {date}",
+        "FAILED": "Failed {date}",
+        "WAITING": "Waiting"
+      },
+      "nothing": "No holds, problems or quality findings"
+    },
+    "specs": {
+      "title": "Specs in force"
     }
   },
   "woStatus": {
@@ -739,7 +765,9 @@
     "amended": "Amendment {revision} applied.",
     "amendedReaccept": "Amendment {revision} applied. The net total changed: the customer must accept the order again — tell them.",
     "reopened": "The lines were reopened.",
-    "cancelled": "The order was cancelled."
+    "cancelled": "The order was cancelled.",
+    "healthRaised": "Raised to At risk: the customer reads it with its reason.",
+    "healthCleared": "The raise is cleared: the dates speak again."
   },
   "stepUp": {
     "title": "Confirm it's you",

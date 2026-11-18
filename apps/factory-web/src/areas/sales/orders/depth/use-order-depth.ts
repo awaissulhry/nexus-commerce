@@ -166,7 +166,8 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   const [approval, againApproval] = usePart(at && order?.status === 'PENDING_APPROVAL' ? at : null, (signal) => getApproval(api, id!, signal))
   const [freeze, againFreeze] = usePart(on('lines', 'changes'), (signal) => getFreeze(api, id!, signal))
   const [changes, againChanges] = usePart(on('changes'), (signal) => getChanges(api, id!, signal))
-  const [materials, againMaterials, putMaterials] = usePart(on('lines'), (signal) => getMaterials(api, id!, signal))
+  // F-SA-235: the customer's materials are on Production › Materials (they moved from Lines).
+  const [materials, againMaterials, putMaterials] = usePart(on('production'), (signal) => getMaterials(api, id!, signal))
   // ---- B-TH-214 (tabs 9 → 5): the confirmation is on Confirmation & changes; the tech pack and the dates on Production & dates ----
   const [confirmation, againConfirmation, putConfirmation] = usePart(at && tab === 'changes' ? at : null, (signal) => getConfirmation(api, id!, signal))
   // F-SA-230: the tech pack is read ONCE per order (the band's "Made from INQ-…" and Production's Specs in force both draw it).

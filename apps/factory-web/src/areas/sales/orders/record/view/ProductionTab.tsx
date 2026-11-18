@@ -21,6 +21,15 @@ import type { Work } from '../overview/api'
 // ---- B-W2b-323 (orders in depth on screen): the finish forecast per line; the milestones' card, fed by the order's own read ----
 import { ForecastCell, ForecastNote, MilestonesCard } from '../../depth/view/DatesDepth'
 import { NAMESPACE as DEPTH } from '../../depth/model'
+// ---- F-SA-235: Holds, quality & problems (the work order record's HealthCard, moved to lib/production/health: one card), Materials
+// (the customer-supplied materials card, moved from Lines), Specs in force (the tech pack in force, moved from the tab's foot) ----
+import { Lock } from 'lucide-react'
+import { HealthCard } from '../../../../../lib/production/health/view/HealthCard'
+import { useProductionWords } from '../../../../../lib/production/words'
+import { MaterialsCard } from '../../materials/view/MaterialsCard'
+import { TechPackCard } from '../../confirmation/view/ConfirmationCard'
+import { say } from '../overview/model'
+// ---- end F-SA-235
 
 const WO_TONE = { DRAFT: 'neutral', RELEASED: 'info', IN_PROGRESS: 'info', COMPLETED: 'success', CLOSED: 'neutral', CANCELLED: 'danger' } as const
 /** The readiness words are the production lane's (`production-work-orders` readiness.*), reused in place. */
@@ -41,7 +50,7 @@ const WORK_ORDERS_NS = 'production-work-orders'
  */
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
-    <WithMessages namespaces={[WORK_ORDERS_NS]}>
+    <WithMessages namespaces={[WORK_ORDERS_NS, 'production' /* F-SA-235: the HealthCard's words */]}>
       <div className="fw-so-stack">
         <WorkOrdersCard order={order} model={model} actions={actions} />
         <section id="dates" className="fw-so-anchor fw-so-stack" aria-labelledby="fw-so-dates-title">
@@ -49,6 +58,12 @@ export function ProductionTab({ order, model, actions }: { order: Order; model: 
           <MilestonesCard part={milestonesPart(model)} onRetry={() => actions?.onRetryProduction?.()} />
           <PromiseMoves order={order} />
         </section>
+        {/* F-SA-235: what holds it, its quality and its problems; the materials; the specs it is made to. */}
+        <div className="fw-so-cards fw-so-cards--wide">
+          <HoldsQualityCard order={order} model={model} actions={actions} />
+          <SpecsCard order={order} model={model} actions={actions} />
+        </div>
+        <MaterialsCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
       </div>
     </WithMessages>
   )
@@ -386,3 +401,130 @@ function PromiseMoves({ order }: { order: Order }) {
     </Card>
   )
 }
+
+// ---- F-SA-235 (10-order-page §2.3 P3, P4, P5) ------------------------------------------------------------------------------------
+
+/**
+ * P3 Holds, quality & problems: the order's health (the work order record's HealthCard — computed + shown, Raise to At risk with a
+ * curated reason and an office note, Clear; production.brand.manage), what holds its work (in plain words; the office's note per work
+ * order with workorders.view, never shared), the open problems that need an answer, the final inspections and the NCRs of its own
+ * work orders. Each block without its right is held in one line of words — never an empty list that looks like "none". A hold that
+ * serves several customers names none of the others (the read's own words).
+ */
+function HoldsQualityCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const w = useProductionWords()
+  const locale = useLocale()
+  const read = readOf(model.production)
+  const headline = read?.headline ?? null
+  const quality = read?.quality ?? null
+  const withheld = new Set(read?.withheld ?? [])
+  const holds = headline?.holds ?? []
+  const notes = headline?.holdNotes ?? null
+  const issues = quality?.issues ?? null
+  const ncrs = quality?.ncrs ?? null
+  const finals = quality?.final ?? null
+  // "Nothing" only when every block was read and is empty (a block held back is never "none").
+  const none = (list: readonly unknown[] | null) => list !== null && list.length === 0
+  const nothing = !!read && holds.length === 0 && none(issues) && none(ncrs) && none(finals)
+  const ncrHref = (id: string, number: string) => `${model.prefix}${recordAddress({ type: 'Nonconformance', id, label: number, companyId: order.companyId }, OFFICE_PAGES)}`
+  return (
+    <div className="fw-so-stack">
+      {model.health && model.health.orders.length > 0 && <HealthCard model={model.health} daysLate={order.daysLate} actions={actions?.health} />}
+      <Card padded>
+        <h2 className="fw-so-h2">{t('production.quality.title')}</h2>
+        {!read ? (
+          <Skeleton height={44} />
+        ) : (
+          <div className="fw-so-stack">
+            {holds.map((hold, index) => (
+              <div key={`${hold.kind}-${index}`} className="fw-so-cell">
+                <span>{w.t('parts.hold.office.titleWhy', { date: w.day(hold.since), reason: say(hold.words, locale) })}</span>
+                <span className="fw-so-cell-sub">{w.t(`parts.hold.office.${hold.kind}`)}</span>
+              </div>
+            ))}
+            {notes && notes.length > 0 && (
+              <ul className="fw-so-datelist" aria-label={t('production.quality.notes')}>
+                {notes.map((note) => (
+                  <li key={`${note.workOrderId}-${note.since}`}>
+                    <span className="fw-so-inline">
+                      <Lock size={12} aria-hidden /> <strong>{note.number}</strong> {note.note}
+                    </span>
+                    <span className="fw-so-cell-sub">{t('production.quality.officeOnly', { date: formatDate(note.since, { locale }) })}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {issues === null ? (
+              withheld.has('quality.issues') && <p className="fw-so-hint">{t('production.quality.issuesHeld')}</p>
+            ) : issues.length > 0 ? (
+              <div className="fw-so-stack">
+                <h3 className="fw-so-h3">{t('production.quality.needsAnswer', { count: issues.length })}</h3>
+                <ul className="fw-so-datelist">
+                  {issues.map((issue) => (
+                    <li key={issue.id}>
+                      <span>{t('production.quality.issue', { since: formatDate(issue.since, { locale }), due: formatDate(dayInstant(issue.dueOn), { locale }) })}</span>
+                      {issue.escalation > 0 && <span className="fw-so-cell-sub">{t('production.quality.escalated', { count: issue.escalation })}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {ncrs === null ? (
+              withheld.has('quality.ncrs') && <p className="fw-so-hint">{t('production.quality.ncrsHeld')}</p>
+            ) : ncrs.length > 0 ? (
+              <p className="fw-so-inline">
+                <span>{t('production.quality.ncrs', { count: ncrs.length })}</span>
+                {ncrs.map((ncr) => (
+                  <Link key={ncr.id} className="fw-so-link" href={ncrHref(ncr.id, ncr.number)}>
+                    {ncr.number}
+                  </Link>
+                ))}
+              </p>
+            ) : null}
+            {finals === null ? (
+              withheld.has('quality.final') && <p className="fw-so-hint">{t('production.quality.finalHeld')}</p>
+            ) : finals.length > 0 ? (
+              <ul className="fw-so-datelist" aria-label={t('production.quality.final')}>
+                {finals.map((entry) => (
+                  <li key={entry.workOrderId}>
+                    <span>{t('production.quality.finalRow', { number: entry.number ?? '—', checked: entry.sampleSize })}</span>
+                    <span className="fw-so-cell-sub">{t(`production.quality.finalState.${entry.status === 'PASSED' || entry.status === 'FAILED' ? entry.status : 'WAITING'}`, { date: entry.on ? formatDate(dayInstant(entry.on), { locale }) : '—' })}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {nothing && <p className="fw-so-hint">{t('production.quality.nothing')}</p>}
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+/**
+ * P5 Specs in force: the revision of each style the order is made to (as the order fixes it; else the work order chooses), and the
+ * customer's tech pack in force (the request's files: named vs newer, opened in the viewer). An open design change has its place
+ * here once the change flow lands (S4).
+ */
+function SpecsCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const styles = [...new Map(order.lines.map((line) => [line.styleId, line])).values()]
+  return (
+    <div className="fw-so-stack">
+      <Card padded>
+        <h2 className="fw-so-h2">{t('production.specs.title')}</h2>
+        <ul className="fw-so-datelist">
+          {styles.map((line) => (
+            <li key={line.styleId}>
+              <span>{`${line.style?.code ?? '—'} · ${line.style?.name ?? ''}`}</span>
+              <span className="fw-so-cell-sub">{line.styleRevision ? t('lines.revision', { revision: line.styleRevision.revision }) : t('lines.noRevision')}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      <TechPackCard model={model.depth} actions={actions?.depth} />
+    </div>
+  )
+}
+// ---- end F-SA-235

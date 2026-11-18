@@ -19,7 +19,6 @@ import type { AmendState, OrderRecordActions, OrderRecordModel } from '../record
 import { LinesEditor } from './LinesEditor'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { FrozenSizes, frozenIssues } from '../../depth/view/LinesDepth'
-import { MaterialsCard } from '../../materials/view/MaterialsCard'
 import { NAMESPACE as DEPTH } from '../../depth/model'
 
 /**
@@ -109,8 +108,7 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
             )
           })}
           {model.sizeLayer === 'inWorkOrders' && <p className="fw-so-hint">{t('lines.madeHint')}</p>}
-          {/* B-W2b-323: Customer-supplied materials (order.lines.owned). */}
-          <MaterialsCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
+          {/* F-SA-235: Customer-supplied materials moved to Production › Materials. */}
         </div>
       }
       aside={<SummaryRail order={order} model={model} />}

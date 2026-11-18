@@ -63,7 +63,7 @@ import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
-import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ready, WORK_READ } from './overview/fixtures'
+import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
@@ -338,6 +338,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-progress', label: 'Sales · Production: the work orders with this order’s own pieces (where, made for this order, also makes, held, a shared cut), 12 made-to-measure units as one row, 1 not shown', model: base('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
+    { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ) }) },
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
     { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(WORK_READ) }) },
