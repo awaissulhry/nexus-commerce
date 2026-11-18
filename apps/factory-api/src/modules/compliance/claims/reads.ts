@@ -1,14 +1,18 @@
 import type { Prisma } from '@nexus/factory-db'
-import { CLAIMS_APPROVE, CLAIMS_MANAGE } from '@nexus/factory-domain/compliance/claims/permissions'
+import { CLAIMS_APPROVE, CLAIMS_MANAGE, CLAIMS_VIEW } from '@nexus/factory-domain/compliance/claims/permissions'
 import { CLAIM_LIMITS, CLAIMS_LAW, GENERIC_LAW, LABEL_LAW, nextCode, OFFSET_LAW, wordingCheck, type ClaimKind, type ClaimScope, type ClaimState } from '@nexus/factory-domain/compliance/claims/rules'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
+import { reachesEveryParty, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../../core/command'
-import type { OfficeContext } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
 import { peopleNames } from '../../../platform/alerts/store'
+import { styleBrandWhere } from '../../product/styles/store'
+import { optionalStyleWall, styleReached } from '../wall'
 import { CLAIM_CHECK_KEY } from './gate-plug'
 import { CLAIM_SELECT, claimScope, claimViews, holdsHere, mayRead, officeOf, todayOf, useViews, USE_SELECT, type ClaimRow, type ClaimView, type Reader } from './store'
+import { fileRecordScope, reachesFileRecord } from '../../../platform/files/record-scope'
 
 /**
  * The claims register's reads (B-W2b-264; PRD-380; design compliance.sourcing), office only, compliance.certificates.view,
@@ -32,7 +36,8 @@ const byCode = (a: ClaimView, b: ClaimView): number => a.code.localeCompare(b.co
 
 /** Every claim of the scope the caller reads (with one more row: whether the list is complete). */
 async function registerOf(db: Reader, context: OfficeContext, where: Prisma.SustainabilityClaimWhereInput, today: BusinessDate) {
-  const rows = (await db.sustainabilityClaim.findMany({ where: { AND: [claimScope(context), where] }, take: CLAIM_LIMITS.list + 1, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: CLAIM_SELECT })) as ClaimRow[]
+  // fix-pr-8: a claim of a customer's private-label style is that customer's (the brand wall).
+  const rows = (await db.sustainabilityClaim.findMany({ where: { AND: [claimScope(context), optionalStyleWall(actorOf(context), CLAIMS_VIEW), where] }, take: CLAIM_LIMITS.list + 1, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: CLAIM_SELECT })) as ClaimRow[]
   const complete = rows.length <= CLAIM_LIMITS.list
   return { views: (await claimViews(db, context, rows.slice(0, CLAIM_LIMITS.list), today)).sort(byCode), complete }
 }
@@ -118,6 +123,7 @@ export async function readClaimRow(db: Reader, context: OfficeContext, claimId: 
   if (!isUuid(claimId)) throw new NotFoundError(CLAIM_NOT_FOUND)
   const row = (await db.sustainabilityClaim.findUnique({ where: { id: claimId }, select: CLAIM_SELECT })) as ClaimRow | null
   if (!row || !mayRead(context, row.companyId) || (context.companyId && context.companyId !== row.companyId)) throw new NotFoundError(CLAIM_NOT_FOUND)
+  if (!(await styleReached(db, actorOf(context), CLAIMS_VIEW, row.styleId))) throw new NotFoundError(CLAIM_NOT_FOUND) // fix-pr-8
   return row
 }
 
@@ -145,7 +151,16 @@ export async function claimRecord(caller: CommandCaller, claimId: string) {
   return caller.withClient(async (client) => {
     const row = await readClaimRow(client, context, claimId)
     const [claim] = await claimViews(client, context, [row], today)
-    const uses = await client.claimUse.findMany({ where: { claimId: row.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: USE_SELECT })
+    // fix-pr-8: a use on a style (or its label) of a customer the person does not reach is that customer's.
+    const brand = styleBrandWhere(actorOf(context), CLAIMS_VIEW)
+    const hidden =
+      Object.keys(brand).length === 0
+        ? new Set<string>()
+        : new Set([
+            ...(await client.style.findMany({ where: { NOT: brand }, select: { id: true } })).map((style) => style.id),
+            ...(await client.labelTemplate.findMany({ where: { style: { is: { NOT: brand } } }, select: { id: true } })).map((label) => label.id),
+          ])
+    const uses = (await client.claimUse.findMany({ where: { claimId: row.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: USE_SELECT })).filter((use) => !hidden.has(use.recordId))
     const audits = await client.auditLog.findMany({ where: { recordType: 'SustainabilityClaim', recordId: row.id }, orderBy: [{ at: 'desc' }, { id: 'desc' }], take: 200, select: { id: true, at: true, action: true, actorId: true, audience: true, reason: true, after: true } })
     const names = await peopleNames(client, audits.filter((entry) => entry.audience === 'OFFICE').map((entry) => entry.actorId))
     return {
@@ -171,6 +186,7 @@ const EVIDENCE_CATEGORIES = ['SUPPLIER_CERTIFICATE', 'TEST_REPORT', 'DECLARATION
 /** GET /compliance/claims/choices: what New claim and Where used choose from, for the screen's company. */
 export async function claimChoices(caller: CommandCaller, query: { readonly q?: string | undefined }) {
   const context = officeOf(caller)
+  const actor = actorOf(context)
   return caller.withClient(async (client) => {
     const company = context.companyId ? { OR: [{ companyId: null }, { companyId: context.companyId }] } : {}
     const words = (query.q ?? '').trim()
@@ -178,6 +194,7 @@ export async function claimChoices(caller: CommandCaller, query: { readonly q?: 
       where: {
         AND: [
           company,
+          scopeWhere(actor, CLAIMS_MANAGE, { party: { field: 'partyId', nullable: true } }) as Prisma.StoredFileWhereInput, // fix-pr-8
           { status: 'AVAILABLE', supersededAt: null },
           { OR: [{ kind: 'CERTIFICATE' }, { category: { in: [...EVIDENCE_CATEGORIES] } }, { recordType: 'SustainabilityClaim' }] },
           words ? { originalName: { contains: words, mode: 'insensitive' } } : {},
@@ -185,15 +202,24 @@ export async function claimChoices(caller: CommandCaller, query: { readonly q?: 
       },
       orderBy: [{ availableAt: 'desc' }, { id: 'desc' }],
       take: CLAIM_LIMITS.choices,
-      select: { id: true, originalName: true, kind: true, category: true, recordType: true, recordId: true, expiresOn: true, availableAt: true },
+      select: { id: true, companyId: true, originalName: true, kind: true, category: true, recordType: true, recordId: true, expiresOn: true, availableAt: true },
     })
-    const styles = await client.style.findMany({ where: { AND: [company, { status: { not: 'ARCHIVED' } }] }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: CLAIM_LIMITS.list, select: { id: true, code: true, name: true } })
+    // fix-pr-8 (the brand wall): a file of a record of a customer the person does not reach (its declaration, its order) is
+    // that customer's — as the files read it (platform/files record-scope), for a person limited to some customers.
+    const reached = reachesEveryParty(actor, CLAIMS_MANAGE)
+      ? files
+      : (
+          await Promise.all(
+            files.map(async (file) => (file.recordType && file.recordId ? reachesFileRecord(actor, CLAIMS_MANAGE, await fileRecordScope(client, context.tenantId, { recordType: file.recordType, recordId: file.recordId }), file.companyId) : true) ? [file] : []),
+          )
+        ).flat()
+    const styles = await client.style.findMany({ where: { AND: [company, styleBrandWhere(actor, CLAIMS_MANAGE), { status: { not: 'ARCHIVED' } }] }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: CLAIM_LIMITS.list, select: { id: true, code: true, name: true } })
     const materials = await client.item.findMany({ where: { AND: [company, { status: 'ACTIVE', kind: { not: 'FINISHED' } }] }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: CLAIM_LIMITS.list, select: { id: true, code: true, name: true } })
-    const labels = await client.labelTemplate.findMany({ where: { AND: [company, { status: { not: 'RETIRED' } }] }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: CLAIM_LIMITS.list, select: { id: true, code: true, name: true, styleId: true } })
+    const labels = await client.labelTemplate.findMany({ where: { AND: [company, optionalStyleWall(actor, CLAIMS_MANAGE) as Prisma.LabelTemplateWhereInput, { status: { not: 'RETIRED' } }] }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: CLAIM_LIMITS.list, select: { id: true, code: true, name: true, styleId: true } })
     const phrases = await client.phrase.findMany({ where: { AND: [company, { kind: 'CLAIM', status: 'ACTIVE' }] }, orderBy: [{ key: 'asc' }], take: CLAIM_LIMITS.choices, select: { key: true, sourceText: true, sourceLanguage: true } })
     const codes = await client.sustainabilityClaim.findMany({ where: context.companyId ? { companyId: context.companyId } : {}, select: { code: true } })
     return {
-      files: files.map((file) => ({ id: file.id, name: file.originalName, kind: file.kind, category: file.category, recordType: file.recordType, recordId: file.recordId, expiresOn: file.expiresOn ? file.expiresOn.toISOString().slice(0, 10) : null, availableAt: file.availableAt ? toUtcIso(file.availableAt) : null })),
+      files: reached.map((file) => ({ id: file.id, name: file.originalName, kind: file.kind, category: file.category, recordType: file.recordType, recordId: file.recordId, expiresOn: file.expiresOn ? file.expiresOn.toISOString().slice(0, 10) : null, availableAt: file.availableAt ? toUtcIso(file.availableAt) : null })),
       styles,
       materials,
       labels,

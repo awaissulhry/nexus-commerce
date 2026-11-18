@@ -15,6 +15,7 @@ import { mayWrite } from '../../product/materials/store'
 import { costLine, type SheetCache } from '../quotes/pricing'
 import { rulesInForce, settingsRowsFor } from '../quotes/rules'
 import { officeContextOf, type Reader } from '../quotes/store'
+import { styleBrandWhere } from '../../product/styles/store'
 
 /**
  * The price lists' reads (factory-db pricing.prisma PriceList, PriceListVersion, PriceListEntry): the columns every read
@@ -209,7 +210,9 @@ async function unitCostsOf(db: Reader, entries: readonly EntryRow[], companyId: 
 
 /** A version's prices for the record's Prices tab, with labels; cost and margin only for a caller with those grains. */
 export async function entriesViewOf(db: Reader, context: RequestContext, list: Pick<ListRow, 'companyId'>, versionId: string, now: Date) {
-  const entries = await db.priceListEntry.findMany({ where: { versionId }, select: ENTRY_COLUMNS })
+  // fix-pr-8 (the brand wall): a price of another customer's private-label style is that customer's (the production unit: all).
+  const brand = styleBrandWhere(actorOf(context), PRICE_LISTS_VIEW)
+  const entries = await db.priceListEntry.findMany({ where: { versionId, ...(Object.keys(brand).length > 0 ? { style: { is: brand } } : {}) }, select: ENTRY_COLUMNS })
   const styles = new Map((await db.style.findMany({ where: { id: { in: [...new Set(entries.map((entry) => entry.styleId))] } }, select: { id: true, code: true, name: true, status: true } })).map((row) => [row.id, row]))
   const colourways = new Map((await db.colourway.findMany({ where: { id: { in: [...new Set(entries.flatMap((entry) => (entry.colourwayId ? [entry.colourwayId] : [])))] } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const grains = heldGrains(actorOf(context))

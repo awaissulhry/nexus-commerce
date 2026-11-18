@@ -1,6 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import type { Permission, ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { EVERY_PARTY_MARKER } from '../../modules/quality/wall'
 
 /**
  * The records that take custom fields (B-W2b-421; PLT-111): ONE line each. Every list frame, record form, filter, export
@@ -77,11 +78,13 @@ const MODEL_SHAPES: Readonly<Record<CustomModel, { readonly select: Record<strin
   Party: { select: { id: true, companyId: true, code: true, legalName: true }, facts: (row) => ({ id: row.id as string, companyId: (row.companyId as string | null) ?? null, partyId: row.id as string, key: row.code as string, label: `${String(row.code)} · ${String(row.legalName)}` }) },
   Quote: { select: { id: true, companyId: true, partyId: true, number: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, partyId: row.partyId as string, key: row.number as string, label: row.number as string }) },
   SalesOrder: { select: { id: true, companyId: true, partyId: true, number: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, partyId: row.partyId as string, key: row.number as string, label: row.number as string }) },
-  Style: { select: { id: true, companyId: true, code: true, name: true }, facts: (row) => ({ id: row.id as string, companyId: (row.companyId as string | null) ?? null, key: row.code as string, label: `${String(row.code)} · ${String(row.name)}` }) },
+  // fix-pr-8 (the brand wall): a private-label style is its customer's (our own collection names none).
+  Style: { select: { id: true, companyId: true, brandPartyId: true, code: true, name: true }, facts: (row) => ({ id: row.id as string, companyId: (row.companyId as string | null) ?? null, ...(row.brandPartyId ? { partyId: row.brandPartyId as string } : {}), key: row.code as string, label: `${String(row.code)} · ${String(row.name)}` }) },
   Item: { select: { id: true, companyId: true, code: true, name: true }, facts: (row) => ({ id: row.id as string, companyId: (row.companyId as string | null) ?? null, key: row.code as string, label: `${String(row.code)} · ${String(row.name)}` }) },
   PurchaseOrder: { select: { id: true, companyId: true, siteId: true, partyId: true, number: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, partyId: row.partyId as string, key: row.number as string, label: row.number as string }) },
   Lot: { select: { id: true, companyId: true, siteId: true, code: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, key: row.code as string, label: row.code as string }) },
-  WorkOrder: { select: { id: true, companyId: true, siteId: true, number: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, key: row.number as string, label: row.number as string }) },
+  // fix-pr-8 (the brand wall): a work order is its customer's; one of no customer (mixed, made before the rule) every customer's.
+  WorkOrder: { select: { id: true, companyId: true, siteId: true, partyId: true, number: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, partyId: (row.partyId as string | null) ?? EVERY_PARTY_MARKER, key: row.number as string, label: row.number as string }) },
 }
 
 const readerOf = (client: Client, model: CustomModel): ModelReader => (client as unknown as Record<string, ModelReader>)[model.charAt(0).toLowerCase() + model.slice(1)]!

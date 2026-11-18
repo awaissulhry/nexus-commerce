@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify'
 import type { Prisma } from '@nexus/factory-db'
-import { SUBSTANCES_MANAGE } from '@nexus/factory-domain/compliance/substances/permissions'
+import { SUBSTANCES_MANAGE, SUBSTANCES_VIEW } from '@nexus/factory-domain/compliance/substances/permissions'
 import {
   ruleProblems,
   switchRefusal,
@@ -20,6 +20,7 @@ import { mayWrite } from '../../product/materials/store'
 import { assertMayKeep, mayReadCompany, officeOf } from '../register-of-rules/common'
 import { substanceReach, substancesClock, substancesGuarded, substancesSettings } from './common'
 import { RULE_SELECT, ruleViews, type Reader, type RuleRow, type RuleView } from './store'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 
 /**
  * The rules over the substance list (B-W2b-250; PRD-320 … PRD-325, PRD-329): azo dyes (entry 43), nickel release (27),
@@ -46,7 +47,8 @@ export interface ListQuery {
 /** GET /compliance/substances/rules */
 export async function listRules(request: FastifyRequest, query: ListQuery) {
   const actor = actorOf(officeOf(request))
-  const filters: Prisma.SubstanceRuleWhereInput[] = [substanceReach(actor) as Prisma.SubstanceRuleWhereInput]
+  // fix-pr-8 (the brand wall): a brand's own rule is that customer's.
+  const filters: Prisma.SubstanceRuleWhereInput[] = [substanceReach(actor) as Prisma.SubstanceRuleWhereInput, scopeWhere(actor, SUBSTANCES_VIEW, { party: { field: 'customerPartyId', nullable: true } }) as Prisma.SubstanceRuleWhereInput]
   const status = query.status ?? 'ACTIVE'
   if (status !== 'ALL') filters.push({ status })
   if (query.code) filters.push({ code: query.code })
@@ -62,7 +64,7 @@ export async function listRules(request: FastifyRequest, query: ListQuery) {
 
 async function readRule(db: Reader, caller: CommandCaller, ruleId: string): Promise<RuleRow> {
   const row = isUuid(ruleId) ? await db.substanceRule.findUnique({ where: { id: ruleId }, select: RULE_SELECT }) : null
-  if (!row || !mayReadCompany(actorOf(officeOf(caller)), row.companyId)) throw new NotFoundError('There is no such substance rule.')
+  if (!row || !mayReadCompany(actorOf(officeOf(caller)), row.companyId) || !can(actorOf(officeOf(caller)), SUBSTANCES_VIEW, { partyId: row.customerPartyId })) throw new NotFoundError('There is no such substance rule.') // fix-pr-8
   return row
 }
 

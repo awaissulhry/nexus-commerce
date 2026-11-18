@@ -3,7 +3,7 @@ import { evaluateMaterial, styleRollUp, type MaterialEvaluation, type RuleFacts,
 import { SUBSTANCES_MANAGE, SUBSTANCES_VIEW } from '@nexus/factory-domain/compliance/substances/permissions'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { can, holds, reachesEveryParty, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import type { Prisma } from '@nexus/factory-db'
@@ -35,6 +35,8 @@ import {
   type MaterialRow,
   type Reader,
 } from './store'
+import { reachedUses } from '../wall'
+import { assertEveryParty } from '../../production/work-orders/scope'
 
 /**
  * What the evaluator says (B-W2b-250; PRD-320 … PRD-326, PRD-329; design compliance.tests › Material profiles and the
@@ -60,10 +62,12 @@ interface Facts {
 const factsOf = async (db: Reader): Promise<Facts> => ({ rules: await ruleFacts(db), versions: await versionsById(db), svhc: await svhcSubstances(db) })
 
 /** The evaluation of each material (`only`: one style's context for all; `marketCode`: that market instead of the switched-on ones). */
-async function evaluateAll(db: Reader, materials: readonly MaterialRow[], today: string, options: { readonly only?: StyleUse; readonly marketCode?: string } = {}): Promise<Map<string, { evaluation: MaterialEvaluation; uses: StyleUse[]; markets: string[] }>> {
+async function evaluateAll(db: Reader, materials: readonly MaterialRow[], today: string, options: { readonly only?: StyleUse; readonly marketCode?: string; readonly actor?: Actor } = {}): Promise<Map<string, { evaluation: MaterialEvaluation; uses: StyleUse[]; markets: string[] }>> {
   const ids = materials.map((material) => material.id)
   const facts = await factsOf(db)
-  const uses = options.only ? new Map(ids.map((id) => [id, [options.only!]])) : await usesOf(db, ids)
+  // fix-pr-8 (the brand wall): a person's evaluation reads only the styles of customers it reaches (`actor`); the stored one
+  // (a write, the nightly run) reads every style.
+  const uses = options.only ? new Map(ids.map((id) => [id, [options.only!]])) : options.actor ? reachedUses(await usesOf(db, ids), options.actor, SUBSTANCES_VIEW) : await usesOf(db, ids)
   const tests = await testsOf(db, ids)
   const declarations = await declarationsOf(db, ids)
   const profiles = await profilesOf(db, ids)
@@ -143,7 +147,7 @@ export async function materialEvaluation(request: FastifyRequest, materialId: st
   return request.withClient(async (db) => {
     const material = await readMaterialRow(db, actor, materialId)
     const facts = await factsOf(db)
-    const { evaluation, uses, markets } = (await evaluateAll(db, [material], todayOf(now), { ...(query.marketCode ? { marketCode: query.marketCode } : {}) })).get(material.id)!
+    const { evaluation, uses, markets } = (await evaluateAll(db, [material], todayOf(now), { actor, ...(query.marketCode ? { marketCode: query.marketCode } : {}) })).get(material.id)! // fix-pr-8
     const readable = await readableStyles(db, actor, uses.map((use) => use.styleId))
     const profile = (await profilesOf(db, [material.id])).get(material.id)
     return {
@@ -157,7 +161,8 @@ export async function materialEvaluation(request: FastifyRequest, materialId: st
       svhc: svhcView(evaluation.svhc, facts.svhc),
       state: evaluation.state,
       stateReason: evaluation.stateReason,
-      profile: profileView(profile),
+      // fix-pr-8: the stored reason was written over every customer's styles: a person limited to some reads its own (live) one.
+      profile: profile && !reachesEveryParty(actor, SUBSTANCES_VIEW) ? { ...profileView(profile)!, stateReason: evaluation.stateReason } : profileView(profile),
       mayEvaluate: mayWrite(actor, SUBSTANCES_MANAGE, material.companyId),
       asOf: toUtcIso(now),
     }
@@ -173,6 +178,9 @@ const sameList = (a: readonly string[], b: readonly string[]): boolean => a.leng
 export async function evaluateMaterials(caller: CommandCaller, body: { readonly itemIds: readonly string[] }, key: string | null | undefined) {
   const context = officeOf(caller)
   const actor = actorOf(context)
+  // fix-pr-8 (the brand wall): the stored evaluation reads every customer's styles that use the material (and its answer names
+  // them): a write that mixes customers, refused in words that name none to a person limited to some.
+  assertEveryParty(actor, SUBSTANCES_MANAGE)
   const ids = [...new Set(body.itemIds)]
   const { result } = await substancesGuarded(() =>
     runCommand(
@@ -299,7 +307,7 @@ export async function styleEvaluation(request: FastifyRequest, styleId: string, 
   const now = substancesClock().now()
   return request.withClient(async (db) => {
     const style = isUuid(styleId) ? await db.style.findUnique({ where: { id: styleId }, select: { id: true, code: true, name: true, productType: true, ppeCategory: true, brandPartyId: true, companyId: true } }) : null
-    if (!style || !can(actor, SUBSTANCES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+    if (!style || !can(actor, SUBSTANCES_VIEW, { companyId: style.companyId }) || !can(actor, SUBSTANCES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.') // fix-pr-8: by brand too
     const revisions = await db.styleRevision.findMany({ where: { styleId }, select: { id: true, revision: true, status: true }, orderBy: { revision: 'desc' } })
     let revision = revisions.find((row) => row.status === 'RELEASED') ?? revisions.find((row) => row.status === 'DRAFT') ?? revisions[0] ?? null
     if (query.revisionId !== undefined) {

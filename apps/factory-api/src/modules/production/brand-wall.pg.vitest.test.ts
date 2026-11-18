@@ -1,26 +1,26 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import type { FactoryDatabase } from '@nexus/factory-db'
+import type { MigratedDatabase } from '@nexus/factory-db/testing'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { EVERY_PARTY_WORDS } from '@nexus/factory-domain/core/permissions'
-import { localFileStore } from '../../adapters/local-files/local'
+// The factory-db seeding helpers are no package export: a test reads them where they live.
+import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { routesFiles } from '../../core/autoload'
 import { buildApp } from '../../core/app'
 import { testAuthenticator } from '../../core/context'
-import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../env'
-import { createOfficeAuth } from '../../platform/auth/sessions/office-auth'
-import { createEmailRuntime, useEmail } from '../../platform/email-out/service'
-import { createFilesRuntime, useFiles } from '../../platform/files/service'
+import { LOCAL_COOKIE_SECRET } from '../../env'
+import { useAbuseGuard } from '../../platform/abuse/guard'
+import { startHarness, type Harness } from '../../platform/auth/sessions/testing/harness'
 import type { Gateway } from '../../platform/gateway/gateway'
 import { useGateway } from '../../platform/gateway/service'
+import { customerTraces, type CustomerTraces } from './testing/customer-traces'
 import { OWN_STYLE_CODE, productionTwoBrands, twoBrandIds, twoBrandSessions, walkWorkOrderRoutes, workOrderModels, type OfficeSession, type ProductionTwoBrands } from './testing/two-brands'
-import { createWallSweep, UUID, type Finding, type Json, type Method } from './testing/wall-sweep'
+import { createWallSweep, EXEMPT, isOffice, UUID, type Finding, type Json, type Method } from './testing/wall-sweep'
 
 /**
  * B-PR-10 — THE BRAND-WALL SWEEP (production plan §2 "Proof": "a sweep of every route, reads AND writes, that touches work
@@ -30,7 +30,9 @@ import { createWallSweep, UUID, type Finding, type Json, type Method } from './t
  *
  * 1. The manifest walker (./testing/two-brands.ts walkWorkOrderRoutes) lists EVERY route of any method whose handler reads
  *    WorkOrder, WorkOrderSize or a model that names one of them — from the schema, the routes files and the code, never a hand
- *    list. The office routes among them are swept; EXEMPT names each one left out and why.
+ *    list. fix-pr-8: the sweep no longer stops there — it calls EVERY office route the app registers (its manifest audiences
+ *    include office; the mail log and the stock card leaked while outside the walker's list); EXEMPT names each one left out
+ *    and why (only a factory-wide route that refuses a person limited to some customers, or one that needs an outside service).
  * 2. Each swept route is called as `office.p2` — every office permission, limited to brand B — with brand A's ids in its address,
  *    its query and its body (A = the seeds' customer P1: every seed file runs, so A owns work orders in every state with their
  *    bundles, scans, cuts, inspections, holds, NCRs, CAPAs, shipments, returns, repairs, subcontract orders …), and again with
@@ -45,9 +47,11 @@ import { createWallSweep, UUID, type Finding, type Json, type Method } from './t
  * 3. The named leftovers of B-PR-04…09 (CAPA, the styles list, the subcontract orders' own list, the MPS screen, planning
  *    allocation, what-ifs, day sheets, the run log, the warehouse exports) have their own tests below, with each decision.
  *
- * On the local stack with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login), every
- * seed file in name order (as `npm run seed`), the production two-brand harness (A's and B's draft work orders through the real
- * route, a mixed one made before the rule). Every name and number is made up.
+ * On the local stack with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login, on the
+ * shared harness of platform/auth/sessions/testing), every seed file in name order (as `npm run seed`), the production two-brand
+ * harness (A's and B's draft work orders through the real route, a mixed one made before the rule) and, fix-pr-8, the golden
+ * production world's traces of A (./testing/customer-traces.ts: its portal people's sign-in mails, a mail from its order's
+ * thread) beside the seeds' (its portal people, stock moves of its work orders, files, threads). Every name and number is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/production/brand-wall`.
  * B-PR-36: the sweep's engine (requests from the routes' own schemas, the comparison, the scan) lives in ./testing/wall-sweep.ts,
  * unchanged, so the production golden flow re-runs the same sweep on its own world at the end.
@@ -63,56 +67,58 @@ const OFFICE_PERMISSIONS = FACTORY_PERMISSIONS.all.filter((definition) => defini
 const SESSIONS: Record<string, OfficeSession> = twoBrandSessions(ids.tenantId, ids.a, ids.b, OFFICE_PERMISSIONS)
 const sweeper = createWallSweep({ ids, sessions: SESSIONS, reportPrefix: process.env.FACTORY_PR10_SWEEP_REPORT })
 
+// fix-pr-8: the seeds' owner, a real office person over every customer (a mail from a thread names its sender).
+SESSIONS['office.owner'] = { audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor'), grants: [{ permissions: OFFICE_PERMISSIONS, companies: 'all', sites: 'all', parties: 'all' }] }
+
+let h: Harness
 let db: MigratedDatabase
 let database: FactoryDatabase
 let app: FastifyInstance
 let w: ProductionTwoBrands
-let filesRoot: string | undefined
+let traces: CustomerTraces
 
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
 
 // ---- set-up ------------------------------------------------------------------------------------------------------------------
 
 beforeAll(async () => {
-  db = await migratedDatabase('pr10_brand_wall')
-  database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
+  // fix-pr-8: the golden production world's harness (platform/auth/sessions/testing, urgency-world.ts's base): its sign-in
+  // mails go through the e-mail runtime and its files to a local store, so A's people's mails are real rows.
+  h = await startHarness('pr10_brand_wall')
+  h.clock.set(new Date())
+  db = h.db
+  database = h.database
   // Every seed file in name order, as `npm run seed` (factory-db cli.ts): A (P1) owns records of every kind.
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
     await module.seed({ db: database, namespace: ns })
   }
-  // Files on the local store (the wall answers before any byte is read); its gateway is never reached by a refusal.
-  filesRoot = mkdtempSync(join(tmpdir(), 'factory-pr10-sweep-'))
-  const noGateway = new Proxy({}, { get: () => () => { throw new Error('the sweep has no gateway') } }) as Gateway
-  const files = createFilesRuntime({ gateway: noGateway, local: localFileStore({ root: filesRoot, environment: 'test' }) })
-  useFiles(files)
-  // The process's gateway and mail: a refusal answers before either is reached; a call that reaches them is an outside call.
-  useGateway(noGateway)
-  useEmail(createEmailRuntime({ gateway: noGateway, fake: null, webOrigin: 'http://localhost:3901', files: files.storage }))
-  const officeAuth = createOfficeAuth({ database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: 'http://localhost:3901', mailer: { deliver: async () => {} } })
   const plugins: FastifyPluginAsync[] = [sweeper.routeSpy]
   for (const file of routesFiles(SRC)) plugins.push(((await import(pathToFileURL(file).href)) as { default: FastifyPluginAsync }).default)
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 1_000_000, perAddressMax: 1_000_000, timeWindowMs: 60_000 } },
-    { database, officeAuth, routes: plugins, authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
+    { database, officeAuth: h.auth, routes: plugins, authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   w = await productionTwoBrands({ db, database, app, namespace: ns })
   expect(w.a.partyId).toBe(ids.a)
+  // fix-pr-8: the golden production world's traces of A beside the seeds' (A's people's sign-in mails, an order mail).
+  traces = await customerTraces({ h, app, tenant: ns, companyCode: 'SCA', session: 'office.owner', partyId: ids.a, salesOrderId: w.a.salesOrderId })
+  // For the sweep: the harness's own file store and mail (FAKE accounts: a file a route makes is kept in its temporary folder, a
+  // mail goes to the fake mailbox — fix-pr-8: a route that makes a PDF is swept too), and no process gateway: a refusal answers
+  // before it is reached; a route that reaches it is an outside service (EXEMPT names each one).
+  useGateway(new Proxy({}, { get: () => () => { throw new Error('the sweep has no gateway') } }) as Gateway)
   await sweeper.prepare({ db, app, w, srcRoot: SRC, schemaDir: SCHEMA_DIR })
 }, 900_000)
 
 afterAll(async () => {
-  useFiles(undefined)
   useGateway(undefined)
-  useEmail(undefined)
-  if (filesRoot) rmSync(filesRoot, { recursive: true, force: true })
+  useAbuseGuard(undefined)
   await app?.close()
-  await database?.close()
-  await db?.close()
+  await h?.close()
 })
 
 describe('B-PR-10 the brand-wall sweep', () => {
-  it('the walker lists every route that reads a work order, from the manifests and the code', () => {
+  it('the walker lists every route that reads a work order; the sweep calls every office route; the world holds every kind of A’s traces', () => {
     const walked = sweeper.walked()
     const keys = new Set(walked.map((route) => route.key))
     // Every route it lists is a registered route with a manifest entry; every registered route was looked at.
@@ -125,22 +131,26 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // Routes it must find, whatever the code's layout.
     for (const key of ['GET /production/work-orders/:workOrderId', 'GET /production/work-orders/travellers', 'POST /views/bulk/apply', 'POST /quality/holds', 'POST /production/cut-orders', 'GET /quality/capa', 'GET /purchasing/subcontracting/orders', 'GET /planning/allocation', 'GET /planning/schedule/day-sheets']) expect(keys.has(key), key).toBe(true)
     sweeper.report('walked', walked.map((route) => ({ key: route.key, file: route.file, via: route.via, audiences: sweeper.routes.get(route.key)?.manifest.audiences ?? null })))
+    // fix-pr-8: every office route the app registers is swept, or EXEMPT with its reason — a route added later by itself.
+    const swept = new Set([...sweeper.swept('read'), ...sweeper.swept('write')].map((route) => `${route.method} ${route.url}`))
+    const office = [...sweeper.routes.values()].filter((route) => isOffice(route)).map((route) => `${route.method} ${route.url}`)
+    expect(office.filter((key) => !swept.has(key) && !EXEMPT[key])).toEqual([])
+    for (const key of Object.keys(EXEMPT)) expect(sweeper.routes.has(key), `EXEMPT ${key} is a registered route`).toBe(true)
+    expect(swept.size).toBeGreaterThan(walked.length)
+    // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,
+    // its files and threads (fix-pr-7 found the mail log and the stock card leaks only where they were).
+    expect(traces).toEqual({ portalPeople: expect.any(Number), mails: expect.any(Number), stockMoves: expect.any(Number), files: expect.any(Number), threads: expect.any(Number) })
+    for (const [kind, count] of Object.entries(traces)) expect(count, `A's ${kind}`).toBeGreaterThan(0)
+    sweeper.report('summary', { officeRoutes: office.length, swept: swept.size, walked: walked.length, exempt: EXEMPT, traces, ambiguous: sweeper.ambiguous() })
   })
 
-  it('every GET that reads a work order, called by brand B with brand A ids: as unknown, empty or 403 EVERY_PARTY, never a word of A', async () => {
+  it('every office GET, called by brand B with brand A ids: as unknown, empty or 403 EVERY_PARTY, never a word of A', async () => {
     const findings: Finding[] = []
     for (const route of sweeper.swept('read')) for (const variant of sweeper.variantsOf(route)) findings.push(...(await sweeper.sweep(route, variant)))
     const reads = sweeper.called.filter((call) => call.route.startsWith('GET '))
     sweeper.report('reads', { findings, failures: sweeper.failures, called: reads, unresolved: sweeper.unresolved() })
     const reached = reads.filter((call) => call.named > 0 && call.all !== null && call.all >= 200 && call.all < 300).length
     console.log(`B-PR-10 GET sweep: ${reads.length} calls; ${reached} named A's records the production unit reads`)
-    expect(findings).toEqual([])
-  }, 1_800_000)
-
-  it('PW-10: every write that reads a work order, called by brand B with brand A ids, is refused as unknown and writes no row about A', async () => {
-    const findings: Finding[] = []
-    for (const route of sweeper.swept('write')) findings.push(...(await sweeper.sweep(route)))
-    sweeper.report('writes', { findings, failures: sweeper.failures, called: sweeper.called.filter((call) => !call.route.startsWith('GET ')), unresolved: sweeper.unresolved() })
     expect(findings).toEqual([])
   }, 1_800_000)
 
@@ -266,4 +276,84 @@ describe('B-PR-10 the brand-wall sweep', () => {
     const ofA = (await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "partyId" = $1 AND status = 'IN_PROGRESS' LIMIT 1`, [ids.a]))[0]!
     expect((await as('office.p2', 'GET', `/inventory/kits/${ofA.id}`)).status).toBe(404)
   })
+
+  // ── fix-pr-8: a person limited to some customers still does its OWN work ─────────────────────────────────────────────────────
+  // Every route the wide sweep closed by FILTERING (not by needing every customer) still shows a limited person its own
+  // customer's rows: here `office.p1`, every office permission limited to A, reads A's records on each of them (B, the sweep's
+  // reader, does not; the production unit reads all). The routes closed as views that mix customers (403 EVERY_PARTY) are
+  // listed in build notes fix-pr-8 (b).
+  it('fix-pr-8 (a): a person limited to a customer still reads that customer’s own rows on every route the sweep filtered', async () => {
+    const rows = async (sql: string, values: unknown[] = [ids.a]) => admin<Json>(sql, values)
+    const first = async (sql: string, values?: unknown[]) => (await rows(sql, values))[0]
+    const ofA = `SELECT id FROM "Style" WHERE "brandPartyId" = $1`
+    const aStyles = (await rows(ofA)).map((row) => String(row.id))
+    const style = String((await first(`SELECT s.id FROM "Style" s WHERE s."brandPartyId" = $1 AND EXISTS (SELECT 1 FROM "StyleRevision" r WHERE r."styleId" = s.id) ORDER BY s.code DESC LIMIT 1`))?.id)
+    const companyA = String((await first(`SELECT id FROM "Company" WHERE code = 'SCA' AND "tenantId" = $1`, [ids.tenantId]))?.id)
+    const problems: string[] = []
+    /** As office.p1: the answer's status, and that it names `wanted` (one of the ids, when given). */
+    const check = async (label: string, url: string, wanted: readonly (string | null | undefined)[] | null) => {
+      const answer = await as('office.p1', 'GET', url)
+      const text = JSON.stringify(answer.body)
+      if (answer.status !== 200) problems.push(`${label}: ${url} answered ${answer.status} ${text.slice(0, 200)}`)
+      else if (wanted !== null && !wanted.some((id) => typeof id === 'string' && text.includes(id))) problems.push(`${label}: ${url} names none of A's ${wanted.filter(Boolean).length} record(s)`)
+    }
+    const claim = await first(`SELECT c.id FROM "SustainabilityClaim" c JOIN "Style" s ON s.id = c."styleId" WHERE s."brandPartyId" = $1 LIMIT 1`)
+    await check('claims', '/compliance/claims?state=all', [claim?.id])
+    await check('claim choices', '/compliance/claims/choices', aStyles)
+    const request = await first(`SELECT id FROM "SupplierDeclarationRequest" WHERE "partyId" = $1 LIMIT 1`)
+    await check('declarations asked', '/compliance/declarations-asked', [request?.id])
+    await check('declaration asked', `/compliance/declarations-asked/${request?.id}`, [request?.id])
+    await check('operators of a style', `/compliance/rules/operators/resolve?styleId=${style}`, [style])
+    await check('standards watch', '/compliance/rules/standard-changes', aStyles)
+    const rule = await first(`SELECT id FROM "SubstanceRule" WHERE "customerPartyId" = $1 LIMIT 1`)
+    await check('substance rules', '/compliance/substances/rules?status=ALL', [rule?.id])
+    await check('substances of a style', `/compliance/substances/styles/${style}/evaluation`, [style])
+    await check('textile rules of a style', `/compliance/textile-rules/styles/${style}`, [style])
+    await check('type changes of a style', `/compliance/type-changes/styles/${style}`, [style])
+    const label = await first(`SELECT id FROM "LabelTemplate" WHERE "makerPartyId" = $1 OR "styleId" IN (${ofA}) LIMIT 1`)
+    await check('labels', '/compliance/labels', [label?.id])
+    await check('cost sheets of a style', `/costing/cost-sheets?styleId=${style}`, [style])
+    const place = await first(`SELECT id FROM "Location" WHERE "partyId" = $1 LIMIT 1`)
+    await check('a customer’s place', `/inventory/locations/${place?.id}/label`, [place?.id])
+    await check('transfer options', '/inventory/transfer-orders/options', [place?.id])
+    const item = await first(`SELECT i.id, i.code FROM "Item" i JOIN "Variant" v ON v.id = i."variantId" WHERE v."styleId" IN (${ofA}) LIMIT 1`)
+    await check('item parameters', `/planning/item-parameters?siteId=${w.siteId}&q=${encodeURIComponent(String(item?.code))}&limit=50`, [item?.id])
+    await check('die styles', '/plant/dies/styles', aStyles)
+    const table = await first(`SELECT id FROM "PieceRateTable" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('piece-rate tables', '/people/piece-rates/tables?includeArchived=true', [table?.id])
+    const step = await first(`SELECT "operationId" AS id, "styleId" FROM "RoutingOperation" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('an operation where used', `/product/operations/${step?.id}`, [step?.styleId])
+    const prepack = await first(`SELECT id FROM "Prepack" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('a prepack', `/product/prepacks/${prepack?.id}`, [prepack?.id])
+    await check('branding-set brands', '/product/branding-sets/brands', [ids.a])
+    await check('sample-order choices', `/purchasing/sample-orders/choices?companyId=${companyA}`, aStyles)
+    await check('safety contacts', `/safety/organisation/contacts?companyId=${companyA}`, [ids.a])
+    const measured = await first(`SELECT "measurementTemplateId" AS id, id AS "styleId" FROM "Style" WHERE "brandPartyId" = $1 AND "measurementTemplateId" IS NOT NULL LIMIT 1`)
+    await check('measurement template where used', `/product/measurement-templates/${measured?.id}/where-used`, [measured?.styleId])
+    const price = await first(`SELECT e."versionId" AS id, v."listId", e."styleId" FROM "PriceListEntry" e JOIN "PriceListVersion" v ON v.id = e."versionId" WHERE e."styleId" IN (${ofA}) LIMIT 1`)
+    await check('a price-list version', `/sales/price-lists/${price?.listId}/versions/${price?.id}`, [price?.styleId])
+    await check('size surcharges of a style', `/sales/styles/${style}/size-surcharges`, [style])
+    const template = await first(`SELECT "templateId" AS id FROM "QuoteTemplateLine" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('quote templates', '/sales/quote-templates?status=ALL', [template?.id])
+    await check('a quote template', `/sales/quote-templates/${template?.id}`, [template?.id])
+    const report = await first(`SELECT r.id FROM "ProductSafetyReport" r JOIN "AccidentLogEntry" e ON e."reportId" = r.id WHERE r."styleId" IN (${ofA}) LIMIT 1`)
+    await check('the accident log', '/sales/safety-reports/accident-log', [report?.id])
+    // A record's own history, by both doors; the custom fields of A's work order.
+    const history = await as('office.p1', 'GET', `/audit/WorkOrder/${w.a.workOrderId}`)
+    if (!((history.body.entries as unknown[] | undefined)?.length)) problems.push(`audit history of A's work order: ${history.status}, no entry`)
+    const named = await as('office.p1', 'GET', `/audit?recordType=WorkOrder&recordId=${w.a.workOrderId}`)
+    if (!((named.body.entries as unknown[] | undefined)?.length)) problems.push(`audit log naming A's work order: ${named.status}, no entry`)
+    await check('custom fields of a work order', `/fields/values/WorkOrder/${w.a.workOrderId}`, [w.a.workOrderId])
+    const alertRule = await first(`SELECT id FROM "AlertRule" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [ids.tenantId])
+    await check('alert routes’ customers', `/alerts/rules/${alertRule?.id}/routes`, [ids.a])
+    expect(problems).toEqual([])
+  })
+
+  // fix-pr-8: the write sweep runs last — it calls EVERY office write, so the named checks above read the world before it.
+  it('PW-10: every office write, called by brand B with brand A ids, is refused as unknown and writes no row about A', async () => {
+    const findings: Finding[] = []
+    for (const route of sweeper.swept('write')) findings.push(...(await sweeper.sweep(route)))
+    sweeper.report('writes', { findings, failures: sweeper.failures, called: sweeper.called.filter((call) => !call.route.startsWith('GET ')), unresolved: sweeper.unresolved() })
+    expect(findings).toEqual([])
+  }, 1_800_000)
 })

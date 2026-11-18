@@ -20,6 +20,7 @@ import { manifest } from './manifest'
 import { checkOverride, previewNumber } from './override'
 import { closeBlock, listBlocks, myBlocks, reserveBlock, topUpBlocks } from './scan-ids'
 import { advanceSeries, closeSeries, createSeries, listSeries, seriesAllocations, setSeriesStart } from './series'
+import { assertEveryCustomer } from '../auth/every-customer'
 
 /**
  * Number series (platform part): the admin's list, the numbers one series issued with its gap proof (B-W0-28), and its
@@ -50,6 +51,9 @@ export default defineRoutes('numbering', manifest, async (app) => {
   })
 
   app.get('/numbering/series/:seriesId/allocations', { schema: allocationsContract }, async (request) => {
+    // fix-pr-8 (the brand wall): a series' gap proof lists the record each number went to — every customer's documents: a view
+    // that mixes customers. The series list itself (its next numbers, read by Sales) stays everyone's.
+    assertEveryCustomer(request, 'numbering.view')
     const actor = actorOf(requireContext(request))
     return request.withClient((client) => seriesAllocations(client, actor, request.params.seriesId, request.query.limit))
   })

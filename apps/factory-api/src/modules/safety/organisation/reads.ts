@@ -165,7 +165,10 @@ export async function pickContacts(caller: CommandCaller, query: { readonly comp
         kind: 'ORGANISATION',
         status: 'ACTIVE',
         OR: [{ companyId: query.companyId }, { companyId: null }],
-        AND: words(query.q).map((word) => ({ OR: [{ legalName: { contains: word, mode: 'insensitive' as const } }, { code: { contains: word, mode: 'insensitive' as const } }, { contacts: { some: { name: { contains: word, mode: 'insensitive' as const } } } }] })),
+        AND: [
+          scopeWhere(actorOf(context), SAFETY_ORGANISATION_MANAGE, { party: 'id' }) as Prisma.PartyWhereInput, // fix-pr-8: the parties the person is given
+          ...words(query.q).map((word) => ({ OR: [{ legalName: { contains: word, mode: 'insensitive' as const } }, { code: { contains: word, mode: 'insensitive' as const } }, { contacts: { some: { name: { contains: word, mode: 'insensitive' as const } } } }] })),
+        ],
       },
       orderBy: [{ legalName: 'asc' }, { id: 'asc' }],
       take: PICK + 1,

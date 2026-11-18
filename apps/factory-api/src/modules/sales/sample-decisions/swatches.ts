@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CreateSwatchBody, DecisionBody, SwatchListQuery, SwatchView, UpdateSwatchBody } from '@nexus/factory-domain/sales/sample-decisions/contracts'
 import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisions/permissions'
@@ -122,6 +122,7 @@ export async function createSwatch(caller: CommandCaller, body: CreateSwatchBody
   const checked = await caller.withClient(async (db) => {
     const style = await db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true, brandPartyId: true } })
     if (!style || (style.companyId !== null && !mayOn(context, SALES_SAMPLES_VIEW, { companyId: style.companyId, partyId: null }))) throw new NotFoundError('Style not found.')
+    if (!can(actorOf(context), SALES_SAMPLES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.') // fix-pr-8: the brand wall
     const round = body.roundId ? await readRoundRow(db, body.roundId) : null
     if (body.roundId && (!round || round.styleId !== style.id || !mayOn(context, SALES_SAMPLES_VIEW, { companyId: round.companyId, partyId: round.partyId }))) {
       throw new ValidationError('No such sample round of this style.', [{ path: 'body/roundId', message: 'No such sample round of this style.' }])

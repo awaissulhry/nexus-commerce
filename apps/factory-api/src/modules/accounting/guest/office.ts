@@ -67,7 +67,8 @@ function reachCompany(request: FastifyRequest, companyId: string, permission: Pe
 async function reachFirm(request: FastifyRequest, companyId: string, partyId: string, permission: Permission): Promise<PartnerParty> {
   const context = reachCompany(request, companyId, permission)
   const party = await request.withClient((client) => partyById(client, partyId))
-  if (!party) throw new NotFoundError('Organisation not found.')
+  // fix-pr-8 (the brand wall): a party the person is not given (another customer) is not found, before anything is said of it.
+  if (!party || !can(actorOf(context), permission, { partyId: party.id })) throw new NotFoundError('Organisation not found.')
   if (party.companyId !== null && party.companyId !== companyId) throw new DomainError('conflict', WORDS.otherCompany, [{ path: 'partyId', message: WORDS.otherCompany }])
   if (!party.roles.includes(ADVISER)) throw new DomainError('conflict', WORDS.notAdviser, [{ path: 'partyId', message: WORDS.notAdviser }])
   const actor = actorOf(context)

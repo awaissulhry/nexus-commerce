@@ -28,6 +28,9 @@ import type { FilesRuntime } from '../../../platform/files/service'
 import { queueDocument } from '../../../platform/print/jobs'
 import { manifestPdf } from '../../../platform/print/layouts/manifest'
 import { assertMay, officeContextOf } from '../access'
+import { assertEveryParty } from '../../production/work-orders/scope'
+import { actorOf } from '../../../core/context'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 
 /**
  * The day's close (B-W2b-395; LOG-049; rules factory-domain shipping/manifest; factory-db DispatchManifest and its guard,
@@ -226,7 +229,15 @@ function dayAsked(asked: BusinessDate | undefined, today: BusinessDate): Busines
 }
 
 /** GET /shipping/end-of-day (see the file's comment). */
+// fix-pr-8 (the brand wall; the B-PR-10 sweep of every office route): a carrier's day sheet holds every customer's parcels of the
+// day — a view that mixes customers: a person limited to some customers is refused in words that name none, before any read.
+function assertWholeDay(caller: CommandCaller, permission: Permission): void {
+  const context = caller.factoryContext
+  if (context?.audience === 'office') assertEveryParty(actorOf(context), permission)
+}
+
 export async function endOfDay(caller: CommandCaller, query: { siteId: string; day?: BusinessDate | undefined }) {
+  assertWholeDay(caller, SHIPPING_VIEW) // fix-pr-8
   const site = await siteFor(caller, query.siteId, SHIPPING_VIEW)
   const now = serverClock.now()
   const today = businessDate(now, site.timeZone)
@@ -271,6 +282,7 @@ async function sheetModel(db: CommandTx, site: DaySite, carrierCode: string, day
 
 /** GET /shipping/end-of-day/preview: the sheet's PDF as it would close now (PREVIEW; stored nowhere). */
 export async function previewSheetPdf(caller: CommandCaller, query: { siteId: string; carrierCode: string; day?: BusinessDate | undefined }): Promise<{ pdf: Buffer; fileName: string }> {
+  assertWholeDay(caller, SHIPPING_VIEW) // fix-pr-8
   const site = await siteFor(caller, query.siteId, SHIPPING_VIEW)
   const today = businessDate(serverClock.now(), site.timeZone)
   const day = dayAsked(query.day, today)
@@ -393,6 +405,7 @@ export interface CloseDayBody {
 
 /** POST /shipping/end-of-day/close (see the file's comment). */
 export async function closeDay(files: FilesRuntime, caller: CommandCaller, body: CloseDayBody, idempotencyKey?: string) {
+  assertWholeDay(caller, SHIPPING_MANAGE) // fix-pr-8
   const site = await siteFor(caller, body.siteId, SHIPPING_MANAGE)
   const today = businessDate(serverClock.now(), site.timeZone)
   const day = dayAsked(body.day, today)
@@ -431,6 +444,7 @@ export async function closeDay(files: FilesRuntime, caller: CommandCaller, body:
 /** GET /shipping/manifests/:manifestId: one sheet, its shipments and its PDF's file. */
 export async function getManifest(caller: CommandCaller, manifestId: string) {
   const context = officeContextOf(caller)
+  assertWholeDay(caller, SHIPPING_VIEW) // fix-pr-8
   const sheet = isUuid(manifestId) ? await caller.withClient((db) => db.dispatchManifest.findUnique({ where: { id: manifestId }, select: SHEET_SELECT })) : null
   assertMay(context, SHIPPING_VIEW, SHIPPING_VIEW, sheet ? { companyId: sheet.companyId, siteId: sheet.siteId } : null, 'Day sheet')
   const site = await siteFor(caller, sheet!.siteId, SHIPPING_VIEW)

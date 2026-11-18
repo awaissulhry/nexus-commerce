@@ -1,13 +1,13 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { fieldLinesOf } from '../../threads/timeline/field-lines'
 import type { AuditViewName } from '../contract'
-import { AUDIT_READ, AUDIT_SCOPE_COLUMNS, AUDIT_VIEW_ACTIONS } from '../read'
+import { AUDIT_VIEW_ACTIONS, auditScope } from '../read'
 import { addressHashOf } from '../security-events/address'
 import type { SearchEntryView } from './contract'
 
@@ -94,7 +94,7 @@ async function addressWhere(client: FactoryClient, ip: string): Promise<Prisma.A
 
 /** The search as a where in the caller's scope (exported for the export source). */
 export async function searchWhere(client: FactoryClient, actor: Actor, query: SearchQuery): Promise<Prisma.AuditLogWhereInput> {
-  const scope = scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  const scope = auditScope(actor) // fix-pr-8: the brand wall
   const from = instantOf(query.from, 'from')
   const to = instantOf(query.to, 'to')
   return {
@@ -163,7 +163,7 @@ export async function searchAudit(caller: CommandCaller, query: SearchQuery & { 
 /** GET /audit/entries/:entryId */
 export async function auditEntry(caller: CommandCaller, entryId: string) {
   const actor = actorOf(contextOf(caller))
-  const scope = scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  const scope = auditScope(actor) // fix-pr-8: the brand wall
   return caller.withClient(async (client) => {
     const row = await client.auditLog.findFirst({ where: { AND: [scope, { id: entryId }] }, select: ENTRY_SELECT })
     if (!row) throw new NotFoundError('No such audit entry.')

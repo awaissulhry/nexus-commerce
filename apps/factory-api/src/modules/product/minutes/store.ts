@@ -12,6 +12,7 @@ import { PEOPLE_PIECERATES_VIEW } from '@nexus/factory-domain/people/piecerates/
 import type { CommandCaller, CommandTools, CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { contextOf, mayWrite } from '../materials/store'
+import { STYLE_SCOPE as BRAND_STYLE_SCOPE } from '../styles/store'
 
 /**
  * The rows of SMV governance (factory-db `OperationTimeVersion`, and the minutes columns of `Operation` and
@@ -195,7 +196,8 @@ export function smvOnDay(operation: StoredMinutes, versions: readonly VersionRec
   return { standardMinutes: version?.standardMinutes ?? operation.standardMinutes, version }
 }
 
-const STYLE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
+// fix-pr-8 (the brand wall): by brand too — B-PR-10's STYLE_SCOPE (another customer's private-label style is not counted).
+const STYLE_SCOPE: ScopeColumns = BRAND_STYLE_SCOPE
 
 /** "Routings and piece rates affected": the draft and released steps made from it, and the piece rates naming it. */
 async function impactOf(client: FactoryClient | CommandTx, context: RequestContext, operationId: string, versions: readonly VersionRecord[]): Promise<OperationMinutesView['impact']> {

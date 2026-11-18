@@ -30,6 +30,9 @@ export async function officeReport(caller: CommandCaller, reportId: string, perm
   const context = officeOf(caller)
   const row = isUuid(reportId) ? await caller.withClient((client) => readReport(client, reportId)) : null
   if (!row || !mayOn(context, SALES_SAFETY_VIEW, row)) throw new NotFoundError('Safety report not found.')
+  // fix-pr-8 (the brand wall): a report about a garment of another customer's private-label style is that customer's.
+  const brand = row.styleId ? await caller.withClient((client) => client.style.findUnique({ where: { id: row.styleId! }, select: { brandPartyId: true } })) : null
+  if (brand && !can(actorOf(context), SALES_SAFETY_VIEW, { partyId: brand.brandPartyId })) throw new NotFoundError('Safety report not found.')
   if (!mayOn(context, permission, row)) throw new ForbiddenError(words)
   return { context, row }
 }

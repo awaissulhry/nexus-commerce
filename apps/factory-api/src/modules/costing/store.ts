@@ -49,8 +49,10 @@ const text = (value: { toString(): string }): string => decimalText(value.toStri
 export async function readStyleFor(caller: CommandCaller, styleId: string): Promise<CostingStyleRow> {
   const context = contextOf(caller)
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
-  const row = await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: STYLE_COLUMNS }))
-  if (!row || !can(actorOf(context), COSTING_VIEW, { companyId: row.companyId })) throw new NotFoundError('Style not found.')
+  const found = await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: { ...STYLE_COLUMNS, brandPartyId: true } }))
+  // fix-pr-8 (the brand wall): another customer's private-label style is not found (as an unknown id).
+  if (!found || !can(actorOf(context), COSTING_VIEW, { companyId: found.companyId }) || !can(actorOf(context), COSTING_VIEW, { partyId: found.brandPartyId })) throw new NotFoundError('Style not found.')
+  const { brandPartyId: _brand, ...row } = found
   return row
 }
 

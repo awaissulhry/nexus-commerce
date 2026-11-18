@@ -29,6 +29,7 @@ import { serverClock } from '../../../core/time'
 import { officeOf, seesPay } from './access'
 import type { VersionDetail } from './contract'
 import { missingBySite } from './switch'
+import { optionalStyleWall, styleBrandWhere } from '../../product/styles/store'
 
 /**
  * The reads of piece rates (B-W2b-34; design people.piecerates "Tiles", "Rate table", the rate detail with who read it,
@@ -142,9 +143,14 @@ export async function siteOf(caller: CommandCaller, siteId: string, permission: 
 export async function tableOf(caller: CommandCaller, tableId: string, permission: Permission): Promise<{ context: OfficeContext; table: TableRow }> {
   const context = officeOf(caller)
   const table = isUuid(tableId) ? await caller.withClient((client) => client.pieceRateTable.findUnique({ where: { id: tableId }, select: TABLE_SELECT })) : null
-  if (!table || !mayOn(context, PEOPLE_PIECERATES_VIEW, table)) throw new NotFoundError('Piece-rate table not found.')
+  if (!table || !mayOn(context, PEOPLE_PIECERATES_VIEW, table) || !(await caller.withClient((client) => tableStyleReached(client, context, table.styleId)))) throw new NotFoundError('Piece-rate table not found.') // fix-pr-8
   if (!mayOn(context, permission, table)) throw new ForbiddenError()
   return { context, table }
+}
+
+/** fix-pr-8: a table's style the person reaches by brand (a table of no style: yes). */
+async function tableStyleReached(client: Pick<Db, 'style'>, context: OfficeContext, styleId: string | null): Promise<boolean> {
+  return styleId === null || (await client.style.count({ where: { AND: [{ id: styleId }, styleBrandWhere(actorOf(context), PEOPLE_PIECERATES_VIEW)] } })) > 0
 }
 
 /** The version and its table, when the caller may see them (else 404) and do `permission` (else 403). */
@@ -157,7 +163,7 @@ export async function versionOf(caller: CommandCaller, versionId: string, permis
         return version && table ? { version, table } : null
       })
     : null
-  if (!found || !mayOn(context, PEOPLE_PIECERATES_VIEW, found.table)) throw new NotFoundError('Rate version not found.')
+  if (!found || !mayOn(context, PEOPLE_PIECERATES_VIEW, found.table) || !(await caller.withClient((client) => tableStyleReached(client, context, found.table.styleId)))) throw new NotFoundError('Rate version not found.') // fix-pr-8
   if (!mayOn(context, permission, found.table)) throw new ForbiddenError()
   return { context, ...found }
 }
@@ -400,7 +406,8 @@ export async function tableDetailOf(db: Db, context: OfficeContext, tableId: str
 
 // ---- routes ---------------------------------------------------------------------------------------------------------
 
-const tableScope = (context: OfficeContext) => scopeWhere(actorOf(context), PEOPLE_PIECERATES_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.PieceRateTableWhereInput
+// fix-pr-8 (the brand wall): a table of another customer's private-label style is that customer's.
+const tableScope = (context: OfficeContext) => ({ AND: [scopeWhere(actorOf(context), PEOPLE_PIECERATES_VIEW, { company: 'companyId', site: 'siteId' }), optionalStyleWall(actorOf(context), PEOPLE_PIECERATES_VIEW)] }) as Prisma.PieceRateTableWhereInput
 
 /** people.piecerates.view: each site in reach with its switch and the tiles (provisional trials ending, unread, drafts). */
 export async function overview(caller: CommandCaller, query: { companyId?: string | undefined; siteId?: string | undefined }) {

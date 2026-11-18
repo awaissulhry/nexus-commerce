@@ -31,6 +31,7 @@ import { assertKeepsAnAdmin, assertWithinAssignerScope, assignmentAudit, assignm
 import type { AssignBody, CreateRoleBody, EditRoleBody, EndAssignmentBody } from './contract'
 import { syncRolesInCommand } from './sync'
 import { isOutdated, systemRoleChanges } from './system-roles'
+import { assertEveryCustomer } from '../every-customer'
 
 /**
  * Roles and assignments (plan A1 §3.11; features PLT-029, PLT-030, PLT-032). Every change is ONE command with its
@@ -297,6 +298,7 @@ export async function syncTemplates(auth: OfficeAuth, request: FastifyRequest) {
 }
 
 export async function userAssignments(auth: OfficeAuth, request: FastifyRequest, userId: string) {
+  assertEveryCustomer(request, 'roles.view') // fix-pr-8
   const assignments = await request.withClient(async (client) => {
     const user = await client.user.findUnique({ where: { id: userId }, select: { id: true } })
     if (!user) throw new NotFoundError('User not found.')
@@ -307,6 +309,7 @@ export async function userAssignments(auth: OfficeAuth, request: FastifyRequest,
 
 export async function assignRole(auth: OfficeAuth, request: FastifyRequest, userId: string, body: AssignBody) {
   const context = officeContextOf(request)
+  assertEveryCustomer(request, 'roles.assign') // fix-pr-8
   requireStepUp(auth, request)
   if (userId === context.actorId) throw new ForbiddenError('You cannot give yourself a role: ask another administrator.')
   const { reason, ...input } = body

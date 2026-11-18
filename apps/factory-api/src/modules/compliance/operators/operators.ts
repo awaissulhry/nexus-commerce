@@ -1,14 +1,16 @@
 import type { FastifyRequest } from 'fastify'
 import type { Prisma } from '@nexus/factory-db'
 import { operatorProblems, overlapOf, overlapWords, resolveOperators, scopeLevelOf, validOn, type OperatorRole, type OperatorRow, type ResolvedOperator } from '@nexus/factory-domain/compliance/operators/rules'
-import { RULES_MANAGE } from '@nexus/factory-domain/compliance/register-of-rules/permissions'
+import { RULES_LIBRARY_VIEW, RULES_MANAGE } from '@nexus/factory-domain/compliance/register-of-rules/permissions'
 import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { mayWrite } from '../../product/materials/store'
 import { assertMayKeep, companyReach, mayReadCompany, officeOf, rulesClock, rulesGuarded, type Reader } from '../register-of-rules/common'
+import { optionalStyleWall, reachesBrand } from '../wall'
 import type { OperatorView } from './contract'
 
 /**
@@ -92,6 +94,16 @@ export const viewOf = (row: Row, on: BusinessDate): OperatorView => {
 
 const today = (): BusinessDate => businessDate(rulesClock().now())
 
+// fix-pr-8 (the brand wall): an operator row for a customer's brand or its private-label style, or that names a customer as the
+// operator, is that customer's: a person limited to other customers neither lists nor finds it. The production unit: `{}`.
+const operatorWall = (actor: Actor): Prisma.EconomicOperatorRoleWhereInput => ({
+  AND: [
+    scopeWhere(actor, RULES_LIBRARY_VIEW, { party: { field: 'brandPartyId', nullable: true } }) as Prisma.EconomicOperatorRoleWhereInput,
+    scopeWhere(actor, RULES_LIBRARY_VIEW, { party: { field: 'partyId', nullable: true } }) as Prisma.EconomicOperatorRoleWhereInput,
+    optionalStyleWall(actor, RULES_LIBRARY_VIEW) as Prisma.EconomicOperatorRoleWhereInput,
+  ],
+})
+
 /** GET /compliance/rules/operators */
 export async function listOperators(
   request: FastifyRequest,
@@ -100,7 +112,7 @@ export async function listOperators(
   const context = officeOf(request)
   const actor = actorOf(context)
   const on = query.on ?? today()
-  const filters: Prisma.EconomicOperatorRoleWhereInput[] = [companyReach(actor) as Prisma.EconomicOperatorRoleWhereInput]
+  const filters: Prisma.EconomicOperatorRoleWhereInput[] = [companyReach(actor) as Prisma.EconomicOperatorRoleWhereInput, operatorWall(actor)]
   if (query.styleId) filters.push({ styleId: query.styleId })
   if (query.brandPartyId) filters.push({ brandPartyId: query.brandPartyId })
   if (query.marketCode) filters.push({ marketCode: query.marketCode })
@@ -111,7 +123,7 @@ export async function listOperators(
 }
 
 async function readOperator(db: Reader, context: OfficeContext, operatorId: string): Promise<Row> {
-  const row = await db.economicOperatorRole.findUnique({ where: { id: operatorId }, select: OPERATOR_SELECT })
+  const row = await db.economicOperatorRole.findFirst({ where: { AND: [{ id: operatorId }, operatorWall(actorOf(context))] }, select: OPERATOR_SELECT }) // fix-pr-8
   if (!row || !mayReadCompany(actorOf(context), row.companyId)) throw new NotFoundError('There is no such economic operator.')
   return row
 }
@@ -157,11 +169,13 @@ export async function resolveForStyle(request: FastifyRequest, query: { readonly
   const on = query.on ?? today()
   return request.withClient(async (db) => {
     const style = await db.style.findUnique({ where: { id: query.styleId }, select: { id: true, code: true, name: true, companyId: true, brandPartyId: true, soldUnderOurName: true } })
-    if (!style || !mayReadCompany(actor, style.companyId)) throw new NotFoundError('There is no such style.')
+    if (!style || !mayReadCompany(actor, style.companyId) || !reachesBrand(actor, RULES_LIBRARY_VIEW, style.brandPartyId)) throw new NotFoundError('There is no such style.') // fix-pr-8
     const market = query.marketCode ? await db.marketProfile.findFirst({ where: { code: query.marketCode }, select: { code: true, importerNeeded: true, gpsrContactNeeded: true, companyId: true } }) : null
     if (query.marketCode && (!market || !mayReadCompany(actor, market.companyId))) throw new NotFoundError(`There is no market ${query.marketCode}.`)
     const { resolved, rows } = await operatorsFor(db, style, { marketCode: query.marketCode ?? null, day: on, companyId: query.companyId ?? null })
-    const shown = resolved.filter((entry) => mayReadCompany(actor, entry.row.companyId))
+    // fix-pr-8: only the rows the person reaches (an operator that names another customer is that customer's).
+    const reached = new Set((await db.economicOperatorRole.findMany({ where: { AND: [{ id: { in: resolved.map((entry) => entry.row.id) } }, operatorWall(actor)] }, select: { id: true } })).map((row) => row.id))
+    const shown = resolved.filter((entry) => mayReadCompany(actor, entry.row.companyId) && reached.has(entry.row.id))
     const has = (role: OperatorRole) => shown.some((entry) => entry.role === role)
     const needs: { role: 'MANUFACTURER' | 'IMPORTER_OR_REPRESENTATIVE' | 'GPSR_CONTACT'; met: boolean }[] = [{ role: 'MANUFACTURER', met: has('MANUFACTURER') }]
     if (market?.importerNeeded) needs.push({ role: 'IMPORTER_OR_REPRESENTATIVE', met: has('IMPORTER') || has('AUTHORISED_REPRESENTATIVE') })

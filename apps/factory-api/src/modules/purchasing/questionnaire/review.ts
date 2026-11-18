@@ -45,6 +45,8 @@ const dayOf = (value: Date | null): string | null => (value === null ? null : va
 async function supplierOf(request: FastifyRequest, partyId: string) {
   const party = isUuid(partyId) ? await request.withClient((client) => client.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true, tradeName: true, language: true, companyId: true } })) : null
   if (!party) throw new NotFoundError('Supplier not found.')
+  // fix-pr-8 (the brand wall): a party the person is not given is not found — before the company is asked for.
+  if (request.factoryContext && !can(actorOf(request.factoryContext), QUESTIONNAIRE_VIEW, { partyId })) throw new NotFoundError('Supplier not found.')
   const { context, companyId } = senderOf(request, party)
   const actor = actorOf(context)
   if (!can(actor, QUESTIONNAIRE_VIEW, { companyId, partyId })) throw new NotFoundError('Supplier not found.')

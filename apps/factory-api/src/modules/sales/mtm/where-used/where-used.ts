@@ -29,7 +29,8 @@ export async function templateWhereUsed(request: FastifyRequest, templateId: str
   if (!template || !can(actor, PRODUCT_STYLES_VIEW, { companyId: template.companyId })) throw new NotFoundError('Measurement template not found.')
   return request.withClient(async (db) => {
     const styles = await db.style.findMany({
-      where: { AND: [{ measurementTemplateId: template.id }, scopeWhere(actor, PRODUCT_STYLES_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput] },
+      // fix-pr-8 (the brand wall): by brand too — another customer's private-label style is not listed.
+      where: { AND: [{ measurementTemplateId: template.id }, scopeWhere(actor, PRODUCT_STYLES_VIEW, { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput] },
       select: { id: true, code: true, name: true, season: true, status: true, lifecycle: true, mtmAllowed: true, companyId: true },
       orderBy: [{ code: 'asc' }, { id: 'asc' }],
     })

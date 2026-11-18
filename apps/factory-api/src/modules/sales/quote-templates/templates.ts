@@ -13,7 +13,7 @@ import type { StoredAcceptanceMode } from '@nexus/factory-domain/sales/quote-ter
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeContextOf, officeQuote, readCurrentVersion, readQuote, type Reader } from '../quotes/store'
-import { assertMayManage, databaseRefusal, invalid, officeTemplate, readTemplate, sizesOf, TEMPLATE_COLUMNS, TEMPLATE_LINE_COLUMNS, templateView, type TemplateRow } from './store'
+import { assertMayManage, databaseRefusal, invalid, officeTemplate, readTemplate, sizesOf, TEMPLATE_COLUMNS, TEMPLATE_LINE_COLUMNS, templateBrandWhere, templateView, type TemplateRow } from './store'
 
 /**
  * Quote templates (B-W2b-294; SAL-144 "Templates speed daily quoting", SAL-252 "Company-scoped templates"; design sales.settings
@@ -46,6 +46,7 @@ export async function listTemplates(caller: CommandCaller, query: { readonly com
   const where: Prisma.QuoteTemplateWhereInput = {
     AND: [
       reach,
+      templateBrandWhere(context), // fix-pr-8: the brand wall
       query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
       query.status === 'ALL' ? {} : { status: query.status },
       query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {},

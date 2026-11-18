@@ -20,8 +20,12 @@ import { contextOf, STYLE_SCOPE } from '../styles/store'
 
 type Reader = FactoryClient | CommandTx
 
-/** Library colours: a company's or every company's (companyId null), as styles and size scales. */
-export const COLOUR_SCOPE = STYLE_SCOPE
+/**
+ * Library colours: a company's or every company's (companyId null), as styles and size scales. fix-pr-8: by company only — a
+ * colour names no customer (B-PR-10's STYLE_SCOPE gained the style's brand, a column a colour has not: a person limited to some
+ * customers got 500 on the colour library).
+ */
+export const COLOUR_SCOPE = { company: { field: 'companyId', nullable: true } } as const
 const MATERIAL_SCOPE = { company: { field: 'companyId', nullable: true } } as const
 /** Branding sets: their company and their brand. */
 export const SET_SCOPE = { company: 'companyId', party: 'partyId' } as const

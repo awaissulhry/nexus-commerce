@@ -84,6 +84,8 @@ export async function sendQuestionnaireLink(request: FastifyRequest, partyId: st
       })
     : null
   if (!facts) throw new NotFoundError('Supplier not found.')
+  // fix-pr-8 (the brand wall): a party the person is not given is not found — before the company is asked for.
+  if (request.factoryContext && !can(actorOf(request.factoryContext), QUESTIONNAIRE_SEND, { partyId })) throw new NotFoundError('Supplier not found.')
   const { context, companyId } = senderOf(request, facts.party)
   if (!can(actorOf(context), QUESTIONNAIRE_SEND, { companyId, partyId })) throw new NotFoundError('Supplier not found.')
   if (facts.party.status === 'ARCHIVED') throw new InvalidStateError('This supplier is archived: reactivate it first.')

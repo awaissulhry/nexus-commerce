@@ -3,7 +3,7 @@ import { ALERTS_VIEW } from '@nexus/factory-domain/alerts/permissions'
 import { ROUTE_REFUSALS, ROUTES_PER_RULE, routeInsideRule, routeKey, type RouteRefusal, type RouteScope } from '@nexus/factory-domain/alert-routes/rules'
 import { DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -42,6 +42,9 @@ async function visibleRule(db: Reader, actor: Actor, id: string) {
 const companyName = (row: { readonly tradeName: string | null; readonly legalName: string }) => row.tradeName ?? row.legalName
 
 /** A place as the database checks it: its own company and site, and its words. */
+// fix-pr-8 (the brand wall): a route to a customer the person does not reach is that customer's: not found, never listed.
+const customerReached = (actor: Actor, route: { readonly scope: string; readonly scopeId: string }): boolean => route.scope !== 'CUSTOMER' || can(actor, ALERTS_VIEW, { partyId: route.scopeId })
+
 async function placeOf(db: Reader, scope: RouteScope, scopeId: string): Promise<{ readonly companyId: string | null; readonly siteId: string | null; readonly label: string; readonly code: string | null } | null> {
   switch (scope) {
     case 'COMPANY': {
@@ -84,7 +87,7 @@ export async function routeViews(db: Reader, rows: readonly RouteRow[]) {
 }
 
 /** The roles, people and places a route of this rule may name (only inside the rule's place). */
-async function choicesFor(db: Reader, rule: { readonly companyId: string | null; readonly siteId: string | null }) {
+async function choicesFor(db: Reader, rule: { readonly companyId: string | null; readonly siteId: string | null }, actor: Actor) {
   const roles = await db.role.findMany({ where: { audience: 'OFFICE', archivedAt: null }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 200, select: { id: true, name: true, key: true } })
   const people = await db.user.findMany({ where: { audience: 'OFFICE', status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: 500, select: { id: true, displayName: true } })
   const companies = await db.company.findMany({
@@ -104,7 +107,7 @@ async function choicesFor(db: Reader, rule: { readonly companyId: string | null;
     },
   })
   const customers = await db.party.findMany({
-    where: { status: 'ACTIVE', roles: { hasSome: ['CUSTOMER', 'BRAND'] }, ...(rule.companyId ? { OR: [{ companyId: rule.companyId }, { companyId: null }] } : {}) },
+    where: { AND: [{ status: 'ACTIVE', roles: { hasSome: ['CUSTOMER', 'BRAND'] }, ...(rule.companyId ? { OR: [{ companyId: rule.companyId }, { companyId: null }] } : {}) }, scopeWhere(actor, ALERTS_VIEW, { party: 'id' }) as Prisma.PartyWhereInput] }, // fix-pr-8: the customers the person reaches
     orderBy: [{ legalName: 'asc' }, { id: 'asc' }],
     take: 501,
     select: { id: true, code: true, legalName: true, tradeName: true },
@@ -125,9 +128,9 @@ export async function listRuleRoutes(caller: CommandCaller, ruleId: string) {
   const actor = actorOf(context)
   return caller.withClient(async (db) => {
     const rule = await visibleRule(db, actor, ruleId)
-    const rows = await db.alertRoute.findMany({ where: { ruleId: rule.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: ROUTE })
+    const rows = (await db.alertRoute.findMany({ where: { ruleId: rule.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: ROUTE })).filter((row) => customerReached(actor, row)) // fix-pr-8
     const canChange = mayManage(actor, rule)
-    return { ruleId: rule.id, routes: await routeViews(db, rows), canChange, max: ROUTES_PER_RULE, choices: canChange ? await choicesFor(db, rule) : null }
+    return { ruleId: rule.id, routes: await routeViews(db, rows), canChange, max: ROUTES_PER_RULE, choices: canChange ? await choicesFor(db, rule, actor) : null }
   })
 }
 
@@ -151,7 +154,7 @@ export async function addRuleRoute(caller: CommandCaller, ruleId: string, body: 
     if (!mayManage(actor, rule)) throw new DomainError('forbidden', 'You may not change the rules of this place.', [{ path: 'permission/alerts.rules.manage', message: 'Not over this rule’s place.' }])
     // One route at a time per rule (the count and the key are read under it).
     await tx.$queryRaw`SELECT id FROM "AlertRule" WHERE id = ${rule.id}::uuid FOR UPDATE`
-    const place = await placeOf(tx, body.scope, body.scopeId)
+    const place = customerReached(actor, body) ? await placeOf(tx, body.scope, body.scopeId) : null // fix-pr-8
     if (!place) throw refused('PLACE_UNKNOWN', 'route/PLACE')
     if (!routeInsideRule(rule, { scope: body.scope, companyId: place.companyId, siteId: place.siteId })) throw refused('WIDER', 'route/WIDER')
     if (roleId !== null) {
@@ -180,7 +183,7 @@ export async function removeRuleRoute(caller: CommandCaller, routeId: string, id
   await command(caller, { name: 'alerts.removeRoute', idempotencyKey, input: { routeId } }, async (tools) => {
     const { tx } = tools
     const route = isUuid(routeId) ? await tx.alertRoute.findUnique({ where: { id: routeId }, select: ROUTE }) : null
-    if (!route) throw new NotFoundError('Route not found.')
+    if (!route || !customerReached(actor, route)) throw new NotFoundError('Route not found.') // fix-pr-8
     const rule = await visibleRule(tx, actor, route.ruleId)
     if (!mayManage(actor, rule)) throw new DomainError('forbidden', 'You may not change the rules of this place.', [{ path: 'permission/alerts.rules.manage', message: 'Not over this rule’s place.' }])
     await tx.$queryRaw`SELECT id FROM "AlertRule" WHERE id = ${rule.id}::uuid FOR UPDATE`

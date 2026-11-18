@@ -16,6 +16,7 @@ import { checkerFor, checksAsked, readGateStyle, readMarkets, styleLabelTemplate
 import { crViGapLots, expiriesOf } from '../reports/facts'
 // B-W2b-288 (FU2:02): the markets a style is sold in (Style.marketCodes): a market it leaves out is "Not sold there".
 import { boardMarketsOf, notSoldCell, rowStateOf, standingOf } from './markets'
+import { styleReached } from '../wall' // fix-pr-8
 
 /**
  * The compliance status board's reads (B-W2b-254; PRD-277, PRD-271; design compliance.status SCR-119, screens B-W2b-266):
@@ -224,6 +225,7 @@ export async function statusCell(request: FastifyRequest, query: { readonly styl
   return request.withClient(async (db) => {
     const style = await readGateStyle(db, query.styleId)
     if (!style || !(style.row.companyId === null || can(actor, CERTIFICATES_VIEW, { companyId: style.row.companyId }))) throw new NotFoundError('Style not found.')
+    if (!(await styleReached(db, actor, CERTIFICATES_VIEW, style.row.id))) throw new NotFoundError('Style not found.') // fix-pr-8: the brand wall
     const market = (await readMarkets(db)).get(query.market)
     if (!market) throw new NotFoundError(`There is no market ${query.market}.`)
     const now = rulesClock().now()

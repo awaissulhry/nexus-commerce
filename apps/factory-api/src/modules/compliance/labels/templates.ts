@@ -40,6 +40,7 @@ import {
   type StyleRow,
   type TemplateRow,
 } from './store'
+import { optionalStyleWall } from '../../product/styles/store'
 
 /**
  * Garment label templates (B-W1-19; PRD-331; A2 SCR-053), office side: list and read them, build one as a DRAFT (from
@@ -80,6 +81,7 @@ export async function listTemplates(caller: CommandCaller, query: ListQuery): Pr
   const where: Prisma.LabelTemplateWhereInput = {
     AND: [
       scopeWhere(actorOf(context), LABELS_VIEW, LABEL_SCOPE) as Prisma.LabelTemplateWhereInput,
+      optionalStyleWall(actorOf(context), LABELS_VIEW) as Prisma.LabelTemplateWhereInput, // fix-pr-8: a label of another customer's style
       query.status ? { status: query.status } : {},
       query.styleId ? { styleId: query.styleId } : {},
       query.code ? { code: query.code.toUpperCase() } : {},

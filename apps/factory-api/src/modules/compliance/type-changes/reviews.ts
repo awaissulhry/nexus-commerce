@@ -280,8 +280,8 @@ export async function completeAnswer(caller: CommandCaller, reviewId: string, fi
 export async function styleChanges(caller: CommandCaller, styleId: string, revisionId?: string): Promise<{ changes: StyleChangesView }> {
   const actor = actorOf(officeOf(caller))
   return caller.withClient(async (db) => {
-    const style = isUuid(styleId) ? await db.style.findUnique({ where: { id: styleId }, select: { id: true, companyId: true } }) : null
-    if (!style || !can(actor, CERTIFICATES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+    const style = isUuid(styleId) ? await db.style.findUnique({ where: { id: styleId }, select: { id: true, companyId: true, brandPartyId: true } }) : null
+    if (!style || !can(actor, CERTIFICATES_VIEW, { companyId: style.companyId }) || !can(actor, CERTIFICATES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.') // fix-pr-8: by brand too
     const revisions = await db.styleRevision.findMany({ where: { styleId }, orderBy: { revision: 'desc' }, select: REVISION_REF })
     const inView = revisionId ? revisions.find((entry) => entry.id === revisionId) : (revisions.find((entry) => entry.status === 'DRAFT') ?? revisions.find((entry) => entry.status === 'RELEASED') ?? revisions[0])
     if (revisionId && !inView) throw new ValidationError('Not a revision of the style.', [{ path: 'querystring/revisionId', message: 'Pick a revision of this style.' }])

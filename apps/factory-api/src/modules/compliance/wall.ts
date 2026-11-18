@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { CommandTx } from '../../core/command'
-import { styleBrandWhere } from '../product/styles/store'
+import { optionalStyleWall, styleBrandWhere } from '../product/styles/store'
 import { workOrderWhere } from '../production/work-orders/scope'
 
 type Reader = FactoryClient | CommandTx
@@ -26,6 +26,22 @@ export function styleWorkWall(actor: Actor, permission: Permission, relations: {
 
 /** A style's brand the person reaches (our own collection: always). */
 export const reachesBrand = (actor: Actor, permission: Permission, brandPartyId: string | null): boolean => can(actor, permission, { partyId: brandPartyId })
+
+// ── fix-pr-8 (the B-PR-10 sweep of every office route) ─────────────────────────────────────────────────────────────────────
+export { optionalStyleWall }
+
+/** Per material, only the styles using it whose brand the person reaches (our own collection: always). */
+export function reachedUses<T extends { readonly brandPartyId: string | null }>(uses: ReadonlyMap<string, readonly T[]>, actor: Actor, permission: Permission): Map<string, T[]> {
+  return new Map([...uses].map(([id, list]) => [id, list.filter((use) => reachesBrand(actor, permission, use.brandPartyId))]))
+}
+
+/** Whether the person reaches a style by its brand (a style that does not exist: no; no style: yes). */
+export async function styleReached(db: Reader, actor: Actor, permission: Permission, styleId: string | null): Promise<boolean> {
+  if (styleId === null) return true
+  const style = await db.style.findUnique({ where: { id: styleId }, select: { brandPartyId: true } })
+  return style !== null && reachesBrand(actor, permission, style.brandPartyId)
+}
+// ── end fix-pr-8 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * B-PR-10: a record about a work order OR a shipment by `subjectType` / `subjectId` (a gate event): the subjects a person limited

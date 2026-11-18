@@ -13,6 +13,7 @@ import { actorOf } from '../../../core/context'
 import { officeOf } from '../labels/store'
 import { labelOf, plantsOf, revisionLines, routingSteps, type Reader } from './facts'
 import { readSwitchStates, switchesOf, textileRulesClock } from './switches'
+import { styleReached } from '../wall'
 
 /**
  * The textile, leather and origin checks of a style revision, read side (B-W2b-208; PRD-338 … PRD-345; design
@@ -54,6 +55,7 @@ async function readStyle(db: Reader, request: FastifyRequest, styleId: string) {
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
   const style = await db.style.findUnique({ where: { id: styleId }, select: STYLE_SELECT })
   if (!style || !can(actorOf(officeOf(request)), TEXTILE_RULES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+  if (!(await styleReached(db, actorOf(officeOf(request)), TEXTILE_RULES_VIEW, style.id))) throw new NotFoundError('Style not found.') // fix-pr-8: by brand too
   return style
 }
 

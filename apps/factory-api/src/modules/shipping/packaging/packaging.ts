@@ -377,7 +377,8 @@ export async function createTemplate(caller: CommandCaller, body: { companyId: s
 /** shipping.packaging.manage: a template's fields and language, or switched off or on (its company and customer never change). */
 export async function changeTemplate(caller: CommandCaller, templateId: string, body: { version?: number | undefined; fields?: ShippingMarkField[] | undefined; language?: string | undefined; active?: boolean | undefined }, idempotencyKey?: string) {
   const before = isUuid(templateId) ? await caller.withClient((client) => client.shippingMarkTemplate.findUnique({ where: { id: templateId }, select: TEMPLATE_SELECT })) : null
-  if (!before) throw new NotFoundError('Mark template not found.')
+  // fix-pr-8 (the brand wall): another customer's template is not found (in the words of an unknown one, never "Company").
+  if (!before || !can(actorOf(officeContextOf(caller)), SHIPPING_SETTINGS_VIEW, { companyId: before.companyId, ...(before.partyId ? { partyId: before.partyId } : {}) })) throw new NotFoundError('Mark template not found.')
   assertCompany(caller, before.companyId, before.partyId)
   const next = { fields: body.fields ?? before.fields, language: body.language ?? before.language }
   const problems = markTemplateProblems(next)

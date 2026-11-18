@@ -150,6 +150,7 @@ export async function listDies(caller: CommandCaller, query: ListQuery) {
   const where: Prisma.ClickingDieWhereInput = {
     AND: [
       scopeOf(context, PLANT_VIEW) as Prisma.ClickingDieWhereInput,
+      { style: { is: styleScope(context) } }, // fix-pr-8: a die of another customer's private-label style is that customer's
       query.siteId ? { siteId: query.siteId } : {},
       query.styleId ? { styleId: query.styleId } : {},
       conditions ? { condition: { in: conditions as DbDieCondition[] } } : { condition: { not: 'RETIRED' } },
@@ -179,7 +180,8 @@ export async function listDies(caller: CommandCaller, query: ListQuery) {
 }
 
 /** The styles the caller's plant.view reaches (the group's, or of a company it reaches). */
-const styleScope = (context: OfficeContext): Prisma.StyleWhereInput => scopeWhere(actorOf(context), PLANT_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput
+// fix-pr-8 (the brand wall): and by brand — another customer's private-label style is neither listed nor found.
+const styleScope = (context: OfficeContext): Prisma.StyleWhereInput => scopeWhere(actorOf(context), PLANT_VIEW, { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput
 
 /** GET /plant/dies/styles: at most 20 styles by code or name, the newest code first when nothing is typed. */
 export async function dieStyles(caller: CommandCaller, query: { readonly q?: string | undefined }) {
@@ -240,6 +242,11 @@ async function checkRefs(tx: CommandTx, style: { readonly id: string; readonly c
   }
 }
 
+/** fix-pr-8: a die's style the person reaches by brand (no style: yes). */
+async function dieStyleReached(client: Pick<CommandTx, 'style'>, context: OfficeContext, styleId: string | null): Promise<boolean> {
+  return styleId === null || (await client.style.count({ where: { AND: [{ id: styleId }, styleScope(context)] } })) > 0
+}
+
 /** The die row locked for the command (one lock order: the die alone). */
 async function lockDie(tx: CommandTx, id: string): Promise<DieRow | null> {
   const locked = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "ClickingDie" WHERE "id" = ${id}::uuid FOR UPDATE`
@@ -249,7 +256,7 @@ async function lockDie(tx: CommandTx, id: string): Promise<DieRow | null> {
 /** A die the caller may see (404 otherwise) and may keep (403 in words otherwise). */
 async function keptDie(caller: CommandCaller, context: OfficeContext, dieId: string, words: string): Promise<DieRow> {
   const known = isUuid(dieId) ? await caller.withClient((client) => readDie(client, dieId)) : null
-  if (!known) throw new NotFoundError('Die not found.')
+  if (!known || !(await caller.withClient((client) => dieStyleReached(client, context, known.styleId)))) throw new NotFoundError('Die not found.') // fix-pr-8
   assertMay(context, PLANT_VIEW, known, 'Die')
   assertMayWrite(context, PLANT_MACHINES_MANAGE, known, words)
   return known

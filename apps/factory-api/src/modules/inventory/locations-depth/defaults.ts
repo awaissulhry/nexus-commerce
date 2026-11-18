@@ -8,6 +8,7 @@ import { INVENTORY_LOCATIONS_MANAGE, INVENTORY_LOCATIONS_VIEW } from '@nexus/fac
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { officeContextOf, siteFor } from '../ledger/access'
 import type { DefaultView } from './contract'
+import { placeReached } from './places'
 
 /**
  * Default locations (B-W2b-289; SCM-179; design warehouse.settings › Default locations: material type × purpose →
@@ -88,7 +89,9 @@ export async function setDefault(caller: CommandCaller, body: SetDefaultBody, id
       emit({ type: 'inventory.default_location_changed', subject: current.id, companyId: site.companyId, siteId: site.id, payload: { siteId: site.id, itemKind: body.itemKind, purpose: body.purpose, locationId: null, change: 'CLEARED' } })
       return { default: null }
     }
-    const place = isUuid(body.locationId) ? await tx.location.findUnique({ where: { id: body.locationId }, select: { code: true, kind: true, status: true, siteId: true } }) : null
+    // fix-pr-8 (the brand wall): a place of a party the person does not reach reads as an unknown one.
+    const found = isUuid(body.locationId) ? await tx.location.findUnique({ where: { id: body.locationId }, select: { code: true, kind: true, status: true, siteId: true, companyId: true, partyId: true } }) : null
+    const place = found && placeReached(context, INVENTORY_LOCATIONS_MANAGE, found) ? found : null
     const problems = defaultProblems(body.purpose, body.itemKind, place, site.id)
     if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems.map((issue) => ({ path: `body/${issue.path}`, message: issue.message })))
     if (current?.locationId === body.locationId) return { default: viewOf(current) }
