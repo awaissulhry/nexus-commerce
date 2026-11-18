@@ -36,6 +36,26 @@ export const STYLE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullab
 export const styleScope = (row: { readonly companyId: string | null; readonly brandPartyId: string | null }): ScopedRecord => ({ companyId: row.companyId, partyId: row.brandPartyId })
 /** B-PR-10: the styles `permission` reaches by brand alone (our own collection and the brands its grants reach), for a relation filter. */
 export const styleBrandWhere = (actor: Actor, permission: Permission): Prisma.StyleWhereInput => scopeWhere(actor, permission, { party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput
+// ── fix-pr-8 (the B-PR-10 sweep of every office route) ─────────────────────────────────────────────────────────────────────
+/**
+ * The rows of a model with an OPTIONAL `style` relation (a claim, a label template, a piece-rate table, a safety report) that
+ * `permission` reaches: no style, or a style of our own collection or of a customer the person reaches. The production unit
+ * is not filtered (`{}`).
+ */
+export function optionalStyleWall(actor: Actor, permission: Permission): Record<string, unknown> {
+  const brand = styleBrandWhere(actor, permission)
+  return Object.keys(brand).length === 0 ? {} : { OR: [{ styleId: null }, { style: { is: brand } }] }
+}
+
+/**
+ * The items `permission` reaches by brand: a FINISHED item made for a SKU of a customer's private-label style is that
+ * customer's; every other item (a material, our own collection's garment) is everyone's.
+ */
+export function itemBrandWhere(actor: Actor, permission: Permission): Prisma.ItemWhereInput {
+  const brand = styleBrandWhere(actor, permission)
+  return Object.keys(brand).length === 0 ? {} : { OR: [{ variantId: null }, { variant: { is: { colourway: { is: { style: { is: brand } } } } } }] }
+}
+// ── end fix-pr-8 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const SCALE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
 
 const FIELD_COLUMNS = {
