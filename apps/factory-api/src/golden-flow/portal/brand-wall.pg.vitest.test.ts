@@ -177,6 +177,14 @@ function urlsFor(path: string, ids: Record<string, string[]>, records: readonly 
   // Lists that take the record or the words by query.
   if (path === '/files') return records.map(([type, recordId]) => `/files?recordType=${type}&recordId=${recordId}`)
   if (path === '/portal/search') return words.map((word) => `/portal/search?q=${encodeURIComponent(word)}`)
+  // ---- B-PR-46b (fix-pr-4): Approve N's review list takes the picked orders by query: Brand Alpha's (one by one and all at once),
+  // never a call without them (400: it would prove nothing).
+  if (path === '/portal/production/approvals') {
+    const orders = ids.orderId ?? []
+    if (orders.length === 0) throw new Error(`Brand Alpha has no order for ${path}: the sweep would prove nothing`)
+    return [...orders.map((order) => `${path}?orderIds=${order}`), `${path}?orderIds=${orders.slice(0, 10).join(',')}`]
+  }
+  // ---- end B-PR-46b
   return urls
 }
 
