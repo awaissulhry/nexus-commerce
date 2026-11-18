@@ -228,7 +228,7 @@ function CountRecordBody({ model, actions, thread, printThread }: { model: Count
   }
 
   return (
-    <RecordFrame {...frame} thread={thread ?? null} printThread={printThread} wide={isWideTab(model.tab)} band={{ back, title, status, meta, primary, more, moreLabel: t('record.more') }}>
+    <RecordFrame {...frame} thread={thread ?? null} printThread={printThread} defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */} band={{ back, title, status, meta, primary, more, moreLabel: t('record.more') }}>
       <div className="fw-cn">
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
 
