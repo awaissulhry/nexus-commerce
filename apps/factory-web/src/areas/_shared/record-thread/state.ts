@@ -212,10 +212,13 @@ export function refusalCode(error: unknown): string | null {
   return path ? path.slice('refusal/'.length) : null
 }
 
-/** B-TH-237 (B-TH-044): why a portal reply did not go, as a key of record-thread `notice.portal.*`, or null (a fault: Retry). */
+/**
+ * B-TH-237 (B-TH-044): why a portal reply did not go, as a key of record-thread `notice.portal.*`, or null (a fault: Retry).
+ * F-SA-282a (B-SA-073): NAMES_OTHER_CUSTOMER — the text names another customer of ours (the API never says whom).
+ */
 export function portalRefusal(error: unknown): string | null {
   const code = refusalCode(error)
-  if (code === 'NO_PARTY' || code === 'NO_PORTAL' || code === 'CLOSED' || code === 'NOT_SHAREABLE') return `notice.portal.${code}`
+  if (code === 'NO_PARTY' || code === 'NO_PORTAL' || code === 'CLOSED' || code === 'NOT_SHAREABLE' || /* F-SA-282a */ code === 'NAMES_OTHER_CUSTOMER') return `notice.portal.${code}`
   if (isApiError(error) && (error.kind === 'invalid' || error.kind === 'conflict')) return 'notice.portal.other'
   return null
 }

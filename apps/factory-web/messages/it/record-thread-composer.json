@@ -34,7 +34,8 @@
     "tooLong": "Togli {count} caratteri per inviarlo",
     "amount": "Prima correggi l'importo: un numero, al massimo due decimali",
     "amountFloor": "Un importo resta in ufficio: togli la spunta “Per il reparto” o l'importo",
-    "floorPrice": "Trattenuta: “{found}” sembra un prezzo, e il reparto non vede mai importi. Toglilo, o scrivilo come importo di una nota d'ufficio"
+    "floorPrice": "Trattenuta: “{found}” sembra un prezzo, e il reparto non vede mai importi. Toglilo, o scrivilo come importo di una nota d'ufficio",
+    "namesOther": "Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti»."
   },
   "box": {
     "closed": "Chiusa da {who}, {date}. Il cliente non può scrivere qui.",
@@ -83,5 +84,9 @@
   },
   "amount": {
     "add": "Importo"
+  },
+  "namesOther": {
+    "tick": "Questo testo non nomina altri clienti",
+    "hint": "Cambia il testo, oppure spunta questa casella se quel nome qui non è un cliente."
   }
 }

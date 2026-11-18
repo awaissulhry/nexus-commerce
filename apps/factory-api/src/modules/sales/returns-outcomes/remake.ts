@@ -58,9 +58,9 @@ const issues = (problems: readonly Issue[], words: string): never => {
 }
 
 /** The audit row and the event of a remake asked (inside the caller's command). */
-export function remakeAskedInCommand(tools: CommandTools, rma: { readonly id: string; readonly number: string; readonly companyId: string; readonly siteId: string }, lineIds: readonly string[], via: RemakeChannel, fit: string): void {
+export function remakeAskedInCommand(tools: CommandTools, rma: { readonly id: string; readonly number: string; readonly companyId: string; readonly siteId: string; readonly partyId: string /* B-SA-004b */ }, lineIds: readonly string[], via: RemakeChannel, fit: string): void {
   tools.audit({ action: REMAKE_ACTION, recordType: RETURN_RECORD, recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, after: { lineIds: [...lineIds], via, fit: fit.trim() } })
-  tools.emit({ type: 'return.remake_asked', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: [...lineIds], via } })
+  tools.emit({ type: 'return.remake_asked', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, lineIds: [...lineIds], via, partyId: rma.partyId /* B-SA-004b */ } })
 }
 
 // ---- the office ------------------------------------------------------------------------------------------------------
@@ -111,8 +111,8 @@ async function requestOf(db: Reader, body: RemakeBody): Promise<{ request: Retur
 async function remakeInCommand(tools: CommandTools, place: Place, scope: ClaimScope, request: ReturnRequestBody, fit: string, who: { readonly via: 'PORTAL' | 'LINK'; readonly personId: string | null; readonly linkId: string | null }) {
   const made = await createRequestInCommand(tools, place, scope, request, who)
   // B-W2b-368: the request's wish is REMAKE (a request from outside offers REPLACE, REPAIR or CREDIT; the remake sets its own).
-  const row = await tools.tx.returnAuthorisation.update({ where: { id: made.returnId }, data: REMAKE_WISH, select: { siteId: true } })
-  remakeAskedInCommand(tools, { id: made.returnId, number: made.number, companyId: place.companyId, siteId: row.siteId }, made.lineIds, who.via, fit)
+  const row = await tools.tx.returnAuthorisation.update({ where: { id: made.returnId }, data: REMAKE_WISH, select: { siteId: true, partyId: true /* B-SA-004b */ } })
+  remakeAskedInCommand(tools, { id: made.returnId, number: made.number, companyId: place.companyId, siteId: row.siteId, partyId: row.partyId }, made.lineIds, who.via, fit)
   return made
 }
 

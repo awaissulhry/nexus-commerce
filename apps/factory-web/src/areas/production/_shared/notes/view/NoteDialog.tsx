@@ -154,7 +154,8 @@ export function NoteDialogBody({ model, actions }: { model: NoteDialogModel; act
       </p>
 
       {/* Write on each work order, or on their sales orders. */}
-      {model.targets.salesOrders.length > 0 || model.targets.withoutOrder > 0 ? (
+      {/* F-SA-280: no work order among the records (the Orders sheet's orders): nothing to choose, each order's own thread. */}
+      {model.targets.workOrders.length > 0 && (model.targets.salesOrders.length > 0 || model.targets.withoutOrder > 0) ? (
         <fieldset className="fw-pnt-on" aria-labelledby={legend}>
           <span id={legend} className="fw-pnt-legend">
             {t('on.legend')}

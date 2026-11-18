@@ -88,7 +88,7 @@ export async function moveStageInCommand(
     subject: repair.id,
     companyId: repair.companyId,
     siteId: repair.siteId,
-    payload: { repairId: repair.id, number: repair.number, from: repair.stage, to, workOrderId: repair.workOrderId, ddtId: input.ddtId ?? null },
+    payload: { repairId: repair.id, number: repair.number, from: repair.stage, to, workOrderId: repair.workOrderId, ddtId: input.ddtId ?? null, partyId: repair.partyId /* B-SA-004b */ },
   })
   return after
 }
@@ -324,7 +324,7 @@ export async function changeRepair(caller: CommandCaller, repairId: string, body
     const fields = Object.keys(after)
     await touchRepair(tools, repair, data)
     tools.audit({ recordType: 'RepairOrder', recordId: repair.id, companyId: repair.companyId, siteId: repair.siteId, before, after: { ...after, ...(GARMENT_FIELDS.some((field) => field in after) ? { garment: garmentAudit({ ...repair, ...(data as object) } as RepairRow) } : {}) } })
-    if (fields.length > 0) tools.emit({ type: 'repair.changed', subject: repair.id, companyId: repair.companyId, siteId: repair.siteId, payload: { repairId: repair.id, number: repair.number, fields } })
+    if (fields.length > 0) tools.emit({ type: 'repair.changed', subject: repair.id, companyId: repair.companyId, siteId: repair.siteId, payload: { repairId: repair.id, number: repair.number, fields, partyId: repair.partyId /* B-SA-004b */ } })
     return { warnings }
   })
   return { repair: await recordOf(caller, seen.id), warnings: result.warnings }

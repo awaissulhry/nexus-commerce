@@ -17,6 +17,8 @@ import { clearDraftInCommand } from './draft-keys'
 // B-SA-073: Reply to N checked on the server (one customer, at most 50 records) and the mis-send text check on every reply.
 import { REPLY_BATCH_MAX } from '@nexus/factory-domain/threads/replies'
 import { otherCustomers } from '../email-out/mis-send/check'
+// B-SA-061: what the reply is about (a part of its order; never a work order: office only).
+import { aboutProblems, aboutShapeProblems, type About } from './about'
 
 /**
  * B-TH-044 (threads plan TH-3, G15; T5-F07 "Reply in the portal only"; wall W08): POST /threads/<type>/<id>/replies — a reply to
@@ -38,6 +40,10 @@ import { otherCustomers } from '../email-out/mis-send/check'
  * read and written under the batch's own lock. Every reply also runs the mis-send text check (email-out/mis-send/check.ts
  * otherCustomers: another customer of the record's company named in the text): held (NAMES_OTHER_CUSTOMER) until the text changes or
  * the writer ticks "This text names no other customer" (`namesNoOtherCustomer`, the production notes' R-47 rule).
+ *
+ * B-SA-061 ("Discuss"): the reply may say which part of its order it is about (`about`: a line, shipment, invoice, deposit request,
+ * gate or change request of THIS order — about.ts); another record's id is refused in words ("Not a part of this record."), and a
+ * work order stays in office notes (a reply to the customer is never about one).
  */
 
 export interface ReplyInput {
@@ -49,6 +55,8 @@ export interface ReplyInput {
   readonly correctsMessageId?: string | undefined
   // ---- B-SA-073: the writer's tick "This text names no other customer" (R-47).
   readonly namesNoOtherCustomer?: boolean | undefined
+  // ---- B-SA-061: the part of its order the reply is about (a sales order's reply only; never a work order).
+  readonly about?: About | undefined
 }
 
 // ---- B-SA-073 ----------------------------------------------------------------------------------------------------------------
@@ -109,7 +117,8 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   const draft = { bodyText: cleanBody(input.body), mentions: [] as string[], attachments: uniqueIds(input.attachments), forFloor: false }
-  const problems = noteProblems(draft)
+  // B-SA-061: an about only on a sales order's reply, and never a work order (office only): refused in words before anything is read.
+  const problems = [...noteProblems(draft), ...aboutShapeProblems(record.type, input.about, 'PARTNER')]
   if (problems.length > 0) throw new ValidationError('The reply is not valid.', problems)
   const { thread: existing, scope } = await caller.withClient((client) => officeRecord(client, record))
   if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
@@ -120,7 +129,7 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
 
   const { result } = await command(
     caller,
-    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null, /* B-SA-073 */ namesNoOtherCustomer: input.namesNoOtherCustomer === true } },
+    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null, /* B-SA-073 */ namesNoOtherCustomer: input.namesNoOtherCustomer === true, /* B-SA-061 */ about: input.about ?? null } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides — with its wall party, as the note route
@@ -136,7 +145,11 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
       if (input.batchId) await joinReplyBatch(tools, input.batchId, thread)
       // ---- end B-SA-073
       const links = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } // B-TH-050
-      const issues = [...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'PARTNER')), ...(await messageLinkProblems(tools.tx, thread, links, { direction: 'OUTBOUND', channel: 'PORTAL' }))]
+      const issues = [
+        ...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'PARTNER')),
+        ...(await messageLinkProblems(tools.tx, thread, links, { direction: 'OUTBOUND', channel: 'PORTAL' })),
+        ...(await aboutProblems(tools.tx, actor, thread, input.about, 'PARTNER')), // B-SA-061
+      ]
       if (issues.length > 0) throw new ValidationError('The reply is not valid.', issues)
       const author = await tools.tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true } })
       const message = await writeMessage(tools, thread, {
@@ -147,6 +160,7 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
         attachments: draft.attachments,
         ...(input.batchId ? { batchId: input.batchId } : {}),
         ...links, // B-TH-050
+        ...(input.about ? { about: input.about } : {}), // B-SA-061
       })
       await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })

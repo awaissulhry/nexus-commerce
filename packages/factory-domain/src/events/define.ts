@@ -51,6 +51,15 @@ export class EventDefinitionError extends Error {
 export interface LiveRule {
   /** The permission an OFFICE viewer needs, checked with can() against the event's company and site. */
   readonly permission: Permission
+  // ── B-SA-004c ──
+  /**
+   * B-SA-004c: a second OFFICE permission that reaches the record by itself, for a record whose own read is "permission OR
+   * also" (a work order change: the order's readers, orders.view, or its work order's, workorders.view). An office viewer is
+   * sent the message through either one, each with its own grants' companies, sites and customers (events/live.ts). Default
+   * none: the one permission. Never the floor's (that is `floor`).
+   */
+  readonly also?: Permission
+  // ── end B-SA-004c ──
   /**
    * The floor permission a FLOOR viewer needs (can() against the event's company and site; only events about the
    * device's own site): one floor roles hold (isFloorPermission), never the office read. Default none: the floor never
@@ -64,6 +73,8 @@ export interface LiveRule {
 /** A declared live rule (the definition's `live`): `floor` is null when no tablet receives it. */
 export interface LiveRuleDefinition {
   readonly permission: Permission
+  /** B-SA-004c: the second office permission, only on a rule that declares one. */
+  readonly also?: Permission
   readonly floor: Permission | null
   readonly fields: readonly string[]
 }
@@ -129,6 +140,9 @@ export function defineEvent<const Type extends string, Payload extends PayloadSc
   const live = spec?.live
   if (live !== undefined) {
     if (!isPermission(live.permission)) problems.push('live.permission is not <module>.<action>')
+    // B-SA-004c: a second office permission is a permission, and another one.
+    if (live.also !== undefined && !isPermission(live.also)) problems.push('live.also is not <module>.<action>')
+    else if (live.also !== undefined && live.also === live.permission) problems.push('live.also names live.permission again')
     if (live.floor !== undefined && !isFloorPermission(live.floor)) {
       problems.push(
         `live.floor ${JSON.stringify(live.floor)} is not a floor permission: name the permission a floor role holds that the station needs (floor.work, or one shared with the floor such as production.cut or plant.report), never true or an office read`,
@@ -148,7 +162,7 @@ export function defineEvent<const Type extends string, Payload extends PayloadSc
     context: spec.context,
     description: spec.description,
     payload: spec.payload,
-    live: live === undefined ? null : Object.freeze({ permission: live.permission, floor: live.floor ?? null, fields: Object.freeze([...(live.fields ?? [])]) }),
+    live: live === undefined ? null : Object.freeze({ permission: live.permission, ...(live.also === undefined ? {} : { also: live.also }) /* B-SA-004c */, floor: live.floor ?? null, fields: Object.freeze([...(live.fields ?? [])]) }),
   })
 }
 

@@ -1,6 +1,8 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, DomainError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+// B-SA-004b: the customers a ranking moved, for the office's live wall.
+import { partyIdsOf } from '@nexus/factory-domain/events/live'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PLANNING_BACKLOG_MANAGE } from '@nexus/factory-domain/planning/backlog/permissions'
@@ -213,6 +215,7 @@ export async function setRanks(caller: CommandCaller, body: RanksBody, idempoten
     await lockBacklog(tx, context.tenantId, company.id)
     const issues: { path: string; message: string }[] = []
     const changed: string[] = []
+    const parties: string[] = [] // B-SA-004b: the moved orders' customers (the rows read FOR UPDATE)
     for (const [index, item] of body.ranks.entries()) {
       const rows = isUuid(item.orderId) ? await tx.$queryRaw<{ id: string; companyId: string; partyId: string; status: string; backlogRank: number | null; number: string }[]>`SELECT id, "companyId", "partyId", status::text AS status, "backlogRank", number FROM "SalesOrder" WHERE id = ${item.orderId}::uuid FOR UPDATE` : []
       const order = rows[0]
@@ -232,10 +235,11 @@ export async function setRanks(caller: CommandCaller, body: RanksBody, idempoten
       await tx.salesOrder.update({ where: { id: order.id }, data: { backlogRank: item.to }, select: { id: true } })
       tools.audit({ action: 'planning.backlog.rank', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { backlogRank: order.backlogRank }, after: { backlogRank: item.to } })
       changed.push(order.id)
+      parties.push(order.partyId) // B-SA-004b
     }
     if (issues.length > 0) throw new DomainError('conflict', issues[0]!.message, issues)
     if (changed.length === 0) throw new ConflictError('Nothing to change: every order named has that rank already.')
-    tools.emit({ type: 'backlog.ranked', subject: company.id, companyId: company.id, payload: { companyId: company.id, mode: 'BY_HAND', orderIds: changed } })
+    tools.emit({ type: 'backlog.ranked', subject: company.id, companyId: company.id, payload: { companyId: company.id, mode: 'BY_HAND', orderIds: changed, partyIds: partyIdsOf(parties) /* B-SA-004b */ } })
     return { changed: changed.length }
   })
   const view = await caller.withClient(async (db) => viewOf(company, await backlogOf(db, company.id, context), context, serverClock.now()))
@@ -259,15 +263,17 @@ export async function rankByRule(caller: CommandCaller, body: { readonly company
     await lockBacklog(tx, context.tenantId, company.id)
     const ranks = await preview(tx)
     const changed: string[] = []
+    const parties: (string | null)[] = [] // B-SA-004b: the moved orders' customers (the rows read FOR UPDATE)
     for (const entry of ranks) {
       if (entry.from === entry.to) continue
-      await tx.$queryRaw`SELECT id FROM "SalesOrder" WHERE id = ${entry.id}::uuid FOR UPDATE`
+      const [locked] = await tx.$queryRaw<{ partyId: string }[]>`SELECT id, "partyId" FROM "SalesOrder" WHERE id = ${entry.id}::uuid FOR UPDATE`
+      parties.push(locked?.partyId ?? null) // B-SA-004b: an order not read names no customer, so the message reaches every-customer people only
       await tx.salesOrder.update({ where: { id: entry.id }, data: { backlogRank: entry.to }, select: { id: true } })
       tools.audit({ action: 'planning.backlog.rank', recordType: 'SalesOrder', recordId: entry.id, companyId: company.id, before: { backlogRank: entry.from }, after: { backlogRank: entry.to, byRule: true } })
       changed.push(entry.id)
     }
     if (changed.length === 0) throw new ConflictError('Nothing to change: the backlog is ranked by the rule already.')
-    tools.emit({ type: 'backlog.ranked', subject: company.id, companyId: company.id, payload: { companyId: company.id, mode: 'BY_RULE', orderIds: changed.slice(0, 500) } })
+    tools.emit({ type: 'backlog.ranked', subject: company.id, companyId: company.id, payload: { companyId: company.id, mode: 'BY_RULE', orderIds: changed.slice(0, 500), partyIds: partyIdsOf(parties) /* B-SA-004b: every moved order's, beyond the 500 named */ } })
     return { changed: changed.length, ranks }
   })
   const view = await caller.withClient(async (db) => viewOf(company, await backlogOf(db, company.id, context), context, serverClock.now()))

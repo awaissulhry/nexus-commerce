@@ -1,5 +1,5 @@
 import { isApiError, issuePath } from '../../../../lib/api/errors'
-import type { Order, OrderStatus } from '../api'
+import type { OrderStatus } from '../api'
 import type { Phrase, Tone } from '../model'
 import type {
   Approval,
@@ -18,7 +18,6 @@ import type {
   PricedBody,
   PrioritiesAnswer,
   PriorityLevel,
-  PromiseLine,
   RiskState,
   TechPack,
   WaitReason,
@@ -437,24 +436,9 @@ export interface Forecast {
   risk: RiskState | null
 }
 
-/** Each line of the order: its planned finish, what sets it, and days to spare (from the promise lines of every site read). */
-export function forecastsOf(lines: readonly PromiseLine[], orderId: string): Map<string, Forecast> {
-  const out = new Map<string, Forecast>()
-  for (const line of lines) {
-    if (line.order.id !== orderId) continue
-    out.set(line.id, { finish: line.finish, source: line.finishSource, slackDays: line.slackDays, risk: line.risk })
-  }
-  return out
-}
-
+// F-SA-234b: the forecast per line comes with the order's own production read (record/production `forecastPart`); no read of
+// every site's promise lines builds it any more.
 export const RISK_TONE: Readonly<Record<RiskState, Tone>> = Object.freeze({ LATE: 'danger', AT_RISK: 'warning', NOT_PROMISED: 'neutral', ON_TIME: 'success' })
-
-/** The sites to read promises for: the order lines' own sites, and the person's sites for lines that name none. */
-export function forecastSites(order: Pick<Order, 'lines'>, mine: ReadonlyArray<{ id: string }>): string[] {
-  const own = order.lines.map((line) => line.siteId).filter((site): site is string => !!site)
-  const any = order.lines.some((line) => !line.siteId)
-  return [...new Set([...own, ...(any ? mine.map((site) => site.id) : [])])]
-}
 
 // ---- milestones (SO3:01) ----------------------------------------------------------------------------------------------------
 

@@ -339,7 +339,7 @@ export async function writeLinePrice(tools: CommandTools, current: QuoteRow, ver
     before: { lineId: line.id, unitPrice: markMoney('price', decimal(line.unitPrice)), listUnitPrice: markMoney('price', decimal(line.listUnitPrice)), priceSteps: markMoney('price', extras?.priceSteps ?? null), adjustmentReason: extras?.adjustmentReason ?? null, sizes: markMoney('price', sizeAudit(line.sizes)) },
     after: { lineId: line.id, start, unitPrice: markMoney('price', plan.unitPrice), listUnitPrice: markMoney('price', plan.listUnitPrice), priceSteps: markMoney('price', plan.steps), adjustmentReason: plan.adjustmentReason, sizes: markMoney('price', plan.sizesAfter) },
   })
-  tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+  tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
 }
 
 /** PUT /sales/quotes/:quoteId/lines/:lineId/price (quotes.manage): see the module comment. */

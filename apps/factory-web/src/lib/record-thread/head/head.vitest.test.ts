@@ -16,6 +16,11 @@ import { PortalHeadLine } from './view/PortalHeadLine'
 // B-TH-255
 import { viewQuery } from './model'
 import { feedKinds } from '../model'
+// F-SA-263
+import { readFileSync } from 'node:fs'
+import { CATALOGUE } from '../../i18n/messages'
+import { hiddenKey, tabWidthKey } from './model'
+import { isRemembered, readHidden, writeHidden } from './use-thread-width'
 
 /**
  * B-TH-209 — the thread's Head (T1, rule R-ACT): who answers next from the last SHARED message, the five Activity doors
@@ -228,6 +233,67 @@ describe('the width', () => {
     expect(readWidth(closed, 'SalesOrder', 'p1')).toBe(DEFAULT_DOCK_WIDTH)
     expect(() => writeWidth(closed, 'SalesOrder', 'p1', 'full')).not.toThrow()
   })
+
+  // ---- F-SA-263 (10-order-page §6.3): a page whose dock adapts per tab keeps the width per person + record type + tab, and "hidden"
+  // per person + record type; a private window (closed storage) keeps nothing and never throws.
+  const memory = () => {
+    const store = new Map<string, string>()
+    return { store, storage: { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } }
+  }
+  const closedStorage = { getItem: () => { throw new Error('closed') }, setItem: () => { throw new Error('closed') }, removeItem: () => { throw new Error('closed') } }
+
+  it('F-SA-263: a width chosen on one tab is kept for THAT tab only (the record type’s key + `.tab`); "Default width" forgets that tab’s', () => {
+    const { store, storage } = memory()
+    expect(tabWidthKey('SalesOrder', 'p1', 'changes')).toBe(`${widthKey('SalesOrder', 'p1')}.changes`)
+    writeWidth(storage, 'SalesOrder', 'p1', 'third', 'changes')
+    expect(readWidth(storage, 'SalesOrder', 'p1', 'changes')).toBe('third')
+    expect(isRemembered(storage, 'SalesOrder', 'p1', 'changes')).toBe(true)
+    // Another tab, the record type's own key, another person, another record type: nothing chosen there.
+    expect(isRemembered(storage, 'SalesOrder', 'p1', 'lines')).toBe(false)
+    expect(isRemembered(storage, 'SalesOrder', 'p1')).toBe(false)
+    expect(isRemembered(storage, 'SalesOrder', 'p2', 'changes')).toBe(false)
+    expect(isRemembered(storage, 'Quote', 'p1', 'changes')).toBe(false)
+    // A page without tabs keeps today's key (per person + record type): every other record page as before.
+    writeWidth(storage, 'Quote', 'p1', 'half')
+    expect(store.has(widthKey('Quote', 'p1'))).toBe(true)
+    expect(isRemembered(storage, 'Quote', 'p1', 'lines')).toBe(false)
+    writeWidth(storage, 'SalesOrder', 'p1', null, 'changes')
+    expect(isRemembered(storage, 'SalesOrder', 'p1', 'changes')).toBe(false)
+    expect(store.has(tabWidthKey('SalesOrder', 'p1', 'changes'))).toBe(false)
+    expect(isRemembered(closedStorage, 'SalesOrder', 'p1', 'changes')).toBe(false)
+    expect(() => writeWidth(closedStorage, 'SalesOrder', 'p1', 'half', 'changes')).not.toThrow()
+  })
+
+  it('F-SA-263: "hidden" is kept per person + record type (any tab, the next order too); showing forgets it; a private window keeps nothing', () => {
+    const { store, storage } = memory()
+    expect(readHidden(storage, 'SalesOrder', 'p1')).toBe(false)
+    writeHidden(storage, 'SalesOrder', 'p1', true)
+    expect(readHidden(storage, 'SalesOrder', 'p1')).toBe(true)
+    expect(store.get(hiddenKey('SalesOrder', 'p1'))).toBe('1')
+    expect(readHidden(storage, 'SalesOrder', 'p2')).toBe(false)
+    expect(readHidden(storage, 'Quote', 'p1')).toBe(false)
+    writeHidden(storage, 'SalesOrder', 'p1', false)
+    expect(readHidden(storage, 'SalesOrder', 'p1')).toBe(false)
+    expect(store.has(hiddenKey('SalesOrder', 'p1'))).toBe(false)
+    expect(readHidden(closedStorage, 'SalesOrder', 'p1')).toBe(false)
+    expect(() => writeHidden(closedStorage, 'SalesOrder', 'p1', true)).not.toThrow()
+  })
+
+  it('F-SA-263: the hook keeps "hidden" only when asked (and never on a page that docks closed); ⌘J, show and a width choice write it', () => {
+    const hook = readFileSync(new URL('./use-thread-width.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('const rememberHidden = (options.rememberHidden ?? false) && !options.startHidden')
+    expect(hook).toMatch(/if \(rememberHidden\) writeHidden\(storageOf\(\), recordType, personId, next\)\s*setHiddenNow\(next\)/)
+    expect(hook).toContain('const toggle = useCallback(() => setHidden(!hiddenNow.current), [setHidden])')
+    expect(hook).toContain('const show = useCallback(() => setHidden(false), [setHidden])')
+    // The width is read for the tab on screen, before paint (another tab never flashes the previous tab's width).
+    expect(hook).toMatch(/useLayoutEffect\(\(\) => \{\s*setWidth\(readWidth\(storageOf\(\), recordType, personId, tab\)\)/)
+  })
+
+  it('F-SA-263: the menu’s reset line says "Default width" / "Larghezza predefinita"', () => {
+    expect(CATALOGUE.en['record-thread-head']?.['width.reset']).toBe('Default width')
+    expect(CATALOGUE.it['record-thread-head']?.['width.reset']).toBe('Larghezza predefinita')
+  })
+  // ---- end F-SA-263
 })
 
 describe('the portal line', () => {

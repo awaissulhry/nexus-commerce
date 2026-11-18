@@ -237,6 +237,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
 
   return (
     <div className="fw-ql">
+      {/* F-SA-277: an embedding host (the customer's Quotes & incoming) draws its own title; no head, no tiles here. */}
+      {!model.embedded && (
       <div className="fw-ql-head">
         <div className="fw-ql-head-text">
           <p className="fw-q-hint">{t('list.intro')}</p>
@@ -251,6 +253,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           {model.pageLinks && <QuotesPageLinks model={model.pageLinks} />}
         </span>
       </div>
+      )}
 
       {model.notice && (
         <Banner
@@ -266,6 +269,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         />
       )}
 
+      {!model.embedded && (
       <MetricStrip
         metrics={QUOTE_TILES.map((tile) => {
           const count = model.tiles[tile]
@@ -279,6 +283,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           }
         })}
       />
+      )}
 
       {filtered && (
         <div className="fw-ql-chips" aria-label={t('list.activeFilters')}>
@@ -309,6 +314,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       )}
 
       <ListFrame<QuoteListRow>
+        listKey="sales.quotes" /* F-SA-277: its own key on any page (its export source, its saved views), never the page's guess */
         label={t('list.tableLabel')}
         rows={state ? [] : shown}
         rowId={(row) => row.id}
@@ -378,7 +384,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         onHelp={() => setDialog('help')}
         onOpen={(row) => actions?.onOpen?.(row.id)}
         // F-SA-225: the rest of a row opens the quote (⌘ / Ctrl: a new tab), as on every Sales list.
-        onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : actions?.onOpen?.(row.id))}
+        // F-SA-277: a host's row click (the customer page docks the quote's thread) when it gives one.
+        onRowClick={(row, event) => (actions?.onOpenRow ? actions.onOpenRow(row.id, event.metaKey || event.ctrlKey) : event.metaKey || event.ctrlKey ? window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : actions?.onOpen?.(row.id))}
         state={state}
         focusRow={model.focusRow}
       />

@@ -99,6 +99,8 @@ import {
   writeProblem,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+import { artworkOfGroup } from './record/production' // F-SA-231b
+import { textOf } from '../../../lib/record-thread/parts/testing' // F-SA-231b
 
 const params = (query: string) => new URLSearchParams(query)
 
@@ -782,7 +784,9 @@ describe('the board\'s Waiting for approval lane, its reasons with doors, Delive
     }
     const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
     expect(en('offBoard.delivered', { count: 3 })).toBe('3 delivered · See them in the list')
-    expect(en('tile.waitingForApproval')).toBe('Waiting for approval')
+    // Round 5 (R9): PENDING_APPROVAL reads the catalogue's "Waiting for a yes" everywhere — the pill, the board lane, the tile.
+    expect(en('tile.waitingForApproval')).toBe('Waiting for a yes')
+    expect(en('tile.waitingForApproval')).toBe(en('status.PENDING_APPROVAL'))
   })
   it('the board holds live re-reads while a card has the focus or its picture is open, and draws the reasons on the waiting cards', () => {
     const view = readFileSync(new URL('./list/view/OrdersBoard.tsx', import.meta.url), 'utf8')
@@ -900,3 +904,39 @@ describe('F-SA-231: Lines — totals by grain instead of the rail, no layer swit
   })
 })
 // ---- end F-SA-231
+
+// ---- B-SA-035b + F-SA-231b (sa-7's follow-ups): the artwork chip opens the thread's ONE viewer; a made-to-measure line names its rider
+// only with sales.measurements.view (the order read adds it under that right) — never a measurement -----------------------------------
+describe('F-SA-231b: Lines — the artwork in the thread’s viewer, the rider only with the measurements right', () => {
+  const file = (n: number) => ({ fileId: `f-${n}`, name: `Logo ${n}.pdf`, contentType: 'application/pdf', sizeBytes: 1000 * n })
+  const caseOf = (id: string) => recordScreen.cases.find((item) => item.id === id)!.model
+
+  it('a style card’s artwork: the files the read names, each once in the lines’ order; the read’s count where it names none', () => {
+    expect(artworkOfGroup([{ artwork: [file(1), file(2)], artworkCount: 2 }, { artwork: [file(2), file(3)], artworkCount: 2 }])).toEqual({ files: [file(1), file(2), file(3)], count: 3 })
+    expect(artworkOfGroup([{ artworkCount: 2 }, { artworkCount: 1 }])).toEqual({ files: [], count: 3 })
+    expect(artworkOfGroup([{ artwork: [], artworkCount: 0 }])).toEqual({ files: [], count: 0 })
+  })
+
+  it('"Artwork (2)" is a button that opens the files in the docked thread’s viewer (no trip to the Files tab)', () => {
+    for (const locale of LOCALES) {
+      const html = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('lines-artwork-viewer'), locale)
+      expect(html).toContain(locale === 'en' ? 'title="Open the artwork in the viewer"' : 'title="Apri le grafiche nel visualizzatore"')
+      expect(html).toContain(locale === 'en' ? 'Artwork (2)' : 'Grafiche (2)')
+    }
+    const source = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('frame.openFiles?.({ files: artwork.files.map((file) => ({ id: file.fileId, name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes })), fileId: artwork.files[0]!.fileId, returnTo: event.currentTarget })')
+  })
+
+  it('a made-to-measure unit names its rider (name · garment, revision) when the read gives it; without the right only "Made to measure"', () => {
+    const named = textOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('lines-mtm-rider'), 'en'))
+    expect(named).toContain('Made to measure')
+    expect(named).toContain('Rider: Demo Rider Uno · JACKET, revision 2')
+    expect(textOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('lines-mtm-rider'), 'it'))).toContain('Pilota: Demo Rider Uno · JACKET, revisione 2')
+    const held = textOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('lines-mtm-no-right'), 'en'))
+    expect(held).toContain('Made to measure')
+    expect(held).not.toContain('Rider:')
+    expect(held).not.toContain('Demo Rider Uno')
+  })
+
+})
+// ---- end F-SA-231b

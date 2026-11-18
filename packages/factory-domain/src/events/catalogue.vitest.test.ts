@@ -3,9 +3,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue' // B-SA-004c
 import { ROLE_TEMPLATES } from '../auth/roles/templates'
 import { createCatalogue, EVENT_CATALOGUE, EVENT_DEFINITIONS, EventPayloadError, UndeclaredEventError } from './catalogue'
-import { defineEvent } from './define'
+import { defineEvent, /* B-SA-004c */ isFloorPermission } from './define'
 import { LIVE_PARTY_KEYS } from './live' // B-SA-004
 
 const v1 = defineEvent({ type: 'lot.released', context: 'quality', description: 'A lot was released.', payload: z.strictObject({ lotId: z.string() }) })
@@ -136,3 +137,113 @@ describe('order events declare their customer (B-SA-004)', () => {
   })
 })
 // ── end B-SA-004 ──
+
+// ── B-SA-004b ──
+/**
+ * B-SA-004b (Sales page plan P17'; the rest of B-SA-004): the same rule for quotes, returns and repairs, and for the events that
+ * name several orders. Every event shown to quotes.view, sales.returns.view, sales.repairs.view or orders.view, and every event
+ * that names a quote, a customer return, a repair, an order or several orders (quoteId, returnId, repairId, orderId,
+ * salesOrderId, orderIds) declares a party key (LIVE_PARTY_KEYS), set by its emitter from the record read on the server — so an
+ * office person limited to some customers is sent their own customers' quote, return and repair changes live, and never another
+ * customer's. A record of the company that no customer owns
+ * is named below with its reason; a new event of these is held to the rule by itself.
+ */
+describe('quote, return, repair and order events declare their customer (B-SA-004b)', () => {
+  const NO_CUSTOMER: Readonly<Record<string, string>> = {
+    'season.changed': "a season is the company's own, of no customer",
+    'sales_settings.changed': "the company's (or the tenant's) quote rules, of no customer",
+    'quote_template.changed': "a quote template is the company's start of quotes, of no customer",
+    'size_curve.changed': "a size curve is the company's own, of no customer",
+    'return_policy.changed': "the company's (or the tenant's) return policy, of no customer",
+    'return_policy.saved': "the company's return policy for a channel, of no customer",
+    'return_fee_rule.changed': "the company's restocking or handling fee rule, of no customer",
+    'inventory.returned': "its returnId is stock that came back from a work order to a store location, not a customer's return",
+  }
+  const RULES = new Set(['quotes.view', 'sales.returns.view', 'sales.repairs.view', 'orders.view'])
+  const NAMES = ['quoteId', 'returnId', 'repairId', 'orderId', 'salesOrderId', 'orderIds']
+  const FAMILY = /^(quote|return|repair|repair_estimate)\./
+  const keysOf = (definition: (typeof EVENT_DEFINITIONS)[number]): string[] => Object.keys(definition.payload.shape)
+  const namesARecord = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => NAMES.includes(key))
+  const namesAParty = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => keysOf(definition).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))
+  const ruled = (definition: (typeof EVENT_DEFINITIONS)[number]): boolean => RULES.has(definition.live?.permission ?? '') || namesARecord(definition)
+
+  it('every event shown to quotes.view, sales.returns.view, sales.repairs.view or orders.view, or that names a quote, a return, a repair or orders, declares a party key', () => {
+    const missing = EVENT_DEFINITIONS.filter((definition) => ruled(definition) && !Object.hasOwn(NO_CUSTOMER, definition.type) && !namesAParty(definition)).map((definition) => definition.type)
+    expect(missing).toEqual([])
+  })
+
+  it('every quote.*, return.*, repair.* and repair_estimate.* event declares a party key (no exemption in these families)', () => {
+    const missing = EVENT_DEFINITIONS.filter((definition) => FAMILY.test(definition.type) && !namesAParty(definition)).map((definition) => definition.type)
+    expect(missing).toEqual([])
+  })
+
+  it('an exemption is real: a declared event that names no party, and none is of these families', () => {
+    for (const type of Object.keys(NO_CUSTOMER)) {
+      const definition = EVENT_CATALOGUE.get(type, 1)
+      expect(namesAParty(definition), type).toBe(false)
+      expect(type, type).not.toMatch(FAMILY)
+    }
+  })
+
+  it('the keys this step added are ids only (optional, nullable) and never copied to the browser', () => {
+    const ADDED = [
+      'quote.updated', 'quote.lines_changed', 'quote.approval_requested', 'quote.approval_decided', 'quote.reopened', 'quote.cancelled', 'quote.sent', 'quote.link_sent', 'quote.revised', 'quote.declined', 'quote.link_requested', 'quote.proofs_changed', 'quote.expired', 'quote.reminder_sent', 'quote.season_changed',
+      'return.lines_changed', 'return.changed', 'return.received', 'return.graded', 'return.decided', 'return.status_changed', 'return.remake_asked', 'return.line_split', 'return.sent_back', 'return.finished', 'return.policy_checked', 'return.garment_named', 'return.scan_code_set', 'return_label.changed',
+      'repair.changed', 'repair.stage_changed', 'repair.safety_checked', 'repair_estimate.withdrawn',
+    ]
+    for (const type of ADDED) {
+      const definition = EVENT_CATALOGUE.get(type, 1)
+      const field = definition.payload.shape.partyId
+      expect(field, type).toBeDefined()
+      expect(field!.safeParse('0190a000-0000-7000-8000-0000000000b1').success, type).toBe(true)
+      expect(field!.safeParse(null).success, type).toBe(true)
+      expect(field!.safeParse(undefined).success, type).toBe(true)
+      expect(field!.safeParse('Brand Alpha').success, type).toBe(false)
+      expect(definition.live!.fields ?? [], type).not.toContain('partyId')
+    }
+  })
+
+  it('backlog.ranked names its orders’ customers as a list of ids (optional for an older event), never copied to the browser', () => {
+    const definition = EVENT_CATALOGUE.get('backlog.ranked', 1)
+    const field = definition.payload.shape.partyIds
+    expect(field).toBeDefined()
+    expect(field!.safeParse(['0190a000-0000-7000-8000-0000000000b1', '0190a000-0000-7000-8000-0000000000b2']).success).toBe(true)
+    expect(field!.safeParse([]).success).toBe(true)
+    expect(field!.safeParse(undefined).success).toBe(true)
+    expect(field!.safeParse(['Brand Alpha']).success).toBe(false)
+    expect(definition.live!.fields ?? []).not.toContain('partyIds')
+  })
+})
+// ── end B-SA-004b ──
+
+// ── B-SA-004c ──
+/**
+ * B-SA-004c: a live rule's second office permission (`also`, events/define.ts) is a declared permission other than its first,
+ * never a floor one; the work order changes name it (their read: orders.view OR workorders.view, production
+ * work-order-changes/read.ts), and still name their customer, so the second permission widens no customer wall.
+ */
+describe('a second office permission on a live rule (B-SA-004c)', () => {
+  const withAlso = EVENT_DEFINITIONS.filter((definition) => definition.live?.also !== undefined)
+
+  it('the work order changes name orders.view and also workorders.view, with their customer', () => {
+    const changes = EVENT_DEFINITIONS.filter((definition) => definition.type.startsWith('work_order_change.'))
+    expect(changes.map((definition) => definition.type).sort()).toEqual(['work_order_change.applied', 'work_order_change.declined', 'work_order_change.proposed', 'work_order_change.stale'])
+    for (const definition of changes) {
+      expect(definition.live, definition.type).toMatchObject({ permission: 'orders.view', also: 'workorders.view', floor: null })
+      expect(Object.keys(definition.payload.shape), definition.type).toContain('partyId')
+      expect(definition.live!.fields, definition.type).not.toContain('partyId')
+    }
+  })
+
+  it('every `also` is a declared office permission, other than the rule’s first, and its event names a party key', () => {
+    expect(withAlso.length).toBeGreaterThan(0)
+    for (const definition of withAlso) {
+      const also = definition.live!.also!
+      expect(FACTORY_PERMISSIONS.isDeclared(also), `${definition.type}: ${also}`).toBe(true)
+      expect(also, definition.type).not.toBe(definition.live!.permission)
+      expect(isFloorPermission(also), `${definition.type}: ${also} is the floor's`).toBe(false)
+      expect(Object.keys(definition.payload.shape).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key)), definition.type).toBe(true)
+    }
+  })
+})
+// ── end B-SA-004c ──

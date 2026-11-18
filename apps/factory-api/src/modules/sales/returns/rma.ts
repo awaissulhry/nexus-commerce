@@ -447,7 +447,7 @@ export async function addLines(caller: CommandCaller, returnId: string, body: { 
       tools.audit({ action: 'returns.addLine', recordType: 'ReturnLine', recordId: data.id!, companyId: rma.companyId, siteId: rma.siteId, after: lineAudit({ ...line.key, seq, quantity: line.quantity, reasonCode: line.reasonCode, reasonNote: line.reasonNote, serial: line.serial, batchNumber: line.batchNumber, description: line.description, unitPrice: line.row.unitPrice }) })
     }
     await touchReturn(tools, rma)
-    tools.emit({ type: 'return.lines_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, change: 'ADDED', lineIds } })
+    tools.emit({ type: 'return.lines_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, change: 'ADDED', lineIds, partyId: rma.partyId /* B-SA-004b */ } })
     const registerEntries = await openSafetyEntries(tools, rma, await tx.returnLine.findMany({ where: { id: { in: lineIds } }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } }))
     return { lineIds, registerEntries: registerEntries.length }
   })
@@ -512,7 +512,7 @@ export async function changeLine(caller: CommandCaller, returnId: string, lineId
     })
     await touchReturn(tools, rma)
     tools.audit({ action: 'returns.changeLine', recordType: 'ReturnLine', recordId: current.id, companyId: rma.companyId, siteId: rma.siteId, before: lineAudit(current), after: lineAudit(after) })
-    tools.emit({ type: 'return.lines_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, change: 'CHANGED', lineIds: [current.id] } })
+    tools.emit({ type: 'return.lines_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, change: 'CHANGED', lineIds: [current.id], partyId: rma.partyId /* B-SA-004b */ } })
     if (body.reasonCode !== undefined) await openSafetyEntries(tools, rma, [after])
     return { lineId: current.id }
   })
@@ -531,7 +531,7 @@ export async function removeLine(caller: CommandCaller, returnId: string, lineId
     await tx.returnLine.delete({ where: { id: current.id }, select: { id: true } })
     await touchReturn(tools, rma)
     tools.audit({ action: 'returns.removeLine', recordType: 'ReturnLine', recordId: current.id, companyId: rma.companyId, siteId: rma.siteId, before: lineAudit(current) })
-    tools.emit({ type: 'return.lines_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, change: 'REMOVED', lineIds: [current.id] } })
+    tools.emit({ type: 'return.lines_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, change: 'REMOVED', lineIds: [current.id], partyId: rma.partyId /* B-SA-004b */ } })
     return { lineId: current.id }
   })
   return { return: await recordOf(caller, seen.id) }
@@ -589,7 +589,7 @@ export async function changeHeader(caller: CommandCaller, returnId: string, body
     const after = await touchReturn(tools, rma, data)
     const pick = (row: RmaRow) => Object.fromEntries(fields.map((field) => [field, field === 'goodsDueBy' ? (row.goodsDueBy ? dayOf(row.goodsDueBy) : null) : row[field as keyof RmaRow]]))
     tools.audit({ recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: pick(rma), after: pick(after) })
-    if (fields.length > 0) tools.emit({ type: 'return.changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, fields } })
+    if (fields.length > 0) tools.emit({ type: 'return.changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, fields, partyId: rma.partyId /* B-SA-004b */ } })
     return { fields }
   })
   return { return: await recordOf(caller, seen.id) }
@@ -610,7 +610,7 @@ export async function cancelReturn(caller: CommandCaller, returnId: string, body
     const rma = await lockReturn(tools, seen.id, body.version, BEFORE_GOODS, 'it is cancelled (the goods arrived: close it instead)')
     await touchReturn(tools, rma, { status: 'CANCELLED', closedAt: tools.now, statusReason: reason })
     tools.audit({ recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: rma.status }, after: { status: 'CANCELLED', closedAt: toUtcIso(tools.now) }, reason })
-    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'CANCELLED' } })
+    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'CANCELLED', partyId: rma.partyId /* B-SA-004b */ } })
     return { status: 'CANCELLED' }
   })
   return { return: await recordOf(caller, seen.id) }
@@ -631,7 +631,7 @@ export async function closeReturn(caller: CommandCaller, returnId: string, body:
     const warnings: Issue[] = closeWarningsFor(lines, await liveRepairsByLine(tx, lines.map((line) => line.id)), liveDdt).map((warning) => ({ path: warning.path, message: warning.message }))
     await touchReturn(tools, rma, { status: 'CLOSED', closedAt: tools.now, statusReason: reason })
     tools.audit({ recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: rma.status }, after: { status: 'CLOSED', closedAt: toUtcIso(tools.now), received: lines.reduce((sum, line) => sum + line.receivedQuantity, 0) }, reason })
-    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'CLOSED' } })
+    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'CLOSED', partyId: rma.partyId /* B-SA-004b */ } })
     return { warnings }
   })
   return { return: await recordOf(caller, seen.id), warnings: result.warnings }

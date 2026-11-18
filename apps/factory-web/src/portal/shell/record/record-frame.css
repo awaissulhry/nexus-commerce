@@ -93,3 +93,20 @@
 .fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-empty {
   align-content: flex-start;
 }
+
+/* ---- F-SA-264: the conversation's top row (width menu, Hide), and the dock hidden — the body takes the whole width. */
+.fw-prf-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-prf.has-thread.is-hidden[data-mode='docked'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fw-prf.is-hidden[data-mode='docked'] > .fw-prf-dock {
+  display: none;
+}
+/* ---- end F-SA-264 */

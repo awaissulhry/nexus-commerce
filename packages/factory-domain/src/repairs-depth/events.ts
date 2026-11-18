@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004b */ livePartyId } from '../events/define'
 
 /**
  * Repairs and alterations in depth (B-W2b-342; SAL-384, SAL-385, SAL-387; follow-ups RR1:01, RR1:02). apps/factory-api's
@@ -46,7 +46,7 @@ export const events = [
     type: 'repair_estimate.withdrawn',
     context: 'repairs-depth',
     description: "A repair's draft or sent estimate was withdrawn (a new revision replaces it, or the office took it back).",
-    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), estimateId: z.uuid(), revision: z.number().int().min(1), from: z.enum(['DRAFT', 'SENT']) }),
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), estimateId: z.uuid(), revision: z.number().int().min(1), from: z.enum(['DRAFT', 'SENT']), partyId: livePartyId() /* B-SA-004b */ }),
     live: { permission: 'sales.repairs.view', fields: ['repairId', 'number', 'estimateId', 'revision'] },
   }),
 ] as const

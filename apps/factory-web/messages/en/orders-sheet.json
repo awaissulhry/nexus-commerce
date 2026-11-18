@@ -30,7 +30,13 @@
     "atRiskHint": "The promise is near and the order is still being made (the alert rule’s days)",
     "customerUrgency": "Customer’s mark",
     "customerUrgencyHint": "The customer’s own mark, read-only (Priority stays the office’s)",
-    "riders": "Riders"
+    "riders": "Riders",
+    "whereItIs": "Where it is",
+    "whereItIsHint": "The plain stage and the health, then this order's own pieces (read only while this column is shown)",
+    "waitingOn": "Waiting on",
+    "waitingOnHint": "The most urgent: a request to answer, a reply that waits on us, who acts next",
+    "supervisor": "Supervisor",
+    "supervisorHint": "Me, someone else or not set: never a name on a list"
   },
   "door": {
     "order": "Open order {number} · its thread on the right",
@@ -47,7 +53,8 @@
   "held": {
     "invoices": "Needs the invoices right",
     "shipping": "Needs the shipping right",
-    "quotes": "Needs the quotes right"
+    "quotes": "Needs the quotes right",
+    "workorders": "Needs the work orders right"
   },
   "invoiced": {
     "NONE": "None",
@@ -107,7 +114,8 @@
     "currency": "Currency: {currency}",
     "urgency": "Customer’s mark: {urgency}",
     "rider": "Rider: {name}",
-    "riderUnnamed": "One rider"
+    "riderUnnamed": "One rider",
+    "waitingUs": "Waiting on us"
   },
   "switcher": {
     "title": "Customer",
@@ -175,7 +183,8 @@
   "views": {
     "suggest": "{customer} — tracking",
     "ofCustomer": "Orders of {customer}",
-    "mtm": "Made-to-measure"
+    "mtm": "Made-to-measure",
+    "waitingUs": "Waiting on us"
   },
   "group": {
     "label": "Group the rows",
@@ -269,5 +278,31 @@
   },
   "empty": {
     "mtmNoRight": "No made-to-measure orders in this view."
+  },
+  "where": {
+    "sewn": "{done} of {total} sewn"
+  },
+  "waiting": {
+    "request": "Request to answer",
+    "requests": "{count} requests to answer",
+    "answerTip": "Answer the request on {number}",
+    "reply": "Reply waits · {time}",
+    "keeper": "{who} · {time}",
+    "more_one": "+{count} more",
+    "more_other": "+{count} more"
+  },
+  "row": {
+    "addTask": "Add task…",
+    "answer": "Answer request…"
+  },
+  "bulk": {
+    "assign": "Assign supervisor…",
+    "note_one": "Note to {count}…",
+    "note_other": "Note to {count}…",
+    "oneCustomer": "Pick the orders of one customer: these are of {count} customers.",
+    "notThisCustomer": "An order of another customer is ticked: tick this customer's orders only.",
+    "addTask_one": "Add task to {count}…",
+    "addTask_other": "Add task to {count}…",
+    "tooMany": "At most {max} orders at once."
   }
 }

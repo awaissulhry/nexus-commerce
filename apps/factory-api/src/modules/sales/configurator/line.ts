@@ -376,7 +376,7 @@ export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, l
       before: { lineId: line.id, options: audited(before) },
       after: { lineId: line.id, options: audited(rows), warnings: check.check.warnings.map((finding) => finding.message.en), outsideCertificate: check.summary.outsideCertificate, newWaterfall: repriced.held === null, held: repriced.held },
     })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
     const detail = await detailInCommand(tools, current.id)
     const row = (await readQuote(tx, current.id))!
     const fresh = await readCurrentVersion(tx, row)

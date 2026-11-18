@@ -549,3 +549,134 @@ describe('the portal learns of its own request’s answer live (B-SA-055)', () =
   })
 })
 // ── end B-SA-055 ──
+
+// ── B-SA-004b ──
+/**
+ * B-SA-004b (Sales page plan P17'): every quote.*, return.* and repair.* event (a return's label, a repair's estimate too) names
+ * the record's customer (`partyId`, from the quote, RMA or repair row the command read), and backlog.ranked the customers of every order it moved
+ * (`partyIds`), so an office person limited to some customers gets the live hint of their own customers' quotes, returns and
+ * rankings (they got none before: a message naming no customer fails closed) and never another customer's. The party ids never
+ * reach the browser. The dock's floor rule (a return's site) is unchanged: a tablet is the factory's, of every customer.
+ */
+describe('quote, return, repair and ranking events name their customer (B-SA-004b)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  /** Every quote.*, return.*, repair.* and repair_estimate.* type the catalogue declares (a new one is held to the rule by
+   * itself), and the return label. */
+  const ONE = [...EVENT_CATALOGUE.types().filter((type) => /^(quote|return|repair|repair_estimate)\./.test(type)), 'return_label.changed']
+  const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
+  const messageOf = (type: string, payload: Record<string, unknown>) => {
+    const definition = definitionOf(type)
+    return { ...liveMessageFor(envelope(definition, payload), definition)!, subject: 'a-record-of-a-brand' }
+  }
+
+  it('covers the quote, return and repair events of every module (W1, quotes in depth, seasons, W2a, outcomes, returns in depth, labels, repairs)', () => {
+    expect(ONE).toEqual(expect.arrayContaining(['quote.updated', 'quote.lines_changed', 'quote.sent', 'quote.expired', 'quote.reminder_sent', 'quote.season_changed', 'return.received', 'return.decided', 'return.status_changed', 'return.finished', 'return.line_split', 'return.policy_checked', 'return.scan_code_set', 'return_label.changed', 'repair.changed', 'repair.stage_changed', 'repair.safety_checked', 'repair_estimate.withdrawn']))
+  })
+
+  it.each(ONE)('%s declares partyId (an id only) and never copies it to the browser', (type) => {
+    const definition = definitionOf(type)
+    const field = definition.payload.shape.partyId
+    expect(field, `${type} names its record's customer`).toBeDefined()
+    expect(field!.safeParse(ALPHA).success).toBe(true)
+    expect(field!.safeParse('Brand Alpha').success).toBe(false)
+    expect(['quotes.view', 'sales.returns.view', 'sales.repairs.view']).toContain(definition.live?.permission)
+    expect(definition.live!.fields ?? []).not.toContain('partyId')
+  })
+
+  it.each(ONE)("%s: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
+    const ofAlpha = messageOf(type, { quoteId: 'Q-A', returnId: 'RMA-A', repairId: 'REP-A', partyId: ALPHA })
+    const ofBeta = messageOf(type, { quoteId: 'Q-B', returnId: 'RMA-B', repairId: 'REP-B', partyId: BETA })
+    expect(ofAlpha.partyIds).toEqual([ALPHA])
+    expect(liveViewFor(ofAlpha, viewerOf(type, [BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofAlpha, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)!.fields).not.toHaveProperty('partyId')
+  })
+
+  it.each(ONE)('%s without a party (an event written before): every-customer viewers only (fails closed)', (type) => {
+    const older = messageOf(type, { quoteId: 'Q-OLD', returnId: 'RMA-OLD' })
+    expect(older.partyIds).toEqual([])
+    expect(liveViewFor(older, viewerOf(type, [ALPHA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(older, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+  })
+
+  it("the dock's tablet (floor rule) still receives a return's goods event of any customer at its own site", () => {
+    const received = definitionOf('return.received')
+    const tablet = floor(SITE, [{ permissions: [received.live!.floor!], companies: 'all', sites: 'all', parties: 'all' }])
+    expect(liveViewFor(messageOf('return.received', { returnId: 'RMA-A', partyId: ALPHA }), tablet, EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(messageOf('return.received', { returnId: 'RMA-A', partyId: ALPHA }), tablet, EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+  })
+
+  it("backlog.ranked: one customer's ranking reaches that customer's planners; a ranking of two reaches only who reaches both", () => {
+    const viewer = (parties: Grant['parties']) => viewerOf('backlog.ranked', parties)
+    const ranking = (partyIds?: string[]) => messageOf('backlog.ranked', { companyId: COMPANY, mode: 'BY_HAND', orderIds: ['SO-1'], ...(partyIds ? { partyIds } : {}) })
+    expect(liveViewFor(ranking([ALPHA]), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ranking([BETA]), viewer([BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ranking(partyIdsOf([BETA, ALPHA])), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ranking(partyIdsOf([BETA, ALPHA])), viewer([ALPHA, BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ranking(partyIdsOf([BETA, ALPHA])), viewer('all'), EVENT_CATALOGUE)).not.toBeNull()
+    // An older event (no partyIds): every-customer viewers only. The view: the company and the mode, never a party or an order.
+    expect(liveViewFor(ranking(), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ranking([BETA]), viewer([BETA]), EVENT_CATALOGUE)!.fields).toEqual({ companyId: COMPANY, mode: 'BY_HAND' })
+  })
+})
+// ── end B-SA-004b ──
+
+// ── B-SA-004c ──
+/**
+ * B-SA-004c: a work order change is read by the order's readers (orders.view) OR its work order's (workorders.view), so its live
+ * rule names both (`also`): production staff without orders.view are sent a new proposal live too. Each permission is judged
+ * whole with its own grants (company, site and customers): a person limited to some customers still gets only theirs, and two
+ * grants are never mixed (the company of one with the customers of the other).
+ */
+describe('a work order change reaches the order’s and the work order’s readers (B-SA-004c)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  const TYPES = EVENT_CATALOGUE.types().filter((type) => type.startsWith('work_order_change.'))
+  const grant = (permission: string, parties: Grant['parties'], companies: Grant['companies'] = 'all'): Grant => ({ permissions: [permission as never], companies, sites: 'all', parties })
+  const messageOf = (type: string, partyId: string | null, scope: Partial<EventEnvelope> = {}) => {
+    const definition = EVENT_CATALOGUE.get(type, 1)
+    return { ...liveMessageFor(envelope(definition, { changeId: 'WOC-1', salesOrderId: 'SO-1', workOrderId: 'WO-1', partyId, kind: 'LOWER_TO_ORDER' }, scope), definition)!, subject: 'a-change-of-a-brand' }
+  }
+
+  it('covers proposed, applied, declined and stale; each names orders.view and also workorders.view', () => {
+    expect([...TYPES].sort()).toEqual(['work_order_change.applied', 'work_order_change.declined', 'work_order_change.proposed', 'work_order_change.stale'])
+    for (const type of TYPES) expect(EVENT_CATALOGUE.get(type, 1).live).toMatchObject({ permission: 'orders.view', also: 'workorders.view', floor: null })
+  })
+
+  it.each(TYPES)("%s: a production person (workorders.view, no orders.view) limited to Beta gets Beta's, never Alpha's; one of every customer both", (type) => {
+    expect(liveViewFor(messageOf(type, BETA), office([grant('workorders.view', [BETA])]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(messageOf(type, ALPHA), office([grant('workorders.view', [BETA])]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(messageOf(type, ALPHA), office([grant('workorders.manage', 'all'), grant('workorders.view', 'all')]), EVENT_CATALOGUE)).not.toBeNull()
+    // No party (an older event): every-customer viewers only, through either permission.
+    expect(liveViewFor(messageOf(type, null), office([grant('workorders.view', [BETA])]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(messageOf(type, null), office([grant('workorders.view', 'all')]), EVENT_CATALOGUE)).not.toBeNull()
+    // The view: the rule's fields, never a party.
+    const view = liveViewFor(messageOf(type, BETA), office([grant('workorders.view', [BETA])]), EVENT_CATALOGUE)!
+    expect(view).not.toHaveProperty('partyIds')
+    expect(view.fields).toEqual({ changeId: 'WOC-1', salesOrderId: 'SO-1', workOrderId: 'WO-1', kind: 'LOWER_TO_ORDER' })
+  })
+
+  it.each(TYPES)('%s: the order’s readers as before; a person with neither permission, or a tablet, gets nothing', (type) => {
+    expect(liveViewFor(messageOf(type, ALPHA), office([grant('orders.view', [ALPHA])]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(messageOf(type, ALPHA), office([grant('orders.view', [BETA])]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(messageOf(type, ALPHA), office([grant('quotes.view', 'all'), grant('workorders.manage', 'all')]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(messageOf(type, ALPHA), floor(SITE, [{ permissions: ['floor.work', 'workorders.view' as never], companies: 'all', sites: 'all', parties: 'all' }]), EVENT_CATALOGUE)).toBeNull()
+  })
+
+  it.each(TYPES)('%s: two grants are never mixed — each permission reaches the message whole, or not at all', (type) => {
+    // orders.view over Alpha only; workorders.view over Beta only: Alpha's through the first, Beta's through the second.
+    const split = office([grant('orders.view', [ALPHA]), grant('workorders.view', [BETA])])
+    expect(liveViewFor(messageOf(type, ALPHA), split, EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(messageOf(type, BETA), split, EVENT_CATALOGUE)).not.toBeNull()
+    // orders.view of every customer but company C2 only; workorders.view of company C1 but Beta only: Alpha's change in C1
+    // reaches neither (the company of one grant, the customers of the other).
+    const crossed = office([grant('orders.view', 'all', [OTHER_COMPANY]), grant('workorders.view', [BETA], [COMPANY])])
+    expect(liveViewFor(messageOf(type, ALPHA), crossed, EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(messageOf(type, BETA), crossed, EVENT_CATALOGUE)).not.toBeNull()
+  })
+})
+// ── end B-SA-004c ──

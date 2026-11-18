@@ -74,7 +74,7 @@ export const PRODUCTION_READ: OrderProduction = {
   lines: LINES,
   work: null,
   // F-SA-234: the order's gates and milestones under its own right (the planner's demo milestones: two gates done, one late; start; shipping).
-  dates: { gates: [], milestones: MILESTONES.milestones.map((row) => ({ ...row, gateId: null, owner: null })), late: MILESTONES.late, next: MILESTONES.next, planned: { cutStart: '2026-11-10', sewStart: '2026-11-13', finish: '2026-12-10' }, forecast: [{ lineId: LINE_BLK, seq: 10, finish: '2026-12-08', risk: 'ON_TIME', slackDays: 7, sizes: [{ size: '48', finish: '2026-12-05', risk: 'ON_TIME' }, { size: '50', finish: '2026-12-08', risk: 'ON_TIME' }] }] },
+  dates: { gates: [], milestones: MILESTONES.milestones.map((row) => ({ ...row, gateId: null, owner: null })), late: MILESTONES.late, next: MILESTONES.next, planned: { cutStart: '2026-11-10', sewStart: '2026-11-13', finish: '2026-12-10' }, forecast: [{ lineId: LINE_BLK, seq: 10, finish: '2026-12-08', risk: 'ON_TIME', slackDays: 7, source: 'BOARD', sizes: [{ size: '48', finish: '2026-12-05', risk: 'ON_TIME' }, { size: '50', finish: '2026-12-08', risk: 'ON_TIME' }] }, /* F-SA-234b */ { lineId: LINE_RED, seq: 20, finish: '2026-12-29', risk: 'AT_RISK', slackDays: -7, source: 'WORK_ORDER_DUE', sizes: [] }] },
   quality: { issues: [], ncrs: [], final: [] },
   people: null,
   changes: { openRequests: [] },

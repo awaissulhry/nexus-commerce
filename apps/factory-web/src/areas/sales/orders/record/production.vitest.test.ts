@@ -7,6 +7,12 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { productionWordsFor } from '../../../../lib/production/words'
 import { COUNTED_STEPS, madeForOf, ownProgress, productionProgress } from './production'
+// F-SA-234b
+import { forecastPart } from './production'
+import { FAILED_STATE, LOADING_STATE, ready, WORK_READ } from './overview/fixtures'
+import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
+// F-SA-235b
+import { designScreen as workOrderScreen } from '../../../production/work-orders/record/fixtures'
 
 /**
  * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
@@ -105,3 +111,102 @@ describe('F-SA-235: Production’s holds, quality & problems — each block held
   })
 })
 // ---- end F-SA-235
+
+// ---- F-SA-234b (sa-7's follow-up): the by-line finish forecast reads the order's own production read (`dates.forecast`) ----------
+describe('F-SA-234b — the by-line finish forecast from the order’s own production read, not every site’s promise lines', () => {
+  it('ready: per line its finish, what sets it, the days to spare or short; an unknown risk word is no risk', () => {
+    const part = forecastPart(ready(WORK_READ))
+    expect(part?.problem).toBeNull()
+    expect(part?.value?.get(LINE_BLK)).toEqual({ finish: '2026-12-08', source: 'BOARD', slackDays: 7, risk: 'ON_TIME' })
+    expect(part?.value?.get(LINE_RED)).toEqual({ finish: '2026-12-29', source: 'WORK_ORDER_DUE', slackDays: -7, risk: 'AT_RISK' })
+    const odd = forecastPart(ready({ ...WORK_READ, dates: { ...WORK_READ.dates!, forecast: [{ ...WORK_READ.dates!.forecast![0]!, risk: 'SOMETHING_NEW' }] } }))
+    expect(odd?.value?.get(LINE_BLK)?.risk).toBeNull()
+  })
+
+  it('withheld (no planning.promise.view) or not read: null — "—" per line, never "not planned"; reading and failed as the read is', () => {
+    expect(forecastPart(ready({ ...WORK_READ, withheld: ['dates.forecast'], dates: { ...WORK_READ.dates!, forecast: null } }))).toBeNull()
+    expect(forecastPart(null)).toBeNull()
+    expect(forecastPart(undefined)).toBeNull()
+    expect(forecastPart(LOADING_STATE)).toEqual({ value: null, problem: null })
+    expect(forecastPart(FAILED_STATE)).toEqual({ value: null, problem: 'problem.read.unavailable' })
+  })
+
+  it('Production draws it by line: 7 days to spare (the planning board), 7 days short (a work order’s due day); withheld: no figure', () => {
+    const text = textOf(draw('w2b-323-dates'))
+    expect(text).toContain('7 days to spare')
+    expect(text).toContain('7 days short')
+    expect(text).toContain('The planning board')
+    expect(text).toContain('A work order’s due day')
+    const held = textOf(draw('w2b-323-dates-withheld'))
+    expect(held).not.toContain('days to spare')
+    expect(held).not.toContain('Not planned')
+  })
+
+  it('the order page makes no read of every site’s promise lines any more (the wide per-site read is gone)', () => {
+    const depth = readFileSync(new URL('../depth/use-order-depth.ts', import.meta.url), 'utf8')
+    expect(depth).not.toContain('listPromiseLines')
+    expect(depth).not.toContain('forecasts')
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('const forecast = forecastPart(model.production)')
+    expect(tab).toContain('<ForecastCell key="f" part={forecast} lineId={line.id} />')
+    expect(tab).not.toContain('ForecastNote')
+  })
+})
+// ---- end F-SA-234b
+
+// ---- F-SA-235b (sa-7's follow-up): the moved HealthCard draws the same on the sales order as on the work order — its look moved with
+// it into lib/production/health (its own classes, the same declarations), so the production area's stylesheet is not needed ---------
+describe('F-SA-235b — the Health card’s look lives with the card (lib/production/health), the same on both pages', () => {
+  /** The final declarations of each single-class rule of a stylesheet (grouped selectors spread; a later rule wins). */
+  const rulesOf = (css: string): Map<string, Map<string, string>> => {
+    const out = new Map<string, Map<string, string>>()
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selectors = match[1]!.split(',').map((part) => part.trim())
+      const declarations = match[2]!.split(';').map((part) => part.trim()).filter(Boolean).map((part) => [part.slice(0, part.indexOf(':')).trim(), part.slice(part.indexOf(':') + 1).trim()] as const)
+      for (const selector of selectors) {
+        if (!/^\.[a-z0-9-]+$/.test(selector)) continue
+        const known = out.get(selector) ?? new Map<string, string>()
+        for (const [name, value] of declarations) known.set(name, value)
+        out.set(selector, known)
+      }
+    }
+    return out
+  }
+  const card = readFileSync(new URL('../../../../lib/production/health/view/HealthCard.tsx', import.meta.url), 'utf8')
+  const own = rulesOf(readFileSync(new URL('../../../../lib/production/health/view/health-card.css', import.meta.url), 'utf8'))
+  const area = rulesOf(readFileSync(new URL('../../../production/_shared/production.css', import.meta.url), 'utf8'))
+
+  it('the card imports its own stylesheet and uses no class of the production area’s stylesheet', () => {
+    expect(card).toContain("import './health-card.css'")
+    expect(card).not.toMatch(/className="fw-pr-/)
+  })
+
+  it('each of its classes has exactly the declarations the production area’s rule had (the work order page looks as before)', () => {
+    const pairs: [string, string][] = [
+      ['.fw-phc-card', '.fw-pr-card'],
+      ['.fw-phc-head', '.fw-pr-card-head'],
+      ['.fw-phc-h2', '.fw-pr-h2'],
+      ['.fw-phc-stack', '.fw-pr-stack'],
+      ['.fw-phc-dialog', '.fw-pr-dialog'],
+      ['.fw-phc-hint', '.fw-pr-hint'],
+      ['.fw-phc-inline', '.fw-pr-inline'],
+      ['.fw-phc-actions', '.fw-pr-actions'],
+    ]
+    for (const [mine, theirs] of pairs) {
+      expect(own.get(mine), mine).toBeDefined()
+      expect(Object.fromEntries(own.get(mine)!), mine).toEqual(Object.fromEntries(area.get(theirs)!))
+    }
+    // Semantic tokens only: no raw colour of its own.
+    const css = readFileSync(new URL('../../../../lib/production/health/view/health-card.css', import.meta.url), 'utf8')
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i)
+  })
+
+  it('the work order’s Health card draws with its own classes (and the office note keeps the shared parts’ look)', () => {
+    const html = renderView(workOrderScreen.view as ComponentType<{ model: unknown }>, workOrderScreen.cases.find((item) => item.id === 'health-raised')!.model, 'en')
+    expect(html).toContain('fw-phc-card')
+    expect(html).toContain('class="fw-phc-head"')
+    expect(html).toContain('class="fw-prp-office-note"')
+  })
+})
+// ---- end F-SA-235b

@@ -123,7 +123,7 @@ export async function openReturn(caller: CommandCaller, caseId: string, body: Re
       internalNote: body.internalNote ?? null,
       lines,
     })
-    if (body.purpose === 'REMAKE') remakeAskedInCommand(tools, { id: made.returnId, number: made.number, companyId: row.companyId, siteId: made.siteId }, made.lineIds, 'OFFICE', body.fit!)
+    if (body.purpose === 'REMAKE') remakeAskedInCommand(tools, { id: made.returnId, number: made.number, companyId: row.companyId, siteId: made.siteId, partyId: row.partyId /* B-SA-004b: the case's customer the return was just made for */ }, made.lineIds, 'OFFICE', body.fit!)
     await linkInCommand(tools, row, { recordType: 'ReturnAuthorisation', recordId: made.returnId, note: actionLinkNote(body.purpose, made.number), via: body.purpose })
     const after = await touchCase(tools, row)
     tools.audit({ action: 'serviceCases.openReturn', recordType: SERVICE_CASE_RECORD, recordId: row.id, companyId: row.companyId, before: { version: row.version }, after: { version: after.version, purpose: body.purpose, returnId: made.returnId, returnNumber: made.number } })

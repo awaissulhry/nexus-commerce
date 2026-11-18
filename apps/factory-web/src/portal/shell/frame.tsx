@@ -43,6 +43,12 @@ export function usePortalFrame(): PortalFrameValue {
   return frame
 }
 
+// ---- F-SA-264: the record frame keeps its dock layout per signed-in person; outside the portal layout (a design case) nobody: null.
+export function usePortalPersonId(): string | null {
+  return useContext(FrameContext)?.me.user.id ?? null
+}
+// ---- end F-SA-264
+
 /** The API client of a portal page. */
 export const usePortalApi = (): ApiClient => usePortalFrame().api
 

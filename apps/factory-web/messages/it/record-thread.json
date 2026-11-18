@@ -22,7 +22,8 @@
       "NO_PORTAL": "Non pubblicato: nessuno di questo cliente legge questo record nel portale ora. Rispondi via e-mail; il tuo testo è di nuovo nel riquadro.",
       "CLOSED": "Non pubblicato: questa conversazione è chiusa. Riaprila per rispondere; il tuo testo è di nuovo nel riquadro.",
       "NOT_SHAREABLE": "Non pubblicato: la conversazione di questo record resta in fabbrica e non si condivide mai con un cliente. Scrivi una nota d'ufficio; il tuo testo è di nuovo nel riquadro.",
-      "other": "Non pubblicato nel portale: la fabbrica lo ha rifiutato così com'è. Il tuo testo è di nuovo nel riquadro."
+      "other": "Non pubblicato nel portale: la fabbrica lo ha rifiutato così com'è. Il tuo testo è di nuovo nel riquadro.",
+      "NAMES_OTHER_CUSTOMER": "Non pubblicato: il testo nomina un altro cliente. Cambialo, oppure spunta «Questo testo non nomina altri clienti»; il tuo testo è di nuovo nel riquadro."
     },
     "pinned": "Fissato per tutti su questo record.",
     "unpinned": "Tolto dai fissati: il messaggio resta nella conversazione.",
@@ -41,5 +42,57 @@
   "pane": {
     "label": "Riquadro di lettura",
     "close": "Chiudi il riquadro di lettura"
+  },
+  "allOfCustomer": {
+    "title": "Tutto di {customer}",
+    "line": "Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di {customer}. Per scrivere, scegli una conversazione.",
+    "readMarks": "Apri una conversazione per segnarla come letta.",
+    "view": {
+      "label": "Vista",
+      "menu": "Scegli quali messaggi mostra l'elenco",
+      "all": "Tutto",
+      "shared": "Con il cliente",
+      "notes": "Note d'ufficio"
+    },
+    "kind": {
+      "label": "Tipo",
+      "menu": "Scegli di quali record mostrare i messaggi",
+      "every": "Ogni tipo",
+      "ORDERS": "Ordini",
+      "QUOTES": "Preventivi",
+      "REQUESTS": "Richieste",
+      "GENERAL": "Conversazione generale",
+      "PROJECTS": "Progetti",
+      "AFTER_SALES": "Post-vendita"
+    },
+    "newShow_one": "1 nuovo · Mostra",
+    "newShow_other": "{count} nuovi · Mostra",
+    "loading": "Lettura dei messaggi di {customer}…",
+    "failed": "Non è stato possibile leggere i messaggi.",
+    "retry": "Riprova",
+    "gone": "Le conversazioni di questo cliente sono fuori dalla tua portata.",
+    "empty": "Ancora nessun messaggio con {customer}",
+    "emptyFiltered": "Niente con questa vista e questo tipo: scegli Tutto e Ogni tipo per vedere ogni messaggio.",
+    "feedLabel": "Messaggi con {customer}, i più recenti prima",
+    "showOlder": "Mostra i più vecchi",
+    "olderLoading": "Lettura dei messaggi più vecchi…",
+    "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",
+    "older": "Conversazioni più vecchie: apri il loro record",
+    "notShown_one": "1 conversazione di {customer} che non puoi aprire è esclusa.",
+    "notShown_other": "{count} conversazioni di {customer} che non puoi aprire sono escluse.",
+    "openRecord": "Apri {record}",
+    "new": "Nuovo",
+    "answer": "Rispondi nella sua conversazione",
+    "answerLabel": "Rispondi nella conversazione di {record}",
+    "chip": {
+      "general": "{customer} (generale)",
+      "number": "{number}",
+      "unnamed": "Un record non più presente",
+      "own": {
+        "ORDER": "{number} · Ordine {seq} del cliente",
+        "QUOTE": "{number} · Preventivo {seq} del cliente",
+        "REQUEST": "{number} · Richiesta {seq} del cliente"
+      }
+    }
   }
 }
