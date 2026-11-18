@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-002 */ livePartyId } from '../events/define'
 
 /**
  * The files platform's events (plan A1 §3.4, §3.6; feature COL-045). apps/factory-api's platform/files emits
@@ -17,6 +17,11 @@ export const events = [
       recordId: z.uuid(),
       // B-W2b-96: AUDIO (a voice note of a machine request or job, QHS-189; FileKind since B-W2b-86).
       kind: z.enum(['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO']),
+      // B-SA-002 (Sales page plan P17'): the customer of the file's record as the office's file reads judge it
+      // (platform/files/record-scope.ts fileLivePartyId), so an office person limited to some customers is sent the live message
+      // of their customers' files; none (null) for several customers, none or a record not found: every-customer viewers only.
+      // Never in the live fields; optional, so an older event still parses.
+      partyId: livePartyId(),
     }),
     live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
   }),

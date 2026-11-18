@@ -6,6 +6,8 @@ import type { InboundAttachment } from '@nexus/factory-domain/email-in/rules'
 import type { CommandCaller, CommandTools, CommandTx } from '../../core/command'
 import type { FilesRuntime } from '../files/service'
 import { storageKeyFor, type FileAudience } from '../files/rules'
+import { tenantOf } from '../files/files' // B-SA-002
+import { fileLivePartyId } from '../files/record-scope' // B-SA-002
 
 /**
  * The attachments of received mail as record files (COL-025: "Attachments are stored as files on the record
@@ -108,7 +110,8 @@ export async function recordFiles(tools: Pick<CommandTools, 'tx' | 'context' | '
       companyId: home.companyId,
       after: { recordType: home.recordType, recordId: home.recordId, kind: 'ATTACHMENT', originalName: part.name, contentType: part.contentType, sizeBytes: part.sizeBytes, sha256: part.sha256, status: 'AVAILABLE', visibility, partyId: home.partyId },
     })
-    tools.emit({ type: 'file.available', subject: id, companyId: home.companyId, payload: { fileId: id, recordType: home.recordType, recordId: home.recordId, kind: 'ATTACHMENT' } })
+    // B-SA-002: the record's customer for the office's live wall (the file record's own, as the office's file reads judge it).
+    tools.emit({ type: 'file.available', subject: id, companyId: home.companyId, payload: { fileId: id, recordType: home.recordType, recordId: home.recordId, kind: 'ATTACHMENT', partyId: await fileLivePartyId(tx, tenantOf(tools.context), home) } })
     ids.push(id)
   }
   return ids

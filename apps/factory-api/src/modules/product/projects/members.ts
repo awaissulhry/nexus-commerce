@@ -156,7 +156,7 @@ export async function removePerson(caller: CommandCaller, projectId: string, use
     if (!entry) throw new NotFoundError('This person is not in the project.')
     await tools.tx.recordFollower.delete({ where: { id: entry.id } })
     tools.audit({ action: 'threads.unfollow', recordType: 'RecordFollower', recordId: entry.id, companyId: row.companyId, before: { reason: entry.reason, muted: entry.muted }, after: { following: false, recordType: 'Project', recordId: row.id, userId, removedBy: context.actorId } })
-    tools.emit({ type: 'thread.followers_changed', subject: row.id, companyId: row.companyId, payload: { recordType: 'Project', recordId: row.id } })
+    tools.emit({ type: 'thread.followers_changed', subject: row.id, companyId: row.companyId, payload: { recordType: 'Project', recordId: row.id, partyId: row.partyId /* B-SA-002: the project row's own customer */ } })
     if (userId !== context.actorId) tools.emit({ type: 'project.person_removed', subject: row.id, companyId: row.companyId, payload: { projectId: row.id, number: row.number, partyId: row.partyId, userId, outside: entry.partyId !== null, byId: context.actorId } })
     return { removed: true }
   }).catch(databaseRefusal)

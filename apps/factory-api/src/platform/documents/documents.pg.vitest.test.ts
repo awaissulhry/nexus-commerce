@@ -222,7 +222,8 @@ describe('storeDocumentPdf (GAP-008)', () => {
     const [audit] = await admin<{ action: string; after: Record<string, unknown> }>('SELECT action, after FROM "AuditLog" WHERE "recordId" = $1', [file.id])
     expect(audit).toMatchObject({ action: 'documents.render', after: { documentType: 'DDT', number: '2026/000144', layout: 'DDT/1', language: 'it', kind: 'FISCAL_ARCHIVE', sha256: file.sha256 } })
     const events = await admin('SELECT type, payload FROM "OutboxEvent" WHERE subject = $1', [file.id])
-    expect(events).toEqual([{ type: 'file.available', payload: { fileId: file.id, recordType: 'Ddt', recordId, kind: 'FISCAL_ARCHIVE' } }])
+    // B-SA-002: a DDT this test never made names no customer (a record not found: every-customer viewers only).
+    expect(events).toEqual([{ type: 'file.available', payload: { fileId: file.id, recordType: 'Ddt', recordId, kind: 'FISCAL_ARCHIVE', partyId: null } }])
     const calls = await admin('SELECT operation, status FROM "IntegrationCall" WHERE "requestSummary"->>\'key\' LIKE $1', [`legal/t/${tenantA}/%`])
     expect(calls.map((entry) => entry.operation)).toContain('files.put')
   })

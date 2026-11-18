@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-002 */ livePartyId } from '../events/define'
 import { MESSAGE_AUDIENCES, MESSAGE_DIRECTIONS } from './rules'
 
 /**
@@ -7,7 +7,8 @@ import { MESSAGE_AUDIENCES, MESSAGE_DIRECTIONS } from './rules'
  * platform/threads emits them in the transaction that writes the message:
  *   thread.message_posted   a message entered a record's thread (an internal note now; the email steps' sent and
  *                           received mail later): the record's thread and timeline panels refresh on the office
- *                           screens that may read the record's thread. It names no text and no party.
+ *                           screens that may read the record's thread. It names no text. B-SA-002: it names the record's
+ *                           customer for the office's live wall only (`partyId`, below), never in the live fields.
  *   thread.user_mentioned   one per person a note mentions: the notification centre (COL-006, PLT-138) turns it into
  *                           that person's notification. No live rule: a live message reaches everyone who may read
  *                           the thread, not one person.
@@ -27,6 +28,12 @@ export const events = [
       // B-TH-045 (production lane T6): the batch one action wrote several messages in (a note to N records, the answer to N
       // orders of one customer): their notifications fold into ONE bell item per reader. Absent: a message of its own.
       batchId: z.uuid().optional(),
+      // B-SA-002 (Sales page plan P17'): the customer of the thread's record, so an office person limited to some customers is
+      // sent the live message of their customers' threads (events/live.ts): the thread's party, or a work order's, hold's or
+      // NCR's WALL party (platform/threads/records.ts wallScopeOf); none (null) for a record of several customers or of none —
+      // then only people of every customer receive it. Set by the API from the thread row, never a caller's value; never in the
+      // live fields (party ids never reach the browser); optional, so an older event still parses.
+      partyId: livePartyId(),
     }),
     live: { permission: 'threads.read', fields: ['threadId', 'messageId', 'recordType', 'recordId'] },
   }),
@@ -51,7 +58,8 @@ export const events = [
     type: 'thread.followers_changed',
     context: 'threads',
     description: "A record's followers changed (someone followed, unfollowed or muted it, or was added).",
-    payload: z.strictObject({ recordType: z.string(), recordId: z.uuid() }),
+    // B-SA-002: the record's customer for the office's live wall (as thread.message_posted's partyId).
+    payload: z.strictObject({ recordType: z.string(), recordId: z.uuid(), partyId: livePartyId() }),
     live: { permission: 'threads.read', fields: ['recordType', 'recordId'] },
   }),
   // ---- B-TH-068 (threads plan TH-5, PROJ-G05): a colleague added by hand to a record (reason ADDED) — the notification centre

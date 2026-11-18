@@ -142,7 +142,8 @@ export async function postOnShare(request: FastifyRequest, input: SharePostInput
         subject: current.recordId,
         companyId: current.companyId,
         siteId: current.siteId,
-        payload: { threadId: current.id, messageId: id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER' },
+        // B-SA-002: the thread row's own party (a link writes only on its party's shareable record: checked above).
+        payload: { threadId: current.id, messageId: id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', partyId: current.partyId },
       }),
     )
     const attachments = await linkAttachments(tools.tx, request, row.attachmentFileIds)

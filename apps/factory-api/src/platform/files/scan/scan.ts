@@ -5,11 +5,12 @@ import { command, StaleVersionError, type CommandCaller } from '../../../core/co
 import { gatewayAccount, GatewayCallFailed, GatewayRefusal } from '../../gateway/gateway'
 import { processGateway } from '../../gateway/service'
 import type { FileView } from '../contract'
-import { viewOf } from '../files'
+import { tenantOf, viewOf } from '../files' // B-SA-002: tenantOf
 import type { FilesRuntime } from '../service'
 import { ScannerUnavailableError, type ScanVerdict, type VirusScanner } from './port'
 import { retryChange, verdictChange, waitsForScan, type ScanStatus } from './rules'
 import { supersedeEarlierVersions } from '../versions/supersede'
+import { fileLivePartyId } from '../record-scope' // B-SA-002
 
 /**
  * The virus scan of a confirmed upload (PLT-245; B-W2a-42), OUTSIDE any transaction like every store call:
@@ -97,7 +98,7 @@ async function record(caller: CommandCaller, row: ScanRow, verdict: Awaited<Retu
         input: { fileId: row.id, verdict: verdict.verdict, engine: verdict.engine },
         record: { type: 'StoredFile', id: row.id, expectedVersion: row.version },
       },
-      async ({ tx, audit, emit, now }) => {
+      async ({ tx, audit, emit, now, context /* B-SA-002 */ }) => {
         const current = await tx.storedFile.findUniqueOrThrow({ where: { id: row.id }, select: SELECT })
         if (current.scanStatus !== 'PENDING') return viewOf(current)
         const change = verdictChange(scanned(current), verdict, now)
@@ -110,7 +111,7 @@ async function record(caller: CommandCaller, row: ScanRow, verdict: Awaited<Retu
           after: { status: after.status, scanStatus: after.scanStatus, quarantineReason: after.quarantineReason, scanEngine: after.scanEngine, scanFinding: after.scanFinding },
         })
         if (after.status === 'AVAILABLE' && current.status !== 'AVAILABLE') {
-          emit({ type: 'file.available', subject: row.id, companyId: after.companyId, payload: { fileId: row.id, recordType: after.recordType, recordId: after.recordId, kind: after.kind } })
+          emit({ type: 'file.available', subject: row.id, companyId: after.companyId, payload: { fileId: row.id, recordType: after.recordType, recordId: after.recordId, kind: after.kind, partyId: await fileLivePartyId(tx, tenantOf(context), after) /* B-SA-002 */ } })
           // B-W2b-160 (COL-046): a later version made AVAILABLE by its clean scan supersedes the earlier ones in this transaction.
           await supersedeEarlierVersions({ tx, audit, now }, row.id)
         }
