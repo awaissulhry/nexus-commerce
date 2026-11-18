@@ -319,7 +319,6 @@
     "deactivate_other": "{count} persone disattivate",
     "production": "I limiti di produzione di {name} sono salvati.",
     "supervisor": "Il supervisore di {name} è salvato.",
-    "productionAndSupervisor": "I limiti di produzione e il supervisore di {name} sono salvati.",
     "freeze": "La regola di blocco di {name} è salvata.",
     "freezeReset": "{name} segue di nuovo i punti di blocco dell'azienda per questo campo.",
     "previewProduction": "La mia produzione di {name} si è aperta in una nuova scheda, in sola lettura, per un'ora."
@@ -481,7 +480,6 @@
     },
     "previewOpen": "Apri La mia produzione come {name}",
     "portalOff": "Il suo portale è spento: questi limiti valgono quando sarà attivo. Un supervisore lavora senza portale: salvarlo non apre nulla per il cliente.",
-    "limitsSavedNotSupervisor": "I limiti sono salvati; il supervisore non è cambiato.",
     "sees": {
       "title": "Cosa vede {name}",
       "always": "Ogni livello mostra la fase, la data prevista e i suoi spostamenti, lo stato di salute, chi deve agire, i blocchi e le richieste. In più:",

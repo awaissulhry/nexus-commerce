@@ -158,6 +158,12 @@
       "addTask": "Add task for {customer}…",
       "importOrders": "Import orders for {customer}…",
       "workOrders": "Work orders of {customer} ›"
+    },
+    "anchor": {
+      "label": "Parts of Terms & requirements",
+      "commercial": "Commercial terms",
+      "hold": "Hold and PO number",
+      "identity": "Tax identity and VIES"
     }
   },
   "suppliers": {
@@ -752,9 +758,7 @@
   },
   "overview": {
     "identity": "Identity",
-    "now": "Now",
-    "nothingOpen": "Nothing open with this customer.",
-    "seeAll": "See all {count}"
+    "alsoOpen": "Also open"
   },
   "numbers": {
     "openQuotes": "Open quotes",
@@ -764,7 +768,11 @@
     "units_other": "{count} units to ship",
     "thisYear": "Ordered in {year}",
     "ordersHint": "Orders not cancelled",
-    "reading": "Reading…"
+    "reading": "Reading…",
+    "inProduction": "In production",
+    "inProductionHint": "Being made now",
+    "late": "Late",
+    "lateHint": "The promise passed, not shipped yet"
   },
   "side": {
     "label": "Status and next step",
@@ -782,8 +790,6 @@
     "all": "All",
     "quote": "Quote",
     "order": "Order",
-    "validUntil": "Valid until {date}",
-    "promise": "Promised {date}",
     "noQuotesRight": "Quotes are not shown: your role does not see quotes.",
     "failed": "Couldn't load quotes and orders",
     "empty": "Nothing here.",
@@ -796,8 +802,7 @@
       "date": "Date",
       "value": "Value",
       "promise": "Promise",
-      "validUntil": "Valid until",
-      "when": "When"
+      "validUntil": "Valid until"
     },
     "titleQuotes": "Quotes",
     "titleOrders": "Orders"

@@ -1,4 +1,13 @@
 import { describe, expect, it } from 'vitest'
+// F-SA-272: the supervisor moved to the customer's Overview (its own card and Apply).
+import { readFileSync } from 'node:fs'
+import { createElement, type ComponentType } from 'react'
+import { renderToString } from 'react-dom/server'
+import { I18nProvider } from '../../../../lib/i18n/provider'
+import type { DesignScreen } from '../../../../lib/design/design-screen'
+import { designScreen as customerRecordScreen } from '../record/fixtures'
+import { OFFICE_PEOPLE, productionLimits, SUPERVISOR_CASES } from './demo'
+import { limitsDraftOf, saveLimits } from './limits/model'
 import { CAPABILITIES, PARTNER_KINDS } from '@nexus/factory-domain/auth/partners/kinds'
 import { PARTNER_WORDS } from '@nexus/factory-domain/auth/partners/rules'
 import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
@@ -186,3 +195,43 @@ describe('Portal access in the office (B-W2b-180)', () => {
     }
   })
 })
+
+// ---- F-SA-272 (sales page plan N5, pick P10'; the production lane's yes): the limits Apply no longer carries the supervisor ----
+describe('F-SA-272: who looks after the customer moved to its Overview', () => {
+  const saved = productionLimits({ version: 4 }).production
+  const draft = { ...limitsDraftOf(saved), supervisorId: OFFICE_PEOPLE.bea.id, backupId: OFFICE_PEOPLE.carlo.id }
+
+  it("Portal settings' Apply sends the limits only, even with a changed supervisor in the draft", async () => {
+    const calls: string[] = []
+    const outcome = await saveLimits(saved, { ...draft, level: 'PROGRESS' }, { limits: async () => (calls.push('limits'), productionLimits({ version: 5 })) }, { manage: true, supervise: false })
+    expect(outcome).toEqual({ state: 'saved', limits: true, supervisor: false })
+    expect(calls).toEqual(['limits'])
+  })
+
+  it("the Overview card's Apply sends the supervisor only, with the version read", async () => {
+    const calls: string[] = []
+    const outcome = await saveLimits(saved, draft, { supervisor: async (body) => (calls.push(`supervisor v${body.version} ${body.supervisorId}`), { version: 5 }) }, { manage: false, supervise: true })
+    expect(outcome).toEqual({ state: 'saved', limits: false, supervisor: true })
+    expect(calls).toEqual([`supervisor v4 ${OFFICE_PEOPLE.bea.id}`])
+  })
+
+  it('the limits card no longer draws the supervisor; the Overview card does, office only', () => {
+    const card = readFileSync(new URL('./view/LimitsCard.tsx', import.meta.url), 'utf8')
+    expect(card).not.toContain('function SupervisorBlock')
+    const moved = readFileSync(new URL('./view/CustomerSupervisorCard.tsx', import.meta.url), 'utf8')
+    expect(moved).toContain('function SupervisorBlock')
+    expect(moved).toContain("t('limits.supervisor.officeOnly')")
+    const draw = (id: string) => {
+      const View = customerRecordScreen.view as ComponentType<{ model: unknown }>
+      const item = (customerRecordScreen as DesignScreen<unknown>).cases.find((entry) => entry.id === id)!
+      return renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(View, { model: item.model })))
+    }
+    const html = draw('overview-supervisor')
+    expect(html).toContain('Who looks after')
+    expect(html).toContain(OFFICE_PEOPLE.bea.name)
+    expect(html).toContain('Office only')
+    expect(draw('overview-supervisor-held')).toContain('Who looks after')
+    expect(SUPERVISOR_CASES.first.draft?.supervisorId).toBe(OFFICE_PEOPLE.bea.id)
+  })
+})
+// ---- end F-SA-272

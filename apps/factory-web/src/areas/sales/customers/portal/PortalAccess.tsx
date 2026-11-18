@@ -78,8 +78,7 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
     companyId: party.companyId ?? session.company?.id ?? null,
     companyName: party.companyId === null || party.companyId === session.company?.id ? (session.company?.name ?? null) : null,
     enabled: can.view && access !== null && limitsApply(side, access.kinds),
-    supervise: session.permissions.includes('production.brand.manage'),
-    guard,
+    guard, // F-SA-272: the supervisor moved to the customer's Overview
     onNotice: setNotice,
   })
 

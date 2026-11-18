@@ -38,6 +38,7 @@ export function useCustomerOverview(model: CustomerMoneyModel | null): OverviewS
     if (!model) return undefined
     const { can } = model
     const numbers: Metric[] = []
+    let overdueTile: Metric | undefined // F-SA-272: the Overview's door to Money
     if (can.receivables) {
       const overdue = model.ageing.items ? overdueOf(model.ageing.items, model.partyId) : null
       const value = !model.ageing.items
@@ -56,7 +57,8 @@ export function useCustomerOverview(model: CustomerMoneyModel | null): OverviewS
           : overdue?.daysLate
             ? t('money.oldestLate', { count: overdue.daysLate })
             : t('money.nothingLateHint')
-      numbers.push({ label: t('money.overdue'), value, hint, href: receivablesOfCustomer(model.prefix, model.partyId) })
+      overdueTile = { label: t('money.overdue'), value, hint, href: receivablesOfCustomer(model.prefix, model.partyId) }
+      numbers.push(overdueTile)
     }
     if (can.returns) {
       const year = model.returns.items ? returnsThisYear(model.returns.items, model.year) : null
@@ -77,6 +79,6 @@ export function useCustomerOverview(model: CustomerMoneyModel | null): OverviewS
           }}
         />
       ) : null
-    return { numbers, now }
+    return { numbers, now, ...(overdueTile ? { overdue: overdueTile } : {}) }
   }, [model, t, locale])
 }

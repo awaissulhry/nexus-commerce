@@ -72,6 +72,8 @@ export interface PartyRecordActions {
 export interface OverviewSlot {
   readonly numbers?: readonly Metric[]
   readonly now?: ReactNode
+  /** F-SA-272: the Overdue tile alone (the customer's Overview shows it as a door to Money; Money shows every number). */
+  readonly overdue?: Metric
 }
 
 /**

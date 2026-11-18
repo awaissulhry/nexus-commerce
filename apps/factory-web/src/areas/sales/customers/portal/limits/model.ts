@@ -235,11 +235,12 @@ export function limitsProblemOf(error: unknown): string {
 
 // ---- one Apply: the limits, then the supervisor ------------------------------------------------------------------------------
 
+// F-SA-272: each call optional — the Portal settings card applies the limits only, the customer's Overview card the supervisor only.
 export interface SaveCalls {
   /** PUT /partners/:id/production (through the step-up guard): the new version. */
-  readonly limits: (body: ProductionLimitsBody) => Promise<ProductionLimits>
+  readonly limits?: (body: ProductionLimitsBody) => Promise<ProductionLimits>
   /** PUT /production/brands/:id/supervisor: the new version. */
-  readonly supervisor: (body: { supervisorId: string | null; backupId: string | null; version: number }) => Promise<{ version: number }>
+  readonly supervisor?: (body: { supervisorId: string | null; backupId: string | null; version: number }) => Promise<{ version: number }>
 }
 
 export type SaveOutcome =
@@ -251,17 +252,17 @@ export type SaveOutcome =
  * supervisor with the version the limits' answer gave. A refused supervisor after saved limits says both (nothing is undone).
  */
 export async function saveLimits(saved: ProductionLimitsView, draft: LimitsDraft, calls: SaveCalls, rights: { readonly manage: boolean; readonly supervise: boolean }): Promise<SaveOutcome> {
-  const limits = rights.manage ? limitsBody(saved, draft) : null
-  const supervisor = rights.supervise ? supervisorBody(saved, draft) : null
+  const limits = rights.manage && calls.limits ? limitsBody(saved, draft) : null
+  const supervisor = rights.supervise && calls.supervisor ? supervisorBody(saved, draft) : null
   let version = saved.version
-  if (limits) {
+  if (limits && calls.limits) {
     try {
       version = (await calls.limits(limits)).production.version
     } catch (error) {
       return { state: 'failed', part: 'limits', limitsSaved: false, error }
     }
   }
-  if (supervisor) {
+  if (supervisor && calls.supervisor) {
     try {
       await calls.supervisor({ ...supervisor, version })
     } catch (error) {
@@ -373,15 +374,13 @@ export interface LimitsModel {
   readonly state: 'loading' | 'ready' | 'error'
   readonly read: ProductionLimits | null
   readonly problem: string | null
-  /** production.brand.manage (the supervisor's slots; else held in words). */
-  readonly supervise: boolean
-  readonly pick: PickState
+  // F-SA-272: the supervisor and backup moved to the customer's Overview (SupervisorModel below).
   readonly freeze: FreezeState
   readonly freezeDialog: FreezeDialog | null
   /** The company the freeze points are read at (the customer's own, else the one this page works in). */
   readonly companyName: string | null
   readonly busy: boolean
-  /** A refused Apply (the limits or the supervisor), with whether the limits were saved before it. */
+  /** A refused Apply of the limits (F-SA-272: the supervisor has its own card), with whether the limits were saved before it. */
   readonly saveProblem: { readonly key: string; readonly ns: 'portal-access' | 'production-supervisor'; readonly limitsSaved: boolean } | null
   /** Design cases: the draft the card starts with. */
   readonly draft?: LimitsDraft
@@ -390,7 +389,6 @@ export interface LimitsModel {
 export interface LimitsActions {
   readonly onApply?: (draft: LimitsDraft) => Promise<boolean>
   readonly onRetry?: () => void
-  readonly onRetryPick?: () => void
   readonly onRetryFreeze?: () => void
   readonly onPreviewProduction?: () => void
   readonly onFreezeDialog?: (field: OrderFreezeField | null) => void
@@ -399,6 +397,30 @@ export interface LimitsActions {
   readonly onFreezeReset?: (rules: readonly FreezeRule[]) => void
   readonly onDismissProblem?: () => void
 }
+
+// ---- F-SA-272 (sales page plan N5, pick P10': supervisor + backup move to Overview, the production lane's yes): "Who looks after
+// <customer>" — its own card on the customer's Overview, read and saved by itself (customers/record/view/CustomerSupervisorCard.tsx).
+export interface SupervisorModel {
+  readonly state: 'loading' | 'ready' | 'error'
+  /** The customer's production read (its supervisor, backup and version). */
+  readonly read: ProductionLimits | null
+  readonly problem: string | null
+  /** production.brand.manage (the slots; else held in words). */
+  readonly supervise: boolean
+  readonly pick: PickState
+  readonly busy: boolean
+  readonly saveProblem: { readonly key: string; readonly ns: 'portal-access' | 'production-supervisor' } | null
+  /** Design cases: the draft the card starts with (a change in progress). */
+  readonly draft?: LimitsDraft
+}
+
+export interface SupervisorActions {
+  readonly onApply?: (draft: LimitsDraft) => Promise<boolean>
+  readonly onRetry?: () => void
+  readonly onRetryPick?: () => void
+  readonly onDismissProblem?: () => void
+}
+// ---- end F-SA-272
 
 /** The card is drawn for a customer (or a brand) only; never for a supplier, a workshop or an adviser. */
 export const limitsApply = (side: 'customers' | 'suppliers', kinds: readonly string[]): boolean => side === 'customers' && kinds.includes('CUSTOMER')

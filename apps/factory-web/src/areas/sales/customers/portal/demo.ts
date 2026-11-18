@@ -2,7 +2,8 @@ import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templat
 import { STEP_UP_CLOSED } from '../../../admin/shared/model'
 import type { PartnerKind, PartnerPerson, PartnerRole, PortalAccess, ProductionLimits, ProductionLimitsView } from '../../../admin/users/partners/api'
 import type { FreezeList, FreezeRule } from './limits/api' // F-PR-07
-import type { LimitsModel } from './limits/model' // F-PR-07
+import type { LimitsModel, SupervisorModel } from './limits/model' // F-PR-07; F-SA-272: SupervisorModel
+import { limitsDraftOf } from './limits/model' // F-SA-272
 import type { PartnerCan } from '../../../admin/users/partners/model'
 import type { PortalAccessModel, RequestRow } from './model'
 
@@ -228,13 +229,25 @@ export function freezeList(over: Partial<FreezeList> = {}): FreezeList {
   }
 }
 
-export function limitsModel(over: Partial<LimitsModel> = {}): LimitsModel {
+/** F-SA-272: the customer Overview's "Who looks after <customer>" card (the supervisor and backup, moved from the limits card). */
+export function supervisorModel(over: Partial<SupervisorModel> = {}): SupervisorModel {
   return {
     state: 'ready',
     read: productionLimits(),
     problem: null,
     supervise: true,
     pick: { status: 'ready', people: [OFFICE_PEOPLE.me, OFFICE_PEOPLE.bea, OFFICE_PEOPLE.carlo], complete: true, ordersOnDefault: 7 },
+    busy: false,
+    saveProblem: null,
+    ...over,
+  }
+}
+
+export function limitsModel(over: Partial<LimitsModel> = {}): LimitsModel {
+  return {
+    state: 'ready',
+    read: productionLimits(),
+    problem: null,
     freeze: { status: 'ready', list: freezeList() },
     freezeDialog: null,
     companyName: 'Demo Factory',
@@ -244,3 +257,13 @@ export function limitsModel(over: Partial<LimitsModel> = {}): LimitsModel {
   }
 }
 // ── end F-PR-07 ──
+
+/** F-SA-272: the states of the customer Overview's supervisor card (the record's design cases draw them). */
+export const SUPERVISOR_CASES: Readonly<Record<'saved' | 'first' | 'held' | 'everyCompany' | 'nobody' | 'refused', SupervisorModel>> = {
+  saved: supervisorModel({ read: productionLimits({ supervisor: { id: OFFICE_PEOPLE.bea.id, name: OFFICE_PEOPLE.bea.name, active: true }, backup: { id: OFFICE_PEOPLE.carlo.id, name: OFFICE_PEOPLE.carlo.name, active: true }, version: 6 }) }),
+  first: supervisorModel({ draft: { ...limitsDraftOf(productionLimits().production), supervisorId: OFFICE_PEOPLE.bea.id, backupId: OFFICE_PEOPLE.carlo.id } }),
+  held: supervisorModel({ supervise: false, pick: { status: 'held', key: 'held.noRight', ns: 'production-supervisor' } }),
+  everyCompany: supervisorModel({ pick: { status: 'held', key: 'limits.supervisor.heldEveryCompany', ns: 'portal-access' } }),
+  nobody: supervisorModel({ pick: { status: 'ready', people: [], complete: true, ordersOnDefault: 0 } }),
+  refused: supervisorModel({ saveProblem: { key: 'skip.NO_MEASUREMENTS', ns: 'production-supervisor' } }),
+}

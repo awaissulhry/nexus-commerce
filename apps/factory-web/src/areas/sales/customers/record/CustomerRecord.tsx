@@ -18,6 +18,8 @@ import { CommercialTerms } from '../terms/CommercialTerms'
 // B-W2b-324: Customer 360 and customers in depth (the glance, requirements, the hold, PO number, consent and personal data).
 import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth'
 import { CustomerRecordView } from './view/CustomerRecordView'
+import { CustomerSupervisor } from '../portal/view/CustomerSupervisorCard' // F-SA-272
+import { partyName } from '../../../parties/_shared/model'
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -58,7 +60,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     depth: (party, reload) => customerDepthSlot(party, reload, prefix),
   })
   const task = useCustomerTask(partyId, record.party?.code ?? null)
-  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} />
+  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} />
 }
 
 /** F-SA-271: a task on the customer itself (the Party record), as every record's "+ Add task" makes one (POST /tasks). */

@@ -158,6 +158,12 @@
       "addTask": "Aggiungi attività per {customer}…",
       "importOrders": "Importa ordini per {customer}…",
       "workOrders": "Ordini di lavoro di {customer} ›"
+    },
+    "anchor": {
+      "label": "Parti di Condizioni e requisiti",
+      "commercial": "Condizioni commerciali",
+      "hold": "Blocco e numero d’ordine del cliente",
+      "identity": "Identità fiscale e VIES"
     }
   },
   "suppliers": {
@@ -752,9 +758,7 @@
   },
   "overview": {
     "identity": "Anagrafica",
-    "now": "In corso",
-    "nothingOpen": "Niente di aperto con questo cliente.",
-    "seeAll": "Vedi tutti ({count})"
+    "alsoOpen": "Ancora aperti"
   },
   "numbers": {
     "openQuotes": "Preventivi aperti",
@@ -764,7 +768,11 @@
     "units_other": "{count} pezzi da spedire",
     "thisYear": "Ordinato nel {year}",
     "ordersHint": "Ordini non annullati",
-    "reading": "Lettura…"
+    "reading": "Lettura…",
+    "inProduction": "In produzione",
+    "inProductionHint": "In lavorazione ora",
+    "late": "In ritardo",
+    "lateHint": "La data promessa è passata, non ancora spedito"
   },
   "side": {
     "label": "Stato e prossimo passo",
@@ -782,8 +790,6 @@
     "all": "Tutti",
     "quote": "Preventivo",
     "order": "Ordine",
-    "validUntil": "Valido fino al {date}",
-    "promise": "Promesso il {date}",
     "noQuotesRight": "I preventivi non sono mostrati: il tuo ruolo non vede i preventivi.",
     "failed": "Caricamento di preventivi e ordini non riuscito",
     "empty": "Niente qui.",
@@ -796,8 +802,7 @@
       "date": "Data",
       "value": "Valore",
       "promise": "Promessa",
-      "validUntil": "Valido fino al",
-      "when": "Quando"
+      "validUntil": "Valido fino al"
     },
     "titleQuotes": "Preventivi",
     "titleOrders": "Ordini"

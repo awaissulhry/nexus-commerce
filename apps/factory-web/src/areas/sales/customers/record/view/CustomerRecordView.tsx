@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Table2 } from 'lucide-react'
-import { Card, KeyValue, MetricStrip, RecordLayout, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Card, KeyValue, MetricStrip, RecordLayout, SummaryTable, Tabs, type MenuItemDef, type Metric, type TabItem } from '@nexus/ui/components'
 import { Button, SegmentedControl } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -39,6 +39,7 @@ export function CustomerRecordView({
   depth,
   onAddTask,
   taskDialog,
+  supervisor,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -56,11 +57,13 @@ export function CustomerRecordView({
   /** F-SA-271: the band's ⋯ "Add task for <customer>…" (the record's New task dialog, drawn by the container). */
   onAddTask?: () => void
   taskDialog?: ReactNode
+  /** F-SA-272: "Who looks after <customer>" on the Overview (CustomerSupervisorCard, drawn by the container or a design case). */
+  supervisor?: ReactNode
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -78,6 +81,7 @@ interface CustomerProps {
   depth?: SupplierDepth | undefined
   onAddTask?: (() => void) | undefined
   taskDialog?: ReactNode
+  supervisor?: ReactNode
 }
 
 function Customer(props: CustomerProps) {
@@ -115,7 +119,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -183,7 +187,7 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           )}
           {/* F-SA-271: the customer's quotes (the two lists of Quotes & incoming come with F-SA-277). */}
           {tab === 'quotes' && <DealsTab model={model} actions={actions} only="quote" />}
-          {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} />}
+          {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} />}
           {tab === 'money' && <div className="fw-pty-stack">{[...(overview?.numbers ?? []), ...(depth?.numbers ?? [])].length > 0 && <MetricStrip metrics={[...(overview?.numbers ?? []), ...(depth?.numbers ?? [])]} />}</div>}
           {tab === 'people' && (
             <div className="fw-pty-stack">
@@ -194,20 +198,34 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
             </div>
           )}
           {tab === 'terms' && (
-            // B-TH-260: Terms & requirements — the tax identity and VIES, the side's own Commercial terms (B-W2a-49), the hold and PO
-            // number required (B-W2b-324), then the packing, labelling and document rules in force (B-W2b-324's Requirements).
+            // F-SA-272: Terms & requirements — an anchor line (in-page jumps, not tabs), then the Commercial terms first (the most used),
+            // the hold and PO number required (B-W2b-324), the requirements in force, the tax identity and VIES.
             <div className="fw-pty-stack">
-              <div className="fw-pty-two-wide">
-                <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
-                <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
-              </div>
-              {terms}
-              {depth?.tax}
+              <nav className="fw-pty-actions" aria-label={t('customers.anchor.label')}>
+                {terms && <a className="fw-pty-link" href="#party-commercial">{t('customers.anchor.commercial')}</a>}
+                {depth?.tax && <a className="fw-pty-link" href="#party-hold">{t('customers.anchor.hold')}</a>}
+                {depth?.requirements && <a className="fw-pty-link" href="#party-requirements">{t('customers.requirementsLabel')}</a>}
+                <a className="fw-pty-link" href="#party-identity">{t('customers.anchor.identity')}</a>
+              </nav>
+              {terms && (
+                <section id="party-commercial" className="fw-pty-anchor" aria-label={t('customers.anchor.commercial')}>
+                  {terms}
+                </section>
+              )}
+              {depth?.tax && (
+                <section id="party-hold" className="fw-pty-anchor" aria-label={t('customers.anchor.hold')}>
+                  {depth.tax}
+                </section>
+              )}
               {depth?.requirements && (
                 <section id="party-requirements" className="fw-pty-anchor" aria-label={t('customers.requirementsLabel')}>
                   {depth.requirements}
                 </section>
               )}
+              <section id="party-identity" className="fw-pty-anchor fw-pty-two-wide" aria-label={t('customers.anchor.identity')}>
+                <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
+                <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
+              </section>
             </div>
           )}
           {/* B-W2b-180: Portal settings (areas/sales/customers/portal; a refused invite keeps its real reason). */}
@@ -222,50 +240,61 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
 
 // ---- Overview (moved from PartyRecordView.tsx, F-SA-270) ---------------------------------------------------------------
 
-function CustomerOverview({ model, party, actions, editable, viesHeld, overview, depth }: TabProps & { viesHeld: string | null; overview?: OverviewSlot; depth?: SupplierDepth | undefined }) {
+/** F-SA-272: the open orders' states the Overview counts (the record's newest 200 orders). */
+const OPEN_ORDER_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED']
+
+/**
+ * F-SA-272 (11-customer-page §4): who they are, how they stand, who looks after them — Key numbers (at most 6, each a door: Open
+ * orders · In production · Late → Work, Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
+ * open returns and claims), the custom fields (the frame's, on this tab only); beside it Status, Who looks after <customer> (the
+ * supervisor and backup, moved from Portal settings), Next steps, VIES, the team and the requirements in force, the main contacts.
+ * Ordered in <year>, Returns in <year> and Free credit went to Money; the Now card to Work and Quotes & incoming.
+ */
+function CustomerOverview({ model, party, actions, editable, viesHeld, overview, depth, supervisor }: TabProps & { viesHeld: string | null; overview?: OverviewSlot | undefined; depth?: SupplierDepth | undefined; supervisor?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const can = model.can
   const year = String(new Date().getUTCFullYear())
   const numbers = keyNumbers(model.quotes, model.orders, year)
   const amount = (value: number | null | undefined, currency: string | null) => (can.price && value !== null && value !== undefined && currency ? money(value, currency, locale) : null)
-  const metrics = [
+  const tabHref = (tab: string) => `${sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)}?tab=${tab}`
+  const today = new Date().toISOString().slice(0, 10)
+  const orders = model.orders.items && !model.orders.more ? model.orders.items : null
+  const ordersHint = t(model.orders.problem ? 'tile.unknown' : 'numbers.reading')
+  const metrics: Metric[] = [
+    ...(can.orders
+      ? [
+          {
+            label: t('numbers.backlog'),
+            value: numbers.backlog ? String(numbers.backlog.count) : '—',
+            hint: numbers.backlog ? [t('numbers.units', { count: numbers.backlog.units }), amount(numbers.backlog.amount, numbers.backlog.currency)].filter(Boolean).join(' · ') : ordersHint,
+            href: tabHref('work'),
+          },
+          { label: t('numbers.inProduction'), value: orders ? String(orders.filter((order) => order.status === 'IN_PRODUCTION').length) : '—', hint: orders ? t('numbers.inProductionHint') : ordersHint, href: tabHref('work') },
+          {
+            label: t('numbers.late'),
+            value: orders ? String(orders.filter((order) => OPEN_ORDER_STATES.includes(order.status) && order.promiseDate !== null && order.promiseDate < today).length) : '—',
+            hint: orders ? t('numbers.lateHint') : ordersHint,
+            href: tabHref('work'),
+          },
+        ]
+      : []),
     ...(can.quotes
       ? [
           {
             label: t('numbers.openQuotes'),
             value: numbers.openQuotes ? String(numbers.openQuotes.count) : '—',
             hint: numbers.openQuotes ? (amount(numbers.openQuotes.amount, numbers.openQuotes.currency) ?? t('numbers.quotesHint')) : t(model.quotes.problem ? 'tile.unknown' : 'numbers.reading'),
+            href: tabHref('quotes'),
           },
         ]
       : []),
-    ...(can.orders
-      ? [
-          {
-            label: t('numbers.backlog'),
-            value: numbers.backlog ? String(numbers.backlog.count) : '—',
-            hint: numbers.backlog
-              ? [t('numbers.units', { count: numbers.backlog.units }), amount(numbers.backlog.amount, numbers.backlog.currency)].filter(Boolean).join(' · ')
-              : t(model.orders.problem ? 'tile.unknown' : 'numbers.reading'),
-          },
-          {
-            label: t('numbers.thisYear', { year }),
-            value: numbers.orderedThisYear ? String(numbers.orderedThisYear.count) : '—',
-            hint: numbers.orderedThisYear
-              ? (amount(numbers.orderedThisYear.amount, numbers.orderedThisYear.currency) ?? t('numbers.ordersHint'))
-              : t(model.orders.problem ? 'tile.unknown' : 'numbers.reading'),
-          },
-        ]
-      : []),
-    // B-W2a-81: the side's own key numbers (Customers: Overdue, Returns this year), after the design's first three.
-    ...(overview?.numbers ?? []),
-    // B-W2b-324: free credit and the promises (Sales' depth slot).
-    ...(depth?.numbers ?? []),
-  ]
-  const openQuotes = (model.quotes.items ?? []).filter((quote) => ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT'].includes(quote.status))
-  const openOrders = (model.orders.items ?? []).filter((order) => ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'].includes(order.status))
+    // B-W2a-81: what the customer owes that is overdue — its door is Money (F-SA-272).
+    ...(overview?.overdue ? [{ ...overview.overdue, href: can.money ? tabHref('money') : overview.overdue.href }] : []),
+  ].slice(0, 6)
   const main = (
     <div className="fw-pty-stack">
+      {metrics.length > 0 && <MetricStrip metrics={metrics} />}
       <Card padded>
         <div className="fw-pty-card-body">
           <CardHead
@@ -293,59 +322,14 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
           />
         </div>
       </Card>
-      {metrics.length > 0 && <MetricStrip metrics={metrics} />}
-      {(can.quotes || can.orders) && (
-        <Card padded>
-          <div className="fw-pty-card-body">
-            <CardHead title={t('overview.now')} />
-            {model.quotes.items === null && model.orders.items === null && !model.quotes.problem && !model.orders.problem ? (
-              <ReadState loading rows={3} />
-            ) : openQuotes.length + openOrders.length === 0 ? (
-              <p className="fw-pty-hint">{t('overview.nothingOpen')}</p>
-            ) : (
-              <SummaryTable
-                label={t('overview.now')}
-                columns={[t('deals.col.type'), t('deals.col.number'), t('deals.col.status'), t('deals.col.when')]}
-                stackOnPhone
-                align={['left', 'left', 'left', 'left']}
-                rows={[
-                  ...openQuotes.slice(0, 5).map((quote) => ({
-                    id: quote.id,
-                    cells: [
-                      t('deals.quote'),
-                      <span key="n" className="fw-pty-code">
-                        {quote.number}
-                      </span>,
-                      t(`quoteStatus.${quote.status}`),
-                      quote.validUntil ? t('deals.validUntil', { date: formatDate(quote.validUntil, { locale }) }) : '—',
-                    ],
-                  })),
-                  ...openOrders.slice(0, 5).map((order) => ({
-                    id: order.id,
-                    cells: [
-                      t('deals.order'),
-                      <span key="n" className="fw-pty-code">
-                        {order.number}
-                      </span>,
-                      t(`orderStatus.${order.status}`),
-                      order.promiseDate ? t('deals.promise', { date: formatDate(order.promiseDate, { locale }) }) : '—',
-                    ],
-                  })),
-                ]}
-              />
-            )}
-            {(openQuotes.length > 5 || openOrders.length > 5) && (
-              <Link className="fw-pty-name" href={`${sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)}?tab=work` /* F-SA-271 */}>
-                {t('overview.seeAll', { count: openQuotes.length + openOrders.length })}
-              </Link>
-            )}
-          </div>
-        </Card>
+      {/* F-SA-272: Also open — samples in progress, repairs and alterations (Sales' depth slot), open returns and claims (B-W2a-81). */}
+      {(depth?.now || overview?.now) && (
+        <section className="fw-pty-stack" aria-label={t('overview.alsoOpen')}>
+          <h2 className="fw-pty-card-title">{t('overview.alsoOpen')}</h2>
+          {depth?.now}
+          {overview?.now}
+        </section>
       )}
-      {/* B-W2a-81: the side's own part of Now (Customers: open returns and claims, Finance › Receivables). */}
-      {overview?.now}
-      {/* B-W2b-324: samples in progress, measurement profiles, riders, repairs (Sales' depth slot). */}
-      {depth?.now}
     </div>
   )
   return (
@@ -353,6 +337,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
       main={main}
       aside={
         <SidePanel model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} status={depth?.status}>
+          {/* F-SA-272: who looks after the customer (office only), moved from Portal settings › Production limits. */}
+          {supervisor}
           {depth?.aside}
         </SidePanel>
       }
