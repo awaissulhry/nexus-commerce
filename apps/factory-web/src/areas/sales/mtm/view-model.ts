@@ -1,6 +1,7 @@
 import type { LiveState } from '../../quality/_shared/model'
 import type { ContactOption, LinkAnswer, MtmCheck, PartyOption, Person, ProfileRow, StyleDetail, StyleOption, TemplateOption, Tiles } from './api'
 import type { FormDraft, FormPoint, LinkDraft, ListAddress, MtmCan, Notice, Phrase, QuoteDraft, RowVerb } from './model'
+import type { Segment } from './model' // F-SA-222
 import type { FormFlag } from './view/MeasurementForm'
 
 /** A read in its three states: reading (items null, no problem), read, failed (a problem key). */
@@ -142,6 +143,8 @@ export interface MtmListModel {
   readonly quote: QuoteDialogModel | null
   /** B-W2b-371 (XF2:03): the customers for the "By customer" filter (null: not read, or no right to read customers). */
   readonly customers?: readonly PartyOption[] | null
+  /** F-SA-222: the band's link tabs Orders | Riders (the one shown, each segment's address); null: Riders only (no orders.view). */
+  readonly segments?: MtmSegments | null
   /** Design only: the rows picked, the focused row, the keys panel open. */
   readonly selected?: readonly string[]
   readonly focusRow?: number
@@ -164,4 +167,10 @@ export interface MtmListActions {
   /** Copy the selected riders (rider, customer, garment type, revision) as lines. */
   onCopy?: (lines: readonly string[]) => void
   onDismissNotice?: () => void
+}
+
+/** F-SA-222: the page's segment tabs — the one shown and the address of each (real links). */
+export interface MtmSegments {
+  readonly active: Segment
+  readonly href: (segment: Segment) => string
 }

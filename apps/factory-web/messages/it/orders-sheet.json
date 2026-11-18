@@ -105,7 +105,9 @@
     "invoiced": "Fatturato: {state}",
     "atRisk": "Vicino alla data promessa",
     "currency": "Valuta: {currency}",
-    "urgency": "Segno del cliente: {urgency}"
+    "urgency": "Segno del cliente: {urgency}",
+    "rider": "Pilota: {name}",
+    "riderUnnamed": "Un pilota"
   },
   "switcher": {
     "title": "Cliente",

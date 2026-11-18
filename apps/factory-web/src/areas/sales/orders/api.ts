@@ -192,6 +192,8 @@ export interface OrderQuery {
   // ── end B-TH-244 ──
   /** F-SA-221: made-to-measure orders only (`?kind=mtm`: the list, the board, the totals, the switcher's counts, the file). */
   kind?: 'mtm' | null
+  /** F-SA-222: a rider's orders (`?profile=`: any revision of the rider's garment profile; sales.measurements.view only). */
+  profile?: string | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -219,6 +221,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       ...doorQueryOf(query), // B-TH-244
       progress: query.progress ? 'true' : undefined, // B-TH-244
       kind: query.kind ?? undefined, // F-SA-221
+      profile: query.profile ?? undefined, // F-SA-222
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -237,9 +240,9 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */> = {}): Promise<OrderBoard> {
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */> = {}): Promise<OrderBoard> {
   return api.get('/sales/orders/board', {
-    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */ },
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */, profile: narrow.profile ?? undefined /* F-SA-222 */ },
     schema: boardSchema,
     signal,
   })
@@ -294,6 +297,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       cf: query.cf?.trim() || undefined,
       ...doorQueryOf(query),
       kind: query.kind ?? undefined, // F-SA-221
+      profile: query.profile ?? undefined, // F-SA-222
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },

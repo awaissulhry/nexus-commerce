@@ -12,6 +12,8 @@ import { useCoalesced, useLive } from '../hooks'
 import { boardRereadOf } from '../model' // F-SA-214
 import type { BoardLane } from '../api' // F-SA-214
 import { kindFromAddress } from '../model' // F-SA-221
+import { profileFromAddress } from '../model' // F-SA-222
+import { getProfile } from '../../mtm/api' // F-SA-222: the rider chip's name
 import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
 import type { OrderSort } from '../api' // B-TH-057
 import { newOrderAddress } from '../new/new-model'
@@ -135,6 +137,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const company = companyFromAddress(params)
   // F-SA-221: made-to-measure orders only (`?kind=mtm`); the host's lock wins.
   const kind = host.locked?.kind ?? kindFromAddress(params)
+  // F-SA-222: a rider's orders (`?profile=`: the rider list's Open orders door).
+  const profile = profileFromAddress(params)
   // B-TH-057 (TH-4): the server sort and the custom field filter are address terms too (a saved view and the file keep them).
   const sort = sortFromAddress(params)
   const cf = cfFromAddress(params)
@@ -143,7 +147,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const extraKey = JSON.stringify(extraFromAddress(params, rows))
   const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
   const [progressShown, setProgressShown] = useState(false)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */ }), [brand, company, cf, sort, extra, progressShown, kind])
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile])
   const grouped = layout === 'list' && group === 'party' && !party
   const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
@@ -161,7 +165,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
         sheetAddress(base, host, params, {
@@ -176,9 +180,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
           group: next.group === undefined ? group : next.group, // B-TH-244
           extra: next.extra === undefined ? extra : next.extra, // B-TH-244
           kind: next.kind === undefined ? kind : next.kind, // F-SA-221
+          profile: next.profile === undefined ? profile : next.profile, // F-SA-222
         }),
       ),
-    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind],
+    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile],
   )
 
   // ── B-TH-244: the view's figures from the server (the grouped view's headers and grand total, the honest count of a door's view) ──
@@ -445,6 +450,20 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     () => void load(),
   )
 
+  // ── F-SA-222: the rider chip's name (GET /sales/mtm/profiles/:id: the term needs sales.measurements.view anyway); null: unread ──
+  const [rider, setRider] = useState<{ id: string; name: string | null } | null>(null)
+  useEffect(() => {
+    if (!profile || rider?.id === profile) return
+    let gone = false
+    getProfile(api, profile)
+      .then((found) => !gone && setRider({ id: profile, name: found.riderName }))
+      .catch(() => !gone && setRider({ id: profile, name: null }))
+    return () => {
+      gone = true
+    }
+  }, [api, profile, rider?.id])
+  // ── end F-SA-222 ──
+
   // ── F-SA-220 (the SHEET-G02 lesson): a lock lives in the ADDRESS, so Export ▾, saved views and Pin to Today hold the same rows as
   // the screen — written on entry when the address lacks it (a view applied without it gets it back), never cleared. ──
   const entry = lockedEntry(base, host, params)
@@ -535,6 +554,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     week: { state: week.state, sites: week.sites, siteId: week.siteId },
     importer: { held: importer.held, sheet: importer.model, memory: importer.memory /* B-TH-293 */ },
     kind, // F-SA-221
+    profile: profile ? { id: profile, name: rider?.id === profile ? rider.name : undefined } : null, // F-SA-222
     // ---- F-SA-220: the host ----
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
@@ -577,8 +597,9 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onBrand: (next) => go({ brand: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     // F-SA-221: the made-to-measure mark's funnel, its chip's ✕ and the built-in view (with its rows); By promise week cannot narrow: the list.
     onKind: (next, view) => go({ kind: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+    onProfile: (next) => go({ profile: next }), // F-SA-222: the rider chip's ✕
     onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */ }),
+    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */ }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057
     readPictures, // F-SA-212

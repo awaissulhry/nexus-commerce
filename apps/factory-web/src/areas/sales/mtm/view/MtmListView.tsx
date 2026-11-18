@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Copy, MoreHorizontal, Plus, Ruler, X } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
+import { Tabs } from '@nexus/ui/components' // F-SA-222: the segment tabs
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
@@ -13,6 +14,12 @@ import type { ProfileRow } from '../api'
 import { chipsOf, HOME_ADDRESS, isFiltered, recordHref, ROW_VIEWS, rowVerbHeld, templatesHref, TILE_VIEW, tileValue, TILES, worksheetHref, type RowVerb, type RowView } from '../model'
 import { isPageKey, MtmMessages, NoticeLine, ReviewPill, useWords } from '../parts'
 import type { MtmListActions, MtmListModel } from '../view-model'
+// ---- F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.4, §4.7): Orders | Riders ----
+import { riderOrdersHref, SEGMENTS } from '../model'
+import type { MtmCan } from '../model'
+import type { MtmSegments } from '../view-model'
+import type { OrdersListActions, OrdersListModel } from '../../orders/list/list-model'
+import { OrdersLayoutSwitch, OrdersListView, OrdersTiles } from '../../orders/list/view/OrdersListView'
 // B-W2b-371 (XF2:03): the certified range of a row, the customer filter.
 import { customerName } from '../list-filters/model'
 import { CustomerFilter, RangeCell as RangeTag } from '../list-filters/view/ListFilterParts'
@@ -33,6 +40,11 @@ export type { MtmListActions, MtmListModel } from '../view-model'
  * list frame: Rider (a real link), Customer, Garment type, Revision, Taken on, Taken by, Base size, Inside certified range,
  * Review, Open orders, Next fitting, Privacy notice given and ⋯ (Open · Open in new tab · New revision · Use in a new quote ·
  * Print worksheet), each verb held with why.
+ *
+ * F-SA-222: the band's second row holds the page's link tabs Orders | Riders; a rider's Open orders count is a door to its orders
+ * (the Orders segment, `?profile=`). MtmOrdersSegment is the Orders segment: this band (⋯ Measurement templates only: units are
+ * made from quotes), List · Board with By promise week held with why, the sheet's tiles, then the ONE Orders sheet embedded, an
+ * empty view saying why (GATE-MTM: made-to-measure not started for any template, or no order yet).
  */
 export function MtmListView({ model, actions }: { model: MtmListModel; actions?: MtmListActions }) {
   return (
@@ -117,6 +129,16 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
           <RangeTag range={data.range} />
         </ExtrasMessages>
       ) : null
+    const OpenOrdersCell = ({ data }: ICellRendererParams<ProfileRow>) =>
+      data ? (
+        model.can.ordersView ? (
+          <Link className="fw-mtm-link" href={riderOrdersHref(model.prefix, data.id)} aria-label={t('row.openOrders', { rider: data.riderName, count: data.openUnits })}>
+            {data.openUnits}
+          </Link>
+        ) : (
+          <span>{data.openUnits}</span>
+        )
+      ) : null
     const MoreCell = ({ data }: ICellRendererParams<ProfileRow>) =>
       data ? (
         <Menu
@@ -142,7 +164,8 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
       { colId: 'baseSize', headerName: t('col.baseSize'), minWidth: 90, flex: 0.4, valueGetter: (params) => params.data?.baseSize ?? '—' },
       { colId: 'range', headerName: t('col.range'), minWidth: 150, flex: 0.7, sortable: false, valueGetter: (params) => params.data?.range.points.join(', ') ?? '', cellRenderer: RangeCell },
       { colId: 'review', headerName: t('col.review'), minWidth: 130, flex: 0.6, valueGetter: (params) => (params.data ? t(`review.${params.data.review.status}`) : ''), cellRenderer: ReviewCell },
-      { colId: 'openUnits', headerName: t('col.openUnits'), minWidth: 100, flex: 0.4, type: 'numericColumn', valueGetter: (params) => params.data?.openUnits ?? 0 },
+      // F-SA-222: the count is a door to the rider's orders (any revision of the garment profile) for a reader of orders.
+      { colId: 'openUnits', headerName: t('col.openUnits'), minWidth: 100, flex: 0.4, type: 'numericColumn', valueGetter: (params) => params.data?.openUnits ?? 0, cellRenderer: OpenOrdersCell },
       { colId: 'nextFitting', headerName: t('col.nextFitting'), minWidth: 140, flex: 0.6, valueGetter: (params) => (params.data?.nextFittingAt ? when(params.data.nextFittingAt) : '—') },
       { colId: 'notice', headerName: t('col.notice'), minWidth: 120, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.privacyNoticeAt) : '') },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
@@ -238,6 +261,7 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
           {newButton}
         </div>
       </div>
+      {model.segments && <SegmentTabs segments={model.segments} t={t} /> /* F-SA-222 */}
       {model.templates !== null && (
         <Banner
           tone="info"
@@ -326,3 +350,45 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
     </div>
   )
 }
+
+// ── F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.4, §4.7) ──────────────────────────────────────────────────────────
+type Words = ReturnType<typeof useWords>['t']
+
+/** The page's link tabs in its band's second row (real links: back, forward and ⌘-click work). */
+function SegmentTabs({ segments, t }: { segments: MtmSegments; t: Words }) {
+  return <Tabs ariaLabel={t('segment.label')} tabs={SEGMENTS.map((id) => ({ id, label: t(`segment.${id}`), href: segments.href(id) }))} active={segments.active} size="sm" />
+}
+
+/** The Orders segment: this page's band, the layouts (week held), the tiles, and the ONE Orders sheet embedded. */
+export function MtmOrdersSegment(props: { sheet: { model: OrdersListModel; actions: OrdersListActions }; gate: 'off' | 'none' | null; segments: MtmSegments | null; can: Pick<MtmCan, 'styles'> }) {
+  return (
+    <MtmMessages>
+      <OrdersSegment {...props} />
+    </MtmMessages>
+  )
+}
+
+function OrdersSegment({ sheet, gate, segments, can }: { sheet: { model: OrdersListModel; actions: OrdersListActions }; gate: 'off' | 'none' | null; segments: MtmSegments | null; can: Pick<MtmCan, 'styles'> }) {
+  const { t } = useWords()
+  const { model, actions } = sheet
+  // GATE-MTM: an empty view says why — made-to-measure not started for any template (a door for who may open them), or no order yet.
+  const empty = gate === 'off' ? { title: t('gate.offTitle'), body: t('gate.offBody'), link: can.styles ? { href: templatesHref(model.prefix), label: t('off.where') } : null } : gate === 'none' ? { title: t('gate.noneTitle'), body: t('gate.noneBody'), link: null } : null
+  return (
+    <div className="fw-mtm">
+      <div className="fw-mtm-head">
+        <div className="fw-mtm-head-text">
+          <p className="fw-mtm-intro">{t('list.intro')}</p>
+          <Freshness asOf={model.asOf} live={model.live} />
+        </div>
+        <div className="fw-mtm-actions">
+          <OrdersLayoutSwitch model={model} actions={actions} held={{ layout: 'week', why: t('week.held') }} />
+          <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('list.more') }} items={[{ id: 'templates', label: t('list.templates'), href: templatesHref(model.prefix) }]} />
+        </div>
+      </div>
+      {segments && <SegmentTabs segments={segments} t={t} />}
+      <OrdersTiles model={model} actions={actions} />
+      <OrdersListView model={{ ...model, empty }} actions={actions} />
+    </div>
+  )
+}
+// ── end F-SA-222 ──

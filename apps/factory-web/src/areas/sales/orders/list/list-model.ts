@@ -119,6 +119,10 @@ export interface OrdersListModel {
   invoiceDrafts?: InvoiceDraftsState | null
   /** F-SA-221: made-to-measure orders only (`?kind=mtm`): its chip (fixed when the host locks it), the Riders column shown. */
   kind?: 'mtm' | null
+  /** F-SA-222: a rider's orders (`?profile=`): the rider's name once read (undefined while read, null when not found). */
+  profile?: { id: string; name: string | null | undefined } | null
+  /** F-SA-222: what an empty view says on this host (the Made-to-measure page says why: GATE-MTM), when nothing narrows it. */
+  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null } | null
   // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
   /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
   listKey?: string
@@ -187,6 +191,8 @@ export interface OrdersListActions {
   onCellSaved?: (id: string, after: Readonly<Record<string, string | number | null>>, version: number) => void
   /** F-SA-221: made-to-measure orders only, or every kind (null); `rows` with it (the built-in view Made-to-measure: the open ones). */
   onKind?: (kind: 'mtm' | null, rows?: RowView) => void
+  /** F-SA-222: the rider chip's ✕ (every rider again). */
+  onProfile?: (profile: null) => void
   /** F-SA-214: a board card has the focus or its picture is open large (true): live re-reads wait behind "N updates · Show". */
   onBoardHold?: (held: boolean) => void
 }

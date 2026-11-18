@@ -164,6 +164,14 @@ export function partyFromAddress(params: { get(name: string): string | null } | 
 export const kindFromAddress = (params: { get(name: string): string | null } | null): 'mtm' | null => (params?.get('kind') === 'mtm' ? 'mtm' : null)
 // ── end F-SA-221 ──
 
+// ── F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.2): a rider's orders, `?profile=<id>` ──
+/** The rider term of the address (a profile id: any revision of the rider's garment profile), or null. */
+export function profileFromAddress(params: { get(name: string): string | null } | null): string | null {
+  const value = params?.get('profile')?.trim() ?? ''
+  return UUID.test(value) ? value.toLowerCase() : null
+}
+// ── end F-SA-222 ──
+
 // ── B-TH-225: Brand and Company narrow the sheet (`?brand=<party id>|own`, `?company=<id>`) ──
 /** The label on the garment the address narrows the sheet to: a brand party's id, `own` (our own collection), or null. */
 export function brandFromAddress(params: { get(name: string): string | null } | null): string | null {
@@ -192,6 +200,8 @@ export interface Narrowing {
   readonly progress?: boolean
   /** F-SA-221: made-to-measure orders only (`?kind=mtm`). */
   readonly kind?: 'mtm' | null
+  /** F-SA-222: a rider's orders (`?profile=<id>`, the rider list's Open orders door). */
+  readonly profile?: string | null
 }
 // ── end B-TH-225 ──
 
@@ -245,7 +255,7 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */ }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */ }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -262,6 +272,7 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   if (next.brand) query.set('brand', next.brand) // B-TH-225
   if (next.company) query.set('company', next.company) // B-TH-225
   if (next.kind) query.set('kind', next.kind) // F-SA-221
+  if (next.profile) query.set('profile', next.profile) // F-SA-222
   if (next.cf) query.set('cf', next.cf) // B-TH-057
   if (next.sort) query.set('sort', next.sort) // B-TH-057
   if (next.q.trim()) query.set('q', next.q.trim())
@@ -323,6 +334,7 @@ const narrowingOf = (narrow: Narrowing): OrderQuery => ({
   ...extraQueryOf(narrow.extra ?? null),
   ...(narrow.progress ? { progress: true } : {}),
   ...(narrow.kind ? { kind: narrow.kind } : {}), // F-SA-221
+  ...(narrow.profile ? { profile: narrow.profile } : {}), // F-SA-222
 })
 
 /**
@@ -901,7 +913,7 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
   if (!rowsTerm && filter.open !== 'true') query.set('rows', 'all')
   if (filter.partyId) query.set('party', filter.partyId)
   if (filter.companyId) query.set('company', filter.companyId)
-  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
+  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'profile' /* F-SA-222 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }
@@ -910,8 +922,8 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
  * rows views (Invoiced, At risk, the currency, the customer's mark, "Shipped, not invoiced" beside another view). The rows view itself
  * stays the tiles' and lanes' own, as before.
  */
-export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' | 'kind' /* F-SA-221 */> {
+export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */> {
   const extra = narrow.extra ?? {}
-  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null }
+  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null, profile: narrow.profile ?? null }
 }
 // ── end B-TH-244 ──

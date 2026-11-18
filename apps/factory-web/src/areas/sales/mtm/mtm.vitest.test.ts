@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-SA-222
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -59,6 +60,10 @@ import {
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { designScreen as worksheetScreen } from './worksheet/fixtures'
+// F-SA-222: Orders | Riders.
+import { createTranslator } from '../../../lib/i18n/messages'
+import { NS, ordersGateOf, riderOrdersHref, ridersAddressText, ROW_VIEWS, segmentHref, segmentOf } from './model'
+import { boardNarrowOf, doorAddress, laneQuery, listAddress, profileFromAddress, rowsQuery } from '../orders/model'
 
 const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['sales-mtm']!
 const can = mtmCan(Object.values(MTM_PERMISSIONS))
@@ -338,3 +343,79 @@ const RECORD_APPOINTMENT = {
   // B-W2b-F38: the company's fitting reminder switch.
   reminderEnabled: true,
 }
+
+// ---- F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.4, §4.7): the page shows Orders | Riders --------------------------
+describe('the Made-to-measure page: Orders | Riders, every old address opens Riders, the lock kept, the gate said in words (F-SA-222)', () => {
+  const can = (ordersView: boolean) => ({ ...mtmCan(Object.values(MTM_PERMISSIONS)), ordersView })
+  const segment = (search: string, ordersView = true) => segmentOf(new URLSearchParams(search), can(ordersView))
+
+  it('the segment from the address: Orders by default, Riders with ?segment=riders; without orders.view always Riders', () => {
+    expect(segment('')).toBe('orders')
+    expect(segment('segment=riders')).toBe('riders')
+    expect(segment('segment=orders&view=waiting')).toBe('orders')
+    expect(segment('', false)).toBe('riders')
+    expect(segment('segment=orders', false)).toBe('riders')
+    // The Orders sheet's own terms stay on Orders.
+    expect(segment('view=board')).toBe('orders')
+    expect(segment('view=week')).toBe('orders')
+    expect(segment('profile=0190f0e2-0000-7000-8000-000000000001&late=true')).toBe('orders')
+  })
+
+  it('every old address of the rider list opens Riders (alerts and old links land as before)', () => {
+    for (const view of ROW_VIEWS.filter((entry) => entry !== 'all')) expect(segment(`view=${view}`), view).toBe('riders')
+    for (const search of ['garment=JACKET', 'customer=0190f0e2-0000-7000-8000-000000000002', 'new=1', 'link=1', 'view=waiting&party=0190f0e2-0000-7000-8000-000000000002']) expect(segment(search), search).toBe('riders')
+  })
+
+  it('the rider list keeps its segment when it writes its address; each segment is a real link; a rider\'s orders are a door', () => {
+    expect(ridersAddressText(HOME_ADDRESS)).toBe('?segment=riders')
+    expect(ridersAddressText({ ...HOME_ADDRESS, view: 'waiting' })).toBe('?view=waiting&segment=riders')
+    expect(segment(ridersAddressText(HOME_ADDRESS).slice(1))).toBe('riders')
+    expect(segmentHref('/w/DEMO', 'orders')).toBe('/w/DEMO/sales/made-to-measure')
+    expect(segmentHref('/w/DEMO', 'riders')).toBe('/w/DEMO/sales/made-to-measure?segment=riders')
+    expect(riderOrdersHref('/w/DEMO', '0190f0e2-0000-7000-8000-000000000003')).toBe('/w/DEMO/sales/made-to-measure?profile=0190f0e2-0000-7000-8000-000000000003')
+    expect(segment(riderOrdersHref('/w/DEMO', '0190f0e2-0000-7000-8000-000000000003').split('?')[1]!)).toBe('orders')
+  })
+
+  it('the sheet reads the rider term (?profile=) into every read and its chip; Clear all and the chip\'s ✕ drop it', () => {
+    const id = '0190f0e2-0000-7000-8000-000000000003'
+    expect(profileFromAddress(new URLSearchParams(`profile=${id}`))).toBe(id)
+    expect(profileFromAddress(new URLSearchParams('profile=Rider A'))).toBeNull()
+    expect(listAddress('/p', { rows: 'open', q: '', layout: 'list', kind: 'mtm', profile: id })).toBe(`/p?kind=mtm&profile=${id}`)
+    expect(rowsQuery('open', '', null, null, { kind: 'mtm', profile: id })).toMatchObject({ kind: 'mtm', profile: id })
+    expect(laneQuery('CONFIRMED', 'open', '', null, { profile: id })).toMatchObject({ profile: id })
+    expect(boardNarrowOf({ profile: id })).toMatchObject({ profile: id })
+    expect(doorAddress('/p', { open: 'true', kind: 'mtm', profile: id })).toBe(`/p?kind=mtm&profile=${id}`)
+    const hook = readFileSync(new URL('../orders/list/use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('profile: null /* F-SA-222 */')
+    const sheetWords = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
+    expect(sheetWords('chips.rider', { name: 'Rider A' })).toBe('Rider: Rider A')
+    expect(createTranslator('it', messagesFor('it', ['orders-sheet'])['orders-sheet']!)('chips.rider', { name: 'Rider A' })).toBe('Pilota: Rider A')
+  })
+
+  it('Orders is the ONE Orders sheet locked to made-to-measure (in the address), embedded, the segment kept', () => {
+    const page = readFileSync(new URL('./MtmPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("useOrdersSheet({ basePath: LIST_PATH, locked: { kind: 'mtm' }, embedded: true, keep: ['segment'] })")
+    const view = readFileSync(new URL('./view/MtmListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("held={{ layout: 'week', why: t('week.held') }}")
+    expect(view).toContain('<OrdersListView model={{ ...model, empty }} actions={actions} />')
+  })
+
+  it('GATE-MTM: an empty Orders view says why — made-to-measure not started for any template, or no order yet; unread: nothing', () => {
+    const template = (rulesOn: boolean, status: 'ACTIVE' | 'ARCHIVED' = 'ACTIVE') => ({ rulesOn, status })
+    expect(ordersGateOf([template(false), template(true, 'ARCHIVED')])).toBe('off')
+    expect(ordersGateOf([])).toBe('off')
+    expect(ordersGateOf([template(false), template(true)])).toBe('none')
+    expect(ordersGateOf(null)).toBeNull()
+  })
+
+  it('the words in both languages: the segments, the held week, the gate, the Open orders door', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [NS])[NS]!)
+      for (const key of ['segment.label', 'segment.orders', 'segment.riders', 'week.held', 'gate.offTitle', 'gate.offBody', 'gate.noneTitle', 'gate.noneBody']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('row.openOrders', { count: 2, rider: 'Rider A' }), locale).toContain('Rider A')
+    }
+    const en = createTranslator('en', messagesFor('en', [NS])[NS]!)
+    expect(en('week.held')).toBe('It reads one site’s promise plan and cannot show only made-to-measure orders.')
+  })
+})
+// ---- end F-SA-222

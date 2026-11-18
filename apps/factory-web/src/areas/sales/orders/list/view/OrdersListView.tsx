@@ -188,7 +188,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     [t, s, d, l, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */],
   )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
   const clearFilters = () => {
     setQuery('')
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -203,6 +203,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
     // F-SA-221: made-to-measure orders only — removable here, fixed where the page holds it (the Made-to-measure page).
     ...(model.kind ? [{ id: 'kind', label: s('mtm.mark'), onClear: model.locked?.kind ? null : () => actions?.onKind?.(null) }] : []),
+    // F-SA-222: a rider's orders (the rider list's Open orders door); the name once read, else "One rider".
+    ...(model.profile ? [{ id: 'profile', label: model.profile.name ? s('chips.rider', { name: model.profile.name }) : s('chips.riderUnnamed'), onClear: () => actions?.onProfile?.(null) }] : []),
     // B-TH-057 (SHEET-G05): a custom field filter of the address is a chip too (the list, its counts and its file apply it).
     ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
     // B-TH-244: the terms a total's door added (never a hidden filter).
@@ -237,6 +239,19 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   ) : items && items.length === 0 && model.rows === 'uninvoiced' && !groupsShown ? (
     // B-TH-244 (SHEET.overall-F06): nothing shipped waits to be invoiced.
     <EmptyState title={s('uninvoiced.none')} description={s('uninvoiced.noneBody')} />
+  ) : items && items.length === 0 && !groupsShown && !narrowed && model.empty ? (
+    // F-SA-222 (GATE-MTM): the host says why its view is empty (made-to-measure not started, or no order yet) — never a bare 0.
+    <EmptyState
+      title={model.empty.title}
+      description={model.empty.body ?? undefined}
+      action={
+        model.empty.link ? (
+          <Button size="sm" asChild>
+            <Link href={model.empty.link.href}>{model.empty.link.label}</Link>
+          </Button>
+        ) : undefined
+      }
+    />
   ) : items && items.length === 0 && !groupsShown && model.kind && !model.can.measurements ? (
     // F-SA-221 (GATE-MTM): made-to-measure orders for a reader without the riders' right: the view's words, no gate detail.
     <EmptyState title={s('empty.mtmNoRight')} />

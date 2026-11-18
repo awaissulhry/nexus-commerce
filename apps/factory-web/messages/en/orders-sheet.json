@@ -105,7 +105,9 @@
     "invoiced": "Invoiced: {state}",
     "atRisk": "Close to promise",
     "currency": "Currency: {currency}",
-    "urgency": "Customer’s mark: {urgency}"
+    "urgency": "Customer’s mark: {urgency}",
+    "rider": "Rider: {name}",
+    "riderUnnamed": "One rider"
   },
   "switcher": {
     "title": "Customer",
