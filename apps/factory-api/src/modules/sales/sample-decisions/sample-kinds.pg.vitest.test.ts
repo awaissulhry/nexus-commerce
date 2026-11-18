@@ -244,7 +244,8 @@ describe('B-PR-29 PW-P05: Waiting for you and answers stay inside one customer',
     const roundA = await roundOf('SIZE_SET', world.ids.a)
     const askA = await ask('SAMPLE', 'SampleRound', roundA.id)
     const sentAt = new Date(Date.now() - 3_600_000).toISOString()
-    const { swatch: swatchA } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    // fix-pr-11: a swatch of A's round (the world's jacket is shared by every company: a swatch of no round is refused for A).
+    const { swatch: swatchA } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, roundId: roundA.id, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
     const roundB = await roundOf('SIZE_SET', world.ids.b)
     const askB = await ask('SAMPLE', 'SampleRound', roundB.id)
 

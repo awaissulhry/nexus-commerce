@@ -31,6 +31,9 @@ import {
   SWATCH_WORDS,
   // B-PR-38
   customerDecidesRefusal,
+  // fix-pr-11
+  DECISION_REFUSALS,
+  swatchNeedsRoundRefusal,
 } from './rules'
 import { ITEM_KINDS } from '../../product/materials/rules'
 
@@ -196,6 +199,21 @@ describe('no silent office decision on a customer\'s own round or swatch (B-PR-3
     expect(swatchDecisionRefusal({ ...sent, decision: 'APPROVED' }, null, true)?.code).toBe('SWATCH_DECIDED')
     expect(swatchDecisionRefusal(sent, null, false)).toBeNull()
     expect(customerDecidesRefusal('X').message).not.toMatch(/brand alpha|another customer/i)
+  })
+})
+
+// fix-pr-11 (the lead's decision): a swatch nobody could ever decide is not recorded, nor sent.
+describe('a swatch of no round, of a style shared by every company, for a customer whose portal is on (fix-pr-11)', () => {
+  it('is refused in words that say why and where to go; a company, or a portal off, keeps it', () => {
+    const refused = swatchNeedsRoundRefusal({ companyId: null, customerDecides: true }, 'JKT-01')
+    expect(refused).toEqual({
+      code: 'SWATCH_NEEDS_ROUND',
+      message: "Style JKT-01 is shared by every company and this customer approves in their portal: a swatch of it with no round could be neither asked of them nor decided here. Add it to one of the customer's sample rounds.",
+    })
+    expect(DECISION_REFUSALS).toContain('SWATCH_NEEDS_ROUND')
+    expect(swatchNeedsRoundRefusal({ companyId: 'company-1', customerDecides: true }, 'JKT-01')).toBeNull()
+    expect(swatchNeedsRoundRefusal({ companyId: null, customerDecides: false }, 'JKT-01')).toBeNull()
+    expect(refused!.message).not.toMatch(/brand alpha|another customer/i)
   })
 })
 

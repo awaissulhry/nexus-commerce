@@ -289,6 +289,7 @@
     "MATERIAL_KIND": "A fabric swatch is of a textile, lining, membrane or padding; a trim swatch of a trim, hardware, thread or label.",
     "NOT_THE_ROUNDS_PARTY": "The swatch goes to the round's own customer.",
     "NO_COMPANY": "A swatch of a shared style with no round cannot be asked of the customer: ask on a round’s swatch, or decide it here.",
+    "SWATCH_NEEDS_ROUND": "A swatch of a shared style with no round, for a customer whose portal is on, could be neither asked of them nor decided here: add it to one of the customer's sample rounds.",
     "other": "The factory refused it as it is.",
     "ORDER_LINE_NEEDED": "This round is made on an order line: only a proto, fit or salesman round that charges nobody is made without one.",
     "PRIVATE_STYLE": "This style is another customer's private-label style: its samples are made for that customer only."
