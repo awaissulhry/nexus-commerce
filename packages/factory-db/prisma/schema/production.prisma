@@ -284,6 +284,9 @@ model WorkOrder {
   scheduleSlots       ScheduleSlot[]
   // B-PR-15 (production plan, schema wave 3/5): its plain production and customer holds (quality holds stay holds.prisma's).
   productionHolds     WorkOrderHold[]
+  // B-SA-005 (sales page plan, schema wave "sales page 1/1"): order-apply.prisma, the changes an accepted change of its
+  // orders proposes for it (lower it to the order, make more).
+  orderChanges        WorkOrderChange[]    @relation("WorkOrderChangeWorkOrder")
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -393,7 +396,10 @@ enum WorkOrderHoldStatus {
 
 /// One cell of a work order's size grid (MES-002): the pieces of one colourway in one size, from one sales order line
 /// (the line's style and colourway; W2b-5: a SAMPLE cell may name none). A made-to-measure work order has exactly one cell, of quantity 1, with the rider's
-/// measurement profile revision (PRD-193). Changes only while the work order is DRAFT.
+/// measurement profile revision (PRD-193). Changes only while the work order is DRAFT. B-SA-005 (sales page plan, schema wave
+/// "sales page 1/1"; lead pick R1, production's "Lower to the order"): on a RELEASED or IN_PROGRESS work order a cell may still
+/// go down (a lower quantity, nothing else changed) or go (nothing of it cut), never below what is already cut, bundled or on a
+/// cut order (the …_order_apply_guards function factory_work_order_cell_floor); a raise or a new cell only while DRAFT.
 model WorkOrderSize {
   id                   String   @id @db.Uuid
   tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -545,7 +551,9 @@ model WorkOrderOperation {
 /// One planned material line of a work order (SCR-093 pick list): a BOM line of its revision for one cell, in the BOM
 /// line's unit (wastage included) and in the item's base unit, with the material colour the cell's colourway takes. What
 /// was issued and returned is the stock ledger's: the ISSUE and RETURN moves that name the work order (StockMove
-/// .workOrderId). Changes only while the work order is DRAFT. No cost: costing reads the ledger's valuation.
+/// .workOrderId). Changes only while the work order is DRAFT. No cost: costing reads the ledger's valuation. B-SA-005 (R1,
+/// "Lower to the order": the planned materials follow the new figure): on a RELEASED or IN_PROGRESS work order a line may still
+/// follow its cell down (both quantities lower, nothing else changed) or go with a cell nothing of which is cut.
 model WorkOrderMaterial {
   id              String   @id @db.Uuid
   tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid

@@ -599,7 +599,15 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    bundle not VOID for a cell of its lines: `factory_order_gate_waits_again`, `factory_sales_order_work_started`)),
    `…_production_wave5_counter_guards` (B-PR-40 EXTRA 2, no schema folder of its own: it redefines wave 4's
    `factory_order_change_request_guard`: a COUNTERED request is ACCEPTED exactly when the customer said yes to the counter and
-   that yes was not put back; a yes put back is no yes — the request is refused or withdrawn, never accepted)):
+   that yes was not put back; a yes put back is no yes — the request is refused or withdrawn, never accepted)),
+   `…_order_apply_guards` (sales page plan schema wave 1/1, B-SA-005: the DESIGN ask, its files and its ask's message — it
+   redefines `factory_order_change_request_guard` (from …_production_wave5_counter_guards) and
+   `factory_order_change_request_line_guard` (from …_brand_asks_guards), with a deferred "a DESIGN request has a line"; a
+   CUSTOMER ChangeRequest naming the customer's DESIGN request only for that customer's private-label style
+   (`ChangeRequest_order_ask`); `Message.aboutKind/aboutId` a part of the thread's own order (`Message_about_check`);
+   WorkOrderChange's moves and wall; and R1's "Lower to the order": it redefines production's `factory_work_order_size_guard`
+   (from …_followups_product_w2b4_guards) and `factory_work_order_material_guard` (W1's) so a RELEASED or IN_PROGRESS cell and
+   its planned materials go down or go, never below `factory_work_order_cell_floor` — what is cut, bundled or on a cut order)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

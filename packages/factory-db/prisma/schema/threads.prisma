@@ -183,6 +183,14 @@ model Message {
   /// else of the message changes. The partner role reads only messages that are not held, so a customer never sees a mail
   /// that was taken back (its policy: onlyValues). False for every other message.
   held              Boolean           @default(false)
+  /// B-SA-005 (sales page plan, schema wave "sales page 1/1"; lead picks P26, R10; B-SA-061 "Discuss"): the part of its
+  /// order it is about, so the order page can jump back to it: a SalesOrderLine, Shipment, Invoice, DepositRequest, OrderGate,
+  /// OrderChangeRequest or WorkOrder of the order whose thread it is in (a work order: one that makes a line of the order).
+  /// Kind and id both or neither; only on a message of a sales order's thread; a message shared with the customer is never
+  /// about a work order (office only). Written with the message, never changed (a message is append-only). The partner
+  /// reads it on its own shared messages and may write it in its own posts (held to its own order's parts).
+  aboutKind         String?
+  aboutId           String?           @db.Uuid
 
   thread       Thread  @relation("ThreadMessages", fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // A shared message names its thread's own party: the reference is checked whenever partyId is set.
@@ -204,10 +212,16 @@ model Message {
   tasks        Task[]
   // TH-9 (B-TH-090): its pin, when it is pinned.
   pins         ThreadPin[]
+  // B-SA-005 (portal-sales.prisma): the customer's change request it asked (OrderChangeRequest.askMessageId, the ask's own
+  // message in the order's conversation, P21).
+  askedChangeRequests OrderChangeRequest[] @relation("OrderChangeRequestAskMessage")
 
   @@unique([tenantId, emailMessageId])
   // The target of the mentions' tenant-safe reference.
   @@unique([tenantId, id])
+  // B-SA-005: the target of a change request's ask message: a message shared with the request's own party (the key holds the
+  // party, so the database refuses a message of another customer or an internal note).
+  @@unique([tenantId, partyId, id])
   // TH-3 (B-TH-038): the target of a reply's and a correction's reference (a message of the same thread).
   @@unique([tenantId, threadId, id])
   // A thread's messages, newest first (the record panel and the timeline).

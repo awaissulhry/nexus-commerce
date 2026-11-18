@@ -705,6 +705,9 @@ model SalesOrder {
   // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from, its change and cancel requests.
   portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestOrder")
   changeRequests      OrderChangeRequest[] @relation("OrderChangeRequestOrder")
+  // B-SA-005 (sales page plan, schema wave "sales page 1/1"): order-apply.prisma, the changes of its work orders an accepted
+  // change left to do.
+  workOrderChanges    WorkOrderChange[]    @relation("WorkOrderChangeOrder")
   // W2b-5 sales-intake.prisma (wave 37/44): its season, of its own company (Restrict, not Prisma's SetNull default: that
   // would also clear tenantId and companyId).
   season              Season?              @relation(fields: [tenantId, companyId, seasonId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -1041,6 +1044,8 @@ model SalesOrderAmendment {
   reapprovalTask ApprovalTask?   @relation("SalesOrderAmendmentReapproval", fields: [tenantId, companyId, reapprovalTaskId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b portal-sales.prisma (wave 21/22): the customer's change request it answers.
   changeRequests OrderChangeRequest[] @relation("OrderChangeRequestAmendment")
+  // B-SA-005: order-apply.prisma, the work-order changes it left to do.
+  workOrderChanges WorkOrderChange[] @relation("WorkOrderChangeAmendment")
 
   @@unique([tenantId, orderId, revision])
   // W2b (wave 21/22): the target of a change request's reference: an amendment of the request's own order.
