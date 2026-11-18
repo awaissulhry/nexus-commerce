@@ -114,7 +114,8 @@
     "currency": "Valuta: {currency}",
     "urgency": "Segno del cliente: {urgency}",
     "rider": "Pilota: {name}",
-    "riderUnnamed": "Un pilota"
+    "riderUnnamed": "Un pilota",
+    "waitingUs": "Tocca a noi"
   },
   "switcher": {
     "title": "Cliente",
@@ -182,7 +183,8 @@
   "views": {
     "suggest": "{customer} — monitoraggio",
     "ofCustomer": "Ordini di {customer}",
-    "mtm": "Su misura"
+    "mtm": "Su misura",
+    "waitingUs": "Tocca a noi"
   },
   "group": {
     "label": "Raggruppa le righe",

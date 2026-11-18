@@ -228,6 +228,10 @@ export interface OrderQuery {
   profile?: string | null
   /** F-SA-275: read each row's production part (only while a production column is shown: Where it is, Waiting on, Supervisor). */
   production?: boolean
+  /** F-SA-276: the orders waiting on us (`?waiting=us`, the customer's Work tab's "Waiting on us"). */
+  waiting?: 'us' | null
+  /** F-SA-276: only these rows (≤ 50: a live read again of the rows in view, values in place). */
+  ids?: readonly string[] | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -257,6 +261,8 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       kind: query.kind ?? undefined, // F-SA-221
       profile: query.profile ?? undefined, // F-SA-222
       production: query.production ? 'true' : undefined, // F-SA-275
+      waiting: query.waiting ?? undefined, // F-SA-276
+      ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -275,9 +281,9 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */> = {}): Promise<OrderBoard> {
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */ | 'waiting' /* F-SA-276 */> = {}): Promise<OrderBoard> {
   return api.get('/sales/orders/board', {
-    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */, profile: narrow.profile ?? undefined /* F-SA-222 */ },
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */, profile: narrow.profile ?? undefined /* F-SA-222 */, waiting: narrow.waiting ?? undefined /* F-SA-276 */ },
     schema: boardSchema,
     signal,
   })
@@ -333,6 +339,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       ...doorQueryOf(query),
       kind: query.kind ?? undefined, // F-SA-221
       profile: query.profile ?? undefined, // F-SA-222
+      waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },

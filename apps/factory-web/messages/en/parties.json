@@ -164,6 +164,37 @@
       "commercial": "Commercial terms",
       "hold": "Hold and PO number",
       "identity": "Tax identity and VIES"
+    },
+    "work": {
+      "strip": {
+        "label": "What waits",
+        "us": "Waiting on us",
+        "them": "Waiting on {customer}",
+        "tasks": "Tasks"
+      },
+      "tile": {
+        "requests": "Requests to answer",
+        "replies": "Replies waiting on us",
+        "late": "Late",
+        "deposit": "Waiting for deposit",
+        "customer": "Waiting for {customer}",
+        "tasks": "Open tasks",
+        "failed": "Couldn't be read · Try again"
+      },
+      "attention_one": "{count} thing waits on us",
+      "attention_other": "{count} things wait on us",
+      "empty": "Nothing in production for {customer}.",
+      "showAll": "Show all orders",
+      "gone": "{record} is no longer in «{view}»",
+      "view": {
+        "waitingUs": "Waiting on us"
+      },
+      "dock": {
+        "label": "Which thread",
+        "general": "{customer} (general)",
+        "generalLine": "{customer}'s general thread is shared with {customer}: what you send there reaches the customer.",
+        "recordLine": "{record}'s thread is shared with {customer}: what you send there reaches the customer."
+      }
     }
   },
   "suppliers": {

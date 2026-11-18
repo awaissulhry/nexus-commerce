@@ -27,8 +27,11 @@ export interface RecordKey {
 }
 
 export interface TaskQuery {
-  readonly scope: 'MINE' | 'CREATED' | 'RECORD'
+  // F-SA-276 (the API's B-SA-072): + PARTY — the open tasks on one customer's records the reader may read (the customer page's strip).
+  readonly scope: 'MINE' | 'CREATED' | 'RECORD' | 'PARTY'
   readonly record?: RecordKey | null
+  /** F-SA-276: the customer of scope PARTY. */
+  readonly partyId?: string | null
   readonly tile?: TaskTile | null
   readonly status?: TaskStatus | 'ALL' | null
   readonly q?: string | null
@@ -43,6 +46,7 @@ export function listTasks(api: ApiClient, query: TaskQuery, signal?: AbortSignal
       scope: query.scope,
       recordType: query.record?.type,
       recordId: query.record?.id,
+      partyId: query.partyId ?? undefined, // F-SA-276
       tile: query.tile ?? undefined,
       status: query.status ?? undefined,
       q: query.q?.trim() || undefined,

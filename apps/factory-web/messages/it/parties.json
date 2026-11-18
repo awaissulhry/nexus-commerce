@@ -164,6 +164,37 @@
       "commercial": "Condizioni commerciali",
       "hold": "Blocco e numero d’ordine del cliente",
       "identity": "Identità fiscale e VIES"
+    },
+    "work": {
+      "strip": {
+        "label": "Cosa aspetta",
+        "us": "Tocca a noi",
+        "them": "Tocca a {customer}",
+        "tasks": "Attività"
+      },
+      "tile": {
+        "requests": "Richieste a cui rispondere",
+        "replies": "Risposte che toccano a noi",
+        "late": "In ritardo",
+        "deposit": "In attesa di acconto",
+        "customer": "In attesa di {customer}",
+        "tasks": "Attività aperte",
+        "failed": "Lettura non riuscita · Riprova"
+      },
+      "attention_one": "{count} cosa tocca a noi",
+      "attention_other": "{count} cose toccano a noi",
+      "empty": "Niente in produzione per {customer}.",
+      "showAll": "Mostra tutti gli ordini",
+      "gone": "{record} non è più tra «{view}»",
+      "view": {
+        "waitingUs": "Tocca a noi"
+      },
+      "dock": {
+        "label": "Quale conversazione",
+        "general": "{customer} (generale)",
+        "generalLine": "La conversazione generale di {customer} è condivisa con {customer}: ciò che invii lì arriva al cliente.",
+        "recordLine": "La conversazione di {record} è condivisa con {customer}: ciò che invii lì arriva al cliente."
+      }
     }
   },
   "suppliers": {

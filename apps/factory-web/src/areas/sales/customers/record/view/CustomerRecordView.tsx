@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Table2 } from 'lucide-react'
+import { CircleAlert } from 'lucide-react' // F-SA-276: the Work tab's mark (something waits on us)
 import { Card, KeyValue, MetricStrip, RecordLayout, SummaryTable, Tabs, type MenuItemDef, type Metric, type TabItem } from '@nexus/ui/components'
 import { Button, SegmentedControl } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -44,6 +44,8 @@ export function CustomerRecordView({
   supervisor,
   portalPeople,
   portalEmails,
+  work,
+  workCount,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -66,11 +68,15 @@ export function CustomerRecordView({
   /** F-SA-274: People & addresses' people with portal access (Portal access's people part) and their e-mails (the contacts' tags). */
   portalPeople?: ReactNode
   portalEmails?: ReadonlySet<string>
+  /** F-SA-276: the Work tab (the waiting strip and the Orders sheet locked to the customer, drawn by the container). */
+  work?: ReactNode
+  /** F-SA-276: the Work tab's count — what waits on us (requests to answer + replies waiting on us); null while read. */
+  workCount?: { readonly count: number | null; readonly attention: boolean } | null
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -91,6 +97,8 @@ interface CustomerProps {
   supervisor?: ReactNode
   portalPeople?: ReactNode
   portalEmails?: ReadonlySet<string> | undefined
+  work?: ReactNode // F-SA-276
+  workCount?: { readonly count: number | null; readonly attention: boolean } | null | undefined
 }
 
 function Customer(props: CustomerProps) {
@@ -128,7 +136,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -140,8 +148,7 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   const recordPath = sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)
   const activeAddresses = party.addresses.filter((address) => address.status === 'ACTIVE')
   const activeContacts = party.contacts.filter((contact) => contact.status === 'ACTIVE')
-  // Until the Work and Quotes & incoming lists are drawn (F-SA-276, F-SA-277), each keeps today's rows of its kind.
-  const ordersCount = model.orders.items && !model.orders.more ? model.orders.items.length : null
+  // Until the Quotes & incoming lists are drawn (F-SA-277), it keeps today's rows of its kind.
   const quotesCount = model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
   const overdueCount = moneyModel?.can.receivables ? (moneyModel.ageing.items ? (overdueOf(moneyModel.ageing.items, party.id)?.invoices ?? 0) : null) : undefined
   const tabItems: TabItem[] = tabs.map((id) => ({
@@ -149,7 +156,9 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
     href: `${recordPath}?tab=${id}`,
     label: t(`${side}.tab.${id}`),
     // F-SA-273: Money counts the overdue invoices (receivables.view; null while reading).
-    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? ordersCount : id === 'quotes' ? quotesCount : id === 'money' ? overdueCount : undefined,
+    // F-SA-276: Work counts what waits on us (requests to answer + replies waiting on us), marked when something does.
+    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? (workCount?.count ?? null) : id === 'quotes' ? quotesCount : id === 'money' ? overdueCount : undefined,
+    ...(id === 'work' && workCount?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: workCount.count ?? 0 })} /> } : {}),
   }))
   // F-SA-271: the primary — Activate a prospect, New order for an active customer (orders.manage), none when blocked or archived;
   // Check VIES goes into ⋯ (and stays in Terms › VIES).
@@ -185,17 +194,8 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabItems} active={tab} size="sm" overflow="scroll" />
           <PartyNotices model={model} party={party} actions={actions} />
 
-          {tab === 'work' && (
-            // F-SA-271: the customer's orders (the Orders sheet locked to the customer comes with F-SA-276).
-            <div className="fw-pty-stack">
-              <p className="fw-pty-actions">
-                <Link className="fw-pty-link" href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&rows=all`}>
-                  <Table2 size={14} aria-hidden /> {t('customers.openSheet')}
-                </Link>
-              </p>
-              <DealsTab model={model} actions={actions} only="order" />
-            </div>
-          )}
+          {/* F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (no tabs inside the tab, R5). */}
+          {tab === 'work' && work}
           {/* F-SA-271: the customer's quotes (the two lists of Quotes & incoming come with F-SA-277). */}
           {tab === 'quotes' && <DealsTab model={model} actions={actions} only="quote" />}
           {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} />}

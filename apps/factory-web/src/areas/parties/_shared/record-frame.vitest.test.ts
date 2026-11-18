@@ -84,13 +84,12 @@ describe('the customer on RecordFrame', () => {
     expect(textOf(customer('w2b-324-tax'))).toContain('Terms & requirements')
   })
 
-  // F-SA-271: the link reads "Open in Sales › Orders" (on Work and in ⋯).
+  // F-SA-271: the link reads "Open in Sales › Orders" (in ⋯). F-SA-276: Work IS the Orders sheet locked to the customer now; the band's ⋯
+  // keeps "Open in Sales › Orders" (this customer, every row: SHEET-G12) and the Work tab draws the strip and the sheet.
   it('Work: "Open in Sales › Orders" opens Sales › Orders with this customer and every row (SHEET-G12)', () => {
-    const id = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!.id
-    const html = customer('quotes-orders')
-    expect(textOf(html)).toContain('Open in Sales › Orders')
-    expect(html).toContain(`/sales/orders?party=${id}&amp;rows=all`)
-    expect(textOf(customer('quotes-orders', 'it'))).toContain('Apri in Vendite › Ordini')
+    const view = readFileSync(new URL('../../sales/customers/record/view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{ id: 'orders', label: t('customers.openSheet'), href: `${model.prefix}/sales/orders?party=${id}&rows=all` }")
+    for (const locale of ['en', 'it'] as const) expect(textOf(customer('quotes-orders', locale))).toContain(locale === 'en' ? 'Requests to answer' : 'Richieste a cui rispondere')
   })
 
   it('one notice: the most serious shows, the rest wait behind "N more notices" (never above the thread)', () => {

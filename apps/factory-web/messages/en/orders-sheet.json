@@ -114,7 +114,8 @@
     "currency": "Currency: {currency}",
     "urgency": "Customer’s mark: {urgency}",
     "rider": "Rider: {name}",
-    "riderUnnamed": "One rider"
+    "riderUnnamed": "One rider",
+    "waitingUs": "Waiting on us"
   },
   "switcher": {
     "title": "Customer",
@@ -182,7 +183,8 @@
   "views": {
     "suggest": "{customer} — tracking",
     "ofCustomer": "Orders of {customer}",
-    "mtm": "Made-to-measure"
+    "mtm": "Made-to-measure",
+    "waitingUs": "Waiting on us"
   },
   "group": {
     "label": "Group the rows",

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
-import { failed, loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
+import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
 import type { Party } from '../../../parties/_shared/api'
 import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
 import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
@@ -27,6 +27,17 @@ import { PoNumberCard, type PoNumberModel } from '../depth/view/PoNumberCard'
 import { PrivacyCard, type PrivacyModel } from '../depth/view/PrivacyCard'
 import { RequirementsTab, type RequirementsModel } from '../depth/view/RequirementsTab'
 import { STEP_UP_CLOSED } from '../../../admin/shared/model'
+// ---- F-SA-276: the Work tab (the waiting strip with made-up reads, the ONE Orders sheet locked to the customer) ----
+import { useT } from '../../../../lib/i18n/provider'
+import { at as ordersAt, BOARD, canOf, LIST_ROWS, TODAY as ORDERS_TODAY } from '../../orders/_demo/fixtures'
+import type { OrderRow } from '../../orders/api'
+import type { RowView } from '../../orders/model'
+import type { OrdersListModel } from '../../orders/list/list-model'
+import { OrdersListView } from '../../orders/list/view/OrdersListView'
+import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import { WaitingStrip } from './view/WaitingStrip'
+import { WORK_VIEWS, workPreset } from './view/WorkTab'
+// ---- end F-SA-276
 
 /**
  * SCR-033 Customer record — made-up customers only. Each case is one state the Owner reviews: an Italian business that
@@ -57,7 +68,73 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[] }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */ }
+
+// ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
+interface WorkCase {
+  readonly reads: WorkReads
+  /** null: the rows still read. */
+  readonly rows: readonly OrderRow[] | null
+  readonly view?: RowView
+  readonly problem?: string | null
+  readonly price?: boolean
+}
+const STRIP_READY: WorkReads = {
+  board: { status: 'ready', value: { ...BOARD, tiles: BOARD.tiles.map((tile) => (tile.key === 'late' ? { ...tile, count: 1 } : tile.key === 'waitingForDeposit' ? { ...tile, count: 1 } : tile)) } },
+  requests: { status: 'ready', value: { items: [], open: 2, countered: 1 } },
+  replies: { status: 'ready', value: { rows: [], count: 3, complete: true } },
+  asks: { status: 'ready', value: { items: [], complete: true } },
+  tasks: { status: 'ready', value: { items: [], total: 4, complete: true } },
+}
+const STRIP_READING: WorkReads = { board: { status: 'reading' }, requests: { status: 'reading' }, replies: { status: 'reading' }, asks: { status: 'reading' }, tasks: { status: 'reading' } }
+const workRows = (party: Party, over: (row: OrderRow, index: number) => Partial<OrderRow> = () => ({})): OrderRow[] =>
+  LIST_ROWS.filter((row) => row.status === 'IN_PRODUCTION' || row.status === 'CONFIRMED').map((row, index) => ({
+    ...row,
+    partyId: party.id,
+    partyName: party.tradeName ?? party.legalName,
+    progress: index === 1 ? { inWork: 120, cut: 120, sewn: null, finished: null } : { inWork: 266, cut: 266, sewn: 100, finished: 40 },
+    production: { stage: index === 2 ? 'CUTTING' : 'SEWING', stageSince: '2026-10-27', health: index === 1 ? 'LATE' : index === 0 ? 'AT_RISK' : 'ON_TRACK', waitingOn: index === 2 ? 'SUPPLIER' : null, since: index === 2 ? ordersAt(27, 9) : null, held: false, supervisorMark: index === 0 ? 'ME' : index === 1 ? 'SOMEONE_ELSE' : 'NOT_SET', openRequests: index === 0 ? 1 : 0, openIssues: 0, withheld: [] },
+    ...over(row, index),
+  }))
+const workCase = (code: string, work: WorkCase, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'work', ...over }), work })
+
+/** The Work tab as the page draws it: the strip, then the Orders sheet embedded and locked to the customer (its views, its preset). */
+function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
+  const t = useT('parties')
+  const name = party.tradeName ?? party.legalName
+  const view = work.view ?? WORK_DEFAULT_ROWS
+  const list: OrdersListModel = {
+    prefix: '/w/DEMO',
+    can: { ...canOf('sales'), price: work.price !== false },
+    today: ORDERS_TODAY,
+    layout: 'list',
+    rows: view,
+    q: '',
+    list: { items: work.rows ? [...work.rows] : null, more: false, problem: work.problem ?? null },
+    lanes: [],
+    board: BOARD,
+    asOf: ordersAt(29, 9, 42),
+    live: 'live',
+    updates: 0,
+    notice: null,
+    customer: { id: party.id, name },
+    embedded: true,
+    locked: { party: true, kind: false },
+    listKey: 'sales.orders',
+    views: WORK_VIEWS,
+    defaultRows: WORK_DEFAULT_ROWS,
+    preset: workPreset(view, null),
+    toolbarLink: { href: `/w/DEMO/production/work-orders?party=${party.id}`, label: t('customers.band.workOrders', { customer: name }) },
+    empty: view === WORK_DEFAULT_ROWS ? { title: t('customers.work.empty', { customer: name }), link: { href: `/w/DEMO/sales/customers/${party.id}?tab=work&rows=all`, label: t('customers.work.showAll') } } : null,
+  }
+  return createElement(
+    'div',
+    { className: 'fw-cw' },
+    createElement(WaitingStrip, { customer: name, reads: work.reads, can: { orders: true, workorders: true, threads: true, partners: true }, doors: { onView: () => undefined, repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES', onWindow: () => undefined } }),
+    createElement(OrdersListView, { model: list }),
+  )
+}
+// ---- end F-SA-276
 
 function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDepth | undefined {
   if (!depth) return undefined
@@ -86,7 +163,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, portalEmails, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, work, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -95,7 +172,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}) }),
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WorkDesign, { work, party }) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null }),
     ),
   )
 }
@@ -187,17 +264,19 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'identity-new', label: 'New tax identity from a date', model: record('MODA-DEMO', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
     { id: 'identity-correct', label: 'Correct the identity in force (add the SDI code)', model: record('MARCHIO-ESEMPIO', { tab: 'terms', dialog: { kind: 'identity', mode: 'correct' } }) },
     { id: 'identity-first', label: 'A first tax identity', model: record('NUOVO-PROVA', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
-    { id: 'quotes-orders', label: 'Work: the open orders (until the Orders sheet, F-SA-276)', model: record('MODA-DEMO', { tab: 'work' }) },
-    { id: 'quotes-orders-all', label: 'Work: every order', model: record('MODA-DEMO', { tab: 'work', deals: 'all' }) },
+    // ---- F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (In production · Waiting on us · Late · All orders).
+    { id: 'quotes-orders', label: 'F-SA-276 · Work: the strip (two groups and the tasks) and the orders in production', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
+    { id: 'quotes-orders-all', label: 'F-SA-276 · Work: All orders (Status shown)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), view: 'all' }) },
     {
       id: 'quotes-orders-no-price',
-      label: 'Work: without the price grain',
-      model: record('MODA-DEMO', { tab: 'work', deals: 'all', can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }),
+      label: 'F-SA-276 · Work without the price grain (no money column, never 0)',
+      model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false }, { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }),
     },
-    { id: 'quotes-orders-empty', label: 'Work: no order yet', model: record('NUOVO-PROVA', { tab: 'work', quotes: loaded([]), orders: loaded([]) }) },
-    { id: 'quotes-orders-error', label: "Work: couldn't load", model: record('MODA-DEMO', { tab: 'work', quotes: failed('problem.unavailable') }) },
+    { id: 'quotes-orders-empty', label: 'F-SA-276 · Work: nothing in production (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [] }) },
+    { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
+    { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read' }) },
     // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.
-    { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: record('MODA-DEMO', { tab: 'work' }) },
+    { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
     { id: 'tab-quotes', label: 'F-SA-271 · Quotes & incoming: the quotes (until its two lists, F-SA-277)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).

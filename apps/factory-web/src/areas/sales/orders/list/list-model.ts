@@ -138,6 +138,18 @@ export interface OrdersListModel {
   /** The review window's address on the host's page for a request (the customer page's door); absent: the order's Changes tab. */
   doorHref?: ((requestId: string) => string) | null
   // ---- end F-SA-275
+  // ---- F-SA-276 (the customer's Work tab) ----
+  /** `?waiting=us`: the orders waiting on us (a chip with ✕; the customer page's built-in view "Waiting on us"). */
+  waiting?: 'us' | null
+  /** The host's built-in views, in its order (ids of builtInViewsOf; absent: every one of the sheet's). */
+  views?: readonly string[] | null
+  /** The host's default rows view, written into the address on entry: not a narrowing (no chip, no "Viewing …" line). */
+  defaultRows?: RowView | null
+  /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
+  preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
+  /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
+  toolbarLink?: { readonly href: string; readonly label: string } | null
+  // ---- end F-SA-276
 }
 
 export interface OrdersListActions {
@@ -205,4 +217,6 @@ export interface OrdersListActions {
   onBoardHold?: (held: boolean) => void
   /** F-SA-275 / F-SA-281: Add task… on these orders (a row's ⋯, the selection's Add task to N…); absent: no such door. */
   onAddTask?: (ids: readonly string[]) => void
+  /** F-SA-276: the waiting term (null clears it); `rows` with it (the built-in view "Waiting on us": the open ones). */
+  onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
 }

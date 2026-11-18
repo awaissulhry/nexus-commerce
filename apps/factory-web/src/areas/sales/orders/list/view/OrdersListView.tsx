@@ -184,10 +184,11 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const columns = useMemo<ColDef<OrderRow>[]>(
     () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */],
   )
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
+  // F-SA-276: the host's default view is not a narrowing; the waiting term is.
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all' && model.rows !== model.defaultRows) || !!model.waiting || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
   const clearFilters = () => {
     search.reset('') // F-SA-223
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -198,7 +199,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     // F-SA-220: a customer the host locks is the page's own (no chip: the page names it).
     ...(model.customer && !model.locked?.party ? [{ id: 'party', label: model.customer.name === null ? s('switcher.unknown') : s('chips.customer', { name: model.customer.name ?? '…' }), onClear: () => actions?.onCustomer?.(null) }] : []),
     ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
-    ...(statusView ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
+    ...(statusView && statusView !== model.defaultRows /* F-SA-276: the host's own view is no chip */ ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
+    // F-SA-276: the orders waiting on us (the customer page's view "Waiting on us").
+    ...(model.waiting ? [{ id: 'waiting', label: s('chips.waitingUs'), onClear: () => actions?.onWaiting?.(null) }] : []),
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
     // F-SA-221: made-to-measure orders only — removable here, fixed where the page holds it (the Made-to-measure page).
     ...(model.kind ? [{ id: 'kind', label: s('mtm.mark'), onClear: model.locked?.kind ? null : () => actions?.onKind?.(null) }] : []),
@@ -385,6 +388,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           columns={columns}
           count={items ? (count !== null && items.length < count ? s('loadedOf', { loaded: items.length, total: count }) : t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length })) : '—'}
           search={searchField}
+          right={
+            model.toolbarLink ? (
+              // F-SA-276: a real link beside the list ("Work orders of <customer> ›": its own page, its own list).
+              <Link className="fw-sheet-door" href={model.toolbarLink.href}>
+                {model.toolbarLink.label}
+              </Link>
+            ) : undefined
+          }
           tools={
             <>
               {switcher /* B-TH-226 */}
@@ -403,7 +414,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
-          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => (id === MTM_VIEW ? actions?.onKind?.('mtm', 'open') : actions?.onRows?.(id as RowView)) /* F-SA-221 */ }}
+          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
@@ -438,7 +449,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           focusRow={model.focusRow}
         />
       )}
-      {model.rows !== 'open' && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
+      {model.rows !== 'open' && model.rows !== model.defaultRows /* F-SA-276 */ && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
@@ -572,17 +583,32 @@ function LayoutSwitchFor({ model, actions, held }: { model: OrdersListModel; act
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
 // F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
-export function builtInViewsOf(model: Pick<OrdersListModel, 'customer'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
+// F-SA-276: + "Waiting on us" (`waiting=us` with the open orders); a host's `views` names which it offers, in its order.
+export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
   const name = model.customer?.name ?? null
   const hint = name ? { hint: s('views.ofCustomer', { customer: name }) } : {}
-  return [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }]
+  const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }]
+  if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW)
+  return model.views.flatMap((id) => all.filter((view) => view.id === id))
 }
 
 /** F-SA-221: the built-in view "Made-to-measure" (`kind=mtm` + the open orders). */
 export const MTM_VIEW = 'kind:mtm'
+/** F-SA-276: the built-in view "Waiting on us" (`waiting=us` + the open orders: the customer's Work tab). */
+export const WAITING_US_VIEW = 'waiting:us'
 
 /** F-SA-221: the built-in view the address shows: "Made-to-measure" for the open made-to-measure orders, else the rows view. */
-export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind'>): string => (model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows)
+// F-SA-276: "Waiting on us" for the open orders waiting on us; another view with the waiting term is none of them.
+export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind' | 'waiting'>): string | null =>
+  model.waiting === 'us' ? (model.rows === 'open' && !model.kind ? WAITING_US_VIEW : null) : model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows
+
+/** F-SA-276: a built-in view picked — each stands alone (picking Late drops the waiting term; Waiting on us drops nothing else). */
+export function pickBuiltIn(id: string, model: Pick<OrdersListModel, 'waiting'>, actions?: Pick<OrdersListActions, 'onKind' | 'onRows' | 'onWaiting'>): void {
+  if (id === MTM_VIEW) return actions?.onKind?.('mtm', 'open')
+  if (id === WAITING_US_VIEW) return actions?.onWaiting?.('us', 'open')
+  if (model.waiting) return actions?.onWaiting?.(null, id as RowView)
+  actions?.onRows?.(id as RowView)
+}
 // ── end B-TH-243 ──
 
 // ── B-TH-225 (threads plan TH-1a, picture 23; Owner rule 2026-11-16 "every cell is a door"; features grid-F01…F30) ──────────
@@ -969,7 +995,14 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer }: 
     later({ colId: 'supervisor', headerName: s('col.supervisor'), headerTooltip: s('col.supervisorHint'), minWidth: 104, flex: 0.6, cellRenderer: SupervisorColumn, valueGetter: ({ data }: { data?: OrderRow }) => data?.production?.supervisorMark ?? '' }),
     ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
-  ] as ColDef<OrderRow>[])
+  ] as ColDef<OrderRow>[]).map((column) => withPreset(column, model.preset ?? null, wide)) // F-SA-276
+}
+
+/** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
+export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean): ColDef<OrderRow> {
+  if (!preset || column.colId === 'more') return column
+  const id = column.colId ?? ''
+  return { ...column, hide: !(preset.shown.includes(id) || (wide && !!preset.wide?.includes(id))) }
 }
 // ── end B-TH-225 ──
 

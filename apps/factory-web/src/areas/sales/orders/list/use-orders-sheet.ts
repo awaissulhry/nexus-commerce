@@ -38,6 +38,7 @@ import { useLiveBus } from '../../../../shell/live/use-live'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
 import { PIECES_COLUMNS, PRODUCTION_COLUMNS } from './sheet/model' // F-SA-275
+import { orderIdsOfChange, valueTouches, waitingFromAddress } from '../model' // F-SA-276
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -140,6 +141,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const kind = host.locked?.kind ?? kindFromAddress(params)
   // F-SA-222: a rider's orders (`?profile=`: the rider list's Open orders door).
   const profile = profileFromAddress(params)
+  // F-SA-276: the orders waiting on us (`?waiting=us`: the customer's Work tab's view "Waiting on us").
+  const waiting = waitingFromAddress(params)
   // B-TH-057 (TH-4): the server sort and the custom field filter are address terms too (a saved view and the file keep them).
   const sort = sortFromAddress(params)
   const cf = cfFromAddress(params)
@@ -150,7 +153,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const [progressShown, setProgressShown] = useState(false)
   // F-SA-275: the rows' production part only while a production column is shown (Where it is, Waiting on, Supervisor).
   const [productionShown, setProductionShown] = useState(false)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */, production: productionShown /* F-SA-275 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile, productionShown])
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */, production: productionShown /* F-SA-275 */, waiting /* F-SA-276 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile, productionShown, waiting])
   const grouped = layout === 'list' && group === 'party' && !party
   const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
@@ -168,7 +171,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
         sheetAddress(base, host, params, {
@@ -184,9 +187,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
           extra: next.extra === undefined ? extra : next.extra, // B-TH-244
           kind: next.kind === undefined ? kind : next.kind, // F-SA-221
           profile: next.profile === undefined ? profile : next.profile, // F-SA-222
+          waiting: next.waiting === undefined ? waiting : next.waiting, // F-SA-276
         }),
       ),
-    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile],
+    [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile, waiting],
   )
 
   // ── B-TH-244: the view's figures from the server (the grouped view's headers and grand total, the honest count of a door's view) ──
@@ -427,8 +431,34 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     if (statuses.length > 0) void readLanes(statuses)
   }, 900)
   // ── end F-SA-214 ──
+  // ── F-SA-276 (rule 37): values in place — a production or request event naming an order on screen reads only those rows again
+  // (`ids=`, ≤ 50, coalesced 800 ms) and swaps their values where they stand: a row never moves, is never added or removed here (a row
+  // that no longer fits the view stays until "N updates · Show"). ──
+  const onScreen = useRef<readonly string[]>([])
+  onScreen.current = (list.items ?? []).map((row) => row.id)
+  const stale = useRef(new Set<string>())
+  const rereadRows = useCoalesced(() => {
+    const ids = [...stale.current].slice(0, 50)
+    stale.current.clear()
+    if (ids.length === 0) return
+    const id = readId.current
+    listOrders(api, { ids, production: productionShown, progress: progressShown, limit: 50 })
+      .then((page) => {
+        if (id !== readId.current) return
+        const fresh = new Map(page.orders.map((row) => [row.id, row]))
+        setList((current) => ({ ...current, items: current.items?.map((row) => fresh.get(row.id) ?? row) ?? null }))
+      })
+      .catch(() => undefined)
+  }, 800)
+  // ── end F-SA-276 ──
   const live = useLive(
     (change) => {
+      // F-SA-276: the values of the rows on screen, in place (the list layout).
+      if (layout === 'list' && valueTouches(change)) {
+        const named = orderIdsOfChange(change.fields).filter((id) => onScreen.current.includes(id))
+        for (const id of named) stale.current.add(id)
+        if (named.length > 0) rereadRows()
+      }
       if (!listTouches(change)) return
       // F-SA-214: the board's lanes one by one (above); the counts follow at once.
       if (layout === 'board') {
@@ -582,6 +612,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     importer: { held: importer.held, sheet: importer.model, memory: importer.memory /* B-TH-293 */ },
     kind, // F-SA-221
     profile: profile ? { id: profile, name: rider?.id === profile ? rider.name : undefined } : null, // F-SA-222
+    waiting, // F-SA-276
     // ---- F-SA-220: the host ----
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
@@ -630,7 +661,9 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onKind: (next, view) => go({ kind: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onProfile: (next) => go({ profile: next }), // F-SA-222: the rider chip's ✕
     onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */ }),
+    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */, waiting: null /* F-SA-276 */ }),
+    // F-SA-276: the waiting term's chip ✕ and the built-in view "Waiting on us" (with its rows: the open ones).
+    onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057
     readPictures, // F-SA-212
