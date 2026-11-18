@@ -78,7 +78,7 @@ const fixed = (key: string) => `ffffffff${seedUuid(NS, `pr45:${key}`).slice(8)}`
 const staff = { pmA: fixed('user:pmA'), pmB: fixed('user:pmB'), adminAll: fixed('user:adminAll') }
 const STAFF_NAMES = { pmA: 'T Production Manager Alpha', pmB: 'T Production Manager Beta', adminAll: 'T Administrator All' }
 
-const OFFICE_PERMISSIONS: Permission[] = ['workorders.view', 'orders.view', 'production.brand.manage', 'sales.measurements.view', 'threads.read', 'threads.post', 'threads.manage', 'home.view', 'tasks.manage']
+const OFFICE_PERMISSIONS: Permission[] = ['workorders.view', 'orders.view', 'production.brand.manage', 'sales.measurements.view', 'threads.read', 'threads.post', 'threads.manage', 'home.view', 'tasks.manage', 'workorders.manage' /* fix-pr-10: the harness makes its work orders as office.all (as fix-pr-3) */]
 const grant = (permissions: Permission[], parties: 'all' | string[]) => ({ permissions, companies: 'all' as const, sites: 'all' as const, parties })
 const SESSIONS: Record<string, SessionContext> = {
   ...twoBrandSessions(T, ids.a, ids.b, OFFICE_PERMISSIONS),
