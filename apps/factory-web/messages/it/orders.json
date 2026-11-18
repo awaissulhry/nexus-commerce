@@ -756,7 +756,10 @@
     "reopened": "Le righe sono state riaperte.",
     "cancelled": "L'ordine è stato annullato.",
     "healthRaised": "Portato a A rischio: il cliente lo legge con il motivo.",
-    "healthCleared": "Segnalazione tolta: parlano di nuovo le date."
+    "healthCleared": "Segnalazione tolta: parlano di nuovo le date.",
+    "amendedTold": "Modifica {revision} applicata; scritta anche nella conversazione dell'ordine.",
+    "amendedNotTold": "Modifica {revision} applicata; le parole non sono state scritte nella conversazione dell'ordine: scrivile lì.",
+    "amendedNotReached": "Modifica {revision} applicata; nessun modo di raggiungere {customer}: aggiungi un contatto."
   },
   "stepUp": {
     "title": "Conferma che sei tu",
@@ -835,6 +838,10 @@
       "problems": "Prima sistema ciò che blocca la modifica",
       "reason": "Scrivi perché l'ordine cambia",
       "cut": "Una taglia è sotto il già tagliato: portala ai capi tagliati"
+    },
+    "tell": {
+      "words": "Parole per il cliente (facoltative)",
+      "hint": "Se spunti, vanno come nostro messaggio nella conversazione dell'ordine dopo la modifica. Mai un prezzo a parole."
     }
   },
   "editor": {
@@ -1140,10 +1147,10 @@
     "reacceptance": "Nuova accettazione del cliente",
     "onUs": {
       "title": "Tocca a noi",
-      "approvals": "Apri Approvazioni ›",
       "nothing": "Niente aspetta noi",
       "countered": "Controproposta inviata · aspetta il cliente",
-      "answer": "Rispondi in Approvazioni ›"
+      "count_one": "{count} in attesa",
+      "count_other": "{count} in attesa"
     },
     "onCustomer": {
       "title": "Tocca al cliente",
@@ -1171,6 +1178,18 @@
       "made": "Conferma v{version} fatta",
       "sent": "Conferma v{version} inviata",
       "noneHere": "Ancora niente di questo tipo"
+    },
+    "still": {
+      "title": "Ancora da fare",
+      "since": "dal {when}",
+      "open": "Apri",
+      "none": "Per le modifiche accettate non resta nulla da fare.",
+      "changeOf": "{kind} accettata · {when}",
+      "office": "Modifica dell'ufficio · {when}",
+      "madeExtra": "Fatti in più",
+      "extraLine": "Riga {line} · {words}",
+      "leftOut_one": "{count} ordine di lavoro non mostrato: è fuori da ciò che puoi aprire.",
+      "leftOut_other": "{count} ordini di lavoro non mostrati: sono fuori da ciò che puoi aprire."
     }
   },
   "compare": {
@@ -1453,7 +1472,8 @@
       "onCustomer_one": "Tocca al cliente: {count}",
       "onCustomer_other": "Tocca al cliente: {count}",
       "nothing": "Niente aspetta noi o il cliente",
-      "latest": "Ultima modifica: revisione {revision} · {date}"
+      "latest": "Ultima modifica: revisione {revision} · {date}",
+      "still": "Ancora da fare: {count}"
     },
     "linked": {
       "title": "Record collegati",
@@ -1490,5 +1510,18 @@
     "title": "File",
     "openFailed": "Impossibile aprire il file: riprova.",
     "shareFailed": "La condivisione non è riuscita: riprova."
+  },
+  "band": {
+    "asks": "{customer} chiede: {what}",
+    "answer": "Rispondi…",
+    "answerNone": "Si risponde dalla pagina dell'ordine.",
+    "askCell": "riga {line} · {size} {from} → {to}",
+    "askLine": "riga {line}",
+    "askWhole": "tutto l'ordine",
+    "moreRequests_one": "{count} altra richiesta",
+    "moreRequests_other": "Altre {count} richieste",
+    "decision_one": "Modifica delle {time}: {count} passo richiede una decisione",
+    "decision_other": "Modifica delle {time}: {count} passi richiedono una decisione",
+    "open": "Apri"
   }
 }

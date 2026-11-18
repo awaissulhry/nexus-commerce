@@ -233,3 +233,80 @@ describe('B-TH-256 — what points at the order', () => {
     expect(hook).toContain('declineRepromise(api, decline.proposalId, decline.reason, newIdempotencyKey())')
   })
 })
+
+// ── F-SA-243 (sales page plan P5, R1; 14-change-flow §3.1, §3.4; review R-5): the order page's doors to the ONE review window ──
+describe('F-SA-243: the order page opens the same review window as Home › Approvals, and keeps Still to do', () => {
+  it('the band: "<Customer> asks: … · Answer…" (the oldest waiting on us, "1 more request"), a real link to ?open= on this page', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('f-sa-243-band', locale)
+      const text = textOf(html)
+      expect(text).toContain(locale === 'en' ? 'asks: Change · line 10 · 50 6 → 4' : 'chiede: Modifica · riga 10 · 50 6 → 4')
+      expect(text).toContain(locale === 'en' ? '1 more request' : '1 altra richiesta')
+      expect(text).toContain(locale === 'en' ? 'Answer…' : 'Rispondi…')
+      expect(text).toContain(locale === 'en' ? 'Still to do: 2' : 'Ancora da fare: 2')
+    }
+    expect(draw('f-sa-243-band')).toMatch(/href="[^"]*\?tab=changes&amp;open=/)
+    // Only while a row asks THIS reader (Your turn / Needs a decision) the band says a step needs a decision (R-5).
+    expect(textOf(draw('f-sa-243-band'))).toMatch(/1 step needs a decision/)
+    expect(textOf(draw('f-sa-243-nothing-mine'))).not.toMatch(/needs? a decision/)
+  })
+
+  it('Changes: Answer… on each waiting request (no more "Answer in Approvals ›"), Still to do under its change with state, owner and door', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw('f-sa-243-changes', locale))
+      for (const words of locale === 'en' ? ['Still to do', 'Your turn', 'Waiting for planning', 'Planning', 'WO-00021: make 50 6 → 4'] : ['Ancora da fare', 'Tocca a te', 'Aspetta la pianificazione', 'Pianificazione']) expect(text, words).toContain(words)
+      expect(text).not.toContain(locale === 'en' ? 'Answer in Approvals' : 'Rispondi in Approvazioni')
+    }
+    const html = draw('f-sa-243-changes')
+    expect(html).toContain('id="still-to-do"')
+    // The work-order change opens Home › Approvals' window on it; the extra pieces' row its work order's page.
+    expect(html).toContain('/home/approvals?open=0190f0e2-9090-7000-8000-000000000001')
+    expect(textOf(draw('f-sa-243-nothing-mine'))).toContain('1 work order not shown')
+  })
+
+  it('the pure parts: the request in words, the band only for rows that ask me, rows grouped under their change, each row’s door', async () => {
+    const { askingOf, askWordsOf, decisionBandOf, stillDoorOf, stillGroupsOf } = await import('./changes/model')
+    const say = (key: string, params?: Record<string, string | number>) => `${key}:${JSON.stringify(params ?? {})}`
+    const request = { kind: 'CHANGE' as const, wholeOrder: false, requestedDate: null, cells: [1, 2, 3, 4].map((seq) => ({ lineId: `l${seq}`, seq, style: null, colourway: null, size: 'M', before: 4, asked: 2, askedColourway: null })) }
+    expect(askWordsOf(request, { kind: 'Change', say, day: String }).split(' · ')).toHaveLength(5) // the kind, three cells, "…"
+    expect(askingOf([])).toBeNull()
+    const rows = [
+      { kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: 'c1', number: null }, words: { en: 'a', it: 'a' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: 'r1' },
+      { kind: 'REPROMISE', ref: { type: 'RePromise', id: 'p1', number: null }, words: { en: 'b', it: 'b' }, since: '2026-11-17T14:00:00Z', waitingOn: 'SALES', mayAct: true, requestId: null },
+    ]
+    expect(decisionBandOf(rows)).toEqual({ count: 1, since: '2026-11-17T14:00:00Z', requestId: null })
+    expect(decisionBandOf(rows.map((row) => ({ ...row, mayAct: false })))).toBeNull()
+    expect(stillGroupsOf(rows, []).map((group) => group.requestId)).toEqual(['r1', null])
+    const place = { prefix: '/w/DEMO', record: '/w/DEMO/sales/orders/o1', address: (ref: { type: string; id: string }) => `/records/${ref.type}/${ref.id}` }
+    expect(stillDoorOf(rows[0]!, place)).toBe('/w/DEMO/home/approvals?open=c1')
+    expect(stillDoorOf(rows[1]!, place)).toBe('/w/DEMO/sales/orders/o1?tab=overview')
+    expect(stillDoorOf({ kind: 'TELL_WORKSHOP', ref: null }, place)).toBeNull()
+  })
+
+  it('the page mounts the door (?open= in its own address, the tab kept: Esc returns to the same tab and scroll), the window and Decide for <customer>', async () => {
+    const page = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('useRequestReviewDoor({')
+    expect(page).toContain('orderId: readyId,')
+    expect(page).toContain('<CustomerOverrideProvider')
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<RequestDoorWindow door={model.requestDoor.parts} />')
+    expect(view).toContain('<RequestBandNotices order={order} model={model} />')
+    const { doorAddress } = await import('../../../home/approvals/requests/model')
+    expect(doorAddress('?tab=changes', 'r1')).toBe('?tab=changes&open=r1')
+    expect(doorAddress('?tab=changes&open=r1', null)).toBe('?tab=changes')
+    const section = readFileSync(new URL('./view/RequestsSection.tsx', import.meta.url), 'utf8')
+    expect(section).not.toContain('/home/approvals`}>{t(\'changes.onUs.answer\')}')
+  })
+
+  it('every new word in it + en (the band, Still to do, the amend review tick)', async () => {
+    const { CATALOGUE, placeholdersOf } = await import('../../../../lib/i18n/messages')
+    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'band.askCell', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', 'changes.onUs.count_one', 'changes.still.title', 'changes.still.since', 'changes.still.open', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.madeExtra', 'changes.still.extraLine', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', 'notice.amendedTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
+    for (const key of keys) {
+      expect(CATALOGUE.en.orders?.[key]?.trim(), `en ${key}`).toBeTruthy()
+      expect(CATALOGUE.it.orders?.[key]?.trim(), `it ${key}`).toBeTruthy()
+      expect(placeholdersOf(CATALOGUE.it.orders?.[key] ?? ''), key).toEqual(placeholdersOf(CATALOGUE.en.orders?.[key] ?? ''))
+    }
+    expect(CATALOGUE.en.orders?.['changes.onUs.answer']).toBeUndefined()
+  })
+})
+// ── end F-SA-243 ──

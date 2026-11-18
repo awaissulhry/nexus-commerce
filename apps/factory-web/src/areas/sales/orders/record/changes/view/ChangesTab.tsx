@@ -15,7 +15,7 @@ import { ChangesDepth } from '../../../changes-depth/view/ChangesDepth' // B-W2b
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../../view/OrderRecordView'
 import { DocumentsTab } from '../../view/DocumentsTab'
-import { RequestsSection } from '../../view/RequestsSection'
+import { RequestsSection, StillToDo } from '../../view/RequestsSection'
 import { HISTORY_CHIPS, historyFor, historyOf, type HistoryChip, type HistoryEntry } from '../model'
 
 /**
@@ -35,6 +35,8 @@ export function ChangesTab({ order, model, actions }: { order: Order; model: Ord
   return (
     <div className="fw-so-stack">
       <RequestsSection order={order} model={model} actions={actions} />
+      {/* F-SA-243: Still to do under each accepted change (#still-to-do: the band's "Open" lands here). */}
+      <StillToDo order={order} model={model} />
       <section id="confirmation" className="fw-so-anchor" aria-labelledby="fw-so-confirmation-title">
         <DocumentsTab order={order} model={model} actions={actions} />
       </section>

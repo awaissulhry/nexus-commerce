@@ -38,6 +38,9 @@ import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/n
 // ---- F-SA-232: Overview, the first tab; the band's health and the customer's urgency from the production read ----
 import { BandHealth, BandUrgency, OverviewTab } from './OverviewTab'
 import { FilesTab } from './FilesTab' // F-SA-237
+// F-SA-243: the order page's doors to the ONE review window, its notices and Still to do.
+import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
+import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
 // ---- end F-SA-232
 
@@ -341,6 +344,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           <GateNotices model={model.links} prefix={model.prefix} />
           {/* B-W2b-323: the yes the order waits for. */}
           {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+          {/* F-SA-243: after an answer the window's own notice; "<Customer> asks: … · Answer…" and "Change of hh:mm: N steps need a
+              decision · Open" (only while a row asks this reader) — one banner place, the most serious first. */}
+          {model.requestDoor && <RequestDoorNoticeBanner door={model.requestDoor.parts} />}
+          <RequestBandNotices order={order} model={model} />
           {/* B-W2b-368: the made-to-measure units the order waits for, each with its factory review. */}
           {model.reviewBanner}
           {order.reapprovalNeededAt && !isFinal(order) && (
@@ -397,6 +404,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
+      {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}
+      {model.requestDoor && <RequestDoorWindow door={model.requestDoor.parts} />}
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
       <DeclineDialog model={model.links} actions={actions?.links} />
       {/* F-SA-230: the production lane's own dialogs, mounted as they are. */}

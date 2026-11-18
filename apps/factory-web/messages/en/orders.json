@@ -756,7 +756,10 @@
     "reopened": "The lines were reopened.",
     "cancelled": "The order was cancelled.",
     "healthRaised": "Raised to At risk: the customer reads it with its reason.",
-    "healthCleared": "The raise is cleared: the dates speak again."
+    "healthCleared": "The raise is cleared: the dates speak again.",
+    "amendedTold": "Amendment {revision} applied; also written in the order's conversation.",
+    "amendedNotTold": "Amendment {revision} applied; the words were not written in the order's conversation: write them there.",
+    "amendedNotReached": "Amendment {revision} applied; no way to reach {customer}: add a contact."
   },
   "stepUp": {
     "title": "Confirm it's you",
@@ -835,6 +838,10 @@
       "problems": "Fix what stops the amendment first",
       "reason": "Say why the order changes",
       "cut": "A size is under what is already cut: raise it to the pieces cut"
+    },
+    "tell": {
+      "words": "Words for the customer (optional)",
+      "hint": "Ticked, they go as our message in the order's conversation after the amendment. Never a price in words."
     }
   },
   "editor": {
@@ -1140,10 +1147,10 @@
     "reacceptance": "Customer re-acceptance",
     "onUs": {
       "title": "Waiting on us",
-      "approvals": "Open Approvals ›",
       "nothing": "Nothing waits on us",
       "countered": "Counter-offer sent · waits for the customer",
-      "answer": "Answer in Approvals ›"
+      "count_one": "{count} waiting",
+      "count_other": "{count} waiting"
     },
     "onCustomer": {
       "title": "Waiting on the customer",
@@ -1171,6 +1178,18 @@
       "made": "Confirmation v{version} made",
       "sent": "Confirmation v{version} sent",
       "noneHere": "Nothing of this kind yet"
+    },
+    "still": {
+      "title": "Still to do",
+      "since": "since {when}",
+      "open": "Open",
+      "none": "Nothing left to do for the accepted changes.",
+      "changeOf": "{kind} accepted · {when}",
+      "office": "Office change · {when}",
+      "madeExtra": "Made extra",
+      "extraLine": "Line {line} · {words}",
+      "leftOut_one": "{count} work order not shown: it is outside what you can open.",
+      "leftOut_other": "{count} work orders not shown: they are outside what you can open."
     }
   },
   "compare": {
@@ -1453,7 +1472,8 @@
       "onCustomer_one": "Waiting on the customer: {count}",
       "onCustomer_other": "Waiting on the customer: {count}",
       "nothing": "Nothing waits on us or on the customer",
-      "latest": "Latest change: revision {revision} · {date}"
+      "latest": "Latest change: revision {revision} · {date}",
+      "still": "Still to do: {count}"
     },
     "linked": {
       "title": "Linked records",
@@ -1490,5 +1510,18 @@
     "title": "Files",
     "openFailed": "The file could not be opened: try again.",
     "shareFailed": "Sharing did not go through: try again."
+  },
+  "band": {
+    "asks": "{customer} asks: {what}",
+    "answer": "Answer…",
+    "answerNone": "Answered from the order's page.",
+    "askCell": "line {line} · {size} {from} → {to}",
+    "askLine": "line {line}",
+    "askWhole": "the whole order",
+    "moreRequests_one": "{count} more request",
+    "moreRequests_other": "{count} more requests",
+    "decision_one": "Change of {time}: {count} step needs a decision",
+    "decision_other": "Change of {time}: {count} steps need a decision",
+    "open": "Open"
   }
 }
