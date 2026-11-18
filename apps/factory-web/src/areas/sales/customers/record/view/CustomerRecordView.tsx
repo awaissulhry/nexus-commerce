@@ -17,6 +17,8 @@ import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { rightRef } from '../../../../../lib/i18n/rights' // F-SA-271
 import { CUSTOMER_MONEY_NAMESPACE } from '../../money/model'
 import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overview'
+import { MoneyTab } from './MoneyTab' // F-SA-273
+import { overdueOf } from '../../money/model' // F-SA-273
 
 /**
  * SCR-033 Customer record (design sales.customers "records: Customer"; F-SA-270, sales page plan N5, picks P10, R5): the customer's
@@ -119,7 +121,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -134,11 +136,13 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   // Until the Work and Quotes & incoming lists are drawn (F-SA-276, F-SA-277), each keeps today's rows of its kind.
   const ordersCount = model.orders.items && !model.orders.more ? model.orders.items.length : null
   const quotesCount = model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
+  const overdueCount = moneyModel?.can.receivables ? (moneyModel.ageing.items ? (overdueOf(moneyModel.ageing.items, party.id)?.invoices ?? 0) : null) : undefined
   const tabItems: TabItem[] = tabs.map((id) => ({
     id,
     href: `${recordPath}?tab=${id}`,
     label: t(`${side}.tab.${id}`),
-    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? ordersCount : id === 'quotes' ? quotesCount : undefined,
+    // F-SA-273: Money counts the overdue invoices (receivables.view; null while reading).
+    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? ordersCount : id === 'quotes' ? quotesCount : id === 'money' ? overdueCount : undefined,
   }))
   // F-SA-271: the primary — Activate a prospect, New order for an active customer (orders.manage), none when blocked or archived;
   // Check VIES goes into ⋯ (and stays in Terms › VIES).
@@ -188,7 +192,8 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           {/* F-SA-271: the customer's quotes (the two lists of Quotes & incoming come with F-SA-277). */}
           {tab === 'quotes' && <DealsTab model={model} actions={actions} only="quote" />}
           {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} />}
-          {tab === 'money' && <div className="fw-pty-stack">{[...(overview?.numbers ?? []), ...(depth?.numbers ?? [])].length > 0 && <MetricStrip metrics={[...(overview?.numbers ?? []), ...(depth?.numbers ?? [])]} />}</div>}
+          {/* F-SA-273: Money — key numbers, credit, open invoices, the open orders' deposits and balances, payment terms. */}
+          {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} />}
           {tab === 'people' && (
             <div className="fw-pty-stack">
               <AddressesCard model={model} party={party} actions={actions} editable={editable} />

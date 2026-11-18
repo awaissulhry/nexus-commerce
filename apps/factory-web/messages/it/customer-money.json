@@ -69,5 +69,41 @@
     "rate_limited": "Troppi tentativi: attendi un momento.",
     "invalid": "Rifiutato così com'è.",
     "internal": "Qualcosa è andato storto."
+  },
+  "tab": {
+    "openToPay": "Da pagare",
+    "openToPayHint": "Tutte le fatture aperte",
+    "nothingOpen": "Niente di aperto",
+    "depositsWaiting": "Acconti in attesa",
+    "depositsWaitingHint": "Ordini aperti con l’acconto richiesto",
+    "credit": "Fido",
+    "noLimit": "Nessun fido impostato",
+    "changeLimit": "Cambia fido…",
+    "changeLimitHeld": "Per cambiare un fido serve il permesso di impostare i fidi.",
+    "paymentTerms": "Condizioni di pagamento",
+    "editTerms": "Modifica in Condizioni e requisiti",
+    "openInvoices": "Fatture aperte",
+    "noOpenInvoice": "Nessuna fattura aperta",
+    "bucket": {
+      "NOT_DUE": "Non scaduto",
+      "D1_30": "1–30",
+      "D31_60": "31–60",
+      "D61_90": "61–90",
+      "OVER_90": "90+"
+    },
+    "openStatement": "Apri estratto conto",
+    "deposits": "Acconti e saldi degli ordini aperti",
+    "noOrderOwes": "Nessun ordine aperto deve denaro",
+    "deposit": {
+      "NOT_NEEDED": "Nessun acconto",
+      "MISSING": "Acconto non chiesto",
+      "OPEN": "Acconto aperto",
+      "PAID": "Acconto pagato",
+      "WAIVED": "Acconto rinunciato"
+    },
+    "depositDue": "scade il {date}",
+    "paid": "pagato {amount}",
+    "balance": "da pagare {amount}",
+    "seeAll": "Vedi tutti · Lavori › Tutti gli ordini"
   }
 }

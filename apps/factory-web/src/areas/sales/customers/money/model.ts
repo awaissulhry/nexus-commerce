@@ -1,4 +1,5 @@
 import type { AgeingRow } from '../../../finance/receivables/api'
+import type { OpenOrderMoney } from './api' // F-SA-273
 import { OPEN_RETURN_STATUSES, type CustomerComplaint, type CustomerReturn } from './api'
 
 /**
@@ -14,11 +15,23 @@ export interface CustomerMoneyCan {
   readonly price: boolean
   readonly returns: boolean
   readonly complaints: boolean
+  // F-SA-273: the Money tab's cards — the open orders' deposits and balances (orders.view), the credit (sales.credit.view), its one editor (sales.credit.limits).
+  readonly orders?: boolean
+  readonly credit?: boolean
+  readonly creditLimits?: boolean
 }
 
 export function customerMoneyCanOf(permissions: readonly string[]): CustomerMoneyCan {
   const held = new Set(permissions)
-  return { receivables: held.has('receivables.view'), price: held.has('money.price'), returns: held.has('sales.returns.view'), complaints: held.has('quality.complaints.view') }
+  return {
+    receivables: held.has('receivables.view'),
+    price: held.has('money.price'),
+    returns: held.has('sales.returns.view'),
+    complaints: held.has('quality.complaints.view'),
+    orders: held.has('orders.view'), // F-SA-273
+    credit: held.has('sales.credit.view'), // F-SA-273
+    creditLimits: held.has('sales.credit.limits'), // F-SA-273
+  }
 }
 
 /** What one customer owes late: an amount per currency (absent without the price grain), the oldest days late, the invoices. */
@@ -70,3 +83,43 @@ export function openAfterSales(returns: readonly CustomerReturn[], complaints: r
 
 /** Finance › Receivables & credit filtered to the customer (the API's own `partyId`). */
 export const receivablesOfCustomer = (prefix: string, partyId: string): string => `${prefix}/finance/receivables?party=${encodeURIComponent(partyId)}`
+
+// ── F-SA-273 (sales page plan N5, pick P10; 11-customer-page §5): the Money tab ──
+/** What the customer still owes, per currency (the ageing rows of every company summed): open, overdue, the five buckets, invoices. */
+export interface OpenToPay {
+  readonly currency: string
+  readonly open: number
+  readonly overdue: number
+  readonly buckets: Readonly<Record<string, number>>
+  readonly invoices: number
+  readonly daysLate: number | null
+  /** The company each statement opens at (the first row's of the currency). */
+  readonly companyId: string
+}
+
+export function openToPayOf(rows: readonly AgeingRow[], partyId: string): OpenToPay[] {
+  const out = new Map<string, { currency: string; open: number; overdue: number; buckets: Record<string, number>; invoices: number; daysLate: number | null; companyId: string }>()
+  for (const row of rows.filter((entry) => entry.customer.id === partyId)) {
+    const now = out.get(row.currency) ?? { currency: row.currency, open: 0, overdue: 0, buckets: {}, invoices: 0, daysLate: null, companyId: row.company.id }
+    now.open += row.open ?? 0
+    now.overdue += row.overdue ?? 0
+    for (const [bucket, amount] of Object.entries(row.buckets ?? {})) now.buckets[bucket] = (now.buckets[bucket] ?? 0) + (amount ?? 0)
+    now.invoices += row.invoices
+    if (row.daysLate !== null && (now.daysLate === null || row.daysLate > now.daysLate)) now.daysLate = row.daysLate
+    out.set(row.currency, now)
+  }
+  return [...out.values()].sort((a, b) => a.currency.localeCompare(b.currency))
+}
+
+/** Finance › Receivables & credit's statement of the customer for a company and a currency. */
+export const statementOf = (prefix: string, partyId: string, companyId: string, currency: string): string =>
+  `${prefix}/finance/receivables?statement=${encodeURIComponent(partyId)}&company=${encodeURIComponent(companyId)}&currency=${encodeURIComponent(currency)}`
+
+/** The open orders that owe money, the largest balance first (no balance without the price grain: then by number), the first 10. */
+export const DEPOSITS_SHOWN = 10
+export function depositsAndBalances(orders: readonly OpenOrderMoney[]): { readonly rows: OpenOrderMoney[]; readonly owing: number; readonly depositsWaiting: number } {
+  const owing = orders.filter((order) => (order.balance ?? 0) > 0 || order.deposit.state === 'OPEN' || order.deposit.state === 'MISSING')
+  const sorted = [...owing].sort((a, b) => (b.balance ?? -1) - (a.balance ?? -1) || a.number.localeCompare(b.number))
+  return { rows: sorted.slice(0, DEPOSITS_SHOWN), owing: owing.length, depositsWaiting: orders.filter((order) => order.deposit.state === 'OPEN').length }
+}
+// ── end F-SA-273 ──

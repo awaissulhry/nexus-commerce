@@ -11,6 +11,7 @@ import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272: the supervisor card's states (made-up people of the portal demo).
 import { CustomerSupervisorCard } from '../portal/view/CustomerSupervisorCard'
 import { SUPERVISOR_CASES } from '../portal/demo'
+import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import type { Metric } from '@nexus/ui/components'
@@ -45,6 +46,13 @@ interface DepthCase {
   requirements?: RequirementsModel
   privacy?: PrivacyModel
 }
+
+/** F-SA-273: three made-up open orders of MODA-DEMO with their deposits and balances (minor units). */
+const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
+  { id: 'd0000000-0000-4000-8000-000000000271', number: 'SO-0142', currency: 'EUR', deposit: { state: 'OPEN', dueDate: '2026-12-01' }, paid: 0, balance: 420000 },
+  { id: 'd0000000-0000-4000-8000-000000000272', number: 'SO-0150', currency: 'EUR', deposit: { state: 'PAID', dueDate: null }, paid: 120000, balance: 280000 },
+  { id: 'd0000000-0000-4000-8000-000000000273', number: 'SO-0155', currency: 'EUR', deposit: { state: 'NOT_NEEDED', dueDate: null }, paid: 0, balance: 0 },
+]
 
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
@@ -189,7 +197,9 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: record('MODA-DEMO', { tab: 'work' }) },
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
     { id: 'tab-quotes', label: 'F-SA-271 · Quotes & incoming: the quotes (until its two lists, F-SA-277)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
-    { id: 'tab-money', label: 'F-SA-271 · Money (any of its rights)', model: record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }) },
+    // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
+    { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } },
+    { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel({ ...MONEY_CAN, price: false, orders: true, credit: true, creditLimits: false }, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } },
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).
