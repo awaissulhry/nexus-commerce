@@ -34,6 +34,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
+import { browserAddress } from '../../../../lib/api/browser-address'
 
 /**
  * `/w/<company>/sales/orders` (SCR-038): reads the orders of the saved rows view and the search from the address (the
@@ -307,7 +308,7 @@ function OrdersContainer() {
   const companyNamed = company ? { id: company, name: session.companies.find((entry) => entry.id === company)?.name ?? company } : null
   const loadPicture = useCallback<PictureLoader>(async (orderId) => {
     const picture = await getOrderPicture(api, orderId)
-    return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null
+    return picture.small ? { url: browserAddress(picture.small.url) /* end check: the local store's path through /api */, expiresAt: picture.small.expiresAt } : null
   }, [api])
   // ── end B-TH-225 ──
 

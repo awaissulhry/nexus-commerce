@@ -22,6 +22,7 @@ import { QuoteSpeed } from '../speed/QuoteSpeed'
 // ---- B-TH-257 (X-SAL-QUO-LIST.grid-F03): the New messages column, B-TH-230's one read per page ----
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
+import { browserAddress } from '../../../../lib/api/browser-address'
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -303,7 +304,7 @@ function QuotesContainer() {
   const loadPicture = useCallback<PictureLoader>(
     async (quoteId) => {
       const picture = await readQuotePicture(api, quoteId)
-      return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null
+      return picture.small ? { url: browserAddress(picture.small.url) /* end check: the local store's path through /api */, expiresAt: picture.small.expiresAt } : null
     },
     [api],
   )

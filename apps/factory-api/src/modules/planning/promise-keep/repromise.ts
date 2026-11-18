@@ -361,8 +361,15 @@ export interface AcceptProposals {
  * already, it has no making site, the person may not propose dates there (planning.promise.manage), a re-promise of it waits for
  * sales already, or its checks refuse it (a certificate, a day). Read in the caller's client before the accept's command;
  * `proposeInCommand` writes each inside it.
+ * fix-pr-5 (lead decision, B-PR-27b): `byAccept` — the accept itself is the decision (ship what is ready, Sales' accept): the
+ * proposal is made inside the accept's command under the accepter's orders.manage over the order (its caller checked it), so
+ * planning.promise.manage is not asked; the proposal then waits as any other (accepted or declined as today).
  */
-export async function acceptProposals(db: Reader, context: OfficeContext, input: { readonly orderId: string; readonly date: BusinessDate | null; readonly only?: ReadonlyMap<string, ReadonlySet<string>> | undefined; readonly now: Date }): Promise<AcceptProposals> {
+export async function acceptProposals(
+  db: Reader,
+  context: OfficeContext,
+  input: { readonly orderId: string; readonly date: BusinessDate | null; readonly only?: ReadonlyMap<string, ReadonlySet<string>> | undefined; readonly now: Date; readonly byAccept?: boolean | undefined },
+): Promise<AcceptProposals> {
   const lines = await db.salesOrderLine.findMany({ where: { orderId: input.orderId, kind: { in: ['SIZE_GRID', 'MADE_TO_MEASURE'] }, closedShortQuantity: null }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } })
   const wanted = input.only ? lines.filter((line) => input.only!.has(line.id)) : lines
   if (input.date === null) return { checked: [], skipped: wanted.map((line) => ({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.NO_DATE })) }
@@ -378,7 +385,8 @@ export async function acceptProposals(db: Reader, context: OfficeContext, input:
       skipped.push({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.NO_SITE })
       continue
     }
-    if (!mayPromiseAt(context, PLANNING_PROMISE_VIEW, site) || !mayPromiseAt(context, PLANNING_PROMISE_MANAGE, site)) {
+    // fix-pr-5: an accept that is the decision (byAccept) needs no promise right at the site (its caller holds orders.manage).
+    if (input.byAccept !== true && (!mayPromiseAt(context, PLANNING_PROMISE_VIEW, site) || !mayPromiseAt(context, PLANNING_PROMISE_MANAGE, site))) {
       skipped.push({ orderLineId: line.id, seq: line.seq, words: REPROMISE_SKIP_WORDS.NO_RIGHT })
       continue
     }

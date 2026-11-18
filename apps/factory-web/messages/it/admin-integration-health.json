@@ -390,6 +390,10 @@
           "name": "Report giornaliero di produzione",
           "what": "Ogni 15 minuti: il report giornaliero va agli iscritti, alla loro ora."
         },
+        "issueEscalation": {
+          "name": "Segnalazioni dei clienti senza risposta",
+          "what": "Ogni 15 minuti: una segnalazione di un cliente ancora senza risposta passa al vice (o ai responsabili di produzione) dopo 1 giorno lavorativo, al titolare e all'amministratore dopo 2, alle 08:00 ora dell'azienda."
+        },
         "scanFindings": {
           "name": "Controlli delle scansioni",
           "what": "Ogni ora: si segnalano le scansioni che sembrano sbagliate."
