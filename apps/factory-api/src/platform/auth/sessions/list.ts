@@ -10,6 +10,7 @@ import { requireContext, type OfficeContext } from '../../../core/context'
 import { officeSessionOf } from './authenticator'
 import type { OfficeAuth } from './office-auth'
 import { securityRulesIn } from './rules'
+import { assertEveryCustomer } from '../every-customer'
 
 /**
  * Active sessions and devices (B-W2b-404; PLT-064; design shell.profile "Where I'm signed in" with the confirm "Sign out
@@ -133,6 +134,7 @@ async function assertAnotherPerson(client: FactoryClient | CommandTx, context: O
 
 /** GET /auth/users/:userId/sessions: a person's live sessions (Admin › Users › Sessions & sign-ins). */
 export async function userSessions(auth: OfficeAuth, request: FastifyRequest, userId: string) {
+  assertEveryCustomer(request, 'users.sessions.manage') // fix-pr-8
   const context = officeContextOf(request)
   const live = await request.withClient(async (client) => {
     await assertAnotherPerson(client, context, userId)
@@ -143,6 +145,7 @@ export async function userSessions(auth: OfficeAuth, request: FastifyRequest, us
 
 /** POST /auth/users/:userId/sessions/end: ends every session of a person (an administrator's). */
 export async function endUserSessions(auth: OfficeAuth, request: FastifyRequest, userId: string, body: { readonly reason?: string | undefined }) {
+  assertEveryCustomer(request, 'users.sessions.manage') // fix-pr-8
   const context = officeContextOf(request)
   const { result } = await auth.command(context, { name: 'users.endSessions', input: { userId, ...body } }, async ({ tx, now, audit }) => {
     await assertAnotherPerson(tx, context, userId)

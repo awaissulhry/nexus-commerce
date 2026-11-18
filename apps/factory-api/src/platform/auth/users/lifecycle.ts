@@ -11,6 +11,8 @@ import { endSessions } from '../sessions/session-store'
 import { handBackInCommand } from '../../portal/tasks/people'
 import type { UserChangeBody } from './contract'
 import { adminFacts, userStatus } from './status'
+import { assertEveryCustomer } from '../every-customer'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 
 /**
  * The user list and the lifecycle commands (features PLT-015, PLT-016, PLT-070). Each change is ONE command with its
@@ -31,6 +33,8 @@ import { adminFacts, userStatus } from './status'
  */
 
 export type UserChange = 'suspend' | 'reactivate' | 'deactivate' | 'require-password-reset'
+/** fix-pr-8: each change's permission, as the manifest names it. */
+const CHANGE_PERMISSION: Readonly<Record<UserChange, Permission>> = { suspend: 'users.suspend', reactivate: 'users.reactivate', deactivate: 'users.deactivate', 'require-password-reset': 'users.resetPassword' }
 
 const TARGET: Readonly<Record<Exclude<UserChange, 'require-password-reset'>, UserStatus>> = {
   suspend: 'SUSPENDED',
@@ -39,6 +43,7 @@ const TARGET: Readonly<Record<Exclude<UserChange, 'require-password-reset'>, Use
 }
 
 export async function listUsers(auth: OfficeAuth, request: FastifyRequest) {
+  assertEveryCustomer(request, 'users.view') // fix-pr-8
   const now = auth.clock.now()
   const { rows, roles } = await request.withClient(async (client) => {
     const rows = await client.user.findMany({
@@ -87,6 +92,7 @@ export async function listUsers(auth: OfficeAuth, request: FastifyRequest) {
 
 export async function changeUser(auth: OfficeAuth, request: FastifyRequest, userId: string, body: UserChangeBody, change: UserChange) {
   const context = requireContext(request) as OfficeContext
+  assertEveryCustomer(request, CHANGE_PERMISSION[change]) // fix-pr-8
   requireStepUp(auth, request)
   if (userId === context.actorId) throw new ForbiddenError('You cannot change the access of your own account here; ask another administrator.')
 
