@@ -623,6 +623,10 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
       ['HOLD', 'OPEN'],
     ])
     expect((await outbox('order_change_request.batch_asked')).map((row) => row.payload).filter((payload) => payload.batchId === G.holdBatch)).toEqual([{ batchId: G.holdBatch, partyId: world.ids.a, kind: 'HOLD', count: 3 }])
+    // fix-pr-7: the worker's job right after the ask, as it runs (seconds, before any answer): the supervisor is told of the batch
+    // ask while it waits ("asks to pause 3 orders"); a batch already answered tells nobody of the ask (brand-production rules).
+    await settle()
+    expect(keysOf(await bellOf(supervisor))).toContain('notifications.production.customerAskedHoldMany')
 
     // Home › Approvals: ONE row for the batch; a person limited to B reaches none of it.
     const today = await ok(planner, 'GET', '/home/today?kind=ORDER_CHANGE_REQUEST&limit=200')
@@ -640,10 +644,9 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     for (const workOrder of [WO.p1, WO.p2, WO.p3]) expect(await workOrderStatus(workOrder.id)).toBe('ON_HOLD')
 
     await settle()
-    // A reads its pause; its supervisor was told of the batch ask.
+    // A reads its pause.
     expect(rowIn(await listOfA(), A.p1.orderId).marks).toMatchObject({ paused: true })
     expect((rowIn(await listOfA(), A.p1.orderId).marks.words as Json[]).map((words) => words.en)).toContain('Paused at your request')
-    expect(keysOf(await bellOf(supervisor)).some((key) => key.startsWith('notifications.production.customerAsked'))).toBe(true)
     expect((await fresh(buyerA)).some((notice) => notice.messageKey === 'portal.production.hold_accepted')).toBe(true)
     expect(await fresh(productionB)).toEqual([])
   })
