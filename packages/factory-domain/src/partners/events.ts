@@ -9,11 +9,12 @@ import { PRODUCTION_SHARE_LEVELS } from '../production-brand/levels'
  * emits them in the commands that make the change (an office person's, a partner admin's, or the scheduler's). Their own
  * module folder: the code is factory-domain auth/partners.
  *
- *   partner_portal.settings_changed   a party's portal was switched on or off, its limits (people, roles) or its production
- *                                     progress switch (Owner answer C1) changed; B-PR-14: or its production limits (level,
- *                                     urgency switch, urgent quota, production asks, named approver, second person) — the
- *                                     payload carries the level, the switch, the quota and the asks, NEVER the supervisor
- *                                     or the backup (brand_production.supervisor_changed, office only: PW-15)
+ *   partner_portal.settings_changed   a party's portal was switched on or off, its limits (people, roles) changed, or
+ *                                     B-PR-14: its production limits (level — what it sees of its production, Owner answer
+ *                                     C1 —, urgency switch, urgent quota, production asks, named approver, second person) —
+ *                                     the payload carries the level, the switch, the quota and the asks, NEVER the
+ *                                     supervisor or the backup (brand_production.supervisor_changed, office only: PW-15).
+ *                                     B-PR-40: the old progress switch is gone; `progressShared` is no longer sent
  *   partner_user.invited              a person of a party was invited to its portal (or invited again)
  *   partner_user.changed              a portal person's role, capabilities, end of access or status changed, or their
  *                                     open invitation was revoked
@@ -34,13 +35,16 @@ export const events = [
   defineEvent({
     type: 'partner_portal.settings_changed',
     context: 'partners',
-    description: "A party's portal was switched on or off, or its limits (people, roles), its production-progress switch or its production limits changed.",
+    description: "A party's portal was switched on or off, or its limits (people, roles) or its production limits (what it sees of its production, urgency, asks, approver, second person) changed.",
     payload: z.strictObject({
       partyId: z.uuid(),
       fields: z.array(z.string()),
       portalOn: z.boolean(),
-      /** Kept in every contract until B-PR-40 drops it: derived from the level (PROGRESS or more). */
-      progressShared: z.boolean(),
+      /**
+       * B-PR-40: no longer sent (the old progress switch is dropped; productionLevel says it, PROGRESS or more). Optional only so
+       * an event written before B-PR-40 still parses (the livePartyId precedent, events/define).
+       */
+      progressShared: z.boolean().optional(),
       // B-PR-14: the production limits after the change (never the supervisor, the backup or the approver: PW-15). Every emit
       // sends them; optional only so an event written before B-PR-14 still parses (the livePartyId precedent, events/define).
       productionLevel: z.enum(PRODUCTION_SHARE_LEVELS).optional(),

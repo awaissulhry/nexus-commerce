@@ -28,7 +28,7 @@ import { seed as seedRoles } from './roles'
  *                switches it on) and the three roles allowed.
  *   B-PR-15      (production plan, schema wave 3/5; the seeds B-PR-14 left) a fourth person of Seed Brand Two with the customer
  *                Production role (customer-production: its orders in production, no prices), that role allowed too, and
- *                its share level PROGRESS (production progress shared: progressShared in step). P1 keeps STATUS: the portal
+ *                its share level PROGRESS (production progress shared; B-PR-40: the level alone). P1 keeps STATUS: the portal
  *                golden flow and the portal-orders tests read its progress as not shared, and its people fill its seats.
  *
  * Local and test databases only: the seed CLI refuses any other (src/cli.ts assertTestDatabaseUrl). Runs the auth, roles,
@@ -196,8 +196,8 @@ export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
         const row = { userId, roleId: roleIds[role]!, allCompanies: true, companyIds: [], siteIds: [], partyIds: [partyId], validFrom: T.setup, grantedById: actorId }
         await tx.roleAssignment.upsert({ where: { id: assignmentId }, create: { id: assignmentId, ...row, createdAt: T.setup }, update: row, select })
       }
-      // B-PR-15: + the Production role; its share level PROGRESS, so progressShared on (the database keeps the two in step).
-      const settings = { partyId, portalOn: false, progressShared: true, productionLevel: 'PROGRESS' as const, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer', 'customer-production'] }
+      // B-PR-15: + the Production role; its share level PROGRESS: production progress shared (B-PR-40: the level alone says it).
+      const settings = { partyId, portalOn: false, productionLevel: 'PROGRESS' as const, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer', 'customer-production'] }
       // ---- th3b fix: ONE row per party, its id the party's (the PortalSettings convention, B-W2b-152; the party's id starts with
       // ffffffff too). A second row of the party under another id made "switch the portal on" fail (the office's settings read by
       // the party, then updated by the party's id) and the portal's on/off read either row (order-news T06 red with this seed).

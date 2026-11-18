@@ -110,7 +110,6 @@ describe('at a glance', () => {
 
 const ORDERS: OrdersRead = {
   asOf: '2026-11-08T09:42:00.000Z',
-  progressShared: true,
   chips: [
     { chip: 'OPEN', count: 7 },
     { chip: 'ALL', count: 23 },
@@ -143,7 +142,8 @@ describe('your next deliveries', () => {
   })
 
   it('no % when the account does not share progress (C1); "see all" counts the Open chip; any order at all for the first visit', () => {
-    expect(nextOrderRows({ ...ORDERS, progressShared: false }, 'en', '/p/X', (day) => day)[0]!.progress).toBeNull()
+    // B-PR-40: the API sends no progressPercent then.
+    expect(nextOrderRows({ ...ORDERS, items: ORDERS.items.map((row) => ({ ...row, progressPercent: null })) }, 'en', '/p/X', (day) => day)[0]!.progress).toBeNull()
     expect(orderCounts(ORDERS)).toEqual({ open: 7, all: 23 })
     expect(orderCounts(null)).toEqual({ open: null, all: null })
     expect(nextOrderRows(null, 'en', '/p/X', (day) => day)).toEqual([])

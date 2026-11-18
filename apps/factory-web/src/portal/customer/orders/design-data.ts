@@ -148,7 +148,6 @@ function readOf(world: readonly OrderRow[], chip: OrderChip, rows: readonly Orde
   return {
     asOf: at(0),
     seesPrices,
-    progressShared: true,
     chip,
     chips: ORDER_CHIPS.map((entry) => ({ chip: entry, count: world.filter((item) => inChip(entry, item)).length, words: CHIP_WORDS[entry] })),
     count: items.length,
@@ -308,7 +307,7 @@ export function orderRecord(over: Partial<OrderRecord['order']> = {}, rest: Part
       },
     ],
     pieces: { ordered: 46, shipped: 18, open: 28, closedShort: 0 },
-    progressShared: true,
+    productionLevel: 'PROGRESS',
     shipments: { shown: 1, onTheWay: 1 },
     live: LIVE,
     ...rest,
@@ -333,7 +332,7 @@ export function mtmRecord(): OrderRecord {
   return {
     ...base,
     promiseHistory: [],
-    progressShared: false,
+    productionLevel: 'STATUS',
     shipments: { shown: 0, onTheWay: 0 },
     pieces: { ordered: 1, shipped: 0, open: 1, closedShort: 0 },
     milestones: base.milestones.map((step, index) => ({ ...step, state: index < 2 ? 'DONE' : 'TODO', date: index < 2 ? step.date : null, current: index === 2, expected: step.key === 'SHIPPED' ? dayAt(19) : null })),

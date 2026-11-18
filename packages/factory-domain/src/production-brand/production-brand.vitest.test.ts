@@ -7,7 +7,7 @@ import { PORTAL_CUSTOMER_DOCUMENTS_CONFORMITY, PORTAL_CUSTOMER_DOCUMENTS_FINANCE
 import { freezeVerdict, rulesForParty, type FreezeRuleFacts } from '../sales/order-changes/freeze'
 import { computedHealth, effectiveHealth, HEALTH_REASON_CODES, raiseProblems, raiseStands, raiseUntil, type BrandHealth } from './health'
 import { askKindsProblems, isAskOpen, openAskKinds, PRODUCTION_REQUEST_KINDS } from './kinds'
-import { maskByLevel, maskOf, PRODUCTION_SHARE_LEVELS, progressSharedOf, qualityResultsShown, shares } from './levels'
+import { maskByLevel, maskOf, PRODUCTION_SHARE_LEVELS, qualityResultsShown, shares } from './levels'
 import { CUSTOMER_PRODUCTION_ROLE } from './permissions'
 import { BRAND_STAGES, lineStageOf, movedForward, orderStageOf, type LineStageFacts } from './stages'
 import { BLOCKER_KINDS, BLOCKER_OWNER, brandSideOf, waitingOn, WAITING_ON } from './waiting'
@@ -53,7 +53,8 @@ describe('B-PR-13 share levels and their masks', () => {
     expect(maskOf('PROGRESS')).toEqual({ progress: true, gates: false, quality: false })
     expect(maskOf('GATES')).toEqual({ progress: true, gates: true, quality: false })
     expect(maskOf('QUALITY')).toEqual({ progress: true, gates: true, quality: true })
-    for (const level of PRODUCTION_SHARE_LEVELS) expect(progressSharedOf(level)).toBe(shares(level, 'progress'))
+    // B-PR-40: production progress is the level's alone (the old progressShared switch dropped): from PROGRESS on.
+    expect(PRODUCTION_SHARE_LEVELS.filter((level) => shares(level, 'progress'))).toEqual(['PROGRESS', 'GATES', 'QUALITY'])
   })
 
   it('a section the level hides leaves the read as null even when it was read; every other key passes', () => {

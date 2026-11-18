@@ -137,7 +137,6 @@ export type ProductionRow = z.infer<typeof productionRowSchema>
 const levelFields = {
   level: z.enum(PRODUCTION_SHARE_LEVELS),
   levelWords: words,
-  progressShared: z.boolean(),
   urgencyOn: z.boolean(),
   urgentUse: urgentUse.nullable(),
 }

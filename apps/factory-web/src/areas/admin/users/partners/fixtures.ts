@@ -48,7 +48,6 @@ const organisation = (access: PortalAccess, ending: number) => ({
   party: access.party,
   kinds: access.kinds,
   portalOn: access.settings.portalOn,
-  progressShared: access.settings.progressShared,
   maxUsers: access.settings.maxUsers,
   people: {
     active: access.people.filter((person) => person.status === 'ACTIVE').length,

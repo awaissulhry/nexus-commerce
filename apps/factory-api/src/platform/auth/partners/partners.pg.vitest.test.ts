@@ -101,7 +101,8 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
   it('shows the Portal access, invites a buyer with a step-up, mails the sign-in page, and the sign-in gives the roles', async () => {
     const tab = await owner.get(`/partners/${world.partyId}`)
     expect(tab.status).toBe(200)
-    expect(tab.body).toMatchObject({ kinds: ['CUSTOMER'], settings: { portalOn: true, progressShared: false }, seats: { taken: 0, max: null }, termsInForce: null })
+    expect(tab.body).toMatchObject({ kinds: ['CUSTOMER'], settings: { portalOn: true }, seats: { taken: 0, max: null }, termsInForce: null })
+    expect(tab.body.settings).not.toHaveProperty('progressShared') // B-PR-40: the level is the limits card's
     // B-PR-13: + the customer Production role.
     expect(tab.body.roles.map((role: { key: string }) => role.key)).toEqual(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-production', 'customer-viewer', 'customer-admin'])
 
@@ -174,20 +175,23 @@ describe("the limits: seats, allowed roles, the production-progress switch (PLT-
     expect(noSeat.status).toBe(409)
     expect(noSeat.body.error.message).toContain(`holds at most ${before.seats.taken}`)
 
-    const narrowed = await asOwner('post', `/partners/${world.partyId}/settings`, { maxUsers: null, allowedRoleKeys: ['customer-viewer', 'customer-admin'], progressShared: true, version: full.body.settings.version })
+    const narrowed = await asOwner('post', `/partners/${world.partyId}/settings`, { maxUsers: null, allowedRoleKeys: ['customer-viewer', 'customer-admin'], version: full.body.settings.version })
     expect(narrowed.status, JSON.stringify(narrowed.body)).toBe(200)
-    expect(narrowed.body.settings).toMatchObject({ maxUsers: null, allowedRoleKeys: ['customer-viewer', 'customer-admin'], progressShared: true })
+    expect(narrowed.body.settings).toMatchObject({ maxUsers: null, allowedRoleKeys: ['customer-viewer', 'customer-admin'] })
     const outside = await invite({ email: 'dan@brand-alpha.example', displayName: 'Dan', roleKey: 'customer-finance' })
     expect(outside.status).toBe(400)
     expect(outside.body.error.issues).toEqual([{ path: 'roleKey', message: "This organisation's portal offers only: Viewer, Admin." }])
-    expect((await events('partner_portal.settings_changed')).at(-1)).toMatchObject({ partyId: world.partyId, fields: ['progressShared', 'maxUsers', 'allowedRoleKeys'], progressShared: true })
+    const changed = (await events('partner_portal.settings_changed')).at(-1)!
+    expect(changed).toMatchObject({ partyId: world.partyId, fields: ['maxUsers', 'allowedRoleKeys'] })
+    expect(changed).not.toHaveProperty('progressShared') // B-PR-40: no longer sent
 
-    const stale = await asOwner('post', `/partners/${world.partyId}/settings`, { portalOn: true, progressShared: false, version: full.body.settings.version })
+    const stale = await asOwner('post', `/partners/${world.partyId}/settings`, { portalOn: true, version: full.body.settings.version })
     expect(stale.status).toBe(409)
     const supplier = await party(['SUPPLIER'])
+    // B-PR-40: the old progress switch is gone from the settings: the field is refused (the level is the limits card's, and
+    // that card is a customer's only).
     const refused = await asOwner('post', `/partners/${supplier}/settings`, { progressShared: true, version: 1 })
-    expect(refused.status).toBe(409)
-    expect(refused.body.error.message).toContain('only to a customer or a brand')
+    expect(refused.status).toBe(400)
     const wrongKind = await invite({ email: 'eve@supplier.example', displayName: 'Eve', roleKey: 'customer-viewer', kind: 'CUSTOMER' }, supplier)
     expect(wrongKind.status).toBe(409)
     expect(wrongKind.body.error.message).toContain('not a customer')
@@ -311,7 +315,6 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
       party: { id: alpha },
       production: {
         level: 'STATUS',
-        progressShared: false,
         urgency: { on: false, max: 3, now: 0, dormant: null, overQuota: null },
         askKinds: [],
         openAsks: [],
@@ -337,28 +340,27 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
     expect(preset.status, JSON.stringify(preset.body)).toBe(200)
     expect(preset.body.production).toMatchObject({
       level: 'PROGRESS',
-      progressShared: true,
       urgency: { on: true, max: 3, now: 0 },
       askKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'],
       openAsks: ['RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'],
       version: 2,
     })
-    // progressShared stays in every contract, derived from the level: the Portal access tab and the list say so too.
-    expect((await owner.get(`/partners/${alpha}`)).body.settings).toMatchObject({ progressShared: true })
-    expect((await owner.get('/partners')).body.organisations.find((entry: { party: { id: string } }) => entry.party.id === alpha)).toMatchObject({ progressShared: true })
+    // B-PR-40: the old progress switch is gone from every answer: the card's level says it, not the Portal access tab or the list.
+    expect(preset.body.production).not.toHaveProperty('progressShared')
+    expect((await owner.get(`/partners/${alpha}`)).body.settings).not.toHaveProperty('progressShared')
+    expect((await owner.get('/partners')).body.organisations.find((entry: { party: { id: string } }) => entry.party.id === alpha)).not.toHaveProperty('progressShared')
     // PW-S01: every change has its audit row.
     expect(await audits(alpha)).toEqual([
       expect.objectContaining({
-        before: expect.objectContaining({ productionLevel: 'STATUS', productionUrgencyOn: false, progressShared: false }),
-        after: expect.objectContaining({ productionLevel: 'PROGRESS', productionUrgencyOn: true, productionAskKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'], progressShared: true, preset: 'PRODUCTION_PARTNER' }),
+        before: expect.objectContaining({ productionLevel: 'STATUS', productionUrgencyOn: false }),
+        after: expect.objectContaining({ productionLevel: 'PROGRESS', productionUrgencyOn: true, productionAskKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'], preset: 'PRODUCTION_PARTNER' }),
       }),
     ])
     const event = (await events('partner_portal.settings_changed')).at(-1)!
     expect(event).toEqual({
       partyId: alpha,
-      fields: ['productionLevel', 'productionUrgencyOn', 'productionAskKinds', 'progressShared'],
+      fields: ['productionLevel', 'productionUrgencyOn', 'productionAskKinds'],
       portalOn: true,
-      progressShared: true,
       productionLevel: 'PROGRESS',
       productionUrgencyOn: true,
       productionUrgentMax: 3,
@@ -415,7 +417,7 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
     expect((await owner.get(card(delta))).body.production).toMatchObject({ level: 'STATUS', version: 0 })
     const made = await asOwnerPut(card(delta), { productionLevel: 'GATES', version: 0 })
     expect(made.status, JSON.stringify(made.body)).toBe(200)
-    expect((await h.db.admin.query('SELECT "portalOn", "progressShared", "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1', [delta])).rows).toEqual([{ portalOn: false, progressShared: true, level: 'GATES' }])
+    expect((await h.db.admin.query('SELECT "portalOn", "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1', [delta])).rows).toEqual([{ portalOn: false, level: 'GATES' }])
   })
 
   it("says when the customer's allowed roles leave out the Production role", async () => {
@@ -450,7 +452,7 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
     const changed = await asOwnerPut(card(theta), { productionLevel: 'QUALITY', version: read.body.production.version })
     expect(changed.status, JSON.stringify(changed.body)).toBe(200)
     const event = (await events('partner_portal.settings_changed')).at(-1)!
-    expect(Object.keys(event).sort()).toEqual(['fields', 'partyId', 'portalOn', 'productionAskKinds', 'productionLevel', 'productionUrgencyOn', 'productionUrgentMax', 'progressShared'])
+    expect(Object.keys(event).sort()).toEqual(['fields', 'partyId', 'portalOn', 'productionAskKinds', 'productionLevel', 'productionUrgencyOn', 'productionUrgentMax'])
     expect(JSON.stringify(event)).not.toContain(ownerUser.id)
     expect(JSON.stringify(event)).not.toContain(backup.id)
     const opened = await owner.post(`/partners/${theta}/preview`, { companyId: world.companyId })

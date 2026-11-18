@@ -113,7 +113,7 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
     }
   })
   for (const [partyId, max] of [[ids.a, 3], [ids.b, 2]] as const) {
-    await admin(`UPDATE "PortalSettings" SET "productionLevel" = 'PROGRESS', "progressShared" = true, "productionUrgencyOn" = true, "productionUrgentMax" = $2, version = version + 1 WHERE "partyId" = $1`, [partyId, max])
+    await admin(`UPDATE "PortalSettings" SET "productionLevel" = 'PROGRESS', "productionUrgencyOn" = true, "productionUrgentMax" = $2, version = version + 1 WHERE "partyId" = $1`, [partyId, max])
   }
 
   const colourway = (await admin<{ colourwayId: string }>('SELECT "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [w.b.salesOrderLineId]))[0]!.colourwayId

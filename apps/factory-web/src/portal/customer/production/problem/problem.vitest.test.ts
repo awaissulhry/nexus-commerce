@@ -321,7 +321,7 @@ function listModel(over: Partial<ProductionListModel> = {}): ProductionListModel
   const items = [row('b2', { problem: { state: 'WAITING_ON_US', since: '2026-11-16', on: null, inOrder: null } }), row('b3', { problem: { state: 'ANSWERED_IN', since: null, on: '2026-11-17', inOrder: { id: 'b2', number: 'SO-2026-0202', customerRef: null, yourNumber: customerNumberOf('ORDER', 4) } } }), row('b4')]
   return {
     state: 'ready',
-    read: { asOf: '2026-11-17T09:42:00.000Z', level: 'STATUS', levelWords: w('Status only'), progressShared: false, urgencyOn: false, urgentUse: null, chip: 'ALL', chips: [{ chip: 'ALL', count: 3, words: w('All') }], count: 3, items, live: { events: [] } },
+    read: { asOf: '2026-11-17T09:42:00.000Z', level: 'STATUS', levelWords: w('Status only'), urgencyOn: false, urgentUse: null, chip: 'ALL', chips: [{ chip: 'ALL', count: 3, words: w('All') }], count: 3, items, live: { events: [] } },
     chip: null,
     q: '',
     prefix: `/p/${BRAND_BETA.code}`,

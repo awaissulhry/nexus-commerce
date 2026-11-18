@@ -222,14 +222,13 @@ export function personBody(person: PartnerPerson, draft: PersonDraft): ChangeBod
 
 export interface SettingsDraft {
   portalOn: boolean
-  progressShared: boolean
   /** People at most, as typed ('' = no limit). */
   maxUsers: string
   /** The roles the portal offers ([] = every role of its kinds). */
   allowedRoleKeys: string[]
 }
 
-export const settingsDraftOf = (settings: PortalSettings): SettingsDraft => ({ portalOn: settings.portalOn, progressShared: settings.progressShared, maxUsers: settings.maxUsers === null ? '' : String(settings.maxUsers), allowedRoleKeys: [...settings.allowedRoleKeys] })
+export const settingsDraftOf = (settings: PortalSettings): SettingsDraft => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers === null ? '' : String(settings.maxUsers), allowedRoleKeys: [...settings.allowedRoleKeys] })
 
 export function settingsProblems(draft: SettingsDraft, seats: Seats): Record<string, string> {
   const out: Record<string, string> = {}
@@ -246,14 +245,10 @@ export function settingsBody(saved: PortalSettings, draft: SettingsDraft): Setti
   const before = settingsDraftOf(saved)
   const body: SettingsBody = { version: saved.version }
   if (draft.portalOn !== before.portalOn) body.portalOn = draft.portalOn
-  if (draft.progressShared !== before.progressShared) body.progressShared = draft.progressShared
   if (draft.maxUsers.trim() !== before.maxUsers) body.maxUsers = draft.maxUsers.trim() === '' ? null : Number(draft.maxUsers)
   if ([...draft.allowedRoleKeys].sort().join() !== [...before.allowedRoleKeys].sort().join()) body.allowedRoleKeys = [...draft.allowedRoleKeys]
   return Object.keys(body).length === 1 ? null : body
 }
-
-/** The production-progress switch is only a customer's or a brand's (Owner answer C1). */
-export const progressApplies = (kinds: readonly PartnerKind[]) => kinds.includes('CUSTOMER')
 
 // ---- refusals in words -------------------------------------------------------------------------------------------------
 
@@ -267,7 +262,6 @@ const CONFLICTS: ReadonlyArray<[string, string]> = [
   [PARTNER_WORDS.notInvited, 'problem.notInvited'],
   [PARTNER_WORDS.stillInvited, 'problem.stillInvited'],
   [PARTNER_WORDS.noPortalCompany, 'problem.noPortalCompany'],
-  [PARTNER_WORDS.progressOnlyCustomers, 'problem.progressOnlyCustomers'],
 ]
 
 /**

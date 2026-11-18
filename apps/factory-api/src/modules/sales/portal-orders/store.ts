@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
-import { progressSharedOf } from '@nexus/factory-domain/production-brand/levels'
+import type { ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
 import type { PromiseMove } from '@nexus/factory-domain/sales/portal-orders/promise'
 
 /**
@@ -267,10 +267,11 @@ export async function firstRelease(db: Reader, lineIds: readonly string[]): Prom
 }
 
 /**
- * The customer shares production progress (C1): its PortalSettings row, read in the tenant's scope. B-PR-14: the level decides
- * (PROGRESS or more: production-brand/levels progressSharedOf); progressShared is kept in step by the database until B-PR-40.
+ * What the customer sees of its production (C1; B-PR-14 the level, B-PR-40 the level alone: the old progress switch is dropped):
+ * its PortalSettings row's share level, read in the tenant's scope; no row of its own: Status only. Production progress shows
+ * from PROGRESS on (production-brand/levels shares(level, 'progress')).
  */
-export async function progressShared(db: Reader, partyId: string): Promise<boolean> {
+export async function shareLevelOf(db: Reader, partyId: string): Promise<ProductionShareLevel> {
   const settings = await db.portalSettings.findUnique({ where: { id: partyId }, select: { partyId: true, productionLevel: true } })
-  return settings?.partyId === partyId && progressSharedOf(settings.productionLevel)
+  return settings?.partyId === partyId ? settings.productionLevel : 'STATUS'
 }

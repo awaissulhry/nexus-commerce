@@ -30,7 +30,6 @@ function production(over: Partial<ProductionOrder> = {}): ProductionOrder {
     asOf: at(0),
     level: 'STATUS',
     levelWords: w('Status only', 'Solo lo stato'),
-    progressShared: false,
     urgencyOn: false,
     urgentUse: null,
     order: { id: ORDER_ID, customerRef: BRAND_BETA.customerRef, number: BRAND_BETA.numbers.order, yourNumber: customerNumberOf('ORDER', 4), orderedOn: dayAt(-20), promiseDate: dayAt(10), originalPromiseDate: dayAt(10), promiseMoved: false },

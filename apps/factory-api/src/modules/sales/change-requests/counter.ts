@@ -61,8 +61,9 @@ export const counterOfRow = (row: Pick<OfficeRequestRow, 'counterDate' | 'counte
 /** Where the request's counter stands now (null: never countered). */
 export async function counterStateIn(db: Reader, row: Pick<OfficeRequestRow, 'counterApprovalId'>): Promise<CounterState | null> {
   if (!row.counterApprovalId) return null
-  const approval = await db.approvalRequest.findUnique({ where: { id: row.counterApprovalId }, select: { status: true } })
-  return counterStateOf(approval?.status ?? null) ?? 'LAPSED'
+  // B-PR-40: + whether its answer was put back (a yes put back lapses).
+  const approval = await db.approvalRequest.findUnique({ where: { id: row.counterApprovalId }, select: { status: true, reversedAt: true } })
+  return counterStateOf(approval?.status ?? null, approval?.reversedAt != null) ?? 'LAPSED'
 }
 
 /**

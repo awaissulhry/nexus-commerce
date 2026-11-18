@@ -47,7 +47,6 @@ export async function partyById(client: Reader, partyId: string): Promise<Partne
 export interface PortalSettingsView {
   readonly exists: boolean
   readonly portalOn: boolean
-  readonly progressShared: boolean
   readonly maxUsers: number | null
   readonly allowedRoleKeys: readonly string[]
   readonly version: number
@@ -65,7 +64,6 @@ export interface PortalSettingsView {
 
 const SETTINGS_SELECT = {
   portalOn: true,
-  progressShared: true,
   maxUsers: true,
   allowedRoleKeys: true,
   version: true,
@@ -88,7 +86,6 @@ export async function settingsOf(client: Reader, partyId: string): Promise<Porta
   return {
     exists: false,
     portalOn: false,
-    progressShared: false,
     maxUsers: null,
     allowedRoleKeys: [],
     version: 0,

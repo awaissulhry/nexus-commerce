@@ -50,7 +50,7 @@ const partnerPerson = z.object({
 })
 export type PartnerPerson = z.infer<typeof partnerPerson>
 
-const settings = z.object({ portalOn: z.boolean(), progressShared: z.boolean(), maxUsers: z.number().nullable(), allowedRoleKeys: z.array(z.string()), version: z.number() })
+const settings = z.object({ portalOn: z.boolean(), maxUsers: z.number().nullable(), allowedRoleKeys: z.array(z.string()), version: z.number() })
 export type PortalSettings = z.infer<typeof settings>
 const seats = z.object({ taken: z.number(), max: z.number().nullable() })
 export type Seats = z.infer<typeof seats>
@@ -73,7 +73,6 @@ const organisation = z.object({
   party: partnerParty,
   kinds: z.array(kind),
   portalOn: z.boolean(),
-  progressShared: z.boolean(),
   maxUsers: z.number().nullable(),
   people: z.object({ active: z.number(), invited: z.number(), suspended: z.number() }),
   accessEndingSoon: z.number(),
@@ -97,7 +96,6 @@ export const getPortalAccess = (api: ApiClient, partyId: string) => api.get(part
 
 export interface SettingsBody {
   portalOn?: boolean
-  progressShared?: boolean
   maxUsers?: number | null
   allowedRoleKeys?: string[]
   /** The version read (0: no settings row yet). */
@@ -189,8 +187,6 @@ export const productionLimitsSchema = z.object({
   production: z.object({
     /** What the customer sees of its orders in production (each level adds to the one before). */
     level: z.enum(PRODUCTION_SHARE_LEVELS),
-    /** Kept until B-PR-40: derived from the level. */
-    progressShared: z.boolean(),
     urgency: z.object({ on: z.boolean(), max: z.number(), now: z.number(), dormant: limitWords.nullable(), overQuota: limitWords.nullable() }),
     askKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)),
     openAsks: z.array(z.enum(PRODUCTION_REQUEST_KINDS)),

@@ -52,7 +52,7 @@ const system = () => callerFor(world.h.database, systemContext(T(), `test-${newI
 const fanOutOptions = () => ({ clock: world.h.clock, unsubscribeKey: unsubscribeKeyOf(world.h.auth.secrets) })
 const seqOf = async (orderId: string) => (await admin<{ seq: number | null }>('SELECT "customerSeq" AS seq FROM "SalesOrder" WHERE id = $1', [orderId]))[0]!.seq
 const setLevel = (partyId: string, level: 'STATUS' | 'PROGRESS' | 'GATES' | 'QUALITY') =>
-  admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", "progressShared" = $3, version = version + 1 WHERE "partyId" = $1`, [partyId, level, level !== 'STATUS'])
+  admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", version = version + 1 WHERE "partyId" = $1`, [partyId, level]) // B-PR-40: the level alone
 
 /** An event planted straight into the worker's fan-out. */
 async function tell(type: string, payload: Json): Promise<void> {

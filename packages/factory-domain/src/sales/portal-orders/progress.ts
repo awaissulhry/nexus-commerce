@@ -5,8 +5,9 @@ import type { Words } from './status'
  * showing counts per line and size"; design portal.customer.orders › Status & progress "Production progress": "Per line:
  * Cut · Sewn · Inspected · Packed as bars with counts ('Sewn 32 of 40'); expand a line: progress per size", "Counts
  * refresh live from floor scans, batched to at most once a minute"). Pure: the API reads the counts in the tenant's scope
- * (the floor's records are the office's) only while the customer's PortalSettings.progressShared is on, and never a
- * person: every figure is a sum over the work orders that make the line.
+ * (the floor's records are the office's) only while the customer's share level shares it (PortalSettings.productionLevel
+ * PROGRESS or more: production-brand/levels; B-PR-40 dropped the old switch), and never a person: every figure is a sum over
+ * the work orders that make the line.
  *
  *   CUT        garments in the work orders' ACTIVE whole-garment bundles (production/scans WIP `bundled`)
  *   SEWN       garments past the sewing operation by the floor's scans (WIP `sewn`; null: the site does not scan there)

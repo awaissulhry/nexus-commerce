@@ -30,9 +30,10 @@ import { localeOf, lockRequest, RECORD, refOf, revokeLinksInCommand, sourceKeyOf
  *                the round's event —, OUR message on the record's thread "Decided by us for you: …", the settle's marker);
  *                approval_request.decided_for_party
  *   reverse      an answered request, once, while the record's effect can still be put back (reverseVerdictOf: the domain's
- *                verdict on the live facts, then the record's own hold): the record's hook first (a new date asked again),
- *                then the reversal written beside the answer (the answer itself never changes), OUR message on the record's
- *                thread "Put back by us: …" with what it did; approval_request.reversed
+ *                verdict on the live facts, then the record's own hold): the reversal written beside the answer (the answer
+ *                itself never changes), then the record's hook (B-PR-40: after it — a new date asked again, a sample round
+ *                back under review and its gate waiting again, a swatch undecided), OUR message on the record's thread "Put
+ *                back by us: …" with what it did; approval_request.reversed
  * Each refusal is said in words with its code (409 `refusal/<CODE>`, 403 for the person who asked).
  */
 
@@ -167,13 +168,15 @@ export async function reverseInCommand(
   if (!check.ok) refuse({ code: check.code, message: check.words.en })
   const reason = input.reason.trim()
 
-  // The record's own effect first (a new date asked again), then the reversal beside the answer.
-  const done = adapter.reverse ? await adapter.reverse(tools, refOf(current), { effects: check.effects, actorId: input.reverserId, ask: input.ask }) : null
+  // B-PR-40: the reversal beside the answer first, then the record's own effect (a new date asked again; a sample round back
+  // under review and the gate it passed waiting again; a swatch undecided; schema wave 5/5): the database lets a decided round,
+  // a decided swatch and a passed gate move back only once their request names its reversal. One command: either both or none.
   const { count } = await tx.approvalRequest.updateMany({
     where: { id: current.id, reversedAt: null, version: current.version },
     data: { reversedAt: now, reversedById: input.reverserId, reverseReason: reason, version: current.version + 1, updatedAt: now },
   })
   if (count !== 1) throw new InvalidStateError('This request changed meanwhile: read it again.')
+  const done = adapter.reverse ? await adapter.reverse(tools, refOf(current), { effects: check.effects, actorId: input.reverserId, ask: input.ask }) : null
 
   // OUR message on the record's thread, in the party's language (never who of us): why, and what it did.
   const record = await adapter.read(tx, current.recordId, kind, { partyId: current.partyId, now })

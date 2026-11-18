@@ -3,8 +3,9 @@
  * puts the list here for the schema's ProductionShareLevel (PortalSettings.productionLevel; factory-db domain-mirrors keeps
  * the two equal); B-PR-13 adds the masks of each level.
  *
- * In this order: each level adds to the one before, and the database compares them in this order (progressShared is on
- * exactly from PROGRESS until it is dropped, B-PR-40).
+ * In this order: each level adds to the one before, and the database compares them in this order (production progress is
+ * shared from PROGRESS on, only with a customer or a brand: B-PR-40 dropped the old progressShared switch, the level alone
+ * says it).
  *   STATUS     the plain stage and since when, the next stage, the expected date, the health and what it waits on
  *   PROGRESS   + the pieces per line and size at each stage (today's "production progress", Owner answer C1)
  *   GATES      + its gates (target and passed dates), the promise history and the published plan's stage dates
@@ -67,9 +68,3 @@ export function maskByLevel<T extends object>(level: ProductionShareLevel, read:
  */
 export const qualityResultsShown = (level: ProductionShareLevel, workOrderPartyId: string | null, customerPartyId: string): boolean =>
   shares(level, 'quality') && workOrderPartyId !== null && workOrderPartyId === customerPartyId
-
-/**
- * The old switch kept until B-PR-40 drops it: progressShared is on exactly from PROGRESS (the database keeps the two in step,
- * B-PR-12's guard). Every API contract keeps `progressShared`, derived from the level.
- */
-export const progressSharedOf = (level: ProductionShareLevel): boolean => atLeast(level, 'PROGRESS')

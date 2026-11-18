@@ -112,7 +112,7 @@ describe('Portal access in the office (B-W2b-180)', () => {
   it('the portal card sends only what changes; the limit cannot drop below the people already in', () => {
     const saved = customerAccess().settings
     expect(settingsBody(saved, settingsDraftOf(saved))).toBeNull()
-    expect(settingsBody(saved, { ...settingsDraftOf(saved), progressShared: true, maxUsers: '' })).toEqual({ version: 4, progressShared: true, maxUsers: null })
+    expect(settingsBody(saved, { ...settingsDraftOf(saved), portalOn: false, maxUsers: '' })).toEqual({ version: 4, portalOn: false, maxUsers: null })
     expect(settingsProblems({ ...settingsDraftOf(saved), maxUsers: '3' }, { taken: 5, max: 10 })).toEqual({ maxUsers: 'settings.maxBelowTaken' })
     expect(settingsProblems({ ...settingsDraftOf(saved), maxUsers: '0' }, { taken: 0, max: null })).toEqual({ maxUsers: 'settings.maxRange' })
   })

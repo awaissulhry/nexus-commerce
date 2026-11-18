@@ -3,6 +3,7 @@
 import { createElement, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { failureWords } from '@nexus/factory-domain/payments/online/rules'
+import { shares } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -371,7 +372,7 @@ function OrderContainer({ id }: { id: string }) {
   }, [number, reconfirmNeeded, loadRevision])
 
   // F-PR-12b: today's progress read only where the order's production read does not draw the pieces (by level).
-  const shared = (record?.progressShared ?? false) && !productionOwnsProgress(production)
+  const shared = record !== null && shares(record.productionLevel, 'progress') && !productionOwnsProgress(production)
   useEffect(() => {
     if (!shared) return
     void loadProgress()

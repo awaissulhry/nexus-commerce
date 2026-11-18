@@ -180,19 +180,19 @@ export function overrideGrantProblem(override: { readonly requestedById: string;
 }
 
 /**
- * B-PR-30b, what is NOT built (it needs a schema change: the database keeps a decided sample round, a decided swatch and a passed
- * gate as they are — factory_sample_round_guard, factory_sample_swatch_guard, factory_order_gate_guard): putting back the
- * customer's decision on a sample round or a material swatch. Until those guards let a reversal through, the office reads why
- * (code KEPT) and makes a new round or swatch to ask again; nothing is marked put back that still holds.
+ * B-PR-30b / B-PR-40 (schema wave 5/5 lets the reversal through: factory_sample_round_guard, factory_sample_swatch_guard,
+ * factory_order_gate_guard): the customer's decision on a sample round or a material swatch is put back — the round back under
+ * review and the gate it passed waiting again, the swatch undecided — only while it is still the answer being put back (the
+ * record decided by that request, at its time). A record decided another way or cancelled meanwhile holds nothing of the answer:
+ * the office reads why (code HELD) and nothing is marked put back.
  */
-export const RECORD_KEPT_WORDS: Readonly<Record<'SampleRound' | 'SampleSwatch', Words>> = Object.freeze({
+export const ANSWER_NOT_ON_RECORD_WORDS: Readonly<Record<'SampleRound' | 'SampleSwatch', Words>> = Object.freeze({
   SampleRound: {
-    it: "La decisione del cliente su un giro di campionatura resta com'è: per cambiarla fate un nuovo giro e chiedetelo di nuovo al cliente.",
-    en: "The customer's decision on a sample round stays as it is: to change it, make a new round and ask them again.",
+    it: "Il giro di campionatura non porta più questa risposta (è stato deciso in altro modo o annullato): non c'è nulla da revocare.",
+    en: 'The sample round no longer holds this answer (it was decided another way or cancelled): there is nothing to put back.',
   },
   SampleSwatch: {
-    it: "La decisione del cliente su un campione di materiale resta com'è: per cambiarla inviate un nuovo campione e chiedetelo di nuovo.",
-    en: "The customer's decision on a material swatch stays as it is: to change it, send a new swatch and ask them again.",
+    it: "Il campione di materiale non porta più questa risposta (è stato deciso in altro modo): non c'è nulla da revocare.",
+    en: 'The swatch no longer holds this answer (it was decided another way): there is nothing to put back.',
   },
 })
-

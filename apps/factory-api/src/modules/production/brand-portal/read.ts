@@ -3,7 +3,7 @@ import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 import { effectiveHealth, type HealthRaise } from '@nexus/factory-domain/production-brand/health'
-import { maskByLevel, progressSharedOf, shares, type ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
+import { maskByLevel, shares, type ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
 import {
   APPROVAL_STATE_WORDS,
   CHANGE_PENDING_WORDS,
@@ -287,7 +287,6 @@ function problemOf(read: ProductionRead, orderId: string) {
 const levelOf = (read: ProductionRead) => ({
   level: read.settings.level,
   levelWords: LEVEL_WORDS[read.settings.level],
-  progressShared: progressSharedOf(read.settings.level),
   urgencyOn: read.settings.urgencyOn,
   urgentUse: urgentUseOf(read),
 })

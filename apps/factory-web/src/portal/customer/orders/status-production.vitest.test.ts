@@ -32,7 +32,6 @@ function production(over: Partial<ProductionOrder> = {}): ProductionOrder {
     asOf: at(0),
     level: 'PROGRESS',
     levelWords: w('+ Progress', '+ Avanzamento'),
-    progressShared: true,
     urgencyOn: true,
     urgentUse: null,
     order: { id: ORDER_ID, customerRef: BRAND_BETA.customerRef, number: BRAND_BETA.numbers.order, yourNumber: customerNumberOf('ORDER', 4), orderedOn: dayAt(-20), promiseDate: dayAt(10), originalPromiseDate: dayAt(8), promiseMoved: true },
@@ -267,7 +266,7 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
   })
 
   it('a level without + Progress draws no pieces; one without + Gates & dates draws no gates (a section not shared is not drawn)', () => {
-    const status = textOf(draw(ready(production({ level: 'STATUS', levelWords: w('Status only'), progressShared: false, progress: null, gates: null }))))
+    const status = textOf(draw(ready(production({ level: 'STATUS', levelWords: w('Status only'), progress: null, gates: null }))))
     for (const words of ['Production progress', 'Cut and bundled', 'Gates and dates', 'Cutting starts']) expect(status).not.toContain(words)
     const progress = textOf(draw(ready(production({ progress: withPieces(), gates: null }))))
     expect(progress).toContain('Cut and bundled')

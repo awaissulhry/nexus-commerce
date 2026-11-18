@@ -477,8 +477,8 @@ export type CustomerRequestKind = 'CHANGE' | 'CANCEL' | 'RUSH' | 'HOLD' | 'RESUM
 
 /**
  * A customer's request waiting for us: `state` ASKED (an OPEN request), AGREED (the customer said yes to our counter-offer: we
- * accept it to carry it out) or LAPSED (our counter-offer expired or was withdrawn: we answer it); `count` above 1 (or a
- * batch) says the batch in one row; `needBy` a rush's need-by date.
+ * accept it to carry it out) or LAPSED (our counter-offer expired, was withdrawn or its yes was put back, B-PR-40: we answer
+ * it); `count` above 1 (or a batch) says the batch in one row; `needBy` a rush's need-by date.
  */
 export function customerRequestWords(facts: {
   readonly number: string

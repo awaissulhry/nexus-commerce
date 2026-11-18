@@ -586,7 +586,20 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    link, or the active office person who decided for the party, never its asker, with why; reversed once with when, who and
    why, only once answered; neither on a CONCESSION, REVISED_ORDER, SIGNATURE or PROOF), and samples'
    `factory_sample_swatch_guard` (a FABRIC swatch of a textile, lining, membrane or padding, a TRIM swatch of a trim, hardware,
-   thread or label) and `factory_order_gate_guard` (a SIZE_SET gate waits for a SIZE_SET round)):
+   thread or label) and `factory_order_gate_guard` (a SIZE_SET gate waits for a SIZE_SET round)),
+   `…_production_wave5_guards` (production plan schema wave 5/5, B-PR-40, the old progress switch goes: its schema folder drops
+   PortalSettings.progressShared; it redefines portal identity's `factory_portal_settings_guard` from B-PR-12's body (every rule
+   kept but the two columns in step; production progress — the level PROGRESS or more, at insert or when raised to it — only for
+   a customer or a brand)), `…_production_wave5_samples_guards` (B-PR-40 EXTRA 1, no schema folder of its own, for B-PR-30b's
+   reverse: it redefines samples' `factory_sample_round_guard` (a DECIDED round back UNDER_REVIEW, its decision cleared and
+   nothing else, only by the reversal of the approval request whose answer decided it — about it, answered at its decidedAt,
+   reversed: `factory_sample_decision_reversed`), wave 4's `factory_sample_swatch_guard` (a decided swatch undecided by the same
+   rule) and `factory_order_gate_guard` (a gate passed by its round waits again, its pass cleared and nothing else, only once
+   the round is back without a decision by that reversal and no work started on its order — no cut log piece not reversed, no
+   bundle not VOID for a cell of its lines: `factory_order_gate_waits_again`, `factory_sales_order_work_started`)),
+   `…_production_wave5_counter_guards` (B-PR-40 EXTRA 2, no schema folder of its own: it redefines wave 4's
+   `factory_order_change_request_guard`: a COUNTERED request is ACCEPTED exactly when the customer said yes to the counter and
+   that yes was not put back; a yes put back is no yes — the request is refused or withdrawn, never accepted)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

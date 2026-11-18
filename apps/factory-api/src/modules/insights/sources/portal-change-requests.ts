@@ -38,11 +38,11 @@ export const portalChangeRequests: Source = async ({ caller, viewer, all }) => {
     const { rows: read, complete } = capped(found, all ? found.length : SOURCE_LIMIT)
     // A countered request waits on the customer while its counter is open; it waits on us again once they said yes or it lapsed.
     const counterIds = read.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : []))
-    const counters = new Map((counterIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: counterIds } }, select: { id: true, status: true, answeredAt: true, updatedAt: true } }) : []).map((row) => [row.id, row]))
+    const counters = new Map((counterIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: counterIds } }, select: { id: true, status: true, reversedAt: true, answeredAt: true, updatedAt: true } }) : []).map((row) => [row.id, row])) // B-PR-40: + reversedAt
     const stateOf = (row: (typeof read)[number]): 'ASKED' | CounterState => {
       if (row.status === 'OPEN') return 'ASKED'
       const counter = row.counterApprovalId ? counters.get(row.counterApprovalId) : undefined
-      return counter ? (counterStateOf(counter.status) ?? 'LAPSED') : 'LAPSED'
+      return counter ? (counterStateOf(counter.status, counter.reversedAt !== null) ?? 'LAPSED') : 'LAPSED' // B-PR-40: a yes put back lapses
     }
     const rows = read.filter((row) => {
       const state = stateOf(row)

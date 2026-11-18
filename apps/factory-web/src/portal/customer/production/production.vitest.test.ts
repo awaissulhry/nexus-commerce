@@ -85,7 +85,6 @@ function list(over: Partial<ProductionList> = {}): ProductionList {
     asOf: '2026-11-17T09:42:00.000Z',
     level: 'STATUS',
     levelWords: { it: 'Solo lo stato', en: 'Status only' },
-    progressShared: false,
     urgencyOn: true,
     urgentUse: USE,
     chip: 'ALL',

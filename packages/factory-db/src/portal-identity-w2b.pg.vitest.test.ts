@@ -154,9 +154,10 @@ describe('grants and the seed', () => {
   })
 
   it('ships every portal OFF and production progress OFF; a new row starts OFF too (Owner answer C1)', async () => {
-    expect(await admin('SELECT "portalOn", "progressShared", count(*)::int AS n FROM "PortalSettings" GROUP BY 1, 2')).toEqual([{ portalOn: false, progressShared: false, n: 2 }])
+    // B-PR-40: production progress is the share level (Status only: not shared), the old switch dropped.
+    expect(await admin('SELECT "portalOn", "productionLevel"::text AS level, count(*)::int AS n FROM "PortalSettings" GROUP BY 1, 2')).toEqual([{ portalOn: false, level: 'STATUS', n: 2 }])
     await insert(office(), 'PortalSettings', { id: A.p3, partyId: A.p3 })
-    expect(await admin('SELECT "portalOn", "progressShared", "maxUsers", "allowedRoleKeys" FROM "PortalSettings" WHERE id = $1', [A.p3])).toEqual([{ portalOn: false, progressShared: false, maxUsers: null, allowedRoleKeys: [] }])
+    expect(await admin('SELECT "portalOn", "productionLevel"::text AS level, "maxUsers", "allowedRoleKeys" FROM "PortalSettings" WHERE id = $1', [A.p3])).toEqual([{ portalOn: false, level: 'STATUS', maxUsers: null, allowedRoleKeys: [] }])
     // Every seeded code is dead, every seeded session ended.
     expect(await admin(`SELECT count(*)::int AS n FROM "PortalSignInCode" WHERE "usedAt" IS NULL AND "revokedAt" IS NULL AND tries < 5 AND "expiresAt" > now()`)).toEqual([{ n: 0 }])
     expect(await admin(`SELECT count(*)::int AS n FROM "Session" WHERE "revokedAt" IS NULL`)).toEqual([{ n: 0 }])
@@ -363,9 +364,10 @@ describe('sign-in codes', () => {
 
 describe('portal settings and branding', () => {
   it('production progress only for a customer or a brand; 1 to 1000 people or no limit; role keys each once; the party never changes; never deleted', async () => {
-    await expect(update('PortalSettings', seeded.settingsIds.p2, { progressShared: true })).rejects.toThrow(/only with a customer or a brand/)
-    expect(await update('PortalSettings', seeded.settingsIds.p1, { progressShared: true, portalOn: true })).toBe(1)
-    expect(await update('PortalSettings', seeded.settingsIds.p1, { progressShared: false, portalOn: false })).toBe(1)
+    // B-PR-40: production progress is the share level (PROGRESS or more), the old switch dropped.
+    await expect(update('PortalSettings', seeded.settingsIds.p2, { productionLevel: 'PROGRESS' })).rejects.toThrow(/only with a customer or a brand/)
+    expect(await update('PortalSettings', seeded.settingsIds.p1, { productionLevel: 'PROGRESS', portalOn: true })).toBe(1)
+    expect(await update('PortalSettings', seeded.settingsIds.p1, { productionLevel: 'STATUS', portalOn: false })).toBe(1)
     await expect(update('PortalSettings', seeded.settingsIds.p1, { maxUsers: 0 })).rejects.toThrow(/1 to 1000 people/)
     await expect(update('PortalSettings', seeded.settingsIds.p1, { maxUsers: 1001 })).rejects.toThrow(/1 to 1000 people/)
     await expect(update('PortalSettings', seeded.settingsIds.p1, { allowedRoleKeys: ['customer-buyer', 'customer-buyer'] })).rejects.toThrow(/each once/)

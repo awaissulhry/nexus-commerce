@@ -151,5 +151,4 @@ export const PARTNER_WORDS = Object.freeze({
   stillInvited: 'This person has not signed in yet: change the invitation instead (send it again).',
   noPortalCompany: 'Say which company this portal is for: the organisation works with every company of the factory.',
   wrongCompany: 'This organisation belongs to another company: its portal is that company\'s.',
-  progressOnlyCustomers: 'Production progress shows only to a customer or a brand (Owner answer C1).',
 })

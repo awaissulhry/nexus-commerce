@@ -172,7 +172,6 @@ const row = (n: number, status: OrdersRead['items'][number]['status'], over: Par
 })
 const ORDERS: OrdersRead = {
   asOf: at(0),
-  progressShared: true,
   chips: [
     { chip: 'OPEN', count: 7 },
     { chip: 'ALL', count: 23 },
