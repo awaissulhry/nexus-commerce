@@ -62,7 +62,8 @@ export const toldContract = defineContract({
   response: {
     200: output({
       order: output({ id: id(), number: z.string() }),
-      change: output({ batchId: z.string(), messageId: id(), at: instant() }),
+      // F-SA-244: `requestId` — the customer's request the change carries out (null: the office's own change, or written before it).
+      change: output({ batchId: z.string(), messageId: id(), at: instant(), requestId: id().nullable() }),
       people: output({
         count: z.number().int(),
         groups: z.array(output({ why: z.enum(TOLD_WHY), words, people: z.array(output({ id: id(), name: z.string(), workOrder: workOrderRef.nullable() })) })),
@@ -76,6 +77,10 @@ export const toldContract = defineContract({
 interface NotesRecord {
   readonly written?: boolean
   readonly messageId?: string
+  /** F-SA-244: the event that spoke, when it happened, and the customer's request it carried out. */
+  readonly eventType?: string
+  readonly at?: string
+  readonly requestId?: string | null
   /** Told of the same act by B-PR-32's notice (a withdrawal: the supervisor and the backup), not by the change's bell. */
   readonly alreadyTold?: readonly string[]
   readonly floor?: readonly { readonly workOrderId: string; readonly messageId: string }[]
@@ -168,10 +173,134 @@ export async function whoWasTold(caller: CommandCaller, orderId: string, query: 
 
     return {
       order: { id: order.id, number: order.number },
-      change: { batchId, messageId: line.id, at: toUtcIso(line.at) },
+      change: { batchId, messageId: line.id, at: toUtcIso(line.at), requestId: notes.requestId ?? null /* F-SA-244 */ },
       people: { count: people.reduce((sum, group) => sum + group.people.length, 0), groups: people },
       floor: { at: floorAt ? toUtcIso(floorAt) : null, workOrders: floorNamed, leftOut: floorRows.length - floorNamed.length },
       workshop: { at: shopAt ? toUtcIso(shopAt) : null, subcontractOrders: shopNamed, waiting: shopRows.filter((entry) => !toldAt.has(entry.subcontractOrderId)).length, leftOut: shopRows.length - shopNamed.length },
     }
   })
 }
+
+// ---- F-SA-244 (sales page plan P8, R2, R7, R8; 14-change-flow §4.1, §5.2; 10-order-page §2.4 C5 "Told", §2.3): the told lines of
+// ALL the order's changes in ONE read for the order page — each system line's card ("Told the floor at hh:mm", "Who was told",
+// its Still to do by the request it carried out), History's "Told: conversation · bell to N people · floor note on WO-… ·
+// workshop notice", the Production tab's "Told the floor at hh:mm" per work order and Overview's "Told about changes: N people".
+// Counts and times only (the names stay in Who was told, above), never who read anything (R2); the same wall as above: the order
+// with orders.view, its conversation with threads.read, office people only, a work order the reader does not reach counted, never
+// named. A read: nothing is written.
+
+/** The newest changes the page reads at once (older ones keep their line in the conversation; Who was told still reads each). */
+export const TOLD_CHANGES_LIMIT = 50
+
+export const toldChangesContract = defineContract({
+  params: input({ orderId: id() }),
+  response: {
+    200: output({
+      order: output({ id: id(), number: z.string() }),
+      /** The office people told about any of these changes, each counted once. */
+      people: z.number().int(),
+      /** Newest first. */
+      changes: z.array(
+        output({
+          batchId: z.string(),
+          messageId: id(),
+          /** When the change happened (the act) and when its line was written. */
+          occurredAt: instant(),
+          at: instant(),
+          /** The event that spoke for the change (sales_order.amended, order_change_request.answered, …). */
+          eventType: z.string(),
+          /** The customer's request it carried out (null: the office's own change, or written before it). */
+          requestId: id().nullable(),
+          people: z.number().int(),
+          floor: output({ at: instant().nullable(), workOrders: z.array(workOrderRef), leftOut: z.number().int() }),
+          workshop: output({ at: instant().nullable(), told: z.number().int(), waiting: z.number().int() }),
+        }),
+      ),
+    }),
+  },
+})
+
+/** GET /sales/orders/:orderId/told/changes. */
+export async function toldChanges(caller: CommandCaller, orderId: string) {
+  const context = officeContextOf(caller)
+  const actor = actorOf(context)
+  const order = await officeOrder(caller, orderId)
+  return caller.withClient(async (db) => {
+    const thread = await db.thread.findFirst({ where: { recordType: 'SalesOrder', recordId: order.id }, select: { recordType: true, recordId: true, companyId: true, siteId: true, partyId: true } })
+    // No conversation yet: no change was ever told.
+    if (!thread) return { order: { id: order.id, number: order.number }, people: 0, changes: [] }
+    if (!mayOnThread(actor, THREADS_READ, 'SalesOrder', await wallScopeOf(db, thread))) throw new NotFoundError(NOT_FOUND)
+    const rows = await db.auditLog.findMany({
+      where: { recordType: 'SalesOrder', recordId: order.id, action: ORDER_CHANGE_NOTES_HANDLER, after: { path: ['written'], equals: true } },
+      orderBy: { at: 'desc' },
+      take: TOLD_CHANGES_LIMIT,
+      select: { requestId: true, after: true },
+    })
+    const written = rows.flatMap((row) => {
+      const notes = (row.after ?? {}) as NotesRecord
+      return notes.written === true && notes.messageId && row.requestId ? [{ batchId: row.requestId, messageId: notes.messageId, notes }] : []
+    })
+    const lines = new Map((written.length > 0 ? await db.message.findMany({ where: { id: { in: written.map((entry) => entry.messageId) } }, select: { id: true, at: true } }) : []).map((line) => [line.id, line.at]))
+    const changes = written.filter((entry) => lines.has(entry.messageId))
+
+    // The work orders the notes went on, read once (named only when the reader reaches them).
+    const floorRows = changes.flatMap((entry) => entry.notes.floor ?? [])
+    const shopRows = changes.flatMap((entry) => entry.notes.workshops ?? [])
+    const workOrderIds = [...new Set([...floorRows.map((entry) => entry.workOrderId), ...shopRows.map((entry) => entry.workOrderId)])]
+    const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true } }) : []).map((entry) => [entry.id, entry]))
+    const reached = (workOrderId: string) => {
+      const workOrder = workOrders.get(workOrderId)
+      return workOrder && reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder) ? { id: workOrder.id, number: workOrder.number } : null
+    }
+
+    // People: the rows of each change's ONE bell item (office rows only), with those B-PR-32's notice told of the same act.
+    const keyOf = (batchId: string) => batchGroupKey(orderChangeBatch(batchId, order.id), 'FOLLOWING')
+    const noted = [...new Set(floorRows.map((entry) => entry.workOrderId))]
+    const told = changes.length > 0 ? await db.notification.findMany({ where: { partyId: null, groupKey: { in: changes.map((entry) => keyOf(entry.batchId)) }, OR: [{ recordType: 'SalesOrder', recordId: order.id }, ...(noted.length > 0 ? [{ recordType: 'WorkOrder', recordId: { in: noted } }] : [])] }, select: { userId: true, groupKey: true } }) : []
+    const candidates = [...new Set([...told.map((entry) => entry.userId), ...changes.flatMap((entry) => entry.notes.alreadyTold ?? [])])]
+    const office = new Set((candidates.length > 0 ? await db.user.findMany({ where: { id: { in: candidates }, audience: 'OFFICE' }, select: { id: true } }) : []).map((user) => user.id))
+    const everyone = new Set<string>()
+
+    // The floor notes' times; the workshops' notices (B-SA-054's partner rule) after the oldest line.
+    const floorAt = new Map((floorRows.length > 0 ? await db.message.findMany({ where: { id: { in: floorRows.map((entry) => entry.messageId) } }, select: { id: true, at: true } }) : []).map((message) => [message.id, message.at]))
+    const oldest = [...lines.values()].reduce<Date | null>((first, at) => (first === null || at < first ? at : first), null)
+    const shopIds = [...new Set(shopRows.map((entry) => entry.subcontractOrderId))]
+    const notices = shopIds.length > 0 && oldest ? await db.notification.findMany({ where: { recordType: 'SubcontractOrder', recordId: { in: shopIds }, partyId: { not: null }, eventType: 'production.floor_note_posted', createdAt: { gte: oldest } }, select: { recordId: true, createdAt: true } }) : []
+
+    const out = changes.map((entry) => {
+      const lineAt = lines.get(entry.messageId)!
+      const key = keyOf(entry.batchId)
+      const people = new Set([...told.filter((row) => row.groupKey === key).map((row) => row.userId), ...(entry.notes.alreadyTold ?? [])].filter((userId) => office.has(userId)))
+      for (const userId of people) everyone.add(userId)
+      const floor = entry.notes.floor ?? []
+      const floorTimes = floor.flatMap((row) => (floorAt.has(row.messageId) ? [floorAt.get(row.messageId)!] : []))
+      const named = floor.flatMap((row) => {
+        const workOrder = reached(row.workOrderId)
+        return workOrder ? [workOrder] : []
+      })
+      // A workshop is told by the first notice on its subcontract order since this change's line.
+      const shops = entry.notes.workshops ?? []
+      const shopTimes = shops.flatMap((row) => {
+        const first = notices.filter((notice) => notice.recordId === row.subcontractOrderId && notice.createdAt >= lineAt).reduce<Date | null>((earliest, notice) => (earliest === null || notice.createdAt < earliest ? notice.createdAt : earliest), null)
+        return first ? [first] : []
+      })
+      const earliest = (times: readonly Date[]) => times.reduce<Date | null>((first, at) => (first === null || at < first ? at : first), null)
+      const floorFirst = earliest(floorTimes)
+      const shopFirst = earliest(shopTimes)
+      const occurred = typeof entry.notes.at === 'string' && !Number.isNaN(Date.parse(entry.notes.at)) ? new Date(entry.notes.at) : lineAt
+      return {
+        batchId: entry.batchId,
+        messageId: entry.messageId,
+        occurredAt: toUtcIso(occurred),
+        at: toUtcIso(lineAt),
+        eventType: entry.notes.eventType ?? '',
+        requestId: entry.notes.requestId ?? null,
+        people: people.size,
+        floor: { at: floorFirst ? toUtcIso(floorFirst) : null, workOrders: named, leftOut: floor.length - named.length },
+        workshop: { at: shopFirst ? toUtcIso(shopFirst) : null, told: shopTimes.length, waiting: shops.length - shopTimes.length },
+      }
+    })
+    return { order: { id: order.id, number: order.number }, people: everyone.size, changes: out }
+  })
+}
+// ---- end F-SA-244

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Download, PackageCheck } from 'lucide-react'
+import { Download, Eye /* B-SA-0xxb */, PackageCheck } from 'lucide-react'
 import { Banner, Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../../../lib/i18n/format'
@@ -10,6 +10,7 @@ import { recordAddress } from '../../../../../../../lib/records/record-links'
 import { WithMessages } from '../../../../../../../record-panels/i18n'
 import { OFFICE_PAGES } from '../../../../../../../shell/nav/office-nav'
 import { arrivalKey, downloadHeldKey, type DeliveriesActions, type DeliveriesModel } from '../model'
+import { proofFileOf } from '../model' // B-SA-0xxb
 import '../delivered.css'
 
 export type { DeliveriesActions, DeliveriesModel } from '../model'
@@ -96,7 +97,12 @@ function Body({ model, actions }: { model: DeliveriesModel; actions?: Deliveries
                   <Pill key="a" tone={ARRIVAL_TONE[key as keyof typeof ARRIVAL_TONE] ?? 'neutral'}>{t(key)}</Pill>,
                   row.deliveredAt ? formatDateTime(row.deliveredAt, { locale }) : '—',
                   row.pod?.signedBy ? (row.pod.signedAt ? t('dv.signedAt', { name: row.pod.signedBy, at: formatDateTime(row.pod.signedAt, { locale }) }) : row.pod.signedBy) : row.status === 'DELIVERED' ? t('dv.noSigner') : '—',
-                  row.status === 'DELIVERED' ? (
+                  // B-SA-0xxb / F-SA-266b: the reader's own proof file opens in the thread's ONE viewer (it has its own download there).
+                  row.status === 'DELIVERED' && actions?.onView && proofFileOf(row) ? (
+                    <Button key="v" size="sm" onClick={() => actions.onView?.(row.id)}>
+                      <Eye size={14} aria-hidden /> {t('dv.view')}
+                    </Button>
+                  ) : row.status === 'DELIVERED' ? (
                     <Button key="d" size="sm" heldReason={held ? t(held) : null} onClick={() => actions?.onDownload?.(row.id)}>
                       {model.downloading === row.id ? <Spinner size={12} /> : <Download size={14} aria-hidden />} {t('dv.download')}
                     </Button>

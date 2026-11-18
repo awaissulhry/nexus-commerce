@@ -18,6 +18,7 @@ import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, i
 import { showsOnArrival, type DockDefault } from './model' // F-SA-263
 import { viewOpenOf } from './model' // F-SA-262
 import type { DiscussAsk, FrameDoor, ShowInThreadAsk } from './model' // F-SA-265
+import type { FrameAnswer } from './model' // F-SA-244
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
@@ -85,11 +86,15 @@ export interface RecordFrameProps {
   // in the page's words) — a row of the customer's Work tab picked it; absent: "Thread" (or "Thread · 2 new").
   readonly threadButton?: string | null
   // ---- end F-SA-279
+  // ---- F-SA-244: the page's ONE review window, opened from the conversation (the customer's ask's Answer…); absent: not offered.
+  readonly answer?: FrameAnswer
+  // ---- end F-SA-244
 }
 
 // B-TH-264 follow-up: the body's files in the thread's ONE viewer (the types live in model.ts).
 export type { FrameFile, FrameFilesAsk } from './model'
 export type { DiscussAbout, DiscussAsk, ShowInThreadAsk } from './model' // F-SA-265
+export type { FrameAnswer } from './model' // F-SA-244
 
 /** What the docked thread reads of its frame: the width (null where it is not docked), the chooser, the phone head, the way back. */
 export interface RecordFrameState {
@@ -128,6 +133,9 @@ export interface RecordFrameState {
   readonly showAsk?: ShowInThreadAsk | null
   readonly clearShow?: () => void
   // ---- end F-SA-265
+  // ---- F-SA-244: the door kind beside openDoor('approve') — the conversation asks the page's review window to open on a request.
+  readonly answer?: FrameAnswer
+  // ---- end F-SA-244
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -204,7 +212,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */, threadButton: namedButton /* F-SA-279 */ }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */, threadButton: namedButton /* F-SA-279 */, answer /* F-SA-244 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -426,8 +434,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       showThread /* B-TH-265 */,
       ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */,
       ...(hasThread ? { discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow } : {}) /* F-SA-265: only where the page has a conversation */,
+      ...(hasThread && answer ? { answer } : {}) /* F-SA-244: only where the page has the review window and a conversation */,
     }),
-    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow],
+    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow, answer],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229

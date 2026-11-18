@@ -20,6 +20,8 @@ import { HISTORY_CHIPS, historyFor, historyOf, type HistoryChip, type HistoryEnt
 // F-SA-266: each history row's Discuss and Show in the thread; its anchor `change-<id>` ("Show on the page", `?tab=changes#change-<id>`)
 import { DiscussDoor, ShowInThreadDoor } from '../../view/Discuss'
 import type { DiscussPart } from '../../dock/discuss'
+// F-SA-244: each change's Told line ("Told: conversation · bell to 6 people · floor note on WO-0311 · workshop notice") → Who was told.
+import { toldOfHistory, toldParts } from '../../told'
 
 /**
  * F-SA-236 (sales page plan N2, N3, P5; 10-order-page §2.4) — Changes, one newest-first story:
@@ -76,8 +78,27 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
     if (entry.kind === 'amendment') return { part: t('discuss.revision', { revision: entry.revision }), target: null }
     return { part: t(entry.kind === 'confirmationMade' ? 'changes.history.made' : 'changes.history.sent', { version: entry.version }), target: null }
   }
-  const withDoors = <S extends { label: ReactNode }>(entry: HistoryEntry, drawn: S): S & { key: string } => ({
+  // ---- F-SA-244: the change's Told line under its row — who was TOLD (the conversation, the bell, the floor, the workshop), never
+  // who read it (R2, review WP-2); it opens Who was told. Only with the told lines read (the conversation's read right).
+  const toldChanges = model.told?.value?.changes ?? []
+  const toldLine = (entry: HistoryEntry): ReactNode => {
+    const change = toldOfHistory({ kind: entry.kind, at: entry.at, requestId: entry.kind === 'requestAnswered' ? entry.request.id : null }, toldChanges)
+    if (!change) return null
+    const words = toldParts(change)
+      .map((one) => t(one.key, one.params))
+      .join(' · ')
+    return (
+      <span className="fw-so-told">
+        <Button size="xs" variant="link" inline wrap onClick={() => actions?.onWhoWasTold?.(change.messageId)} title={t('told.open')}>
+          {words}
+        </Button>
+      </span>
+    )
+  }
+  // ---- end F-SA-244
+  const withDoors = <S extends { label: ReactNode; detail?: ReactNode }>(entry: HistoryEntry, drawn: S): S & { key: string } => ({
     ...drawn,
+    ...(toldChanges.length > 0 ? { detail: (<>{drawn.detail}{toldLine(entry)}</>) as ReactNode } : {}) /* F-SA-244 */,
     key: entry.id,
     label: (
       <span className="fw-so-inline" id={`change-${entry.id}`} tabIndex={-1}>

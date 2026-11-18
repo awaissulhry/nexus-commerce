@@ -9,6 +9,7 @@ import { Composer } from '../../../../../lib/record-thread/composer/view/Compose
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { NAMESPACE as SHEET, type Phrase } from '../sheet/model'
 import { languageInSentence, replyComposerContext, replyReceipt, replySendHeld, sentOf, targetLabel, toSend, type ReplyManyActions, type ReplyManyModel } from '../reply-many'
+import { previewLabel } from '../reply-many' // B-SA-070b
 import '../sheet/sheet.css'
 
 /**
@@ -108,7 +109,7 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
       {sent.length > 0 && <p className="fw-srm-hint">{s('reply.already', { count: sent.length, orders: sent.map(targetLabel).join(', ') })}</p>}
       <div className="fw-srm-orders">
         <p className="fw-srm-heading">{s('reply.preview', { customer, count: pending.length })}</p>
-        <p className="fw-srm-list">{pending.map(targetLabel).join(', ')}</p>
+        <p className="fw-srm-list">{pending.map((target) => previewLabel(target, s) /* B-SA-070b */).join(', ')}</p>
         <p className="fw-srm-hint">{s('reply.each')}</p>
       </div>
       <Composer

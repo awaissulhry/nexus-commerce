@@ -162,7 +162,8 @@
       "right": "Per scaricare la prova serve il permesso di vedere le spedizioni.",
       "offline": "Nessuna connessione: riprova quando torna la rete.",
       "busy": "Un momento: un download è in corso."
-    }
+    },
+    "view": "Apri la prova"
   },
   "link": {
     "title": "Il tuo reso {number}",

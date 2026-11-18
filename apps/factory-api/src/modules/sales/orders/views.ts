@@ -333,6 +333,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     partyId: order.partyId,
     party: party ? { code: party.code, legalName: party.legalName } : null,
     customerRef: order.customerRef,
+    customerSeq: order.customerSeq ?? null, // B-SA-070b
     status: order.status,
     orderDate: dayOf(order.orderDate),
     currency: order.currency,

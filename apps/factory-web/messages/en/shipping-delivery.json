@@ -162,7 +162,8 @@
       "right": "Downloading the proof needs the right to see shipments.",
       "offline": "No connection: try again when the network is back.",
       "busy": "One moment: a download is on its way."
-    }
+    },
+    "view": "Open proof"
   },
   "link": {
     "title": "Your return {number}",

@@ -4,6 +4,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { DELIVERED_VIAS } from '@nexus/factory-domain/shipping/pod/rules'
 import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue' // B-SA-0xxb / F-SA-266b
 import { dueDateOf } from '@nexus/factory-domain/sales/terms/terms'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -28,7 +29,8 @@ import { asDay, dayOrNull } from './store'
  *                goods' invoice, which reads the order's deliveredAt for anything counted from delivery
  *   the read     GET /sales/orders/:orderId/deliveries (orders.view): each shipment's arrival, how it came (the carrier's
  *                tracking or a status typed by a person), its proof of delivery (who signed, when, an image: downloaded
- *                from the shipment with shipping.view), the order's delivery time and the steps that run from it
+ *                from the shipment with shipping.view; B-SA-0xxb: its file id with files.read on the shipment, for the
+ *                thread's ONE viewer), the order's delivery time and the steps that run from it
  */
 
 export interface DeliveredMove {
@@ -76,10 +78,20 @@ export async function getDeliveries(caller: CommandCaller, orderId: string) {
       select: { id: true, number: true, status: true, siteId: true, partyId: true, companyId: true, carrierName: true, shippedAt: true, deliveredAt: true, podSignedBy: true, podAt: true, podFileId: true },
       orderBy: { number: 'asc' },
     })
+    // ---- B-SA-0xxb / F-SA-266b: the proof's file itself (its id, name and type), for a reader who may read the shipment's files
+    // (files.read over the shipment's company, site and customer): the order page opens it in the thread's ONE viewer, not a download.
+    const actor = actorOf(context)
+    const podIds = shipments.flatMap((shipment) => (shipment.podFileId && can(actor, FILES_READ, { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId }) ? [shipment.podFileId] : []))
+    const podFiles = new Map((podIds.length > 0 ? await db.storedFile.findMany({ where: { id: { in: podIds }, recordType: 'Shipment', status: 'AVAILABLE' }, select: { id: true, recordId: true, originalName: true, contentType: true, sizeBytes: true } }) : []).map((file) => [file.id, file]))
+    const podFileOf = (shipment: { readonly id: string; readonly podFileId: string | null }) => {
+      const file = shipment.podFileId ? podFiles.get(shipment.podFileId) : undefined
+      return file && file.recordId === shipment.id ? { id: file.id, name: file.originalName, contentType: file.contentType, sizeBytes: Number(file.sizeBytes) } : null
+    }
+    // ---- end B-SA-0xxb
     const rows = []
     for (const shipment of shipments) {
       const open = await db.trackingException.count({ where: { shipmentId: shipment.id, resolvedAt: null } })
-      const pod = shipment.podSignedBy || shipment.podAt || shipment.podFileId ? { signedBy: shipment.podSignedBy, signedAt: iso(shipment.podAt), image: shipment.podFileId !== null } : null
+      const pod = shipment.podSignedBy || shipment.podAt || shipment.podFileId ? { signedBy: shipment.podSignedBy, signedAt: iso(shipment.podAt), image: shipment.podFileId !== null, file: podFileOf(shipment) /* B-SA-0xxb */ } : null
       rows.push({
         id: shipment.id,
         number: shipment.number,
@@ -91,7 +103,7 @@ export async function getDeliveries(caller: CommandCaller, orderId: string) {
         pod,
         openProblems: open,
         /** The reader may open the shipment and download its proof (shipping.view there). */
-        mayOpen: can(actorOf(context), SHIPPING_VIEW, { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId }),
+        mayOpen: can(actor, SHIPPING_VIEW, { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId }),
       })
     }
     const steps = await db.salesOrderMilestone.findMany({ where: { orderId: order.id, kind: 'ON_DELIVERY' }, select: { id: true, seq: true, status: true, dueDate: true }, orderBy: { seq: 'asc' } })
@@ -118,7 +130,8 @@ export const deliveriesContract = defineContract({
           shippedAt: instant().nullable(),
           deliveredAt: instant().nullable(),
           deliveredVia: z.enum(DELIVERED_VIAS).nullable(),
-          pod: output({ signedBy: z.string().nullable(), signedAt: instant().nullable(), image: z.boolean() }).nullable(),
+          // B-SA-0xxb / F-SA-266b: `file` — the proof's own file for a reader with files.read on the shipment (null: none, or not this reader's).
+          pod: output({ signedBy: z.string().nullable(), signedAt: instant().nullable(), image: z.boolean(), file: output({ id: id(), name: z.string(), contentType: z.string(), sizeBytes: z.number().int() }).nullable() }).nullable(),
           openProblems: z.number().int(),
           mayOpen: z.boolean(),
         }),

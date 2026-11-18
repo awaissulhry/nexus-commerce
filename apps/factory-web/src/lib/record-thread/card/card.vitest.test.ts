@@ -23,9 +23,11 @@ import {
 // B-TH-236
 import { amountWords, correctionWay, excerptOf, showsUndo, undoLeft } from './model'
 import { MessageCard } from './view/MessageCard'
+import type { CardActions } from './view/MessageCard' // F-SA-244
 // B-TH-255
 import { SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
 import { bodyKind, cardDepth, SKIP_REASON_CODES, skippedLine, skipReasonKey } from './model'
+import { ASK_STATES, askChip, changeChip, withChangeSide } from './model' // F-SA-244
 
 /** B-TH-298 — the message card (T3): each kind, its audience in words and colour, the folds, the files, Retry keeps the text. */
 
@@ -383,3 +385,78 @@ describe('B-TH-286 — pin a message for everyone, by right', () => {
   })
 })
 // ---- end B-TH-286
+
+// ---- F-SA-244 (sales page plan P5, P8', P21, R2, R7; 14-change-flow §3.1, §4.1; review WP-1, WP-2): the conversation side of a change
+describe('F-SA-244: the customer\'s ask and a change\'s line on their cards (office only, filled by the record page)', () => {
+  const ASK: CardMessage = { ...MAIL, id: 'ask-1', kind: 'theirs', channel: 'PORTAL' }
+  const LINE: CardMessage = { ...NOTE, id: 'line-1', kind: 'note', author: null, authorKind: 'SYSTEM', body: 'Modifica accettata · Bea Esempio · 10:42' }
+  const withActions = (message: CardMessage, actions: CardActions, locale: 'en' | 'it' = 'en', readOnly = false) => render(createElement(MessageCard, { message, context: CONTEXT, actions, readOnly }), locale)
+
+  it('the ask\'s chip lives with the request: waiting on us → counter-offer → accepted · N still to do → accepted; refused, withdrawn', () => {
+    expect([...ASK_STATES]).toEqual(['OPEN', 'COUNTERED', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'])
+    expect(askChip({ state: 'OPEN', stillToDo: 0 })).toEqual({ key: 'ask.chip.OPEN', tone: 'warning' })
+    expect(askChip({ state: 'COUNTERED', stillToDo: 0 })).toEqual({ key: 'ask.chip.COUNTERED', tone: 'info' })
+    expect(askChip({ state: 'ACCEPTED', stillToDo: 2 })).toEqual({ key: 'ask.chip.acceptedStill', params: { count: 2 }, tone: 'info' })
+    expect(askChip({ state: 'ACCEPTED', stillToDo: 0 })).toEqual({ key: 'ask.chip.ACCEPTED', tone: 'success' })
+    expect(askChip({ state: 'REFUSED', stillToDo: 0 }).key).toBe('ask.chip.REFUSED')
+    expect(askChip({ state: 'WITHDRAWN', stillToDo: 0 }).key).toBe('ask.chip.WITHDRAWN')
+  })
+
+  it('the line\'s chip: "Still to do: N" (a door) → "Done"; not counted for this reader → no chip at all (no claim)', () => {
+    expect(changeChip({ stillToDo: 2 })).toEqual({ key: 'change.still', params: { count: 2 }, tone: 'warning', door: true })
+    expect(changeChip({ stillToDo: 0 })).toEqual({ key: 'change.done', tone: 'success', door: false })
+    expect(changeChip({ stillToDo: null })).toBeNull()
+  })
+
+  it('only their own message takes the ask, only the system\'s office note takes the line; no facts: the card as before', () => {
+    const facts = { asks: new Map([['ask-1', { requestId: 'r1', state: 'OPEN' as const, stillToDo: 0, answer: true }], ['line-1', { requestId: 'r2', state: 'OPEN' as const, stillToDo: 0, answer: true }]]), changes: new Map([['line-1', { stillToDo: 1, floorAt: null, workshopAt: null }], ['ask-1', { stillToDo: 1, floorAt: null, workshopAt: null }]]) }
+    expect(withChangeSide(ASK, facts)).toMatchObject({ ask: { requestId: 'r1' } })
+    expect(withChangeSide(ASK, facts)).not.toHaveProperty('change')
+    expect(withChangeSide(LINE, facts)).toMatchObject({ change: { stillToDo: 1 } })
+    expect(withChangeSide(LINE, facts)).not.toHaveProperty('ask')
+    // A colleague's office note is never a change's line, whatever the page says.
+    expect(withChangeSide({ ...LINE, authorKind: 'USER', author: 'Bea Esempio' }, facts)).not.toHaveProperty('change')
+    expect(withChangeSide(ASK, null)).toBe(ASK)
+  })
+
+  it('their ask: "Request · waiting on us" and Answer… — a real link to the page\'s window, a plain click stays on the page', () => {
+    const asked: string[] = []
+    const html = withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, { onAnswer: (id: string) => asked.push(id), answerHref: (id: string) => `/w/acme/sales/orders/o1?tab=overview&open=${id}` })
+    expect(textOf(html)).toContain('Request · waiting on us')
+    expect(html).toContain('href="/w/acme/sales/orders/o1?tab=overview&amp;open=r1"')
+    expect(textOf(html)).toContain('Answer…')
+    // No door from the page (another host, or the reader may not answer): the chip alone.
+    expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: false } }, { onAnswer: () => undefined, answerHref: () => '/x' }))).not.toContain('Answer…')
+    expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, {}))).not.toContain('Answer…')
+    expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'ACCEPTED', stillToDo: 2, answer: false } }, {}, 'it'))).toContain('Richiesta · accettata · ancora 2 da fare')
+    // The merged customer feed (read only) draws neither.
+    expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, { onAnswer: () => undefined }, 'en', true))).not.toContain('Request · waiting on us')
+  })
+
+  it('a change\'s line: Still to do, when the floor and the workshop were told, Who was told — never who read it', () => {
+    const html = withActions({ ...LINE, change: { stillToDo: 2, floorAt: '2026-11-18T09:42:00.000Z', workshopAt: '2026-11-18T09:44:00.000Z' } }, { onWhoWasTold: () => undefined, onStillToDo: () => undefined })
+    const text = textOf(html)
+    expect(text).toContain('Still to do: 2')
+    expect(text).toMatch(/Told the floor at \d\d:\d\d/)
+    expect(text).toMatch(/Told the workshop at \d\d:\d\d/)
+    expect(text).toContain('Who was told')
+    expect(text).not.toMatch(/\b(seen|read by|not yet|shown)\b/i)
+    const italian = textOf(withActions({ ...LINE, change: { stillToDo: 0, floorAt: '2026-11-18T09:42:00.000Z', workshopAt: null } }, { onWhoWasTold: () => undefined }, 'it'))
+    expect(italian).toContain('Fatto')
+    expect(italian).toMatch(/Reparto avvisato alle \d\d:\d\d/)
+    expect(italian).toContain('Chi è stato avvisato')
+    expect(italian).not.toMatch(/letto|visto|non ancora/i)
+    // Not counted for this reader: no chip; the told times stay.
+    expect(textOf(withActions({ ...LINE, change: { stillToDo: null, floorAt: null, workshopAt: null } }, {}))).not.toMatch(/Still to do|Done/)
+  })
+
+  it('every word in both languages', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['record-thread-card'] ?? {}
+      for (const key of ['OPEN', 'COUNTERED', 'ACCEPTED', 'acceptedStill', 'REFUSED', 'WITHDRAWN']) expect(words[`ask.chip.${key}`]).toBeTruthy()
+      for (const key of ['ask.answer', 'change.still', 'change.done', 'change.floor', 'change.workshop', 'change.whoWasTold', 'place.line', 'place.open']) expect(words[key]).toBeTruthy()
+    }
+    expect(CATALOGUE.it['record-thread-card']?.['ask.chip.OPEN']).toBe('Richiesta · tocca a noi')
+  })
+})
+// ---- end F-SA-244

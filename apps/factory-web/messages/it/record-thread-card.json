@@ -147,5 +147,27 @@
   },
   "pin": {
     "pinned": "Fissato per tutti su questo record"
+  },
+  "ask": {
+    "chip": {
+      "OPEN": "Richiesta · tocca a noi",
+      "COUNTERED": "Richiesta · controproposta inviata",
+      "ACCEPTED": "Richiesta · accettata",
+      "acceptedStill": "Richiesta · accettata · ancora {count} da fare",
+      "REFUSED": "Richiesta · rifiutata",
+      "WITHDRAWN": "Richiesta · ritirata"
+    },
+    "answer": "Rispondi…"
+  },
+  "change": {
+    "still": "Ancora da fare: {count}",
+    "done": "Fatto",
+    "floor": "Reparto avvisato alle {time}",
+    "workshop": "Terzista avvisato alle {time}",
+    "whoWasTold": "Chi è stato avvisato"
+  },
+  "place": {
+    "line": "Se ne parla nella conversazione dell'ordine",
+    "open": "Apri"
   }
 }

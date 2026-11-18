@@ -21,6 +21,7 @@ import type { OfficeRequest } from '../../../../record-panels/approvals/api' // 
 import type { RequestDoorParts } from '../../../home/approvals/requests/view/RequestReview' // F-SA-243
 import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-237
 import type { FilesViewActions } from '../../../../lib/record-thread/files-view/view/FilesView' // F-SA-237
+import type { ToldChanges } from './told' // F-SA-244
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -162,7 +163,9 @@ export interface OrderRecordModel {
    * F-SA-243: the ONE review window on this page (requests/use-request-review-door.ts): its state, its notice after an answer, and
    * the address that opens it on a request of this order (`?open=<id>`, the tab kept). Absent (a design case): Answer… opens nothing.
    */
-  requestDoor?: { readonly parts: RequestDoorParts; readonly hrefOf: (id: string) => string } | null
+  requestDoor?: { readonly parts: RequestDoorParts; readonly hrefOf: (id: string) => string; /* F-SA-244: open it with no reload */ readonly open?: (id: string) => void } | null
+  /** F-SA-244: the told lines of the order's changes (History's Told line, Production's floor time, Overview's count); null: not read. */
+  told?: Part<ToldChanges> | null
   /** F-SA-236: the approvals we asked the customer on this order (partners.approvals.view); null: not read (no right, or not here). */
   askedOfCustomer?: Part<OfficeRequest[]> | null
   /** F-SA-235: the order's health on Production (the work order record's HealthCard; workorders.view); absent: not read. */
@@ -186,6 +189,8 @@ export interface PaymentInput {
 export interface OrderRecordActions {
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */
   onPortal?: () => void
+  /** F-SA-244: Who was told of one change (by its system line). */
+  onWhoWasTold?: (messageId: string) => void
   /** B-W2a-80: the schedule card's verbs. */
   scheduleSteps?: ScheduleStepsActions
   onRetry?: () => void

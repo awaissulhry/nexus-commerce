@@ -44,6 +44,7 @@ import { orderMilestones, orderProduction } from './production-read'
 import { orderFiles, orderFilesContract } from './order-files'
 // B-SA-056: who was told about one change of the order.
 import { toldContract, whoWasTold } from './told'
+import { toldChanges, toldChangesContract } from './told' // F-SA-244
 import { openOrderFile, openOrderFileContract } from './order-files-open'
 // B-SA-011: the small pictures of a page of orders in one read.
 import { orderPicturesReadContract } from './contract'
@@ -148,4 +149,6 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (never who read it).
   app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(request, request.params.orderId, request.query))
+  // F-SA-244: the told lines of all the order's changes (the order page's one read).
+  app.get('/sales/orders/:orderId/told/changes', { schema: toldChangesContract }, async (request) => toldChanges(request, request.params.orderId))
 })

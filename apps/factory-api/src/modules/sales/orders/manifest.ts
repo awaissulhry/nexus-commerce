@@ -54,4 +54,6 @@ export const manifest = defineManifest({
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (can() on the order, threads.read on its conversation;
   // office people by name, the floor and the workshops by when and which work order — never who read anything).
   'GET /sales/orders/:orderId/told': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // F-SA-244: the told lines of all the order's changes in one read (counts and times; the same wall as above).
+  'GET /sales/orders/:orderId/told/changes': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })

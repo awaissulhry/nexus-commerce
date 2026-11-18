@@ -11,6 +11,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { useLiveBus } from '../../../../../shell/live/use-live'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
+import type { DockedHost } from '../../../../_shared/record-thread/DockedOfficeThread' // F-SA-244
 import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
@@ -37,6 +38,8 @@ export interface OrderDockProps {
   readonly printHref?: string
   /** F-SA-265: a message about a part of the order jumps back to its row ("Show on the page"). */
   readonly showOnPage?: (about: { kind: string; id: string }) => void
+  /** F-SA-244: the conversation side of a change on THIS order's conversation (the asks' chips, the change lines, their doors). */
+  readonly changeSide?: DockedHost['changeSide']
 }
 
 export function OrderDock(props: OrderDockProps) {
@@ -47,7 +50,7 @@ export function OrderDock(props: OrderDockProps) {
   )
 }
 
-function Dock({ order, workOrders, prefix, printHref, showOnPage }: OrderDockProps) {
+function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* F-SA-244 */ }: OrderDockProps) {
   const t = useT('orders')
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -176,7 +179,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage }: OrderDockPro
       </div>
     )
   } else {
-    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} />
+    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} {...(changeSide ? { changeSide } : {}) /* F-SA-244 */} />
   }
 
   return (

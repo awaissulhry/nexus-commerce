@@ -123,12 +123,38 @@ export type DoneItem =
   | { readonly kind: 'LINES_CLOSED'; readonly seqs: readonly number[] }
   | { readonly kind: 'LINES_REOPENED'; readonly seqs: readonly number[] }
   | { readonly kind: 'PROMISE'; readonly from: string | null; readonly to: string }
-  | { readonly kind: 'WORK_ORDER_CHANGED'; readonly workOrder: WorkOrderLabel; readonly cells: readonly CellFigure[] }
+  // B-SA-053b: `cells` are the work order's own cells AFTER the apply (from → what it makes now: Lower to the order never goes below
+  // what is cut), and `extra` the pieces it keeps beyond the order's figure with their outcome (office only; never on the floor).
+  | { readonly kind: 'WORK_ORDER_CHANGED'; readonly workOrder: WorkOrderLabel; readonly cells: readonly CellFigure[]; readonly extra?: ExtraKept | null }
   | { readonly kind: 'WORK_ORDER_NEW'; readonly workOrder: WorkOrderLabel }
   | { readonly kind: 'LEFT_AS_IS'; readonly workOrder: WorkOrderLabel; readonly why: string | null }
   | { readonly kind: 'PAUSED'; readonly workOrders: readonly WorkOrderLabel[] }
   | { readonly kind: 'RESUMED'; readonly workOrders: readonly WorkOrderLabel[] }
   | { readonly kind: 'RELEASED'; readonly changeOrder: string; readonly workOrders: readonly WorkOrderLabel[] }
+
+// ---- B-SA-053b: the extra pieces a lowered work order keeps (cut beyond the order's new figure) and what happens to them, as the
+// accepter named it (null: an office close or cancel that named none).
+export interface ExtraKept {
+  readonly count: number
+  readonly outcome: 'CHARGE' | 'LEFTOVER' | 'SCRAP' | null
+}
+
+/** "2 extra pieces kept as the customer's leftover" — the outcome's own words (order-apply CHANGE_WORDS.extraOutcome's). */
+function extraText(extra: ExtraKept, locale: NoteLocale): string {
+  const it = locale === 'it'
+  const pieces = it ? `${extra.count} ${extra.count === 1 ? 'pezzo in più' : 'pezzi in più'}` : `${extra.count} extra ${extra.count === 1 ? 'piece' : 'pieces'}`
+  switch (extra.outcome) {
+    case 'CHARGE':
+      return it ? `${pieces} ${extra.count === 1 ? 'tenuto e addebitato' : 'tenuti e addebitati'} al cliente` : `${pieces} kept and charged to the customer`
+    case 'LEFTOVER':
+      return it ? `${pieces} ${extra.count === 1 ? 'tenuto' : 'tenuti'} come rimanenza del cliente` : `${pieces} kept as the customer's leftover`
+    case 'SCRAP':
+      return it ? `${pieces} da scartare, con la loro approvazione` : `${pieces} to scrap, with their approval`
+    default:
+      return it ? `${pieces} ${extra.count === 1 ? 'tenuto' : 'tenuti'}` : `${pieces} kept`
+  }
+}
+// ---- end B-SA-053b
 
 /** What comes next (a step of this change still open). */
 export type NextItem =
@@ -219,8 +245,11 @@ function doneText(item: DoneItem, locale: NoteLocale): string {
       return it ? `${SEQ(item.seqs, locale)} ${item.seqs.length === 1 ? 'riaperta' : 'riaperte'}` : `${SEQ(item.seqs, locale)} reopened`
     case 'PROMISE':
       return it ? `data promessa ${item.from ? `${dateText(item.from)} → ` : ''}${dateText(item.to)}` : `promise date ${item.from ? `${dateText(item.from)} → ` : ''}${dateText(item.to)}`
-    case 'WORK_ORDER_CHANGED':
-      return it ? `${woName(item.workOrder, locale)} cambiato: ${cellsText(item.cells)}` : `${woName(item.workOrder, locale)} changed: ${cellsText(item.cells)}`
+    case 'WORK_ORDER_CHANGED': {
+      // B-SA-053b: the work order's new cells, then the extra pieces it keeps and their outcome.
+      const kept = item.extra && item.extra.count > 0 ? ` · ${extraText(item.extra, locale)}` : ''
+      return it ? `${woName(item.workOrder, locale)} cambiato: ${cellsText(item.cells)}${kept}` : `${woName(item.workOrder, locale)} changed: ${cellsText(item.cells)}${kept}`
+    }
     case 'WORK_ORDER_NEW':
       return it ? `fatto ${woName(item.workOrder, locale)} in più` : `${woName(item.workOrder, locale)} made for the rest`
     case 'LEFT_AS_IS':
@@ -295,7 +324,7 @@ export type FloorChange =
   | { readonly kind: 'SIZES'; readonly cells: readonly CellFigure[]; readonly waitSizes: readonly string[] }
   /** Lines of the order closed or cancelled: no new bundles of them. */
   | { readonly kind: 'LINES_CLOSED'; readonly seqs: readonly number[] }
-  /** Production applied the work-order change: cut these figures. */
+  /** Production applied the work-order change: cut these figures — the work order's own cells after the apply (B-SA-053b). */
   | { readonly kind: 'APPLIED'; readonly cells: readonly { readonly size: string; readonly quantity: number }[] }
   /** Production left the work order as it was: cut as planned. */
   | { readonly kind: 'LEFT_AS_IS' }

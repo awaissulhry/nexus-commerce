@@ -393,3 +393,41 @@ describe('F-SA-265: the frame\'s doors into the conversation (Discuss, Show in t
   })
 })
 // ---- end F-SA-265
+
+// ---- F-SA-244 (14-change-flow §3.1 "Order thread | the ask message's card Answer… | the same address (the dock asks the frame: a NEW
+// door kind beside openDoor('approve'))"): the answer door — the conversation opens the page's ONE review window on a request.
+describe('F-SA-244: the frame\'s answer door — the ask card opens the page\'s review window', () => {
+  it('a page gives the door (open + its real address); the frame passes it on only where the page has a conversation', () => {
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    expect(model).toContain('export interface FrameAnswer {')
+    expect(model).toContain('readonly open: (requestId: string) => void')
+    expect(model).toContain('readonly href: (requestId: string) => string | null')
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('readonly answer?: FrameAnswer')
+    expect(frame).toContain('...(hasThread && answer ? { answer } : {})')
+    // Beside openDoor('approve'): the approve door is untouched.
+    expect(frame).toContain('readonly openDoor?: (door: FrameDoor) => void')
+  })
+  it('the docked thread hands it to the cards; a door to the conversation of another record (a change request: its order\'s)', () => {
+    const docked = readFileSync(new URL('../record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('...(frame?.answer ? { onAnswer: frame.answer.open, answerHref: frame.answer.href } : {})')
+    expect(docked).toContain('withChangeSide(message, side)')
+    expect(docked).toContain("place && (place.type !== key.type || place.id !== key.id)")
+    expect(docked).toContain("tc('place.line')")
+    const api = readFileSync(new URL('../record-thread/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain('place: z.object({ type: z.string(), id: z.string() }).optional()')
+  })
+  it('the order page gives its door: the window\'s `?open=` address, opened without a reload', () => {
+    const view = readFileSync(new URL('../../sales/orders/record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('{...(model.requestDoor?.open ? { answer: { open: model.requestDoor.open, href: model.requestDoor.hrefOf } } : {})}')
+    const record = readFileSync(new URL('../../sales/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(record).toContain('open: (id: string) => door.open(id) /* F-SA-244 */')
+  })
+  it('the place reads where the API says the conversation is, and nothing else (every read says it again)', async () => {
+    const { applyNewest, EMPTY_SERVER } = await import('../record-thread/state')
+    const thread = { status: 'OPEN' as const, version: 1, partyId: 'p1' }
+    expect(applyNewest(EMPTY_SERVER, { thread, messages: [], nextCursor: null, place: { type: 'SalesOrder', id: 'o1' } }).place).toEqual({ type: 'SalesOrder', id: 'o1' })
+    expect(applyNewest(EMPTY_SERVER, { thread, messages: [], nextCursor: null }).place).toBeNull()
+  })
+})
+// ---- end F-SA-244

@@ -60,6 +60,10 @@ import { useRecordFrame } from '../record-frame/RecordFrame'
 import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
 import { stepNearest } from '../record-frame/model' // F-SA-265: Show in thread
 import { withAbout } from '../../../lib/record-thread/composer/model' // F-SA-265: Discuss
+// F-SA-244: the conversation side of a change (the customer's ask, a change's line) and the door to a conversation held elsewhere.
+import { withChangeSide, type CardAsk, type CardChange } from '../../../lib/record-thread/card/model'
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { recordAddress } from '../../../lib/records/record-links'
 import { officeOnly, removeFile, shareWithParty } from './api'
 // B-TH-231: carry a file to another record (same customer or none); a refused file read in words.
 import { readUseOnTargets, useFileOn } from './api'
@@ -103,9 +107,19 @@ export interface DockedHost extends RecordThreadHost {
   // ---- F-SA-265: "Show on the page" — a message about a part of the record (a line, a shipment…) jumps back to its row; absent: no door.
   showOnPage?: (about: { kind: string; id: string }) => void
   // ---- end F-SA-265
+  // ---- F-SA-244: the conversation side of a change, filled by the record page — the customer's ask by its message (the live chip,
+  // Answer… through the frame's answer door) and a change's system line (its Still to do, when the floor and the workshop were told)
+  // with the page's doors (Who was told…, the Still to do card); absent: the cards draw as before.
+  changeSide?: {
+    readonly asks: ReadonlyMap<string, CardAsk>
+    readonly changes: ReadonlyMap<string, CardChange>
+    readonly onWhoWasTold?: (messageId: string) => void
+    readonly onStillToDo?: (messageId: string) => void
+  }
+  // ---- end F-SA-244
 }
 
-const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork']
+const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork', /* F-SA-244: the place door */ 'record-thread-card']
 
 /** B-TH-288: the search before anything is typed (closed). */
 const CLOSED_SEARCH: ThreadSearchModel = { open: false, query: '', state: 'idle', hits: [], total: 0, words: [] }
@@ -144,11 +158,17 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const th = useT(HEAD_NS)
   const ta = useT('record-approvals')
   const ts = useT(SHARES_NS)
+  const tc = useT('record-thread-card') // F-SA-244: the place door's words
   const { key, held, can, notify } = base
   const party = host.party ?? null
   const partyId = base.partyId
   const role = host.partyRole ?? 'customer'
   const offline = base.offline !== null
+  // ---- F-SA-244: the conversation the read named, when it is another record's: its page, the conversation shown there.
+  const place = base.server.place ?? null
+  const placePage = place && (place.type !== key.type || place.id !== key.id) ? recordAddress({ type: place.type, id: place.id }, OFFICE_PAGES) : null
+  const placeHref = placePage ? `${companyPrefix(session.company?.code ?? '')}${placePage}${placePage.includes('?') ? '&' : '?'}thread=open` : null
+  // ---- end F-SA-244
 
   // ── the Head's View (T1-F04) ────────────────────────────────────────────────────────────────────────────────────────
   const [view, setView] = useState<ThreadView>('all')
@@ -800,7 +820,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
 
   // B-TH-231: "Use on another record…" on a message's ⋯ for a person who may add files (files.upload), online.
   // B-TH-255: the line of what the View hides comes with the view's feed (0 on All).
-  const feed = { ...feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown), hiddenNew: shown === 'all' ? 0 : hiddenNew }
+  // F-SA-244: the record page's facts on the customer's ask and on a change's line (the page's own; a message it names nothing of keeps none).
+  const side = host.changeSide
+  const sided = side ? model.feed.messages.map((message) => withChangeSide(message, side)) : model.feed.messages
+  const feed = { ...feedForView({ ...model.feed, messages: sided, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown), hiddenNew: shown === 'all' ? 0 : hiddenNew }
   const shownModel: RecordThreadModel = { ...model, feed }
   const fileOf = (fileId: string) => threadFiles.find((file) => file.id === fileId)
   const threadActions: RecordThreadActions = {
@@ -831,6 +854,12 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     ...(searchOffered ? { onSlash: () => openSearch(true) } : {}),
     // B-TH-231: the message's files the reader opens, carried to another record.
     onUseOn: (messageId) => openUseOn(model.feed.messages.find((item) => item.id === messageId)?.files.map((file) => file.id) ?? []),
+    // ---- F-SA-244: Answer… on the customer's ask opens the page's ONE review window (the frame's answer door: the dock asks the
+    // frame); Who was told… and "Still to do: N" on a change's line are the page's own doors.
+    ...(frame?.answer ? { onAnswer: frame.answer.open, answerHref: frame.answer.href } : {}),
+    ...(side?.onWhoWasTold ? { onWhoWasTold: side.onWhoWasTold } : {}),
+    ...(side?.onStillToDo ? { onStillToDo: side.onStillToDo } : {}),
+    // ---- end F-SA-244
     // F-SA-265: a message about a part of the record: back to its row on the page.
     ...(host.showOnPage
       ? {
@@ -921,6 +950,20 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
         </div>
       )}
       {hasResults && <div className="fw-rt-door">{doorResults}</div>}
+      {/* F-SA-244 (B-SA-048): this record talks in another record's conversation (a change request: its order's) — one door to it. */}
+      {placeHref && (
+        <div className="fw-rt-door">
+          <Banner
+            tone="info"
+            title={tc('place.line')}
+            action={
+              <Button size="sm" asChild>
+                <a href={placeHref}>{tc('place.open')}</a>
+              </Button>
+            }
+          />
+        </div>
+      )}
     </>
   )
 

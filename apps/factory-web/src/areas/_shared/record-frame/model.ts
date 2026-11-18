@@ -220,3 +220,16 @@ export function stepNearest(events: readonly { readonly id: string; readonly at:
   return best?.id ?? null
 }
 // ---- end F-SA-265
+
+// ---- F-SA-244 (sales page plan P5, P24; 14-change-flow §3.1 "Order thread | the ask message's card Answer… | the same address (the
+// dock asks the frame: a NEW door kind beside openDoor('approve'))"): the conversation asks the PAGE to open its ONE review window on
+// a customer's request. The page gives the door (the order page: its door hook's `?open=<request id>`); a page without one gives none,
+// and the card offers no Answer….
+export interface FrameAnswer {
+  /** Open the review window on the request (the page's own address word; the tab and scroll kept). */
+  readonly open: (requestId: string) => void
+  /** The address that opens it (a real link: ⌘-click opens it in a new tab); null: none for this request. */
+  readonly href: (requestId: string) => string | null
+}
+// ---- end F-SA-244
+

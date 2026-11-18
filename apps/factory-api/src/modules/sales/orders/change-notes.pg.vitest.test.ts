@@ -236,6 +236,45 @@ describe('B-SA-053: the floor note on each open work order whose work changes', 
   })
 })
 
+// ---- B-SA-053b (14-change-flow S7): production applied the work-order change — the floor note and the line's "Fatto" give the work
+// order's NEW cells (Lower to the order keeps what is cut: 52 asked 4 → 1, 3 cut, the cell makes 3), never the ask's figure; the line
+// (office only) names the extra pieces kept and their outcome; the floor never reads them.
+describe('B-SA-053b: an applied work-order change names the work order\'s new cells, and its extra pieces in the office line only', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('52 asked 4 → 1 with 3 cut: "cambiato: taglia 52 3." on the floor; "52 4 → 3 · 2 pezzi in più tenuti come rimanenza del cliente" in the line', async () => {
+    const world = await inWork(1)
+    const correlation = newId()
+    await acceptRequest(caller(SALES, correlation), world.request, { version: 1 }, undefined, h.clock)
+    await tellEveryone(correlation)
+    const [change] = await admin<{ id: string; cells: Json[] }>(`SELECT id::text AS id, cells FROM "WorkOrderChange" WHERE "tenantId" = $1 AND "salesOrderId" = $2 AND status = 'PROPOSED'`, [T, world.order])
+    expect(change!.cells).toEqual([expect.objectContaining({ size: '52', from: 4, to: 1, workOrderSizeId: world.cell })])
+    // Production applies it as Lower to the order does when 3 are cut: the cell keeps 3 (planted as the command leaves it).
+    const decidedAt = new Date(h.clock.now().getTime() + 60_000)
+    await planted([
+      { sql: `UPDATE "WorkOrderSize" SET quantity = 3, version = version + 1 WHERE id = $1`, values: [world.cell] },
+      {
+        sql: `UPDATE "WorkOrderChange" SET status = 'APPLIED', "decidedAt" = $2, "decidedById" = $3, extra = $4::jsonb, "extraOutcome" = 'LEFTOVER', version = version + 1 WHERE id = $1`,
+        values: [change!.id, decidedAt, officeId, JSON.stringify([{ workOrderSizeId: world.cell, salesOrderLineId: world.line, size: '52', count: 2 }])],
+      },
+    ])
+    const [template] = await eventsOf(correlation)
+    const applied = newId()
+    const event = { ...template!, eventId: newId(), type: 'work_order_change.applied', subject: change!.id, correlationId: applied, causationId: null, occurredAt: decidedAt.toISOString(), payload: { changeId: change!.id, salesOrderId: world.order, workOrderId: world.workOrder } } as EventEnvelope
+    await orderChangeNotes(callerFor(h.database, systemContext(T, applied)), event)
+
+    const lines = await notesOn('SalesOrder', world.order)
+    expect(lines).toHaveLength(2)
+    const text = lines[1]!.bodyText.split('\n')
+    expect(text[0]).toMatch(/^Ordine di lavoro cambiato · Otto Office · \d\d:\d\d$/)
+    expect(text).toContain(`Fatto: ${world.number} cambiato: 52 4 → 3 · 2 pezzi in più tenuti come rimanenza del cliente.`)
+    expect(lines[1]!.bodyText).not.toContain('52 4 → 1')
+    const notes = await notesOn('WorkOrder', world.workOrder)
+    expect(notes).toHaveLength(2)
+    expect(notes[1]!.bodyText).toBe(`${world.number} cambiato: taglia 52 3.`)
+    expect(notes[1]!.bodyText).not.toMatch(/in più|rimanenza|addebit|scart/)
+  })
+})
+// ---- end B-SA-053b
+
 describe('B-SA-054: the outside workshops are told by their own subcontract order', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const rule = () => PARTNER_RULES.find((entry) => entry.name === 'portalProduction.workshopOrderChanged')!
   const draftsOf = (event: EventEnvelope) => h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, (client) => rule().drafts({ tx: client as never, tenantId: T, now: h.clock.now(), event }, event.payload))

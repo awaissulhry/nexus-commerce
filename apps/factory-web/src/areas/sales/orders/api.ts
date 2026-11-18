@@ -110,6 +110,8 @@ export const orderRowSchema = z.object({
   partyId: z.string(),
   partyName: z.string(),
   customerRef: z.string().nullable(),
+  /** B-SA-070b: the customer's own number of the order ("Your order 12"; absent or null: none given yet). */
+  customerSeq: z.number().nullable().optional(),
   status,
   deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable() }),
   lineCount: z.number(),
@@ -482,6 +484,8 @@ export const orderSchema = z.object({
   partyId: z.string(),
   party: z.object({ code: z.string(), legalName: z.string() }).nullable(),
   customerRef: z.string().nullable(),
+  /** B-SA-070b: the customer's own number of the order ("Your order 12"; absent or null: none given yet). */
+  customerSeq: z.number().nullable().optional(),
   status,
   orderDate: z.string(),
   currency: z.string(),

@@ -261,3 +261,27 @@ describe('F-SA-282: the window in both languages', () => {
     expect(tFor('it')('reply.oneCustomer')).toBe('Rispondere a più ordini funziona per un cliente alla volta.')
   })
 })
+
+// ---- B-SA-070b: the preview names each order as the customer reads it — its own number ("Your order 12"), the office number beside it
+describe('B-SA-070b: Reply to N\'s preview reads "Your order 12" (the customer\'s own number), the office number beside it', () => {
+  it('a row with its own number: "Your order 12 (SO-…)"; one without: the office number and its PO, as before', async () => {
+    const { previewLabel } = await import('./reply-many')
+    const [first, second] = replyTargetsOf([{ ...order(1), customerSeq: 12 }, order(2)])
+    expect(first!.customerSeq).toBe(12)
+    expect(second!.customerSeq).toBeNull()
+    const en = tFor('en')
+    const it_ = tFor('it')
+    expect(previewLabel(first!, en)).toBe(`Your order 12 (${first!.number})`)
+    expect(previewLabel(first!, it_)).toBe(`Il vostro ordine 12 (${first!.number})`)
+    expect(previewLabel(second!, en)).toBe(targetLabel(second!))
+  })
+  it('the window draws it; the receipt keeps the office number (the writer\'s own)', () => {
+    const targets = replyTargetsOf([{ ...order(1), customerSeq: 12 }, { ...order(2), customerSeq: 13 }])
+    const model: ReplyManyModel = { customer: { id: ALPHA, name: BRAND_ALPHA.tradeName }, targets, batchId: 'c3c3c3c3-0000-4000-8000-0000000000c3', draft: startDraft(replyComposerContext(BRAND_ALPHA.tradeName)), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false }
+    const text = textOf(render(createElement(ReplyManyBody, { model }), 'en'))
+    expect(text).toContain(`Your order 12 (${targets[0]!.number}), Your order 13 (${targets[1]!.number})`)
+    const italian = textOf(render(createElement(ReplyManyBody, { model }), 'it'))
+    expect(italian).toContain(`Il vostro ordine 12 (${targets[0]!.number})`)
+  })
+})
+// ---- end B-SA-070b

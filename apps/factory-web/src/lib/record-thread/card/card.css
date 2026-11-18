@@ -393,3 +393,12 @@
   color: var(--nds-text-2);
   margin-inline-end: 2px;
 }
+
+/* ---- F-SA-244: the conversation side of a change — the ask's chip and Answer…, a change's Still to do and told times (layout only). */
+.fw-rt-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+/* ---- end F-SA-244 */

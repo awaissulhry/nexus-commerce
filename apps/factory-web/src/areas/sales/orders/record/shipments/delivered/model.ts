@@ -19,6 +19,8 @@ export interface DeliveriesActions {
   readonly onRetry?: () => void
   readonly onDownload?: (shipmentId: string) => void
   readonly onDismiss?: () => void
+  /** B-SA-0xxb / F-SA-266b: the proof opens in the thread's ONE viewer (the page has a conversation and the reader its file). */
+  readonly onView?: (shipmentId: string) => void
 }
 
 export const initialDeliveries = (prefix: string): DeliveriesModel => ({ state: 'loading', read: null, prefix, downloading: null, problem: null, offline: false })
@@ -38,3 +40,11 @@ export function downloadHeldKey(model: Pick<DeliveriesModel, 'downloading' | 'of
   if (model.downloading !== null) return 'dv.held.busy'
   return null
 }
+
+// ---- B-SA-0xxb / F-SA-266b (10-order-page §6.4 "Viewer: … POD … the thread's ONE viewer"): the proof as the viewer lists it, or null
+// — no file for this reader (no files.read on the shipment, none kept yet): the card keeps Download, with its held words.
+export function proofFileOf(row: DeliveryRow): { readonly id: string; readonly name: string; readonly contentType: string; readonly sizeBytes: number } | null {
+  return row.pod?.file ?? null
+}
+// ---- end B-SA-0xxb
+

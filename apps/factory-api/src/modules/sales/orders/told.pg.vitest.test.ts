@@ -17,6 +17,7 @@ import { systemContext } from '../../../platform/outbox/system'
 import { acceptRequest } from '../change-requests/office'
 import { orderChangeNotes } from './change-notes'
 import { whoWasTold } from './told'
+import { toldChanges } from './told' // F-SA-244
 
 /**
  * B-SA-056 — who was told about one change of a sales order (sales page plan P8, R2, R8; 14-change-flow §5.2; review WP-1, WP-2), on
@@ -167,3 +168,46 @@ describe('B-SA-056: who was told about one change — never who read it', { time
     expect(await thrown(whoWasTold(caller(READER), world.order, {}))).toMatchObject({ message: 'Name the change.' })
   })
 })
+
+// ---- F-SA-244: the told lines of all the order's changes in one read (the system line cards, History's Told line, the Production
+// tab's "Told the floor at hh:mm", Overview's "Told about changes: N people") — counts and times, never names, never who read anything.
+describe('F-SA-244: the told lines of every change of the order, one read', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('names each change by its line and its request; counts the people once; the floor by when and which work order; no read state', async () => {
+    const world = await inWork()
+    await follow(people.supervisor, 'SalesOrder', world.order)
+    await follow(salesRep, 'SalesOrder', world.order)
+    await follow(people.betaPlanner, 'SalesOrder', world.order)
+    const correlation = newId()
+    await acceptRequest(caller(['orders.view', 'orders.manage'], 'all', correlation), world.request, { version: 1 }, undefined, h.clock)
+    await asTheWorker(correlation)
+
+    const single = await whoWasTold(caller(READER), world.order, { batchId: correlation })
+    expect(single.change.requestId).toBe(world.request)
+
+    const list = await toldChanges(caller(READER), world.order)
+    expect(list.order.id).toBe(world.order)
+    expect(list.changes).toHaveLength(1)
+    const [change] = list.changes
+    expect(change).toMatchObject({ batchId: correlation, messageId: single.change.messageId, requestId: world.request, eventType: 'order_change_request.answered', people: single.people.count })
+    expect(change!.floor).toMatchObject({ workOrders: [{ id: world.workOrder, number: world.number }], leftOut: 0 })
+    expect(change!.floor.at).not.toBeNull()
+    expect(change!.workshop).toEqual({ at: null, told: 0, waiting: 0 })
+    expect(list.people).toBe(single.people.count)
+    // Counts only: no person's name or id, and nothing about reading.
+    expect(JSON.stringify(list)).not.toContain(people.supervisor)
+    expect(JSON.stringify(list)).not.toContain('Sara Sales')
+    expect(JSON.stringify(list)).not.toMatch(/"(read|readAt|seen|seenAt|shown|offline)"/)
+  })
+
+  it('an order with no conversation yet: nothing told; the wall as Who was told', async () => {
+    const world = await inWork()
+    expect(await toldChanges(caller(READER), world.order)).toMatchObject({ people: 0, changes: [] })
+    const correlation = newId()
+    await acceptRequest(caller(['orders.view', 'orders.manage'], 'all', correlation), world.request, { version: 1 }, undefined, h.clock)
+    await asTheWorker(correlation)
+    expect(await thrown(toldChanges(caller(READER, [betaPartyId]), world.order))).toMatchObject({ message: 'Sales order not found.' })
+    expect(await thrown(toldChanges(caller(['orders.view']), world.order))).toMatchObject({ message: 'Change not found.' })
+    expect(await thrown(toldChanges(caller(READER), newId()))).toMatchObject({ message: 'Sales order not found.' })
+  })
+})
+// ---- end F-SA-244
