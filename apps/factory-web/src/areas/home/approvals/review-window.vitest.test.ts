@@ -5,18 +5,24 @@ import { render, textOf } from '../../../lib/record-thread/parts/testing'
 import { designScreen } from './fixtures'
 import { DEPTH_CASES } from './depth/fixtures'
 import { InboxView } from './view/InboxView'
+// F-SA-240: the customer request window, one of the inbox's windows, mounted with its own props.
+import { openIdOf } from './inbox'
+import type { InboxViewModel } from './model'
+import { REQUEST_CASES } from './requests/fixtures'
 
 // The DS DetailModal opens only in a browser (after hydration, in a portal): here it draws in place — its title, its tab row's
 // labels and its content — so the review window itself is checked.
 vi.mock('@nexus/ui/patterns', async (original) => {
   const actual = await original<typeof import('@nexus/ui/patterns')>()
-  const DetailModal = ({ open, title, tabs, children }: { open: boolean; title?: unknown; tabs?: readonly { id: string; label: string }[]; children?: unknown }) =>
+  // F-SA-240: the ‹ › arrows' list drawn as its ids (`data-walk`), to compare the windows' lists.
+  const DetailModal = ({ open, title, tabs, children, nav }: { open: boolean; title?: unknown; tabs?: readonly { id: string; label: string }[]; children?: unknown; nav?: { ids: readonly string[]; current: string } }) =>
     open
       ? createElement(
           'section',
           { role: 'dialog' },
           createElement('h2', null, title as never),
           createElement('nav', { 'data-tabs': '' }, ...(tabs ?? []).map((tab) => createElement('span', { key: tab.id, 'data-tab': tab.id }, tab.label))),
+          nav ? createElement('p', { 'data-walk': nav.ids.join(','), 'data-at': nav.current }) : null,
           children as never,
         )
       : null
@@ -93,5 +99,30 @@ describe('B-TH-270: the review window — Change · Context & history, the reque
     expect(textOf(html)).toContain('Context & history')
     expect(html).not.toContain('fw-apv-window')
     expect(html).not.toContain('aria-label="Thread tools"')
+  })
+})
+
+describe('F-SA-240: Home › Approvals behaves as before — its windows walk ONE list, the inbox’s rows (P24)', () => {
+  const walkOf = (html: string) => /data-walk="([^"]*)"/.exec(html)?.[1]?.split(',') ?? null
+  const atOf = (html: string) => /data-at="([^"]*)"/.exec(html)?.[1] ?? null
+  const inbox = (model: InboxViewModel) => render(createElement(InboxView, { model, actions: { onOpen: () => undefined } }))
+
+  it('a customer request’s window walks every row that opens a window here, in the list’s order, as the task review does', () => {
+    const request = REQUEST_CASES.find((entry) => entry.id === 'f-pr-08-rush')!.model
+    const rows = (request.rows.items ?? []).map(openIdOf).filter((id): id is string => id !== null)
+    const walked = walkOf(inbox(request))
+    expect(walked).toEqual(rows)
+    expect(atOf(inbox(request))).toBe(request.requestReview!.id)
+    // The task review of the same inbox walks the same rows (one rule for every window of the inbox).
+    const task = DEPTH_CASES.find((entry) => entry.id === 'w2b-307-review')!.model
+    const taskRows = (task.rows.items ?? []).map(openIdOf).filter((id): id is string => id !== null)
+    expect(walkOf(inbox(task))).toEqual(taskRows)
+  })
+
+  it('without a way to open another (a design case): no arrows, the window still draws', () => {
+    const request = REQUEST_CASES.find((entry) => entry.id === 'f-pr-08-rush')!.model
+    const html = render(createElement(InboxView, { model: request }))
+    expect(walkOf(html)).toBeNull()
+    expect(textOf(html)).toContain('Urgent – asked · SO-DEMO-0101')
   })
 })

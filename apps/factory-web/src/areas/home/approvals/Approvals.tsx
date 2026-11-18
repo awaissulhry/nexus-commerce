@@ -223,6 +223,9 @@ export function Approvals() {
     go({ open: next && next !== answered.id ? next : null })
   }
   const requestTarget = target === 'request' || target === 'batch' ? target : null
+  // F-SA-240: this page is one of the window's four doors — its host is the inbox (the window's ‹ › walk its rows, InboxView passes
+  // the window's own props); the order page, the order's thread and the customer's Work tab open the same window through
+  // requests/use-request-review-door.ts.
   const requestReview = useRequestReview({
     api,
     openId: requestTarget ? openId : null,

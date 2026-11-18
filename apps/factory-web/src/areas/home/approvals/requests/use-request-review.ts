@@ -36,6 +36,8 @@ import {
  * `RequestReviewModel`): reads the request (`GET /production/brand-requests/:id` + its impact) or the batch (`?batchId=`), keeps the
  * words the customer reads, answers through each kind's own route (./api), re-reads a batch before Accept all / Refuse all, and hands
  * the inbox a notice — with "Lift the hold" or "Clear rush" when the accept offers one (R-23). Every write carries an Idempotency-Key.
+ * F-SA-240: two hosts, one engine — Home › Approvals (Approvals.tsx: its inbox rows) and every other door of the same window (the
+ * order page, the order's thread, the customer's Work tab) through use-request-review-door.ts. Nothing here knows the inbox.
  */
 
 /** A notice the inbox shows after an answer (keys of approvals-depth `notice.*`). */
@@ -57,7 +59,7 @@ export interface RequestReviewHost {
   readonly offline: boolean
   /** The reader holds the price grain (a counter's fee is theirs to set). */
   readonly price: boolean
-  /** The order's page (with the company prefix). */
+  /** The order's page (with the company prefix). F-SA-240: '' — no link (the door is that order's own page). */
   readonly orderHref: (request: Pick<BrandRequest, 'orderId' | 'orderNumber' | 'companyId'>) => string
   /** The reader may lift a customer's pause (workorders.hold). */
   readonly mayLift: boolean
