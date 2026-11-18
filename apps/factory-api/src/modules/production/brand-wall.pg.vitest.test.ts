@@ -343,7 +343,8 @@ describe('B-PR-10 the brand-wall sweep', () => {
     if (!((history.body.entries as unknown[] | undefined)?.length)) problems.push(`audit history of A's work order: ${history.status}, no entry`)
     const named = await as('office.p1', 'GET', `/audit?recordType=WorkOrder&recordId=${w.a.workOrderId}`)
     if (!((named.body.entries as unknown[] | undefined)?.length)) problems.push(`audit log naming A's work order: ${named.status}, no entry`)
-    await check('custom fields of a work order', `/fields/values/WorkOrder/${w.a.workOrderId}`, [w.a.workOrderId])
+    // fix-pr-11: the address takes the record type's key (platform/fields/records.ts CUSTOM_RECORD_KEYS), not its model name.
+    await check('custom fields of a work order', `/fields/values/WORK_ORDER/${w.a.workOrderId}`, [w.a.workOrderId])
     const alertRule = await first(`SELECT id FROM "AlertRule" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [ids.tenantId])
     await check('alert routes’ customers', `/alerts/rules/${alertRule?.id}/routes`, [ids.a])
     expect(problems).toEqual([])
