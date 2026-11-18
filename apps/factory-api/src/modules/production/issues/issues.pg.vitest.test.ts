@@ -612,7 +612,17 @@ describe('B-PR-45 escalation (cron production.issueEscalation)', { timeout: SLOW
       return system.withClient((client) => client.$transaction((tx) => rule.drafts(ruleContext(tx, T, new Date()), { taskId, recordType: task.recordType, recordId: task.recordId, assigneeId: task.assigneeId, assignedById: null })))
     }
     const nameB = (await one<{ name: string }>(`SELECT coalesce("tradeName", "legalName") AS name FROM "Party" WHERE id = $1`, [ids.b]))!.name
-    const reported = await draftsOf(batchTask.id)
+    // fix-pr-10: R-42 above ticked the batch task DONE, and the bell tells only of an OPEN task (tasks.assigned): its words are read
+    // as when it was given — the task open again for this read only, then closed as it was (no event: the database's own login).
+    const closed = (await one<{ closedAt: Date; closedById: string }>(`SELECT "closedAt", "closedById"::text AS "closedById" FROM "Task" WHERE id = $1 AND status = 'DONE'`, [batchTask.id]))!
+    expect(closed).toBeDefined()
+    await admin(`UPDATE "Task" SET status = 'OPEN', "closedAt" = NULL, "closedById" = NULL, version = version + 1 WHERE id = $1`, [batchTask.id])
+    let reported: Awaited<ReturnType<typeof draftsOf>>
+    try {
+      reported = await draftsOf(batchTask.id)
+    } finally {
+      await admin(`UPDATE "Task" SET status = 'DONE', "closedAt" = $2, "closedById" = $3, version = version + 1 WHERE id = $1`, [batchTask.id, closed.closedAt, closed.closedById])
+    }
     expect(reported).toEqual([expect.objectContaining({ userId: people.officeB, category: 'ASSIGNMENT', messageKey: 'notifications.production.problemReportedMany', actorId: null, record: expect.objectContaining({ type: 'SalesOrder', id: w.b.salesOrderId }) })])
     expect(reported[0]!.params).toMatchObject({ customer: nameB, count: 2, taskId: batchTask.id })
     expect(sentenceOf({ messageKey: reported[0]!.messageKey, params: reported[0]!.params, recordLabel: 'SEED-SO-B001', actorId: null }, new Map(), 'en')).toBe(`${nameB} reported a problem on 2 orders: answer in the thread of SEED-SO-B001`)
