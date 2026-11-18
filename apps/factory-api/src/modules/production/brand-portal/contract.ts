@@ -12,6 +12,9 @@ import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/
 import { PROBLEM_ORDERS_MAX } from '@nexus/factory-domain/production-brand/issues' // B-PR-45
 import { MAX_BODY_LENGTH } from '@nexus/factory-domain/threads/rules' // B-PR-45
 import { BULK_ASK_KINDS, BULK_ASK_MAX, BULK_REASON_MAX, WITHDRAW_OUTCOMES } from '@nexus/factory-domain/production-brand/bulk' // B-PR-46a
+import { APPROVAL_KINDS, APPROVAL_STATUSES } from '@nexus/factory-domain/approvals-out/kinds' // B-PR-46b
+import { APPROVAL_LIMITS } from '@nexus/factory-domain/approvals-out/rules' // B-PR-46b
+import { APPROVE_ROW_CODES, BULK_APPROVE_MAX, BULK_FILES_MAX } from '@nexus/factory-domain/production-brand/approve-zip' // B-PR-46b
 
 /**
  * B-PR-18: the customer's own production in its portal (see ./read.ts). Every state comes with its words in Italian and English
@@ -500,3 +503,87 @@ export const withdrawAskBatchContract = defineContract({
   },
 })
 // ── end B-PR-46a ──
+
+// ── B-PR-46b ──
+/**
+ * B-PR-46b: Approve N (./approve.ts) and Download files of N (./zip.ts). The review list names only the customer's own orders and
+ * requests; an id that is not one of its own is only counted (`notFound`), never named. Approve N: one result per own request
+ * (approved, or why not: its code and words); nothing approved at all: 409 with each request's words at
+ * `body/items/<index>/<code>`; it takes an Idempotency-Key (a retry answers no request twice). The zip: the attachment's bytes, or
+ * 409 in words at `problem/<CODE>`.
+ */
+const commaOrderIds = z
+  .string()
+  .trim()
+  .max(BULK_FILES_MAX * 37)
+  .transform((value) => [...new Set(value.split(',').map((part) => part.trim()).filter((part) => part !== ''))])
+  .pipe(z.array(id()).min(1).max(BULK_FILES_MAX))
+
+const orderNamed = output({ orderId: id(), number: z.string(), customerRef: z.string().nullable() })
+
+export const approvalsToReviewContract = defineContract({
+  querystring: input({ orderIds: commaOrderIds }),
+  response: {
+    200: output({
+      /** The picked own orders, each with how many of the listed approvals wait on it. */
+      orders: z.array(orderNamed.extend({ waiting: z.number().int() })),
+      items: z.array(
+        output({
+          requestId: id(),
+          /** Send it back with the answer: a request that changed since is not approved ("Read it again"). */
+          version: z.number().int(),
+          kind: z.enum(APPROVAL_KINDS),
+          /** What it is about, in both languages ("Sample · PP · T-OWN-JKT-02"). */
+          words,
+          question: z.string(),
+          dueAt: instant(),
+          /** The picked orders it waits on (a style's sample waits on every picked order of that style). */
+          orders: z.array(orderNamed),
+          facts: z.array(output({ label: z.string(), value: z.string() })),
+          /** Its photos and PDFs (the request's own files, shared with the customer: the portal's file routes open them). */
+          files: z.array(output({ id: id(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int() })),
+          /** This person may tick it (Approve N); else why not, in their language (a price: the buyer; a named approver; "Open it to answer"). */
+          may: output({ approve: z.boolean(), held: z.string().nullable() }),
+        }),
+      ),
+      /** More approvals wait on these orders than the list holds (the rest: Waiting for you). */
+      more: z.boolean(),
+      /** Ids named that are not its own orders: counted, never named. */
+      notFound: z.number().int(),
+      /** Said before Send: Approve N cannot be undone. */
+      undo: words,
+    }),
+  },
+})
+
+export const approveManyContract = defineContract({
+  body: input({
+    items: z.array(input({ requestId: id(), version: z.number().int().min(1) })).min(1).max(BULK_APPROVE_MAX),
+    /** One typed name signs every approval. */
+    typedName: z.string().max(APPROVAL_LIMITS.typedName + 50),
+  }),
+  response: {
+    200: output({
+      results: z.array(
+        output({
+          requestId: id(),
+          kind: z.enum(APPROVAL_KINDS),
+          done: z.boolean(),
+          status: z.enum(APPROVAL_STATUSES),
+          /** Why not (OWN_ANSWER, NOT_YOURS, HELD, CHANGED, NOT_DONE); null: approved. */
+          code: z.enum(APPROVE_ROW_CODES).nullable(),
+          words,
+        }),
+      ),
+      /** Request ids named that are not its own: counted, never named. */
+      notFound: z.number().int(),
+      replayed: z.boolean(),
+    }),
+  },
+})
+
+export const productionZipContract = defineContract({
+  body: input({ orderIds: orderIds(BULK_FILES_MAX) }),
+  response: {},
+})
+// ── end B-PR-46b ──

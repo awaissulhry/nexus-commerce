@@ -1,9 +1,10 @@
+import { createHash } from 'node:crypto' // B-PR-46b
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { KIND_RULES, type ApprovalDecision, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
 import { PORTAL_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
 import { answerHeld, answerProblems, answerWords, markupDraftProblems, markupShapesOf, typedNameOf, type MarkupDraft } from '@nexus/factory-domain/approvals-out/rules'
 import { PORTAL_APPROVE } from '@nexus/factory-domain/auth/partners/permissions'
-import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, InvalidStateError, isDomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -316,3 +317,99 @@ export async function answerInPortal(app: FastifyInstance, request: FastifyReque
   if (!can(actorOf(requireContext(request)), PORTAL_APPROVE, { companyId: row.companyId, partyId: row.partyId })) throw new ForbiddenError('Your access lets you read this request, not answer it: ask your admin for the right to approve.')
   return answer(app, request, who, requestId, body, (work) => commandOn(app, request, { name: 'approvalsOut.answer', idempotencyKey: idempotencyKeyFrom(request), input: { requestId, ...body } }, work))
 }
+
+// ---- B-PR-46b: Approve N on My production (modules/production/brand-portal/approve.ts) ---------------------------------------
+// Production plan §1 "Bulk", §3 "Bulk 'Approve' cannot be undone"; lead pick L26; wall test PW-12. Each request of the batch is
+// answered as ONE answer of its own through this file's answer path — prepare (the request in the session's scope, its holds, the
+// named approver B-PR-29, the answerer's money rule B-PR-26, the words), the answer's own command (the session's scope, the
+// request locked at the version the list read), then its own settle — with its own Idempotency-Key derived from the batch's and the
+// request. One refusal never stops the others; each approval still settles alone.
+
+/** One request of a batch, at the version the review list read. */
+export interface ManyItem {
+  readonly requestId: string
+  readonly version: number
+}
+
+/** What became of one request of the batch. */
+export interface AnsweredRow {
+  readonly requestId: string
+  readonly kind: ApprovalKind
+  /** Answered now, or by an earlier try of the same batch (`replayed`). */
+  readonly done: boolean
+  readonly replayed: boolean
+  /** The request's state after the batch. */
+  readonly status: ApprovalStatus
+  /** Why it was not answered: the answer path's error code and words (the reader's language where the rule has it); `OWN_ANSWER`: a kind this batch does not answer. */
+  readonly refusal: { readonly code: string; readonly message: string } | null
+}
+
+/** One request's own Idempotency-Key, derived from the batch's, the person and the request (the same batch answers each once). */
+const manyKeyOf = (key: string | undefined, userId: string, requestId: string): string | undefined =>
+  key ? `approve-many-${createHash('sha256').update(`${key}|${userId}|${requestId}`).digest('hex').slice(0, 48)}` : undefined
+
+/** This person's answer of that key already ran (a retry of the same batch): its receipt, in the session's own scope. */
+const answeredBefore = (request: FastifyRequest, key: string, userId: string): Promise<boolean> =>
+  request.withClient(async (client) => (await client.idempotencyReceipt.findFirst({ where: { scope: 'approvalsOut.answer', key, actorId: userId }, select: { id: true } })) !== null)
+
+/**
+ * Approve N: each request APPROVED with one typed name, one after the other. The person needs portal.approve over the portal's
+ * company and its own party (a preview never answers). A request that is not the session's party's own, at the portal's company,
+ * with the page's permissions, is neither answered nor named: only counted (`notFound`). A kind outside `kinds` is not answered
+ * (`OWN_ANSWER`). Returns one row per answered-or-refused request, in the body's order.
+ */
+export async function answerManyInPortal(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  input: { readonly items: readonly ManyItem[]; readonly typedName: string; readonly kinds: readonly ApprovalKind[] },
+  idempotencyKey: string | undefined,
+): Promise<{ readonly rows: readonly AnsweredRow[]; readonly notFound: number; readonly locale: ApprovalLocale }> {
+  const who = portalWho(request)
+  if (who.preview) throw new ForbiddenError('A preview reads the portal; it never answers for the partner.')
+  const actor = actorOf(requireContext(request))
+  // Every request answered here is of the portal's company and the session's party (checked per row below): one check for all.
+  const userId = who.userId
+  if (!userId || !can(actor, PORTAL_APPROVE, { companyId: who.companyId, partyId: who.partyId })) throw new ForbiddenError('Your access lets you read these requests, not answer them: ask your admin for the right to approve.')
+  const rows: AnsweredRow[] = []
+  let notFound = 0
+  for (const item of input.items) {
+    const row = isUuid(item.requestId) ? await request.withClient((client) => readPartner(client, item.requestId)) : null
+    // The wall: only the session's party's own request at the portal's company, with the page's permissions; else only counted.
+    if (!row || row.partyId !== who.partyId || row.companyId !== who.companyId || !sees(request, row)) {
+      notFound++
+      continue
+    }
+    const kind = row.kind as ApprovalKind
+    const base = { requestId: row.id, kind }
+    if (!input.kinds.includes(kind)) {
+      rows.push({ ...base, done: false, replayed: false, status: row.status as ApprovalStatus, refusal: { code: 'OWN_ANSWER', message: '' } })
+      continue
+    }
+    const key = manyKeyOf(idempotencyKey, userId, row.id)
+    const body: AnswerBody = { decision: 'APPROVED', typedName: input.typedName, version: item.version }
+    // A retry of the same batch: this request's answer ran already (its receipt); nothing runs twice.
+    const replayed = key !== undefined && (await answeredBefore(request, key, userId))
+    if (!replayed) {
+      try {
+        const prepared = await prepare(app, request, who, row.id, body)
+        await commandOn(app, request, { name: 'approvalsOut.answer', idempotencyKey: key, input: { requestId: row.id, ...body } }, (tools) => answerInCommand(tools, request, who, prepared, body))
+      } catch (error) {
+        if (!isDomainError(error)) throw error
+        const now = await request.withClient((client) => readPartner(client, row.id))
+        rows.push({ ...base, done: false, replayed: false, status: (now?.status ?? row.status) as ApprovalStatus, refusal: { code: error.code, message: error.message } })
+        continue
+      }
+    }
+    // The answer stands: the office's side settles it alone (keyed `settle:<request>`: once; what does not settle here, the sweep
+    // settles — ./sweep.ts), so a refusal of the settle never turns a recorded answer into a row "not done".
+    try {
+      await settleRequest(systemCallerOf(request)(who.tenantId), row.id, clockOf(app), who.locale)
+    } catch (error) {
+      if (!isDomainError(error)) throw error
+    }
+    const now = (await request.withClient((client) => readPartner(client, row.id)))!
+    rows.push({ ...base, done: true, replayed, status: now.status as ApprovalStatus, refusal: null })
+  }
+  return { rows, notFound, locale: who.locale }
+}
+// ---- end B-PR-46b

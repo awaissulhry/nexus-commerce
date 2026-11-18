@@ -4,18 +4,22 @@ import { attachmentDisposition } from '../../../platform/files/rules'
 import { appClock } from '../../../platform/portal/tasks/clock'
 import { inlineDisposition } from '../../inventory/receipts/report'
 import { askManyContract, listContract, markUrgencyContract, orderContract, qualityContract, qualityReportContract, reportProblemContract, undoUrgencyContract, urgentOrderContract, withdrawAskBatchContract } from './contract'
+import { approvalsToReviewContract, approveManyContract, productionZipContract } from './contract' // B-PR-46b
 import { manifest } from './manifest'
 import { productionQuality, productionQualityReport } from './quality'
 import { productionCsv, productionList, productionOrder } from './read'
 import { reportProblem } from './problems' // B-PR-45
 import { askMany, withdrawAskBatch } from './bulk' // B-PR-46a
+import { approvalsToReview, approveMany } from './approve' // B-PR-46b
+import { productionZip } from './zip' // B-PR-46b
+import { processFiles } from '../../../platform/files/service' // B-PR-46b
 import { markUrgency, orderUrgent, undoUrgency } from './urgency'
 
 /**
  * B-PR-18: the customer's own production in its portal (production plan §4, §5; design 06-tree B.1 My production, B.2 Order ›
  * Status & progress; the screens are F-PR-11 and F-PR-12a/b). Reads only; see ./read.ts. B-PR-22a adds the customer's urgency
  * commands (./urgency.ts). B-PR-19 adds the quality of its own goods and the inspection report PDF (./quality.ts). B-PR-46a adds
- * the bulk asks (./bulk.ts).
+ * the bulk asks (./bulk.ts). B-PR-46b adds Approve N (./approve.ts) and the files of N as one zip (./zip.ts).
  */
 export default defineRoutes('portal-production', manifest, async (app) => {
   app.get('/portal/production', { schema: listContract }, async (request, reply) => {
@@ -52,4 +56,11 @@ export default defineRoutes('portal-production', manifest, async (app) => {
   app.post('/portal/production/asks', { schema: askManyContract }, async (request) => askMany(app, request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/portal/production/asks/:batchId/withdraw', { schema: withdrawAskBatchContract }, async (request) => withdrawAskBatch(app, request, request.params.batchId, idempotencyKeyFrom(request)))
+
+  // B-PR-46b: Approve N (./approve.ts) and the files of N as one zip (./zip.ts).
+  app.get('/portal/production/approvals', { schema: approvalsToReviewContract }, async (request) => approvalsToReview(app, request, request.query.orderIds))
+
+  app.post('/portal/production/approvals/answer', { schema: approveManyContract }, async (request) => approveMany(app, request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/portal/production/files/zip', { schema: productionZipContract }, async (request, reply) => productionZip(app, processFiles(), request, reply, request.body))
 })

@@ -161,6 +161,10 @@ const GENERATED_KINDS: Readonly<Record<string, PortalDocumentKind>> = Object.fre
   NCR_REPORT: 'QUALITY_REPORT',
   EIGHT_D: 'QUALITY_REPORT',
   COMPLAINT_ANSWER: 'QUALITY_REPORT',
+  // B-PR-46b (production plan L26, R-52; PW-12): the order confirmation the sales order keeps (GeneratedDocument ORDER_CONFIRMATION,
+  // shared with its customer on the order, sales/orders-depth/confirmation) carries the order's prices: it is an ORDER_CONFIRMATION
+  // (group ORDERS: the price grain), never a plain document every role of the customer reads (a Production person has no prices).
+  ORDER_CONFIRMATION: 'ORDER_CONFIRMATION',
 })
 
 const CATEGORY_KINDS: Readonly<Record<string, PortalDocumentKind>> = Object.freeze({

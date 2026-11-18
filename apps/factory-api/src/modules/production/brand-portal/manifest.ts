@@ -19,6 +19,10 @@ import { defineManifest } from '../../../core/manifest'
  * B-PR-46a: the bulk asks (portal.salesOrders.ask over its party, never a preview): Ask N — one request per own order, all of one
  * batch and one kind (pause, resume, cancel; urgent only through Mark urgent, whose rows over the quota or from Cutting become
  * "Urgent – asked" of their own batch) — and Undo of a batch (its requests that still wait are withdrawn) — ./bulk.ts.
+ * B-PR-46b: Approve N — the review list of the approvals waiting on the picked own orders (portal.approvals.view) and their answer
+ * (portal.approvals.view in the manifest + portal.approve over its party in the handler, never a preview; each request through the
+ * approvals answer path with its own rules and key) — ./approve.ts; Download files of N — one zip of what the document library
+ * lists for those orders by role (portal.customerDocuments.view; an order confirmation only with the price grain) — ./zip.ts.
  */
 export const manifest = defineManifest({
   'GET /portal/production': { audiences: ['partner'], permission: 'portal.production.view', scope: 'party' },
@@ -35,4 +39,8 @@ export const manifest = defineManifest({
   // B-PR-46a: Ask N (one request per own order, one batch, one kind: pause, resume, cancel) and its Undo (the batch's open ones).
   'POST /portal/production/asks': { audiences: ['partner'], permission: 'portal.salesOrders.ask', scope: 'party' },
   'POST /portal/production/asks/:batchId/withdraw': { audiences: ['partner'], permission: 'portal.salesOrders.ask', scope: 'party' },
+  // B-PR-46b: Approve N (the review list and its answer: the handler also checks portal.approve) and the files of N as one zip.
+  'GET /portal/production/approvals': { audiences: ['partner'], permission: 'portal.approvals.view', scope: 'party' },
+  'POST /portal/production/approvals/answer': { audiences: ['partner'], permission: 'portal.approvals.view', scope: 'party' },
+  'POST /portal/production/files/zip': { audiences: ['partner'], permission: 'portal.customerDocuments.view', scope: 'party' },
 })

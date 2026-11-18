@@ -26,7 +26,8 @@ import { readForStore, type StoreRow } from './store'
 export type OpenMode = 'download' | 'preview'
 
 /** The library's invoices: their PDF and XML are the office's fiscal archive, opened as the tenant's system. */
-const INVOICE_KINDS: readonly PortalDocumentKind[] = ['INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE']
+// B-PR-46b: exported for My production's files zip (modules/production/brand-portal/zip.ts), the same rule.
+export const INVOICE_KINDS: readonly PortalDocumentKind[] = ['INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE']
 
 function withdrawnError(replacedBy: Replacement | null): DomainError {
   const words = replacedBy ? `This version was withdrawn: open ${replacedBy.title.en} (version ${replacedBy.version}) instead.` : 'This version was withdrawn: ask us for the current one.'
