@@ -303,6 +303,48 @@
     "notThisCustomer": "È spuntato un ordine di un altro cliente: spunta solo gli ordini di questo cliente.",
     "addTask_one": "Aggiungi attività a {count}…",
     "addTask_other": "Aggiungi attività a {count}…",
-    "tooMany": "Al massimo {max} ordini alla volta."
+    "tooMany": "Al massimo {max} ordini alla volta.",
+    "reply_one": "Rispondi a {customer} su {count}…",
+    "reply_other": "Rispondi a {customer} su {count}…",
+    "replyAny_one": "Rispondi su {count}…",
+    "replyAny_other": "Rispondi su {count}…"
+  },
+  "reply": {
+    "title_one": "Rispondi a {customer} su {count} ordine",
+    "title_other": "Rispondi a {customer} su {count} ordini",
+    "oneCustomer": "Rispondere a più ordini funziona per un cliente alla volta.",
+    "noRight": "Il tuo ruolo non scrive ai clienti.",
+    "tooMany": "Al massimo {max} ordini in una risposta.",
+    "portalOff": "{customer} non ha ancora il portale: scrivi per e-mail nella conversazione di ogni ordine.",
+    "reads": "{customer} legge in {language}",
+    "preview_one": "{customer} lo leggerà su {count} ordine:",
+    "preview_other": "{customer} lo leggerà su {count} ordini:",
+    "each": "La conversazione di ogni ordine riceve il proprio messaggio; niente viene copiato tra gli ordini.",
+    "noFiles": "Niente file qui: un file appartiene a un solo ordine, aggiungilo nella conversazione di quell'ordine.",
+    "already_one": "Già pubblicato su {count} ordine: {orders}",
+    "already_other": "Già pubblicato su {count} ordini: {orders}",
+    "nothingLeft": "Ogni ordine è fatto: non resta niente da pubblicare.",
+    "progress": "{done} di {count} fatti…",
+    "sending": "Attendi: le risposte si stanno pubblicando.",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "retry_one": "Riprova su {count} ordine",
+    "retry_other": "Riprova su {count} ordini",
+    "result": {
+      "title_one": "Pubblicato su {count} ordine: {customer} lo legge nella conversazione dell'ordine.",
+      "title_other": "Pubblicato su {count} ordini: {customer} lo legge nella conversazione di ogni ordine.",
+      "none": "Non è stato pubblicato niente.",
+      "label": "Ogni ordine",
+      "sent": "Pubblicato",
+      "notSent": "Non pubblicato. {why}"
+    },
+    "why": {
+      "closed": "La sua conversazione è chiusa: riaprila per rispondere.",
+      "noPortal": "Nessuno di {customer} legge questo ordine nel portale: scrivi per e-mail nella sua conversazione.",
+      "refused": "La fabbrica lo ha rifiutato così com'è.",
+      "notFound": "Questo ordine non si può più aprire.",
+      "forbidden": "Il tuo ruolo non scrive nella conversazione di questo ordine.",
+      "failed": "Non è arrivato: riprova."
+    }
   }
 }

@@ -781,6 +781,10 @@
       "SAMPLE_ROUND": {
         "title": "Another sample",
         "hint": "Pick the line and the kind of sample."
+      },
+      "DESIGN": {
+        "title": "Design change",
+        "hint": "Tell us what to change in the design of some lines, with files if they help. We decide and answer you."
       }
     },
     "verdict": {
@@ -822,7 +826,8 @@
       "HOLD": "We pause the work on the order until you ask us to resume. A pause may move your date.",
       "RESUME": "We take the work up again and confirm your date.",
       "SPLIT_SHIPMENT": "Name the pieces of each size that should ship first. The rest ships when it is ready.",
-      "SAMPLE_ROUND": "Pick the line and the kind of sample. A pre-production sample or a size set is possible only before cutting starts."
+      "SAMPLE_ROUND": "Pick the line and the kind of sample. A pre-production sample or a size set is possible only before cutting starts.",
+      "DESIGN": "Pick the lines, say what to change and add files if they help. Nothing changes until we answer."
     },
     "split": {
       "caption": "Pieces to ship first",
@@ -895,6 +900,46 @@
       "reading": "Still reading what it means…",
       "failedHeld": "Read what it means first: Try again above.",
       "blockedHeld": "Part of what you ask cannot change any more: go back and change your request."
+    },
+    "design": {
+      "lines": "Lines",
+      "linesHint": "The lines the design change is for.",
+      "linePieces_one": "{count} piece ordered",
+      "linePieces_other": "{count} pieces ordered",
+      "what": "What to change",
+      "whatHint": "Say it in your words: the more precise, the faster we can answer.",
+      "files": "Files",
+      "filesHint": "Up to {max} files: from your device, or files already on the order.",
+      "checked": "Files are checked before we open them.",
+      "orderFiles": "Files already on the order",
+      "orderFilesNone": "No files on the order yet.",
+      "orderFilesFailed": "We could not read the order's files.",
+      "fileOnOrder": "On the order",
+      "fileOnLine": "On line {seq}",
+      "deviceHeld": "Sending files needs the right to write in the conversation: ask your admin.",
+      "scanningLeft_one": "{count} file is still being checked: it stays on the order and we see it once it is checked. This request carries the others.",
+      "scanningLeft_other": "{count} files are still being checked: they stay on the order and we see them once they are checked. This request carries the others.",
+      "problem": {
+        "lines": "Pick at least one line the change is for.",
+        "linesGone": "A line you picked can no longer take a design change: pick again.",
+        "words": "Say in your words what should change in the design.",
+        "long": "Your words are too long: at most 4000 characters.",
+        "files": "At most 10 files go with one request: take some off.",
+        "uploading": "Wait until your files are uploaded.",
+        "fileGone": "A file you picked cannot go with the request now: take it off and send again."
+      },
+      "impact": {
+        "priced": "Frozen since cutting: a design change is priced.",
+        "notCut": "Nothing of these lines is cut yet.",
+        "date": "We tell you the date with our answer.",
+        "linesLabel": "Where each line is"
+      },
+      "review": {
+        "files_one": "{count} file",
+        "files_other": "{count} files",
+        "noFiles": "No files"
+      },
+      "sent": "Request sent. We answer here and in the order's conversation."
     }
   },
   "orderFiles": {

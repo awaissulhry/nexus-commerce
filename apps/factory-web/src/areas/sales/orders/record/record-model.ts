@@ -18,6 +18,7 @@ import type { ReadinessRow } from '../../../production/work-orders/daily/api' //
 import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: the one HealthCard
 import type { BrandRequest } from '../../../home/approvals/requests/api' // F-SA-236
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-SA-236
+import type { RequestDoorParts } from '../../../home/approvals/requests/view/RequestReview' // F-SA-243
 import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-237
 import type { FilesViewActions } from '../../../../lib/record-thread/files-view/view/FilesView' // F-SA-237
 
@@ -78,6 +79,8 @@ export interface AmendState {
 export interface OrderRecordModel {
   /** B-W2b-180: ⋯ "See it in the customer's portal" (held: why); null/absent: not offered. */
   portal?: { held: Phrase | null; opening: boolean } | null
+  /** F-SA-242: the portal said nobody of the customer reads this order there (NO_PORTAL): the conversation tick is held. */
+  portalGone?: boolean
   prefix: string
   can: OrderAbilities
   /** Today in the site's zone (YYYY-MM-DD). */
@@ -155,6 +158,11 @@ export interface OrderRecordModel {
   files?: OrderFilesModel | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
+  /**
+   * F-SA-243: the ONE review window on this page (requests/use-request-review-door.ts): its state, its notice after an answer, and
+   * the address that opens it on a request of this order (`?open=<id>`, the tab kept). Absent (a design case): Answer… opens nothing.
+   */
+  requestDoor?: { readonly parts: RequestDoorParts; readonly hrefOf: (id: string) => string } | null
   /** F-SA-236: the approvals we asked the customer on this order (partners.approvals.view); null: not read (no right, or not here). */
   askedOfCustomer?: Part<OfficeRequest[]> | null
   /** F-SA-235: the order's health on Production (the work order record's HealthCard; workorders.view); absent: not read. */
@@ -200,7 +208,8 @@ export interface OrderRecordActions {
   onAmendPrice?: (key: string, text: string) => void
   onAmendHeader?: (field: 'customerRef' | 'requestedDate', value: string) => void
   onAmendReview?: () => void
-  onAmendApply?: (reason: string) => void
+  // F-SA-242: `tell` — the words for the customer also written in the order's conversation (null: not ticked).
+  onAmendApply?: (reason: string, tell?: string | null) => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void

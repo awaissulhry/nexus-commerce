@@ -8,8 +8,8 @@ import type { Issue } from '../core/errors'
  *
  *   RUSH        "Urgent – asked": open exactly while the customer's urgency switch is on (PortalSettings.productionUrgencyOn),
  *               never through the list of asks
- *   the others  open while the customer's limits list them (PortalSettings.productionAskKinds: these four only, each once;
- *               the database refuses any other kind there)
+ *   the others  open while the customer's limits list them (PortalSettings.productionAskKinds: these four only, each once,
+ *               beside the design change DESIGN (B-SA-005b, LIMITS_ASK_KINDS); the database refuses any other kind there)
  * CHANGE and CANCEL follow the company's cut-offs and the role's ask right, never these lists.
  */
 export const URGENT_ASK_KIND = 'RUSH' as const
@@ -21,6 +21,14 @@ export type ProductionAskKind = (typeof PRODUCTION_ASK_KINDS)[number]
 /** Every production ask: RUSH and the four the limits open. */
 export const PRODUCTION_REQUEST_KINDS = [URGENT_ASK_KIND, ...PRODUCTION_ASK_KINDS] as const
 export type ProductionRequestKind = (typeof PRODUCTION_REQUEST_KINDS)[number]
+
+// B-SA-005b (sales page plan, schema wave "sales page 2/2"; lead picks Round 5b): the same switch also opens the design change
+// (sales/change-requests/rules DESIGN_KIND, answered by Sales, never a production ask). The database's list
+// (…_order_apply_design_asks_guards' factory_portal_settings_guard) is this one; the literal, because rules imports this file.
+/** Every kind a customer's ask-kinds switch may list (PortalSettings.productionAskKinds), in the limits card's order. */
+export const LIMITS_ASK_KINDS = [...PRODUCTION_ASK_KINDS, 'DESIGN'] as const
+export type LimitsAskKind = (typeof LIMITS_ASK_KINDS)[number]
+// end B-SA-005b
 
 // ---- B-PR-13: which asks are open to a customer ------------------------------------------------------------------------------
 
@@ -41,18 +49,21 @@ export const isAskOpen = (kind: ProductionRequestKind, limits: AskLimits): boole
 /** The production asks open to the customer, in their order (a switched-off ask is not drawn). */
 export const openAskKinds = (limits: AskLimits): ProductionRequestKind[] => PRODUCTION_REQUEST_KINDS.filter((kind) => isAskOpen(kind, limits))
 
-/** What a list of asks for the limits card would break, in the database's words first (paths under `at`). */
+/**
+ * What a list of asks for the limits card would break, in the database's words first (paths under `at`). B-SA-005b: the
+ * design change DESIGN is listed too (LIMITS_ASK_KINDS, the database's list), so the API and the database agree.
+ */
 export function askKindsProblems(kinds: readonly string[], at = 'body/productionAskKinds'): Issue[] {
   const issues: Issue[] = []
   if (new Set(kinds).size !== kinds.length) issues.push({ path: at, message: 'An ask is listed twice.' })
   kinds.forEach((kind, index) => {
-    if ((PRODUCTION_ASK_KINDS as readonly string[]).includes(kind)) return
+    if ((LIMITS_ASK_KINDS as readonly string[]).includes(kind)) return
     const message =
       kind === URGENT_ASK_KIND
         ? '"Urgent – asked" follows the urgency switch, not this list.'
         : kind === 'CHANGE' || kind === 'CANCEL'
           ? "Change and cancel follow the company's cut-offs, not this list."
-          : `Expected one of ${PRODUCTION_ASK_KINDS.join(', ')}.`
+          : `Expected one of ${LIMITS_ASK_KINDS.join(', ')}.`
     issues.push({ path: `${at}/${index}`, message })
   })
   return issues

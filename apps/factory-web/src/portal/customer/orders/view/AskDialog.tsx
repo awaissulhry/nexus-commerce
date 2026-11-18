@@ -3,11 +3,14 @@
 import { useMemo, type KeyboardEvent } from 'react'
 import { Banner, Field, KeyValue, type KeyValueItem } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
-import { Button, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, CheckboxCard, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea, useDsWords } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
-import type { ChangeRules } from '../api'
-import { askBodyOf, isProductionKind, sampleKindsOf, splitCells, splitLines, takesDate, type AskChoice, type AskDraft, type AskKind } from '../ask-model'
+import type { ChangeRules, ProductionAskKind } from '../api'
+import { askBodyOf, sampleKindsOf, splitCells, splitLines, takesDate, type AskChoice, type AskDraft, type AskKind } from '../ask-model'
+// F-SA-246: the design change — its lines, their words, its files (from the device through the order's conversation, or already on it).
+import { designBodyOf, MAX_DESIGN_FILES, MAX_DESIGN_WORDS, takesSteps, type PickableFile } from '../ask-model'
+import { ComposeFiles, type ComposeFilesModel } from '../../../../lib/request-compose/view/ComposeFiles'
 import { MAX_NOTE } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
 import { AskImpact, type AskImpactModel } from './AskImpact'
@@ -44,7 +47,22 @@ export interface AskDialogModel {
   withdrawing: string | null
   /** Today (Europe/Rome): the earliest day to ask for. */
   today: string
+  /** F-SA-246: a design change's files (absent or null: not a design change, or not read yet). */
+  design?: DesignAskModel | null
 }
+
+// ---- F-SA-246 (R6; 14-change-flow §2.4): the design change's files ----
+export interface DesignAskModel {
+  /** The files already on the order it may name (the order's own and its lines', shared with the customer). */
+  orderFiles: { state: 'loading' | 'error' | 'ready'; files: readonly PickableFile[] }
+  /** The files from the device, sent through the order's conversation's upload route (closed until the virus scanner runs). */
+  upload: ComposeFilesModel
+  /** Our uploads that go with it (sent: clean). */
+  uploaded: readonly string[]
+  /** Our uploads still held for the virus scan: they stay on the order, this request carries the others. */
+  scanning: number
+}
+// ---- end F-SA-246
 
 export interface AskDialogActions {
   onKind?: (kind: AskKind) => void
@@ -57,6 +75,11 @@ export interface AskDialogActions {
   onClose?: () => void
   onRetry?: () => void
   onRetryImpact?: () => void
+  // F-SA-246: a design change's files from the device, and the order's files read again.
+  onUpload?: (files: File[]) => void
+  onUploadRemove?: (key: string) => void
+  onUploadRetry?: () => void
+  onRetryOrderFiles?: () => void
 }
 
 const STEP_KEY = { what: 'ask.step.what', details: 'ask.step.details', impact: 'ask.step.impact' } as const
@@ -112,7 +135,9 @@ export function AskDialogBody({ model, actions }: { model: AskDialogModel; actio
   const words = useOrderWords()
   if (model.state === 'loading') return <Loading rows={3} height={56} />
   if (model.state === 'error' || !model.rules) return <ReadFailed title={words.t('ask.failed')} onRetry={actions?.onRetry} />
-  if (model.step === 'what' || model.kind === null || !isProductionKind(model.kind)) return <AskWhat model={model} actions={actions} words={words} />
+  // F-SA-246: the production asks and the design change have their own steps 2 and 3 here.
+  if (model.step === 'what' || model.kind === null || !takesSteps(model.kind)) return <AskWhat model={model} actions={actions} words={words} />
+  if (model.kind === 'DESIGN') return model.step === 'details' ? <DesignDetails model={model} rules={model.rules} actions={actions} words={words} /> : <DesignReview model={model} rules={model.rules} actions={actions} words={words} />
   if (model.step === 'details') return <AskDetails model={model} rules={model.rules} kind={model.kind} actions={actions} words={words} />
   return <AskReview model={model} rules={model.rules} kind={model.kind} actions={actions} words={words} />
 }
@@ -193,7 +218,7 @@ function useSplitCopy(t: OrderWords['t']): Partial<SizeGridCopy> {
 const lineName = (line: ChangeRules['lines'][number], t: OrderWords['t']) => t('change.line', { seq: line.seq, style: line.style?.code ?? '—', colour: line.colourway?.name ?? '' })
 
 // ── step 2: the details of a production ask ─────────────────────────────────────────────────────────────────────────────
-function AskDetails({ model, rules, kind, actions, words }: { model: AskDialogModel; rules: ChangeRules; kind: Exclude<AskKind, 'CHANGE' | 'CANCEL'>; actions?: AskDialogActions; words: OrderWords }) {
+function AskDetails({ model, rules, kind, actions, words }: { model: AskDialogModel; rules: ChangeRules; kind: ProductionAskKind; actions?: AskDialogActions; words: OrderWords }) {
   const { t, locale, day } = words
   const copy = useSplitCopy(t)
   const draft = model.draft
@@ -269,7 +294,7 @@ function AskDetails({ model, rules, kind, actions, words }: { model: AskDialogMo
 }
 
 // ── step 3: what it means, before Send ──────────────────────────────────────────────────────────────────────────────────
-function AskReview({ model, rules, kind, actions, words }: { model: AskDialogModel; rules: ChangeRules; kind: Exclude<AskKind, 'CHANGE' | 'CANCEL'>; actions?: AskDialogActions; words: OrderWords }) {
+function AskReview({ model, rules, kind, actions, words }: { model: AskDialogModel; rules: ChangeRules; kind: ProductionAskKind; actions?: AskDialogActions; words: OrderWords }) {
   const { t, day } = words
   const body = askBodyOf(kind, rules, model.draft)
   const line = body.lineId ? rules.lines.find((entry) => entry.lineId === body.lineId) ?? null : null
@@ -292,3 +317,106 @@ function AskReview({ model, rules, kind, actions, words }: { model: AskDialogMod
     </div>
   )
 }
+
+// ── F-SA-246 (sales page plan R6, R3, P21; 14-change-flow §2.4; review OW-8): a design change ──────────────────────────────────
+/**
+ * Step 2 of a design change: the lines it is for, what to change (their words, required), and up to ten files — from the device
+ * (through the order's conversation's upload route: each file is checked by the virus scanner before we open it; while uploads
+ * from outside are closed the file's row says the API's sentence) or already on the order. Nothing of another order is offered.
+ */
+function DesignDetails({ model, rules, actions, words }: { model: AskDialogModel; rules: ChangeRules; actions?: AskDialogActions; words: OrderWords }) {
+  const { t } = words
+  const draft = model.draft
+  const design = model.design ?? null
+  const set = (over: Partial<AskDraft>) => actions?.onDraft?.({ ...draft, ...over })
+  const pick = (list: readonly string[], id: string, on: boolean) => (on ? [...new Set([...list, id])] : list.filter((entry) => entry !== id))
+  return (
+    <div className="fw-pord-stack">
+      <p className="fw-pord-hint">{t('ask.details.DESIGN')}</p>
+      <div className="fw-pord-stack" role="group" aria-label={t('ask.design.lines')}>
+        <h3 className="fw-pord-h3">{t('ask.design.lines')}</h3>
+        <p className="fw-pord-sub">{t('ask.design.linesHint')}</p>
+        {rules.lines.map((line) => {
+          const on = draft.lineIds.includes(line.lineId)
+          return (
+            <CheckboxCard
+              key={line.lineId}
+              variant="row"
+              checked={on}
+              selected={on}
+              onChange={(event) => set({ lineIds: pick(draft.lineIds, line.lineId, event.target.checked) })}
+              title={lineName(line, t)}
+              description={t('ask.design.linePieces', { count: line.sizes.reduce((sum, size) => sum + size.quantity, 0) })}
+            />
+          )
+        })}
+      </div>
+      <div className="fw-pord-note">
+        <Field label={t('ask.design.what')} required hint={t('ask.design.whatHint')} error={draft.note.trim().length > MAX_DESIGN_WORDS ? t('ask.design.problem.long') : undefined}>
+          <Textarea value={draft.note} rows={5} maxLength={MAX_DESIGN_WORDS + 200} onChange={(event) => set({ note: event.target.value })} />
+        </Field>
+      </div>
+      <section className="fw-pord-stack" aria-label={t('ask.design.files')}>
+        <h3 className="fw-pord-h3">{t('ask.design.files')}</h3>
+        <p className="fw-pord-sub">{t('ask.design.filesHint', { max: MAX_DESIGN_FILES })}</p>
+        <Banner tone="info" title={t('ask.design.checked')} />
+        {design ? (
+          <>
+            <ComposeFiles model={design.upload} title={false} actions={{ onDrop: (files) => actions?.onUpload?.(files), onRemove: (key) => actions?.onUploadRemove?.(key), onRetry: () => actions?.onUploadRetry?.(), onSend: () => actions?.onUploadRetry?.() }} />
+            <h4 className="fw-pord-strong">{t('ask.design.orderFiles')}</h4>
+            {design.orderFiles.state === 'loading' ? (
+              <Loading rows={1} height={40} />
+            ) : design.orderFiles.state === 'error' ? (
+              <ReadFailed title={t('ask.design.orderFilesFailed')} onRetry={actions?.onRetryOrderFiles} />
+            ) : design.orderFiles.files.length === 0 ? (
+              <p className="fw-pord-sub">{t('ask.design.orderFilesNone')}</p>
+            ) : (
+              <div className="fw-pord-stack" role="group" aria-label={t('ask.design.orderFiles')}>
+                {design.orderFiles.files.map((file) => {
+                  const on = draft.fileIds.includes(file.id)
+                  return (
+                    <CheckboxCard
+                      key={file.id}
+                      variant="row"
+                      checked={on}
+                      selected={on}
+                      onChange={(event) => set({ fileIds: pick(draft.fileIds, file.id, event.target.checked) })}
+                      title={file.name}
+                      description={file.line !== null ? t('ask.design.fileOnLine', { seq: file.line }) : t('ask.design.fileOnOrder')}
+                    />
+                  )
+                })}
+              </div>
+            )}
+          </>
+        ) : (
+          <Loading rows={1} height={40} />
+        )}
+      </section>
+    </div>
+  )
+}
+
+/** Step 3 of a design change: what is asked (lines, their words, the files), then what it means — never a guessed date. */
+function DesignReview({ model, rules, actions, words }: { model: AskDialogModel; rules: ChangeRules; actions?: AskDialogActions; words: OrderWords }) {
+  const { t } = words
+  const design = model.design ?? null
+  const body = designBodyOf(rules, model.draft, design?.uploaded ?? [])
+  const count = body.fileIds?.length ?? 0
+  const items: KeyValueItem[] = [
+    { label: t('ask.review.what'), value: t('ask.kind.DESIGN.title') },
+    { label: t('ask.design.lines'), value: rules.lines.filter((line) => body.lineIds.includes(line.lineId)).map((line) => lineName(line, t)).join(' · ') },
+    { label: t('ask.design.what'), value: body.note },
+    { label: t('ask.design.files'), value: count > 0 ? t('ask.design.review.files', { count }) : t('ask.design.review.noFiles') },
+  ]
+  return (
+    <div className="fw-pord-stack">
+      <p className="fw-pord-hint">{t('ask.review.hint')}</p>
+      <KeyValue labelCase="sentence" items={items} />
+      {design && design.scanning > 0 ? <Banner tone="info" title={t('ask.design.scanningLeft', { count: design.scanning })} /> : null}
+      {model.impact ? <AskImpact model={model.impact} onRetry={actions?.onRetryImpact} /> : null}
+      <p className="fw-pord-sub">{t('change.sendKeys')}</p>
+    </div>
+  )
+}
+// ── end F-SA-246 ──

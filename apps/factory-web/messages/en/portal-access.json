@@ -528,13 +528,15 @@
       "HOLD": "Ask to pause",
       "RESUME": "Ask to resume",
       "SPLIT_SHIPMENT": "Ask to ship what is ready",
-      "SAMPLE_ROUND": "Ask for another sample round"
+      "SAMPLE_ROUND": "Ask for another sample round",
+      "DESIGN": "Ask for a design change"
     },
     "askLine": {
       "HOLD": "They ask us to pause an order; we accept or refuse.",
       "RESUME": "They ask us to go on with an order paused at their request.",
       "SPLIT_SHIPMENT": "They ask us to ship what is ready now and the rest later.",
-      "SAMPLE_ROUND": "They ask for one more sample round before production."
+      "SAMPLE_ROUND": "They ask for one more sample round before production.",
+      "DESIGN": "They ask us to change the design of a style of their own label, with words and files; we accept, suggest something else or refuse."
     },
     "approver": {
       "title": "Who answers on their side",

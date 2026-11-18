@@ -50,6 +50,7 @@ import { createTask, createTasks, listAssignees, taskReadProblem } from '../../.
 import { addTaskHeld, batchBody, createBody, type Assignable, type BatchAnswer, type BatchAssignee, type BatchRecord, type TaskDraft } from '../../../../record-panels/tasks/model'
 import type { PanelRead } from '../../../../record-panels/model'
 // ---- end F-SA-281
+import { useReplyMany } from './use-reply-many' // F-SA-282
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -624,6 +625,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onClose: () => setTask(null),
   }
   // ---- end F-SA-281
+  // ---- F-SA-282: Reply to <customer> on N… — the ticked orders of one customer (the bar holds it otherwise, the API checks again);
+  // a Send that posted reads the rows again (their New messages).
+  const replyMany = useReplyMany(api, session.permissions, () => void load(true))
+  // ---- end F-SA-282
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -692,7 +697,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     // ---- F-SA-280 ----
     assign: assign.model,
     note: note.model,
-    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */ },
+    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */ },
+    replyMany: replyMany.model, // F-SA-282
     task, // F-SA-281
     me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
@@ -752,6 +758,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     note: note.actions,
     onAddTask: (ids, from = 'row') => openTask(ids, from), // F-SA-281
     task: taskActions, // F-SA-281
+    onReplyMany: (ids) => replyMany.open(pickedRows(ids), host.locked?.party ?? null), // F-SA-282
+    replyMany: replyMany.actions, // F-SA-282
     // ---- end F-SA-280
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onSort: (next) => go({ sort: next }), // B-TH-057

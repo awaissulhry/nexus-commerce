@@ -1,4 +1,4 @@
-import { PRODUCTION_ASK_KINDS, URGENT_ASK_KIND, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
+import { LIMITS_ASK_KINDS, PRODUCTION_ASK_KINDS, URGENT_ASK_KIND, type LimitsAskKind, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
 import { maskOf, PRODUCTION_SHARE_LEVELS, SHARE_SECTIONS, type ProductionShareLevel, type ShareSection } from '@nexus/factory-domain/production-brand/levels'
 import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import { dormantMarksWords, overQuotaWords } from '@nexus/factory-domain/production-brand/words'
@@ -30,8 +30,8 @@ import type { FreezeList, FreezeRule, FreezeRuleDraftBody } from './api'
  * own words from `production-supervisor`.
  */
 
-export { PRODUCTION_ASK_KINDS, URGENT_MAX, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_STAGES }
-export type { ProductionAskKind, ProductionShareLevel, OrderFreezeAction, OrderFreezeField, OrderFreezeStage }
+export { LIMITS_ASK_KINDS, PRODUCTION_ASK_KINDS, URGENT_MAX, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_STAGES }
+export type { LimitsAskKind, ProductionAskKind, ProductionShareLevel, OrderFreezeAction, OrderFreezeField, OrderFreezeStage }
 
 /** The card's anchor (the Customer card's and the Overview's "Limits" link opens `?tab=portal#production-limits`). */
 export const LIMITS_ANCHOR = 'production-limits'
@@ -44,7 +44,7 @@ export interface LimitsDraft {
   readonly level: ProductionShareLevel
   readonly urgencyOn: boolean
   readonly urgentMax: number
-  readonly askKinds: readonly ProductionAskKind[]
+  readonly askKinds: readonly LimitsAskKind[] // B-SA-005b: + DESIGN, kept as saved
   readonly approverMode: ApproverMode
   /** The named approver (NAMED; null: not picked yet). */
   readonly approverId: string | null
@@ -71,22 +71,30 @@ export function limitsDraftOf(saved: ProductionLimitsView): LimitsDraft {
   }
 }
 
-/** The asks in the card's order, each once. */
-export const inCardOrder = (kinds: readonly string[]): ProductionAskKind[] => PRODUCTION_ASK_KINDS.filter((kind) => kinds.includes(kind))
+// B-SA-005b (sales page 2/2): the switch may also hold the design change DESIGN (LIMITS_ASK_KINDS, the API's and the database's
+// list); the draft keeps it as saved, so an Apply never drops it. Its own checkbox and words come with F-SA-246.
+/** The asks in the card's order, each once (the design change DESIGN last). */
+export const inCardOrder = (kinds: readonly string[]): LimitsAskKind[] => LIMITS_ASK_KINDS.filter((kind) => kinds.includes(kind))
+/** The production asks of a list, in the card's order (never the design change). */
+const productionAsksOf = (kinds: readonly string[]): ProductionAskKind[] => PRODUCTION_ASK_KINDS.filter((kind) => kinds.includes(kind))
+// end B-SA-005b
 
 /** What the preset "Production partner" sets (the API's PRODUCTION_PARTNER: Progress, urgency on with 3, every ask). */
 export const PRODUCTION_PARTNER = Object.freeze({ level: 'PROGRESS' as ProductionShareLevel, urgencyOn: true, urgentMax: URGENT_MAX.byDefault, askKinds: [...PRODUCTION_ASK_KINDS] as readonly ProductionAskKind[] })
 
-/** The preset pressed: the four limits it sets; the approver, the second person and the supervisor stay as they are. */
+/**
+ * The preset pressed: the four limits it sets; the approver, the second person and the supervisor stay as they are. B-SA-005b:
+ * the design change stays as it is too (it is no production ask; the API's preset keeps it the same way).
+ */
 export function withPreset(draft: LimitsDraft): LimitsDraft {
-  return { ...draft, level: PRODUCTION_PARTNER.level, urgencyOn: PRODUCTION_PARTNER.urgencyOn, urgentMax: PRODUCTION_PARTNER.urgentMax, askKinds: [...PRODUCTION_PARTNER.askKinds], preset: true }
+  return { ...draft, level: PRODUCTION_PARTNER.level, urgencyOn: PRODUCTION_PARTNER.urgencyOn, urgentMax: PRODUCTION_PARTNER.urgentMax, askKinds: inCardOrder([...PRODUCTION_PARTNER.askKinds, ...draft.askKinds]), preset: true }
 }
 
 const sameKinds = (a: readonly string[], b: readonly string[]) => inCardOrder(a).join() === inCardOrder(b).join()
 
 /** The draft still holds the preset's four limits (else the preset is not named in the change). */
 export const presetHolds = (draft: LimitsDraft): boolean =>
-  draft.preset && draft.level === PRODUCTION_PARTNER.level && draft.urgencyOn === PRODUCTION_PARTNER.urgencyOn && draft.urgentMax === PRODUCTION_PARTNER.urgentMax && sameKinds(draft.askKinds, PRODUCTION_PARTNER.askKinds)
+  draft.preset && draft.level === PRODUCTION_PARTNER.level && draft.urgencyOn === PRODUCTION_PARTNER.urgencyOn && draft.urgentMax === PRODUCTION_PARTNER.urgentMax && sameKinds(productionAsksOf(draft.askKinds), PRODUCTION_PARTNER.askKinds) // B-SA-005b: the production asks
 
 /** The draft's own changes (the supervisor slots go to their own route). */
 export const approverOf = (draft: LimitsDraft): string | null => (draft.approverMode === 'NAMED' ? draft.approverId : null)
@@ -154,7 +162,7 @@ export function seesNow(level: ProductionShareLevel): ReadonlyArray<{ readonly s
 }
 
 /** "Urgent – asked" is open exactly while the urgency switch is on (R-50); the others while ticked. */
-export const openAsksOf = (draft: LimitsDraft): readonly string[] => [...(draft.urgencyOn ? [URGENT_ASK_KIND] : []), ...inCardOrder(draft.askKinds)]
+export const openAsksOf = (draft: LimitsDraft): readonly string[] => [...(draft.urgencyOn ? [URGENT_ASK_KIND] : []), ...productionAsksOf(draft.askKinds)] // B-SA-005b: production asks only
 
 /** The customer's portal people who may be its named approver: active ones of its customer portal, by name. */
 export function approverChoices(people: readonly PartnerPerson[], saved: ProductionLimitsView): Array<{ value: string; label: string; active: boolean }> {

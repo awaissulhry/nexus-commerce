@@ -129,3 +129,86 @@ export function historyOf(input: HistoryInput): HistoryEntry[] {
 
 /** The entries a chip shows (All: every entry). */
 export const historyFor = (entries: readonly HistoryEntry[], chip: HistoryChip): HistoryEntry[] => (chip === 'all' ? [...entries] : entries.filter((entry) => chipOf(entry) === chip))
+
+// ---- F-SA-243 (sales page plan P5, R1; 14-change-flow §3.1, §3.4; review R-5): the order page's doors to the ONE review window ----
+/**
+ * The order page opens the same review window as Home › Approvals (requests/use-request-review-door.ts), from three places — the band
+ * notice "<Customer> asks: … · Answer…" (ONE banner, "N more requests"), Overview's "Waiting on us: N · Answer…" and Changes › Waiting
+ * on us — and it keeps "Still to do" after each accepted change (B-SA-050's rows, computed from the records) until every row is done
+ * or left as is: Overview's top 3, Changes' rows under each change, and the band notice "Change of hh:mm: 1 step needs a decision ·
+ * Open" ONLY while a row is Your turn or Needs a decision for this reader (14's narrow rule, review R-5). Only this order's records.
+ */
+
+/** The requests that wait on US (not on the customer), oldest first: the band notice names the first, counts the rest. */
+export function askingOf(requests: readonly BrandRequest[]): { readonly first: BrandRequest; readonly more: number } | null {
+  const onUs = waitingOnUsOf(requests).filter((request) => request.waitingOn === 'US')
+  return onUs.length > 0 ? { first: onUs[0]!, more: onUs.length - 1 } : null
+}
+
+type Say = (key: string, params?: Record<string, string | number>) => string
+
+/**
+ * What a request asks, in words for the band notice: its kind, then each size asked old → new ("line 2 · M 40 → 36"), at most three,
+ * "…" after; a whole-order cancel, a date. Never a price, never another order.
+ */
+export function askWordsOf(request: Pick<BrandRequest, 'kind' | 'cells' | 'wholeOrder' | 'requestedDate'>, words: { readonly kind: string; readonly say: Say; readonly day: (value: string) => string }): string {
+  const cells = request.cells.map((cell) => (cell.size === null ? words.say('band.askLine', { line: cell.seq }) : words.say('band.askCell', { line: cell.seq, size: cell.size, from: cell.before, to: cell.askedColourway ? `${cell.asked} ${cell.askedColourway.name}` : cell.asked })))
+  const parts = [words.kind, ...cells.slice(0, 3), ...(cells.length > 3 ? ['…'] : [])]
+  if (request.wholeOrder) parts.push(words.say('band.askWhole'))
+  if (request.requestedDate && cells.length === 0) parts.push(words.day(request.requestedDate))
+  return parts.join(' · ')
+}
+
+/** "Still to do" in the order's production read (none read yet, or no right: none — never claimed). */
+export const stillRowsOf = (read: { readonly changes?: { readonly stillToDo?: { readonly rows: readonly StillRowOf[] } | undefined } | undefined } | null | undefined): StillRowOf[] => [...(read?.changes?.stillToDo?.rows ?? [])]
+
+export interface StillRowOf {
+  readonly kind: string
+  readonly ref: { readonly type: string; readonly id: string; readonly number: string | null } | null
+  readonly words: { readonly en: string; readonly it: string }
+  readonly since: string
+  readonly waitingOn: string
+  readonly mayAct: boolean
+  readonly requestId: string | null
+}
+
+/** The rows that ask THIS reader now (Your turn / Needs a decision): the only ones the band may name (R-5). */
+export const askingMe = (row: Pick<StillRowOf, 'mayAct'>): boolean => row.mayAct
+
+/** The band's "Change of hh:mm: N steps need a decision · Open": the rows asking this reader, from the oldest; null: none. */
+export function decisionBandOf(rows: readonly StillRowOf[]): { readonly count: number; readonly since: string; readonly requestId: string | null } | null {
+  const mine = rows.filter(askingMe).sort((a, b) => a.since.localeCompare(b.since))
+  return mine.length > 0 ? { count: mine.length, since: mine[0]!.since, requestId: mine[0]!.requestId } : null
+}
+
+/** One accepted change and its rows (the customer's request it carries out; null: the office's own change). */
+export interface StillGroup {
+  readonly requestId: string | null
+  /** The request when this page read it (its kind and when it was answered); null: an office change, or not read. */
+  readonly request: BrandRequest | null
+  readonly since: string
+  readonly rows: readonly StillRowOf[]
+}
+
+/** The rows under each change, the oldest change first; inside, the order the API gave (its own: by kind, then since). */
+export function stillGroupsOf(rows: readonly StillRowOf[], requests: readonly BrandRequest[]): StillGroup[] {
+  const groups = new Map<string, StillRowOf[]>()
+  for (const row of rows) groups.set(row.requestId ?? '', [...(groups.get(row.requestId ?? '') ?? []), row])
+  return [...groups.entries()]
+    .map(([key, list]) => {
+      const request = key ? (requests.find((entry) => entry.id === key) ?? null) : null
+      return { requestId: key || null, request, since: request?.answeredAt ?? list.map((row) => row.since).sort()[0]!, rows: list }
+    })
+    .sort((a, b) => a.since.localeCompare(b.since))
+}
+
+/** Where a row opens (a real link): the work-order change in Approvals' window, the amendment on Changes, the record's own page. */
+export function stillDoorOf(row: Pick<StillRowOf, 'kind' | 'ref'>, place: { readonly prefix: string; readonly record: string; readonly address: (ref: { readonly type: string; readonly id: string; readonly number: string | null }) => string }): string | null {
+  const ref = row.ref
+  if (!ref) return null
+  if (ref.type === 'WorkOrderChange') return `${place.prefix}/home/approvals?open=${encodeURIComponent(ref.id)}`
+  if (ref.type === 'SalesOrderAmendment') return `${place.record}?tab=changes`
+  if (ref.type === 'RePromise') return `${place.record}?tab=overview`
+  return `${place.prefix}${place.address(ref)}`
+}
+// ---- end F-SA-243

@@ -781,6 +781,10 @@
       "SAMPLE_ROUND": {
         "title": "Un altro campione",
         "hint": "Scegliete la riga e il tipo di campione."
+      },
+      "DESIGN": {
+        "title": "Modifica del design",
+        "hint": "Diteci cosa cambiare nel design di alcune righe, con file se aiutano. Decidiamo noi e vi rispondiamo."
       }
     },
     "verdict": {
@@ -822,7 +826,8 @@
       "HOLD": "Mettiamo in pausa la lavorazione dell'ordine finché non ci chiedete di riprendere. Una pausa può spostare la vostra data.",
       "RESUME": "Riprendiamo la lavorazione e vi confermiamo la data.",
       "SPLIT_SHIPMENT": "Indicate i capi di ogni taglia da spedire prima. Il resto parte quando è pronto.",
-      "SAMPLE_ROUND": "Scegliete la riga e il tipo di campione. Un campione di pre-produzione o un set taglie è possibile solo prima che inizi il taglio."
+      "SAMPLE_ROUND": "Scegliete la riga e il tipo di campione. Un campione di pre-produzione o un set taglie è possibile solo prima che inizi il taglio.",
+      "DESIGN": "Scegliete le righe, dite cosa cambiare e aggiungete file se aiutano. Nulla cambia finché non rispondiamo."
     },
     "split": {
       "caption": "Capi da spedire prima",
@@ -895,6 +900,46 @@
       "reading": "Stiamo ancora leggendo cosa comporta…",
       "failedHeld": "Prima leggete cosa comporta: riprovate qui sopra.",
       "blockedHeld": "Una parte di ciò che chiedete non si può più cambiare: tornate indietro e cambiate la richiesta."
+    },
+    "design": {
+      "lines": "Righe",
+      "linesHint": "Le righe a cui si riferisce la modifica del design.",
+      "linePieces_one": "{count} pezzo ordinato",
+      "linePieces_other": "{count} pezzi ordinati",
+      "what": "Cosa cambiare",
+      "whatHint": "Ditelo con parole vostre: più siete precisi, prima possiamo rispondere.",
+      "files": "File",
+      "filesHint": "Fino a {max} file: dal vostro dispositivo, o file già sull'ordine.",
+      "checked": "I file vengono controllati prima che li apriamo.",
+      "orderFiles": "File già sull'ordine",
+      "orderFilesNone": "Ancora nessun file sull'ordine.",
+      "orderFilesFailed": "Non siamo riusciti a leggere i file dell'ordine.",
+      "fileOnOrder": "Sull'ordine",
+      "fileOnLine": "Sulla riga {seq}",
+      "deviceHeld": "Per inviare file serve il permesso di scrivere nella conversazione: chiedete al vostro amministratore.",
+      "scanningLeft_one": "{count} file è ancora in controllo: resta sull'ordine e lo vediamo appena controllato. Questa richiesta porta gli altri.",
+      "scanningLeft_other": "{count} file sono ancora in controllo: restano sull'ordine e li vediamo appena controllati. Questa richiesta porta gli altri.",
+      "problem": {
+        "lines": "Scegliete almeno una riga a cui si riferisce la modifica.",
+        "linesGone": "Una riga scelta non può più ricevere una modifica del design: scegliete di nuovo.",
+        "words": "Dite con parole vostre cosa cambiare nel design.",
+        "long": "Le vostre parole sono troppo lunghe: al massimo 4000 caratteri.",
+        "files": "Con una richiesta vanno al massimo 10 file: toglietene qualcuno.",
+        "uploading": "Aspettate che i vostri file siano caricati.",
+        "fileGone": "Un file scelto ora non può andare con la richiesta: toglietelo e inviate di nuovo."
+      },
+      "impact": {
+        "priced": "Bloccato dal taglio: una modifica del design ha un prezzo.",
+        "notCut": "Niente di queste righe è ancora tagliato.",
+        "date": "Vi diamo la data con la nostra risposta.",
+        "linesLabel": "A che punto è ogni riga"
+      },
+      "review": {
+        "files_one": "{count} file",
+        "files_other": "{count} file",
+        "noFiles": "Nessun file"
+      },
+      "sent": "Richiesta inviata. Vi rispondiamo qui e nella conversazione dell'ordine."
     }
   },
   "orderFiles": {

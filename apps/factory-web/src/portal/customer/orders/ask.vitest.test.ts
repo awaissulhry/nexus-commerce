@@ -11,6 +11,15 @@ import { orderBandOf, type OrderBandFacts } from './band'
 import { at, dayAt, orderRecord, orderWords, PREFIX, requestsOf, rulesOf, TODAY } from './design-data'
 import { AskDialogBody, type AskDialogModel } from './view/AskDialog'
 import { AskImpact as AskImpactView } from './view/AskImpact'
+// F-SA-246: the design change (its model, files, doors and the request card's kinds).
+import { ORDER_REQUEST_KINDS } from '@nexus/factory-domain/sales/change-requests/rules'
+import { REQUEST_KINDS as CARD_KINDS } from '../../../lib/production/model'
+import type { HeldFile } from '../../../lib/request-compose/files'
+import type { ComposeFilesModel } from '../../../lib/request-compose/view/ComposeFiles'
+import { PortalRecordFrame } from '../../shell/record/PortalRecordFrame'
+import type { PortalOrderFiles } from './api'
+import { availableIdsOf, cleanedUploads, designAskRefusal, designBodyOf, designFilesOf, designProblem, MAX_DESIGN_FILES, scanningUploadsOf, sentUploadsOf, takesSteps, uploadFailureOf } from './ask-model'
+import type { DesignAskModel } from './view/AskDialog'
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3 "Brand asks, we decide", §5; 06-tree B.2 P-ORD-ask; wall PW-P06): step 1
@@ -212,3 +221,181 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
     expect(orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts }).actions?.map((action) => action.id)).toEqual(['change'])
   })
 })
+
+// ── F-SA-246 (sales page plan R6, R3, P21; 14-change-flow §2.4; review OW-8, C-10): the design change, asked from the portal ──
+
+const OPEN_DESIGN = { words: say('Design change', 'Modifica del design'), open: true, verdict: FREE, waitingRequestId: null }
+const designRules = (over: Partial<NonNullable<ChangeRules['design']>> = {}): ChangeRules => rules({ design: { ...OPEN_DESIGN, ...over } })
+const lineOne = () => rulesOf().lines[0]!.lineId
+const held = (over: Partial<HeldFile>): HeldFile => ({ key: 'k1', name: 'sketch.pdf', sizeBytes: 1200, contentType: 'application/pdf', kind: 'DOCUMENT', sheet: false, design: false, problem: null, state: 'held', ...over })
+const uploadModel = (files: HeldFile[] = [], over: Partial<ComposeFilesModel> = {}): ComposeFilesModel => ({ open: true, closedWords: null, held: files, leftOut: 0, when: 'send', readOnly: false, heldReason: null, ...over })
+const designModel = (over: Partial<DesignAskModel> = {}): DesignAskModel => ({ orderFiles: { state: 'ready', files: [{ id: 'f-order', name: 'artwork-v2.pdf', sizeBytes: 4000, line: null }, { id: 'f-line', name: 'collar.png', sizeBytes: 900, line: 1 }] }, upload: uploadModel(), uploaded: [], scanning: 0, ...over })
+const fileOf = (id: string, type: string, over: Partial<PortalOrderFiles['groups'][number]['files'][number]> = {}): PortalOrderFiles['groups'][number]['files'][number] => ({
+  id,
+  name: `${id}.pdf`,
+  kind: 'DOCUMENT',
+  category: null,
+  documentKind: null,
+  documentWords: null,
+  contentType: 'application/pdf',
+  sizeBytes: 100,
+  versionNo: 1,
+  at: at(-1),
+  from: { type, id: type === 'SalesOrder' ? rulesOf().order.id : 'x', label: 'Your order 4' },
+  line: type === 'SalesOrderLine' ? { id: 'x', seq: 2 } : null,
+  ...over,
+})
+const ORDER_FILES: Pick<PortalOrderFiles, 'groups'> = {
+  groups: [
+    { key: 'ORDER', words: say('Order'), files: [fileOf('f-order', 'SalesOrder'), fileOf('f-library', 'SalesOrder', { documentKind: 'DECLARATION_OF_CONFORMITY', documentWords: say('Declaration') })] },
+    { key: 'LINES', words: say('Lines'), files: [fileOf('f-line', 'SalesOrderLine')] },
+    { key: 'REQUESTS', words: say('Requests'), files: [fileOf('f-request', 'OrderChangeRequest'), fileOf('f-order', 'SalesOrder')] },
+  ],
+}
+
+describe('F-SA-246: step 1 — the design change is offered only where the customer’s settings open it', () => {
+  it('after change and cancel, only while design.open; closed: not drawn at all (never "not for you")', () => {
+    expect(askChoicesOf(designRules(), NO_REQUESTS).map((choice) => choice.kind)).toEqual(['CHANGE', 'CANCEL', 'DESIGN', 'RUSH', 'HOLD', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'])
+    expect(askChoicesOf(designRules({ open: false }), NO_REQUESTS).map((choice) => choice.kind)).not.toContain('DESIGN')
+    // An older answer without the design part: as before.
+    expect(askChoicesOf(rules(), NO_REQUESTS).map((choice) => choice.kind)).not.toContain('DESIGN')
+    expect(takesSteps('DESIGN')).toBe(true)
+    expect(takesSteps('CHANGE')).toBe(false)
+  })
+
+  it('one waits per order: withdrawn here; a design change waiting never holds a change or a cancel', () => {
+    const waiting: ChangeRequest = { ...requestsOf()[0]!, id: 'b1b1b1b1-0000-4000-8000-000000000911', kind: 'DESIGN', status: 'OPEN', askedAt: at(-1), version: 2 }
+    const read = designRules({ verdict: { possible: false, code: 'WAITING', day: dayAt(-1), words: say('Your request waits for our answer') }, waitingRequestId: waiting.id })
+    const choices = askChoicesOf(read, [waiting])
+    expect(choices.find((choice) => choice.kind === 'DESIGN')).toMatchObject({ possible: false, held: null, waiting: { requestId: waiting.id, status: 'OPEN', version: 2 } })
+    expect(choices.find((choice) => choice.kind === 'CHANGE')!.possible).toBe(true)
+    expect(askHeld('DESIGN', read, choices, FACTS)).toBe('ask.held.waiting')
+    expect(textOf(drawWhat({ rules: read, choices }))).toContain('Design change')
+  })
+})
+
+describe('F-SA-246: step 2 — the lines, what to change (required), up to ten files', () => {
+  it('held in order: a line, their words, at most 4000 characters, at most 10 files, nothing still uploading', () => {
+    const read = designRules()
+    const draft = { ...EMPTY_ASK }
+    const none = { uploaded: [] as string[], uploading: false }
+    expect(designProblem(read, draft, none)).toBe('ask.design.problem.lines')
+    expect(designProblem(read, { ...draft, lineIds: [lineOne()], note: '   ' }, none)).toBe('ask.design.problem.words')
+    expect(designProblem(read, { ...draft, lineIds: [lineOne()], note: 'x'.repeat(4001) }, none)).toBe('ask.design.problem.long')
+    const eleven = Array.from({ length: MAX_DESIGN_FILES + 1 }, (_, index) => `f-${index}`)
+    expect(MAX_DESIGN_FILES).toBe(10)
+    expect(designProblem(read, { ...draft, lineIds: [lineOne()], note: 'A shorter collar', fileIds: eleven.slice(0, 6) }, { uploaded: eleven.slice(6), uploading: false })).toBe('ask.design.problem.files')
+    expect(designProblem(read, { ...draft, lineIds: [lineOne()], note: 'A shorter collar' }, { uploaded: [], uploading: true })).toBe('ask.design.problem.uploading')
+    expect(designProblem(read, { ...draft, lineIds: [lineOne()], note: 'A shorter collar', fileIds: ['f-order'] }, { uploaded: ['u1'], uploading: false })).toBeNull()
+  })
+
+  it('what Send sends: only the order’s own lines, their words trimmed, each file once — a foreign line is never named (PW-P06)', () => {
+    const body = designBodyOf(designRules(), { lineIds: ['a1a1a1a1-0000-4000-8000-000000000999', line2(), lineOne()], note: '  A shorter collar  ', fileIds: ['f-order', 'u1'] }, ['u1', 'u2'])
+    expect(body).toEqual({ kind: 'DESIGN', lineIds: [lineOne(), line2()], note: 'A shorter collar', fileIds: ['f-order', 'u1', 'u2'] })
+    expect(designBodyOf(designRules(), { lineIds: [lineOne()], note: 'x', fileIds: [] }, [])).toEqual({ kind: 'DESIGN', lineIds: [lineOne()], note: 'x' })
+  })
+
+  it('the files already on the order it may name: the order’s own and its lines’, never a library document or another request’s file', () => {
+    expect(designFilesOf(ORDER_FILES).map((file) => file.id)).toEqual(['f-order', 'f-line'])
+    expect(designFilesOf(ORDER_FILES).find((file) => file.id === 'f-line')).toMatchObject({ line: 2 })
+    expect(designFilesOf(ORDER_FILES, new Set(['f-order'])).map((file) => file.id)).toEqual(['f-line'])
+    expect(designFilesOf(null)).toEqual([])
+  })
+
+  it('a file of ours held for the virus scan goes once the order’s list holds it; until then it stays on the order and is left out', () => {
+    const files = [held({ key: 'a', state: 'sent', fileId: 'u1' }), held({ key: 'b', state: 'scanning', fileId: 'f-order' }), held({ key: 'c', state: 'scanning', fileId: 'u3' }), held({ key: 'd', state: 'failed', failure: 'x' })]
+    expect(sentUploadsOf(files)).toEqual(['u1'])
+    expect(scanningUploadsOf(files)).toBe(2)
+    const after = cleanedUploads(files, availableIdsOf(ORDER_FILES))
+    expect(sentUploadsOf(after)).toEqual(['u1', 'f-order'])
+    expect(scanningUploadsOf(after)).toBe(1)
+  })
+
+  it('closed uploads say so in the API’s own sentence; a refusal at refusal/<CODE> in its words; else ours', () => {
+    const words = { network: 'the connection dropped', store: 'the file store did not take it', refused: 'it was refused as it is' }
+    const closed = 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.'
+    expect(uploadFailureOf(new ApiError('unavailable', 503, 'not_ready', closed), words)).toBe(closed)
+    expect(uploadFailureOf(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/TOO_MANY_FILES', message: 'This already holds 50 of your files.' }]), words)).toBe('This already holds 50 of your files.')
+    expect(uploadFailureOf(new ApiError('unavailable', 0, 'network', 'The factory API could not be reached.'), words)).toBe(words.network)
+    const store = new Error('The file store answered 500.')
+    store.name = 'StoreError'
+    expect(uploadFailureOf(store, words)).toBe(words.store)
+    // The file's row says it, with Retry.
+    const html = drawWhat({ rules: designRules(), step: 'details', kind: 'DESIGN', draft: { ...EMPTY_ASK, lineIds: [lineOne()] }, design: designModel({ upload: uploadModel([held({ state: 'failed', failure: closed })]) }) })
+    expect(textOf(html)).toContain(`Did not go: ${closed}`)
+    expect(textOf(html)).toContain('Retry the file')
+  })
+
+  it('the details draw the lines, “What to change”, the files and “Files are checked before we open them.”; a person who may not write here is held with why', () => {
+    const text = textOf(drawWhat({ rules: designRules(), step: 'details', kind: 'DESIGN', draft: { ...EMPTY_ASK, lineIds: [lineOne()] }, design: designModel() }))
+    for (const words of ['Pick the lines, say what to change', 'What to change', 'Files are checked before we open them.', 'Up to 10 files', 'Files already on the order', 'artwork-v2.pdf', 'collar.png', 'On line 1', 'On the order', '30 pieces ordered']) expect(text).toContain(words)
+    const heldText = textOf(drawWhat({ rules: designRules(), step: 'details', kind: 'DESIGN', draft: EMPTY_ASK, design: designModel({ upload: uploadModel([], { readOnly: true, heldReason: 'Sending files needs the right to write in the conversation: ask your admin.' }) }) }))
+    expect(heldText).toContain('Sending files needs the right to write in the conversation')
+  })
+})
+
+describe('F-SA-246: step 3 — what it means, never a guessed date', () => {
+  const DESIGN_IMPACT: AskImpact = { kind: 'DESIGN', frozen: [], blocked: false, priced: true, earliest: { date: '2026-12-02', partial: false, meetsWanted: null }, notes: [say('Cutting has started on line 1: the change may cost extra or apply to the next order'), say('Line 2 is not in production yet')] }
+
+  it('cut already: "Frozen since cutting: a design change is priced"; each line’s stage in the API’s words; the date with our answer only', () => {
+    const view = impactViewOf('DESIGN', DESIGN_IMPACT, { seesPrices: false, fee: null, money, sizesAsked: false })
+    expect(view).toMatchObject({ headline: { key: 'ask.design.impact.priced', tone: 'warning' }, cost: { key: 'ask.impact.mayApply' }, earliest: { key: 'ask.design.impact.date', date: null }, blocked: false, afterRelease: false })
+    expect(view.lines).toHaveLength(2)
+    expect(impactViewOf('DESIGN', { ...DESIGN_IMPACT, priced: false }, { seesPrices: false, fee: null, money, sizesAsked: false }).headline.key).toBe('ask.design.impact.notCut')
+    const text = textOf(render(createElement(AskImpactView, { model: { state: 'ready', view } })))
+    for (const words of ['Frozen since cutting: a design change is priced.', 'We tell you the date with our answer.', 'Cutting has started on line 1', 'Line 2 is not in production yet']) expect(text).toContain(words)
+    // Never a guessed date (the impact's estimate is not drawn).
+    expect(text).not.toContain('From about')
+  })
+
+  it('the review says what is asked, the files counted, and the uploads still being checked', () => {
+    const impact = { state: 'ready' as const, view: impactViewOf('DESIGN', DESIGN_IMPACT, { seesPrices: false, fee: null, money, sizesAsked: false }) }
+    const text = textOf(drawWhat({ rules: designRules(), step: 'impact', kind: 'DESIGN', draft: { ...EMPTY_ASK, lineIds: [lineOne()], note: 'A shorter collar', fileIds: ['f-order'] }, impact, design: designModel({ uploaded: ['u1'], scanning: 1 }) }))
+    for (const words of ['Design change', 'A shorter collar', '2 files', '1 file is still being checked', 'What it means']) expect(text).toContain(words)
+  })
+
+  it('a refusal at Send in neutral words: a file not the order’s own reads again the order’s files; a closed ask reads the rules again', () => {
+    expect(designAskRefusal(new ApiError('not_found', 404, 'not_found', 'File not found.', null, [{ path: 'body/fileIds/1', message: 'File not found.' }]))).toEqual({ key: 'ask.design.problem.fileGone', reread: false, files: true })
+    expect(designAskRefusal(new ApiError('invalid', 400, 'invalid', 'x', null, [{ path: 'body/fileIds', message: 'At most 10 files.' }])).key).toBe('ask.design.problem.files')
+    expect(designAskRefusal(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/NOT_OPEN' }]))).toEqual({ key: 'ask.verdict.NOT_OPEN', reread: true, files: false })
+    expect(designAskRefusal(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/lineIds/0/CLOSED_SHORT' }])).key).toBe('ask.verdict.CLOSED_SHORT')
+  })
+})
+
+describe('F-SA-246: the doors, the request card and the words', () => {
+  it('"Ask for a change" above the order’s conversation (the frame; PartnerThread untouched), held with why', () => {
+    const draw = (held: string | null) => render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'the conversation'), threadLabel: 'Messages: Your order 4', design: { mode: 'docked' }, door: { label: 'Ask for a change', held, onOpen: () => undefined }, children: createElement('div', null, 'body') }))
+    const html = draw(null)
+    expect(textOf(html)).toContain('Ask for a change')
+    expect(html.indexOf('Ask for a change')).toBeLessThan(html.indexOf('the conversation'))
+    expect(textOf(draw('You are looking at a preview.'))).toContain('Ask for a change')
+    expect(render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'x'), threadLabel: 'Messages', design: { mode: 'docked' }, children: createElement('div', null, 'body') }))).not.toContain('Ask for a change')
+  })
+
+  it('the request card knows the design change (the domain’s kinds, its word in both languages)', () => {
+    expect([...CARD_KINDS].sort()).toEqual([...ORDER_REQUEST_KINDS].sort())
+    for (const locale of ['en', 'it'] as const) expect(CATALOGUE[locale]['production']?.['parts.request.kind.DESIGN'], locale).toBeTruthy()
+  })
+
+  it('every new word in both languages with the same placeholders; the portal speaks "voi"; the limits card names the design change', () => {
+    const keys = Object.keys(CATALOGUE.en['portal-orders'] ?? {}).filter((key) => key.startsWith('ask.design.') || key.startsWith('ask.kind.DESIGN') || key === 'ask.details.DESIGN')
+    expect(keys.length).toBeGreaterThan(30)
+    const holes = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort()
+    for (const key of keys) expect(holes(CATALOGUE.it['portal-orders']![key] ?? ''), key).toEqual(holes(CATALOGUE.en['portal-orders']![key]!))
+    for (const locale of ['en', 'it'] as const) {
+      expect(CATALOGUE[locale]['portal-orders']!['ask.design.checked']).toBe(locale === 'en' ? 'Files are checked before we open them.' : 'I file vengono controllati prima che li apriamo.')
+      expect(CATALOGUE[locale]['portal-orders']!['ask.design.sent']).toBe(locale === 'en' ? "Request sent. We answer here and in the order's conversation." : "Richiesta inviata. Vi rispondiamo qui e nella conversazione dell'ordine.")
+      for (const key of ['limits.ask.DESIGN', 'limits.askLine.DESIGN']) expect(CATALOGUE[locale]['portal-access']?.[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+
+  it('Brand Beta’s design dialog holds nothing of Brand Alpha', () => {
+    const base = designRules()
+    const beta: ChangeRules = { ...base, lines: base.lines.map((line) => ({ ...line, style: { code: BRAND_BETA.numbers.style, name: 'Beta jacket' }, colourway: { code: 'BK', name: 'Black' } })) }
+    for (const locale of ['en', 'it'] as const) {
+      const html = drawWhat({ rules: beta, choices: askChoicesOf(beta, NO_REQUESTS), step: 'details', kind: 'DESIGN', draft: EMPTY_ASK, design: designModel() }, locale)
+      expect(scanText(html, BRAND_ALPHA), locale).toEqual([])
+    }
+  })
+})
+// ── end F-SA-246 ──

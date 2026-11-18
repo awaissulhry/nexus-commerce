@@ -233,3 +233,50 @@
 .fw-sheet-me {
   font-weight: 600;
 }
+
+/* ---- F-SA-282: Reply to <customer> on N… (layout only; the box is the thread composer's own, in N mode) ---- */
+.fw-srm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-srm-who {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-srm-orders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-srm-heading,
+.fw-srm-list,
+.fw-srm-hint {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.fw-srm-list {
+  max-height: 7.5em;
+  overflow-y: auto;
+}
+.fw-srm-hint {
+  color: var(--nds-text-muted);
+}
+.fw-srm-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-srm-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}

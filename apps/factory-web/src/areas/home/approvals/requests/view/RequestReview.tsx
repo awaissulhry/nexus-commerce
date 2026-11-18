@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Check, ExternalLink, Layers, MessageSquareReply, X, Zap } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Check, ExternalLink, Layers, MessageSquareReply, Settings2, X, Zap } from 'lucide-react'
 import { Banner, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Kbd, Pill, Tag } from '@nexus/ui/primitives'
 import { DateField, DetailModal, Modal, ReviewChangesModal, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -19,6 +20,13 @@ import type { BrandRequest } from '../api'
 import { requestWords } from '../../words/request-words'
 import type { RequestNotice } from '../use-request-review'
 import { CustomerOverrideSlot } from '../../../../_shared/customer-override/slot'
+// F-SA-241: the window's new parts (On the floor now, Extra pieces, What happens next, Done · What happens next) for every door; its
+// layout comes with it (a door other than Home › Approvals has no approvals stylesheet of its own).
+import '../../approvals.css'
+import { DoneSteps, FloorNow, NextSteps } from './NextSteps'
+import { ConversationTick } from './ConversationTick'
+import { ExtraPieces } from './ExtraPieces'
+import { designOptionsOffered, NO_CHOICES, planHeld, type TellTick } from '../model'
 import {
   answerHeld,
   cardInputOf,
@@ -131,20 +139,35 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
   }
   const state = { offline, busy }
   const heldKey = (answer: 'accept' | 'refuse' | 'counter') => (request ? answerHeld(request, answer, state, words) : `${CR}.held.reading`)
-  const acceptHeld = heldKey('accept')
   const refuseHeld = heldKey('refuse')
   const counterHeldKey = heldKey('counter')
   const waiting = request !== null && (request.status === 'OPEN' || request.status === 'COUNTERED')
+  // ---- F-SA-241 / F-SA-242: the apply plan, the choices before Accept, the done view, the conversation tick ----
+  const pathname = usePathname() ?? ''
+  const plan = review.plan?.status === 'ready' ? review.plan.value : null
+  const choices = review.choices ?? NO_CHOICES
+  const done = review.done ?? null
+  const accepted = request?.status === 'ACCEPTED'
+  const fromPlan = waiting ? planHeld(plan, choices) : null
+  const planHeldText = fromPlan ? ('words' in fromPlan ? said(fromPlan.words, locale) : t(fromPlan.key, fromPlan.params)) : null
+  // The change cannot be carried out as it stands (a colour already cut, a style of our own collection): said once in the window.
+  const blockedWhy = waiting ? (plan?.next.find((step) => (step.kind === 'AMEND' || step.kind === 'STYLE_CHANGE') && step.state === 'NOT_POSSIBLE' && step.why !== null)?.why ?? null) : null
+  const acceptHeldKey = heldKey('accept')
+  const acceptHeld = acceptHeldKey ? t(acceptHeldKey) : planHeldText
+  const tell: TellTick | undefined = review.tell
+  const doors = request ? { companyId: request.companyId, orderHref: review.orderHrefs[request.orderId] || null, orderNumber: request.orderNumber } : null
+  const optionsHref = designOptionsOffered(plan) && request ? `${review.orderHrefs[request.orderId] || pathname}?tab=lines` : null
+  // ---- end F-SA-241 / F-SA-242
   const answering = waiting && request.waitingOn === 'US' && (request.may.accept || request.may.refuse || request.may.counter)
   // Why it cannot be accepted as it stands (its state, our counter, who answers its kind) — said once in the window, not only on hover.
   const standingHeld = request && waiting ? answerHeld(request, 'accept', { offline: false, busy: false }, 'words') : null
   const dialog = review.dialog
   const accept = (rushFloor: boolean) => {
-    if (acceptHeld || dialog) return
+    if (acceptHeld || dialog || done) return
     actions?.onAccept?.(rushFloor)
   }
   const refuse = () => {
-    if (refuseHeld || dialog) return
+    if (refuseHeld || dialog || done) return
     actions?.onRefuse?.()
   }
   useEffect(() => {
@@ -172,8 +195,12 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
   const orderHref = request ? (review.orderHrefs[request.orderId] ?? null) : null
   const two = request !== null && hasTwoAccepts(request)
 
-  const footer =
-    request && answering ? (
+  const footer = done ? (
+    // F-SA-241 (Round 4): after Accept the window stays on "Done · What happens next" — Close (a door) or Next request › (Approvals).
+    <Button size="sm" variant="primary" onClick={() => actions?.onDoneClose?.()}>
+      {done.next === 'next' ? t(`${CR}.done.nextRequest`) : t(`${CR}.done.close`)}
+    </Button>
+  ) : request && answering ? (
       <>
         <Button size="sm" variant="danger-outline" heldReason={refuseHeld ? t(refuseHeld) : null} onClick={refuse} aria-keyshortcuts="r">
           <X size={14} aria-hidden /> {t(`${CR}.refuse`)} <Kbd>R</Kbd>
@@ -183,15 +210,15 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
         </Button>
         {two ? (
           <>
-            <Button size="sm" heldReason={acceptHeld ? t(acceptHeld) : null} onClick={() => accept(true)}>
+            <Button size="sm" heldReason={acceptHeld} onClick={() => accept(true)}>
               <Zap size={14} aria-hidden /> {t(`${CR}.acceptRush`)}
             </Button>
-            <Button size="sm" variant="primary" heldReason={acceptHeld ? t(acceptHeld) : null} onClick={() => accept(false)} aria-keyshortcuts="a">
+            <Button size="sm" variant="primary" heldReason={acceptHeld} onClick={() => accept(false)} aria-keyshortcuts="a">
               <Check size={14} aria-hidden /> {t(`${CR}.acceptUrgent`)} <Kbd>A</Kbd>
             </Button>
           </>
         ) : (
-          <Button size="sm" variant="primary" heldReason={acceptHeld ? t(acceptHeld) : null} onClick={() => accept(false)} aria-keyshortcuts="a">
+          <Button size="sm" variant="primary" heldReason={acceptHeld} onClick={() => accept(false)} aria-keyshortcuts="a">
             <Check size={14} aria-hidden /> {t(`${CR}.accept`)} <Kbd>A</Kbd>
           </Button>
         )}
@@ -202,7 +229,7 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
     <>
       <DetailModal
         open
-        onClose={() => nav.onOpen?.(null)}
+        onClose={() => (done ? actions?.onDoneClose?.() : nav.onOpen?.(null))}
         title={title}
         subtitle={subtitle}
         meta={
@@ -219,13 +246,37 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
         onRetry={() => actions?.onRetry?.()}
         actions={footer}
       >
-        {request && input && (
+        {/* F-SA-241 (Round 4): after Accept, "Done · What happens next" — each next step its own command, Close / Next request ›. */}
+        {request && done && doors && (
+          <div className="fw-apv-review">
+            <Banner tone="success" title={t(`${CR}.done.accepted`, { kind: w.t(`parts.request.kind.${request.kind}`), order: request.orderNumber })} />
+            <DoneSteps plan={plan} done={done} tell={tell} customer={request.party.name} offline={offline} canHold={review.can.lift} doors={doors} actions={actions} />
+          </div>
+        )}
+        {request && input && !done && (
           <div className="fw-apv-review">
             <Banner tone="info" title={t(`${CR}.review.asked`, { customer: request.party.name, who: request.askedBy ?? request.party.name, at: formatDateTime(request.askedAt, { locale }) })}>
               {request.reasonWords ? t(`${CR}.review.why`, { reason: said(request.reasonWords, locale) }) : undefined}
             </Banner>
             {review.problem && <Banner tone="danger" title={t(review.problem)} />}
             {standingHeld && <Banner tone="warning" title={t(standingHeld)} />}
+            {/* F-SA-242: held in words before the click — a colour already cut, a style of our own collection (Suggest something else or
+                refuse; the line's Options… only while no work order makes it). */}
+            {!standingHeld && blockedWhy && (
+              <Banner
+                tone="warning"
+                title={said(blockedWhy, locale)}
+                action={
+                  optionsHref ? (
+                    <Button size="sm" variant="quiet" asChild>
+                      <Link href={optionsHref}>
+                        <Settings2 size={14} aria-hidden /> {t(`${CR}.design.options`)}
+                      </Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            )}
             <RequestCard face="office" request={input} />
             {impact?.now.blocked && <Banner tone="warning" title={t(`${CR}.impact.blocked`)} />}
             {impact && (impact.now.notes.length > 0 || impact.now.earliest || impact.now.pricedWords) && (
@@ -238,6 +289,10 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
               </ul>
             )}
             {review.impact.status === 'error' && <p className="fw-apv-hint">{t(`${CR}.impact.notRead`)}</p>}
+            {/* F-SA-241: On the floor now (the order's own cells; without workorders.view "—" and "Needs work-order access"). */}
+            {plan && <FloorNow plan={plan} />}
+            {/* F-SA-241 (R1, Round 4): extra pieces cut beyond the new figure — one outcome required before Accept. */}
+            {plan && plan.extra.total > 0 && <ExtraPieces plan={plan} choices={choices} accepted={accepted} onChoose={actions?.onExtraOutcome} />}
             {request.counter && (
               <Banner tone={request.counter.state === 'AGREED' ? 'success' : request.counter.state === 'WAITING' ? 'info' : 'warning'} title={said(request.counter.offer, locale)}>
                 {[said(request.counter.words, locale), record?.counterApproval?.answer ? t(`${CR}.counter.theirWords`, { words: record.counterApproval.answer }) : null].filter(Boolean).join(' · ')}
@@ -245,6 +300,17 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
             )}
             {/* F-PR-09: our counter-offer asked of the customer — decided for them while it waits, or their answer reversed. */}
             {request.counter && <CustomerOverrideSlot source={{ requestId: request.counter.approvalRequestId }} customer={request.party.name} version={request.version} />}
+            {/* F-SA-241: What happens next (replaces "What accepting does" where the plan has steps: a change, a cancel, ship what is
+                ready, a design change) — numbered, who does each, Finish what is started / Stop now per touched work order. */}
+            {plan && plan.next.length > 0 && doors ? (
+              <section aria-labelledby="fw-apv-cr-next">
+                <h3 id="fw-apv-cr-next" className="fw-apv-h">
+                  {t(`${CR}.next.title`)}
+                </h3>
+                <NextSteps plan={plan} accepted={accepted} choices={choices} offline={offline} canHold={review.can.lift} doors={doors} actions={actions} />
+                <p className="fw-apv-hint">{t(`${CR}.team.${teamOf(request.answeredWith)}`)}</p>
+              </section>
+            ) : (
             <section aria-labelledby="fw-apv-cr-does">
               <h3 id="fw-apv-cr-does" className="fw-apv-h">
                 {t(`${CR}.does.title`)}
@@ -258,6 +324,7 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
               )}
               <p className="fw-apv-hint">{t(`${CR}.team.${teamOf(request.answeredWith)}`)}</p>
             </section>
+            )}
             {impact && (impact.workOrders.length > 0 || impact.workOrdersNotShown > 0) && (
               <section aria-labelledby="fw-apv-cr-wo">
                 <h3 id="fw-apv-cr-wo" className="fw-apv-h">
@@ -282,6 +349,9 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
               </p>
             )}
             {answering && <WordsField words={words} onWords={onWords} required={false} />}
+            {/* F-SA-242 (14-change-flow §4.2): the same words as our message in the order's conversation — on when words are typed, held
+                with why, never automatic. */}
+            {answering && tell && <ConversationTick id={request.id} tick={tell} words={words} customer={request.party.name} onTick={actions?.onTell} />}
             {lift && (
               <Button size="sm" onClick={() => actions?.onLift?.(lift)} heldReason={offline ? t(`${CR}.held.offline`) : null}>
                 {t(`${CR}.followUp.lift`)}

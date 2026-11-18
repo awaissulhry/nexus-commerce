@@ -51,6 +51,8 @@ interface PostedPayload {
   readonly causedById?: string | null
   readonly orderId?: string
   readonly stillToDo?: number
+  /** B-SA-052: people another notice of the same act already told (B-PR-32's withdrawal notice): left out of this bell. */
+  readonly alreadyTold?: readonly string[]
 }
 
 /** How a change note reads in its followers' bell: its words, who made it (never told), and the change's batch. */
@@ -131,6 +133,7 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
       const actorId = change ? change.actorId : authorId
       for (const userId of followers) {
         if (userId === actorId || message.mentionedUserIds.includes(userId)) continue
+        if (change && payload.alreadyTold?.includes(userId)) continue // B-SA-052: one act, one bell item per person
         const reader = await context.reader(userId)
         if (!reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scope)) continue
         drafts.push({

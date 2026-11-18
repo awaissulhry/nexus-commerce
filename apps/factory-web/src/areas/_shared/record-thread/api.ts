@@ -133,8 +133,9 @@ export async function sendReplyKeyed(
 /**
  * POST …/replies with the caller's key: OUTBOUND on the PORTAL channel; files already shared with the record's customer.
  * F-SA-282a (B-SA-073): `namesNoOtherCustomer` — the writer ticked "This text names no other customer" after the API held the text.
+ * F-SA-282 (B-TH-045, B-SA-073): `batchId` — Reply to N's one batch (the same id on each order's reply; one customer, at most 50).
  */
-export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, input: { body: string; attachments: readonly string[]; namesNoOtherCustomer?: boolean } & MessageLinks, idempotencyKey: string): Promise<string> {
+export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, input: { body: string; attachments: readonly string[]; namesNoOtherCustomer?: boolean; /* F-SA-282 */ batchId?: string } & MessageLinks, idempotencyKey: string): Promise<string> {
   const answer = await api.post(`${threadPath(record)}/replies`, {
     body: {
       body: input.body,
@@ -142,6 +143,7 @@ export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, in
       ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
       ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
       ...(input.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {}), // F-SA-282a
+      ...(input.batchId ? { batchId: input.batchId } : {}), // F-SA-282
     },
     schema: posted,
     idempotencyKey,

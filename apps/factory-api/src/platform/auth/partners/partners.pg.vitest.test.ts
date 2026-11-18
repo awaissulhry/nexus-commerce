@@ -392,6 +392,25 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
     expect(refused.body.error.message).toBe('Production limits are set only for a customer or a brand.')
   })
 
+  // B-SA-005b (sales page 2/2): the switch holds the design change, as the database does (…_order_apply_design_asks_guards).
+  it('opens the design change DESIGN through the ask-kinds switch (API and database agree); the preset keeps it; it is no production ask', async () => {
+    const delta = await party(['CUSTOMER'])
+    const design = await asOwnerPut(card(delta), { productionAskKinds: ['DESIGN', 'HOLD'], version: 1 })
+    expect(design.status, JSON.stringify(design.body)).toBe(200)
+    expect(design.body.production).toMatchObject({ askKinds: ['HOLD', 'DESIGN'], openAsks: ['HOLD'], version: 2 })
+    expect((await events('partner_portal.settings_changed')).at(-1)).toMatchObject({ partyId: delta, fields: ['productionAskKinds'], productionAskKinds: ['HOLD', 'DESIGN'] })
+    // The preset opens every production ask and leaves the design change as it was.
+    const preset = await asOwnerPut(card(delta), { preset: 'PRODUCTION_PARTNER', version: 2 })
+    expect(preset.status, JSON.stringify(preset.body)).toBe(200)
+    expect(preset.body.production.askKinds).toEqual(['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND', 'DESIGN'])
+    const twice = await asOwnerPut(card(delta), { productionAskKinds: ['DESIGN', 'DESIGN'], version: 3 })
+    expect(twice.status).toBe(400)
+    expect(twice.body.error.issues).toEqual([{ path: 'body/productionAskKinds', message: 'An ask is listed twice.' }])
+    const off = await asOwnerPut(card(delta), { productionAskKinds: [], version: 3 })
+    expect(off.status, JSON.stringify(off.body)).toBe(200)
+    expect(off.body.production.askKinds).toEqual([])
+  })
+
   it("names the customer's own approver; switching urgency off keeps the marks (audited, R-46); a lower quota keeps them; a customer without a portal row gets one with the portal off", async () => {
     const gamma = await party(['CUSTOMER'])
     const approverId = newId()
