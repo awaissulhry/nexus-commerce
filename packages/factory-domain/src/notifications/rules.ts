@@ -54,7 +54,7 @@ export type NotificationState = (typeof NOTIFICATION_STATES)[number]
  * `actorId`), {record} the record's label, {title} a task's title, {kind} a Today row's kind in words, {status} a
  * decision, {figure} the amount the reader may see (only when params hold one); B-W2b-385: {count}, {entered}, {left} the
  * rows of a followed saved view (numbers in params). F-PR-05b: {customer} the customer's name (params `customer`; told only to a
- * person who reads that customer's record).
+ * person who reads that customer's record) — B-PR-32's notices of a customer's acts name it the same way.
  */
 export const MESSAGE_TEMPLATES = {
   'notifications.mentioned': { en: '{actor} mentioned you on {record}', it: '{actor} ti ha menzionato su {record}' },
@@ -149,6 +149,46 @@ export const MESSAGE_TEMPLATES = {
   'notifications.production.issueEscalatedBackup': { en: 'No answer after 1 working day on {record} ({customer}): it now waits on you', it: 'Senza risposta da 1 giorno lavorativo su {record} ({customer}): ora tocca a te' },
   'notifications.production.issueEscalatedOwner': { en: 'No answer after 2 working days on {record} ({customer}): it now waits on the Owner and Admin', it: 'Senza risposta da 2 giorni lavorativi su {record} ({customer}): ora tocca al titolare e all’amministratore' },
   // ---- end F-PR-05b
+  // ---- B-PR-32 (production plan §1 "Full control", §3; L15, R-43, R-51, R-60; factory-domain production-brand/office-notices.ts): the
+  // factory told of every customer action on its production — to the order's supervisor and the customer's backup, else the holders
+  // of production.brand.manage over the order's company and customer. {customer}: its name (told only to a reader of its records);
+  // {record}: the order (for several, the first of them the reader is told of), a sample round or the record asked on; {count}: the
+  // reader's orders of the act. Never a person of the customer, an amount or a reason a person typed.
+  'notifications.production.customerUrgent': { en: '{customer} marked order {record} urgent', it: '{customer} ha segnato urgente l’ordine {record}' },
+  'notifications.production.customerUrgentMany': { en: '{customer} marked {count} orders urgent, among them {record}', it: '{customer} ha segnato urgenti {count} ordini, tra cui {record}' },
+  'notifications.production.customerRegular': { en: '{customer} set order {record} back to regular', it: '{customer} ha riportato a normale l’ordine {record}' },
+  'notifications.production.customerRegularMany': { en: '{customer} set {count} orders back to regular, among them {record}', it: '{customer} ha riportato a normale {count} ordini, tra cui {record}' },
+  'notifications.production.customerUndid': { en: '{customer} undid its last urgency change on order {record}', it: '{customer} ha annullato la sua ultima modifica di urgenza sull’ordine {record}' },
+  'notifications.production.customerUndidMany': { en: '{customer} undid its last urgency change on {count} orders, among them {record}', it: '{customer} ha annullato la sua ultima modifica di urgenza su {count} ordini, tra cui {record}' },
+  'notifications.production.customerReordered': { en: '{customer} put its urgent orders in a new order ({record} moved)', it: '{customer} ha cambiato l’ordine dei suoi ordini urgenti ({record} spostato)' },
+  'notifications.production.customerAskedRush': { en: '{customer} asks to make order {record} urgent: answer in Approvals', it: '{customer} chiede di rendere urgente l’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedHold': { en: '{customer} asks to pause order {record}: answer in Approvals', it: '{customer} chiede di mettere in pausa l’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedResume': { en: '{customer} asks to resume order {record}: answer in Approvals', it: '{customer} chiede di riprendere l’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedCancel': { en: '{customer} asks to cancel order {record}: answer in Approvals', it: '{customer} chiede di annullare l’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedCancelLines': { en: '{customer} asks to cancel lines of order {record}: answer in Approvals', it: '{customer} chiede di annullare alcune righe dell’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedChange': { en: '{customer} asks to change order {record}: answer in Approvals', it: '{customer} chiede di modificare l’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedSplit': { en: '{customer} asks to ship what is ready of order {record}: answer in Approvals', it: '{customer} chiede di spedire ciò che è pronto dell’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedSampleRound': { en: '{customer} asks for another sample round on order {record}: answer in Approvals', it: '{customer} chiede un altro giro di campioni sull’ordine {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedRushMany': { en: '{customer} asks to make {count} orders urgent, among them {record}: answer in Approvals', it: '{customer} chiede di rendere urgenti {count} ordini, tra cui {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedHoldMany': { en: '{customer} asks to pause {count} orders, among them {record}: answer in Approvals', it: '{customer} chiede di mettere in pausa {count} ordini, tra cui {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedResumeMany': { en: '{customer} asks to resume {count} orders, among them {record}: answer in Approvals', it: '{customer} chiede di riprendere {count} ordini, tra cui {record}: rispondi in Approvazioni' },
+  'notifications.production.customerAskedCancelMany': { en: '{customer} asks to cancel {count} orders, among them {record}: answer in Approvals', it: '{customer} chiede di annullare {count} ordini, tra cui {record}: rispondi in Approvazioni' },
+  'notifications.production.customerWithdrew': { en: '{customer} withdrew its request on order {record}', it: '{customer} ha ritirato la sua richiesta sull’ordine {record}' },
+  'notifications.production.customerWithdrewMany': { en: '{customer} withdrew its requests on {count} orders, among them {record}', it: '{customer} ha ritirato le sue richieste su {count} ordini, tra cui {record}' },
+  'notifications.production.customerCounterAccepted': { en: '{customer} accepted our counter-offer on order {record}: accept its request in Approvals to carry it out', it: '{customer} ha accettato la nostra controproposta sull’ordine {record}: accetta la sua richiesta in Approvazioni per eseguirla' },
+  'notifications.production.customerCounterRefused': { en: '{customer} refused our counter-offer on order {record}: its request is withdrawn', it: '{customer} ha rifiutato la nostra controproposta sull’ordine {record}: la sua richiesta è ritirata' },
+  'notifications.production.customerApprovedSample': { en: '{customer} approved sample {record}', it: '{customer} ha approvato il campione {record}' },
+  'notifications.production.customerApprovedSampleChanges': { en: '{customer} approved sample {record} with changes: read them in its thread', it: '{customer} ha approvato il campione {record} con modifiche: leggile nella sua conversazione' },
+  'notifications.production.customerRefusedSample': { en: '{customer} refused sample {record}: it waits on us', it: '{customer} ha rifiutato il campione {record}: ora tocca a noi' },
+  'notifications.production.customerRefusedTop': { en: '{customer} refused the top-of-production sample {record}: it holds nothing back, quality decides what happens next', it: '{customer} ha rifiutato i primi capi di produzione (TOP) {record}: non blocca nulla, decide la qualità come procedere' },
+  'notifications.production.customerApprovedFabric': { en: '{customer} approved the fabric on {record}', it: '{customer} ha approvato il tessuto su {record}' },
+  'notifications.production.customerApprovedFabricChanges': { en: '{customer} approved the fabric on {record} with changes: read them in its thread', it: '{customer} ha approvato il tessuto su {record} con modifiche: leggile nella sua conversazione' },
+  'notifications.production.customerRefusedFabric': { en: '{customer} refused the fabric on {record}: it waits on us', it: '{customer} ha rifiutato il tessuto su {record}: ora tocca a noi' },
+  'notifications.production.customerApprovedTrim': { en: '{customer} approved the trim on {record}', it: '{customer} ha approvato l’accessorio su {record}' },
+  'notifications.production.customerApprovedTrimChanges': { en: '{customer} approved the trim on {record} with changes: read them in its thread', it: '{customer} ha approvato l’accessorio su {record} con modifiche: leggile nella sua conversazione' },
+  'notifications.production.customerRefusedTrim': { en: '{customer} refused the trim on {record}: it waits on us', it: '{customer} ha rifiutato l’accessorio su {record}: ora tocca a noi' },
+  'notifications.production.customerRefusedNewDate': { en: '{customer} refused the new date of order {record}: the date stands, it waits on us', it: '{customer} ha rifiutato la nuova data dell’ordine {record}: la data resta, ora tocca a noi' },
+  // ---- end B-PR-32
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
   // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came
