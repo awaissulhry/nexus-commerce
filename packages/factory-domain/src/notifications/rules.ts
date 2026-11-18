@@ -149,6 +149,12 @@ export const MESSAGE_TEMPLATES = {
   'notifications.production.issueEscalatedBackup': { en: 'No answer after 1 working day on {record} ({customer}): it now waits on you', it: 'Senza risposta da 1 giorno lavorativo su {record} ({customer}): ora tocca a te' },
   'notifications.production.issueEscalatedOwner': { en: 'No answer after 2 working days on {record} ({customer}): it now waits on the Owner and Admin', it: 'Senza risposta da 2 giorni lavorativi su {record} ({customer}): ora tocca al titolare e all’amministratore' },
   // ---- end F-PR-05b
+  // ---- B-SA-041 (sales page plan, R1): a work-order change an accepted change of a sales order proposed ({record}: the work order,
+  // or the order for a new work order), to who may apply it; applied or left as is, to its proposer ({actor}: who decided).
+  'notifications.production.workOrderChangeProposed': { en: '{actor} proposes a work order change on {record}', it: '{actor} propone una modifica dell’ordine di lavoro su {record}' },
+  'notifications.production.workOrderChangeApplied': { en: '{actor} applied the work order change on {record}', it: '{actor} ha applicato la modifica dell’ordine di lavoro su {record}' },
+  'notifications.production.workOrderChangeDeclined': { en: '{actor} left the work order change on {record} as is', it: '{actor} ha lasciato com’è la modifica dell’ordine di lavoro su {record}' },
+  // ---- end B-SA-041
   // ---- B-PR-32 (production plan §1 "Full control", §3; L15, R-43, R-51, R-60; factory-domain production-brand/office-notices.ts): the
   // factory told of every customer action on its production — to the order's supervisor and the customer's backup, else the holders
   // of production.brand.manage over the order's company and customer. {customer}: its name (told only to a reader of its records);

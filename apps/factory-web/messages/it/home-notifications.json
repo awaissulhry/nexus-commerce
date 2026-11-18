@@ -354,7 +354,10 @@
         "customerApprovedTrim": "{customer} ha approvato l’accessorio su {record}",
         "customerApprovedTrimChanges": "{customer} ha approvato l’accessorio su {record} con modifiche: leggile nella sua conversazione",
         "customerRefusedTrim": "{customer} ha rifiutato l’accessorio su {record}: ora tocca a noi",
-        "customerRefusedNewDate": "{customer} ha rifiutato la nuova data dell’ordine {record}: la data resta, ora tocca a noi"
+        "customerRefusedNewDate": "{customer} ha rifiutato la nuova data dell’ordine {record}: la data resta, ora tocca a noi",
+        "workOrderChangeProposed": "{actor} propone una modifica dell’ordine di lavoro su {record}",
+        "workOrderChangeApplied": "{actor} ha applicato la modifica dell’ordine di lavoro su {record}",
+        "workOrderChangeDeclined": "{actor} ha lasciato com’è la modifica dell’ordine di lavoro su {record}"
       }
     },
     "fallback": "Novità su {record}",

@@ -51,6 +51,8 @@ import { PROJECT_RULES } from './projects'
 import { PRODUCTION_SUPERVISOR_RULES } from './production-supervisor'
 // B-PR-32: the factory told of every customer action on its production (to the order's supervisor and the customer's backup).
 import { BRAND_PRODUCTION_RULES } from './brand-production'
+// B-SA-041: a work-order change proposed (to who may apply it), applied or left as is (to its proposer).
+import { WORK_ORDER_CHANGE_RULES } from '../../../modules/production/work-order-changes/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -108,4 +110,7 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   ...PRODUCTION_SUPERVISOR_RULES,
   // B-PR-32: a customer's urgency marks, asks (one per batch), withdrawals, answered counter-offers and production approvals
   // (FOLLOWING / APPROVAL to the order's supervisor and the customer's backup, else production.brand.manage over the order).
-  ...BRAND_PRODUCTION_RULES])
+  ...BRAND_PRODUCTION_RULES,
+  // B-SA-041: work_order_change.proposed (ASSIGNMENT to the work order's supervisor and followers with workorders.manage),
+  // work_order_change.applied / declined (SYSTEM to the proposer).
+  ...WORK_ORDER_CHANGE_RULES])

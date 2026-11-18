@@ -354,7 +354,10 @@
         "customerApprovedTrim": "{customer} approved the trim on {record}",
         "customerApprovedTrimChanges": "{customer} approved the trim on {record} with changes: read them in its thread",
         "customerRefusedTrim": "{customer} refused the trim on {record}: it waits on us",
-        "customerRefusedNewDate": "{customer} refused the new date of order {record}: the date stands, it waits on us"
+        "customerRefusedNewDate": "{customer} refused the new date of order {record}: the date stands, it waits on us",
+        "workOrderChangeProposed": "{actor} proposes a work order change on {record}",
+        "workOrderChangeApplied": "{actor} applied the work order change on {record}",
+        "workOrderChangeDeclined": "{actor} left the work order change on {record} as is"
       }
     },
     "fallback": "News on {record}",
