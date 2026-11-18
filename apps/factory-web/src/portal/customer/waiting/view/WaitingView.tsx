@@ -1,8 +1,8 @@
 'use client'
 
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Inbox } from 'lucide-react'
 import type { ApprovalDecision } from '@nexus/factory-domain/approvals-out/kinds'
-import { Banner } from '@nexus/ui/components'
+import { Banner, EmptyState } from '@nexus/ui/components'
 import { ActionList, type ActionGroup } from '@nexus/ui/patterns/ActionList/index'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
@@ -96,11 +96,21 @@ export function WaitingView({ model, actions }: { model: WaitingViewModel; actio
           ))}
         </div>
       ) : model.state === 'error' ? (
-        <div className="fw-pstate" role="alert">
-          <AlertCircle size={18} aria-hidden />
-          <span>{t('failed')}</span>
-          {actions?.onRetry ? <Button onClick={actions.onRetry}>{t('retry')}</Button> : null}
-        </div>
+        // F-PR-16: the page's own states fill the main area as the portal's other pages do (a danger Banner; DS EmptyState).
+        <Banner
+          tone="danger"
+          icon={<AlertCircle size={16} aria-hidden />}
+          title={t('failed')}
+          action={
+            actions?.onRetry ? (
+              <Button size="sm" onClick={actions.onRetry}>
+                {t('retry')}
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : model.groups.length === 0 ? (
+        <EmptyState icon={<Inbox size={24} aria-hidden />} title={t('empty')} />
       ) : (
         <section className="fw-pwait-groups" aria-label={t('page.title')}>
           <ActionList groups={groups} headingLevel={2} empty={t('empty')} labels={ds.actionList} countdownLabels={ds.countdown} now={model.now} />

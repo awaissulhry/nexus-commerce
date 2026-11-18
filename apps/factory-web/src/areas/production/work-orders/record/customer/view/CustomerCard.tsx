@@ -295,9 +295,9 @@ function UrgencyDialog({ card, actions }: { card: CustomerCardModel; actions?: W
         </span>
       }
     >
-      <form
+      {/* F-PR-16: no form element — Enter in the reason field sends nothing; the send button and ⌘↵ send. */}
+      <div
         className="fw-pr-dialog"
-        onSubmit={(event) => (event.preventDefault(), go?.())}
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && go) {
             event.preventDefault()
@@ -316,7 +316,7 @@ function UrgencyDialog({ card, actions }: { card: CustomerCardModel; actions?: W
           </>
         )}
         <p className="fw-pr-hint">{t('customerCard.dialog.stepUp')}</p>
-      </form>
+      </div>
     </Modal>
   )
 }

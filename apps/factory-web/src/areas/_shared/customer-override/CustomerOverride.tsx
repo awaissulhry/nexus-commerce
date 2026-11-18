@@ -109,7 +109,8 @@ type Read = { readonly status: 'loading' } | { readonly status: 'ready'; readonl
 
 type Fields = Partial<Record<DecideField, Phrase>>
 
-type Dialog =
+// F-PR-16: exported for the design case (fixtures.ts), as are the two dialogs below.
+export type Dialog =
   | { readonly act: 'decide'; readonly draft: DecideDraft; readonly problem: Phrase | null; readonly fields: Fields }
   | { readonly act: 'reverse'; readonly reason: string; readonly problem: Phrase | null; readonly fields: Fields }
 
@@ -420,7 +421,7 @@ function OutcomeBanner({
 }
 
 /** ⌘↵ / Ctrl+↵ sends, only while nothing holds it. */
-const sendKeys = (held: string | null, onSend: () => void) => (event: KeyboardEvent<HTMLFormElement>) => {
+const sendKeys = (held: string | null, onSend: () => void) => (event: KeyboardEvent<HTMLElement>) => {
   if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && held === null) {
     event.preventDefault()
     onSend()
@@ -428,7 +429,7 @@ const sendKeys = (held: string | null, onSend: () => void) => (event: KeyboardEv
 }
 
 /** "Decide for <customer>": the decision as the kind allows, the words for a change or a refusal, why (they read it), the typed name. */
-function DecideDialog({
+export function DecideDialog({
   request,
   customer,
   dialog,
@@ -470,14 +471,8 @@ function DecideDialog({
         </>
       }
     >
-      <form
-        className="fw-cov-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (heldText === null) onSend()
-        }}
-        onKeyDown={sendKeys(heldText, onSend)}
-      >
+      {/* F-PR-16: no form element — Enter in a one-line field (the typed name) sends nothing; the send button and ⌘↵ send. */}
+      <div className="fw-cov-form" onKeyDown={sendKeys(heldText, onSend)}>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem.key, { customer, ...dialog.problem.params })} />}
         <p className="fw-cov-text">{t('decide.body', { customer })}</p>
         {request.question.trim() !== '' && <p className="fw-cov-hint">{t('decide.asked', { question: request.question, due: formatDateTime(request.dueAt, { locale }) })}</p>}
@@ -510,13 +505,13 @@ function DecideDialog({
         </Field>
         <p className="fw-cov-hint">{t('decide.stepUp')}</p>
         <p className="fw-cov-hint">{t('decide.secondPerson')}</p>
-      </form>
+      </div>
     </Modal>
   )
 }
 
 /** "Reverse": what it does to the record, the answer it reverses, why (the customer reads it). */
-function ReverseDialog({
+export function ReverseDialog({
   request,
   customer,
   dialog,
@@ -556,14 +551,8 @@ function ReverseDialog({
         </>
       }
     >
-      <form
-        className="fw-cov-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (heldText === null) onSend()
-        }}
-        onKeyDown={sendKeys(heldText, onSend)}
-      >
+      {/* F-PR-16: no form element — Enter in a one-line field (the typed name) sends nothing; the send button and ⌘↵ send. */}
+      <div className="fw-cov-form" onKeyDown={sendKeys(heldText, onSend)}>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem.key, { customer, ...dialog.problem.params })} />}
         {answer && (
           <p className="fw-cov-hint">
@@ -577,7 +566,7 @@ function ReverseDialog({
         </Field>
         <p className="fw-cov-hint">{t('decide.stepUp')}</p>
         <p className="fw-cov-hint">{t('decide.secondPerson')}</p>
-      </form>
+      </div>
     </Modal>
   )
 }

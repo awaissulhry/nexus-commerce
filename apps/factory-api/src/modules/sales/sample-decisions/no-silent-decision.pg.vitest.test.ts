@@ -173,7 +173,8 @@ describe('B-PR-38 the BRAND_OVERRIDE kind of the internal approvals engine, wall
     // The task list's wall: a person limited to B reaches B's requests, never A's.
     const p2 = twoBrandSessions(world.ids.tenantId, world.ids.a, world.ids.b, OFFICE_PERMISSIONS)['office.p2']
     const wall = (await office((client) => customerWall(client, actorOf({ ...p2, requestId: newId() })))) as Json
-    const entry = (wall.OR as Json[]).find((row) => row.recordType === 'ApprovalRequest')
+    // fix-pr-9: the wall is `{ OR }`, or `{ AND: [{ OR }, { NOT … }] }` when other customers' supplier records are hidden too (fix-pr-3).
+    const entry = ((wall.OR ?? wall.AND?.[0]?.OR) as Json[]).find((row) => row.recordType === 'ApprovalRequest')
     expect(entry?.recordId?.in).toContain(askB.id)
     expect(entry?.recordId?.in).not.toContain(askA.id)
     // The approval history of A's request: the production unit reads it, office.p2 gets 404.

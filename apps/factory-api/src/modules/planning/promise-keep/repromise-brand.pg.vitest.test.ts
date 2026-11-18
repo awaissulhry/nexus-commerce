@@ -50,6 +50,12 @@ let order = { orderId: '', number: '', lineId: '' }
 let today = ''
 let refusedRequest = ''
 let refusedProposal = ''
+/** fix-pr-10: the question the first test asks. A later test that reads it fails in these words when the first one failed (before, it
+ * called /portal/approvals/ with an empty id and read a 400). */
+function firstQuestion(): string {
+  expect(refusedRequest, 'the first test asks the new date this test reads (it failed: see above)').not.toBe('')
+  return refusedRequest
+}
 
 const admin = <R = Json>(sql: string, values: unknown[] = []) => world.admin<R>(sql, values)
 const one = async <R = Json>(sql: string, values: unknown[] = []): Promise<R> => (await admin<R>(sql, values))[0]!
@@ -120,6 +126,7 @@ describe('B-PR-28 sales accepts a new date asking the customer', { timeout: SLOW
   })
 
   it('the generic "Ask for approval" never offers or asks a new date (refused in words)', async () => {
+    firstQuestion() // fix-pr-10
     const record = await as(owner.browser, 'GET', `/approvals-out?recordType=SalesOrder&recordId=${order.orderId}`)
     expect(record.kinds).not.toContain('REPROMISE')
     expect((record.requests as Json[]).map((entry) => entry.id)).toContain(refusedRequest)
@@ -128,6 +135,7 @@ describe('B-PR-28 sales accepts a new date asking the customer', { timeout: SLOW
   })
 
   it('wall (PW-P05): brand B lists only its own requests; A’s request id → 404 to read and to answer; office.p2 reads neither', async () => {
+    firstQuestion() // fix-pr-10
     const list = await as(beatrice.browser, 'GET', '/portal/approvals')
     expect((list.items as Json[]).map((item) => item.id)).not.toContain(refusedRequest)
     expect(JSON.stringify(list)).not.toContain(order.number)
@@ -139,6 +147,7 @@ describe('B-PR-28 sales accepts a new date asking the customer', { timeout: SLOW
   })
 
   it('A refuses with words: the date stands, its words on the order’s thread, a follow-up task for A’s supervisor; the order waits on us', async () => {
+    firstQuestion() // fix-pr-10
     const before = await one<{ n: number }>('SELECT count(*)::int AS n FROM "PromiseRecord" WHERE "salesOrderLineId" = $1', [order.lineId])
     const page = await as(anna.browser, 'GET', `/portal/approvals/${refusedRequest}`)
     expect(page.request).toMatchObject({ kind: 'REPROMISE', status: 'OPEN' })

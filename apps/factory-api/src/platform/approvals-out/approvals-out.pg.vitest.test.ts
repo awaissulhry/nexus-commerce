@@ -18,6 +18,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../auth/roles/system-
 import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../auth/sessions/testing/harness'
 import { storeGeneratedFile } from '../files/files'
 import { systemContext } from '../outbox/system'
+import { CONCESSION_ADAPTER } from '../../modules/quality/ncr/concession-answer' // fix-pr-10
 import { sweepApprovals } from './sweep'
 
 /**
@@ -220,6 +221,18 @@ describe('a sample asked on an order, answered by link with changes and a marked
     expect(message).toMatchObject({ direction: 'INBOUND', authorName: 'Anna Demo' })
     expect(message.bodyText).toContain('Darker thread on the collar.')
     expect(textOf(lastMail('approvals.receipt', BRAND_QA)!.raw)).toContain('Your words: Darker thread on the collar.')
+    // ---- fix-pr-10 (B-TH-303): the receipt and the answer on the order's thread (the customer's own) name the customer's OWN order
+    // number (the seed's order may have none yet: "—"), never the office's series; the revision words of a revised order stay.
+    const order = await one<{ number: string; customerSeq: number | null }>('SELECT number, "customerSeq" FROM "SalesOrder" WHERE id = $1', [pricing.money.sales.orderId])
+    const mine = order.customerSeq === null ? '—' : `#${order.customerSeq}`
+    const receipt = textOf(lastMail('approvals.receipt', BRAND_QA)!.raw)
+    expect(receipt).toContain(`we received your answer on sample, ${mine}, for `)
+    expect(receipt).not.toContain(order.number)
+    const subject = await one<{ subject: string }>(`SELECT subject FROM "EmailOutbound" WHERE "templateKey" = 'approvals.receipt' AND "recordId" = $1`, [requestId])
+    expect(subject.subject).toBe(`Receipt of your answer: sample — ${mine}`)
+    expect(message.bodyText.split('\n')[0]).toBe(`Sample · ${mine}`)
+    expect(message.bodyText).not.toContain(order.number)
+    // ---- end fix-pr-10
     expect(await admin(`SELECT 1 FROM "AuditLog" WHERE action = 'approvalsOut.settle' AND "recordId" = $1`, [requestId])).toHaveLength(1)
     expect((await eventsOf(requestId)).find((event) => event.type === 'approval_request.answered')!.payload).toMatchObject({ status: 'APPROVED_WITH_CHANGES', via: 'LINK', markedUp: true })
     // One answer per request: the link opens nothing any more.
@@ -241,11 +254,53 @@ describe('the customer\'s concession answered in the portal (QHS-085; AP1:01)', 
     expect(list.items.map((item: Json) => item.id)).toContain(requestId)
     // B-W2b-F16: the concession in both languages, the kind and state as codes.
     const item = list.items.find((entry: Json) => entry.id === requestId)
-    expect(item).toMatchObject({ kind: 'CONCESSION', status: 'OPEN', words: { it: expect.stringMatching(/ · concessione \d+$/), en: expect.stringMatching(/ · concession \d+$/) } })
+    // fix-pr-10 (B-TH-303): the concession as its task reads it, never the office's NCR number.
+    expect(item).toMatchObject({ kind: 'CONCESSION', status: 'OPEN', words: { it: expect.stringMatching(/^concessione \d+$/), en: expect.stringMatching(/^concession \d+$/) } })
     for (const field of ['kindName', 'stateWords', 'dueWords', 'label']) expect(item).not.toHaveProperty(field)
-    const page = await as(viewer, 'GET', `/portal/approvals/${requestId}`)
+    // ---- fix-pr-10: a plain "Quality concession" (the NCR's title) and the customer's OWN number of the order its work order makes,
+    // never the office's NCR number. The seed's asked concession is of a material NCR (no work order): for these reads it names
+    // WO-0001, which makes P1's order (its own number, or "—" while the order has none), and none of it again after.
+    const ncr = await one<{ number: string; title: string }>('SELECT number, title FROM "Nonconformance" WHERE id = $1', [capa.ncrId])
+    const orders = await admin<{ seq: number | null; number: string }>(
+      `SELECT DISTINCT so."customerSeq" AS seq, so.number FROM "WorkOrderSize" c JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" JOIN "SalesOrder" so ON so.id = l."orderId" WHERE c."workOrderId" = $1 AND c."partyId" = $2`,
+      [production.workOrderId, P1],
+    )
+    expect(orders.length).toBeGreaterThan(0)
+    const ownOrders = [...new Set(orders.map((row) => (row.seq === null ? '—' : `#${row.seq}`)))].sort().join(', ')
+    const ncrWorkOrder = async (workOrderId: string | null) => {
+      await h.db.admin.query('BEGIN')
+      try {
+        await h.db.admin.query('SET LOCAL session_replication_role = replica')
+        await h.db.admin.query('UPDATE "Nonconformance" SET "workOrderId" = $2 WHERE id = $1', [capa.ncrId, workOrderId])
+        await h.db.admin.query('COMMIT')
+      } catch (error) {
+        await h.db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    const ref = { id: requestId, companyId: '', kind: 'CONCESSION' as const, recordType: 'NcrConcession', recordId: capa.concessionId, partyId: P1, status: 'OPEN', answer: null, typedName: null, answeredAt: null }
+    await ncrWorkOrder(production.workOrderId)
+    let page: Json
+    let italian: Awaited<ReturnType<typeof CONCESSION_ADAPTER.content>>
+    try {
+      page = await as(viewer, 'GET', `/portal/approvals/${requestId}`)
+      italian = await h.database.withScope({ audience: 'office', tenantId: tenant, actorId: newId() }, (client) => CONCESSION_ADAPTER.content(client as never, ref, 'it'))
+    } finally {
+      await ncrWorkOrder(null)
+    }
     expect(page.may.answer).toBe(false)
-    expect(page.content.facts.map((fact: Json) => fact.label)).toEqual(['Nonconformance', 'The deviation', 'What we propose'])
+    expect(page.content.facts).toEqual([
+      { label: 'Quality concession', value: ncr.title },
+      { label: 'Your order', value: ownOrders },
+      expect.objectContaining({ label: 'The deviation' }),
+      expect.objectContaining({ label: 'What we propose' }),
+    ])
+    expect(italian.facts.map((fact) => fact.label)).toEqual(['Concessione di qualità', 'Il vostro ordine', 'La deviazione', 'Cosa proponiamo'])
+    for (const read of [list, page, italian]) {
+      expect(JSON.stringify(read)).not.toContain(ncr.number)
+      for (const order of orders) expect(JSON.stringify(read)).not.toContain(order.number)
+    }
+    // ---- end fix-pr-10
     await as(viewer, 'POST', `/portal/approvals/${requestId}/answer`, { decision: 'APPROVED', typedName: 'Vera Viewer', version: page.request.version }, 403)
     await as(owner, 'POST', '/approvals-out', { kind: 'CONCESSION', recordType: 'NcrConcession', recordId: capa.concessionId, question: 'Again.', send: false }, 409)
   })
@@ -287,10 +342,14 @@ describe('a revised order re-confirmed by the customer (SAL-222)', () => {
     const page = await viaLink(token, 'GET', '/link/approval?language=en')
     expect(page.may.withChanges).toBe(false)
     // B-W2b-F16: the revision in both languages (the page shows the reader's; Italian no longer reads "revision").
-    expect(page.request.words).toEqual({ it: `${order.number} · revisione ${amended.amendment.revision}`, en: `${order.number} · revision ${amended.amendment.revision}` })
+    // F-PR-16 (B-TH-303's rule): the customer reads its own order number (the seed's order has none yet: "—"), the office its own.
+    const own = await one<{ customerSeq: number | null }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [order.id])
+    const mine = own.customerSeq === null ? '—' : `#${own.customerSeq}`
+    expect(page.request.words).toEqual({ it: `${mine} · revisione ${amended.amendment.revision}`, en: `${mine} · revision ${amended.amendment.revision}` })
+    expect(JSON.stringify(page)).not.toContain(order.number)
     const office = await as(owner, 'GET', `/approvals-out/${made.request.id}`)
-    expect(office.request.record).toEqual({ type: 'SalesOrderAmendment', id: amended.amendment.id, words: page.request.words })
-    expect(page.content.revisedOrder).toMatchObject({ orderNumber: order.number, revision: amended.amendment.revision })
+    expect(office.request.record).toEqual({ type: 'SalesOrderAmendment', id: amended.amendment.id, words: { it: `${order.number} · revisione ${amended.amendment.revision}`, en: `${order.number} · revision ${amended.amendment.revision}` } })
+    expect(page.content.revisedOrder).toMatchObject({ orderNumber: mine, revision: amended.amendment.revision })
     expect(page.content.revisedOrder.netAmountAfter).toBeGreaterThan(page.content.revisedOrder.netAmountBefore)
     expect(page.content.revisedOrder.lines[0]).toMatchObject({ change: 'CHANGED', style: { code: expect.any(String) } })
     const changes = await viaLink(token, 'POST', '/link/approval/approve', { decision: 'APPROVED_WITH_CHANGES', answer: 'one more', typedName: 'Paolo Demo' }, 400)
@@ -390,3 +449,43 @@ describe('office approvals by e-mail (PLT-089)', () => {
     await as(owner, 'POST', '/approvals/mail-open', { key: `${mailedKey.slice(0, -2)}AA` }, 404)
   })
 })
+
+// ---- F-PR-16 (the browser walk; B-TH-303's rule, the same as the party's tasks: platform/portal/tasks/partner-label.ts) ----------
+describe('F-PR-16 — the customer reads its own order and quote numbers, never the office series (portal and link); the office its own', () => {
+  const OFFICE_SERIES = /\b(?:SEED-)?(?:SO|QT|QU|Q)-\d/
+
+  it('an artwork asked on an order and on a quote: the portal list, the portal page and the link page say "#<its own number>"', async () => {
+    const orderId = pricing.money.sales.orderId
+    const quoteId = pricing.money.sales.quoteId
+    // The customer's own numbers are given by the database once (never set here).
+    const order = await one<{ number: string; customerSeq: number }>('SELECT number, "customerSeq" FROM "SalesOrder" WHERE id = $1', [orderId])
+    const quote = await one<{ number: string; customerSeq: number }>('SELECT number, "customerSeq" FROM "Quote" WHERE id = $1', [quoteId])
+    expect(order.customerSeq).toBeGreaterThan(0)
+    expect(quote.customerSeq).toBeGreaterThan(0)
+    for (const [recordType, recordId, office, mine] of [['SalesOrder', orderId, order.number, `#${order.customerSeq}`], ['Quote', quoteId, quote.number, `#${quote.customerSeq}`]] as const) {
+      const photo = await photoOf(recordType, recordId, `Made-up artwork ${recordType}.png`)
+      const made = await as(owner, 'POST', '/approvals-out', { kind: 'ARTWORK', recordType, recordId, email: BRAND_QA, question: 'Approve the artwork.', fileIds: [photo], send: true, language: 'en' }, 201)
+      const id = made.request.id as string
+      // The office reads the office's number.
+      expect(made.request.record.words).toEqual({ it: office, en: office })
+      const officeRead = (await as(owner, 'GET', `/approvals-out/${id}`)).request
+      expect(officeRead.record.words).toEqual({ it: office, en: office })
+      // The portal: the list and the page.
+      const listed = (await as(quality, 'GET', '/portal/approvals?state=OPEN')).items.find((item: Json) => item.id === id)
+      expect(listed?.words, recordType).toEqual({ it: mine, en: mine })
+      const page = await as(quality, 'GET', `/portal/approvals/${id}`)
+      expect(page.request.words, recordType).toEqual({ it: mine, en: mine })
+      expect(page.request.label, recordType).toBe(mine)
+      // The APPROVAL link (one use; opening uses nothing).
+      const link = await viaLink(tokenOf(textOf(lastMail('approvals.request', BRAND_QA)!.raw)), 'GET', '/link/approval?language=en')
+      expect(link.request.id).toBe(id)
+      expect(link.request.words, recordType).toEqual({ it: mine, en: mine })
+      for (const [where, body] of [['list', listed], ['portal', page], ['link', link]] as const) {
+        expect(JSON.stringify(body), `${recordType} ${where}`).not.toContain(office)
+        expect(JSON.stringify({ words: body.words ?? body.request.words, label: body.request?.label ?? null }), `${recordType} ${where}`).not.toMatch(OFFICE_SERIES)
+      }
+      await as(owner, 'POST', `/approvals-out/${id}/withdraw`, { version: officeRead.version, reason: 'Made-up: asked again later.' })
+    }
+  })
+})
+// ---- end F-PR-16

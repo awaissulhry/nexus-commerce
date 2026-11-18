@@ -126,7 +126,10 @@ describe('B-PR-29 the new kinds: size set and TOP rounds, fabric and trim swatch
 
   it('a fabric swatch of a lining is asked as FABRIC (a colour ask refused in words); a trim of a protector is refused before the database', async () => {
     const sentAt = new Date(Date.now() - 3_600_000).toISOString()
-    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    // fix-pr-9: a swatch of A's round (the world's jacket is shared by every company: a swatch of no round is never asked outside,
+    // as override.pg since fix-pr-5).
+    const round = await roundOf('SIZE_SET', world.ids.a)
+    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, roundId: round.id, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
     expect(swatch).toMatchObject({ kind: 'FABRIC', party: { id: world.ids.a }, item: { kind: 'LINING' }, actions: { ask: { allowed: true } } })
     const asColour = await as(owner.browser, 'POST', '/approvals-out', { kind: 'COLOUR', recordType: 'SampleSwatch', recordId: swatch.id, question: 'Made-up.', fileIds: [await photoOf('SampleSwatch', swatch.id)], send: false }, 409)
     expect(asColour.error.message).toBe('This is a fabric swatch: ask with Fabric.')
@@ -168,7 +171,8 @@ describe('B-PR-29 the size set gate passes by its round; TOP gates nothing', { t
     expect(await passGatesOfRound(system(), sizeSet.id, 'APPROVED', { key: `pr3d-${newId()}` })).toEqual([gate.id])
     const passed = await one('SELECT "passedAt" IS NOT NULL AS passed, "passedById"::text AS "by" FROM "OrderGate" WHERE id = $1', [gate.id])
     expect(passed.passed).toBe(true)
-    const change = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'order_gate.changed' AND subject = $1 ORDER BY "occurredAt" DESC LIMIT 1`, [gate.id])
+    // fix-pr-9: on the world's one clock the gate's ADDED and PASSED can share an instant: the later one by its id (ids are in order).
+    const change = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'order_gate.changed' AND subject = $1 ORDER BY "occurredAt" DESC, id DESC LIMIT 1`, [gate.id])
     expect(change[0]!.payload).toMatchObject({ kind: 'SIZE_SET', change: 'PASSED', via: 'SAMPLE', partyId: world.ids.a })
   })
 })
@@ -198,7 +202,8 @@ describe("B-PR-29 the customer's named approver answers its production approvals
 
   it('a fabric swatch is the approver\'s too; a top-of-production round is the approver\'s or Quality\'s; a fit round anyone\'s with the right', async () => {
     const sentAt = new Date(Date.now() - 3_600_000).toISOString()
-    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    const round = await roundOf('SIZE_SET', world.ids.a) // fix-pr-9: a swatch of A's round (above)
+    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, roundId: round.id, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
     const fabric = await ask('FABRIC', 'SampleSwatch', swatch.id)
     await as(bruno.browser, 'POST', `/portal/approvals/${fabric.id}/answer`, answerBody('Bruno Production'), 403)
     await as(quinta.browser, 'POST', `/portal/approvals/${fabric.id}/answer`, answerBody('Quinta Quality'), 403)

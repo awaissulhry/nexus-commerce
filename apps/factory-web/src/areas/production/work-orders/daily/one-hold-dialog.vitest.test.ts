@@ -139,6 +139,20 @@ describe('F-PR-05b — on screen', () => {
     expect(textOf(draw('hold-customer-pause'))).toContain('Paused at the customer’s request')
   })
 
+  // ---- F-PR-16 (the browser walk): Enter sends only from the send button
+  it('Enter in a one-line field sends nothing: the fields of Put on hold and Release the hold sit in no form (the button and ⌘↵ send)', () => {
+    // The DS Modal draws only in a browser: the dialogs' own source is read (the walk checked the screen).
+    const source = readFileSync(join(__dirname, 'view', 'DailyDialogs.tsx'), 'utf8')
+    for (const [from, to] of [['export function HoldDialog(', '// ---- F-PR-05b: Release a plain hold'], ['function LiftHoldDialog(', 'function ReleaseHoldDialog(']] as const) {
+      const dialog = source.slice(source.indexOf(from), source.indexOf(to))
+      expect(dialog.length, from).toBeGreaterThan(100)
+      expect(dialog, from).not.toContain('<form')
+      expect(dialog, from).toContain('<div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>')
+      expect(dialog, from).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
+    }
+  })
+  // ---- end F-PR-16
+
   it('the lift dialog says a standing quality hold keeps it held; without the right Release waits in words', () => {
     expect(textOf(draw('hold-lift'))).toContain('1 quality hold still stands')
     expect(draw('hold-lift-no-right')).toContain('production hold right')

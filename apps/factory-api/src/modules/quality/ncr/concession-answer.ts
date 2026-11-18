@@ -1,6 +1,7 @@
 import type { ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { QUALITY_NCR_MANAGE, QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-pr-10
 import type { CommandTools } from '../../../core/command'
 import { words, type RecordAdapter, type RequestRef } from '../../../platform/approvals-out/adapter'
 import { emitChanged } from './ncr'
@@ -29,7 +30,7 @@ const CONCESSION = {
   proposal: true,
   status: true,
   approvalRequestId: true,
-  ncr: { select: { id: true, number: true, companyId: true, siteId: true, stage: true, title: true } },
+  ncr: { select: { id: true, number: true, companyId: true, siteId: true, stage: true, title: true, workOrderId: true /* fix-pr-10 */ } },
 } as const
 
 export const CONCESSION_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
@@ -57,9 +58,19 @@ export const CONCESSION_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
   async content(client, request, locale: ApprovalLocale) {
     const row = await client.ncrConcession.findUnique({ where: { id: request.recordId }, select: CONCESSION })
     if (!row) return { facts: [], revisedOrder: null }
+    // ---- fix-pr-10 (B-TH-303: the portal never shows the office's series): what the customer reads names no NCR number of ours — a
+    // plain "Quality concession" with the NCR's title, and the customer's OWN order number ("#12") of what its work order makes for
+    // this customer (only this concession's party's cells; none known: no line). content() is read only by the partner's page.
+    const orders = row.ncr.workOrderId
+      ? await client.workOrderSize.findMany({ where: { workOrderId: row.ncr.workOrderId, partyId: row.partyId, salesOrderLineId: { not: null } }, select: { salesOrderLine: { select: { order: { select: { id: true, customerSeq: true } } } } } })
+      : []
+    const seqs = new Map(orders.flatMap((cell) => (cell.salesOrderLine ? [[cell.salesOrderLine.order.id, cell.salesOrderLine.order.customerSeq] as const] : [])))
+    const own = [...new Set([...seqs.values()].map((seq) => customerRefOf('ORDER', seq) ?? '—'))].sort()
     return {
       facts: [
-        { label: words(locale, 'Non conformità', 'Nonconformance'), value: `${row.ncr.number} — ${row.ncr.title}` },
+        { label: words(locale, 'Concessione di qualità', 'Quality concession'), value: row.ncr.title },
+        ...(own.length > 0 ? [{ label: words(locale, 'Il vostro ordine', 'Your order'), value: own.join(', ') }] : []),
+        // ---- end fix-pr-10
         { label: words(locale, 'La deviazione', 'The deviation'), value: row.ask },
         { label: words(locale, 'Cosa proponiamo', 'What we propose'), value: row.proposal },
       ],

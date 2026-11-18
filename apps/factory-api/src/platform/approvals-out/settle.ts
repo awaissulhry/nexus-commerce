@@ -8,6 +8,8 @@ import type { Clock } from '../../core/time'
 import { ensureThread, writeMessage } from '../threads/threads'
 import { deliverMail, queueMail } from './mail'
 import { adapterOf } from './records'
+import { COUNTER_OFFER_RECORD } from '@nexus/factory-domain/approvals-out/kinds' // fix-pr-10
+import { partnerRecordWords, partnerRefsOf } from '../portal/tasks/partner-label' // fix-pr-10
 import { localeOf, readPartner, RECORD, refOf } from './store'
 
 /**
@@ -77,13 +79,19 @@ export async function settleInCommand(tools: CommandTools, requestId: string, an
   // B-PR-30a: decided by us for the party — the party's language, our words, never who of us.
   const forParty = row.decidedForPartyReason
   const locale = answeredIn ?? localeOf(forParty !== null ? await partyLocaleOf(tx, row) : await answererLocale(tx, row))
+  const shared = thread.partyId === row.partyId
+  // ---- fix-pr-10 (B-TH-303: the portal never shows the office's series): what the party reads — the receipt mail, and the answer
+  // on a thread it shares — names its own references ("#12 · revision 2"; a concession without our NCR number), as its approval
+  // page (page.ts) does; only this request's party's rows are read. An internal note keeps the office's label.
+  const refs = record ? await partnerRefsOf(tx, row.partyId, [{ type: row.recordType, id: row.recordId }], row.recordType === COUNTER_OFFER_RECORD ? [row.recordId] : []) : null
+  const theirs = record && refs ? partnerRecordWords(refs, { type: row.recordType, id: row.recordId }, record.label) : null
+  // ---- end fix-pr-10
   const text = [
-    `${KIND_RULES[kind].name[locale]} · ${record?.label[locale] ?? ''}`,
+    `${KIND_RULES[kind].name[locale]} · ${(shared ? theirs?.[locale] : record?.label[locale]) ?? ''}`, // fix-pr-10
     forParty !== null ? decidedForPartyPageWords(kind, status, forParty, locale) : decidedWords(kind, status, row.typedName, row.answeredAt, locale),
     ...(row.answer ? ['', row.answer] : []),
     ...(file ? ['', locale === 'it' ? `Segni sulla foto: ${file.originalName}` : `Marked on the photo: ${file.originalName}`] : []),
   ].join('\n')
-  const shared = thread.partyId === row.partyId
   if (forParty !== null) {
     const company = shared ? await tx.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } }) : null
     await writeMessage(tools, thread, { direction: shared ? 'OUTBOUND' : 'INTERNAL_NOTE', channel: shared ? 'PORTAL' : 'APP', author: { kind: 'SYSTEM', id: null, name: company ? (company.tradeName ?? company.legalName) : null }, bodyText: cleanBody(text) })
@@ -97,7 +105,7 @@ export async function settleInCommand(tools: CommandTools, requestId: string, an
   let body: string | null = null
   if (to && row.answeredAt && row.typedName) {
     const company = await tx.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
-    const mail = receiptMail(locale, { companyName: company?.tradeName ?? company?.legalName ?? '', kind, label: record?.label[locale] ?? '', status, typedName: row.typedName, answeredAt: row.answeredAt, answer: row.answer })
+    const mail = receiptMail(locale, { companyName: company?.tradeName ?? company?.legalName ?? '', kind, label: theirs?.[locale] ?? '' /* fix-pr-10 */, status, typedName: row.typedName, answeredAt: row.answeredAt, answer: row.answer })
     outboundId = await queueMail(tools, { companyId: row.companyId, record: { type: RECORD, id: requestId }, template: APPROVAL_MAIL_TEMPLATES.receipt, to, locale, subject: mail.subject, sender: null })
     body = mail.body
   }

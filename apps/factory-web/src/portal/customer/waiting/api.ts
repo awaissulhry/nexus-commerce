@@ -14,7 +14,7 @@ const words = z.object({ it: z.string(), en: z.string() })
 export const waitingApprovalSchema = z.object({
   id: z.string(),
   kind: z.enum(APPROVAL_KINDS),
-  /** The record's label in both languages ("PP sample · JK-210", "SO-… · new date"). */
+  /** The record's label in both languages ("JK-210 Rider jacket", "#12 · revision 2"): its own order and quote numbers, never the office's series (F-PR-16). */
   words,
   question: z.string(),
   dueAt: z.string(),
