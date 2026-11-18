@@ -343,6 +343,14 @@ export interface AcceptBody {
   readonly reason?: string | undefined
 }
 
+/** B-PR-27b: what ship what is ready did, as the accept's contract sends it (fix-pr-4: its own arrays, not read-only ones). */
+type SplitDone = {
+  shipComplete: boolean
+  proposals: { id: string; orderLineId: string; seq: number; sizes: { size: string | null; from: string | null; to: string }[] }[]
+  skipped: AcceptProposals['skipped'][number][]
+  words: { it: string; en: string }
+}
+
 export async function acceptRequest(caller: CommandCaller, requestId: string, body: AcceptBody, idempotencyKey: string | undefined, clock: Clock) {
   const context = officeContextOf(caller)
   const { order } = await caller.withClient((client) => officeRequest(client, context, requestId))
@@ -368,7 +376,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     let amendmentId: string | null = null
     let orderCancelled = false
     // B-PR-27b: what ship what is ready did.
-    let split: { shipComplete: boolean; proposals: { id: string; orderLineId: string; seq: number; sizes: { size: string | null; from: string | null; to: string }[] }[]; skipped: AcceptProposals['skipped']; words: { it: string; en: string } } | null = null
+    let split: SplitDone | null = null
     // B-W2b-F14: a cancel's fee as it stands now (before its lines close), kept on the audit rows and shown in the answer:
     // the request has no column for it, and no money moves.
     let cancelFee: CancelFee | null = null
@@ -388,13 +396,13 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
         await tx.salesOrder.update({ where: { id: order.id }, data: { shipComplete: false, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
         tools.audit({ action: 'orders.shipAsReady', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { shipComplete: true }, after: { shipComplete: false, requestId }, reason })
       }
-      const proposals: NonNullable<typeof split>['proposals'] = []
+      const proposals: SplitDone['proposals'] = []
       for (const checked of splitProposals?.checked ?? []) {
         const made = await proposeInCommand(tools, checked)
         proposals.push({ id: made.proposalId, orderLineId: checked.line.id, seq: checked.line.seq, sizes: made.sizes.map((size) => ({ size: size.size, from: size.from, to: size.to })) })
       }
       const words = [ACCEPT_DONE_WORDS.shipsAsReady, ACCEPT_DONE_WORDS.repromised(proposals.length)]
-      split = { shipComplete: false, proposals, skipped: splitProposals?.skipped ?? [], words: { it: words.map((entry) => entry.it).join(' '), en: words.map((entry) => entry.en).join(' ') } }
+      split = { shipComplete: false, proposals, skipped: [...(splitProposals?.skipped ?? [])], words: { it: words.map((entry) => entry.it).join(' '), en: words.map((entry) => entry.en).join(' ') } }
     } else if (partlyShipped) {
       await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: [] })
     } else if (row.kind === 'CANCEL' && cells.length === 0) {
