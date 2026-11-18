@@ -483,7 +483,8 @@ export const applyPlanContract = defineContract({
       /** Pieces already cut beyond the new figure, with the three outcomes and what each needs (R1; Round 4: none picked). */
       extra: output({
         pieces: z.array(output({ lineId: id(), seq: z.number().int(), size: z.string(), count: z.number().int(), words })),
-        total: z.number().int(),
+        /** The extra pieces counted (the sum of `pieces[].count`), never money. */
+        total: notMoney(z.number().int()),
         outcomes: z.array(output({ outcome: z.enum(EXTRA_OUTCOMES), words, needs: z.enum(OUTCOME_NEEDS).nullable(), needsWords: words.nullable(), mayChoose: z.boolean() })),
         /** The outcome Accept recorded (null: none yet, or no extra piece). */
         chosen: z.enum(EXTRA_OUTCOMES).nullable(),
