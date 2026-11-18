@@ -31,5 +31,14 @@
     "more_other": "Altri {count} avvisi",
     "fewer_one": "Nascondi 1 avviso",
     "fewer_other": "Nascondi {count} avvisi"
+  },
+  "discuss": {
+    "label": "Discuti",
+    "hint": "Discuti nella conversazione",
+    "of": "Discuti {thing} nella conversazione",
+    "showOnPage": "Mostra nella pagina",
+    "showInThread": "Mostra nella conversazione",
+    "followers": "Chi segue…",
+    "notInThread": "Questa modifica non è nella cronologia della conversazione."
   }
 }

@@ -30,7 +30,12 @@ export type ThreadHead = z.infer<typeof headSchema>
 // files not kept (never a signature logo), and the mail for this conversation that waits for a person. Codes stay strings here (an
 // unknown one is said plainly, never a failed read): the card and the feed name each in words.
 const skippedSchema = z.object({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.string() })
-export const officeMessageSchema = messageSchema.extend({ erased: z.boolean().optional(), skippedAttachments: z.array(skippedSchema).optional() })
+export const officeMessageSchema = messageSchema.extend({
+  erased: z.boolean().optional(),
+  skippedAttachments: z.array(skippedSchema).optional(),
+  // F-SA-265 (B-SA-061): office only — the part of its order the message is about (null: none, or a work order out of the reader's reach).
+  about: z.object({ kind: z.string(), id: z.string() }).nullable().optional(),
+})
 export type OfficeMessage = z.infer<typeof officeMessageSchema>
 export const waitingMailSchema = z.object({ count: z.number().int(), reasons: z.array(z.string()), mayReview: z.boolean() })
 export type WaitingMail = z.infer<typeof waitingMailSchema>
@@ -87,6 +92,8 @@ const sent = z.object({ messageId: z.string(), email: z.object({ id: z.string(),
 export interface MessageLinks {
   replyToMessageId?: string
   correctsMessageId?: string
+  /** F-SA-265 (B-SA-061): the part of its order the message is about (a sales order's thread only; never a work order to the customer). */
+  about?: { kind: string; id: string } | null
 }
 
 /**
@@ -108,6 +115,7 @@ export async function postNoteKeyed(
       ...(input.amount ? { amount: input.amount } : {}),
       ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
       ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
+      ...(input.about ? { about: { kind: input.about.kind, id: input.about.id } } : {}), // F-SA-265
     },
     schema: posted,
     idempotencyKey,
@@ -144,6 +152,7 @@ export async function postPortalReplyKeyed(api: ApiClient, record: RecordKey, in
       ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
       ...(input.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {}), // F-SA-282a
       ...(input.batchId ? { batchId: input.batchId } : {}), // F-SA-282
+      ...(input.about ? { about: { kind: input.about.kind, id: input.about.id } } : {}), // F-SA-265
     },
     schema: posted,
     idempotencyKey,

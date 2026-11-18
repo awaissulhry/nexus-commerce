@@ -30,6 +30,8 @@ export interface ThreadApiMessage {
   corrects?: LinkedApiMessage | null | undefined
   correctedBy?: { id: string; at: string } | null | undefined
   // ---- end B-TH-236
+  /** F-SA-265 (B-SA-061): office only — the part of its order the message is about ("Show on the page"). */
+  about?: { kind: string; id: string } | null | undefined
   at: string
 }
 
@@ -114,6 +116,7 @@ export function cardOf(message: ThreadApiMessage, sources: CardSources): CardMes
     email: email ? { to: email.to, subject: email.subject, status: email.status, ...mailExtras(message, email, sources) } : null,
     bounceTask: email?.status === 'BOUNCED' && delivery?.task && delivery.task.status === 'OPEN' && sources.taskHref ? { href: sources.taskHref(delivery.task.id) } : null,
     ...linksOf(message, sources),
+    ...(message.about ? { about: { kind: message.about.kind, id: message.about.id } } : {}), // F-SA-265
   }
 }
 

@@ -98,6 +98,8 @@ export interface CardMessage {
   erased?: boolean
   skipped?: readonly SkippedFile[]
   // ---- end B-TH-255
+  // ---- F-SA-265 (B-SA-061): office only — the part of its order the message is about; the card offers "Show on the page".
+  about?: { kind: string; id: string } | null
   // ---- B-TH-286 (B-TH-091; T3-F12): pinned for everyone on the record (the files line's "2 pinned" lists it).
   pinned?: boolean
   // ---- end B-TH-286

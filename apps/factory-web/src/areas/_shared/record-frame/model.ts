@@ -173,3 +173,50 @@ export function askedFiles(ask: FrameFilesAsk, known: readonly ThreadFile[], rec
   return { files, index: Math.max(0, files.findIndex((file) => file.id === ask.fileId)) }
 }
 // ---- end B-TH-264 follow-up
+
+// ---- F-SA-265 (sales page plan N2, N4, N6; picks P2, P9, R10; 10-order-page §6.4): Discuss — a row of the body opens the record's
+// conversation about it. The body names the part (its kind and id when the conversation can keep the reference: a line, a shipment,
+// an invoice, a deposit request, a gate, a change request, a work order of THIS order — B-SA-061's list), the chip's words for an
+// office note and for a message to the customer (null: office only — the chip goes on a reply), and, for a part the conversation
+// cannot keep, the note's first line in words.
+export const DISCUSS_KINDS = ['SalesOrderLine', 'Shipment', 'Invoice', 'DepositRequest', 'OrderGate', 'OrderChangeRequest', 'WorkOrder'] as const
+export type DiscussKind = (typeof DISCUSS_KINDS)[number]
+
+export interface DiscussAbout {
+  readonly ref: { readonly kind: DiscussKind; readonly id: string } | null
+  /** The chip's words in an office note ("SO-2026-0142 · line 2"). */
+  readonly office: string
+  /** The chip's words in a message to the customer ("your order · line 2": its own words, no price, no work-order number); null: office only. */
+  readonly customer: string | null
+  /** A part the conversation cannot keep: the office note's first line, in words. */
+  readonly line?: string
+}
+
+/** What the body asks the conversation: discuss this part (on this record's own conversation). */
+export interface DiscussAsk {
+  readonly record: { readonly type: string; readonly id: string }
+  readonly about: DiscussAbout
+}
+
+/** What the body asks the conversation: show the history step of a change of this record (the step nearest `at`). */
+export interface ShowInThreadAsk {
+  readonly record: { readonly type: string; readonly id: string }
+  readonly at: string
+}
+
+/** The frame's doors into the conversation (B-TH-262's approve, F-SA-265's followers). */
+export type FrameDoor = 'approve' | 'followers'
+
+/** The history step a change of the record is (the newest step within `withinMs` of it), or null: not in the conversation's history. */
+export function stepNearest(events: readonly { readonly id: string; readonly at: string }[], at: string, withinMs = 10 * 60_000): string | null {
+  const target = Date.parse(at)
+  if (Number.isNaN(target)) return null
+  let best: { id: string; gap: number } | null = null
+  for (const event of events) {
+    const gap = Math.abs(Date.parse(event.at) - target)
+    if (Number.isNaN(gap) || gap > withinMs) continue
+    if (!best || gap < best.gap) best = { id: event.id, gap }
+  }
+  return best?.id ?? null
+}
+// ---- end F-SA-265

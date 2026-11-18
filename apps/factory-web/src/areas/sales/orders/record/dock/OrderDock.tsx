@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Button, Select } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
@@ -35,6 +35,8 @@ export interface OrderDockProps {
   readonly prefix: string
   /** The order's print view (the Head's Print line, this order's own conversation only). */
   readonly printHref?: string
+  /** F-SA-265: a message about a part of the order jumps back to its row ("Show on the page"). */
+  readonly showOnPage?: (about: { kind: string; id: string }) => void
 }
 
 export function OrderDock(props: OrderDockProps) {
@@ -45,7 +47,7 @@ export function OrderDock(props: OrderDockProps) {
   )
 }
 
-function Dock({ order, workOrders, prefix, printHref }: OrderDockProps) {
+function Dock({ order, workOrders, prefix, printHref, showOnPage }: OrderDockProps) {
   const t = useT('orders')
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -73,6 +75,14 @@ function Dock({ order, workOrders, prefix, printHref }: OrderDockProps) {
     const address = scopeAddress(pathname, window.location.search, next, narrow, messageId)
     if (address !== `${pathname}${window.location.search}`) router.replace(address, { scroll: false })
   }
+
+  // ── F-SA-265: Discuss and Show in thread are about THIS order: the pick goes to its own conversation first (which reads the ask) ──
+  const asking = frame?.discussAsk?.record.id === order.id || frame?.showAsk?.record.id === order.id
+  const goRef = useRef(go)
+  goRef.current = go
+  useEffect(() => {
+    if (asking && scope.kind !== 'order') goRef.current(ORDER_SCOPE)
+  }, [asking, scope.kind])
 
   // ── "N new" of each conversation (the reader's own; again on a live message) ──
   const [tick, setTick] = useState(0)
@@ -166,7 +176,7 @@ function Dock({ order, workOrders, prefix, printHref }: OrderDockProps) {
       </div>
     )
   } else {
-    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} />
+    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} />
   }
 
   return (

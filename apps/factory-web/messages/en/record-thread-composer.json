@@ -52,7 +52,8 @@
     "mentions": "Mentions stay in office notes: taken out of this message: {names}.",
     "amount": "An amount stays on office notes: taken off this message.",
     "correction": "A correction goes the way its message went: this is a new message now, not a correction.",
-    "numbers": "The customer reads its own numbers, never the office’s: changed in this message: {numbers}."
+    "numbers": "The customer reads its own numbers, never the office’s: changed in this message: {numbers}.",
+    "about": "The reference stays in office notes: taken off this message."
   },
   "floor": {
     "label": "For the floor",
@@ -88,5 +89,9 @@
   "namesOther": {
     "tick": "This text names no other customer",
     "hint": "Change the text, or tick this when the name is no customer here."
+  },
+  "about": {
+    "chip": "About: {thing}",
+    "drop": "Remove the reference"
   }
 }
