@@ -8,6 +8,11 @@ import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
+// F-SA-272: the supervisor card's states (made-up people of the portal demo).
+import { CustomerSupervisorCard } from '../portal/view/CustomerSupervisorCard'
+import { SUPERVISOR_CASES } from '../portal/demo'
+import type { OpenOrderMoney } from '../money/api' // F-SA-273
+import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import type { Metric } from '@nexus/ui/components'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -42,8 +47,17 @@ interface DepthCase {
   privacy?: PrivacyModel
 }
 
+/** F-SA-273: three made-up open orders of MODA-DEMO with their deposits and balances (minor units). */
+const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
+  { id: 'd0000000-0000-4000-8000-000000000271', number: 'SO-0142', currency: 'EUR', deposit: { state: 'OPEN', dueDate: '2026-12-01' }, paid: 0, balance: 420000 },
+  { id: 'd0000000-0000-4000-8000-000000000272', number: 'SO-0150', currency: 'EUR', deposit: { state: 'PAID', dueDate: null }, paid: 120000, balance: 280000 },
+  { id: 'd0000000-0000-4000-8000-000000000273', number: 'SO-0155', currency: 'EUR', deposit: { state: 'NOT_NEEDED', dueDate: null }, paid: 0, balance: 0 },
+]
+
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase }
+// F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
+// F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[] }
 
 function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDepth | undefined {
   if (!depth) return undefined
@@ -57,8 +71,10 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
   return {
     ...(glance
       ? {
-          numbers: [tile('credit'), { ...tile('promises'), href: `${recordHref}?tab=orders` }] satisfies Metric[],
-          now: createElement(GlanceNow, { model: glance }),
+          numbers: [tile('credit'), { ...tile('promises'), href: `${recordHref}?tab=work` }] satisfies Metric[],
+          // F-SA-274: samples and repairs on the Overview, riders and measurement profiles on People & addresses.
+          now: createElement(GlanceNow, { model: glance, parts: ['samples', 'repairs'] }),
+          people: createElement(GlanceNow, { model: glance, parts: ['profiles', 'riders'] }),
           status: createElement(GlanceStatus, { model: glance }),
           aside: createElement(GlanceAside, { model: glance }),
         }
@@ -70,7 +86,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -79,7 +95,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id) }),
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}) }),
     ),
   )
 }
@@ -98,7 +114,7 @@ const taxCase = (hold: Partial<HoldCardModel> = {}, po: Partial<PoNumberModel> =
 const reqModel = (over: Partial<RequirementsModel> = {}, can: DepthCan = ALL_CAN): RequirementsModel => ({ read: ready(REQUIREMENTS), can, status: 'ACTIVE', dialog: null, styles: ready(STYLES), files: ready(FILES), companies: COMPANIES, ...over })
 const reqCase = (over: Partial<RequirementsModel> = {}, can: DepthCan = ALL_CAN, record_: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record('MARCHIO-ESEMPIO', { tab: 'terms', can: DEPTH_CAN, ...record_ }), depth: { requirements: reqModel(over, can) } })
 const privacyModel = (over: Partial<PrivacyModel> = {}, can: DepthCan = ALL_CAN): PrivacyModel => ({ read: ready(PRIVACY), can, status: 'ACTIVE', today: TODAY, dialog: null, stepUp: STEP_UP_CLOSED, portalHref: `/w/DEMO/sales/customers/${by('MODA-DEMO').id}?tab=portal`, ...over })
-const privacyCase = (over: Partial<PrivacyModel> = {}, can: DepthCan = ALL_CAN): CustomerCase => ({ ...record('MODA-DEMO', { tab: 'addresses', can: DEPTH_CAN }), depth: { privacy: privacyModel(over, can) } })
+const privacyCase = (over: Partial<PrivacyModel> = {}, can: DepthCan = ALL_CAN): CustomerCase => ({ ...record('MODA-DEMO', { tab: 'people', can: DEPTH_CAN }), depth: { privacy: privacyModel(over, can) } })
 const dialogState = { busy: false, failed: null, tried: false } as const
 const firstContact = PRIVACY.contacts[0]!
 const consentContact = PRIVACY.contacts[2]!
@@ -143,21 +159,21 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'blocked', label: 'Blocked, with its reason', model: record('BLOCCATO-DEMO') },
     { id: 'archived', label: 'Archived: read only until reactivated', model: record('ARCHIVIATO-DEMO', { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'read-only', label: 'Read-only rights: you can view, not change', model: record('MODA-DEMO', { can: { ...RECORD_CAN, manage: false, block: false, vies: false } }) },
-    { id: 'addresses', label: 'Addresses & contacts', model: record('MODA-DEMO', { tab: 'addresses' }), note: 'The default switches save at once; Edit opens the address.' },
-    { id: 'addresses-saving', label: 'Addresses: a default being saved', model: record('MODA-DEMO', { tab: 'addresses', saving: `shipTo:${by('MODA-DEMO').addresses[1]!.id}` }) },
-    { id: 'addresses-empty', label: 'Addresses & contacts: none yet', model: record('NUOVO-PROVA', { tab: 'addresses' }) },
-    { id: 'address-new', label: 'Add an address', model: record('MODA-DEMO', { tab: 'addresses', dialog: { kind: 'address' } }) },
+    { id: 'addresses', label: 'People & addresses', model: record('MODA-DEMO', { tab: 'people' }), note: 'The default switches save at once; Edit opens the address.' },
+    { id: 'addresses-saving', label: 'Addresses: a default being saved', model: record('MODA-DEMO', { tab: 'people', saving: `shipTo:${by('MODA-DEMO').addresses[1]!.id}` }) },
+    { id: 'addresses-empty', label: 'People & addresses: none yet', model: record('NUOVO-PROVA', { tab: 'people' }) },
+    { id: 'address-new', label: 'Add an address', model: record('MODA-DEMO', { tab: 'people', dialog: { kind: 'address' } }) },
     {
       id: 'address-edit',
       label: 'Edit an address (sent documents keep their copy)',
-      model: record('MODA-DEMO', { tab: 'addresses', dialog: { kind: 'address', addressId: by('MODA-DEMO').addresses[1]!.id } }),
+      model: record('MODA-DEMO', { tab: 'people', dialog: { kind: 'address', addressId: by('MODA-DEMO').addresses[1]!.id } }),
     },
     {
       id: 'address-refused',
       label: 'An address refused by the API',
-      model: record('MODA-DEMO', { tab: 'addresses', dialog: { kind: 'address', addressId: by('MODA-DEMO').addresses[0]!.id }, dialogProblem: 'problem.invalid', refused: ['postalCode'] }),
+      model: record('MODA-DEMO', { tab: 'people', dialog: { kind: 'address', addressId: by('MODA-DEMO').addresses[0]!.id }, dialogProblem: 'problem.invalid', refused: ['postalCode'] }),
     },
-    { id: 'contact-new', label: 'Add a contact', model: record('MODA-DEMO', { tab: 'addresses', dialog: { kind: 'contact' } }) },
+    { id: 'contact-new', label: 'Add a contact', model: record('MODA-DEMO', { tab: 'people', dialog: { kind: 'contact' } }) },
     { id: 'tax', label: 'Terms & requirements: an Italian identity', model: record('MODA-DEMO', { tab: 'terms' }) },
     { id: 'tax-eu-valid', label: 'Terms & requirements: VIES valid, with its proof', model: record('DE-BEISPIEL', { tab: 'terms' }) },
     { id: 'tax-eu-invalid', label: 'Terms & requirements: VIES answered not valid', model: record('FR-EXEMPLE', { tab: 'terms' }) },
@@ -171,15 +187,33 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'identity-new', label: 'New tax identity from a date', model: record('MODA-DEMO', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
     { id: 'identity-correct', label: 'Correct the identity in force (add the SDI code)', model: record('MARCHIO-ESEMPIO', { tab: 'terms', dialog: { kind: 'identity', mode: 'correct' } }) },
     { id: 'identity-first', label: 'A first tax identity', model: record('NUOVO-PROVA', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
-    { id: 'quotes-orders', label: 'Quotes & orders: open', model: record('MODA-DEMO', { tab: 'orders' }) },
-    { id: 'quotes-orders-all', label: 'Quotes & orders: all', model: record('MODA-DEMO', { tab: 'orders', deals: 'all' }) },
+    { id: 'quotes-orders', label: 'Work: the open orders (until the Orders sheet, F-SA-276)', model: record('MODA-DEMO', { tab: 'work' }) },
+    { id: 'quotes-orders-all', label: 'Work: every order', model: record('MODA-DEMO', { tab: 'work', deals: 'all' }) },
     {
       id: 'quotes-orders-no-price',
-      label: 'Quotes & orders: without the price grain',
-      model: record('MODA-DEMO', { tab: 'orders', deals: 'all', can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }),
+      label: 'Work: without the price grain',
+      model: record('MODA-DEMO', { tab: 'work', deals: 'all', can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }),
     },
-    { id: 'quotes-orders-empty', label: 'Quotes & orders: none yet', model: record('NUOVO-PROVA', { tab: 'orders', quotes: loaded([]), orders: loaded([]) }) },
-    { id: 'quotes-orders-error', label: "Quotes & orders: couldn't load", model: record('MODA-DEMO', { tab: 'orders', quotes: failed('problem.unavailable') }) },
+    { id: 'quotes-orders-empty', label: 'Work: no order yet', model: record('NUOVO-PROVA', { tab: 'work', quotes: loaded([]), orders: loaded([]) }) },
+    { id: 'quotes-orders-error', label: "Work: couldn't load", model: record('MODA-DEMO', { tab: 'work', quotes: failed('problem.unavailable') }) },
+    // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.
+    { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: record('MODA-DEMO', { tab: 'work' }) },
+    { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
+    { id: 'tab-quotes', label: 'F-SA-271 · Quotes & incoming: the quotes (until its two lists, F-SA-277)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
+    // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
+    { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } },
+    { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel({ ...MONEY_CAN, price: false, orders: true, credit: true, creditLimits: false }, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } },
+    { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
+    { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
+    // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).
+    { id: 'overview-supervisor', label: 'F-SA-272 · Overview: Who looks after <customer> — supervisor Bea Esempio, backup Carlo Prova (office only)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved } },
+    { id: 'overview-supervisor-new', label: 'F-SA-272 · A first supervisor picked — "moves 7 orders that have no supervisor of their own" before Apply', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.first } },
+    { id: 'overview-supervisor-held', label: 'F-SA-272 · The supervisor held — no production.brand.manage', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held } },
+    { id: 'overview-supervisor-every-company', label: 'F-SA-272 · The supervisor held — the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
+    { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody } },
+    { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused } },
+    // ---- F-SA-274: People & addresses — a contact with portal access is tagged (an exact e-mail match), the others offer Invite.
+    { id: 'people-portal', label: 'F-SA-274 · People & addresses: contacts tagged "Has portal access" on the same e-mail; ⋯ Invite to the portal… for the others', model: { ...record('MODA-DEMO', { tab: 'people', can: { ...RECORD_CAN, partners: true } }), portalEmails: by('MODA-DEMO').contacts.slice(0, 1).flatMap((contact) => (contact.email ? [contact.email.toLowerCase()] : [])) } },
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)
     // and its Files view.
     { id: 'thread-docked', label: 'TH-6 · The customer’s thread docked beside the Overview (40 %): Reply to this customer only', model: record('MODA-DEMO'), note: 'The band sits in the shell’s band row with ONE pill; "Projects (2)" opens this customer’s projects. The thread is docked at 40 %, sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me); its Files view the old Documents tab’s files. An old ?tab=activity or ?tab=documents opens the thread; ?tab=tax and ?tab=requirements land on Terms & requirements.' },

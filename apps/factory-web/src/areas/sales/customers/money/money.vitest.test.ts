@@ -12,6 +12,7 @@ import { designScreen as customerScreen } from '../record/fixtures'
 import { COMPLAINT_STATUSES, OPEN_RETURN_STATUSES, RETURN_STATUSES } from './api'
 import { COMPLAINTS, OVERDUE_ROWS, RETURNS } from './_demo/fixtures'
 import { customerMoneyCanOf, openAfterSales, overdueByParty, overdueOf, receivablesOfCustomer, returnsThisYear } from './model'
+import { depositsAndBalances, openToPayOf, statementOf } from './model' // F-SA-273
 
 /**
  * The customer's Overdue and Returns numbers (B-W2a-81): the lists equal factory-domain's, what a customer owes late per
@@ -105,3 +106,44 @@ describe('the W2a design cases draw in both languages with no key on screen', ()
     }
   })
 })
+
+// ---- F-SA-273 (sales page plan N5, pick P10; 11-customer-page §5): the Money tab — each card its own right, one row per currency ----
+describe('F-SA-273: the customer’s Money tab', () => {
+  it('each card has its own right: open orders (orders.view), credit (sales.credit.view), its one editor (sales.credit.limits)', () => {
+    expect(customerMoneyCanOf(['receivables.view'])).toMatchObject({ receivables: true, orders: false, credit: false, creditLimits: false, price: false })
+    expect(customerMoneyCanOf(['orders.view', 'sales.credit.view', 'sales.credit.limits', 'money.price'])).toMatchObject({ receivables: false, orders: true, credit: true, creditLimits: true, price: true })
+  })
+
+  it('open to pay: one row per currency, every company of the customer summed, never another customer’s', () => {
+    const de = OVERDUE_ROWS.find((row) => row.customer.code === 'DE-BEISPIEL')!.customer.id
+    const rows = openToPayOf(OVERDUE_ROWS, de)
+    expect(rows.map((row) => row.currency)).toEqual(['CHF', 'EUR'])
+    expect(rows.find((row) => row.currency === 'EUR')).toMatchObject({ open: 122000, overdue: 122000, daysLate: 21 })
+    expect(rows.find((row) => row.currency === 'CHF')!.buckets.D1_30).toBe(30000)
+    expect(openToPayOf(OVERDUE_ROWS, 'nobody')).toEqual([])
+    expect(statementOf('/w/DEMO', de, 'c1', 'CHF')).toBe(`/w/DEMO/finance/receivables?statement=${de}&company=c1&currency=CHF`)
+  })
+
+  it('deposits and balances: the orders that owe money, the largest balance first, the first 10; deposits waiting counted', () => {
+    const order = (index: number, balance: number | undefined, state: 'OPEN' | 'PAID' | 'NOT_NEEDED' = 'PAID') => ({ id: `o${index}`, number: `SO-${String(index).padStart(4, '0')}`, currency: 'EUR', deposit: { state, dueDate: null }, ...(balance === undefined ? {} : { paid: 0, balance }) })
+    const orders = [order(1, 0, 'NOT_NEEDED'), ...Array.from({ length: 11 }, (_, index) => order(index + 2, (index + 1) * 1000)), order(20, 0, 'OPEN')]
+    const answer = depositsAndBalances(orders)
+    expect(answer.owing).toBe(12)
+    expect(answer.rows).toHaveLength(10)
+    expect(answer.rows[0]!.balance).toBe(11000)
+    expect(answer.rows.map((row) => row.id)).not.toContain('o1')
+    expect(answer.depositsWaiting).toBe(1)
+    // Without the price grain there is no balance: an open deposit still owes, the rest is by number.
+    expect(depositsAndBalances([order(3, undefined, 'OPEN'), order(2, undefined, 'PAID')]).rows.map((row) => row.id)).toEqual(['o3'])
+  })
+
+  it('the record’s Money tab case draws in both languages with no key left', () => {
+    const View = customerScreen.view as ComponentType<{ model: unknown }>
+    const item = (customerScreen as DesignScreen<unknown>).cases.find((entry) => entry.id === 'tab-money')!
+    for (const locale of LOCALES) {
+      const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: item.model })))
+      expect(html).not.toMatch(/\btab\.(openToPay|credit|openInvoices|deposits|paymentTerms)\b/)
+    }
+  })
+})
+// ---- end F-SA-273

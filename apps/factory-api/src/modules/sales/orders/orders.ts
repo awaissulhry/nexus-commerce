@@ -30,6 +30,8 @@ import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-lin
 import { chainWhere } from '../mtm/profiles'
 import { shippedNotInvoiced } from '@nexus/factory-domain/sales/orders/invoiced' // B-TH-244
 import { officeOrder, recordAfter } from './moves'
+// B-SA-070: the production columns, the `waiting=us` term and the `ids=` re-read (the customer's Work tab).
+import { idsTermOf, orderProductionColumns, waitingUsWhere } from './production-columns'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
 
@@ -85,6 +87,8 @@ export interface ListFilters {
   readonly kind?: 'mtm' | undefined
   /** B-SA-021: a rider's orders: a unit of any revision of that rider's garment profile (sales.measurements.view only). */
   readonly profile?: string | undefined
+  /** B-SA-070: `us` — the keeper says the order waits on us, or a customer request on it is still OPEN ("Waiting on us"). */
+  readonly waiting?: 'us' | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -95,6 +99,10 @@ export interface ListQuery extends ListFilters {
   readonly sort?: OrderSortTerm | undefined
   /** B-TH-059: count each row's production progress (the Progress column is shown, or the file writes it). */
   readonly progress?: 'true' | 'false' | undefined
+  /** B-SA-070: the production columns (stage, health, waiting on, held, supervisor mark, open requests and issues). */
+  readonly production?: 'true' | 'false' | undefined
+  /** B-SA-070: only these orders (≤ 50 ids, comma separated): the rows in view, read again. */
+  readonly ids?: string | undefined
 }
 
 
@@ -145,6 +153,7 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.currency ? { currency: filters.currency } : {}, // B-TH-058
       filters.customerUrgency ? customerUrgencyWhere(filters.customerUrgency) : {}, // B-TH-059 (agreement T10)
       filters.kind === 'mtm' ? MTM_WHERE : {}, // B-SA-020
+      filters.waiting === 'us' ? waitingUsWhere : {}, // B-SA-070
     ],
   }
 }
@@ -306,8 +315,10 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
   const context = officeContextOf(caller)
   const today = todayNow()
   if (!query.sort && query.cursor !== undefined && !isUuid(query.cursor)) throw new ValidationError('This page belongs to a sorted list: read the list from its start again.', [{ path: 'query/cursor', message: 'The last id read.' }])
+  const only = query.ids !== undefined ? idsTermOf(query.ids) : null // B-SA-070
   return caller.withClient(async (client) => {
-    const scoped = await viewWhere(client, context, query, today) // B-TH-058 / B-TH-059: the view's one filter
+    const viewed = await viewWhere(client, context, query, today) // B-TH-058 / B-TH-059: the view's one filter
+    const scoped: Prisma.SalesOrderWhereInput = only ? { AND: [viewed, { id: { in: only } }] } : viewed // B-SA-070: the rows in view
     // B-TH-059: + the office's priority and the order note (the later columns).
     const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true, priority: true, priorityLevel: true, urgentReason: true, internalNote: true } as const
     let page: Prisma.SalesOrderGetPayload<{ select: typeof select }>[]
@@ -358,6 +369,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
       shippedOf,
       { today, progress: query.progress === 'true' },
     )
+    // B-SA-070: the production columns, only when asked (the Work tab, or the file).
+    const production = query.production === 'true' ? await orderProductionColumns(client, actorOf(context), context.actorId, page, today) : null
     return {
       orders: page.map((row) => {
         const own = deposits.filter((deposit) => deposit.orderId === row.id && deposit.status !== 'CANCELLED')
@@ -393,6 +406,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           ...extras.get(row.id)!,
           // B-TH-059
           ...later.get(row.id)!,
+          // B-SA-070
+          ...(production ? { production: production.get(row.id)! } : {}),
         }
       }),
       nextCursor, // B-TH-057
@@ -409,7 +424,7 @@ const TILES = ['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction'
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* B-SA-020 */ | 'profile' /* B-SA-021 */>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* B-SA-020 */ | 'profile' /* B-SA-021 */ | 'waiting' /* B-SA-070 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
   return caller.withClient(async (client) => {

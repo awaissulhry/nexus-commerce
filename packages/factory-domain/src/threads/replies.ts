@@ -6,7 +6,10 @@
  * nonconformance) keeps its own refusal, NOT_SHAREABLE (platform/threads/records.ts).
  */
 
-export const REPLY_REFUSALS = ['NO_PARTY', 'NO_PORTAL', 'CLOSED'] as const
+// B-SA-073 (sales page plan R7; review BW-6): + Reply to N on the server — a batch of one customer (BATCH_TWO_CUSTOMERS), at most
+// REPLY_BATCH_MAX records (BATCH_FULL) — and the mis-send text check on every reply (NAMES_OTHER_CUSTOMER, until the writer ticks
+// "This text names no other customer").
+export const REPLY_REFUSALS = ['NO_PARTY', 'NO_PORTAL', 'CLOSED', 'BATCH_TWO_CUSTOMERS', 'BATCH_FULL', 'NAMES_OTHER_CUSTOMER'] as const
 export type ReplyRefusalCode = (typeof REPLY_REFUSALS)[number]
 
 export const REPLY_REFUSAL_WORDS: Readonly<Record<ReplyRefusalCode, { readonly it: string; readonly en: string }>> = Object.freeze({
@@ -22,4 +25,22 @@ export const REPLY_REFUSAL_WORDS: Readonly<Record<ReplyRefusalCode, { readonly i
     it: 'Questa conversazione è chiusa: riaprila per rispondere.',
     en: 'This conversation is closed: reopen it to reply.',
   },
+  // ---- B-SA-073
+  BATCH_TWO_CUSTOMERS: {
+    it: 'Rispondere a più ordini funziona per un cliente alla volta.',
+    en: 'Reply to many works for one customer at a time.',
+  },
+  BATCH_FULL: {
+    it: 'Al massimo 50 ordini in una risposta.',
+    en: 'At most 50 orders in one reply.',
+  },
+  // The production notes' own words (R-47, factory-domain production-brand/notes NOTE_WORDS): one check, one sentence.
+  NAMES_OTHER_CUSTOMER: {
+    it: 'Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti».',
+    en: 'The text names another customer: change it, or tick "This text names no other customer".',
+  },
+  // ---- end B-SA-073
 })
+
+// ---- B-SA-073: the most records one Reply to N writes on (the same batchId on each reply).
+export const REPLY_BATCH_MAX = 50

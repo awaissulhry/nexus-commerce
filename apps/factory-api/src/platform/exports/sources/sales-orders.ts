@@ -19,6 +19,12 @@ import { defineExportSource } from '../source'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions' // B-SA-020
 import { holds } from '@nexus/factory-domain/core/permissions' // B-SA-021
 import { RIDER_TERM_REFUSAL } from '../../../modules/sales/orders/orders' // B-SA-021
+// B-SA-070: the production columns (Where it is, Waiting on, Supervisor) and the `waiting=us` term.
+import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { HEALTH_WORDS, OFFICE_WAITING_WORDS, STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
+import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
+import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 
 /**
  * Sales › Orders (SCR-038, `/sales/orders`): the export of the list as the screen shows it. The address is the list's
@@ -58,6 +64,12 @@ import { RIDER_TERM_REFUSAL } from '../../../modules/sales/orders/orders' // B-S
  * B-SA-021: `?profile=<id>` (a rider's orders, any revision of the rider's garment profile) narrows the file as the screen; a
  * malformed one is refused, and a person without sales.measurements.view is refused the file in the list's own words ("You may not
  * narrow orders by rider."), before anything is read.
+ *
+ * B-SA-070 (sales page plan R5; 17-review F-4: screen = file): `?waiting=us` (the customer's Work tab's "Waiting on us") narrows the
+ * file as it narrows the screen (another value: refused in words), and the file writes the production columns by the web's ids —
+ * `whereItIs` (the plain stage and the shown health: "Sewing · At risk"), `waitingOn` (who it waits on), `held` and `supervisor` (Me /
+ * Someone else / Not set, never a name: a column only for a person holding workorders.view, empty for an order the person's
+ * workorders.view does not reach).
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
@@ -191,6 +203,29 @@ function ridersText(row: Row): string | null {
 }
 // ── end B-SA-020 ──
 
+// ── B-SA-070 ──
+/** The `waiting=us` term of the address, or undefined; another value is refused (a file of every order otherwise). */
+function waitingTerm(address: URLSearchParams): Pick<ListFilters, 'waiting'> {
+  const value = address.get('waiting')?.trim()
+  if (!value) return {}
+  if (value !== 'us') throw new ValidationError('Not a waiting term: the file would hold more than the screen.', [{ path: 'query/waiting', message: 'us' }])
+  return { waiting: value }
+}
+
+/** The Where it is cell: the plain stage and the shown health ("Sewing · At risk"); nothing kept yet: empty. */
+function whereText(row: Row, words: (code: string) => string): string | null {
+  const production = row.production
+  if (!production || (production.stage === null && production.health === null)) return null
+  return [production.stage ? words(`stage.${production.stage}`) : null, production.health ? words(`health.${production.health}`) : null].filter((part) => part !== null).join(' · ')
+}
+
+const productionWords = (locale: ExportLocale): Record<string, string> => ({
+  ...Object.fromEntries(BRAND_STAGES.map((stage) => [`stage.${stage}`, STAGE_WORDS[stage][locale]])),
+  ...Object.fromEntries(BRAND_HEALTHS.map((health) => [`health.${health}`, HEALTH_WORDS[health][locale]])),
+  ...Object.fromEntries(WAITING_ON.map((on) => [`waitingOn.${on}`, OFFICE_WAITING_WORDS[on][locale]])),
+})
+// ── end B-SA-070 ──
+
 /** The Progress cell: cut, sewn and finished of the pieces in work orders ("—" for a step nothing counts); none yet: empty. */
 function progressText(row: Row, words: (code: string) => string): string | null {
   const progress = row.progress
@@ -207,7 +242,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
     const profile = idTerm(address, ['profile', 'profileId'], 'rider') // B-SA-021
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
@@ -219,7 +254,8 @@ export const salesOrders = defineExportSource<Query, Row>({
   refusal: (actor, query) => (query.profile && !holds(actor, SALES_MEASUREMENTS_VIEW) ? RIDER_TERM_REFUSAL : null),
   async read(caller, query, cursor, limit) {
     // B-TH-059: the file counts the progress (its Progress column).
-    const page = await listOrders(caller, { ...query, cursor: cursor ?? undefined, limit, progress: 'true' })
+    // B-SA-070: and the production columns.
+    const page = await listOrders(caller, { ...query, cursor: cursor ?? undefined, limit, progress: 'true', production: 'true' })
     return { rows: await besides(caller, page.orders) /* B-TH-018 */, next: page.nextCursor }
   },
   // ── B-TH-008: the saved view's name, else "Orders - <customer>" for a customer's sheet; the rows it holds. ──
@@ -273,6 +309,12 @@ export const salesOrders = defineExportSource<Query, Row>({
     madeToMeasure: { value: (row) => row.madeToMeasure?.units ?? 0 },
     riders: { permission: SALES_MEASUREMENTS_VIEW, value: (row) => ridersText(row) },
     // ── end B-SA-020 ──
+    // ── B-SA-070: the production columns (the supervisor mark only with workorders.view: else no column) ──
+    whereItIs: { value: (row, words) => whereText(row, words) },
+    waitingOn: { value: (row, words) => (row.production?.waitingOn ? words(`waitingOn.${row.production.waitingOn}`) : null) },
+    held: { value: (row, words) => (row.production?.held ? words('held.yes') : null) },
+    supervisor: { permission: WORKORDERS_VIEW, value: (row, words) => (row.production?.supervisorMark ? words(`supervisor.${row.production.supervisorMark}`) : null) },
+    // ── end B-SA-070 ──
   },
   words: {
     it: {
@@ -302,6 +344,12 @@ export const salesOrders = defineExportSource<Query, Row>({
       'atRisk.text': 'Vicino alla data promessa (mancano {days} giorni)', // F-SA-216: the list rule reads "Close to promise" (P15)
       'urgency.URGENT': 'Urgente',
       'urgency.REGULAR': 'Regolare',
+      // ── B-SA-070 ──
+      ...productionWords('it'),
+      'held.yes': 'In sospeso', // production-work-orders.json status.ON_HOLD
+      'supervisor.ME': 'Io',
+      'supervisor.SOMEONE_ELSE': "Un'altra persona",
+      'supervisor.NOT_SET': 'Non impostato',
     },
     en: {
       'status.PENDING_APPROVAL': 'Waiting for approval', // B-TH-008
@@ -330,6 +378,12 @@ export const salesOrders = defineExportSource<Query, Row>({
       'atRisk.text': 'Close to promise ({days} days left)', // F-SA-216: "At risk / Late" is order health only (P15)
       'urgency.URGENT': 'Urgent',
       'urgency.REGULAR': 'Regular',
+      // ── B-SA-070 ──
+      ...productionWords('en'),
+      'held.yes': 'On hold',
+      'supervisor.ME': 'Me',
+      'supervisor.SOMEONE_ELSE': 'Someone else',
+      'supervisor.NOT_SET': 'Not set',
     },
   },
 })

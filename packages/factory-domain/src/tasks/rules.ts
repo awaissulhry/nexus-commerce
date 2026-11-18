@@ -192,3 +192,37 @@ export type TaskRefusal = keyof typeof TASK_REFUSALS
 /** The bulk actions of My tasks (Reassign N · Set due · Mark done). */
 export const BULK_ACTIONS = ['DONE', 'REASSIGN', 'SET_DUE'] as const
 export type BulkAction = (typeof BULK_ACTIONS)[number]
+
+// ── B-SA-071 (sales page plan N5, pick P10; 11-customer-page §3.9 "Add task to N"): one task on each of many records, one batch ──
+/** The most records one "Add task to N" makes a task on. */
+export const BATCH_MAX = 100
+
+/**
+ * Why a record of a batch got no task (the others still get theirs): not found (an unknown record, or one the maker may not read —
+ * the same words, never a hint that it exists), the maker may not make tasks on it, it has no production supervisor (the assignee
+ * "Each order's supervisor"), or the assignee cannot open it ("{name} cannot open it": a person the maker chose, or the record's own
+ * supervisor — named only on a record the maker reads).
+ */
+export const BATCH_SKIPS = ['NOT_FOUND', 'MAY_NOT', 'NO_SUPERVISOR', 'CANNOT_OPEN'] as const
+export type BatchSkip = (typeof BATCH_SKIPS)[number]
+
+export const BATCH_SKIP_WORDS: Readonly<Record<BatchSkip, { readonly it: string; readonly en: string }>> = Object.freeze({
+  NOT_FOUND: { it: 'Record non trovato.', en: 'Record not found.' },
+  MAY_NOT: { it: 'Non puoi creare attività su questo record.', en: 'You may not make tasks on this record.' },
+  NO_SUPERVISOR: { it: 'Questo record non ha un supervisore di produzione: scegli una persona.', en: 'This record has no production supervisor: pick a person.' },
+  CANNOT_OPEN: { it: '{name} non può aprirlo.', en: '{name} cannot open it.' },
+})
+
+/** A batch skip's words with the person's name in place (CANNOT_OPEN). */
+export const batchSkipWords = (code: BatchSkip, name: string | null): { readonly it: string; readonly en: string } => {
+  const words = BATCH_SKIP_WORDS[code]
+  return { it: words.it.replace('{name}', name ?? ''), en: words.en.replace('{name}', name ?? '') }
+}
+
+/** What is wrong with the records of a batch (empty: nothing): 1 to BATCH_MAX, each once. */
+export function batchRecordProblems(records: readonly { readonly type: string; readonly id: string }[]): Issue[] {
+  if (records.length === 0 || records.length > BATCH_MAX) return [{ path: 'body/records', message: `Choose 1 to ${BATCH_MAX} records.` }]
+  const keys = records.map((record) => `${record.type}:${record.id}`)
+  return new Set(keys).size === keys.length ? [] : [{ path: 'body/records', message: 'A record is listed twice.' }]
+}
+// ── end B-SA-071 ──
