@@ -10,6 +10,7 @@ import type { SampleKind, SampleStage } from '@nexus/factory-domain/sales/sample
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeContextOf, unitsOf } from '../store'
+import { itemBrandWhere, styleBrandWhere } from '../../product/styles/store'
 
 /**
  * GET /purchasing/sample-orders/choices?companyId= (purchasing.manage over the company; design pop "New sample order"): what the
@@ -37,7 +38,7 @@ export async function sampleChoices(caller: CommandCaller, query: { readonly com
       select: { id: true, code: true, legalName: true, currency: true, language: true },
     })
     const styles = await client.style.findMany({
-      where: { OR: [{ companyId: null }, { companyId: query.companyId }], status: { not: 'ARCHIVED' }, lifecycle: { not: 'DISCONTINUED' } },
+      where: { AND: [{ OR: [{ companyId: null }, { companyId: query.companyId }], status: { not: 'ARCHIVED' }, lifecycle: { not: 'DISCONTINUED' } }, styleBrandWhere(actor, PURCHASING_MANAGE)] }, // fix-pr-8: by brand too
       orderBy: [{ code: 'asc' }, { id: 'asc' }],
       take: LIMIT.styles + 1,
       select: { id: true, code: true, name: true, lifecycle: true },
@@ -52,7 +53,7 @@ export async function sampleChoices(caller: CommandCaller, query: { readonly com
             select: { id: true, styleId: true, number: true, kind: true, roundNo: true, stage: true },
           })
     const materials = await client.item.findMany({
-      where: { OR: [{ companyId: null }, { companyId: query.companyId }], kind: { in: [...ITEM_KINDS] }, status: 'ACTIVE' },
+      where: { AND: [{ OR: [{ companyId: null }, { companyId: query.companyId }], kind: { in: [...ITEM_KINDS] }, status: 'ACTIVE' }, itemBrandWhere(actor, PURCHASING_MANAGE)] }, // fix-pr-8
       orderBy: [{ code: 'asc' }, { id: 'asc' }],
       take: LIMIT.materials + 1,
       select: { id: true, code: true, name: true, kind: true, baseUom: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true },
