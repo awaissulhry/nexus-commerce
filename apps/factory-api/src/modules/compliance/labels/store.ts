@@ -39,7 +39,8 @@ import type { TemplateDetail, TemplateView } from './contract'
 
 export type Reader = FactoryClient | CommandTx
 
-export const LABEL_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
+// fix-pr-8 (the brand wall): and the maker it names — a brand's own label (its legal name and address) is that customer's.
+export const LABEL_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true }, party: { field: 'makerPartyId', nullable: true } }
 
 let clock: Clock = serverClock
 /** Test only: the clock of the label commands and of "today" (default the server clock). */
@@ -141,6 +142,10 @@ export async function readTemplate(caller: CommandCaller, templateId: string): P
   if (!isUuid(templateId)) throw new NotFoundError('Label not found.')
   const row = await caller.withClient((client) => client.labelTemplate.findUnique({ where: { id: templateId }, select: TEMPLATE_SELECT }))
   if (!row || !can(actorOf(context), LABELS_VIEW, { companyId: row.companyId })) throw new NotFoundError('Label not found.')
+  // fix-pr-8 (the brand wall): the label of another customer's private-label style, or naming it as the maker, is that customer's.
+  if (!can(actorOf(context), LABELS_VIEW, { partyId: row.makerPartyId })) throw new NotFoundError('Label not found.')
+  const brand = row.styleId ? await caller.withClient((client) => client.style.findUnique({ where: { id: row.styleId! }, select: { brandPartyId: true } })) : null
+  if (brand && !can(actorOf(context), LABELS_VIEW, { partyId: brand.brandPartyId })) throw new NotFoundError('Label not found.')
   return row
 }
 
