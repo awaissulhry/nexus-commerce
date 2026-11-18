@@ -1,7 +1,7 @@
 import type { Uom } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
+import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import { issueDecision, PICKED_REASONS, returnDecision, reversalRefusal, undoRefusal, type HideState, type Refusal } from '@nexus/factory-domain/inventory/issue/rules'
 import { quantityText, reversalOf } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -223,13 +223,16 @@ export async function issueInCommand(
   // B-W2b-100: the cutting table checks the shade itself (a warning a lead may pass: B-W2b-103), so its scan skips it here.
   // B-W2b-298: `plannedAs` = what a substitute's substitution allows (base unit, with what the work order held of it before):
   // an approved substitute (modules/inventory/substitutions) is issued against it, not against the work order's plan.
-  options: { readonly shade?: boolean; readonly plannedAs?: string } = {},
+  // fix-pr-3: `permission` = the right the calling command acts under (the cutting table issues with production.cut, as its
+  // command checked it); inventory.issue unless named.
+  options: { readonly shade?: boolean; readonly plannedAs?: string; readonly permission?: Permission } = {},
 ): Promise<IssueResult> {
   const context = contextOf(tools)
   const workOrder = await lockedWorkOrder(tools, workOrderId)
   // B-PR-10: every issue checks the work order's site AND customer (a roll issued to another customer's work order was not
-  // checked by its caller): another customer's is not found, as an unknown one.
-  if (!mayPick(contextOf(tools), INVENTORY_ISSUE, workOrder)) throw new NotFoundError('Work order not found.')
+  // checked by its caller): another customer's is not found, as an unknown one. fix-pr-3: under the calling command's own right
+  // (the wall is the customer; a cutter's issue at its table never asked for inventory.issue).
+  if (!mayPick(contextOf(tools), options.permission ?? INVENTORY_ISSUE, workOrder)) throw new NotFoundError('Work order not found.')
   const { tx } = tools
   const reason = body.overIssueReason?.trim() || null
   if (reason && !mayOverIssue(context, workOrder)) throw new ForbiddenError("An over-issue is the office's, with the right to issue more than a work order needs.")

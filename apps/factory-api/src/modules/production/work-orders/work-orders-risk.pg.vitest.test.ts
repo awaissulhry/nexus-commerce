@@ -313,7 +313,7 @@ describe('PW-02: a person limited to customer B never meets customer A', { timeo
   })
 
   it('nothing B’s person was answered names A (names, codes, numbers, references, ids)', async () => {
-    await list('office.p2', '&sort=risk&limit=2')
+    await ok('office.p2', 'GET', '/production/work-orders?sort=risk&limit=2') // fix-pr-3: one page of 2 (list() already asks limit=200)
     expect(seenByB.length).toBeGreaterThan(10)
     const found = findMarkers(seenByB.map((seen) => seen.body), aMarkers)
     expect(found, JSON.stringify(found)).toEqual([])
