@@ -140,7 +140,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage }: OrderDockPro
     ) : scope.kind === 'wo' ? (
       <Select size="sm" aria-label={t('record.dock.workOrderPick')} value={scope.id} onChange={(event) => go({ kind: 'wo', id: event.target.value })}>
         {workOrderGroups(ownWork).map((group) => (
-          <optgroup key={group.key} label={group.label || t('record.dock.workOrders')}>
+          <optgroup key={group.key} label={group.label || (group.items[0]?.mtm ? t('record.madeToMeasure') : t('record.dock.workOrders'))}>
             {group.items.map((one) => (
               <option key={one.id} value={one.id}>
                 {withNew(one.number, fresh(one.id))}

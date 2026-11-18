@@ -111,13 +111,15 @@ export interface DockWorkOrder {
   readonly number: string
   readonly style: string | null
   readonly colourway: string | null
+  /** A made-to-measure unit (one work order per unit). */
+  readonly mtm?: boolean
 }
 
 /** The work orders grouped per style × colourway (made-to-measure units: one work order per unit, one group per line), in order. */
 export function workOrderGroups(rows: readonly DockWorkOrder[]): { readonly key: string; readonly label: string; readonly items: readonly DockWorkOrder[] }[] {
   const groups: { key: string; label: string; items: DockWorkOrder[] }[] = []
   for (const row of rows) {
-    const key = `${row.style ?? ''}|${row.colourway ?? ''}`
+    const key = `${row.mtm ? 'mtm' : ''}|${row.style ?? ''}|${row.colourway ?? ''}`
     const label = [row.style, row.colourway].filter(Boolean).join(' · ')
     const group = groups.find((one) => one.key === key)
     if (group) group.items.push(row)

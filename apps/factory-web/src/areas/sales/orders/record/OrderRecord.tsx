@@ -917,16 +917,30 @@ function RecordContainer({ orderId }: { orderId: string }) {
 }
 
 // ---- F-SA-262: the work orders the dock may show the notes of — the production read's (this reader's wall), each with its site
-// from the order's chain (a floor note goes to that site's tablets); null while the read is not there.
+// from the order's chain (a floor note goes to that site's tablets); null while the read is not there. Made-to-measure units (the
+// read counts them per style × colourway, without their numbers) are the chain's other work orders — only when the read left
+// none out (else a unit could not be told from a work order out of this reader's reach), at most the read's count of them; one
+// group names its style and colourway, several are "Made to measure".
 function dockWorkOrders(work: Work | null | undefined, order: Order): (DockWorkOrderRow & { siteId: string | null })[] | null {
   if (!work) return null
-  return work.workOrders.map((row) => ({
+  const siteOf = (id: string) => order.chain.workOrders.find((chained) => chained.id === id)?.siteId ?? null
+  const listed = work.workOrders.map((row) => ({
     id: row.id,
     number: row.number,
     style: row.style ? `${row.style.code} · ${row.style.name}` : null,
     colourway: row.colourways.length > 0 ? row.colourways.map((colour) => colour.name).join(', ') : null,
-    siteId: order.chain.workOrders.find((chained) => chained.id === row.id)?.siteId ?? null,
+    siteId: siteOf(row.id),
   }))
+  const unitCount = work.mtm.reduce((sum, group) => sum + group.workOrders, 0)
+  const single = work.mtm.length === 1 ? work.mtm[0]! : null
+  const units =
+    work.workOrdersLeftOut === 0 && unitCount > 0
+      ? order.chain.workOrders
+          .filter((chained) => !work.workOrders.some((row) => row.id === chained.id))
+          .slice(0, unitCount)
+          .map((chained) => ({ id: chained.id, number: chained.number, style: single?.style ? `${single.style.code} · ${single.style.name}` : null, colourway: single?.colourway?.name ?? null, siteId: chained.siteId, mtm: true }))
+      : []
+  return [...listed, ...units]
 }
-type DockWorkOrderRow = { id: string; number: string; style: string | null; colourway: string | null }
+type DockWorkOrderRow = { id: string; number: string; style: string | null; colourway: string | null; mtm?: boolean }
 // ---- end F-SA-262

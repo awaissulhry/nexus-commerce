@@ -405,6 +405,16 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
       ['JKT-01 · Rider jacket · Black', ['WO-1', 'WO-3']],
       ['JKT-01 · Rider jacket · Red', ['WO-2']],
     ])
+    // The units of a made-to-measure line: their own group (never mixed with the line's grid work orders).
+    const units = workOrderGroups([
+      { id: 'w1', number: 'WO-1', style: 'SUIT-01', colourway: 'Black' },
+      { id: 'u1', number: 'WO-7', style: 'SUIT-01', colourway: 'Black', mtm: true },
+      { id: 'u2', number: 'WO-8', style: 'SUIT-01', colourway: 'Black', mtm: true },
+    ])
+    expect(units.map((group) => group.items.map((item) => item.number))).toEqual([['WO-1'], ['WO-7', 'WO-8']])
+    // The units come from the order's chain only when the read left no work order out (a unit is never told from one out of reach).
+    const page = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('work.workOrdersLeftOut === 0 && unitCount > 0')
   })
   it('the dock: ThreadPick, the work order\'s notes office only (no party: never shared, the floor tick), drafts per conversation', () => {
     const dock = readFileSync(new URL('./dock/OrderDock.tsx', import.meta.url), 'utf8')
