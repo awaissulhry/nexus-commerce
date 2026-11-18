@@ -64,6 +64,11 @@ const SESSIONS: Record<string, () => SessionContext> = {
   pm: office(['quality.capa.view'], 'all', () => pmUserId),
   /** Another person who only sees CAPAs. */
   other: office(['quality.capa.view'], 'all', () => qaUserId),
+  // fix-pr-2 (B-PR-10): CAPA readers limited to one customer, without quality.ncr.view or quality.complaints.view.
+  /** Sees the CAPAs of customer P1 (the seeds' brand) and of no customer. */
+  capaP1: () => ({ audience: 'office', tenantId: T, actorId: fixedActor, grants: [{ permissions: ['quality.capa.view'], companies: 'all', sites: 'all', parties: [idIn('party:P1')] }] }),
+  /** Sees the CAPAs of customer P2 and of no customer: never one answering P1's records. */
+  capaP2: () => ({ audience: 'office', tenantId: T, actorId: fixedActor, grants: [{ permissions: ['quality.capa.view'], companies: 'all', sites: 'all', parties: [idIn('party:P2')] }] }),
 }
 
 async function call(session: string, method: Method, url: string, body?: unknown, idempotencyKey = key(session)) {
@@ -342,3 +347,39 @@ describe('an 8D for a customer, sources taken off, a cancel; the list and its ti
     expect((await call('companyB', 'GET', `/quality/capa/people?companyId=${companyA}`)).status).toBe(404)
   })
 })
+
+// ── fix-pr-2 (B-PR-10) ───────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('B-PR-10 the wall asks whose records a CAPA answers, with the CAPA permission (fix-pr-2)', () => {
+  let ofP1 = ''
+  it('a CAPA reader of every customer without quality.ncr.view sees the CAPAs answering a customer’s NCR and complaint', async () => {
+    // A CAPA of no customer answering an NCR of P1's work order (SEED-NCR-0001's), and SEED-8D-0001 (P1's complaint and NCR).
+    const [seededNcr] = await admin<{ workOrderId: string; siteId: string; partyId: string }>('SELECT n."workOrderId", o."siteId", o."partyId" FROM "Nonconformance" n JOIN "WorkOrder" o ON o.id = n."workOrderId" WHERE n.id = $1', [seeded.openNcrId])
+    expect(seededNcr!.partyId, 'SEED-NCR-0001 is about P1’s work').toBe(seeded.customerId)
+    const ncr = (await ok('quality', 'POST', '/quality/ncr', { siteId: seededNcr!.siteId, title: 'Stitch skips on the collar', quantityAffected: '3', uom: 'PCS', severity: 'MAJOR', foundAt: 'FINAL', workOrderId: seededNcr!.workOrderId }, 201)).record.ncr
+    ofP1 = (await ok('quality', 'POST', '/quality/capa', { type: 'CAPA', title: 'Collar stitch skips', dueOn: addDays(TODAY, 20), sources: [{ recordType: 'Nonconformance', recordId: ncr.id }] }, 201)).record.capa.id
+    for (const id of [ofP1, seeded.eightDId]) expect((await call('viewer', 'GET', `/quality/capa/${id}`)).status, id).toBe(200)
+    const listed = (await ok('viewer', 'GET', '/quality/capa?view=all')).capas.map((row: Json) => row.id)
+    expect(listed).toEqual(expect.arrayContaining([ofP1, seeded.eightDId, capaId]))
+  })
+
+  it('a CAPA reader limited to P1 keeps the CAPAs answering its own customer’s NCR and complaint', async () => {
+    for (const id of [ofP1, seeded.eightDId, capaId]) expect((await call('capaP1', 'GET', `/quality/capa/${id}`)).status, id).toBe(200)
+    expect((await ok('capaP1', 'GET', '/quality/capa?view=all')).capas.map((row: Json) => row.id)).toEqual(expect.arrayContaining([ofP1, seeded.eightDId, capaId]))
+  })
+
+  it('a CAPA reader limited to P2 meets neither P1’s 8D nor a CAPA of no customer answering P1’s NCR: as an unknown CAPA', async () => {
+    const unknown = await call('capaP2', 'GET', `/quality/capa/${newId()}`)
+    expect([unknown.status, unknown.body.error?.message]).toEqual([404, 'CAPA not found.'])
+    for (const id of [ofP1, seeded.eightDId]) {
+      const theirs = await call('capaP2', 'GET', `/quality/capa/${id}`)
+      expect([theirs.status, theirs.body.error?.message], id).toEqual([404, 'CAPA not found.'])
+    }
+    const listed = (await ok('capaP2', 'GET', '/quality/capa?view=all')).capas.map((row: Json) => row.id)
+    expect(listed).not.toContain(ofP1)
+    expect(listed).not.toContain(seeded.eightDId)
+    // The wall takes nothing else away: a CAPA answering NCRs of no customer is still its to read.
+    expect(listed).toContain(capaId)
+    expect((await call('capaP2', 'GET', `/quality/capa/${capaId}`)).status).toBe(200)
+  })
+})
+// ── end fix-pr-2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

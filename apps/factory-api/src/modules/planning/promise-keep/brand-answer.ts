@@ -203,11 +203,13 @@ async function repromiseSettle(tools: CommandTools, request: RequestRef): Promis
   if (known) return { refused: true, taskId: known.id }
   const row = await tx.approvalRequest.findUnique({ where: { id: request.id }, select: { createdById: true, answer: true } })
   const scope = { companyId: line.companyId, siteId: null, partyId: line.partyId }
-  const tenantId = tools.context.tenantId
+  const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : undefined
+  if (!tenantId) throw new Error('promise-keep: an answer settled outside a tenant')
   const may = async (userId: string | null | undefined): Promise<string | null> => (userId && (await mayBeAssigned(tx, tenantId, userId, scope, true, now, 'SalesOrder')) ? userId : null)
   // The order's supervisor first (plan B-PR-32: office notices to the supervisor), else the person who asked.
   const assigneeId = (await may((await supervisorOfOrder(tx, line.orderId))?.userId)) ?? (await may(row?.createdById))
-  const systemId = tools.context.actorId
+  // Who settles it (an office, partner or system actor); a link reader is no person: none.
+  const systemId = 'actorId' in tools.context ? tools.context.actorId : null
   const { title, description } = refusalTaskOf({ orderNumber: line.order.number, lineSeq: line.seq, sizes: asked.sizes, answer: row?.answer ?? request.answer })
   await tx.task.create({
     data: {

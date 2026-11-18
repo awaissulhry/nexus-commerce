@@ -10,8 +10,6 @@ import { isOverdue, type ActionKind, type ActionStatus, type CapaPriority, type 
 import { TASKS_MANAGE } from '@nexus/factory-domain/tasks/permissions'
 import type { CommandTx } from '../../../core/command'
 import { heldRoles } from '../../../platform/auth/roles/access'
-import { QUALITY_COMPLAINTS_VIEW } from '@nexus/factory-domain/quality/complaints/permissions' // B-PR-10
-import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions' // B-PR-10
 import { ncrListWhere, seesEveryCustomer } from '../wall' // B-PR-10
 
 /**
@@ -234,21 +232,25 @@ export async function lockCapa(tx: CommandTx, capaId: string): Promise<{ version
  * (of a customer's work, B-PR-06's quality wall) or a complaint (its customer's). A person limited to some customers reaches a
  * CAPA only when it reaches its customer AND every record it answers (an 8D of no customer that answers another customer's NCR
  * tells that customer's story). The CAPAs a person may not reach for their sources, by id; empty for the production unit.
+ * fix-pr-2: the wall asks "is the source another customer's (or a mixed one this reader may not see)?", not "may this person
+ * open NCRs or complaints?": each source's customers are judged with the CAPA's own permission (quality.capa.view), in the
+ * same shape (ncrListWhere: a mixed NCR still needs every customer; can() over a complaint's company and customer). A CAPA
+ * reader without quality.ncr.view keeps the CAPAs answering its own customers' NCRs.
  */
 export async function capasOfHiddenSources(db: Reader, actor: Actor): Promise<string[]> {
-  if (seesEveryCustomer(actor, QUALITY_NCR_VIEW) && seesEveryCustomer(actor, QUALITY_COMPLAINTS_VIEW)) return []
+  if (seesEveryCustomer(actor, QUALITY_CAPA_VIEW)) return []
   const sources = await db.capaSource.findMany({ select: { capaId: true, recordType: true, recordId: true } })
   if (sources.length === 0) return []
   const facts = await sourceFactsOf(db, sources as unknown as SourceRow[])
   const ncrRows = [...facts.ncrs.values()]
   const reachedNcrs = new Set(
-    ncrRows.length === 0 ? [] : (await db.nonconformance.findMany({ where: await ncrListWhere(db, actor, QUALITY_NCR_VIEW, { id: { in: ncrRows.map((row) => row.id) } }), select: { id: true } })).map((row) => row.id),
+    ncrRows.length === 0 ? [] : (await db.nonconformance.findMany({ where: await ncrListWhere(db, actor, QUALITY_CAPA_VIEW, { id: { in: ncrRows.map((row) => row.id) } }), select: { id: true } })).map((row) => row.id),
   )
   const reached = (source: { recordType: string; recordId: string }): boolean => {
     if (source.recordType === 'Nonconformance') return reachedNcrs.has(source.recordId)
     if (source.recordType === 'Complaint') {
       const complaint = facts.complaints.get(source.recordId)
-      return complaint !== undefined && can(actor, QUALITY_COMPLAINTS_VIEW, { companyId: complaint.companyId, partyId: complaint.partyId })
+      return complaint !== undefined && can(actor, QUALITY_CAPA_VIEW, { companyId: complaint.companyId, partyId: complaint.partyId })
     }
     return true
   }

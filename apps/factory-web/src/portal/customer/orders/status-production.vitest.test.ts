@@ -39,10 +39,10 @@ function production(over: Partial<ProductionOrder> = {}): ProductionOrder {
     inProduction: true,
     stage: { code: 'SEWING', words: w('Sewing', 'Confezione'), since: dayAt(-3), next: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, ahead: 1, aheadWords: w('1 line ahead', '1 riga avanti'), sewingNotCounted: false, sewingNotCountedWords: null },
     health: { code: 'AT_RISK', words: w('At risk', 'A rischio'), reason: { code: 'MATERIAL_LATE', words: w('Material delivery late', 'Consegna dei materiali in ritardo') } },
-    waiting: { code: 'YOU', words: w('Waiting on you', 'Tocca a te'), since: dayAt(-2) },
+    waiting: { code: 'YOU', words: w('Waiting on you', 'Tocca a voi'), since: dayAt(-2) },
     marks: { onHold: true, paused: true, partlyShipped: false, changePending: false, words: [] },
     holds: [
-      { kind: 'BRAND', since: dayAt(-1), words: w('Paused at your request', 'In pausa su tua richiesta') },
+      { kind: 'BRAND', since: dayAt(-1), words: w('Paused at your request', 'In pausa su vostra richiesta') },
       { kind: 'PRODUCTION', since: dayAt(-4), words: w('Material on its way', 'Materiale in arrivo') },
     ],
     urgency: null,
@@ -87,6 +87,8 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
 
 const ACTIONS: OrderRecordActions = { onAsk: () => undefined, onRetryProduction: () => undefined }
 const draw = (over: Partial<OrderRecordViewModel> = {}, locale: Locale = 'en', record = betaRecord()) => render(createElement(StatusTab, { model: model(record, over), record, actions: ACTIONS }), locale)
+/** The names of the tables drawn (a DS SummaryTable names itself by `aria-label`, not by a visible caption): read by role and name. */
+const tableNames = (html: string) => [...html.matchAll(/<table\b[^>]*\baria-label="([^"]*)"/g)].map((match) => textOf(match[1]!))
 
 describe('the order’s production on Status & progress, part 1 (every level)', () => {
   it('waiting for you on this order, with the way to what waits (Waiting for you, F-PR-14)', () => {
@@ -125,7 +127,7 @@ describe('the order’s production on Status & progress, part 1 (every level)', 
     // In Italian, the same facts in Italian words.
     const it = textOf(draw({}, 'it'))
     expect(it).toContain('Confezione · 32 di 40 cuciti · 1 riga avanti')
-    expect(it).toContain('Su questo ordine aspettiamo una tua risposta')
+    expect(it).toContain('Su questo ordine aspettiamo una vostra risposta')
   })
 
   it('a section not shared is not drawn: no production section when hidden (not in production, not its order, no access)', () => {
@@ -164,7 +166,7 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
 
   it('holds keep only our curated words; Waiting for you once built (F-PR-14: built), else Home', () => {
     expect(holdsOf(production().holds, 'it').map((hold) => [hold.kind, hold.customerWords])).toEqual([
-      ['BRAND', 'In pausa su tua richiesta'],
+      ['BRAND', 'In pausa su vostra richiesta'],
       ['PRODUCTION', 'Materiale in arrivo'],
     ])
     expect(waitingHrefOf(PREFIX)).toBe(`${PREFIX}/waiting`)
@@ -174,11 +176,12 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
 
   it('the API’s answer parses (a field the API adds never breaks the tab)', () => {
     const read = production()
-    const parsed = productionOrderSchema.parse({ ...read, gates: null, problem: null, progress: { ...read.progress!, stages: [] } })
+    // fix-pr-2: `problem` is read since F-PR-24 (#1628); the field the API adds here is one the web does not know.
+    const parsed = productionOrderSchema.parse({ ...read, gates: null, laterField: null, progress: { ...read.progress!, stages: [] } })
     expect(parsed.stage?.code).toBe('SEWING')
     // F-PR-12b reads the gates: a level that does not share them answers null.
     expect(parsed.gates).toBeNull()
-    expect('problem' in parsed).toBe(false)
+    expect('laterField' in parsed).toBe(false)
   })
 
   it('the words exist in both languages', () => {
@@ -277,8 +280,8 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
     expect(text).toContain('Gates and dates')
     for (const words of ['PP sample', 'Size set', 'Trims in', 'Leather approved']) expect(text).toContain(words)
     for (const words of ['Waiting on you', 'Waiting on us', 'Passed', 'Started before approval']) expect(text).toContain(words)
-    // Swatch answers are approvals, not gates: their own table.
-    expect(text).toContain('Your material approvals')
+    // Swatch answers are approvals, not gates: their own table (named by its aria-label).
+    expect(tableNames(html)).toContain('Your material approvals')
     expect(text).toContain('Colour')
     expect(text).toContain('Fabric')
     expect(text).toContain('Approved')
@@ -302,8 +305,10 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
   })
 
   it('Italian: the same sections in Italian words, and the customer is "voi" (never "tu")', () => {
-    const text = textOf(draw(ready(atGates()), 'it'))
-    for (const words of ['Tappe e date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Le vostre approvazioni dei materiali', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
+    const html = draw(ready(atGates()), 'it')
+    const text = textOf(html)
+    for (const words of ['Tappe e date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
+    expect(tableNames(html)).toContain('Le vostre approvazioni dei materiali')
     const words = CATALOGUE.it['portal-orders']!
     const mine = Object.entries(words).filter(([key]) => /^production\.(gates|approvals|planned|pieces)\./.test(key))
     expect(mine.length).toBeGreaterThan(20)

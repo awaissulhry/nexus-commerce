@@ -68,9 +68,9 @@ export const counterPriced = (counter: Pick<Counter, 'fee'>): boolean => counter
 export function counterQuestion(kind: OrderRequestKind, counter: Counter, locale: ApprovalLocale): string {
   const it = locale === 'it'
   const asked = ORDER_REQUEST_KIND_WORDS[kind][locale]
-  const parts = [it ? `La nostra controproposta alla tua richiesta «${asked}».` : `Our counter-offer to your request “${asked}”.`]
+  const parts = [it ? `La nostra controproposta alla vostra richiesta «${asked}».` : `Our counter-offer to your request “${asked}”.`]
   if (counter.date !== null) parts.push(it ? `La data che proponiamo: ${dayWords(counter.date, 'it')}.` : `The date we offer: ${dayWords(counter.date, 'en')}.`)
-  if (counterPriced(counter)) parts.push(it ? 'È previsto un costo: lo vede il tuo buyer.' : 'A price applies: your buyer sees it.')
+  if (counterPriced(counter)) parts.push(it ? 'È previsto un costo: lo vede il vostro buyer.' : 'A price applies: your buyer sees it.')
   if (counter.note !== null) parts.push(counter.note)
   return parts.join(' ')
 }
@@ -84,8 +84,8 @@ export function counterForReader(counter: Counter, maySeePrices: boolean): { rea
 /** Why this customer person may not answer the counter-offer (null: they may), in their words. */
 export function counterAnswerHeld(input: { readonly priced: boolean; readonly maySeePrices: boolean; readonly mayAnswer: boolean }, locale: ApprovalLocale = 'en'): string | null {
   const it = locale === 'it'
-  if (!input.mayAnswer) return it ? 'Puoi leggere questa controproposta, non rispondere: chiedi al tuo amministratore il diritto di approvare.' : 'Your access lets you read this counter-offer, not answer it: ask your admin for the right to approve.'
-  if (input.priced && !input.maySeePrices) return it ? 'Può essere previsto un costo: a questa controproposta risponde il tuo buyer.' : 'A price may apply: your buyer answers this counter-offer.'
+  if (!input.mayAnswer) return it ? 'Potete leggere questa controproposta, non rispondere: chiedete al vostro amministratore il diritto di approvare.' : 'Your access lets you read this counter-offer, not answer it: ask your admin for the right to approve.'
+  if (input.priced && !input.maySeePrices) return it ? 'Può essere previsto un costo: a questa controproposta risponde il vostro buyer.' : 'A price may apply: your buyer answers this counter-offer.'
   return null
 }
 

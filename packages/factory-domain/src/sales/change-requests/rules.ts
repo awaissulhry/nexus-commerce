@@ -62,7 +62,7 @@ export const REQUEST_STATUS_WORDS: Readonly<Record<RequestStatus, Words>> = Obje
   REFUSED: { it: 'Non accettata', en: 'Not accepted' },
   WITHDRAWN: { it: 'Ritirata', en: 'Withdrawn' },
   // B-PR-23
-  COUNTERED: { it: 'Controproposta: in attesa della tua risposta', en: 'Our counter-offer: waiting for your answer' },
+  COUNTERED: { it: 'Controproposta: in attesa della vostra risposta', en: 'Our counter-offer: waiting for your answer' },
 })
 
 // ---- B-PR-23 (production plan, schema wave 4/5; review fixes R-14, R-50): every kind a request may be ------------------------
@@ -747,7 +747,7 @@ export const ASK_RULES: Readonly<Record<OrderRequestKind, AskRule>> = Object.fre
     sampleKind: false,
     answeredWith: PRODUCTION_BRAND_MANAGE,
     accept: ['BRAND_HOLD'],
-    acceptWords: { it: "Mettiamo in pausa la lavorazione dell'ordine finché non ci chiedi di riprendere.", en: 'We pause the work on the order until you ask us to resume it.' },
+    acceptWords: { it: "Mettiamo in pausa la lavorazione dell'ordine finché non ci chiedete di riprendere.", en: 'We pause the work on the order until you ask us to resume it.' },
     counter: true,
   }),
   RESUME: askRule({
@@ -827,7 +827,7 @@ export interface AskFacts {
   readonly shipComplete: boolean
 }
 
-const FREE_ASK_WORDS: Words = Object.freeze({ it: 'Puoi chiederlo: decidiamo noi e ti rispondiamo', en: 'You can ask: we decide and answer you' })
+const FREE_ASK_WORDS: Words = Object.freeze({ it: 'Potete chiederlo: decidiamo noi e vi rispondiamo', en: 'You can ask: we decide and answer you' })
 
 /** Whether the order takes a production ask of this kind now, before what it names (the order, a waiting ask, the kind's own state). */
 export function askVerdict(kind: ProductionRequestKind, facts: AskFacts): AskVerdict {
@@ -839,7 +839,7 @@ export function askVerdict(kind: ProductionRequestKind, facts: AskFacts): AskVer
   }
   if (facts.waitingDay !== null) {
     const day = facts.waitingDay
-    return askVerdict_('WAITING', { it: `La tua richiesta del ${dayWords(day, 'it')} attende la nostra risposta`, en: `Your request of ${dayWords(day, 'en')} waits for our answer` }, day)
+    return askVerdict_('WAITING', { it: `La vostra richiesta del ${dayWords(day, 'it')} attende la nostra risposta`, en: `Your request of ${dayWords(day, 'en')} waits for our answer` }, day)
   }
   switch (kind) {
     case 'RUSH':
@@ -847,8 +847,8 @@ export function askVerdict(kind: ProductionRequestKind, facts: AskFacts): AskVer
       if (facts.urgency?.locked) return askVerdict_('LOCKED', setBackWords(facts.urgency.lockReason))
       break
     case 'HOLD':
-      if (facts.ready) return askVerdict_('READY', { it: "È già tutto pronto per la spedizione: per fermare la spedizione scrivici nella conversazione dell'ordine", en: "Everything is ready to ship already: to hold the shipment, write to us in the order's thread" })
-      if (facts.pauseOn) return askVerdict_('PAUSED', { it: "L'ordine è già in pausa: chiedici di riprendere quando vuoi", en: 'The order is paused already: ask us to resume it when you are ready' })
+      if (facts.ready) return askVerdict_('READY', { it: "È già tutto pronto per la spedizione: per fermare la spedizione scriveteci nella conversazione dell'ordine", en: "Everything is ready to ship already: to hold the shipment, write to us in the order's thread" })
+      if (facts.pauseOn) return askVerdict_('PAUSED', { it: "L'ordine è già in pausa: chiedeteci di riprendere quando volete", en: 'The order is paused already: ask us to resume it when you are ready' })
       break
     case 'RESUME':
       if (!facts.pauseOn) return askVerdict_('NOT_PAUSED', { it: "L'ordine non è in pausa", en: 'The order is not paused' })
@@ -870,8 +870,8 @@ export function askLineVerdict(kind: 'SPLIT_SHIPMENT' | 'SAMPLE_ROUND', line: Ru
   if (kind === 'SAMPLE_ROUND' && sampleKind !== null && BEFORE_CUT_SAMPLE_KINDS.includes(sampleKind) && line.cut) {
     const cut = line.cut
     return cut.leather
-      ? askVerdict_('LEATHER_CUT', { it: `Non possibile: la pelle è stata tagliata il ${dayWords(cut.day, 'it')}. Puoi chiedere i primi capi di produzione (TOP)`, en: `Not possible: the leather was cut on ${dayWords(cut.day, 'en')}. You can ask for a top-of-production sample` }, cut.day)
-      : askVerdict_('CUT', { it: `Non possibile: il taglio è iniziato il ${dayWords(cut.day, 'it')}. Puoi chiedere i primi capi di produzione (TOP)`, en: `Not possible: cutting started on ${dayWords(cut.day, 'en')}. You can ask for a top-of-production sample` }, cut.day)
+      ? askVerdict_('LEATHER_CUT', { it: `Non possibile: la pelle è stata tagliata il ${dayWords(cut.day, 'it')}. Potete chiedere i primi capi di produzione (TOP)`, en: `Not possible: the leather was cut on ${dayWords(cut.day, 'en')}. You can ask for a top-of-production sample` }, cut.day)
+      : askVerdict_('CUT', { it: `Non possibile: il taglio è iniziato il ${dayWords(cut.day, 'it')}. Potete chiedere i primi capi di produzione (TOP)`, en: `Not possible: cutting started on ${dayWords(cut.day, 'en')}. You can ask for a top-of-production sample` }, cut.day)
   }
   return whole
 }
@@ -931,7 +931,7 @@ export function productionAskProblems(ask: ProductionAsk, facts: ProductionAskFa
         issues.push({ path: 'body/requestedDate', message: `The order is promised for ${dayWords(promise, 'en')} already: the date you need it by is earlier than that.` })
       }
       if (date === null && facts.urgency?.urgency === 'URGENT') {
-        issues.push(askRefusalOf('body', askVerdict_('ALREADY_URGENT', { it: "L'ordine è già urgente: indica la data entro cui ti serve per chiedere di più", en: 'The order is urgent already: give the date you need it by to ask for more' })))
+        issues.push(askRefusalOf('body', askVerdict_('ALREADY_URGENT', { it: "L'ordine è già urgente: indicate la data entro cui vi serve per chiedere di più", en: 'The order is urgent already: give the date you need it by to ask for more' })))
       }
       break
     }

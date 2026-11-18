@@ -10,7 +10,6 @@ import {
   FINAL_STATE_WORDS,
   FINAL_STATES,
   finalStateOf,
-  photoShown,
   reportVersionOf,
   workOrderAlone,
   type CheckRow,
@@ -23,7 +22,6 @@ import {
 
 const A = 'aaaaaaaa-0000-4000-8000-000000000001'
 const B = 'bbbbbbbb-0000-4000-8000-000000000002'
-const MARKER = 'ffffffff-ffff-8fff-bfff-ffffffffffff'
 
 describe('a work order is the customer’s alone (L8)', () => {
   it('only at QUALITY, only when its customer is the customer and no cell names another', () => {
@@ -127,15 +125,3 @@ describe('the customer’s own cells', () => {
   })
 })
 
-describe('photos shared on its order (WALL-G02, WALL-G07)', () => {
-  it('draws a photo that is no copy, or a copy of its own record or of one of no customer; never of another’s or a shared one', () => {
-    expect(photoShown({ kind: 'none' }, B)).toBe(true)
-    expect(photoShown({ kind: 'party', partyId: B }, B)).toBe(true)
-    expect(photoShown({ kind: 'party', partyId: null }, B)).toBe(true)
-    expect(photoShown({ kind: 'party', partyId: A }, B)).toBe(false)
-    // A legacy work order that mixed customers: its wall party is the every-party marker.
-    expect(photoShown({ kind: 'party', partyId: MARKER }, B)).toBe(false)
-    // A source whose customer cannot be read: fail closed.
-    expect(photoShown({ kind: 'unknown' }, B)).toBe(false)
-  })
-})

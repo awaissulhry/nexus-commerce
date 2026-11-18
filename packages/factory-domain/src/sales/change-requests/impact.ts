@@ -96,26 +96,26 @@ export interface Impact {
 }
 
 /** "A price may apply: we will tell you" — every reader; the amount only live and only under the price grain. */
-export const PRICED_WORDS: Words = Object.freeze({ it: 'Può essere previsto un costo: te lo diciamo noi', en: 'A price may apply: we will tell you' })
+export const PRICED_WORDS: Words = Object.freeze({ it: 'Può essere previsto un costo: ve lo diciamo noi', en: 'A price may apply: we will tell you' })
 
 /** What the kind may do to the date, as the customer reads it before Send. */
 export const IMPACT_NOTES: Readonly<Partial<Record<OrderRequestKind, Words>>> = Object.freeze({
-  RUSH: { it: 'Guardiamo di nuovo la data e te la confermiamo', en: 'We look at the date again and confirm it to you' },
-  HOLD: { it: 'Una pausa può spostare la tua data', en: 'A pause may move your date' },
-  RESUME: { it: 'Alla ripresa ti confermiamo la data', en: 'When the work starts again, we confirm your date' },
+  RUSH: { it: 'Guardiamo di nuovo la data e ve la confermiamo', en: 'We look at the date again and confirm it to you' },
+  HOLD: { it: 'Una pausa può spostare la vostra data', en: 'A pause may move your date' },
+  RESUME: { it: 'Alla ripresa vi confermiamo la data', en: 'When the work starts again, we confirm your date' },
   SPLIT_SHIPMENT: { it: 'Il resto parte quando è pronto', en: 'The rest ships when it is ready' },
-  SAMPLE_ROUND: { it: 'Un altro campione può spostare la tua data', en: 'Another sample may move your date' },
+  SAMPLE_ROUND: { it: 'Un altro campione può spostare la vostra data', en: 'Another sample may move your date' },
 })
 
-const NOTHING_FROZEN: Words = Object.freeze({ it: 'Niente di ciò che chiedi è bloccato', en: 'Nothing you ask is frozen' })
+const NOTHING_FROZEN: Words = Object.freeze({ it: 'Niente di ciò che chiedete è bloccato', en: 'Nothing you ask is frozen' })
 
 /** The earliest date in the customer's words (an estimate: dates only). */
 export function earliestWords(earliest: Pick<DateOnly, 'date' | 'partial' | 'meetsWanted'>): Words {
-  if (earliest.date === null) return { it: 'Ti diamo una data appena l’abbiamo pianificata', en: 'We give you a date once we have planned it' }
+  if (earliest.date === null) return { it: 'Vi diamo una data appena l’abbiamo pianificata', en: 'We give you a date once we have planned it' }
   const day = { it: dayWords(earliest.date, 'it'), en: dayWords(earliest.date, 'en') }
-  const later = earliest.meetsWanted === false ? { it: ', dopo la data che hai chiesto', en: ', later than the date you asked' } : { it: '', en: '' }
+  const later = earliest.meetsWanted === false ? { it: ', dopo la data che avete chiesto', en: ', later than the date you asked' } : { it: '', en: '' }
   const partial = earliest.partial ? { it: ' (alcune righe non sono ancora datate)', en: ' (some lines are not dated yet)' } : { it: '', en: '' }
-  return { it: `Dal ${day.it} circa${later.it} — te lo confermiamo noi${partial.it}`, en: `From about ${day.en}${later.en} — we confirm it${partial.en}` }
+  return { it: `Dal ${day.it} circa${later.it} — ve lo confermiamo noi${partial.it}`, en: `From about ${day.en}${later.en} — we confirm it${partial.en}` }
 }
 
 const feeApplies = (pct: string | null): boolean => {
@@ -163,8 +163,8 @@ export function impactOf(ask: ImpactAsk, facts: ImpactFacts): Impact {
     frozen.length === 0
       ? NOTHING_FROZEN
       : blocked
-        ? { it: 'Una parte di ciò che chiedi non si può più cambiare', en: 'Part of what you ask cannot change any more' }
-        : { it: 'Una parte di ciò che chiedi è bloccata: diventa una modifica con prezzo', en: 'Part of what you ask is frozen: it becomes a priced change' }
+        ? { it: 'Una parte di ciò che chiedete non si può più cambiare', en: 'Part of what you ask cannot change any more' }
+        : { it: 'Una parte di ciò che chiedete è bloccata: diventa una modifica con prezzo', en: 'Part of what you ask is frozen: it becomes a priced change' }
   return Object.freeze({
     kind: ask.kind,
     frozen: Object.freeze(frozen),

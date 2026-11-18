@@ -104,7 +104,7 @@ const BETA_HOLD_WORDS = 'Made-up: we wait for the lining to arrive'
 const office = { inspectorId: newId() }
 const inspections = { beta: newId(), betaOpen: newId(), mixed: newId(), alpha: newId() }
 const REPORT_BYTES = Buffer.from('%PDF-1.7 made-up inspection report of T-PR19-INS-B1 (the factory kept version 1)')
-const photos = {} as Record<'betaSource' | 'betaCopy' | 'alphaSource' | 'alphaCopy' | 'mixedSource' | 'legacyCopy' | 'officeOnly' | 'document', Json>
+const photos = {} as Record<'betaSource' | 'betaCopy' | 'alphaSource' | 'alphaCopy' | 'mixedSource' | 'legacyCopy' | 'legacyCopyOfCopy' | 'officeOnly' | 'document', Json>
 
 let counter = 0
 /** A call of the office (every customer) through the office app. */
@@ -146,6 +146,12 @@ async function signedIn(email: string): Promise<Browser> {
   const terms = await browser.get('/portal/terms?locale=en')
   expect((await browser.post('/portal/first-visit', { noticeId: terms.body.notice.id, noticeLocale: terms.body.notice.locale, sha256: terms.body.notice.sha256 })).status).toBe(200)
   return browser
+}
+
+// fix-pr-2: a refusal's words without its own request id (every answer carries a fresh requestId): "the same words".
+const refusalOf = (body: Json): Json => {
+  const { requestId: _requestId, ...error } = (body.error ?? {}) as Json
+  return error
 }
 
 async function get(who: keyof typeof people, url: string, status = 200): Promise<Json> {
@@ -315,6 +321,14 @@ beforeAll(async () => {
       values: [photos.legacyCopy.id, photos.mixedSource.id, photos.legacyCopy.originalName, `t/${T}/c/${w.companyId}/2026/${newId()}`, photos.betaCopy.id],
     },
   ])
+  // fix-pr-2: a copy of that legacy copy, on B's order too — its source is B's own record, its source's source the mixed lot (two hops).
+  photos.legacyCopyOfCopy = { id: newId(), originalName: 'Made-up copy of the legacy copy.jpg' }
+  await replica([
+    {
+      sql: `INSERT INTO "StoredFile" SELECT (jsonb_populate_record(NULL::"StoredFile", to_jsonb(f) || jsonb_build_object('id', $1::uuid, 'sourceFileId', $2::uuid, 'originalName', $3::text, 'storageKey', $4::text))).* FROM "StoredFile" f WHERE f.id = $5`,
+      values: [photos.legacyCopyOfCopy.id, photos.legacyCopy.id, photos.legacyCopyOfCopy.originalName, `t/${T}/c/${w.companyId}/2026/${newId()}`, photos.betaCopy.id],
+    },
+  ])
   // Kept for the office only, and a shared document (no photo).
   photos.officeOnly = await uploaded('Beta order office photo.jpg', { recordType: 'SalesOrder', recordId: w.b.salesOrderId }, 'PHOTO', jpeg('office only'))
   photos.document = await uploaded('Beta order shared document.pdf', { recordType: 'SalesOrder', recordId: w.b.salesOrderId }, 'DOCUMENT', Buffer.from('%PDF-1.7 made-up shared document'), ['OFFICE', 'PARTNER'])
@@ -342,6 +356,8 @@ beforeAll(async () => {
     { label: 'mixed photo', text: photos.mixedSource.id },
     { label: 'legacy copy', text: photos.legacyCopy.id },
     { label: 'legacy copy', text: photos.legacyCopy.originalName },
+    { label: 'copy of the legacy copy', text: photos.legacyCopyOfCopy.id },
+    { label: 'copy of the legacy copy', text: photos.legacyCopyOfCopy.originalName },
     { label: 'office-only photo', text: photos.officeOnly.id },
     { label: 'source of B photo', text: photos.betaSource.id },
   ]
@@ -427,8 +443,9 @@ describe('B-PR-19 Quality & photos (GET /portal/production/:orderId/quality) —
     for (const word of [OFFICE_WORDS.alphaHoldCode, OFFICE_WORDS.alphaHoldWords, OFFICE_WORDS.holdNote, OFFICE_WORDS.inspectorName]) expect(text).not.toContain(word)
   })
 
-  it('photos: only the one shared with B whose source is B’s own work order; never the legacy copy of the mixed lot, the office’s, a document or A’s', async () => {
+  it('photos: only the one shared with B whose source is B’s own work order; never the legacy copy of the mixed lot (nor a copy of it), the office’s, a document or A’s', async () => {
     const read = await get('beta', quality(w.b.salesOrderId))
+    // fix-pr-2: every hop of a copy's sources is followed (platform/files/content-wall): the copy of the legacy copy is not drawn.
     expect(read.photos).toEqual([{ id: photos.betaCopy.id, name: 'Beta jacket front.jpg', contentType: 'image/jpeg', sizeBytes: photos.betaSource.sizeBytes, sharedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }])
     // A's photo id (its copy and its source) is as unknown to B as a wrong id.
     for (const fileId of [photos.alphaCopy.id, photos.alphaSource.id, photos.mixedSource.id, photos.officeOnly.id]) {
@@ -445,7 +462,7 @@ describe('B-PR-19 Quality & photos (GET /portal/production/:orderId/quality) —
     seenByB.push({ url: 'A order quality', body: foreign.body })
     const unknown = await browsers.beta.get(quality(newId()))
     expect([foreign.status, unknown.status]).toEqual([404, 404])
-    expect(foreign.body).toEqual(unknown.body)
+    expect(refusalOf(foreign.body)).toEqual(refusalOf(unknown.body))
     await get('betaDesigner', quality(w.b.salesOrderId), 403)
     await get('betaDesigner', reportOf(w.b.salesOrderId, inspections.beta), 403)
   })
@@ -498,11 +515,11 @@ describe('B-PR-19 the inspection report PDF (GET /portal/production/:orderId/qua
       expect(answer.body.error.message).toBe(REPORT_NOT_FOUND)
       bodies.push(answer.body)
     }
-    expect(new Set(bodies.map((body) => JSON.stringify(body))).size).toBe(1)
+    expect(new Set(bodies.map((body) => JSON.stringify(refusalOf(body as Json)))).size).toBe(1)
     const foreign = await browsers.beta.get(reportOf(w.a.salesOrderId, inspections.alpha))
     seenByB.push({ url: 'report under A order', body: foreign.body })
     expect(foreign.status).toBe(404)
-    expect(foreign.body).toEqual((await browsers.beta.get(quality(newId()))).body)
+    expect(refusalOf(foreign.body)).toEqual(refusalOf((await browsers.beta.get(quality(newId()))).body))
   })
 
   it('a decided inspection of its own with no report kept yet: 404 in its own words', async () => {

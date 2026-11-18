@@ -126,6 +126,12 @@ async function signedIn(email: string): Promise<Browser> {
   return browser
 }
 
+// fix-pr-2: a refusal's words without its own request id (every answer carries a fresh requestId): "the same words".
+const refusalOf = (body: Json): Json => {
+  const { requestId: _requestId, ...error } = (body.error ?? {}) as Json
+  return error
+}
+
 async function get(who: keyof typeof people, url: string, status = 200): Promise<Json> {
   const answer = await browsers[who].get(url)
   if (who !== 'alpha') seenByB.push({ url, body: answer.response.headers['content-type']?.toString().includes('json') ? answer.body : answer.response.body })
@@ -401,7 +407,7 @@ describe('B-PR-18 one order (GET /portal/production/:orderId)', { timeout: SLOW_
     seenByB.push({ url: 'A order', body: foreign.body })
     const unknown = await browsers.beta.get(`/portal/production/${newId()}`)
     expect([foreign.status, unknown.status]).toEqual([404, 404])
-    expect(foreign.body).toEqual(unknown.body)
+    expect(refusalOf(foreign.body)).toEqual(refusalOf(unknown.body))
     expect((await browsers.alpha.get(`/portal/production/${w.b.salesOrderId}`)).status).toBe(404)
     expect(await get('beta', `/portal/production/${w.b.salesOrderId}`)).toMatchObject({ order: { id: w.b.salesOrderId, number: 'SEED-SO-B001' }, inProduction: true })
   })

@@ -203,7 +203,7 @@ export function firstTaker(chain: readonly (string | null)[], takes: ReadonlySet
 /** The customer's report and the escalation, in Italian and English (office words but the two the customer reads). */
 export const PROBLEM_WORDS = Object.freeze({
   // The customer's (portal) refusals: they never name anyone, nor another customer.
-  NOT_IN_PRODUCTION: { it: 'Questo ordine non è in produzione: scrivi nella sua conversazione.', en: 'This order is not in production: write in its conversation.' },
+  NOT_IN_PRODUCTION: { it: 'Questo ordine non è in produzione: scrivete nella sua conversazione.', en: 'This order is not in production: write in its conversation.' },
   NOT_SENT: { it: 'Messaggio non inviato.', en: 'Message not sent.' },
   NONE_SENT: { it: 'Nessun messaggio inviato.', en: 'No message was sent.' },
   // The office's.

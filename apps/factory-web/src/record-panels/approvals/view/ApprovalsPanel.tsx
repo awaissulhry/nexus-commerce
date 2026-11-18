@@ -153,8 +153,9 @@ function RequestRow({ request, model, actions }: { request: OfficeRequest; model
       {answer && (
         <div className="fw-ra-answer" role="group" aria-label={t('row.answer')}>
           <span>
-            {t(answer.via === 'LINK' ? 'row.answeredLink' : 'row.answeredPortal', { name: answer.typedName, at: at(answer.at) })}
-            {answer.personName ? ` · ${t('row.portalPerson', { name: answer.personName })}` : ''}
+            {/* B-PR-30a: an answer we decided for the customer reads as ours (its person is ours, not a portal account). */}
+            {t(answer.via === 'LINK' ? 'row.answeredLink' : answer.via === 'OFFICE' ? 'row.answeredOffice' : 'row.answeredPortal', { name: answer.typedName, at: at(answer.at) })}
+            {answer.personName && answer.via !== 'OFFICE' ? ` · ${t('row.portalPerson', { name: answer.personName })}` : ''}
           </span>
           {answer.words && <q className="fw-ra-words">{answer.words}</q>}
           {answer.markup && (
