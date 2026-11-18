@@ -118,7 +118,7 @@ export async function recordCollection(caller: CommandCaller, shipmentId: string
   if (body.vehiclePlate !== undefined) data.vehiclePlate = body.vehiclePlate === null ? null : plateOf(body.vehiclePlate)
   if (body.signatureFileId !== undefined) data.collectionSignatureFileId = body.signatureFileId
   await command(caller, { name: 'shipping.recordCollection', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
-    const current = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipment.id }, select: { status: true, transportBy: true, number: true, companyId: true, siteId: true, /* B-SA-004 */ partyId: true, ...COLLECTION_SELECT } })
+    const current = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipment.id }, select: { status: true, transportBy: true, number: true, companyId: true, siteId: true, ...COLLECTION_SELECT /* B-SA-004: its partyId */ } })
     const again = recordRefusal({ status: current.status as ShipmentStatus, transportBy: current.transportBy as TransportBy })
     if (again) refused(again.code, again.message)
     await tools.tx.shipment.update({ where: { id: shipment.id }, data, select: { id: true } })
