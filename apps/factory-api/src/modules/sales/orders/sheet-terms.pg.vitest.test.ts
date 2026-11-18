@@ -307,3 +307,58 @@ describe('the rider term and the rider-name search, only for a reader of measure
   })
 })
 // ── end B-SA-021 ──
+
+// ── B-SA-070 (sales page plan R5; 15-steps-notes §8.6): waiting=us — the customer's Work tab's "Waiting on us", screen = file = count ──
+describe('waiting=us narrows the list, the board, the totals and the file alike, inside the reader\'s customers (B-SA-070)', () => {
+  beforeAll(async () => {
+    // TEST-SO-R1: the keeper says it waits on us. SEED-SO-0001: a customer request still OPEN on it. TEST-SO-MTM-C1: it waits on the customer.
+    for (const [number, waitingOn] of [['TEST-SO-R1', 'US'], ['TEST-SO-MTM-C1', 'BRAND']] as const) {
+      await admin(
+        `INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", "waitingOn", "waitingSince")
+         SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'PREPARING', now(), $3::"WaitingOn", now() FROM "SalesOrder" o WHERE o."tenantId" = $2 AND o.number = $4
+         ON CONFLICT ("tenantId", key) DO UPDATE SET "waitingOn" = $3::"WaitingOn", "waitingSince" = now()`,
+        [newId(), tenant, waitingOn, number],
+      )
+    }
+    await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o."tenantId" = $2 AND o.number = 'SEED-SO-0001'`, [newId(), tenant])
+  })
+
+  /** The orders waiting on us, counted here in SQL: the keeper's waiting on us, or a customer request still OPEN. */
+  async function waitingOnUs(partyId?: string): Promise<string[]> {
+    const rows = await admin<{ number: string }>(
+      `SELECT o.number FROM "SalesOrder" o WHERE o."tenantId" = $1 AND ($2::uuid IS NULL OR o."partyId" = $2::uuid)
+        AND (EXISTS (SELECT 1 FROM "BrandOrderProduction" p WHERE p."salesOrderId" = o.id AND p."waitingOn" = 'US')
+             OR EXISTS (SELECT 1 FROM "OrderChangeRequest" r WHERE r."orderId" = o.id AND r.status = 'OPEN')) ORDER BY 1`,
+      [tenant, partyId ?? null],
+    )
+    return rows.map((row) => row.number).sort()
+  }
+
+  it('the same rows and counts on the list, the board, the totals (their doors keep the term) and the file', async () => {
+    const expected = await waitingOnUs()
+    expect(expected).toEqual(expect.arrayContaining(['SEED-SO-0001', 'TEST-SO-R1']))
+    expect(expected).not.toContain('TEST-SO-MTM-C1')
+    expect(await numbers('all', 'waiting=us')).toEqual(expected)
+    expect(await boardTotal('all', 'waiting=us')).toBe(expected.length)
+    const summary = await ok('all', '/sales/orders/summary?waiting=us')
+    expect(summary.all.orders.count).toBe(expected.length)
+    expect(summary.all.orders.filter).toMatchObject({ waiting: 'us' })
+    expect(await fileNumbers('all', 'waiting=us&rows=all')).toEqual(expected)
+  })
+
+  it('a person limited to SEED-R1 reads only SEED-R1\'s orders waiting on us, never a count of SEED-C1\'s', async () => {
+    const expected = await waitingOnUs(R1)
+    expect(expected).toEqual(['TEST-SO-R1'])
+    expect(await numbers('onlyR1', 'waiting=us')).toEqual(expected)
+    expect(await numbers('onlyR1', `waiting=us&partyId=${C1}`)).toEqual([])
+    expect(await boardTotal('onlyR1', `waiting=us&partyId=${C1}`)).toBe(0)
+    expect((await ok('onlyR1', `/sales/orders/summary?waiting=us&partyId=${C1}`)).all.orders.count).toBe(0)
+    expect(await fileNumbers('onlyR1', 'waiting=us&rows=all')).toEqual(expected)
+  })
+
+  it('another value is refused in words, on the list and for the file', async () => {
+    expect((await app.inject({ method: 'GET', url: '/sales/orders?waiting=them', headers: { 'x-test-session': 'all' } })).statusCode).toBe(400)
+    expect(() => exportSourceOf('sales.orders')!.query(new URLSearchParams('waiting=customer'))).toThrow('Not a waiting term: the file would hold more than the screen.')
+  })
+})
+// ── end B-SA-070 ──

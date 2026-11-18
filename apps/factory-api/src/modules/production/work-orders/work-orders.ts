@@ -60,8 +60,9 @@ import { workOrderCustomerUrgency, type WorkOrderUrgency } from '../brand/urgenc
 // F-PR-18: the Customer urgency column's state and its filter (Urgent n / Urgent – asked / Regular / Set to regular by us).
 import type { CustomerUrgencyState } from '@nexus/factory-domain/production-brand/urgency-state'
 // B-PR-42a (production plan §3 "Supervisor"): the supervisor per row (Me / Someone else / Not set), "Mine", and by name on the record.
-import { supervisorMarkOf, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
-import { recordSupervisorOf, workOrderSupervisorsOf, type Reader as SupervisorReader, type RecordSupervisor, type WorkOrderOrders } from '../supervisor/resolver'
+import type { SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
+import { recordSupervisorOf, type RecordSupervisor, type WorkOrderOrders } from '../supervisor/resolver'
+import { supervisorMarksOf } from '../supervisor/resolver' // B-SA-070: moved there
 // B-PR-33 (Production › Overview, "blocked by a gate"): planning's gate hold of a work order not started.
 import { gateHoldsOf } from '../../planning/schedule/gates'
 
@@ -237,16 +238,7 @@ const ordersOfRow = (row: { id: string; partyId: string | null; sizes: readonly 
   orderIds: [...new Set(row.sizes.flatMap((cell) => (cell.salesOrderLine ? [cell.salesOrderLine.order.id] : [])))],
 })
 
-/** The supervisor mark of each row for this viewer (null: a work order of no customer shows none). */
-async function supervisorMarksOf(client: SupervisorReader, rows: readonly WorkOrderOrders[], viewerId: string): Promise<Map<string, SupervisorMark | null>> {
-  const found = await workOrderSupervisorsOf(client, rows)
-  return new Map(
-    rows.map((row): [string, SupervisorMark | null] => {
-      const supervisor = found.get(row.id) ?? null
-      return [row.id, supervisor === null ? null : supervisorMarkOf(supervisor, viewerId)]
-    }),
-  )
-}
+// B-SA-070: supervisorMarksOf moved to ../supervisor/resolver (the Sales › Orders list reads the same marks).
 
 /** What a light read selects for the supervisor (the cells' orders and the customer). */
 const SUPERVISOR_SELECT = { id: true, partyId: true, sizes: { select: { salesOrderLine: { select: { order: { select: { id: true } } } } } } } as const satisfies Prisma.WorkOrderSelect
