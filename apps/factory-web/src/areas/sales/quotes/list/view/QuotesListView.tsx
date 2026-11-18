@@ -9,6 +9,7 @@ import { Button, FilterChip, Input, Pill, RadioCard, Select, Spinner, Tag, Token
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
+import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/CustomerSwitcher' // F-SA-224
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -336,6 +337,20 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             <FilterChip pressed={model.filters.mine} onClick={() => actions?.onFilters?.({ ...model.filters, mine: !model.filters.mine })}>
               {t('list.onlyMine')}
             </FilterChip>
+            {/* F-SA-224: the one customer filter of the Sales lists (`?party=`; names only). */}
+            {model.switcher && (
+              <CustomerSwitcher
+                state={model.switcher.state}
+                party={model.filters.party ?? null}
+                partyName={model.switcher.partyName}
+                query={model.switcher.query}
+                searching={model.switcher.searching}
+                onQuery={actions?.onCustomerSearch}
+                onPick={(party) => actions?.onFilters?.({ ...model.filters, party })}
+                recent={0}
+                subject="list"
+              />
+            )}
           </>
         }
         selection={{

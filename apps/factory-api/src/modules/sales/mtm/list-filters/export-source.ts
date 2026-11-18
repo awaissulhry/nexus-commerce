@@ -8,7 +8,7 @@ import { listProfiles } from '../profiles'
 /**
  * Sales › Special orders › Made-to-measure (`/sales/made-to-measure`, the mtm.grid; B-W2b-371, XF2:03): the export of the rider list
  * as the screen shows it. The address is the list's own: `?view=` a tile or saved row (all | waiting | needMore | confirmed | old |
- * outside | fittings), `?garment=` a garment type, `?customer=` a customer, `?q=`. Read through the module's listProfiles
+ * outside | fittings), `?garment=` a garment type, `?party=` a customer (F-SA-224; the old `?customer=` still read), `?q=`. Read through the module's listProfiles
  * (sales.measurements.view over the customers), page by page. Never a measure, a note or a photo: the rider, the customer, the
  * garment type, the revision, who measured where and when, the base size, the certified range (its points), the review, the open
  * units, the next fitting, the privacy notice's day. Body data: only a reader of measurements exports it (sales.measurements.view).
@@ -35,7 +35,7 @@ export const mtmProfiles = defineExportSource<Query, Row>({
   query(address) {
     const q = (address.get('q') ?? '').trim().slice(0, 100)
     const garment = (address.get('garment') ?? '').trim()
-    const customer = address.get('customer') ?? ''
+    const customer = address.get('party') ?? address.get('customer') ?? '' // F-SA-224: the one customer term `?party=` (the old `?customer=` still read)
     return {
       ...(VIEWS[address.get('view') ?? ''] ?? {}),
       ...(q ? { q } : {}),

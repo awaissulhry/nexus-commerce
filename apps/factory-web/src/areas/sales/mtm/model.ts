@@ -6,6 +6,7 @@ import { APPOINTMENT_KINDS, APPOINTMENT_STATUSES, FITTING_LIMITS, FITTING_VERDIC
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Appointment, AppointmentRow, FittingResult, FittingsTab, MtmCheck, ProfileRecord, ProfilesQuery, QuoteProofs, RepeatFacts, Revision, SentRevision, TemplatePoint, Tiles, Unit } from './api'
 import type { TemplateOption } from './api' // F-SA-222
+import { partyOfAddress } from '../_shared/customer-switcher/model' // F-SA-224
 
 /**
  * Sales › Made-to-measure (SCR-036, the rider profile, the worksheet tab; B-W2b-362), pure: who may do what, the list's
@@ -140,13 +141,11 @@ export interface ListAddress {
   readonly isNew: boolean
   /** Send a measurement link from the band (`?link=1`). */
   readonly link: boolean
-  /** B-W2b-371 (XF2:03): one customer's riders (`?customer=<party id>`, design Rows ▾ "By customer"). */
+  /** B-W2b-371 (XF2:03): one customer's riders (design Rows ▾ "By customer"). F-SA-224: `?party=<id>` (the one customer term; the old `?customer=` is still read). */
   readonly customer: string | null
 }
 
 export const HOME_ADDRESS: ListAddress = Object.freeze({ view: 'all', garment: null, q: '', isNew: false, link: false, customer: null })
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export function addressOf(params: Pick<URLSearchParams, 'get'> | null | undefined): ListAddress {
   const view = params?.get('view') ?? ''
   const garment = (params?.get('garment') ?? '').trim()
@@ -156,7 +155,7 @@ export function addressOf(params: Pick<URLSearchParams, 'get'> | null | undefine
     q: (params?.get('q') ?? '').slice(0, 100),
     isNew: params?.get('new') === '1',
     link: params?.get('link') === '1',
-    customer: UUID.test(params?.get('customer') ?? '') ? params!.get('customer') : null,
+    customer: partyOfAddress(params, 'customer'), // F-SA-224: ?party=, else the old ?customer=
   }
 }
 
@@ -165,7 +164,7 @@ export function addressText(address: ListAddress): string {
   if (address.view !== 'all') search.set('view', address.view)
   if (address.garment) search.set('garment', address.garment)
   if (address.q.trim()) search.set('q', address.q.trim())
-  if (address.customer) search.set('customer', address.customer)
+  if (address.customer) search.set('party', address.customer) // F-SA-224: the one customer term of every Sales list
   if (address.isNew) search.set('new', '1')
   if (address.link) search.set('link', '1')
   const text = search.toString()

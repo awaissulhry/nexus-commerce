@@ -3,10 +3,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { ChevronDown, Filter, X } from 'lucide-react'
-import { AsyncListboxPanel, DetailPopover, type ListboxOption } from '@nexus/ui/components'
+import { Filter, X } from 'lucide-react'
 import { Button, FilterChip, Tag } from '@nexus/ui/primitives'
-import { switcherFace, switcherLines, type Door, type Phrase, type SwitcherState } from './model'
+import type { Door, Phrase } from './model'
 import './sheet.css'
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
@@ -16,7 +15,7 @@ const say = (t: Translate, phrase: Phrase) => t(phrase.key, phrase.params)
  * B-TH-225 / B-TH-226 — the parts of the Orders sheet the design system does not have (Owner yes on decision 2: they live in
  * factory-web): the door (a real link in the link colour, or plain words with the reason when the reader may not open it), the
  * peek card (a link that shows a small card after half a second of rest or on focus; Space opens it at once), the funnel
- * button (a value that narrows the sheet, never a page), the chips row and the Customer switcher. Words: the `orders-sheet`
+ * button (a value that narrows the sheet, never a page) and the chips row (F-SA-224: the Customer switcher is areas/sales/_shared). Words: the `orders-sheet`
  * catalogue. F-SA-212: the Picture cell and its viewer are the ONE picture part (lib/record-picture).
  */
 
@@ -214,105 +213,4 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
   )
 }
 
-// ---- the Customer switcher ---------------------------------------------------------------------------------------------------------
-
-export interface SwitcherProps {
-  state: SwitcherState
-  party: string | null
-  /** The chosen customer's name when the switcher's page does not hold it (from the rows or its record); null: not available. */
-  partyName: string | null | undefined
-  t: Translate
-  /** The search typed in the open list (the page reads the customers that match). */
-  query: string
-  searching: boolean
-  onQuery?: (query: string) => void
-  onPick?: (party: string | null) => void
-  onRetry?: () => void
-  /** Design cases: open at start. */
-  open?: boolean
-}
-
-/**
- * "Customer: All customers ▾" beside the views (SHEET.switcher-F01): a DS DetailPopover whose panel is the DS AsyncListboxPanel —
- * search, then "All customers" (or "All my customers (n)") on top, the recent customers, the others by name, each with its open
- * and late orders read by the API. A reader limited to one customer reads a fixed label; with no customer yet it is absent.
- */
-export function CustomerSwitcher({ state, party, partyName, t, query, searching, onQuery, onPick, onRetry, open: startOpen }: SwitcherProps) {
-  // A design case opens it after the first paint (a popover is portaled to <body>: never in the server's HTML).
-  const [open, setOpen] = useState(false)
-  useEffect(() => {
-    if (startOpen) setOpen(true)
-  }, [startOpen])
-  const face = switcherFace(state, party, partyName)
-  if (face.kind === 'hidden') return null
-  if (face.kind === 'fixed')
-    return (
-      <span className="fw-sheet-fixed" title={t('switcher.fixedHint')}>
-        {t('switcher.fixed', { name: face.name })}
-      </span>
-    )
-  const all = state.limited ? t('switcher.allMine', { count: state.total }) : t('switcher.all')
-  const lines = switcherLines(state.customers ?? [], query.trim() !== '', { all, recent: t('switcher.recent'), others: t(state.limited ? 'switcher.mine' : 'switcher.everyone', { count: state.total }) })
-  const options: ListboxOption[] = lines.map((line) => ({
-    value: line.value,
-    label: line.label,
-    ...(line.group ? { group: line.group } : {}),
-    ...(line.value
-      ? {
-          title: line.archived ? `${line.label} · ${t('switcher.archived')}` : line.label,
-          trailing: (
-            <span className="fw-sheet-opt-n">
-              {t('switcher.open', { count: line.open ?? 0 })}
-              {(line.late ?? 0) > 0 && (
-                <>
-                  {' · '}
-                  <span className="fw-sheet-late">{t('switcher.late', { count: line.late ?? 0 })}</span>
-                </>
-              )}
-              {line.archived && ` · ${t('switcher.archived')}`}
-            </span>
-          ),
-        }
-      : {}),
-  }))
-  const shown = state.customers?.length ?? 0
-  const message = state.customers && state.total > shown ? t('switcher.typeToFind', { count: state.total - shown }) : undefined
-  return (
-    <DetailPopover
-      open={open}
-      onOpenChange={setOpen}
-      hoverDelay={0}
-      trigger={
-        <span className="fw-sheet-switch">
-          {say(t, face.label)}
-          <ChevronDown size={13} aria-hidden />
-        </span>
-      }
-      triggerClassName="nds-btn sm fw-sheet-switch-btn"
-      triggerLabel={`${say(t, face.label)} — ${t('switcher.trigger')}`}
-      label={t('switcher.title')}
-      panelClassName="fw-sheet-switch-panel"
-    >
-      {({ close }) => (
-        <AsyncListboxPanel
-          label={t('switcher.search')}
-          placeholder={t('switcher.searchHint')}
-          query={query}
-          onQueryChange={(next) => onQuery?.(next)}
-          options={options}
-          value={party ?? ''}
-          loading={state.customers === null || searching}
-          error={state.problem ? t('switcher.failed') : undefined}
-          onRetry={onRetry}
-          message={state.customers === null || searching ? t('switcher.reading') : message}
-          emptyMessage={query.trim() ? t('switcher.noMatch', { q: query.trim() }) : t('switcher.none')}
-          onCommit={(value) => {
-            onPick?.(value || null)
-            close({ returnFocus: true })
-          }}
-          onCancel={() => close({ returnFocus: true })}
-        />
-      )}
-    </DetailPopover>
-  )
-}
+// F-SA-224: the Customer switcher moved to areas/sales/_shared/customer-switcher (one customer filter for every Sales list).

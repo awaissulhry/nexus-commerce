@@ -33,7 +33,8 @@ import { NAMESPACE as DEPTH } from '../../depth/model'
 import '../../orders.css'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
-import { CustomerSwitcher, DoorCell, FunnelButton, PeekCard, PeekLink, SheetChips, type SheetChip } from '../sheet/parts'
+import { DoorCell, FunnelButton, PeekCard, PeekLink, SheetChips, type SheetChip } from '../sheet/parts'
+import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/CustomerSwitcher' // F-SA-224: the one customer filter
 // F-SA-212: the ONE picture part (the cell, the phone card's aside and the picture large).
 import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
 import { PictureViewer } from '../../../../../lib/record-picture/view/PictureViewer'
@@ -211,13 +212,24 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       state={model.switcher}
       party={model.customer?.id ?? null}
       partyName={model.customer ? model.customer.name : undefined}
-      t={s}
       query={model.switcher.query}
       searching={model.switcher.searching}
       onQuery={actions?.onCustomerSearch}
       onPick={(party) => actions?.onCustomer?.(party)}
       onRetry={actions?.onCustomerRetry}
       open={model.switcherOpen}
+      // F-SA-224: only Orders counts per customer (GET /sales/orders/customers): "3 open · 1 late".
+      trailing={(customer) => (
+        <>
+          {s('switcher.open', { count: customer.open ?? 0 })}
+          {(customer.late ?? 0) > 0 && (
+            <>
+              {' · '}
+              <span className="fw-sheet-late">{s('switcher.late', { count: customer.late ?? 0 })}</span>
+            </>
+          )}
+        </>
+      )}
     />
   ) : null
   const about = exportAbout(s, { customer: customerName, view: t(`rows.${model.rows}`), count, price: model.can.price, formats: ['XLSX', 'CSV'], margin: !!model.margins && wide })

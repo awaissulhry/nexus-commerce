@@ -9,6 +9,9 @@ import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, list
 import { pictureReader } from '../../../../lib/record-picture/api'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { abilitiesOf, filtersOfTile, grainsOf, quotesCsv, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
+// F-SA-224: the one customer filter of the Sales lists (`?party=`; names only: Quotes has no count read per customer).
+import { partyOfAddress, type SwitcherState } from '../../_shared/customer-switcher/model'
+import type { PartyRow } from '../api'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { readProblem, writeProblem } from '../problems'
@@ -40,6 +43,7 @@ function filtersOf(params: URLSearchParams | null): ListFilters {
     mine: params?.get('mine') === '1',
     expiring: params?.get('expiring') === '1' && status === 'SENT',
     q: params?.get('q') ?? '',
+    party: partyOfAddress(params), // F-SA-224
   }
 }
 
@@ -49,6 +53,7 @@ function searchOf(filters: ListFilters): string {
   if (filters.mine) search.set('mine', '1')
   if (filters.expiring) search.set('expiring', '1')
   if (filters.q.trim()) search.set('q', filters.q.trim())
+  if (filters.party) search.set('party', filters.party) // F-SA-224
   const text = search.toString()
   return text ? `?${text}` : ''
 }
@@ -97,7 +102,7 @@ function QuotesContainer() {
     async (more = false, after: string | null = null) => {
       const wanted = filtersRef.current
       try {
-        const page = await listQuotes(api, { status: wanted.status ?? undefined, mine: wanted.mine, q: wanted.q }, more ? after : null)
+        const page = await listQuotes(api, { status: wanted.status ?? undefined, mine: wanted.mine, q: wanted.q, partyId: wanted.party ?? undefined /* F-SA-224 */ }, more ? after : null)
         if (wanted !== filtersRef.current) return
         setRows((current) => ({ items: more && current.items ? [...current.items, ...page.quotes] : page.quotes, more: page.nextCursor !== null, problem: null }))
         setCursor(page.nextCursor)
@@ -109,6 +114,8 @@ function QuotesContainer() {
     [api],
   )
 
+  // F-SA-224: the tiles count the chosen customer's quotes as the rows do.
+  const tileParty = filters.party ?? null
   const loadTiles = useCallback(async () => {
     const today = romeToday()
     const entries = await Promise.all(
@@ -118,7 +125,7 @@ function QuotesContainer() {
           let next: string | null = null
           // At most 4 pages (200 rows) per tile: past that the tile says "200+".
           for (let page = 0; page < 4; page++) {
-            const answer = await listQuotes(api, { status: read.status, mine: read.mine }, next)
+            const answer = await listQuotes(api, { status: read.status, mine: read.mine, partyId: tileParty ?? undefined /* F-SA-224 */ }, next)
             all.push(...answer.quotes)
             next = answer.nextCursor
             if (!next) break
@@ -130,7 +137,7 @@ function QuotesContainer() {
       }),
     )
     setTiles(Object.fromEntries(entries) as Record<QuoteTile, TileCount>)
-  }, [api, session.user.id])
+  }, [api, session.user.id, tileParty])
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
@@ -160,6 +167,38 @@ function QuotesContainer() {
   })
 
   const go = (next: ListFilters) => router.replace(`${pathname}${searchOf(next)}`)
+
+  // ── F-SA-224: the Customer switcher — the customers the reader may see (GET /parties?role=CUSTOMER, searched on the server after
+  // 250 ms), the chosen one's name from the rows, else its record (a customer the reader may not open: named by no one). ──
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [customerSearched, setCustomerSearched] = useState('')
+  const [customers, setCustomers] = useState<{ rows: PartyRow[] | null; problem: string | null }>({ rows: null, problem: null })
+  useEffect(() => {
+    const timer = setTimeout(() => setCustomerSearched(customerQuery.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [customerQuery])
+  useEffect(() => {
+    const abort = new AbortController()
+    findCustomers(api, customerSearched, companyId || null, abort.signal)
+      .then((found) => !abort.signal.aborted && setCustomers({ rows: found, problem: null }))
+      .catch((error: unknown) => !abort.signal.aborted && setCustomers({ rows: [], problem: readProblem(error) }))
+    return () => abort.abort()
+  }, [api, customerSearched, companyId])
+  const chosen = filters.party ?? null
+  const [chosenName, setChosenName] = useState<{ id: string; name: string | null } | null>(null)
+  const inRows = chosen ? ((rows.items ?? []).find((row) => row.partyId === chosen)?.partyName ?? customers.rows?.find((row) => row.id === chosen)?.legalName ?? null) : null
+  useEffect(() => {
+    if (!chosen || inRows || chosenName?.id === chosen) return
+    let gone = false
+    getParty(api, chosen)
+      .then((found) => !gone && setChosenName({ id: chosen, name: found.legalName }))
+      .catch(() => !gone && setChosenName({ id: chosen, name: null }))
+    return () => {
+      gone = true
+    }
+  }, [api, chosen, inRows, chosenName?.id])
+  const switcherState: SwitcherState = { customers: customers.rows?.map((row) => ({ id: row.id, code: row.code, name: row.tradeName ?? row.legalName, archived: row.status === 'ARCHIVED' })) ?? null, total: customers.rows?.length ?? 0, limited: false, problem: customers.problem }
+  // ── end F-SA-224 ──
 
   // ---- New quote ------------------------------------------------------------------------------------------------------
   const searchSeq = useRef(0)
@@ -273,6 +312,8 @@ function QuotesContainer() {
     unread: readsThreads ? unread : null,
     readsRequests: session.permissions.includes('sales.inquiries.view'),
     readsOrders: session.permissions.includes('orders.view'),
+    // F-SA-224
+    switcher: { state: switcherState, query: customerQuery, searching: customerQuery.trim() !== customerSearched, partyName: chosen ? (inRows ?? (chosenName?.id === chosen ? chosenName.name : undefined)) : undefined },
   }
 
   const cancelMany = async (ids: readonly string[], reason: string): Promise<boolean> => {
@@ -322,7 +363,8 @@ function QuotesContainer() {
       model={model}
       actions={{
         onFilters: go,
-        onTile: (tile) => go(filtersOfTile(tile)),
+        onTile: (tile) => go({ ...filtersOfTile(tile), party: filters.party ?? null /* F-SA-224: a tile keeps the customer */ }),
+        onCustomerSearch: setCustomerQuery, // F-SA-224
         onMore: () => void load(true, cursor),
         onRetry: () => {
           setRows({ items: null, more: false, problem: null })

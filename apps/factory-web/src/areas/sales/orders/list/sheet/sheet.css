@@ -149,33 +149,7 @@
   }
 }
 
-.fw-sheet-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fw-sheet-switch-panel {
-  width: 340px;
-  max-width: calc(100vw - 32px);
-}
-.fw-sheet-opt-n {
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-xs);
-  white-space: nowrap;
-}
-.fw-sheet-fixed {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 var(--nds-space-8);
-  color: var(--nds-text-strong);
-  font-weight: var(--nds-font-weight-medium);
-  white-space: nowrap;
-}
+/* F-SA-224: the Customer switcher's rules moved to areas/sales/_shared/customer-switcher/customer-switcher.css. */
 
 .fw-sheet-band {
   display: flex;

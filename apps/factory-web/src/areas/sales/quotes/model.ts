@@ -130,9 +130,11 @@ export interface ListFilters {
   /** Sent quotes whose offer ends within 7 days (filtered here: the API filters by status). */
   expiring: boolean
   q: string
+  /** F-SA-224: one customer's quotes (`?party=`, the Sales lists' one customer filter); none: every customer. */
+  party?: string | null
 }
 
-export const NO_FILTERS: ListFilters = { status: null, mine: false, expiring: false, q: '' }
+export const NO_FILTERS: ListFilters = { status: null, mine: false, expiring: false, q: '', party: null }
 
 export function filtersOfTile(tile: QuoteTile): ListFilters {
   switch (tile) {
@@ -158,7 +160,7 @@ export function tileOfFilters(filters: ListFilters): QuoteTile | null {
 }
 
 export function activeFilterCount(filters: ListFilters): number {
-  return (filters.status ? 1 : 0) + (filters.mine ? 1 : 0) + (filters.expiring ? 1 : 0) + (filters.q.trim() ? 1 : 0)
+  return (filters.status ? 1 : 0) + (filters.mine ? 1 : 0) + (filters.expiring ? 1 : 0) + (filters.q.trim() ? 1 : 0) + (filters.party ? 1 : 0) /* F-SA-224 */
 }
 
 /** Rows the expiring filter keeps: sent, valid until today + 7 days at most, not past. */

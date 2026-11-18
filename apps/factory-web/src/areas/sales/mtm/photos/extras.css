@@ -1,18 +1,6 @@
 /* B-W2b-371: the made-to-measure office extras' own layout (CSS prefix fw-mtx-); semantic DS tokens only. */
 
-/* A label read by assistive technology only (the customer filter's name). */
-.fw-mtx-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.fw-mtx-customer {
-  min-width: 220px;
-}
+/* F-SA-224: the customer filter's rules went with it (the Sales lists' one Customer switcher). */
 
 /* The rule editor: one row per rule, its fields wrapping on a narrow screen. */
 .fw-mtx-rule {

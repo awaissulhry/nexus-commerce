@@ -112,6 +112,7 @@
   "switcher": {
     "title": "Customer",
     "trigger": "choose whose orders the sheet shows",
+    "triggerList": "choose whose rows the list shows",
     "all": "All customers",
     "allMine": "All my customers ({count})",
     "chosen": "Customer: {name}",
@@ -133,6 +134,7 @@
     "failed": "The customers could not be read.",
     "noMatch": "No customer matches “{q}”",
     "none": "No customer has orders yet",
+    "noneList": "No customer yet",
     "unavailable": "This customer is not available.",
     "unavailableBody": "The link names a customer you cannot open, or one that no longer exists.",
     "showAll": "Show all customers"

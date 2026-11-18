@@ -23,7 +23,10 @@ import type { OrdersListActions, OrdersListModel } from '../../orders/list/list-
 import { OrdersLayoutSwitch, OrdersListView, OrdersTiles } from '../../orders/list/view/OrdersListView'
 // B-W2b-371 (XF2:03): the certified range of a row, the customer filter.
 import { customerName } from '../list-filters/model'
-import { CustomerFilter, RangeCell as RangeTag } from '../list-filters/view/ListFilterParts'
+import { RangeCell as RangeTag } from '../list-filters/view/ListFilterParts'
+// F-SA-224: the one customer filter of the Sales lists (names only here: no count read of riders per customer).
+import { CustomerSwitcher } from '../../_shared/customer-switcher/view/CustomerSwitcher'
+import { localSwitcherState } from '../../_shared/customer-switcher/model'
 import { ExtrasMessages } from '../photos/words'
 import { LinkDialog } from './LinkDialog'
 import { MeasurementsDialog } from './MeasurementsDialog'
@@ -60,6 +63,7 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
   const search = useListSearch(model.address.q, (q) => actions?.onAddress?.({ q }))
+  const [customerQuery, setCustomerQuery] = useState('') // F-SA-224: the switcher's own search (in the names read)
   const rows = model.rows.items
   const rowsKey = rows?.map((row) => row.id).join(',') ?? ''
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
@@ -236,9 +240,22 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
           </option>
         ))}
       </Select>
-      <ExtrasMessages>
-        <CustomerFilter customers={model.customers ?? null} value={model.address.customer} onChange={(customer) => actions?.onAddress?.({ customer })} />
-      </ExtrasMessages>
+      {model.customers && (
+        <CustomerSwitcher
+          state={localSwitcherState(model.customers.map((party) => ({ id: party.id, name: party.legalName, code: party.code })), customerQuery)}
+          party={model.address.customer}
+          partyName={customerName(model.customers, rows, model.address.customer)}
+          query={customerQuery}
+          searching={false}
+          onQuery={setCustomerQuery}
+          onPick={(customer) => {
+            setCustomerQuery('')
+            actions?.onAddress?.({ customer })
+          }}
+          recent={0}
+          subject="list"
+        />
+      )}
     </>
   )
 

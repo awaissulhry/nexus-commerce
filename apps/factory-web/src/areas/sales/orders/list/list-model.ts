@@ -1,6 +1,7 @@
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow, OrderSort } from '../api'
+import type { OrderCustomer } from '../api' // F-SA-224: the switcher's customers carry Orders' counts
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
 // ---- B-W2b-323 (orders in depth on screen) ----
@@ -10,7 +11,7 @@ import type { OrdersImportActions } from '../import/use-orders-import' // B-TH-2
 import type { WeekModel } from '../week/use-promise-week'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import type { ReadPictures } from '../../../../lib/record-picture/cache' // F-SA-212: the one picture part's batch read
-import type { SwitcherState } from './sheet/model'
+import type { SwitcherState } from '../../_shared/customer-switcher/model' // F-SA-224: the one customer filter
 // ---- B-TH-244 (TH-4: the overall view) ----
 import type { OrderSummary } from '../api'
 import type { ExtraTerms } from '../model'
@@ -94,7 +95,7 @@ export interface OrdersListModel {
   /** The companies the reader sees: the Company column and its funnel only from two on. */
   companies?: ReadonlyArray<{ id: string; name: string }>
   /** The Customer switcher: the reader's customers, their counts, a limited reader (null: not drawn). */
-  switcher?: (SwitcherState & { query: string; searching: boolean }) | null
+  switcher?: (SwitcherState<OrderCustomer> & { query: string; searching: boolean }) | null
   /** Design cases: each row's picture as an address (the page reads the small previews through `actions.readPictures`). */
   demoPictures?: Readonly<Record<string, string>>
   /** Design cases: the viewer open on a row, the switcher open, the widths that show the wide columns. */

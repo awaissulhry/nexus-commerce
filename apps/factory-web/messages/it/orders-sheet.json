@@ -112,6 +112,7 @@
   "switcher": {
     "title": "Cliente",
     "trigger": "scegli di chi sono gli ordini del foglio",
+    "triggerList": "scegli di chi sono le righe dell’elenco",
     "all": "Tutti i clienti",
     "allMine": "Tutti i miei clienti ({count})",
     "chosen": "Cliente: {name}",
@@ -133,6 +134,7 @@
     "failed": "Non è stato possibile leggere i clienti.",
     "noMatch": "Nessun cliente corrisponde a “{q}”",
     "none": "Nessun cliente ha ancora ordini",
+    "noneList": "Ancora nessun cliente",
     "unavailable": "Questo cliente non è disponibile.",
     "unavailableBody": "Il link indica un cliente che non puoi aprire, o che non esiste più.",
     "showAll": "Mostra tutti i clienti"
