@@ -176,11 +176,12 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
 
   it('the API’s answer parses (a field the API adds never breaks the tab)', () => {
     const read = production()
-    const parsed = productionOrderSchema.parse({ ...read, gates: null, problem: null, progress: { ...read.progress!, stages: [] } })
+    // fix-pr-2: `problem` is read since F-PR-24 (#1628); the field the API adds here is one the web does not know.
+    const parsed = productionOrderSchema.parse({ ...read, gates: null, laterField: null, progress: { ...read.progress!, stages: [] } })
     expect(parsed.stage?.code).toBe('SEWING')
     // F-PR-12b reads the gates: a level that does not share them answers null.
     expect(parsed.gates).toBeNull()
-    expect('problem' in parsed).toBe(false)
+    expect('laterField' in parsed).toBe(false)
   })
 
   it('the words exist in both languages', () => {
