@@ -9,6 +9,9 @@ import { documentsInOrder } from '../model'
 import { useOrderWords } from '../words'
 import { Loading, PricesNote, ReadFailed } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
+// F-SA-238: the order's shared files, grouped like the office's Files tab — the SAME body (lib/record-thread files-view), its customer face.
+import { OrderFilesBody } from '../../../../lib/record-thread/files-view/view/FilesView'
+import { orderFilesOf } from '../../../../lib/record-thread/files-view/model'
 
 /**
  * Order › Documents (design rec "Order" tab documents; SAL-086, SAL-092): every document of the order the person's role may
@@ -17,6 +20,46 @@ import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView
  * one that replaced it. Preview in place (PDF) and download, both logged. "Download all as zip" is Later (SAL-091).
  */
 export function DocumentsTab({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
+  return (
+    <div className="fw-pord-tab">
+      <OrderFiles model={model} actions={actions} />
+      <Library model={model} actions={actions} />
+    </div>
+  )
+}
+
+/**
+ * F-SA-238 (sales page plan N9, P14, R6; review OW-1): the order's files we shared with you, by where they come from — the order and
+ * its conversation, its lines and artwork, your requests, shipments and invoices, returns — the office's Files body in its customer
+ * face: your own numbers, no audience label (every file is yours to see), nothing counted, never "n hidden". Empty: "No documents
+ * yet."; reading: skeleton rows; another customer's order: the portal's neutral "not found".
+ */
+function OrderFiles({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
+  const { t } = useOrderWords()
+  const files = model.files ?? null
+  if (!files) return null
+  if (files.notFound) return <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.filesNotFound')} />
+  const library = new Set((files.read ? orderFilesOf(files.read) : []).filter((file) => !!file.documentWords).map((file) => file.id))
+  return (
+    <section className="fw-pord-stack" aria-label={t('docs.filesTitle')}>
+      <h2 className="fw-pord-h2">{t('docs.filesTitle')}</h2>
+      <OrderFilesBody
+        model={files}
+        party={null}
+        actions={{
+          onRetry: actions?.onRetryFiles,
+          onOrderOpen: (fileId) => {
+            const file = files.read ? orderFilesOf(files.read).find((entry) => entry.id === fileId) : undefined
+            if (file) actions?.onOpenOrderFile?.({ fileId, name: file.name, contentType: file.contentType, library: library.has(fileId) })
+          },
+        }}
+      />
+    </section>
+  )
+}
+
+/** The documents' versions and fingerprints (SAL-086, SAL-092): every version of each document the person's role may see. */
+function Library({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
   const words = useOrderWords()
   const { t } = words
   const documents = model.documents
@@ -26,6 +69,7 @@ export function DocumentsTab({ model, actions }: { model: OrderRecordViewModel; 
   const read = documents.read
   return (
     <div className="fw-pord-tab">
+      {model.files ? <h2 className="fw-pord-h2">{t('docs.versionsTitle')}</h2> : null}
       {!read.seesPrices ? <PricesNote /> : null}
       {read.items.length === 0 ? (
         <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.none')} description={t('docs.noneBody')} />

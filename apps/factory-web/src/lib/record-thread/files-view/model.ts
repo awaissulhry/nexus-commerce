@@ -153,6 +153,8 @@ export interface OrderFile {
   readonly alsoOn: readonly OrderFileRef[]
   readonly alsoOnOther: number
   readonly inThread: { readonly messageId: string } | null
+  /** F-SA-238: a library document (a DDT, an invoice …) in its own words; absent: a plain file. */
+  readonly documentWords?: { readonly it: string; readonly en: string } | null
 }
 
 export interface OrderFilesGroup {
@@ -179,6 +181,11 @@ export interface OrderFilesModel {
   /** files.manage: share the order's OWN files with its customer. */
   readonly canShare: boolean
   readonly busy?: boolean
+  /**
+   * F-SA-238: `customer` — the portal's face of the same body: the customer's own shared files only, no audience label (all are
+   * theirs), no "also on", no left-out count (never "n hidden"), no choosing or sharing; default `office`.
+   */
+  readonly face?: 'office' | 'customer'
 }
 
 /** The groups that list a file or count one the reader may not open (an empty group says nothing). */
@@ -198,6 +205,25 @@ export function orderBulkReach(chosen: readonly OrderFile[], orderId: string, ca
   return {
     download: chosen.map((file) => file.id),
     share: canShare ? chosen.filter((file) => isOwnFile(file, orderId) && file.audience === 'OFFICE_ONLY').map((file) => file.id) : [],
+  }
+}
+
+/**
+ * F-SA-238: the portal read (GET /portal/sales-orders/:orderId/files, B-SA-037) as the body reads it — the customer's groups, every file
+ * shared with it (no audience, no "also on", nothing counted), labels by the customer's own numbers (a record with none: no chip).
+ */
+export function portalFilesRead(read: { readonly order: { readonly id: string }; readonly groups: readonly { readonly key: string; readonly words: { readonly it: string; readonly en: string }; readonly files: readonly { readonly id: string; readonly name: string; readonly kind: string; readonly category: string | null; readonly documentWords: { readonly it: string; readonly en: string } | null; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly at: string; readonly from: { readonly type: string; readonly id: string; readonly label: string | null }; readonly line: { readonly id: string; readonly seq: number } | null }[] }[]; readonly total: number }, ownNumber: string): OrderFilesRead {
+  return {
+    order: { id: read.order.id, number: ownNumber },
+    groups: read.groups.map((group) => ({
+      key: group.key,
+      words: group.words,
+      files: group.files.map((file) => ({ ...file, from: { type: file.from.type, id: file.from.id, label: file.from.label ?? '' }, audience: 'CUSTOMER_CAN_SEE' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null })),
+      leftOut: 0,
+      measurementsLeftOut: 0,
+    })),
+    total: read.total,
+    truncated: false,
   }
 }
 

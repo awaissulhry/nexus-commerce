@@ -139,7 +139,8 @@
     "truncated": "Sono elencati i {count} file più recenti.",
     "empty": {
       "title": "Ancora nessun file",
-      "body": "I file aggiunti nella conversazione compaiono qui."
+      "body": "I file aggiunti nella conversazione compaiono qui.",
+      "customer": "Ancora nessun documento."
     },
     "shareOwn_one": "Condividi {count} dell'ordine con {party}",
     "shareOwn_other": "Condividi {count} dell'ordine con {party}",

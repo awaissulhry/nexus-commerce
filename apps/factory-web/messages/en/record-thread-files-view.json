@@ -139,7 +139,8 @@
     "truncated": "The newest {count} files are listed.",
     "empty": {
       "title": "No files yet",
-      "body": "Files added in the conversation show here."
+      "body": "Files added in the conversation show here.",
+      "customer": "No documents yet."
     },
     "shareOwn_one": "Share {count} own with {party}",
     "shareOwn_other": "Share {count} own with {party}",

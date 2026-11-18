@@ -480,9 +480,10 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
     )
   }
   const read = model.read
+  const customer = model.face === 'customer' // F-SA-238: the portal's face of the same body
   const groups = orderGroupsShown(read)
   const files = orderFilesOf(read)
-  const leftOut = orderLeftOut(read)
+  const leftOut = customer ? 0 : orderLeftOut(read)
   const chosen = files.filter((file) => model.selected.includes(file.id))
   const reach = orderBulkReach(chosen, read.order.id, model.canShare)
   const allChosen = files.length > 0 && chosen.length === files.length
@@ -502,17 +503,17 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
       choose(fileId, !model.selected.includes(fileId))
     }
   }
-  if (files.length === 0 && leftOut === 0) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t('order.empty.title')} description={t('order.empty.body')} />
+  if (files.length === 0 && leftOut === 0) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
   return (
     <div className="fw-rtv-order">
       {leftOut > 0 && <p className="fw-rtv-held">{t('order.leftOut', { count: leftOut })}</p>}
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
-      {files.length > 0 && (
+      {files.length > 0 && !customer && (
         <div className="fw-rtv-tools">
           <Checkbox label={allChosen ? t('select.none', { count: files.length }) : t('select.all', { count: files.length })} checked={allChosen} onChange={(event) => actions?.onOrderSelect?.(event.target.checked ? files.map((file) => file.id) : [])} />
         </div>
       )}
-      {chosen.length > 0 && (
+      {chosen.length > 0 && !customer && (
         <BulkActionBar count={chosen.length} noun={t('bulk.noun')} onClear={() => actions?.onOrderSelect?.([])}>
           <Button size="sm" onClick={() => actions?.onOrderBulk?.('download', reach.download)}>
             <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
@@ -532,10 +533,10 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
             </h3>
             <ul className="fw-rtv-rows">
               {group.files.map((file) => (
-                <OrderRow key={file.id} file={file} orderId={read.order.id} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={{ t, fileWords, locale }} />
+                <OrderRow key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={{ t, fileWords, locale }} />
               ))}
             </ul>
-            {group.leftOut + group.measurementsLeftOut > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut })}</p>}
+            {!customer && group.leftOut + group.measurementsLeftOut > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut })}</p>}
           </section>
         ))}
       </div>
@@ -543,15 +544,17 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
   )
 }
 
-function OrderRow({ file, orderId, chosen, onChoose, actions, words }: { file: OrderFile; orderId: string; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' } }) {
+function OrderRow({ file, orderId, customer, chosen, onChoose, actions, words }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' } }) {
   const { t, fileWords, locale } = words
   const source = sourceOf(file, orderId)
   const kind = (['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO', 'ATTACHMENT'] as readonly string[]).includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT'
   return (
     <li className={`fw-rtv-row${chosen ? ' is-chosen' : ''}`}>
-      <span className="fw-rtv-check">
-        <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
-      </span>
+      {!customer && (
+        <span className="fw-rtv-check">
+          <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
+        </span>
+      )}
       <span className="fw-rtv-pic" aria-hidden>
         {KIND_ICON[kind]}
       </span>
@@ -560,12 +563,13 @@ function OrderRow({ file, orderId, chosen, onChoose, actions, words }: { file: O
           {file.bodyData && <Lock size={13} aria-hidden />} {file.name}
         </button>
         <span className="fw-rtv-meta">
-          {fileWords(`kind.${kind}`)} · {sizeWords(file.sizeBytes, locale)} · {formatDate(file.at, { locale })}
+          {file.documentWords ? (locale === 'it' ? file.documentWords.it : file.documentWords.en) : fileWords(`kind.${kind}`)} · {sizeWords(file.sizeBytes, locale)} · {formatDate(file.at, { locale })}
           {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
         </span>
         <span className="fw-rtv-marks">
-          <Tag tone="neutral">{t(source.key, source.params)}</Tag>
-          <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>
+          {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
+          {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
+          {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
           {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
           {file.alsoOn.map((other) => (
             <Tag key={`${other.type}:${other.id}`} tone="neutral">
