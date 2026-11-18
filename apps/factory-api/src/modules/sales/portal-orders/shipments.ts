@@ -15,6 +15,7 @@ import { partnerOrder, portalReader } from './access'
 import { latestByShipment, progressOfLines } from './orders'
 import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalShipmentRow, type PortalTrackingRow } from './store'
 import { walledForOutside } from '../../../platform/files/content-wall' // fix-wall-1
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
@@ -164,7 +165,8 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
       return {
         shipmentId: shipment.id,
         number: shipment.number,
-        order: { id: order.id, number: order.number, customerRef: order.customerRef },
+        // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's SO-….
+        order: { id: order.id, customerRef: order.customerRef, yourNumber: customerNumberOf('ORDER', order.customerSeq) },
         status,
         words: SHIPMENT_STATUS_WORDS[status],
         carrierName: shipment.carrierName,

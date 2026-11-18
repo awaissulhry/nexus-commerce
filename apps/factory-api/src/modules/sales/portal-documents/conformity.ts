@@ -9,6 +9,7 @@ import { publicDocAddress, publicDocCodeOf } from '@nexus/factory-domain/complia
 import { processEmail } from '../../../platform/email-out/service'
 import { readLibrary, visibleEntries, type LibraryEntry } from './library'
 import { CERTIFICATE_SELECT, coveringCertificates, frozenRevisions, heldByCompanyOr, readOrderLines, readOrders, readShipmentLines, readShipmentsThatLeft, readStyles, type CertificateRow } from './store'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 
 /**
  * Conformity per style received (B-W2b-178; SAL-087, QHS-111; design portal.customer.documents "Conformity per style you
@@ -109,7 +110,8 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
           const order = orderOf.get(shipment.salesOrderId)
           return {
             shipment: { id: shipment.id, number: shipment.number },
-            order: order ? { id: order.id, number: order.number, customerRef: order.customerRef } : null,
+            // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's SO-….
+            order: order ? { id: order.id, customerRef: order.customerRef, yourNumber: customerNumberOf('ORDER', order.customerSeq) } : null,
             shippedOn,
             revision: row.revision,
             pieces: row.pieces,

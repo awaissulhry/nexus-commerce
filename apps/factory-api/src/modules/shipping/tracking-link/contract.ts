@@ -80,6 +80,7 @@ export const trackingPageView = output({
     expectedDeliveryAt: instant().nullable(),
   }),
   /** "Your order 4500-1234": the customer's own reference first, then ours. */
+  // fix-portal-numbers-1 (B-TH-303): `number` is the customer's own order number ("#12"), never the office's SO-… series.
   order: output({ customerRef: z.string().nullable(), number: z.string().nullable() }),
   pill: z.enum(TRACKING_PILLS),
   problem: z.enum(TRACKING_PROBLEMS).nullable(),

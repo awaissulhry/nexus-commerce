@@ -181,7 +181,8 @@ describe('the tracking page by link (links.tracking)', { timeout: SLOW_TEST_TIME
     expect(read.statusCode, read.body).toBe(200)
     const page = read.json()
     expect(page.shipment).toMatchObject({ number: 'SEED-SH-0001', status: 'SHIPPED', transportBy: 'CARRIER', carrierName: 'Seed Express' })
-    expect(page.order).toEqual({ customerRef: 'SEED-PO-78', number: 'SEED-SO-0002' })
+    // fix-portal-numbers-1 (B-TH-303): the customer's own order number ("#N"), never the office's SEED-SO-0002.
+    expect(page.order).toEqual({ customerRef: 'SEED-PO-78', number: expect.stringMatching(/^#\d+$/) })
     expect(page.pill).toBe('IN_TRANSIT')
     expect(page.steps.map((step: Json) => [step.code, step.state])).toEqual([
       ['PACKED', 'DONE'],
