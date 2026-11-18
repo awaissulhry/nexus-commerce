@@ -95,8 +95,9 @@ async function activeSite(tx: Tx, siteId: string) {
 /** An office account that may be linked: a current user, not the caller, without a record of its own. */
 async function checkAccount(tx: Tx, context: OfficeContext, userId: string, employeeId: string | null): Promise<void> {
   if (userId === context.actorId) refuse('SELF_LINK', 'You cannot link your own office account: ask another administrator.', 'userId')
-  const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } })
-  if (!user || user.status === 'DEACTIVATED') refuse('ACCOUNT_INACTIVE', 'No current office account of the tenant has this id.', 'userId')
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true, audience: true } })
+  // fix-pr-8 (the brand wall): a portal person (a customer's or a supplier's) is no office account: as an unknown id.
+  if (!user || user.status === 'DEACTIVATED' || user.audience !== 'OFFICE') refuse('ACCOUNT_INACTIVE', 'No current office account of the tenant has this id.', 'userId')
   const owner = await tx.employee.findFirst({ where: { userId, ...(employeeId ? { id: { not: employeeId } } : {}) }, select: { id: true } })
   if (owner) refuse('ACCOUNT_TAKEN', 'This office account belongs to another employee record: one record per person.', 'userId')
 }
