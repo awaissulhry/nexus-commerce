@@ -523,16 +523,16 @@
     "reach": {
       "STYLE": "Riguarda tutti i capi di questo modello.",
       "BATCH": "Riguarda questo lotto: {batch}.",
-      "BATCHES": "Riguarda questi lotti: {batches}. Controlla il numero di lotto sulla tua etichetta.",
-      "PART": "Riguarda alcuni capi del lotto {batch}: contattaci per verificare il tuo.",
-      "PART_SERIAL": "Riguarda alcuni capi del lotto {batch}: controlla la matricola sulla tua etichetta e contattaci.",
-      "PART_STYLE": "Riguarda alcuni capi di questo modello: controlla lotto e matricola sulla tua etichetta e contattaci."
+      "BATCHES": "Riguarda questi lotti: {batches}. Controllate il numero di lotto sulla vostra etichetta.",
+      "PART": "Riguarda alcuni capi del lotto {batch}: contattateci per verificare il vostro.",
+      "PART_SERIAL": "Riguarda alcuni capi del lotto {batch}: controllate la matricola sulla vostra etichetta e contattateci.",
+      "PART_STYLE": "Riguarda alcuni capi di questo modello: controllate lotto e matricola sulla vostra etichetta e contattateci."
     },
     "problem": "Cosa non va",
     "action": "Cosa fare",
     "contact": "Chi contattare",
     "otherLanguage": "Scritto in {language}.",
-    "quote": "Indica {number} quando ci contatti."
+    "quote": "Indicate {number} quando ci contattate."
   },
   "pdf": {
     "title": "Notifica a {authority} · {reference}",
