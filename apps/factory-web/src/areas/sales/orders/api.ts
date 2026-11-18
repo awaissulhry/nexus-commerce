@@ -21,6 +21,18 @@ export const ORDER_PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as cons
 // F-SA-214: why a waiting order waits (factory-domain sales/orders-depth WAIT_WORDS' codes, the row's `waits`).
 export const WAIT_REASONS = ['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD', 'MEASUREMENTS'] as const
 export type WaitReason = (typeof WAIT_REASONS)[number]
+// ---- F-SA-275 (the API's B-SA-070, `production=true`): the production part of a row — factory-domain production-brand's codes ----
+export { BRAND_STAGES, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+export { BRAND_HEALTHS, type BrandHealth } from '@nexus/factory-domain/production-brand/health'
+export { WAITING_ON, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
+export { SUPERVISOR_MARKS, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
+import { BRAND_STAGES as STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { BRAND_HEALTHS as HEALTHS } from '@nexus/factory-domain/production-brand/health'
+import { WAITING_ON as WAITS } from '@nexus/factory-domain/production-brand/waiting'
+import { SUPERVISOR_MARKS as MARKS } from '@nexus/factory-domain/production-brand/supervisor'
+/** The parts a reader without workorders.view over the order does not get (null, named in `withheld`): the API's PRODUCTION_WITHHELD. */
+export const PRODUCTION_WITHHELD = ['supervisorMark', 'openIssues'] as const
+// ---- end F-SA-275
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
@@ -157,6 +169,26 @@ export const orderRowSchema = z.object({
    * first names and how many in all) only in the answer of a reader of measurements (null otherwise). Never a measurement.
    */
   madeToMeasure: z.object({ units: z.number(), waitingReview: z.number(), riders: z.object({ names: z.array(z.string()), count: z.number() }).nullable() }).nullable().optional(),
+  /**
+   * F-SA-275 (the API's B-SA-070): only when asked (`production=true`) — the keeper's stored state: the plain stage and since when,
+   * the shown health, who it waits on and since when, a live work order of it on hold, the supervisor mark (Me / Someone else / Not
+   * set: never a name) and the open production issues only with workorders.view over the order (else null, named in `withheld`),
+   * and the customer requests still OPEN. Absent from an answer that was not asked for it.
+   */
+  production: z
+    .object({
+      stage: z.enum(STAGES).nullable(),
+      stageSince: z.string().nullable(),
+      health: z.enum(HEALTHS).nullable(),
+      waitingOn: z.enum(WAITS).nullable(),
+      since: z.string().nullable(),
+      held: z.boolean(),
+      supervisorMark: z.enum(MARKS).nullable(),
+      openRequests: z.number(),
+      openIssues: z.number().nullable(),
+      withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
+    })
+    .optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -194,6 +226,12 @@ export interface OrderQuery {
   kind?: 'mtm' | null
   /** F-SA-222: a rider's orders (`?profile=`: any revision of the rider's garment profile; sales.measurements.view only). */
   profile?: string | null
+  /** F-SA-275: read each row's production part (only while a production column is shown: Where it is, Waiting on, Supervisor). */
+  production?: boolean
+  /** F-SA-276: the orders waiting on us (`?waiting=us`, the customer's Work tab's "Waiting on us"). */
+  waiting?: 'us' | null
+  /** F-SA-276: only these rows (≤ 50: a live read again of the rows in view, values in place). */
+  ids?: readonly string[] | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -222,6 +260,9 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       progress: query.progress ? 'true' : undefined, // B-TH-244
       kind: query.kind ?? undefined, // F-SA-221
       profile: query.profile ?? undefined, // F-SA-222
+      production: query.production ? 'true' : undefined, // F-SA-275
+      waiting: query.waiting ?? undefined, // F-SA-276
+      ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -240,9 +281,9 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */> = {}): Promise<OrderBoard> {
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null; cf?: string | null /* B-TH-057 */ } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */ | 'waiting' /* F-SA-276 */> = {}): Promise<OrderBoard> {
   return api.get('/sales/orders/board', {
-    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */, profile: narrow.profile ?? undefined /* F-SA-222 */ },
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */, cf: narrow.cf?.trim() || undefined /* B-TH-057 */, ...doorQueryOf(narrow) /* B-TH-244 */, kind: narrow.kind ?? undefined /* F-SA-221 */, profile: narrow.profile ?? undefined /* F-SA-222 */, waiting: narrow.waiting ?? undefined /* F-SA-276 */ },
     schema: boardSchema,
     signal,
   })
@@ -298,6 +339,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       ...doorQueryOf(query),
       kind: query.kind ?? undefined, // F-SA-221
       profile: query.profile ?? undefined, // F-SA-222
+      waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 // F-SA-271: the band's ⋯ "Add task for <customer>…" — the record's ONE New task dialog (the Party record's task).
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -21,6 +21,15 @@ import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth
 import { CustomerRecordView } from './view/CustomerRecordView'
 import { CustomerSupervisor } from '../portal/view/CustomerSupervisorCard' // F-SA-272
 import { partyName } from '../../../parties/_shared/model'
+// ---- F-SA-276: the Work tab (the strip's reads, the Orders sheet locked to the customer) and the dock that follows its rows ----
+import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer-work'
+import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
+// ---- end F-SA-276
+// ---- F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks) ----
+import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
+import { OpenTasksDialog } from './view/OpenTasksDialog'
+// ---- end F-SA-278
+import { QuotesIncomingTab } from './view/QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -65,6 +74,40 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     depth: (party, reload) => customerDepthSlot(party, reload, prefix),
   })
   const task = useCustomerTask(partyId, record.party?.code ?? null)
+  // ---- F-SA-276: the Work tab's reads (its strip and the tab's count, on every tab), the row the dock follows on Work (and on Quotes &
+  // incoming): leaving those tabs drops it (the other tabs are about the account).
+  const can = record.model.can
+  const workCan: WorkCan = { orders: can.orders, workorders: can.workorders === true, threads: can.threads, partners: can.partners }
+  const work = useCustomerWork(partyId, workCan)
+  const tab = record.model.tab
+  const [pick, setPick] = useState<DockPick | null>(null)
+  const [scope, setScope] = useState<'general' | 'record'>('general')
+  useEffect(() => {
+    if (tab === 'work' || tab === 'quotes') return
+    setPick(null)
+    setScope('general')
+  }, [tab])
+  const onPick = useCallback((next: DockPick) => {
+    setPick(next)
+    setScope('record')
+  }, [])
+  const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
+  const dock = named && record.thread ? <CustomerDock customer={named} general={record.thread} pick={pick} scope={scope} onScope={setScope} prefix={prefix} /> : record.thread
+  // ---- F-SA-278: the strip's windows — each row picks its record in the dock (the customer's own record: its thread).
+  const [win, setWin] = useState<'customer' | 'tasks' | null>(null)
+  const reaccept = useReacceptOrders(partyId, win === 'customer', can.orders)
+  const pickOrGeneral = (next: DockPick | null) => (next ? onPick(next) : setScope('general'))
+  const windows =
+    named && win === 'customer' ? (
+      <WaitingForCustomerDialog party={{ ...named, companyId: record.party?.companyId ?? null }} can={{ partners: can.partners }} requests={work.reads.requests} reaccept={reaccept} onPick={onPick} onClose={() => setWin(null)} />
+    ) : named && win === 'tasks' ? (
+      <OpenTasksDialog customer={named.name} tasks={work.reads.tasks} onPick={pickOrGeneral} onClose={() => setWin(null)} />
+    ) : null
+  // ---- end F-SA-278
+  // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
+  const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} /> : null
+  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={pick} onPick={onPick} onWindow={setWin /* F-SA-278 */} /> : null
+  // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
   const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
   const contactEmails = useMemo(() => new Set((record.party?.contacts ?? []).filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!.trim().toLowerCase())), [record.party])
@@ -74,7 +117,12 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={['people']} contactEmails={contactEmails} onPeople={setPortalEmails} />
     ) : null
   // ---- end F-SA-274
-  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+  return (
+    <>
+      {windows /* F-SA-278 */}
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+    </>
+  )
 }
 
 /** F-SA-271: a task on the customer itself (the Party record), as every record's "+ Add task" makes one (POST /tasks). */

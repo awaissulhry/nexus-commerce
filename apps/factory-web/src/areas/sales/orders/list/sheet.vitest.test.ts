@@ -245,3 +245,113 @@ describe('made-to-measure in the sheet: the term in the address and every read, 
   })
 })
 // ---- end F-SA-221
+
+// ---- F-SA-280 (sales page plan N5, picks P10, P18; 11-customer-page §3.8): bulk on the sheet's own bar — Set priority for N,
+// Assign supervisor…, Note to N… / Ask the supervisor, Export N — one customer only, checked before any window (the server again).
+describe('F-SA-280: bulk on the Orders sheet\'s own bar', () => {
+  it('the one-customer check: one customer passes; two are held with how many; on a locked page another customer\'s row is held', async () => {
+    const { oneCustomerHeld } = await import('./sheet/model')
+    const alpha = LIST_ROWS[0]!
+    const beta = { ...LIST_ROWS[1]!, partyId: 'b0000000-0000-4000-8000-0000000000b2' }
+    expect(oneCustomerHeld([alpha, { ...alpha, id: 'x' }], null)).toBeNull()
+    expect(oneCustomerHeld([alpha, beta], null)).toEqual({ key: 'bulk.oneCustomer', params: { count: 2 } })
+    expect(oneCustomerHeld([alpha], alpha.partyId)).toBeNull()
+    expect(oneCustomerHeld([beta], alpha.partyId)).toEqual({ key: 'bulk.notThisCustomer' })
+    expect(oneCustomerHeld([], null)).toBeNull()
+  })
+  it('the dialogs get the ticked orders as production\'s own targets (each order\'s own thread; no work order asked about)', async () => {
+    const { noteTargetsOf, supervisorTargetsOf } = await import('./sheet/model')
+    const alpha = LIST_ROWS[0]!
+    expect(supervisorTargetsOf([alpha])).toEqual([{ orderId: alpha.id, number: alpha.number, customerRef: alpha.customerRef, partyId: alpha.partyId, partyName: alpha.partyName, companyId: alpha.companyId }])
+    expect(noteTargetsOf([alpha])).toEqual({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: alpha.id, label: alpha.number, partyId: alpha.partyId, partyName: alpha.partyName, companyId: alpha.companyId }], withoutOrder: 0 })
+    // The note dialog opens on the orders' own threads when no work order is among the records, and asks nothing about them.
+    const hook = readFileSync(new URL('../../../production/_shared/notes/use-note-dialog.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("const wanted: WriteOn = targets.workOrders.length === 0 ? 'salesOrders' : on")
+    const dialog = readFileSync(new URL('../../../production/_shared/notes/view/NoteDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain('model.targets.workOrders.length > 0 && (model.targets.salesOrders.length > 0')
+  })
+  it('the limits are the dialogs\' own (assign 100, note 100, priority 200) and every hold is said in words before the click', async () => {
+    const { ASSIGN_MAX, assignHeld } = await import('../../../_shared/production-supervisor/model')
+    const { NOTE_RECORDS_MAX, openHeld } = await import('../../../production/_shared/notes/model')
+    expect(ASSIGN_MAX).toBe(100)
+    expect(NOTE_RECORDS_MAX).toBe(100)
+    expect(assignHeld({ manage: false }, { targets: [], leftOut: 0 })).toEqual({ key: 'held.noRight' })
+    expect(openHeld(true, 101)).toMatchObject({ key: 'held.tooMany' })
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('heldReason={assignWords}')
+    expect(view).toContain('heldReason={noteWords}')
+    expect(view).toContain('held={oneCustomerWords /* F-SA-280 */}')
+    expect(view).toContain('<AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />')
+    expect(view).toContain('<NoteDialog model={model.note} actions={actions?.note} />')
+    // Export N stays the export job with the picked ids (never held by the customer check: a file of the list).
+    expect(view).toContain('exportSelected: true')
+  })
+  it('the words in both languages (no key left)', () => {
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['bulk.assign', 'bulk.notThisCustomer']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('bulk.note', { count: 2 }), locale).toContain('2')
+      expect(t('bulk.oneCustomer', { count: 2 }), locale).toContain('2')
+    }
+    expect(tFor('it')('bulk.assign')).toBe('Assegna supervisore…')
+  })
+})
+// ---- end F-SA-280
+
+// ---- F-SA-281 (sales page plan N5, pick P10; 11-customer-page §3.9; the API's B-SA-071): Add task to N — the one New task window in
+// an N-records mode (Assign to each order's supervisor by default, or one person), one batch, its receipt; + the row's ⋯ Add task….
+describe('F-SA-281: Add task to N', () => {
+  it('the due day starts on the next working day (a Friday goes to Monday)', async () => {
+    const { nextWorkingDay } = await import('../../../../record-panels/tasks/model')
+    expect(nextWorkingDay('2026-11-18')).toBe('2026-11-19')
+    expect(nextWorkingDay('2026-11-20')).toBe('2026-11-23')
+    expect(nextWorkingDay('2026-11-21')).toBe('2026-11-23')
+  })
+  it('the check line names the orders without a supervisor (only when "Each order\'s supervisor" is the choice); unknown is never guessed', async () => {
+    const { withoutSupervisor } = await import('../../../../record-panels/tasks/model')
+    const records = [
+      { type: 'SalesOrder', id: 'a', label: 'SO-1', supervisor: true },
+      { type: 'SalesOrder', id: 'b', label: 'SO-2', supervisor: false },
+      { type: 'SalesOrder', id: 'c', label: 'SO-3', supervisor: null },
+    ]
+    expect(withoutSupervisor(records).map((record) => record.label)).toEqual(['SO-2'])
+  })
+  it('held before Send: no record, more than BATCH_MAX, no title; the body names SUPERVISOR or one person', async () => {
+    const { BATCH_MAX, batchBody, batchHeld } = await import('../../../../record-panels/tasks/model')
+    const one = [{ type: 'SalesOrder', id: 'a', label: 'SO-1', supervisor: true }]
+    expect(BATCH_MAX).toBe(100)
+    expect(batchHeld({ title: 'Call', description: '' }, { kind: 'SUPERVISOR' }, [])).toEqual({ key: 'batch.held.none' })
+    expect(batchHeld({ title: 'Call', description: '' }, { kind: 'SUPERVISOR' }, Array.from({ length: 101 }, (_, index) => ({ ...one[0]!, id: String(index) })))).toMatchObject({ key: 'batch.held.tooMany' })
+    expect(batchHeld({ title: '  ', description: '' }, { kind: 'SUPERVISOR' }, one)).toEqual({ key: 'tasks.new.held.title' })
+    expect(batchHeld({ title: 'Call', description: '' }, { kind: 'SUPERVISOR' }, one)).toBeNull()
+    expect(batchBody({ title: ' Call  the tannery ', description: '', dueDate: '2026-11-19' }, { kind: 'SUPERVISOR' }, one)).toEqual({ title: 'Call the tannery', records: [{ type: 'SalesOrder', id: 'a' }], assignee: 'SUPERVISOR', description: null, dueDate: '2026-11-19' })
+    expect(batchBody({ title: 'Call', description: 'Note', dueDate: '' }, { kind: 'PERSON', userId: 'u1' }, one)).toMatchObject({ assignee: { userId: 'u1' }, description: 'Note', dueDate: null })
+  })
+  it('the receipt: made, left out, each left out with its label (when the maker reads it) and the API\'s words in the page\'s language', async () => {
+    const { batchReceipt } = await import('../../../../record-panels/tasks/model')
+    const answer = { batchId: 'b', made: [{}, {}, {}, {}] as never, skipped: [{ record: { type: 'SalesOrder', id: 'x' }, label: 'SO-0150', code: 'CANNOT_OPEN' as const, words: { it: 'Persona A non può aprirlo.', en: 'Person A cannot open it.' } }] }
+    expect(batchReceipt(answer, 'en')).toEqual({ made: 4, left: 1, lines: ['SO-0150: Person A cannot open it.'] })
+    const words = createTranslator('en', messagesFor('en', ['home-tasks'])['home-tasks']!)
+    expect(words('batch.receipt', { made: 4, left: 1 })).toBe('4 tasks made · 1 left out')
+  })
+  it('the sheet offers it on the bar (one customer, the tasks\' right) and on a row\'s ⋯ (one order: POST /tasks); one batch: POST /tasks/batch', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("actions.onAddTask?.(picked.map((row) => row.id), 'selection')")
+    expect(view).toContain("act()?.onAddTask?.([data.id], 'row')")
+    expect(view).toContain('heldReason={taskWords}')
+    const hook = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("readTaskPeople(many ? { type: 'Party', id: rows[0]!.partyId } : { type: 'SalesOrder', id: rows[0]!.id })")
+    const api = readFileSync(new URL('../../../../record-panels/tasks/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain("api.post('/tasks/batch'")
+  })
+  it('every word in both languages (no key left)', () => {
+    for (const locale of LOCALES) {
+      const h = createTranslator(locale, messagesFor(locale, ['home-tasks'])['home-tasks']!)
+      for (const key of ['batch.assignee', 'batch.assigneeHint', 'batch.supervisor', 'batch.dueHint', 'batch.note', 'batch.where', 'batch.close', 'batch.held.none', 'batch.held.assignee']) expect(h(key), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['batch.title', 'batch.noSupervisor', 'batch.send', 'batch.made', 'batch.more']) expect(h(key, { count: 2 }), `${locale} ${key}`).toContain('2')
+      expect(tFor(locale)('bulk.addTask', { count: 3 }), locale).toContain('3')
+    }
+    expect(createTranslator('it', messagesFor('it', ['home-tasks'])['home-tasks']!)('batch.supervisor')).toBe('Il supervisore di ogni ordine')
+  })
+})
+// ---- end F-SA-281

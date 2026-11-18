@@ -782,7 +782,9 @@ describe('the board\'s Waiting for approval lane, its reasons with doors, Delive
     }
     const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
     expect(en('offBoard.delivered', { count: 3 })).toBe('3 delivered · See them in the list')
-    expect(en('tile.waitingForApproval')).toBe('Waiting for approval')
+    // Round 5 (R9): PENDING_APPROVAL reads the catalogue's "Waiting for a yes" everywhere — the pill, the board lane, the tile.
+    expect(en('tile.waitingForApproval')).toBe('Waiting for a yes')
+    expect(en('tile.waitingForApproval')).toBe(en('status.PENDING_APPROVAL'))
   })
   it('the board holds live re-reads while a card has the focus or its picture is open, and draws the reasons on the waiting cards', () => {
     const view = readFileSync(new URL('./list/view/OrdersBoard.tsx', import.meta.url), 'utf8')

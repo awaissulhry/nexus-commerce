@@ -59,6 +59,15 @@ import { CATALOGUE_RECORD, CATALOGUE_ROW, CHANGE_ROW, INCOMING_ROWS, listOf, rep
 import { acceptBodyOf, acceptDraftOf, acceptHeld, catalogueHeld, catalogueMain, catalogueOutcome, refuseHeld } from './catalogue-model'
 import { approvalsHref, CUSTOMER_REPLIES, incomingRowOf, LIST_TILES, mergePages, navIdsOf, numberWithCompany, placeOf, replyHref, replyWaiting, rowHref, THREAD_TYPE } from './model'
 import { designScreen as paneScreen } from './view/pane/fixtures'
+// ---- F-SA-277: the Incoming list lifted for the customer's Quotes & incoming (pane 'host'; two lists apart) ----
+import type { ListToolsTransport } from '../../../list-frame/tools/transport'
+import { scopedTransport } from '../_shared/scoped-list-tools/ScopedListTools'
+import { NO_FILTERS } from '../quotes/model'
+import { quotesToolsQuery } from '../quotes/list/use-quotes-list'
+import { fullPageHref, type ListAddress } from './model'
+import type { InquiriesModel } from './view/InquiriesView'
+import { incomingAddress, incomingFromQuery, incomingLocked, incomingMemory, incomingToolsQuery, INQUIRIES_LIST_KEY, rowPageHref } from './use-inquiries-list'
+// ---- end F-SA-277
 
 const owner = inquiriesCan(ROLE_PERMISSIONS.owner)
 const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['sales-inquiries']!
@@ -576,3 +585,108 @@ describe('Sales › Incoming mounts the ONE picture part (F-SA-212)', () => {
   })
 })
 // ---- end F-SA-212
+
+// ---- F-SA-277 (sales page plan R5, P18; 11-customer-page §3.6): the ONE Incoming list (use-inquiries-list.ts), lifted for the
+// customer's Quotes & incoming — a locked host's every read carries the customer, Sales › Incoming reads and writes as before, pane
+// 'host' draws no SplitPane (the page's dock is the pane; a change request opens Home › Approvals as on Incoming), and the two lists
+// of the tab keep their own terms. Pure helpers, sources and the design case drawn on the server: no DOM.
+describe('F-SA-277: the Incoming list lifted — the locked container, the page unchanged, pane "host", two lists apart', () => {
+  const LOCK = '0190f0e2-0000-7000-8000-00000000a1a1'
+  const OTHER = '0190f0e2-0000-7000-8000-00000000b2b2'
+  const at = (patch: Partial<ListAddress>): ListAddress => ({ ...HOME_ADDRESS, ...patch })
+  const locked = { locked: { party: LOCK } }
+  const docked = { locked: { party: LOCK }, pane: 'host' as const }
+  const hook = readFileSync(new URL('./use-inquiries-list.ts', import.meta.url), 'utf8')
+  const view = readFileSync(new URL('./view/InquiriesView.tsx', import.meta.url), 'utf8')
+  const request = INCOMING_ROWS.find((row) => row.kind === 'REQUEST')!
+
+  it('every read of a locked host carries the customer (Incoming\'s read, Customer replies, the tools\' query), never "prospects only"; Clear filters keeps it', () => {
+    for (const address of [HOME_ADDRESS, at({ party: OTHER, q: 'jacket' }), at({ prospect: true }), at({ tile: CUSTOMER_REPLIES }), at({ tile: 'ALL', kind: 'CHANGE_REQUEST' })]) {
+      const kept = incomingMemory(docked, address)
+      expect(kept.party).toBe(LOCK)
+      expect(queryOf(kept)).toMatchObject({ partyId: LOCK, prospect: false })
+      expect(queryOf(incomingLocked(locked, address))).toMatchObject({ partyId: LOCK, prospect: false })
+      expect(new URLSearchParams(incomingToolsQuery(locked, address)).get('party')).toBe(LOCK)
+    }
+    expect(hook).toContain("const repliesKey = JSON.stringify({ companyId: read.company, partyId: read.prospect ? null : read.party })")
+    // "Clear filters" (HOME_ADDRESS) and a saved view naming another customer: the lock comes back.
+    expect(incomingMemory(docked, { ...HOME_ADDRESS }).party).toBe(LOCK)
+    expect(incomingFromQuery(docked, `tile=ALL&party=${OTHER}`)).toMatchObject({ tile: 'ALL', party: LOCK })
+    // The view never counts it as a filter, draws no chip and no From switcher for it.
+    expect(view).toContain('const narrowing = model.locked ? { ...model.address, party: null } : model.address')
+    expect(view).toContain('{!model.locked && <CustomerSwitcher')
+    expect(isFiltered({ ...incomingMemory(docked, HOME_ADDRESS), party: null })).toBe(false)
+  })
+
+  it('Sales › Incoming reads and writes as before: its own terms in the address, on its own path', () => {
+    const address = at({ tile: 'ALL', party: OTHER, q: 'jacket', open: ROWS[0]!.id, tab: 'files' })
+    expect(incomingLocked({}, address)).toBe(address)
+    expect(incomingAddress('/w/DEMO/sales/incoming', address)).toBe(`/w/DEMO/sales/incoming${addressText(address)}`)
+    expect(incomingAddress('/w/DEMO/sales/incoming', HOME_ADDRESS)).toBe('/w/DEMO/sales/incoming')
+    const page = readFileSync(new URL('./InquiriesPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('useInquiriesList({ basePath: PAGE_PATH })')
+    expect(page.split('\n').length).toBeLessThan(40)
+    expect(hook).toContain('router.replace(incomingAddress(base, { ...addressRef.current, ...next }), { scroll: false })')
+    expect(hook).toContain("companyPrefix(session.company?.code ?? '')")
+    expect(hook).not.toContain('usePathname')
+  })
+
+  it('pane "host": no SplitPane and no reading pane — the list alone under the host\'s title; Enter and a link open the row\'s own page', () => {
+    const base = listScreen.cases.find((item) => item.id === 'th3-233-catalogue')!.model as { model: InquiriesModel }
+    const own = render(listScreen as DesignScreen<unknown>, base, 'en')
+    expect(own).toMatch(/class="fw-split[ "]/)
+    expect(own).toContain('fw-inq-listband')
+    for (const locale of LOCALES) {
+      const hosted = render(listScreen as DesignScreen<unknown>, { ...base, model: { ...base.model, address: { ...base.model.address, catalogue: null }, detail: null, catalogue: null, embedded: true, paneMode: 'host', locked: true } }, locale)
+      expect(hosted, locale).not.toMatch(/class="fw-split[ "]/)
+      expect(hosted, locale).not.toContain('fw-inq-listband')
+      expect(hosted, locale).toContain('fw-inq-listcol')
+      const html = hosted.replace(/https?:\/\/[^"\s<]+/g, '').replace(/data:[^"]+/g, '').replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '').replace(/\b(?:sales|product|products|files|example|email|quotes|money|threads)\.[a-z]+(?:\.[a-z]+)?\b/g, '')
+      expect(html.match(LEFT_KEY)?.[0] ?? null, locale).toBeNull()
+    }
+    expect(view).toContain('{hostPane ? listColumn : (')
+    expect(view).toContain('onOpen={(row) => (hostPane ? actions?.onOpen?.(row.id) : actions?.onOpenRow?.(row, false))}')
+    // A request's door is its full page, any other kind its own place (Incoming's ⌘ rule); nothing opens beside the list in memory.
+    expect(rowPageHref('/w/DEMO', request, at({ party: LOCK }))).toBe(fullPageHref('/w/DEMO', request.id, at({ party: LOCK })))
+    expect(rowPageHref('/w/DEMO', CATALOGUE_ROW, at({ party: LOCK }))).toBe(rowHref('/w/DEMO', at({ party: LOCK }), CATALOGUE_ROW))
+    expect(incomingMemory(docked, at({ open: request.id, tab: 'files' }))).toMatchObject({ open: null, catalogue: null, tab: 'request' })
+    expect(incomingMemory(docked, at({ catalogue: CATALOGUE_ROW.id }))).toMatchObject({ open: null, catalogue: null })
+  })
+
+  it('a change request opens Home › Approvals on every host, before the host\'s row click (as on Incoming); a row\'s click docks its thread', () => {
+    expect(placeOf(CHANGE_ROW)).toBe('approvals')
+    expect(rowPageHref('/w/DEMO', CHANGE_ROW, at({ party: LOCK }))).toBe(approvalsHref('/w/DEMO'))
+    const approvals = hook.indexOf("if (place === 'approvals') return newTab ? void window.open(approvalsHref(prefix), '_blank', 'noopener') : router.push(approvalsHref(prefix))")
+    expect(approvals).toBeGreaterThan(0)
+    expect(approvals).toBeLessThan(hook.indexOf('if (host.onRowClick) return host.onRowClick(row, newTab)'))
+    expect(THREAD_TYPE.REQUEST).toBe('Inquiry')
+    const tab = readFileSync(new URL('../customers/record/view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("type: 'Quote', id: row.id, label: row.number, companyId: row.companyId")
+    expect(tab).toContain('type: THREAD_TYPE[row.kind], id: row.id, label: row.number')
+    // Each list only for who may read it.
+    expect(tab).toContain("session.permissions.includes('quotes.view')")
+    expect(tab).toContain("session.permissions.includes('sales.inquiries.view')")
+  })
+
+  it('the two lists of Quotes & incoming keep their own terms: typing in one never narrows the other; each frame\'s tools take its own', () => {
+    const quotesTerms = quotesToolsQuery(locked, { ...NO_FILTERS, q: 'Q-7' })
+    const incomingTerms = incomingToolsQuery(locked, incomingMemory(docked, HOME_ADDRESS))
+    expect(new URLSearchParams(quotesTerms).get('q')).toBe('Q-7')
+    expect(new URLSearchParams(incomingTerms).get('q')).toBeNull()
+    expect(incomingTerms).toBe(`party=${LOCK}`)
+    // A list in memory writes no address (the page's own `tab` stays); its frame reads a transport of its own terms only.
+    expect(hook).toContain('if (memory) return setKept((now) => incomingMemory(lockHost, { ...now, ...next }))')
+    const parent = { pageKey: null, query: 'q=Q-7&tab=quotes', linked: { view: 'view-1', export: 'job-1' }, goTo: () => undefined } as unknown as ListToolsTransport
+    const scoped = scopedTransport(parent, { listKey: INQUIRIES_LIST_KEY, page: '/w/DEMO/sales/incoming', query: incomingTerms, goTo: () => undefined })
+    expect(scoped.query).toBe(`party=${LOCK}`)
+    expect(scoped.pageKey).toBe('sales.inquiries')
+    expect(scoped.linked).toEqual({ view: null, export: null })
+    const tab = readFileSync(new URL('../customers/record/view/QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(tab.match(/<ScopedListTools /g)?.length).toBe(2)
+    expect(tab.match(/terms: 'memory'/g)?.length).toBe(2)
+    expect(tab).toContain("pane: 'host'")
+    expect(tab).toContain('listKey={QUOTES_LIST_KEY}')
+    expect(tab).toContain('listKey={INQUIRIES_LIST_KEY}')
+  })
+})
+// ---- end F-SA-277

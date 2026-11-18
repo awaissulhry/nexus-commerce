@@ -1,6 +1,8 @@
 import { newIdempotencyKey, type ApiClient } from '../../lib/api/client'
 import { isApiError, issuePath } from '../../lib/api/errors'
 import {
+  batchAnswerSchema, // F-SA-281
+  type BatchAnswer, // F-SA-281
   assigneesSchema,
   bulkAnswerSchema,
   followersSchema,
@@ -27,8 +29,11 @@ export interface RecordKey {
 }
 
 export interface TaskQuery {
-  readonly scope: 'MINE' | 'CREATED' | 'RECORD'
+  // F-SA-276 (the API's B-SA-072): + PARTY — the open tasks on one customer's records the reader may read (the customer page's strip).
+  readonly scope: 'MINE' | 'CREATED' | 'RECORD' | 'PARTY'
   readonly record?: RecordKey | null
+  /** F-SA-276: the customer of scope PARTY. */
+  readonly partyId?: string | null
   readonly tile?: TaskTile | null
   readonly status?: TaskStatus | 'ALL' | null
   readonly q?: string | null
@@ -43,6 +48,7 @@ export function listTasks(api: ApiClient, query: TaskQuery, signal?: AbortSignal
       scope: query.scope,
       recordType: query.record?.type,
       recordId: query.record?.id,
+      partyId: query.partyId ?? undefined, // F-SA-276
       tile: query.tile ?? undefined,
       status: query.status ?? undefined,
       q: query.q?.trim() || undefined,
@@ -63,6 +69,11 @@ export async function getTask(api: ApiClient, id: string, signal?: AbortSignal):
 /** POST /tasks (the body from model.ts createBody). */
 export async function createTask(api: ApiClient, body: Record<string, unknown>): Promise<TaskItem> {
   return (await api.post('/tasks', { body, schema: oneTaskSchema, idempotencyKey: newIdempotencyKey() })).task
+}
+
+/** F-SA-281: POST /tasks/batch — one task on each record (the body from model.ts batchBody); one batch: each assignee's bell, one item. */
+export function createTasks(api: ApiClient, body: Record<string, unknown>, idempotencyKey: string = newIdempotencyKey()): Promise<BatchAnswer> {
+  return api.post('/tasks/batch', { body, schema: batchAnswerSchema, idempotencyKey })
 }
 
 /** PUT /tasks/:id: its title, description, due day and time, checklist (an OPEN task). */

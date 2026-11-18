@@ -221,3 +221,15 @@
 .fw-sheet-progress {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- F-SA-275: the production columns (Where it is: the stage beside its health chip; Supervisor: "Me" reads strong) ---- */
+.fw-sheet-where {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  white-space: nowrap;
+}
+.fw-sheet-me {
+  font-weight: 600;
+}
