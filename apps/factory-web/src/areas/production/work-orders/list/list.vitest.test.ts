@@ -209,14 +209,35 @@ describe('F-PR-03 — the screen (both languages)', () => {
   })
 
   it('PW-02: a person limited to one customer sees nothing of the other — not its name, code, order, PO or a filter choice', () => {
+    // fix-pr-6: the table's rows are drawn by the grid in a browser only, so the same rows are read here as cards and on the board too
+    // (the person's own rows are there: the wall is checked on drawn rows, never on an empty page), and grouped (the total's words).
+    const limited = designScreen.cases.find((item) => item.id === 'risk-limited')!.model
+    const shapes = { table: {}, grouped: { group: 'party' as const }, cards: { mode: 'cards' as const }, board: { mode: 'board' as const, view: 'all' as const } }
+    const drawn = (shape: keyof typeof shapes, locale: (typeof LOCALES)[number]) => renderView(view, { ...limited, list: { ...limited.list, ...shapes[shape] } }, locale)
+    const own = RISK_OPEN.filter((entry) => entry.customer?.id === B)
+    expect(own.length).toBeGreaterThan(0)
     for (const locale of LOCALES) {
-      const html = draw('risk-limited', locale)
-      expect(html).not.toContain('Moto Demo')
-      expect(html).not.toContain('ALPHA')
-      expect(html).not.toContain('PO-ESEMPIO-7')
-      expect(html).not.toContain('SO-DEMO-0042')
-      expect(textOf(html)).toContain(locale === 'en' ? 'All my customers' : 'Tutti i miei clienti')
+      const t = createTranslator(locale, messagesFor(locale, ['production']).production!)
+      for (const shape of Object.keys(shapes) as Array<keyof typeof shapes>) {
+        const html = drawn(shape, locale)
+        for (const other of ['Moto Demo', 'ALPHA', 'PO-ESEMPIO-7', 'SO-DEMO-0042']) expect(html, `${locale} ${shape}: ${other}`).not.toContain(other)
+        // One customer and none picked: no customer filter at all (F-PR-02, every row is theirs) — so no choice can name another.
+        expect(html, `${locale} ${shape}`).not.toContain(`aria-label="${t('customer.filter')}"`)
+      }
+      for (const shape of ['cards', 'board'] as const) {
+        const text = textOf(drawn(shape, locale))
+        // Its own rows, its customer by the code (no parties.view): BETA, never its name.
+        for (const entry of own) expect(text, `${locale} ${shape}`).toContain(entry.number)
+        expect(text, `${locale} ${shape}`).toContain('BETA')
+        expect(text, `${locale} ${shape}`).not.toContain('Esempio Racing')
+      }
+      // Grouped, the total names the person's scope: "All my customers", never "All customers".
+      const total = textOf(drawn('grouped', locale))
+      expect(total).toContain(locale === 'en' ? 'All my customers' : 'Tutti i miei clienti')
+      expect(total).not.toContain(t('customer.all'))
     }
+    // The same page for a person of every customer draws the filter (the check above is about the filter, not a missing label).
+    expect(draw('risk')).toContain(`aria-label="${createTranslator('en', messagesFor('en', ['production']).production!)('customer.filter')}"`)
   })
 
   it('the dynamic words exist in both languages (risks, blocks, waiting choices, sorts, tiles, columns)', () => {
@@ -295,6 +316,14 @@ describe('F-PR-18 — Work orders: the Customer urgency column and filter', () =
     }
     const filtered = textOf(draw('urgency-filter'))
     for (const other of URGENCY_ROWS.filter((entry) => entry.urgencyState !== 'ASKED')) expect(filtered).not.toContain(other.number)
+    // fix-pr-6: the table's rows are drawn by the grid in a browser only; as cards the same rows are drawn here — the asked ones, no other.
+    const asked = designScreen.cases.find((item) => item.id === 'urgency-filter')!.model
+    const asCards = textOf(renderView(view, { ...asked, list: { ...asked.list, mode: 'cards' as const } }, 'en'))
+    expect(URGENCY_ROWS.some((entry) => entry.urgencyState === 'ASKED')).toBe(true)
+    for (const entry of URGENCY_ROWS) {
+      if (entry.urgencyState === 'ASKED') expect(asCards, entry.number).toContain(entry.number)
+      else expect(asCards, entry.number).not.toContain(entry.number)
+    }
     // Nothing matches: the empty state offers to show every work order (the filter off with the others).
     expect(textOf(draw('urgency-none'))).toContain(createTranslator('en', messagesFor('en', ['production']).production!)('list.clearFilters'))
   })

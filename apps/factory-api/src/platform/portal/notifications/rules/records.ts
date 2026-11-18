@@ -220,12 +220,13 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     async drafts(context, raw) {
       const event = payload<{ projectId: string; userId: string; outside: boolean }>(projectEvents, 'project.person_added', raw)
       if (!event.outside) return []
-      const project = await context.tx.project.findUnique({ where: { id: event.projectId }, select: { id: true, companyId: true, partyId: true, number: true, name: true, status: true } })
+      const project = await context.tx.project.findUnique({ where: { id: event.projectId }, select: { id: true, companyId: true, partyId: true, name: true, status: true } })
       if (!project?.partyId || project.status === 'CLOSED') return []
       const scope = { companyId: project.companyId, partyId: project.partyId }
       return [
         draft(
-          { partyId: project.partyId, companyId: project.companyId, record: { type: 'Project', id: project.id, label: `${project.number} ${project.name}` }, messageKey: 'portal.project.added', params: {}, anchor: null },
+          // fix-portal-numbers-1 (B-TH-303, as B-TH-253's Messages card): the project by its name, never the office's project series.
+          { partyId: project.partyId, companyId: project.companyId, record: { type: 'Project', id: project.id, label: project.name }, messageKey: 'portal.project.added', params: {}, anchor: null },
           (target) => (reader) => home(target)(reader) && reader.personId === event.userId && can(reader.actor, PORTAL_PROJECTS_VIEW, scope),
         ),
       ]

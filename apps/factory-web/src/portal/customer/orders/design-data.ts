@@ -96,8 +96,8 @@ function row(n: number, status: CustomerOrderStatus, over: Partial<OrderRow> = {
     kind: 'ORDER',
     id: id(n),
     customerRef: `BA-PO-${770 + n}`,
-    number: `SO-2026-01${String(40 + n).padStart(2, '0')}`,
-    // B-TH-303: the customer's own count beside the office's number.
+    // fix-portal-numbers-1 (B-TH-303): the list answers an order's own number only (`yourNumber`), never the office's series.
+    number: null,
     yourNumber: customerNumberOf('ORDER', 10 + n),
     orderedOn: dayAt(-30 + n),
     status,
@@ -164,7 +164,7 @@ export function inTransitRead(over: Partial<InTransitRead> = {}): InTransitRead 
       {
         shipmentId: id(101),
         number: 'SH-2026-0233',
-        order: { id: ORDER_ID, number: ROWS[0]!.number!, customerRef: ROWS[0]!.customerRef },
+        order: { id: ORDER_ID, customerRef: ROWS[0]!.customerRef, yourNumber: ROWS[0]!.yourNumber ?? null }, // fix-portal-numbers-1
         status: 'IN_TRANSIT',
         words: SHIPMENT_STATUS_WORDS.IN_TRANSIT,
         carrierName: 'Corriere Demo',
@@ -186,7 +186,7 @@ export function inTransitRead(over: Partial<InTransitRead> = {}): InTransitRead 
 // the cases stay honest once the grid draws its rows. Made up, of the shape the API answers.
 const betaId = (n: number) => `b2b2b2b2-0000-4000-8000-${String(300 + n).padStart(12, '0')}`
 function betaRow(n: number, status: CustomerOrderStatus, over: Partial<OrderRow> = {}): OrderRow {
-  return row(n, status, { id: betaId(n), customerRef: `BETA-PO-${String(80 + n).padStart(4, '0')}`, number: `SO-2026-02${50 + n}`, yourNumber: customerNumberOf('ORDER', 20 + n), netAmount: 615000 + n * 12000, ...over })
+  return row(n, status, { id: betaId(n), customerRef: `BETA-PO-${String(80 + n).padStart(4, '0')}`, number: null /* fix-portal-numbers-1 */, yourNumber: customerNumberOf('ORDER', 20 + n), netAmount: 615000 + n * 12000, ...over })
 }
 export const BETA_ROWS: readonly OrderRow[] = [
   betaRow(1, 'PARTLY_SHIPPED', {
@@ -213,7 +213,7 @@ export function betaInTransitRead(over: Partial<InTransitRead> = {}): InTransitR
   const first = BETA_ROWS[0]!
   const [item] = inTransitRead().items
   return inTransitRead({
-    items: [{ ...item!, shipmentId: betaId(101), number: 'SH-2026-0351', order: { id: first.id, number: first.number!, customerRef: first.customerRef }, expectedDeliveryAt: at(32), trackingNumbers: ['DEMO00067890'], trackingLinks: [{ trackingNumber: 'DEMO00067890', url: 'https://tracking.example/DEMO00067890', words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } }], lastEvent: { at: at(-4), status: 'IN_TRANSIT', words: TRACKING_WORDS.IN_TRANSIT, description: 'Hub Demo', location: 'Verona', parcelSeq: 1 } }],
+    items: [{ ...item!, shipmentId: betaId(101), number: 'SH-2026-0351', order: { id: first.id, customerRef: first.customerRef, yourNumber: first.yourNumber ?? null /* fix-portal-numbers-1 */ }, expectedDeliveryAt: at(32), trackingNumbers: ['DEMO00067890'], trackingLinks: [{ trackingNumber: 'DEMO00067890', url: 'https://tracking.example/DEMO00067890', words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } }], lastEvent: { at: at(-4), status: 'IN_TRANSIT', words: TRACKING_WORDS.IN_TRANSIT, description: 'Hub Demo', location: 'Verona', parcelSeq: 1 } }],
     ...over,
   })
 }

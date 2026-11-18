@@ -159,7 +159,8 @@ export const inTransitSchema = z.object({
     z.object({
       shipmentId: z.string(),
       number: z.string(),
-      order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() }),
+      // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's series.
+      order: z.object({ id: z.string(), customerRef: z.string().nullable(), yourNumber }),
       status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
       words,
       carrierName: z.string().nullable(),
