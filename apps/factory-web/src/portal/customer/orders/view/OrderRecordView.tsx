@@ -18,6 +18,7 @@ import { ReportProblemDialog, type ReportProblemActions, type ReportProblemModel
 // ---- B-TH-275: the order docks its conversation (the portal record frame, B-TH-273): no Messages tab, no Ask modal.
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalFrameMode } from '../../../shell/record/model'
+import type { PortalDockWidth } from '../../../shell/record/model' // F-SA-264
 import { orderNameOf } from '../model'
 // ---- end B-TH-275
 import { CancelDialog, ChangeDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
@@ -96,7 +97,7 @@ export interface OrderRecordViewModel {
   /** "Made from your request #7" (its page) or "your quote #3" (its conversation page), from the summary read; null: none. */
   madeFrom?: { kind: 'request' | 'quote'; href: string; label: string | null } | null
   /** The design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
-  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
+  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number; /* F-SA-264 */ width?: PortalDockWidth; hidden?: boolean }
   // ---- end B-TH-275
   // ---- F-PR-12a: the order's production (GET /portal/production/:orderId, B-PR-18) on Status & progress, part 1
   /**
