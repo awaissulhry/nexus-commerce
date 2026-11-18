@@ -1,12 +1,17 @@
 import type { Prisma } from '@nexus/factory-db'
 import { DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { reachesEveryParty, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions' // B-SA-042
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { AmendLineInput } from '@nexus/factory-domain/sales/amendments/amendments'
 import { cancelFeeFor, type CancelFee } from '@nexus/factory-domain/sales/change-requests/fee'
 import { amendmentLinesOf, answerProblems, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-PR-27a: a line in another colourway (a new line, the old one closed short).
-import { colourInWorkWords, colourKeepsTotal, colourLinesOf } from '@nexus/factory-domain/sales/change-requests/rules'
+import { colourCutWords, colourKeepsTotal, colourLinesOf } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-042 (P6', R1): Accept runs the commercial change at once; the gap to the work orders is proposed in the same command.
+import { CHANGE_WORDS, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces } from '@nexus/factory-domain/order-apply/rules'
+import { gapOf, proposeGapsInCommand, storedGapLines, workCellsOf } from '../../production/work-order-changes/propose'
+import { plannedExtra } from '../orders/amend'
 // B-PR-27b: ship what is ready is accepted here too (the order ships as ready, the first part's date proposed to sales).
 import { ACCEPT_DONE_WORDS, isProductionAccept } from '@nexus/factory-domain/production-brand/accept'
 import { acceptProposals, proposeInCommand, type AcceptProposals } from '../../planning/promise-keep/repromise'
@@ -219,18 +224,24 @@ function amendmentOf(row: OfficeRequestRow, cells: readonly AskedCell[], order: 
 }
 
 /**
- * B-PR-27a: why a line asked in another colourway cannot change now — a work order makes it (not cancelled): a colour change is
- * then cancel-and-remake, answered by hand (409 `request/COLOUR_IN_WORK`); null when every such line is free.
+ * B-PR-27a, B-SA-042 (P6', R1): why a line asked in another colourway cannot change now — something of it is already CUT (a cut piece
+ * never changes colour; the database's floor of its cells, work orders not cancelled): "Already cut in Black: 40 pieces. Suggest
+ * something else or refuse." (409 `request/COLOUR_CUT`). While nothing is cut it is accepted: the old line is closed short and its
+ * cells are proposed lowered in the same change. Null when every such line is free.
  */
-async function colourInWorkProblem(db: Reader, cells: readonly AskedCell[], lines: readonly Pick<LineRecord, 'id' | 'seq'>[]): Promise<Issue | null> {
+async function colourCutProblem(db: Reader, tenantId: string, cells: readonly AskedCell[]): Promise<Issue | null> {
   const asked = colourLinesOf(cells).map((colour) => colour.fromLineId)
   if (asked.length === 0) return null
-  const made = await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: asked }, workOrder: { status: { not: 'CANCELLED' } } }, select: { salesOrderLineId: true, workOrder: { select: { number: true } } }, orderBy: { workOrderId: 'asc' } })
-  const first = asked.find((lineId) => made.some((cell) => cell.salesOrderLineId === lineId))
-  if (!first) return null
-  const numbers = [...new Set(made.filter((cell) => cell.salesOrderLineId === first).map((cell) => cell.workOrder.number))]
-  const words = colourInWorkWords(lines.find((line) => line.id === first)?.seq ?? 0, numbers)
-  return { path: 'request/COLOUR_IN_WORK', message: words.en }
+  const made = (await workCellsOf(db, tenantId, asked)).filter((cell) => cell.status !== 'CANCELLED')
+  for (const lineId of asked) {
+    const cut = made.filter((cell) => cell.salesOrderLineId === lineId).reduce((sum, cell) => sum + cell.cut, 0)
+    if (cut === 0) continue
+    const line = await db.salesOrderLine.findUnique({ where: { id: lineId }, select: { colourwayId: true } })
+    const colour = line ? await db.colourway.findUnique({ where: { id: line.colourwayId }, select: { code: true, name: true } }) : null
+    const words = colourCutWords(colour?.name || colour?.code || '?', cut)
+    return { path: 'request/COLOUR_CUT', message: words.en }
+  }
+  return null
 }
 
 /** Why the delivery address asked cannot be written on the order now; null when it can. */
@@ -280,8 +291,8 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
         if (Array.isArray(plan)) problems.push(...plan)
         else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
       } else {
-        // B-PR-27a: a line asked in another colourway changes only while no work order makes it.
-        const inWork = await colourInWorkProblem(client, cells, lines)
+        // B-PR-27a, B-SA-042: a line asked in another colourway changes only while nothing of it is cut.
+        const inWork = await colourCutProblem(client, context.tenantId, cells)
         if (inWork) problems.push(inWork)
         const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
         if (body) {
@@ -295,7 +306,11 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
         }
         if (!body && !row.shipToAddressId) problems.push({ path: 'request', message: 'Nothing is left to change: the order already looks like this.' })
       }
-      preview = { ok: problems.length === 0, problems, amendment, cancel, closes }
+      // B-SA-042 (R1, Round 4): the extra pieces accepting would leave (cut beyond the new figures), shown before Accept; Accept
+      // stays held until their outcome is chosen.
+      const extra = await previewExtra(client, context.tenantId, row, order, cells, closes, now)
+      const workOrders = { extra: extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), needsOutcome: extra.length > 0, words: extra.length > 0 ? CHANGE_WORDS.chooseExtra(extra.reduce((sum, entry) => sum + entry.count, 0)) : null }
+      preview = { ok: problems.length === 0, problems, amendment, cancel, closes, workOrders }
     }
     return {
       asOf: toUtcIso(now),
@@ -341,6 +356,28 @@ export interface AcceptBody {
   readonly version: number
   readonly answer?: string | null | undefined
   readonly reason?: string | undefined
+  /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
+  readonly extraOutcome?: ExtraOutcome | null | undefined
+}
+
+/**
+ * B-SA-042: the extra pieces accepting would leave, read before Accept: a change by its amendment's plan; a cancel of lines (or of
+ * what is left of a partly shipped order) by those lines closed (they want what shipped); a whole cancel by every line wanting none.
+ */
+async function previewExtra(db: Reader, tenantId: string, row: OfficeRequestRow, order: OrderRow, cells: readonly AskedCell[], closes: readonly { lineId: string }[] | null, now: Date): Promise<ExtraPieces[]> {
+  if (row.kind === 'SPLIT_SHIPMENT') return []
+  if (row.kind === 'CANCEL') {
+    const whole = cells.length === 0 && closes === null
+    const lineIds = whole ? undefined : (closes ?? []).map((line) => line.lineId)
+    const lines = await storedGapLines(db, { id: order.id, status: whole ? 'CANCELLED' : order.status }, lineIds, whole ? undefined : new Set(lineIds))
+    return extraOfPlanned(gapOf(lines, await workCellsOf(db, tenantId, lines.map((line) => line.id)), new Map()))
+  }
+  const lines = await readLines(db, order.id)
+  const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
+  if (!body) return []
+  const facts = await readOrderFacts(db, order)
+  const plan = await planAmendment(db, order, order.status, facts, body, now)
+  return isIssueList(plan) ? [] : plannedExtra(db, tenantId, plan, facts.lines)
 }
 
 /** B-PR-27b: what ship what is ready did, as the accept's contract sends it (fix-pr-4: its own arrays, not read-only ones). */
@@ -389,6 +426,10 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short (the order is not
     // cancelled: some of it shipped).
     const partlyShipped = row.kind === 'CANCEL' && cells.length === 0 && (await readOrder(tx, order.id))?.status === 'PARTLY_SHIPPED'
+    // B-SA-042: the lines this Accept changes (and their sizes before), whose gap to the work orders is proposed once at its end.
+    const later = { workOrders: 'later' } as const
+    const touched = new Set<string>()
+    let before = new Map<string, Map<string, number>>()
     if (row.kind === 'SPLIT_SHIPMENT') {
       // B-PR-27b: the order ships as ready (its row locked, its version moved), then the first part's date proposed to sales.
       await lockOrder(tx, order.id)
@@ -405,26 +446,35 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       const words = [ACCEPT_DONE_WORDS.shipsAsReady, ACCEPT_DONE_WORDS.repromised(proposals.length)]
       split = { shipComplete: false, proposals, skipped: [...(splitProposals?.skipped ?? [])], words: { it: words.map((entry) => entry.it).join(' '), en: words.map((entry) => entry.en).join(' ') } }
     } else if (partlyShipped) {
-      await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: [] })
+      for (const line of (await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: [] }, later)).closed) touched.add(line.lineId)
     } else if (row.kind === 'CANCEL' && cells.length === 0) {
-      await cancelOrderInCommand(tools, context.tenantId, order, { reason })
+      await cancelOrderInCommand(tools, context.tenantId, order, { reason }, later)
+      for (const line of await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })) touched.add(line.id)
       orderCancelled = true
     } else if (row.kind === 'CANCEL') {
       // Some lines: closed short with the request's CANCEL code (nothing more is made or shipped of them; never removed).
-      await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: cells.map((cell) => cell.orderLineId) })
+      for (const line of (await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: cells.map((cell) => cell.orderLineId) }, later)).closed) touched.add(line.lineId)
     } else {
       // The order and its lines as they are, read in this transaction: the amendment locks the order at this version.
       const fresh = (await readOrder(tx, order.id))!
       const freshLines = await readLines(tx, order.id)
-      // B-PR-27a: a line asked in another colourway: only while no work order makes it (else answered by hand, nothing written).
-      const inWork = await colourInWorkProblem(tx, cells, freshLines)
+      // B-PR-27a, B-SA-042: a line asked in another colourway: only while nothing of it is cut (else held in words, nothing written).
+      const inWork = await colourCutProblem(tx, context.tenantId, cells)
       if (inWork) throw new DomainError('invalid_state', inWork.message, [inWork])
-      const amend = amendmentOf(row, cells, fresh, freshLines, reason)
+      const asked = amendmentOf(row, cells, fresh, freshLines, reason)
+      // B-SA-042 (R1): the extra pieces' outcome goes with the amendment (CHARGE makes it a priced change).
+      const amend = asked ? { ...asked, extraOutcome: body.extraOutcome ?? null } : null
       // B-PR-27a: the same pieces in another colourway at the old line's prices move no money: no re-acceptance (as a split).
-      if (amend) amendmentId = (await amendInCommand(tools, context.tenantId, fresh, amend, colourKeepsTotal(cells) ? { reacceptance: false } : {})).amendmentId
-      // B-PR-27a: then each old line closed short (a line a request names is never removed: W2a's close, with our reason).
+      if (amend) {
+        const done = await amendInCommand(tools, context.tenantId, fresh, amend, { ...(colourKeepsTotal(cells) ? { reacceptance: false } : {}), requestId, ...later })
+        amendmentId = done.amendmentId
+        for (const lineId of done.changedLineIds) touched.add(lineId)
+        before = done.before
+      }
+      // B-PR-27a: then each old line closed short (a line a request names is never removed: W2a's close, with our reason); B-SA-042:
+      // while nothing of it is cut, its cells are proposed lowered with this change.
       const coloured = colourLinesOf(cells).filter((colour) => colour.sizes.length > 0).map((colour) => colour.fromLineId)
-      if (coloured.length > 0) await closeLinesInCommand(tools, context, (await readOrder(tx, order.id))!, { reason, lineIds: coloured })
+      if (coloured.length > 0) for (const line of (await closeLinesInCommand(tools, context, (await readOrder(tx, order.id))!, { reason, lineIds: coloured }, later)).closed) touched.add(line.lineId)
       if (row.shipToAddressId) {
         if (!amend) await lockOrder(tx, order.id, fresh.version)
         // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting approves it.
@@ -433,6 +483,9 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       }
       if (!amend && !row.shipToAddressId) throw new InvalidStateError('Nothing is left to change: the order already looks like this. Refuse the request with a word to the customer instead.')
     }
+    // B-SA-042 (P6', R1): Accept is the commercial decision; the gap it leaves on the order's work orders is proposed in this command
+    // (a WorkOrderChange per work order, held for who manages it), and Accept stays held while extra pieces have no outcome.
+    const gap = await proposeGapsInCommand(tools, { order: (await readOrder(tx, order.id))!, requestId, amendmentId, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: true, lineIds: [...touched], before })
     await tx.orderChangeRequest.update({
       where: { id: requestId },
       data: { status: 'ACCEPTED', answer: blankToNull(body.answer), answeredAt: tools.now, answeredById: context.actorId, amendmentId, updatedAt: tools.now, version: { increment: 1 } },
@@ -441,9 +494,14 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit, /* B-PR-26 */ ...(row.status === 'COUNTERED' ? { withCounter: row.counterApprovalId } : {}), ...(partlyShipped ? { closedRest: true } : {}) } })
     tools.audit({ action: 'orders.changeRequestAccepted', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind, amendmentId, orderCancelled, ...feeAudit } })
     tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'ACCEPTED', amendmentId, orderCancelled } })
-    return { orderCancelled, cancelFee, split }
+    // The wall (R7): a mixed work order made before the one-customer rule is named only to people who reach every customer.
+    const named = gap.proposed.flatMap((change) => (change.workOrderId ? [change.workOrderId] : []))
+    const mixed = new Set((named.length > 0 ? await tx.workOrder.findMany({ where: { id: { in: named }, partyId: null }, select: { id: true } }) : []).map((entry) => entry.id))
+    const everyCustomer = reachesEveryParty(actorOf(context), WORKORDERS_VIEW, { companyId: order.companyId })
+    const workOrders = { proposed: gap.proposed.map((change) => ({ id: change.id, kind: change.kind, workOrderId: change.workOrderId, number: change.workOrderId && mixed.has(change.workOrderId) && !everyCustomer ? null : change.number })), extra: gap.extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), extraOutcome: gap.extra.length > 0 ? (body.extraOutcome ?? null) : null }
+    return { orderCancelled, cancelFee, split, workOrders }
   }, { ...COMMAND_SETTINGS, clock })
-  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null, /* B-PR-27b */ split: result.split }
+  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null, /* B-PR-27b */ split: result.split, /* B-SA-042 */ workOrders: result.workOrders }
 }
 
 export async function refuseRequest(caller: CommandCaller, requestId: string, body: { readonly version: number; readonly answer: string }, idempotencyKey: string | undefined, clock: Clock) {

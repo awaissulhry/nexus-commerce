@@ -7,6 +7,8 @@ import { FREEZE_LIMITS, FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS
 import { CHANGE_YES_STATES, CUSTOMER_DECISIONS, PRICED_LIMITS } from '@nexus/factory-domain/sales/order-changes/priced'
 import { diffView } from '../orders/daily-contract'
 import { orderView } from '../orders/contract'
+// B-SA-042: what happens to extra pieces already cut.
+import { EXTRA_OUTCOMES } from '@nexus/factory-domain/order-apply/rules'
 
 /**
  * The order-changes routes (B-W2b-309; modules/sales/order-changes). Prices, fees and deposits are money.price (dropped for a
@@ -122,6 +124,8 @@ const pricedFields = {
   deposit: money.price(
     input({ pct: z.string().trim().max(12).optional(), amount: money.price(z.string().trim().max(20).optional()), dueDate: businessDate().optional(), kind: z.enum(['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE']).optional() }).nullish(),
   ),
+  /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
+  extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
 }
 
 const partView = output({ label: z.string(), orderLineId: id().nullable(), amount: money.price(z.number().int()) })

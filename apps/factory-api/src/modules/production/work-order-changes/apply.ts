@@ -1,5 +1,5 @@
 import { DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { applyRouteOf, CHANGE_WORDS, changedSince, declineProblem, type ChangeCell, type WorkOrderChangeStatus, type Words } from '@nexus/factory-domain/order-apply/rules'
+import { applyRouteOf, CHANGE_WORDS, changedSince, declineProblem, takesEveryCell, type ChangeCell, type WorkOrderChangeStatus, type Words } from '@nexus/factory-domain/order-apply/rules'
 import { command, IdempotencyKeyReusedError, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
@@ -10,6 +10,7 @@ import { readWorkOrder } from '../work-orders/store'
 import { createWorkOrder, setCellsInCommand } from '../work-orders/work-orders'
 import { ChangeRefusedError, refuseChange } from './propose'
 import { CHANGE_COLUMNS, cellsOf, changeViews, mayDecide, readableChange, type ChangeRow } from './read'
+import { decideInCommand } from './decide'
 
 /**
  * B-SA-041 (sales page plan, lead picks P6', R1; 13-backend B4b "Apply"): carrying out a PROPOSED WorkOrderChange, leaving it as
@@ -29,8 +30,7 @@ import { CHANGE_COLUMNS, cellsOf, changeViews, mayDecide, readableChange, type C
  *                                      work_order_change.applied. A refusal leaves it PROPOSED with its words in `lastError` (a
  *                                      command of its own after the refused one rolled back): never a silent half-update.
  *   POST …/:changeId/decline {version, words}   "Left as is" (words 1 to 300): DECLINED, audited, work_order_change.declined.
- *   staleChangesInCommand(tools, …)    the PROPOSED changes of a request withdrawn or refused, or of an amendment put back:
- *                                      STALE in that command (sales/change-requests portal.ts withdraw, office.ts refuse).
+ * The decision's writes and STALE are ./decide.ts.
  */
 
 /** The answer of an apply: the change as it is now, the work order it changed or made, and a reprint mark. */
@@ -47,37 +47,14 @@ async function waitingIn(tools: CommandTools, changeId: string): Promise<ChangeR
   return row
 }
 
-/** The decision written (the second version step of this command: the record guard took the first). */
-async function decideInCommand(tools: CommandTools, context: OfficeContext | null, row: ChangeRow, status: 'APPLIED' | 'DECLINED' | 'STALE', extra: { readonly note?: string; readonly madeWorkOrderId?: string } = {}): Promise<void> {
-  const { tx, now } = tools
-  await tx.workOrderChange.update({
-    where: { id: row.id },
-    data: { status, decidedAt: now, decidedById: context?.actorId ?? null, decisionNote: extra.note ?? null, madeWorkOrderId: extra.madeWorkOrderId ?? null, lastError: null, version: { increment: 1 } },
-    select: { id: true },
-  })
-  tools.audit({
-    action: status === 'APPLIED' ? 'workorders.applyChange' : status === 'DECLINED' ? 'workorders.declineChange' : 'workorders.staleChange',
-    recordType: 'WorkOrderChange',
-    recordId: row.id,
-    companyId: row.companyId,
-    siteId: row.siteId,
-    before: { status: 'PROPOSED' },
-    after: { status, madeWorkOrderId: extra.madeWorkOrderId ?? null, decidedById: context?.actorId ?? null },
-    ...(extra.note ? { reason: extra.note } : {}),
-  })
-  const type = status === 'APPLIED' ? 'work_order_change.applied' : status === 'DECLINED' ? 'work_order_change.declined' : 'work_order_change.stale'
-  const payload = { changeId: row.id, salesOrderId: row.salesOrderId, workOrderId: row.workOrderId, partyId: row.partyId, kind: row.kind }
-  tools.emit({ type, subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: status === 'APPLIED' ? { ...payload, madeWorkOrderId: extra.madeWorkOrderId ?? null } : payload })
-}
-
 /** The work order's cells now: by cell, and by line and size. */
 async function cellsNow(tools: CommandTools, workOrderId: string): Promise<{ byCell: Map<string, number>; byLineSize: Map<string, number> }> {
   const rows = await tools.tx.workOrderSize.findMany({ where: { workOrderId }, select: { id: true, salesOrderLineId: true, size: true, quantity: true } })
   return { byCell: new Map(rows.map((row) => [row.id, row.quantity])), byLineSize: new Map(rows.flatMap((row) => (row.salesOrderLineId ? [[`${row.salesOrderLineId}|${row.size}`, row.quantity] as const] : []))) }
 }
 
-/** A made-to-measure unit's change: its one cell's cut (the database's floor); 0 lets the unit work order be cancelled. */
-async function unitCut(tools: CommandTools, tenantId: string, cells: readonly ChangeCell[]): Promise<number> {
+/** What is cut of the change's cells (the database's floor, summed); 0 lets the work order be cancelled. */
+async function cutOf(tools: CommandTools, tenantId: string, cells: readonly ChangeCell[]): Promise<number> {
   let cut = 0
   for (const cell of cells) {
     if (!cell.workOrderSizeId) continue
@@ -137,13 +114,13 @@ const refuseRoute = (refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT', num
 
 async function applyNow(caller: CommandCaller, context: OfficeContext, row: ChangeRow, version: number, idempotencyKey: string | undefined): Promise<ApplyAnswer> {
   const cells = cellsOf(row)
-  const current = row.workOrderId ? await caller.withClient((db) => readWorkOrder(db, row.workOrderId!)) : null
-  const route = applyRouteOf({ kind: row.kind, workOrderId: row.workOrderId }, current)
-  if ('refusal' in route) {
-    const number = current?.number ?? ''
-    refuseRoute(route.refusal, number)
-  }
-  const plan = route as { route: 'SET_DRAFT_CELLS' | 'LOWER_RELEASED' | 'CANCEL_UNIT' | 'NEW_DRAFT' }
+  const { current, cellIds } = await caller.withClient(async (db) => ({
+    current: row.workOrderId ? await readWorkOrder(db, row.workOrderId) : null,
+    cellIds: row.workOrderId ? (await db.workOrderSize.findMany({ where: { workOrderId: row.workOrderId }, select: { id: true } })).map((cell) => cell.id) : [],
+  }))
+  const route = applyRouteOf({ kind: row.kind, workOrderId: row.workOrderId }, current, row.kind === 'LOWER_TO_ORDER' && takesEveryCell(cells, cellIds))
+  if ('refusal' in route) refuseRoute(route.refusal, current?.number ?? '')
+  const plan = route as { route: 'SET_DRAFT_CELLS' | 'LOWER_RELEASED' | 'CANCEL_WORK_ORDER' | 'NEW_DRAFT' }
 
   // MAKE_MORE naming no work order: a new DRAFT through the one create, on the change (its APPLIED write in that command).
   if (plan.route === 'NEW_DRAFT') {
@@ -164,28 +141,30 @@ async function applyNow(caller: CommandCaller, context: OfficeContext, row: Chan
   const { result } = await command(caller, { name: 'workorders.applyChange', idempotencyKey, input: { changeId: row.id, version }, record: { type: 'WorkOrderChange', id: row.id, expectedVersion: version } }, async (tools) => {
     const waiting = await waitingIn(tools, row.id)
     const asked = cellsOf(waiting)
+    // A cancel ends the issuing: the work order's issue lock first, then its row (as the office's cancel takes them).
+    if (plan.route === 'CANCEL_WORK_ORDER') await lockWorkOrderIssues(tools.tx, context.tenantId, workOrderId)
+    await bumpVersion(tools.tx, workOrderId, undefined)
+    const target = (await readWorkOrder(tools.tx, workOrderId))!
+    // Its cells as they are now: a change proposed on another figure is proposed again; the route read again (it may have been
+    // released meanwhile).
+    const now = await cellsNow(tools, workOrderId)
+    if (changedSince(asked, now.byCell, now.byLineSize).length > 0) refuseChange('CHANGED_SINCE', CHANGE_WORDS.changedSince(target.number))
+    const again = applyRouteOf({ kind: waiting.kind, workOrderId }, target, waiting.kind === 'LOWER_TO_ORDER' && takesEveryCell(asked, [...now.byCell.keys()]))
+    if ('refusal' in again) refuseRoute(again.refusal, target.number)
+    const to = (again as { route: string }).route
+    if (to === 'CANCEL_WORK_ORDER' && plan.route !== 'CANCEL_WORK_ORDER') refuseChange('CHANGED_SINCE', CHANGE_WORDS.changedSince(target.number))
     let reprint: ApplyAnswer['reprint'] = { traveller: false, words: null }
-    if (plan.route === 'CANCEL_UNIT') {
-      // A unit is cancelled, never lowered: its issue lock, then its row (as the office's cancel takes them); a cut unit stays.
-      await lockWorkOrderIssues(tools.tx, context.tenantId, workOrderId)
-      await bumpVersion(tools.tx, workOrderId, undefined)
-      const unit = (await readWorkOrder(tools.tx, workOrderId))!
-      if ((await unitCut(tools, context.tenantId, asked)) > 0) refuseChange('UNIT_CUT', CHANGE_WORDS.unitCut(unit.number))
-      await moveInCommand(tools, workOrderId, 'CANCELLED', waiting.reason)
+    const lower = async () => (await lowerToOrderInCommand(tools, context, workOrderId, asked.map((cell) => ({ workOrderSizeId: cell.workOrderSizeId!, quantity: cell.to })), waiting.reason)).reprint
+    if (to === 'CANCEL_WORK_ORDER') {
+      const cut = await cutOf(tools, context.tenantId, asked)
+      if (cut > 0 && target.kind === 'MADE_TO_MEASURE') refuseChange('UNIT_CUT', CHANGE_WORDS.unitCut(target.number))
+      // Every size to 0: nothing cut, the work order is cancelled; something cut stays (Lower to the order keeps it).
+      if (cut === 0) await moveInCommand(tools, workOrderId, 'CANCELLED', waiting.reason)
+      else reprint = await lower()
+    } else if (to === 'SET_DRAFT_CELLS') {
+      await setCellsInCommand(tools, context, workOrderId, asked.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size, quantity: cell.to })))
     } else {
-      // The work order's row, then the route again and its cells as they are now (it may have been released meanwhile): a
-      // change proposed on another figure is proposed again.
-      await bumpVersion(tools.tx, workOrderId, undefined)
-      const target = (await readWorkOrder(tools.tx, workOrderId))!
-      const now = applyRouteOf({ kind: waiting.kind, workOrderId }, target)
-      if ('refusal' in now) refuseRoute(now.refusal, target.number)
-      const cellsThen = await cellsNow(tools, workOrderId)
-      if (changedSince(asked, cellsThen.byCell, cellsThen.byLineSize).length > 0) refuseChange('CHANGED_SINCE', CHANGE_WORDS.changedSince(target.number))
-      if ((now as { route: string }).route === 'SET_DRAFT_CELLS') {
-        await setCellsInCommand(tools, context, workOrderId, asked.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size, quantity: cell.to })))
-      } else {
-        reprint = (await lowerToOrderInCommand(tools, context, workOrderId, asked.map((cell) => ({ workOrderSizeId: cell.workOrderSizeId!, quantity: cell.to })), waiting.reason)).reprint
-      }
+      reprint = await lower()
     }
     await decideInCommand(tools, context, waiting, 'APPLIED')
     return { reprint }
@@ -210,15 +189,4 @@ export async function declineChange(caller: CommandCaller, changeId: string, bod
     const fresh = await db.workOrderChange.findUniqueOrThrow({ where: { id: row.id }, select: CHANGE_COLUMNS })
     return { change: (await changeViews(db, actor, [fresh]))[0]! }
   })
-}
-
-/**
- * The PROPOSED changes of a request withdrawn or refused, or of an amendment put back, made STALE inside that command (the
- * person who did it named when an office person did; the customer's withdrawal names nobody). How many.
- */
-export async function staleChangesInCommand(tools: CommandTools, of: { readonly requestId: string } | { readonly amendmentId: string }): Promise<number> {
-  const rows = await tools.tx.workOrderChange.findMany({ where: { ...of, status: 'PROPOSED' }, select: CHANGE_COLUMNS })
-  const office = tools.context.audience === 'office' ? (tools.context as OfficeContext) : null
-  for (const row of rows) await decideInCommand(tools, office, row, 'STALE')
-  return rows.length
 }

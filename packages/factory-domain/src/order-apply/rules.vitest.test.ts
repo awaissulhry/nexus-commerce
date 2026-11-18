@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRouteOf, CHANGE_WORDS, changedSince, declineProblem, extraOf, planChanges, type WantedLine, type WorkCell } from './rules'
+import { applyRouteOf, chargeFeeOf, CHANGE_WORDS, changedSince, declineProblem, extraOf, planChanges, takesEveryCell, type WantedLine, type WorkCell } from './rules'
 
 /** B-SA-041: the gap between an order and its work orders, as WorkOrderChange records (R1, P6'). */
 
@@ -43,6 +43,9 @@ describe('the changes an accepted change asks of the work orders (B-SA-041)', ()
     // What is cancelled makes nothing; what is completed counts as made and is never changed.
     expect(planChanges([wanted({ M: 40 })], [cell({ status: 'CANCELLED' })])[0]).toMatchObject({ kind: 'MAKE_MORE', cells: [{ from: 0, to: 40 }] })
     expect(planChanges([wanted({ M: 30 })], [cell({ status: 'COMPLETED' })])).toEqual([])
+    // B-SA-042: a change raises by what it added, never the rest of a line not yet in work orders.
+    expect(planChanges([wanted({ M: 44 })], [cell({ status: 'DRAFT', quantity: 20 })], new Map([[`${LINE}|M`, 4]]))[0]).toMatchObject({ cells: [{ from: 20, to: 24 }] })
+    expect(planChanges([wanted({ M: 44 })], [cell({ status: 'DRAFT', quantity: 20 })], new Map())).toEqual([])
   })
 
   it('cancels a made-to-measure unit, never raises one; a cut unit is an extra piece', () => {
@@ -56,7 +59,11 @@ describe('the changes an accepted change asks of the work orders (B-SA-041)', ()
     expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'DRAFT', kind: 'SIZE_GRID' })).toEqual({ route: 'SET_DRAFT_CELLS' })
     expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'RELEASED', kind: 'SIZE_GRID' })).toEqual({ route: 'LOWER_RELEASED' })
     expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'IN_PROGRESS', kind: 'SIZE_GRID' })).toEqual({ route: 'LOWER_RELEASED' })
-    expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'RELEASED', kind: 'MADE_TO_MEASURE' })).toEqual({ route: 'CANCEL_UNIT' })
+    expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'RELEASED', kind: 'MADE_TO_MEASURE' })).toEqual({ route: 'CANCEL_WORK_ORDER' })
+    // B-SA-042: every cell to 0 (a whole order or line cancelled) cancels the work order.
+    expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'RELEASED', kind: 'SIZE_GRID' }, true)).toEqual({ route: 'CANCEL_WORK_ORDER' })
+    expect(takesEveryCell([{ salesOrderLineId: LINE, size: 'M', from: 4, to: 0, workOrderSizeId: 'a' }], ['a'])).toBe(true)
+    expect(takesEveryCell([{ salesOrderLineId: LINE, size: 'M', from: 4, to: 0, workOrderSizeId: 'a' }], ['a', 'b'])).toBe(false)
     expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'ON_HOLD', kind: 'SIZE_GRID' })).toEqual({ refusal: 'ON_HOLD' })
     expect(applyRouteOf({ kind: 'LOWER_TO_ORDER', workOrderId: 'w' }, { status: 'COMPLETED', kind: 'SIZE_GRID' })).toEqual({ refusal: 'WORK_ORDER_DONE' })
     expect(applyRouteOf({ kind: 'MAKE_MORE', workOrderId: 'w' }, { status: 'RELEASED', kind: 'SIZE_GRID' })).toEqual({ refusal: 'NOT_A_DRAFT' })
@@ -72,5 +79,13 @@ describe('the changes an accepted change asks of the work orders (B-SA-041)', ()
     expect(declineProblem('The customer takes them as they are')).toBeNull()
     expect(CHANGE_WORDS.changedSince('WO-0042')).toEqual({ en: 'WO-0042 changed since — propose again', it: 'WO-0042 è cambiato nel frattempo: proponi di nuovo' })
     expect(CHANGE_WORDS.extra(2, 'M')).toEqual({ en: 'Extra pieces: 2 M already cut', it: 'Pezzi in più: 2 M già tagliati' })
+    expect(CHANGE_WORDS.chooseExtra(2)).toEqual({ en: 'Choose what happens to the 2 extra pieces', it: 'Scegli cosa fare dei 2 pezzi in più' })
+  })
+
+  it('charges the customer for its extra pieces at their sizes\' prices (B-SA-042, CHARGE)', () => {
+    const prices = [{ lineId: LINE, size: 'M', unitPrice: '100.005000' }, { lineId: LINE, size: 'L', unitPrice: '0' }]
+    expect(chargeFeeOf([{ salesOrderLineId: LINE, size: 'M', count: 2 }], prices)).toBe('200.01')
+    expect(chargeFeeOf([{ salesOrderLineId: LINE, size: 'L', count: 3 }], prices)).toBeNull()
+    expect(chargeFeeOf([], prices)).toBeNull()
   })
 })

@@ -1,3 +1,5 @@
+import { Dec } from '../tax/decimal'
+
 /**
  * B-SA-041 (sales page plan, lead picks P6', R1; 13-backend B4b; review 17-review P6-1…P6-9, C-4, C-11, C-16), pure: the gap an
  * accepted change of a sales order leaves between the order and its work orders, as WorkOrderChange records (factory-db
@@ -117,9 +119,10 @@ const lowerOrder = (a: WorkCell, b: WorkCell): number => {
  * still over the order after that is cut already: those cells go below their cut in the change, and the difference is their
  * EXTRA pieces. A raise grows an open DRAFT of the line (its cell of that size, else a new cell), else a new DRAFT per style and
  * site. A made-to-measure unit is never raised; wanted 0, its open unit work order is lowered 1 → 0 (cancelled on apply).
- * COMPLETED and CLOSED work orders count as made and are never changed.
+ * COMPLETED and CLOSED work orders count as made and are never changed. B-SA-042: `raiseAtMost` (per `<lineId>|<size>`) caps a
+ * raise at what the change itself added — a line only partly in work orders is the planner's to plan, not a change's.
  */
-export function planChanges(lines: readonly WantedLine[], cells: readonly WorkCell[]): PlannedChange[] {
+export function planChanges(lines: readonly WantedLine[], cells: readonly WorkCell[], /* B-SA-042 */ raiseAtMost?: ReadonlyMap<string, number>): PlannedChange[] {
   const lowers = new Map<string, { workOrder: WorkCell; cells: ChangeCell[]; extra: ExtraPieces[] }>()
   const raises = new Map<string, { workOrderId: string | null; number: string | null; styleId: string; siteId: string | null; cells: ChangeCell[] }>()
   for (const line of lines) {
@@ -158,7 +161,10 @@ export function planChanges(lines: readonly WantedLine[], cells: readonly WorkCe
           lowers.set(cell.workOrderId, entry)
         }
       } else if (gap < 0 && !line.madeToMeasure) {
-        const more = -gap
+        // B-SA-042: a change raises by what it added (and what the changes it replaces still asked), never the rest of a line the
+        // planner has not put in work orders yet.
+        const more = raiseAtMost ? Math.min(-gap, raiseAtMost.get(`${line.lineId}|${size}`) ?? 0) : -gap
+        if (more <= 0) continue
         const drafts = ofLine.filter((cell) => cell.status === 'DRAFT' && cell.kind !== 'MADE_TO_MEASURE')
         const sameSize = drafts.filter((cell) => cell.size === size).sort((a, b) => a.number.localeCompare(b.number))[0]
         const sameLine = drafts.sort((a, b) => a.number.localeCompare(b.number))[0]
@@ -196,16 +202,29 @@ export const extraOf = (changes: readonly PlannedChange[]): ExtraPieces[] => cha
 // ---- how a change is applied --------------------------------------------------------------------------------------------
 
 /** How a PROPOSED change is carried out on its work order as it is now (null: it cannot be now, `refusal` says why). */
-export type ApplyRoute = 'SET_DRAFT_CELLS' | 'LOWER_RELEASED' | 'CANCEL_UNIT' | 'NEW_DRAFT'
+export type ApplyRoute = 'SET_DRAFT_CELLS' | 'LOWER_RELEASED' | 'CANCEL_WORK_ORDER' | 'NEW_DRAFT'
 
-export function applyRouteOf(change: { readonly kind: WorkOrderChangeKind; readonly workOrderId: string | null }, workOrder: { readonly status: string; readonly kind: string } | null): { readonly route: ApplyRoute } | { readonly refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT' } {
+/**
+ * The route of a change: a made-to-measure unit's, and a lowering that takes every cell of its work order to 0 (B-SA-042: a
+ * whole order or line cancelled), cancel the work order (its pieces cut stay: Lower to the order keeps them); a DRAFT's cells are
+ * set; a released one is lowered; MAKE_MORE grows a DRAFT, or makes a new one.
+ */
+export function applyRouteOf(
+  change: { readonly kind: WorkOrderChangeKind; readonly workOrderId: string | null },
+  workOrder: { readonly status: string; readonly kind: string } | null,
+  everyCellToZero = false,
+): { readonly route: ApplyRoute } | { readonly refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT' } {
   if (change.kind === 'MAKE_MORE' && change.workOrderId === null) return { route: 'NEW_DRAFT' }
   if (!workOrder || !changeable(workOrder.status)) return { refusal: 'WORK_ORDER_DONE' }
   if (workOrder.status === 'ON_HOLD') return { refusal: 'ON_HOLD' }
   if (change.kind === 'MAKE_MORE') return workOrder.status === 'DRAFT' ? { route: 'SET_DRAFT_CELLS' } : { refusal: 'NOT_A_DRAFT' }
-  if (workOrder.kind === 'MADE_TO_MEASURE') return { route: 'CANCEL_UNIT' }
+  if (workOrder.kind === 'MADE_TO_MEASURE' || everyCellToZero) return { route: 'CANCEL_WORK_ORDER' }
   return workOrder.status === 'DRAFT' ? { route: 'SET_DRAFT_CELLS' } : { route: 'LOWER_RELEASED' }
 }
+
+/** Does a lowering take every cell of its work order to 0 (its cells now, by id)? */
+export const takesEveryCell = (cells: readonly ChangeCell[], workOrderCellIds: readonly string[]): boolean =>
+  workOrderCellIds.length > 0 && workOrderCellIds.every((id) => cells.some((cell) => cell.workOrderSizeId === id && cell.to === 0))
 
 /** The cells whose `from` is no longer what the work order makes (the change was proposed on another figure). */
 export function changedSince(cells: readonly ChangeCell[], current: ReadonlyMap<string, number>, byLineSize: ReadonlyMap<string, number>): ChangeCell[] {
@@ -223,10 +242,33 @@ export function declineProblem(words: string | null | undefined): string | null 
   return null
 }
 
+// ---- extra pieces charged to the customer (B-SA-042, R1: "keep and charge the customer", a priced change) ----------------
+
+/** A line's price per size, as the amendment's snapshot after holds it (the size's own, else the line's), decimal text. */
+export interface PricedSize {
+  readonly lineId: string
+  readonly size: string
+  readonly unitPrice: string
+}
+
+/**
+ * The change fee that charges the customer for its extra pieces: each piece at its size's unit price, rounded to the cent (half
+ * up), decimal text with 2 places; null when it comes to nothing (a size priced 0, or no extra piece).
+ */
+export function chargeFeeOf(extra: readonly Pick<ExtraPieces, 'salesOrderLineId' | 'size' | 'count'>[], prices: readonly PricedSize[]): string | null {
+  let total = new Dec(0)
+  for (const entry of extra) {
+    const price = prices.find((row) => row.lineId === entry.salesOrderLineId && row.size === entry.size)
+    if (price) total = total.plus(new Dec(price.unitPrice).times(entry.count))
+  }
+  const fee = total.toDecimalPlaces(2, Dec.ROUND_HALF_UP)
+  return fee.gt(0) ? fee.toFixed(2) : null
+}
+
 // ---- words -------------------------------------------------------------------------------------------------------------
 
 /** The refusals of the work-order changes, by code (409 `refusal/<CODE>`). */
-export const CHANGE_REFUSALS = ['CHANGED_SINCE', 'DECIDED', 'WORK_ORDER_DONE', 'ON_HOLD', 'NOT_A_DRAFT', 'UNIT_CUT', 'NOT_THIS_ORDER', 'REQUEST_NOT_ACCEPTED'] as const
+export const CHANGE_REFUSALS = ['CHANGED_SINCE', 'DECIDED', 'WORK_ORDER_DONE', 'ON_HOLD', 'NOT_A_DRAFT', 'UNIT_CUT', 'NOT_THIS_ORDER', 'REQUEST_NOT_ACCEPTED', 'EXTRA_OUTCOME'] as const
 export type ChangeRefusal = (typeof CHANGE_REFUSALS)[number]
 
 const STATUS_WORDS: Readonly<Record<WorkOrderChangeStatus, Words>> = {
@@ -253,4 +295,6 @@ export const CHANGE_WORDS = {
   extraOutcome: (outcome: ExtraOutcome, customer: string): Words =>
     outcome === 'CHARGE' ? { en: 'Keep and charge the customer', it: 'Tieni e addebita al cliente' } : outcome === 'LEFTOVER' ? { en: `Keep as leftover for ${customer}`, it: `Tieni come rimanenza di ${customer}` } : { en: 'Scrap', it: 'Scarta' },
   extra: (count: number, size: string): Words => ({ en: `Extra pieces: ${count} ${size} already cut`, it: `Pezzi in più: ${count} ${size} già tagliati` }),
+  /** Round 4: Accept stays held until what happens to the extra pieces is chosen. */
+  chooseExtra: (count: number): Words => ({ en: `Choose what happens to the ${count} extra pieces`, it: `Scegli cosa fare dei ${count} pezzi in più` }),
 } as const

@@ -618,3 +618,91 @@ describe('B-PR-25: the asks its limits open, the impact before Send, kept at Sen
   })
 })
 // ── end B-PR-25
+
+// ── B-SA-042 (sales page plan P6', R1; a business-rule change named for the Owner: "Accepting may leave extra pieces when cutting
+// has started") ──
+describe('B-SA-042: Accept runs the change at once; the gap goes to the work orders, extra pieces get a named outcome', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  /** Rows written whole, the database's rules off for them (as an import would). */
+  async function planted(rows: readonly { sql: string; values: unknown[] }[]): Promise<void> {
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+      for (const row of rows) await h.db.admin.query(row.sql, row.values)
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+  }
+  const copy = (table: string, from: string, over: Json) => ({ sql: `INSERT INTO "${table}" SELECT * FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM "${table}" r WHERE r.id = $2::uuid))`, values: [JSON.stringify(over), from] })
+  let made = 0
+  /** An order in production of one line, 4 of size 52, made by an IN_PROGRESS work order of which `cut` are bundled; its request to go to `asked`. */
+  async function inWork(cut: number, asked: number) {
+    const so2 = await orderOf('SEED-SO-0002')
+    const [line] = await admin<{ id: string; colourwayId: string; unitPrice: string }>('SELECT id::text AS id, "colourwayId"::text AS "colourwayId", "unitPrice"::text AS "unitPrice" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [so2.id])
+    const [cell] = await admin<{ id: string; workOrderId: string }>('SELECT id::text AS id, "workOrderId"::text AS "workOrderId" FROM "WorkOrderSize" WHERE "salesOrderLineId" = $1 LIMIT 1', [line!.id])
+    const ids = { order: newId(), line: newId(), workOrder: newId(), cell: newId(), request: newId() }
+    const tag = `T-SA042-${++made}-${ids.order.slice(-4)}`
+    await planted([
+      copy('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+      copy('SalesOrderLine', line!.id, { id: ids.line, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
+      { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line, P1] },
+      copy('WorkOrder', cell!.workOrderId, { id: ids.workOrder, number: `${tag}-WO`, batchNumber: `${tag}-BT`, status: 'IN_PROGRESS', version: 1 }),
+      copy('WorkOrderSize', cell!.id, { id: ids.cell, workOrderId: ids.workOrder, salesOrderLineId: ids.line, colourwayId: line!.colourwayId, size: '52', quantity: 4, version: 1 }),
+      ...(cut > 0 ? [{ sql: `INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) SELECT $1, "tenantId", "siteId", $2, $3, $4, $5 FROM "WorkOrderSize" WHERE id = $3::uuid`, values: [newId(), ids.workOrder, ids.cell, `${tag}-BN`, cut] }] : []),
+      { sql: `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, version) VALUES ($1, $2, $3, $4, $5, 'CHANGE', 'OPEN', 1)`, values: [ids.request, T, companyA, P1, ids.order] },
+      { sql: `INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity) VALUES ($1, $2, $3, $4, $5, '52', 4, $6)`, values: [newId(), T, P1, ids.request, ids.line, asked] },
+    ])
+    return { ...ids, unitPrice: line!.unitPrice }
+  }
+  const changesOf = (orderId: string) =>
+    admin('SELECT status::text AS status, kind::text AS kind, "workOrderId"::text AS "workOrderId", "requestId"::text AS "requestId", "amendmentId"::text AS "amendmentId", cells, extra, "extraOutcome"::text AS "extraOutcome" FROM "WorkOrderChange" WHERE "salesOrderId" = $1', [orderId])
+  const size52 = async (lineId: string) => (await one<{ quantity: number }>('SELECT quantity FROM "SalesOrderLineSize" WHERE "lineId" = $1 AND size = $2', [lineId, '52'])).quantity
+
+  it('shows the extra pieces before Accept and holds Accept until their outcome is chosen; nothing is written meanwhile', async () => {
+    const world = await inWork(3, 2)
+    const record = await officeRecord(office(), world.request, h.clock.now())
+    expect(record.preview).toMatchObject({ problems: [], workOrders: { extra: [{ workOrderSizeId: world.cell, salesOrderLineId: world.line, size: '52', count: 1, words: { en: 'Extra pieces: 1 52 already cut', it: 'Pezzi in più: 1 52 già tagliati' } }], needsOutcome: true, words: { en: 'Choose what happens to the 1 extra pieces', it: 'Scegli cosa fare dei 1 pezzi in più' } } })
+    const held = await thrown(acceptRequest(office(), world.request, { version: 1 }, undefined, h.clock))
+    expect(held.issues).toEqual([{ path: 'refusal/EXTRA_OUTCOME', message: 'Choose what happens to the 1 extra pieces' }])
+    expect(await size52(world.line)).toBe(4)
+    expect((await one('SELECT status::text AS status FROM "OrderChangeRequest" WHERE id = $1', [world.request])).status).toBe('OPEN')
+    expect(await changesOf(world.order)).toEqual([])
+  })
+
+  it('accepts a decrease below what is cut in ONE command: the amendment, and the work order lowered by a PROPOSED change with its extra piece kept as leftover', async () => {
+    const world = await inWork(3, 2)
+    const accepted = await acceptRequest(office(), world.request, { version: 1, extraOutcome: 'LEFTOVER' }, undefined, h.clock)
+    expect(accepted.request).toMatchObject({ status: 'ACCEPTED', amendment: { revision: expect.any(Number) } })
+    expect(accepted.workOrders).toMatchObject({ proposed: [{ kind: 'LOWER_TO_ORDER', workOrderId: world.workOrder }], extra: [{ size: '52', count: 1 }], extraOutcome: 'LEFTOVER' })
+    expect(await size52(world.line)).toBe(2)
+    const amendment = (await one<{ amendmentId: string }>('SELECT "amendmentId"::text AS "amendmentId" FROM "OrderChangeRequest" WHERE id = $1', [world.request])).amendmentId
+    expect(await changesOf(world.order)).toEqual([
+      { status: 'PROPOSED', kind: 'LOWER_TO_ORDER', workOrderId: world.workOrder, requestId: world.request, amendmentId: amendment, cells: [{ salesOrderLineId: world.line, size: '52', from: 4, to: 2, workOrderSizeId: world.cell }], extra: [{ workOrderSizeId: world.cell, salesOrderLineId: world.line, size: '52', count: 1 }], extraOutcome: 'LEFTOVER' },
+    ])
+    // The work order itself is not touched by Accept (the planner applies the change: Lower to the order keeps the 3 cut).
+    expect((await one<{ quantity: number }>('SELECT quantity FROM "WorkOrderSize" WHERE id = $1', [world.cell])).quantity).toBe(4)
+    expect((await outbox('work_order_change.proposed')).filter((row) => row.payload.salesOrderId === world.order).map((row) => row.payload)).toEqual([
+      expect.objectContaining({ salesOrderId: world.order, workOrderId: world.workOrder, partyId: P1, kind: 'LOWER_TO_ORDER', requestId: world.request, hasExtra: true }),
+    ])
+  })
+
+  it('CHARGE makes the amendment a priced change: its fee is the extra pieces at their price, and the customer accepts again', async () => {
+    const world = await inWork(3, 2)
+    await acceptRequest(office(), world.request, { version: 1, extraOutcome: 'CHARGE' }, undefined, h.clock)
+    const row = await one<{ feeAmount: number | null; reacceptanceNeeded: boolean }>('SELECT a."feeAmount", a."reacceptanceNeeded" FROM "SalesOrderAmendment" a JOIN "OrderChangeRequest" r ON r."amendmentId" = a.id WHERE r.id = $1', [world.request])
+    expect(row).toEqual({ feeAmount: Math.round(Number(world.unitPrice) * 100), reacceptanceNeeded: true })
+    expect((await outbox('sales_order.change_priced')).some((event) => event.payload.orderId === world.order)).toBe(true)
+    expect((await changesOf(world.order))[0]).toMatchObject({ extraOutcome: 'CHARGE' })
+  })
+
+  it('lowers what is not cut without asking an outcome, and keeps the wall: another customer\'s person does not reach the request', async () => {
+    const world = await inWork(0, 3)
+    const beta = callerFor(h.database, { audience: 'office', tenantId: T, actorId: officeId, requestId: newId(), grants: [{ permissions: ['orders.view', 'orders.manage'], companies: 'all', sites: 'all', parties: [newId()] /* Brand Beta's person */ }] })
+    expect((await thrown(acceptRequest(beta, world.request, { version: 1 }, undefined, h.clock))).code).toBe('not_found')
+    const accepted = await acceptRequest(office(), world.request, { version: 1 }, undefined, h.clock)
+    expect(accepted.workOrders).toMatchObject({ proposed: [{ kind: 'LOWER_TO_ORDER' }], extra: [], extraOutcome: null })
+    expect((await changesOf(world.order))[0]).toMatchObject({ cells: [{ from: 4, to: 3 }], extra: null, extraOutcome: null })
+  })
+})
+// ── end B-SA-042 ──

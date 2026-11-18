@@ -19,7 +19,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { fanOut } from '../../../platform/notifications/fan-out'
 import { systemContext } from '../../../platform/outbox/system'
-import { staleChangesInCommand } from './apply'
+import { staleChangesInCommand } from './decide'
 await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
 afterAll(() => vi.useRealTimers())

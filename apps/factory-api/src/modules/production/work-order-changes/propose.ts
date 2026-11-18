@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { CHANGE_WORDS, type ChangeCell, type ChangeRefusal, type ExtraOutcome, type ExtraPieces, type PlannedChange, type Words } from '@nexus/factory-domain/order-apply/rules'
+import { CHANGE_WORDS, extraOf as extraOfPlanned, planChanges, type ChangeCell, type ChangeRefusal, type ExtraOutcome, type ExtraPieces, type PlannedChange, type WorkCell, type Words } from '@nexus/factory-domain/order-apply/rules'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -9,7 +9,8 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeOrder } from '../../sales/orders/moves'
 import { officeContextOf } from '../work-orders/access'
 import { reachesWorkOrder } from '../work-orders/scope'
-import { changeViews, CHANGE_COLUMNS, WORK_ORDER_COLUMNS } from './read'
+import { cellsOf, changeViews, CHANGE_COLUMNS, WORK_ORDER_COLUMNS, type Reader } from './read'
+import { decideInCommand } from './decide'
 
 /**
  * B-SA-041 (sales page plan, lead picks P6', R1; 13-backend B4b): proposing a WorkOrderChange — the gap an accepted change of a
@@ -198,3 +199,169 @@ export async function proposeChange(caller: CommandCaller, body: ProposeBody, id
   })
 }
 
+
+// ── B-SA-042 (sales page plan, lead picks P6', R1; review C-4, C-16): Accept runs the commercial change at once, and the gap it
+// leaves on the order's work orders is proposed in the SAME command — the amendment, the close of lines and the cancel each call
+// proposeGapsInCommand (Accept once, at its end). ──
+
+/** A line as the gap reads it: what its work orders should make of each size now. */
+export interface GapLine {
+  readonly id: string
+  readonly styleId: string
+  readonly siteId: string | null
+  readonly madeToMeasure: boolean
+  readonly sizes: ReadonlyMap<string, number>
+}
+
+/** The work order kinds a change touches (a repair or a sample round makes no order line's pieces). */
+const MADE_FOR_ORDERS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
+
+/**
+ * The order's lines as stored, as the gap reads them: a line closed short wants what shipped of it (nothing more is made); a
+ * cancelled order wants nothing; a made-to-measure unit its one piece of its base size. Only the lines named (none: every line).
+ */
+export async function storedGapLines(db: Reader, order: { readonly id: string; readonly status: string }, lineIds?: readonly string[], /** A preview: these lines read as closed short already. */ closing?: ReadonlySet<string>): Promise<GapLine[]> {
+  const lines = await db.salesOrderLine.findMany({
+    where: { orderId: order.id, kind: { in: [...MADE_FOR_ORDERS] }, ...(lineIds ? { id: { in: [...lineIds] } } : {}) },
+    select: { id: true, styleId: true, siteId: true, kind: true, baseSize: true, closedShortQuantity: true, sizes: { select: { size: true, quantity: true } } },
+  })
+  const isClosed = (line: { readonly id: string; readonly closedShortQuantity: number | null }) => line.closedShortQuantity !== null || closing?.has(line.id) === true
+  const closed = lines.filter(isClosed).map((line) => line.id)
+  const shipped = closed.length === 0 ? [] : await db.shipmentLine.findMany({ where: { salesOrderLineId: { in: closed }, quantity: { gt: 0 }, shipment: { status: { in: ['SHIPPED', 'DELIVERED'] } } }, select: { salesOrderLineId: true, size: true, quantity: true } })
+  return lines.map((line) => {
+    const sizes = new Map<string, number>()
+    const unit = line.kind === 'MADE_TO_MEASURE'
+    if (order.status === 'CANCELLED') {
+      if (unit && line.baseSize) sizes.set(line.baseSize, 0)
+      for (const size of line.sizes) sizes.set(size.size, 0)
+    } else if (isClosed(line)) {
+      for (const size of line.sizes) sizes.set(size.size, 0)
+      if (unit && line.baseSize) sizes.set(line.baseSize, 0)
+      for (const row of shipped.filter((entry) => entry.salesOrderLineId === line.id)) {
+        const size = row.size
+        sizes.set(size, (sizes.get(size) ?? 0) + row.quantity)
+      }
+    } else if (unit) {
+      if (line.baseSize) sizes.set(line.baseSize, 1)
+    } else {
+      for (const size of line.sizes) sizes.set(size.size, size.quantity)
+    }
+    return { id: line.id, styleId: line.styleId, siteId: line.siteId, madeToMeasure: unit, sizes }
+  })
+}
+
+/** The cells of these lines' work orders (not cancelled is the plan's to judge), with what is already cut (the database's floor). */
+export async function workCellsOf(db: Reader, tenantId: string, lineIds: readonly string[]): Promise<WorkCell[]> {
+  if (lineIds.length === 0) return []
+  const rows = await db.workOrderSize.findMany({
+    where: { salesOrderLineId: { in: [...lineIds] }, workOrder: { is: { kind: { in: [...MADE_FOR_ORDERS] } } } },
+    select: { id: true, salesOrderLineId: true, size: true, quantity: true, workOrder: { select: { id: true, number: true, status: true, kind: true, styleId: true, siteId: true } } },
+  })
+  const started = rows.filter((row) => ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'].includes(row.workOrder.status)).map((row) => row.id)
+  const floors = new Map<string, number>()
+  if (started.length > 0) {
+    const found = await db.$queryRaw<{ id: string; floor: number }[]>`SELECT c.id::text AS id, "factory_work_order_cell_floor"(${tenantId}::uuid, c.id) AS floor FROM unnest(${started}::uuid[]) AS c(id)`
+    for (const row of found) floors.set(row.id, Number(row.floor))
+  }
+  return rows.map((row) => ({
+    workOrderId: row.workOrder.id,
+    number: row.workOrder.number,
+    status: row.workOrder.status,
+    kind: row.workOrder.kind,
+    styleId: row.workOrder.styleId,
+    siteId: row.workOrder.siteId,
+    cellId: row.id,
+    salesOrderLineId: row.salesOrderLineId!,
+    size: row.size,
+    quantity: row.quantity,
+    cut: floors.get(row.id) ?? 0,
+  }))
+}
+
+/** The plan of these lines against their work orders: only lines in work (a counted cell); raises capped by `raiseAtMost`. */
+export function gapOf(lines: readonly GapLine[], cells: readonly WorkCell[], raiseAtMost: ReadonlyMap<string, number>): PlannedChange[] {
+  const inWork = new Set(cells.filter((cell) => cell.status !== 'CANCELLED').map((cell) => cell.salesOrderLineId))
+  return planChanges(
+    lines.filter((line) => inWork.has(line.id)).map((line) => ({ lineId: line.id, styleId: line.styleId, siteId: line.siteId, madeToMeasure: line.madeToMeasure, sizes: line.sizes })),
+    cells,
+    raiseAtMost,
+  )
+}
+
+/** The raise a change allows per `<lineId>|<size>`: what it added (after − before), and what the changes it replaces still asked. */
+export function raisesOf(before: ReadonlyMap<string, ReadonlyMap<string, number>>, after: readonly GapLine[], replaced: readonly { readonly kind: string; readonly cells: readonly ChangeCell[] }[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const line of after) {
+    const was = before.get(line.id)
+    if (!was) continue
+    for (const [size, quantity] of line.sizes) {
+      const added = quantity - (was.get(size) ?? 0)
+      if (added > 0) out.set(`${line.id}|${size}`, added)
+    }
+  }
+  for (const change of replaced) {
+    if (change.kind !== 'MAKE_MORE') continue
+    for (const cell of change.cells) {
+      const key = `${cell.salesOrderLineId}|${cell.size}`
+      out.set(key, (out.get(key) ?? 0) + (cell.to - cell.from))
+    }
+  }
+  return out
+}
+
+export interface GapInput {
+  readonly order: ChangeOrder & { readonly status: string }
+  readonly requestId: string | null
+  readonly amendmentId: string | null
+  readonly reason: string
+  readonly extraOutcome: ExtraOutcome | null
+  /** An Accept of a customer's change, an amendment: Accept stays held until the extra pieces' outcome is chosen. An office's close
+   * or cancel: without an outcome the extra pieces are left to production (as before), named on the order (B-SA-043). */
+  readonly requireOutcome: boolean
+  /** The lines the change touched. */
+  readonly lineIds: readonly string[]
+  /** Their sizes before the change (a raise is what the change added); none: the change raises nothing (a close, a cancel). */
+  readonly before?: ReadonlyMap<string, ReadonlyMap<string, number>>
+}
+
+/**
+ * The gap the change leaves, proposed (see the block's head): the lines it touched (and those of the PROPOSED changes it replaces:
+ * a newer change of the same lines makes them STALE, their raises carried) against their work orders. Only from an office person's
+ * command (the database names an ACTIVE office proposer; the system's own commands leave the gap to production). Refused in words,
+ * nothing written, when extra pieces are left with no outcome and the change needs one.
+ */
+export async function proposeGapsInCommand(tools: CommandTools, input: GapInput): Promise<{ proposed: Proposed[]; extra: ExtraPieces[] }> {
+  const none = { proposed: [], extra: [] }
+  if (tools.context.audience !== 'office' || input.lineIds.length === 0) return none
+  const context = tools.context as OfficeContext
+  const { tx } = tools
+  const proposer = await tx.user.findFirst({ where: { id: context.actorId, status: 'ACTIVE' }, select: { id: true } })
+  if (!proposer) return none
+  // The waiting changes of the order that name a touched line are replaced (and their lines read again with them).
+  const waiting = await tx.workOrderChange.findMany({ where: { salesOrderId: input.order.id, status: 'PROPOSED' }, select: CHANGE_COLUMNS })
+  const touched = new Set(input.lineIds)
+  const replaced: typeof waiting = []
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const row of waiting) {
+      if (replaced.includes(row) || !cellsOf(row).some((cell) => touched.has(cell.salesOrderLineId))) continue
+      replaced.push(row)
+      for (const cell of cellsOf(row)) if (!touched.has(cell.salesOrderLineId)) {
+        touched.add(cell.salesOrderLineId)
+        grew = true
+      }
+    }
+  }
+  const lines = await storedGapLines(tx, input.order, [...touched])
+  const cells = await workCellsOf(tx, context.tenantId, [...touched])
+  let changes = gapOf(lines, cells, raisesOf(input.before ?? new Map(), lines, replaced.map((row) => ({ kind: row.kind, cells: cellsOf(row) }))))
+  const extra = extraOfPlanned(changes)
+  if (extra.length > 0 && input.extraOutcome === null) {
+    if (input.requireOutcome) refuseChange('EXTRA_OUTCOME', CHANGE_WORDS.chooseExtra(extra.reduce((sum, entry) => sum + entry.count, 0)))
+    changes = changes.map((change) => ({ ...change, extra: [] }))
+  }
+  for (const row of replaced) await decideInCommand(tools, context, row, 'STALE')
+  const proposed = await proposeInCommand(tools, context, { order: input.order, requestId: input.requestId, amendmentId: input.amendmentId, reason: input.reason, extraOutcome: input.extraOutcome, changes })
+  return { proposed, extra }
+}
+// ── end B-SA-042 ──

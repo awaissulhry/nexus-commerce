@@ -42,7 +42,7 @@ import { ASKED_ONLY_FROM_COUNTER, counterAnswererHeld, counterFactsOf, counterGo
 import { customerRequestWords } from '../../insights/words'
 import { blockedProblems, earliestWords, IMPACT_NOTES, impactKeepable, impactNamesOnly, impactOf, PRICED_WORDS, type ImpactLine } from './impact'
 import { acceptWayProblems, ASK_RULES, askLineVerdict, askVerdict, changeAcceptWays, FLOOR_TASK_WORDS, productionAskProblems, productionCellsOf, productionColumnsOf, type ProductionAskFacts } from './rules'
-import { colourInWorkWords, colourKeepsTotal, colourLinesOf, sizesAfter } from './rules' // B-PR-27a
+import { colourCutWords, colourKeepsTotal, colourLinesOf, sizesAfter } from './rules' // B-PR-27a; B-SA-042: colourCutWords
 
 const TODAY = '2026-11-07'
 const line = (id: string, seq: number, overrides: Partial<RuleLine> = {}): RuleLine => ({
@@ -699,6 +699,7 @@ describe('B-PR-27a: a change asks a line in another colourway', () => {
     // A size change of another line moves the total: W2a's own rule decides the re-acceptance.
     expect(colourKeepsTotal([...changeCellsOf({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, order()), { orderLineId: L2, size: '50', quantityBefore: 2, quantity: 3 }])).toBe(false)
     expect(sizesAfter(line(L1, 10), [{ lineId: L1, size: '50', quantity: 0 }, { lineId: L2, size: '52', quantity: 9 }])).toEqual([{ size: '50', before: 2, quantity: 0 }, { size: '52', before: 3, quantity: 3 }])
-    expect(colourInWorkWords(10, ['WO-0001']).en).toBe('Line 10 is on a work order already (WO-0001): a colour change is then cancel-and-remake. Answer by hand: refuse with words, or cancel and remake the line.')
+    // B-SA-042: held only once something of the line is cut (a cut piece never changes colour).
+    expect(colourCutWords('Black', 40)).toEqual({ en: 'Already cut in Black: 40 pieces. Suggest something else or refuse.', it: 'Già tagliati in Black: 40 pezzi. Proponi altro o rifiuta.' })
   })
 })

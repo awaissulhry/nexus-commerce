@@ -20,6 +20,9 @@ import { typedPromiseRowsInCommand } from '../../planning/promise-keep/typed'
 import { withdrawPending } from '../../../platform/approvals/engine'
 // B-W2b-398 (LOG-067): a delivered order's time and its terms from delivery.
 import { deliveredMoveInCommand } from './delivered'
+// B-SA-042: a cancel proposes the gap to the work orders.
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+import { proposeGapsInCommand } from '../../production/work-order-changes/propose'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -167,7 +170,7 @@ export async function markReady(caller: CommandCaller, orderId: string, body: { 
 export async function cancelOrder(
   caller: CommandCaller,
   orderId: string,
-  body: { readonly version?: number | undefined; readonly reason: string; readonly confirmNumber?: string | undefined },
+  body: { readonly version?: number | undefined; readonly reason: string; readonly confirmNumber?: string | undefined; /* B-SA-042 */ readonly extraOutcome?: ExtraOutcome | null | undefined },
   idempotencyKey?: string,
 ): Promise<{ order: OrderView; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView> }> {
   const context = officeContextOf(caller)
@@ -189,7 +192,9 @@ export async function cancelOrderInCommand(
   tools: CommandTools,
   tenantId: string,
   order: OrderRow,
-  body: { readonly version?: number | undefined; readonly reason: string },
+  body: { readonly version?: number | undefined; readonly reason: string; /* B-SA-042 */ readonly extraOutcome?: ExtraOutcome | null | undefined },
+  /** B-SA-042: `later` — the caller proposes the gap to the work orders once at its end (Accept of a customer's cancel). */
+  options: { readonly workOrders?: 'now' | 'later' } = {},
 ): Promise<{ orderId: string; status: 'CANCELLED'; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView> }> {
   const { tx, now } = tools
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
@@ -229,6 +234,9 @@ export async function cancelOrderInCommand(
     reason: reason!,
   })
   statusChanged(tools, order, locked.status, 'CANCELLED', 'person')
+  // B-SA-042 (P6', R1): what its open work orders still make of it is proposed to them (to nothing, never below cut); the pieces cut
+  // get the outcome named, else stay production's to decide (as the impact's "work orders stay open" said before).
+  if (options.workOrders !== 'later') await proposeGapsInCommand(tools, { order: { ...order, status: 'CANCELLED' }, requestId: null, amendmentId: null, reason: reason!, extraOutcome: body.extraOutcome ?? null, requireOutcome: false, lineIds })
   return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid, impact: view }
 }
 
