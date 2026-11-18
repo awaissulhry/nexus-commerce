@@ -9,6 +9,9 @@ import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import type { CommandTx } from '../../../core/command'
 import { hasSmallPreview } from '../../../platform/files/thumbs/small'
 import { mainPictureThumbnails } from '../../product/images/main-picture'
+// B-SA-012: why a waiting order waits (the board's "Waiting for approval" lane).
+import type { WaitReason } from '@nexus/factory-domain/sales/orders-depth/rules'
+import { waitsOfOrders } from '../orders-depth/approval'
 
 /**
  * What a Sales › Orders row carries beside the order (B-TH-017; threads plan TH-1a, pictures 23 + 24; features
@@ -33,6 +36,9 @@ import { mainPictureThumbnails } from '../../product/images/main-picture'
  *               invoices        the issued invoices and credit notes of the order, with invoices.view: their count, the
  *                               one document when there is one (the invoice list has no order term: several open the
  *                               order's own invoices)
+ *   waits     B-SA-012: an order waiting for approval (PENDING_APPROVAL), why — a yes asked, the customer's credit, the factory
+ *             review of a made-to-measure unit, or a yes nobody asked yet (orders-depth/approval.ts waitsOfOrders, one query per
+ *             fact for the page: the record's GET …/approval reasons); null for every other order.
  */
 
 type Reader = FactoryClient | CommandTx
@@ -42,6 +48,8 @@ export interface PageOrder {
   readonly companyId: string
   readonly partyId: string
   readonly quote: { readonly id: string; readonly versionId: string } | null
+  /** B-SA-012: the order's state (a waiting order's reasons are read). */
+  readonly status: string
 }
 
 export interface RowPicture {
@@ -73,6 +81,8 @@ export interface OrderRowExtras {
   readonly brands: RowBrand[]
   readonly invoiced: Omit<Invoiced, 'amount'> & { readonly amount: Money<'price', number> }
   readonly doors: RowDoors
+  /** B-SA-012: why a PENDING_APPROVAL order waits; null for every other order. */
+  readonly waits: WaitReason[] | null
 }
 
 const unique = <T>(values: readonly T[]): T[] => [...new Set(values)]
@@ -146,6 +156,9 @@ export async function orderRowExtras(
     if (invoice.depositRequestId !== null) name(orderOfDeposit.get(invoice.depositRequestId), invoice.id)
   }
 
+  // ---- B-SA-012: why the page's waiting orders wait ----------------------------------------------------------------------
+  const waits = await waitsOfOrders(client, orders.filter((order) => order.status === 'PENDING_APPROVAL').map((order) => order.id))
+
   // ---- delivery notes -----------------------------------------------------------------------------------------------------
   const shipmentIds = shipments.map((shipment) => shipment.id)
   const ddts = shipmentIds.length > 0 ? await client.ddt.findMany({ where: { shipmentId: { in: shipmentIds }, cancellations: { none: {} } }, select: { id: true, number: true, shipmentId: true, companyId: true, siteId: true, partyId: true }, orderBy: [{ documentDate: 'asc' }, { number: 'asc' }] }) : []
@@ -206,6 +219,7 @@ export async function orderRowExtras(
         deliveryNotes: mayShipping ? { count: notes.length, only: notes.length === 1 ? { id: notes[0]!.id, number: notes[0]!.number } : null, shipmentId: noteShipments.length === 1 ? noteShipments[0]! : null } : null,
         invoices: mayInvoices ? { count: goods.length, only: goods.length === 1 ? { id: goods[0]!.id, number: goods[0]!.number, docType: goods[0]!.docType } : null } : null,
       },
+      waits: order.status === 'PENDING_APPROVAL' ? (waits.get(order.id) ?? ['NO_REQUEST']) : null, // B-SA-012
     })
   }
   return out

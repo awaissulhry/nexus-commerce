@@ -12,6 +12,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/auth' // B-SA-012: the owner who decides a yes
 import { seed as seedMoney } from '../../../../../../packages/factory-db/seed/money'
 import { seed as seedOptions } from '../../../../../../packages/factory-db/seed/options'
 import { seed as seedStylesDepth } from '../../../../../../packages/factory-db/seed/styles-depth'
@@ -84,7 +85,8 @@ const v4 = (expression: string, salt: string): string => {
   return `(substr(${hash}, 1, 8) || '-' || substr(${hash}, 9, 4) || '-4' || substr(${hash}, 14, 3) || '-8' || substr(${hash}, 18, 3) || '-' || substr(${hash}, 21, 12))::uuid`
 }
 /** SEED-SO-0001 copied as `number` for `partyId` (its lines and sizes too), `adjust` run on the copied lines first. */
-const copyOrderSql = (number: string, partyId: string, adjust = ''): string => {
+// B-SA-012: `orderAdjust` on the copied order before it goes in (an order waiting for approval is made so: nothing moves INTO it).
+const copyOrderSql = (number: string, partyId: string, adjust = '', orderAdjust = ''): string => {
   const salt = number.toLowerCase()
   return `
     CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE "tenantId" = '${tenant}' AND number = 'SEED-SO-0001';
@@ -94,6 +96,7 @@ const copyOrderSql = (number: string, partyId: string, adjust = ''): string => {
     UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
     ${adjust}
     UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL;
+    ${orderAdjust}
     INSERT INTO "SalesOrder" SELECT * FROM o;
     INSERT INTO "SalesOrderLine" SELECT * FROM l;
     INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
@@ -122,6 +125,7 @@ beforeAll(async () => {
   db = await migratedDatabase('orders_row_extras')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 6 } })
   await seedCore({ db: database, namespace: NS })
+  await seedAuth({ db: database, namespace: NS }) // B-SA-012
   await seedMoney({ db: database, namespace: NS })
   await seedStylesDepth({ db: database, namespace: NS })
   await seedOptions({ db: database, namespace: NS }) // the own-collection liner SEED-LNR-01
@@ -259,3 +263,51 @@ describe('the Picture cell reads the small preview, never the original (B-TH-017
     expect((await call('all', '/sales/orders/not-an-id/picture')).statusCode).toBe(400)
   })
 })
+
+// ---- B-SA-012 (sales page plan N8, picks P12, P13; 12-lists-board §3.3): why a waiting order waits, read for the page ----------
+describe('a row waiting for approval says why it waits, read for the whole page at once (B-SA-012)', () => {
+  // A copy for the same customer keeps no number of the customer's own (the portal's "Your order 12" is one per order).
+  const waiting = `UPDATE o SET status = 'PENDING_APPROVAL', "customerSeq" = NULL;`
+  beforeAll(async () => {
+    // Three orders of SEED-C1 waiting for approval: one with a yes asked (a SALES_ORDER request standing), one held for credit
+    // (its ORDER check a HOLD), one for which nobody asked a yes yet.
+    for (const number of ['TEST-SO-WAIT-YES', 'TEST-SO-WAIT-CREDIT', 'TEST-SO-WAIT-NONE']) await admin(copyOrderSql(number, C1, '', waiting))
+    await admin(
+      `INSERT INTO "ApprovalTask" (id, "tenantId", kind, "recordType", "recordId", "companyId", summary, preview, fingerprint, "requestedById", "approverUserId")
+       SELECT gen_random_uuid(), "tenantId", 'SALES_ORDER', 'SalesOrder', id, "companyId", 'A sales order rule asks a yes before it goes on.',
+         '{"changes": [{"field": "status", "from": "PENDING_APPROVAL", "to": "CONFIRMED"}]}'::jsonb, encode(sha256('sa012-yes'::bytea), 'hex'), $2, $2
+       FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'TEST-SO-WAIT-YES'`,
+      [tenant, id('actor')],
+    )
+    await admin(
+      `INSERT INTO "CreditCheck" (id, "tenantId", "companyId", "partyId", step, "recordType", "recordId", "openOrdersAmount", "openInvoicesAmount", "overdueAmount", "exposureAmount", "onHold", result, words, "checkedAt", "requestId")
+       SELECT gen_random_uuid(), "tenantId", "companyId", "partyId", 'ORDER', 'SalesOrder', id, 0, 0, 0, 0, true, 'HOLD', 'The customer is on hold (made up).', now() - interval '1 minute', 'sa012-credit'
+       FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'TEST-SO-WAIT-CREDIT'`,
+      [tenant],
+    )
+  })
+
+  it('each reason as the record says it (GET …/approval): a yes asked, the credit, a yes nobody asked; other rows null', async () => {
+    const all = await rows('all')
+    const of = (number: string) => all.find((row) => row.number === number)
+    expect(of('TEST-SO-WAIT-YES')!.waits).toEqual(['REQUEST_PENDING'])
+    expect(of('TEST-SO-WAIT-CREDIT')!.waits).toEqual(['CREDIT_HOLD'])
+    expect(of('TEST-SO-WAIT-NONE')!.waits).toEqual(['NO_REQUEST'])
+    for (const row of all.filter((entry) => entry.status !== 'PENDING_APPROVAL')) expect(row.waits, row.number).toBeNull()
+    // The row says what the order's own approval read says, reason for reason.
+    for (const number of ['TEST-SO-WAIT-YES', 'TEST-SO-WAIT-CREDIT', 'TEST-SO-WAIT-NONE']) {
+      const approval = await ok('all', `/sales/orders/${of(number)!.id}/approval`)
+      expect(of(number)!.waits, number).toEqual(approval.reasons.map((entry: Json) => entry.reason))
+    }
+  })
+
+  it('the board\'s lane lists them (status PENDING_APPROVAL), each with its reasons; a reader limited to another customer reads none', async () => {
+    const lane = (await ok('all', '/sales/orders?status=PENDING_APPROVAL&limit=200')).orders as Json[]
+    expect(lane.map((row) => row.number).sort()).toEqual(expect.arrayContaining(['TEST-SO-WAIT-CREDIT', 'TEST-SO-WAIT-NONE', 'TEST-SO-WAIT-YES']))
+    expect(lane.every((row) => Array.isArray(row.waits) && row.waits.length > 0)).toBe(true)
+    const other = (await ok('onlyR1', '/sales/orders?status=PENDING_APPROVAL&limit=200')).orders as Json[]
+    expect(other.map((row) => row.number)).not.toEqual(expect.arrayContaining(['TEST-SO-WAIT-YES']))
+    expect(JSON.stringify(other)).not.toContain('TEST-SO-WAIT')
+  })
+})
+// ---- end B-SA-012

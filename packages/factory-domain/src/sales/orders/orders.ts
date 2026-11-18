@@ -58,7 +58,9 @@ export const STATUS_WORDS: Readonly<Record<SalesOrderStatus, string>> = Object.f
 })
 
 /** The board's lanes (SAL-214): the open states, then shipped; closed and cancelled are counted beside them. */
-export const BOARD_LANES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly SalesOrderStatus[]
+// B-SA-012 (sales page plan N8, pick P12): the first lane is "Waiting for approval" — an order waiting for a yes, credit or the
+// factory review of a made-to-measure unit (cards never drag: it is decided where it is decided today).
+export const BOARD_LANES = ['PENDING_APPROVAL', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly SalesOrderStatus[]
 
 /** Not shipped yet: a promise date in the past makes them late. */
 export const OPEN_STATUSES: readonly SalesOrderStatus[] = Object.freeze(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'])

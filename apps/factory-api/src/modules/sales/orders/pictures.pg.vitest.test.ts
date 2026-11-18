@@ -108,7 +108,7 @@ const copyOrderSql = (number: string, partyId: string, adjust = ''): string => {
     UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${partyId}';
     UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
     ${adjust}
-    UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL;
+    UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL;
     INSERT INTO "SalesOrder" SELECT * FROM o;
     INSERT INTO "SalesOrderLine" SELECT * FROM l;
     INSERT INTO "SalesOrderLineSize" SELECT * FROM s;

@@ -22,7 +22,8 @@ export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
 export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 /** The board's lanes (closed and cancelled are counted beside them). */
-export const BOARD_LANES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly OrderStatus[]
+// B-SA-012: the first lane is Waiting for approval (the domain's BOARD_LANES, in its order).
+export const BOARD_LANES = ['PENDING_APPROVAL', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly OrderStatus[]
 export type BoardLane = (typeof BOARD_LANES)[number]
 export const DEPOSIT_STATES = ['NOT_NEEDED', 'MISSING', 'OPEN', 'PAID', 'WAIVED'] as const
 export type DepositState = (typeof DEPOSIT_STATES)[number]
@@ -62,7 +63,8 @@ export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number]
 export const LINE_CHANGES = ['ADDED', 'REMOVED', 'CHANGED'] as const
 export type LineChange = (typeof LINE_CHANGES)[number]
 // B-W2b-323: + waitingForCustomer (a change the customer must accept: the order's reapprovalNeededAt).
-export const TILE_KEYS = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
+// B-SA-012: + waitingForApproval (the board answer names it; its tile is drawn with the lane's words, F-SA-214).
+export const TILE_KEYS = ['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 // B-TH-225: the Invoiced column (factory-domain sales/orders/invoiced.ts INVOICED_STATES).
 export const INVOICED_STATES = ['NONE', 'PART', 'ALL'] as const
