@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ComponentType } from 'react'
-import { describe, expect, it } from 'vitest'
+import { createElement, type ComponentType } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 import { HOLD_BRAND_WORDS_MAX, HOLD_LIFT_REASON_MAX, HOLD_NOTE_MAX } from '@nexus/factory-domain/production/holds/kinds'
 import { REASON_LIST_GROUPS } from '@nexus/factory-domain/reasons/lists'
 import { leftKeys, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
@@ -9,6 +9,14 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { designScreen } from '../record/fixtures'
 import { CUSTOMER_PAUSE, demoCan, HOLD, HOLD_REASONS, LIFTED_HOLD, PLAIN_HOLD, plainHeldWorkOrder, plainHolds, PRODUCTION_HOLD_REASONS, heldWorkOrder } from './demo/fixtures'
 import { bulkHoldHeld, dailyCan, dialogReasons, HOLD_DIALOG_LIMITS, holdHeld, holdKindOf, liftHeld, placeHeld, plainHoldsOf, plainHoldWords, releaseTargetHeld, releaseTargetOf } from './model'
+
+// The DS Modal draws only after it mounts in a browser: here a plain section, so a dialog's words are read on the server too (as the
+// other dialog tests do).
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, children, footer }: { open: boolean; title?: unknown; children?: unknown; footer?: unknown }) => (open ? createElement('section', { role: 'dialog', 'data-modal': '' }, createElement('h2', null, title as never), children as never, footer as never) : null)
+  return { ...actual, Modal }
+})
 
 /**
  * F-PR-05b — ONE "Put on hold" dialog (production plan §5 "holds (one dialog)"; B-PR-21 "the reason chosen decides the kind"; review
