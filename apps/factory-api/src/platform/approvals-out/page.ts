@@ -6,7 +6,7 @@ import type { CommandCaller } from '../../core/command'
 import { sameWords, type ApprovalContent } from './adapter'
 import { adapterOf } from './records'
 import { filesOf, refOf, type PartnerRow } from './store'
-import { partnerRefsOf } from '../portal/tasks/partner-label' // F-PR-16
+import { partnerRecordWords, partnerRefsOf } from '../portal/tasks/partner-label' // F-PR-16, fix-pr-10
 
 /**
  * What a partner reads of one request (B-W2b-184; design links.approve: what we ask, the kind's own panel — revised order
@@ -38,7 +38,7 @@ export async function partnerPage(system: CommandCaller, row: PartnerRow, locale
     const refs = await partnerRefsOf(client, row.partyId, [{ type: row.recordType, id: row.recordId }], row.recordType === COUNTER_OFFER_RECORD ? [row.recordId] : [])
     const label = record?.label ?? sameWords('')
     return {
-      label: { it: refs.own(label.it), en: refs.own(label.en) },
+      label: partnerRecordWords(refs, { type: row.recordType, id: row.recordId }, label), // fix-pr-10: a concession without our NCR number
       content: { facts: content.facts.map((fact) => ({ ...fact, value: refs.own(fact.value) })), revisedOrder: content.revisedOrder ? { ...content.revisedOrder, orderNumber: refs.own(content.revisedOrder.orderNumber) } : null },
       company,
       files,
