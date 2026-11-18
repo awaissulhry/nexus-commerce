@@ -63,6 +63,7 @@ import { receiptStays } from './model'
 import { useNewRequest } from './use-new-request'
 import type { PictureLoader } from './view/cells'
 import { InquiriesView, type BulkDialog } from './view/InquiriesView'
+import { browserAddress } from '../../../lib/api/browser-address'
 
 const readDismissed = (): string[] => {
   try {
@@ -202,7 +203,7 @@ export function InquiriesPage() {
   }, [api, can.view, mayNumbering, maySort, companies])
   const loadPicture = useCallback<PictureLoader>(async (inquiryId) => {
     const picture = await readPicture(api, inquiryId)
-    return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null
+    return picture.small ? { url: browserAddress(picture.small.url) /* end check: the local store's path through /api */, expiresAt: picture.small.expiresAt } : null
   }, [api])
   // ---- end B-TH-216 ----
 
