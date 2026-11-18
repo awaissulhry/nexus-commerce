@@ -10,6 +10,7 @@ import {
   noCompanyRefusal,
   swatchAskRefusal,
   swatchDecisionRefusal,
+  swatchNeedsRoundRefusal,
   swatchSentOnceRefusal,
   swatchSentRefusal,
   type DecisionRefusal,
@@ -164,6 +165,8 @@ export async function swatchViewsOf(db: Reader, context: OfficeContext, rows: re
     const open = waitingOf.get(row.id) ?? null
     const facts = swatchFacts(row)
     const manage = lacking(context, [SALES_SAMPLES_MANAGE], scope)
+    // fix-pr-11: a swatch nobody could decide (one recorded before the rule) says so on send, decide and ask.
+    const stuck = row.decision === null ? swatchNeedsRoundRefusal({ companyId, customerDecides: theirs.has(row.partyId) }, styleRow?.code ?? '') : null
     return {
       id: row.id,
       styleId: row.styleId,
@@ -188,10 +191,10 @@ export async function swatchViewsOf(db: Reader, context: OfficeContext, rows: re
       companyId,
       actions: {
         edit: action(manage, swatchSentRefusal(facts, 'change')),
-        send: action(manage, row.sentAt ? swatchSentOnceRefusal(facts, new Date(0)) : null),
+        send: action(manage, row.sentAt ? swatchSentOnceRefusal(facts, new Date(0)) : stuck),
         remove: action(manage, swatchSentRefusal(facts, 'remove')),
-        decide: action(lacking(context, [SALES_SAMPLES_DECIDE], scope), swatchDecisionRefusal(facts, open, theirs.has(row.partyId))), // B-PR-38
-        ask: action(lacking(context, [SALES_SAMPLES_DECIDE, PARTNERS_APPROVALS_ASK], scope), companyId === null ? noCompanyRefusal(styleRow?.code ?? '') : swatchAskRefusal(facts, row.kind, open)),
+        decide: action(lacking(context, [SALES_SAMPLES_DECIDE], scope), stuck ?? swatchDecisionRefusal(facts, open, theirs.has(row.partyId))), // B-PR-38, fix-pr-11
+        ask: action(lacking(context, [SALES_SAMPLES_DECIDE, PARTNERS_APPROVALS_ASK], scope), stuck ?? (companyId === null ? noCompanyRefusal(styleRow?.code ?? '') : swatchAskRefusal(facts, row.kind, open))),
       },
       createdAt: toUtcIso(row.createdAt),
       version: row.version,

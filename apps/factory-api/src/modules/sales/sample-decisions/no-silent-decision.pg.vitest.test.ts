@@ -113,7 +113,9 @@ describe("B-PR-38 no silent office decision on a customer's own round, swatch or
 
   it("brand A's fabric swatch: the office decision is refused in words; office.p2 gets 404", async () => {
     const sentAt = new Date(Date.now() - 3_600_000).toISOString()
-    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    // fix-pr-11: a swatch of A's round (the world's jacket is shared by every company: a swatch of no round is refused for A).
+    const round = await roundOf('PRE_PRODUCTION', world.ids.a)
+    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, roundId: round.id, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
     expect(swatch.actions.decide).toMatchObject({ allowed: false, refusal: { code: 'CUSTOMER_DECIDES' } })
     const refused = await as(owner.browser, 'POST', `/sales/samples/swatches/${swatch.id}/decision`, { version: swatch.version, decision: 'APPROVED' }, 409)
     expect(pathOf(refused)).toBe('refusal/CUSTOMER_DECIDES')
@@ -121,6 +123,54 @@ describe("B-PR-38 no silent office decision on a customer's own round, swatch or
     expect(await one('SELECT decision::text FROM "SampleSwatch" WHERE id = $1', [swatch.id])).toEqual({ decision: null })
     await asSession('office.p2', 'POST', `/sales/samples/swatches/${swatch.id}/decision`, 404, { version: swatch.version, decision: 'APPROVED' })
   })
+
+  // ── fix-pr-11 (the lead's decision): a swatch nobody could ever decide is not recorded, nor sent ──
+  it('a swatch of no round, of a style shared by every company, for a customer whose portal is on: refused when recorded or sent, in words; a round of it or a portal off stays the office\'s', async () => {
+    const sentAt = new Date(Date.now() - 3_600_000).toISOString()
+    const { code } = await one<{ code: string }>('SELECT code FROM "Style" WHERE id = $1 AND "companyId" IS NULL', [world.w.styleId])
+    const words = `Style ${code} is shared by every company and this customer approves in their portal: a swatch of it with no round could be neither asked of them nor decided here. Add it to one of the customer's sample rounds.`
+    const count = async () => Number((await one<{ n: string }>('SELECT count(*)::text AS n FROM "SampleSwatch" WHERE "styleId" = $1 AND "roundId" IS NULL AND "partyId" = $2', [world.w.styleId, world.ids.a])).n)
+    const before = await count()
+    // Recorded, sent or not: 409 in words, nothing written.
+    for (const body of [{ sentAt }, {}]) {
+      const refused = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, ...body }, 409)
+      expect(pathOf(refused)).toBe('refusal/SWATCH_NEEDS_ROUND')
+      expect(refused.error.message).toBe(words)
+    }
+    expect(await count()).toBe(before)
+    // One recorded before the rule (portal off then), not sent: its view says why, and sending it is refused in the same words.
+    const old: Json = await (async () => {
+      await admin('UPDATE "PortalSettings" SET "portalOn" = false, version = version + 1 WHERE id = $1', [world.ids.a])
+      try {
+        return (await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId }, 201)).swatch
+      } finally {
+        await admin('UPDATE "PortalSettings" SET "portalOn" = true, version = version + 1 WHERE id = $1', [world.ids.a])
+      }
+    })()
+    const [view] = (await as(owner.browser, 'GET', `/sales/samples/swatches?styleId=${world.w.styleId}&partyId=${world.ids.a}`)).rows.filter((row: Json) => row.id === old.id)
+    for (const name of ['send', 'decide', 'ask']) expect(view.actions[name], name).toMatchObject({ allowed: false, refusal: { code: 'SWATCH_NEEDS_ROUND', message: words } })
+    const sent = await world.officeApp.inject({ method: 'PATCH', url: `/sales/samples/swatches/${old.id}`, headers: { 'x-test-session': 'office.all', 'idempotency-key': `pr3d-${newId()}` }, payload: { version: old.version, sentAt } })
+    expect(sent.statusCode, sent.body).toBe(409)
+    expect(pathOf(sent.json() as Json)).toBe('refusal/SWATCH_NEEDS_ROUND')
+    expect(await one('SELECT "sentAt" FROM "SampleSwatch" WHERE id = $1', [old.id])).toEqual({ sentAt: null })
+    // Its note still changes; a swatch not sent yet is still removed.
+    const noted = await world.officeApp.inject({ method: 'PATCH', url: `/sales/samples/swatches/${old.id}`, headers: { 'x-test-session': 'office.all', 'idempotency-key': `pr3d-${newId()}` }, payload: { version: old.version, note: 'Made-up: attach it to the round.' } })
+    expect(noted.statusCode, noted.body).toBe(200)
+
+    // A swatch of A's round (the round names its company) is recorded and asked; a customer whose portal is off stays the office's.
+    const round = await roundOf('PRE_PRODUCTION', world.ids.a)
+    const { swatch: ofRound } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, roundId: round.id, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    expect(ofRound.actions.ask).toMatchObject({ allowed: true })
+    await admin('UPDATE "PortalSettings" SET "portalOn" = false, version = version + 1 WHERE id = $1', [world.ids.b])
+    try {
+      const { swatch: ofB } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.b, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+      expect(ofB.actions.decide).toMatchObject({ allowed: true, refusal: null })
+      expect((await as(owner.browser, 'POST', `/sales/samples/swatches/${ofB.id}/decision`, { version: ofB.version, decision: 'APPROVED' })).swatch).toMatchObject({ decision: 'APPROVED', decidedVia: 'OFFICE' })
+    } finally {
+      await admin('UPDATE "PortalSettings" SET "portalOn" = true, version = version + 1 WHERE id = $1', [world.ids.b])
+    }
+  })
+  // ── end fix-pr-11 ──
 
   it("the hand pass of a gate waiting for A's round is refused in words; the customer's answer passes it by its event; office.p2 gets 404", async () => {
     const pp = await roundOf('PRE_PRODUCTION', world.ids.a)

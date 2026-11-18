@@ -83,6 +83,8 @@ export const DECISION_REFUSALS = [
   'MATERIAL_KIND',
   // B-PR-38: a round or swatch of a customer whose portal is on is the customer's to decide (or ours only as Decide for the customer).
   'CUSTOMER_DECIDES',
+  // fix-pr-11: a swatch nobody could ever decide (no round, a style shared by every company, a customer whose portal is on).
+  'SWATCH_NEEDS_ROUND',
 ] as const
 export type DecisionRefusalCode = (typeof DECISION_REFUSALS)[number]
 export interface DecisionRefusal {
@@ -352,3 +354,20 @@ export const leatherOnlyRefusal = (itemCode: string, itemKind: string): Decision
 
 export const noCompanyRefusal = (styleCode: string): DecisionRefusal =>
   refusal('NO_COMPANY', `Style ${styleCode} is shared by every company and the swatch belongs to no round: ask on a swatch of a round, or record the decision yourself.`)
+
+// ---- fix-pr-11 (the lead's decision, final end check) -----------------------------------------------------------------------
+/**
+ * A swatch of no round, of a style shared by every company, for a customer whose portal is on, could never be decided once
+ * sent: the customer is not asked about it (no company to ask it in: NO_COMPANY), the office does not record it (B-PR-38:
+ * CUSTOMER_DECIDES) and Decide for the customer answers a request that was asked. So it is refused when it is recorded and
+ * when it is sent, pointing to the customer's sample rounds (a round names its company). `companyId`: the swatch's company
+ * (its round's, else its style's); `customerDecides`: its customer has its portal on.
+ */
+export function swatchNeedsRoundRefusal(swatch: { readonly companyId: string | null; readonly customerDecides: boolean }, styleCode: string): DecisionRefusal | null {
+  if (swatch.companyId !== null || !swatch.customerDecides) return null
+  return refusal(
+    'SWATCH_NEEDS_ROUND',
+    `Style ${styleCode} is shared by every company and this customer approves in their portal: a swatch of it with no round could be neither asked of them nor decided here. Add it to one of the customer's sample rounds.`,
+  )
+}
+// ---- end fix-pr-11

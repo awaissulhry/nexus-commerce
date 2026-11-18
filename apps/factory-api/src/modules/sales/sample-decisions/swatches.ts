@@ -9,6 +9,7 @@ import {
   decisionProblems,
   materialKindRefusal,
   swatchDecisionRefusal,
+  swatchNeedsRoundRefusal,
   swatchRoundRefusal,
   swatchSentOnceRefusal,
   swatchSentRefusal,
@@ -32,8 +33,11 @@ import { customerDecides } from './owner'
  * membrane or padding; TRIM of a trim, hardware, thread or label), asked with FABRIC or TRIM.
  *
  *   GET    /sales/samples/swatches                    sales.samples.view: by style, round or brand (one of them), kind, state
- *   POST   /sales/samples/swatches                    sales.samples.manage: recorded (sent already, or later)
- *   PATCH  /sales/samples/swatches/:swatchId          its colour and lot until sent, its note at any time, sent once
+ *   POST   /sales/samples/swatches                    sales.samples.manage: recorded (sent already, or later); fix-pr-11: never
+ *                                                     one nobody could decide (no round, a style shared by every company, a
+ *                                                     customer whose portal is on: swatchNeedsRoundRefusal)
+ *   PATCH  /sales/samples/swatches/:swatchId          its colour and lot until sent, its note at any time, sent once (fix-pr-11:
+ *                                                     not such a swatch)
  *   DELETE /sales/samples/swatches/:swatchId          only before it is sent
  *   POST   /sales/samples/swatches/:swatchId/decision sales.samples.decide: the office records the brand's word, once sent;
  *                                                     B-PR-38: never for a customer whose portal is on (./owner.ts)
@@ -138,6 +142,8 @@ export async function createSwatch(caller: CommandCaller, body: CreateSwatchBody
     // hardware, thread or label (the database's rule, said first).
     refuse(materialKindRefusal(body.kind, item.code, item.kind))
     const { lotSiteId } = await materialOf(db, item.id, body.itemColourId ?? null, body.lotId ?? null)
+    // fix-pr-11: a swatch nobody could ever decide (no company to ask it in, and the customer's own to decide) is not recorded.
+    refuse(swatchNeedsRoundRefusal({ companyId, customerDecides: await customerDecides(db, partyId) }, style.code))
     return { partyId, companyId, lotSiteId }
   })
   requireOn(context, SALES_SAMPLES_MANAGE, { companyId: checked.companyId, partyId: checked.partyId }, 'Your role does not keep swatches for this company or customer')
@@ -179,6 +185,9 @@ export async function updateSwatch(caller: CommandCaller, swatchId: string, body
   if (material) refuse(swatchSentRefusal(facts, 'change'))
   const sentAt = body.sentAt !== undefined ? sentTime(body.sentAt) : undefined
   if (sentAt) refuse(swatchSentOnceRefusal(facts, sentAt))
+  // fix-pr-11: sending a swatch nobody could decide (one recorded before the rule) is refused, said again inside the write.
+  const styleCode = sentAt && swatch.sentAt === null ? await caller.withClient(async (db) => (await db.style.findUnique({ where: { id: swatch.styleId }, select: { code: true } }))?.code ?? '') : ''
+  if (sentAt && swatch.sentAt === null) refuse(swatchNeedsRoundRefusal({ companyId: scope.companyId, customerDecides: await caller.withClient((db) => customerDecides(db, swatch.partyId)) }, styleCode))
   const colourId = body.itemColourId !== undefined ? body.itemColourId : swatch.itemColourId
   const lotId = body.lotId !== undefined ? body.lotId : swatch.lotId
   const { lotSiteId } = material ? await caller.withClient((db) => materialOf(db, swatch.itemId, colourId, lotId)) : { lotSiteId: swatch.lotSiteId }
@@ -188,6 +197,7 @@ export async function updateSwatch(caller: CommandCaller, swatchId: string, body
     if (material) refuse(swatchSentRefusal(swatchFacts(current), 'change'))
     if (sentAt) refuse(swatchSentOnceRefusal(swatchFacts(current), sentAt))
     const sending = sentAt !== undefined && current.sentAt === null
+    if (sending) refuse(swatchNeedsRoundRefusal({ companyId: scope.companyId, customerDecides: await customerDecides(tx, current.partyId) }, styleCode)) // fix-pr-11
     const data = {
       ...(material ? { itemColourId: colourId, lotId, lotSiteId } : {}),
       ...(body.note !== undefined ? { note: body.note } : {}),
