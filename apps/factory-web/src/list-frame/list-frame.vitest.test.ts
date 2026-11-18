@@ -298,8 +298,8 @@ describe('F-SA-279: a list that drives a dock (opt-in active)', () => {
   it('the footer’s keys say ⌘↵ in both languages (keys only in the footer’s info icon)', () => {
     expect(ACTIVE_KEYS).toEqual([{ keys: ['⌘', '↵'], does: 'keys.openNewTab' }])
     for (const locale of LOCALES) {
-      const words = messagesFor(locale, ['lists']).lists as { keys: Record<string, string> }
-      expect(words.keys.openNewTab, locale).toBeTruthy()
+      // The catalogues are flat keys (`keys.openNewTab`), as every translator reads them.
+      expect(messagesFor(locale, ['lists']).lists?.['keys.openNewTab'], locale).toBeTruthy()
     }
     expect(listKeys([...ACTIVE_KEYS], true)[0]).toEqual({ keys: ['⌘', '↵'], does: 'keys.openNewTab' })
   })
