@@ -551,3 +551,37 @@ export async function listIncoming(caller: CommandCaller, query: IncomingListQue
   })
 }
 
+
+// ---- B-SA-010 (sales page plan N1, pick P1; 12-lists-board §1.3): the office shell's "N waiting on us" ------------------------
+
+/** The states whose next move is ours, per kind: the same open set waitingOf reads (factory-domain incoming rules waitsOnUs). */
+const OURS = Object.freeze({
+  request: { status: { in: ['NEW', 'ASSIGNED'] } } satisfies Prisma.InquiryWhereInput,
+  catalogue: { status: 'SENT' } satisfies Prisma.PortalOrderRequestWhereInput,
+  change: { status: 'OPEN' } satisfies Prisma.OrderChangeRequestWhereInput,
+})
+
+/**
+ * GET /sales/incoming/waiting-count: how many rows of Incoming wait on us now — requests NEW or ASSIGNED, catalogue orders SENT,
+ * change and cancel requests OPEN (agreement T3: the other kinds are answered in Home › Approvals and are no Incoming row) —
+ * under the list's own kinds and walls (each kind its own view permission over the row's company and customer: a person limited
+ * to customer A never counts a row of customer B). Exact (three count() queries): no tiles, no working-day calendar, no thread
+ * scan, so the shell may read it on every page. It is not the WAITING_US tile (the part over one working day). `count` null: the
+ * reader lists no kind (the shell shows no badge, never a guessed 0).
+ */
+export async function waitingCount(caller: CommandCaller): Promise<{ count: number | null; asOf: string }> {
+  const context = officeOf(caller)
+  const { listed } = kindsOf(actorOf(context), {})
+  const asOf = toUtcIso(serverClock.now())
+  if (listed.length === 0) return { count: null, asOf }
+  return caller.withClient(async (db) => {
+    const filters = await filtersOf(db, context, {})
+    const [requests, catalogue, changes] = await Promise.all([
+      listed.includes('REQUEST') ? db.inquiry.count({ where: { AND: [filters.request, OURS.request] } }) : 0,
+      listed.includes('CATALOGUE_ORDER') ? db.portalOrderRequest.count({ where: { AND: [filters.catalogue, OURS.catalogue] } }) : 0,
+      listed.includes('CHANGE_REQUEST') ? db.orderChangeRequest.count({ where: { AND: [filters.change, OURS.change] } }) : 0,
+    ])
+    return { count: requests + catalogue + changes, asOf }
+  })
+}
+// ---- end B-SA-010
