@@ -83,9 +83,8 @@ function cmapOf(text: string): Map<string, string> {
   return map
 }
 
-/** The embedded fonts' ToUnicode maps by the resource name the content streams use (/F1 …). */
-function fontMaps(pdf: Buffer, source: string): Map<string, Map<string, string>> {
-  const objects = objectsOf(source)
+/** The embedded fonts' ToUnicode maps by the font object's number. */
+function fontCmaps(pdf: Buffer, source: string, objects: Map<number, { start: number; end: number }>): Map<number, Map<string, string>> {
   const byObject = new Map<number, Map<string, string>>()
   for (const [number, place] of objects) {
     const body = source.slice(place.start, place.end)
@@ -95,6 +94,12 @@ function fontMaps(pdf: Buffer, source: string): Map<string, Map<string, string>>
     const stream = target ? streamOf(pdf, source, target.start, target.end) : null
     if (stream) byObject.set(number, cmapOf(stream))
   }
+  return byObject
+}
+
+/** The embedded fonts' ToUnicode maps by the resource name the content streams use (/F1 …). */
+function fontMaps(pdf: Buffer, source: string): Map<string, Map<string, string>> {
+  const byObject = fontCmaps(pdf, source, objectsOf(source))
   const byName = new Map<string, Map<string, string>>()
   for (const dict of source.matchAll(/\/Font\s*<<([^>]*)>>/g)) {
     for (const entry of dict[1]!.matchAll(/\/([^\s/]+)\s+(\d+)\s+0\s+R/g)) {
@@ -105,39 +110,87 @@ function fontMaps(pdf: Buffer, source: string): Map<string, Map<string, string>>
   return byName
 }
 
-/** The decoded content streams of the PDF (latin1 text of the operators). */
-export function pdfStreams(pdf: Buffer): string[] {
-  const source = pdf.toString('latin1')
-  const streams: string[] = []
+// ---- fix-pg-2: a merged PDF (modules/shipping/shipment-pack/pdf-merge.ts, one PDF per shipment) keeps each source file's resource
+// names on its own pages, so /F1 of a label page and /F1 of the DDT are two fonts: a page's content is read with ITS page's fonts
+// (the one map of every name above stays the answer for a stream no page names, and for a name the page does not hold).
+/** Each page content stream's fonts (object number of the content stream → resource name → ToUnicode map). */
+function pageFonts(pdf: Buffer, source: string): Map<number, Map<string, Map<string, string>>> {
+  const objects = objectsOf(source)
+  const cmaps = fontCmaps(pdf, source, objects)
+  const bodyOf = (number: number): string => {
+    const place = objects.get(number)
+    return place ? source.slice(place.start, place.end) : ''
+  }
+  const fontsIn = (resources: string): Map<string, Map<string, string>> => {
+    let dict = /\/Font\s*<<([^>]*)>>/.exec(resources)?.[1]
+    const ref = dict === undefined ? /\/Font\s+(\d+)\s+0\s+R/.exec(resources) : null
+    if (ref) dict = /<<([^]*)>>/.exec(bodyOf(Number(ref[1])))?.[1]
+    const names = new Map<string, Map<string, string>>()
+    for (const entry of (dict ?? '').matchAll(/\/([^\s/]+)\s+(\d+)\s+0\s+R/g)) {
+      const map = cmaps.get(Number(entry[2]))
+      if (map) names.set(entry[1]!, map)
+    }
+    return names
+  }
+  const byContent = new Map<number, Map<string, Map<string, string>>>()
+  for (const place of objects.values()) {
+    const body = source.slice(place.start, place.end)
+    if (!/\/Type\s*\/Page(?![A-Za-z])/.test(body)) continue
+    const resources = /\/Resources\s+(\d+)\s+0\s+R/.exec(body)
+    const fonts = fontsIn(resources ? bodyOf(Number(resources[1])) : body)
+    const single = /\/Contents\s+(\d+)\s+0\s+R/.exec(body)
+    const refs = single ? [single[1]!] : [...(/\/Contents\s*\[([^\]]*)\]/.exec(body)?.[1] ?? '').matchAll(/(\d+)\s+0\s+R/g)].map((match) => match[1]!)
+    for (const ref of refs) byContent.set(Number(ref), fonts)
+  }
+  return byContent
+}
+
+/** The decoded streams of the PDF in file order, each with the number of the object it belongs to (null before any object). */
+function streamsOf(pdf: Buffer, source: string): { readonly object: number | null; readonly text: string }[] {
+  const heads = [...source.matchAll(/(?:^|[\r\n])(\d+) 0 obj\b/g)].map((match) => ({ at: match.index!, number: Number(match[1]) }))
+  let head = 0
+  let object: number | null = null
+  const streams: { object: number | null; text: string }[] = []
   const pattern = /<<([^]*?)>>\s*stream\r?\n/g
   for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
     const start = match.index + match[0].length
+    // The object the stream belongs to: the last object opened before its data (the `<<` found may be an earlier object's).
+    while (head < heads.length && heads[head]!.at < start) object = heads[head++]!.number
     const end = source.indexOf('endstream', start)
     if (end < 0) break
     const raw = pdf.subarray(start, end)
     if (/\/FlateDecode/.test(match[1] ?? '')) {
       try {
-        streams.push(inflateSync(raw).toString('latin1'))
+        streams.push({ object, text: inflateSync(raw).toString('latin1') })
       } catch {
         // a binary stream (an image) that is not text
       }
     } else {
-      streams.push(raw.toString('latin1'))
+      streams.push({ object, text: raw.toString('latin1') })
     }
     pattern.lastIndex = end
   }
   return streams
 }
+// ---- end fix-pg-2
+
+/** The decoded content streams of the PDF (latin1 text of the operators). */
+export function pdfStreams(pdf: Buffer): string[] {
+  return streamsOf(pdf, pdf.toString('latin1')).map((stream) => stream.text)
+}
 
 /** Every text operation's string, in drawing order. */
 export function pdfTextRuns(pdf: Buffer): string[] {
-  const maps = fontMaps(pdf, pdf.toString('latin1'))
+  const source = pdf.toString('latin1')
+  const maps = fontMaps(pdf, source)
+  const pages = pageFonts(pdf, source) // fix-pg-2
   const runs: string[] = []
-  for (const stream of pdfStreams(pdf)) {
+  for (const { object, text: stream } of streamsOf(pdf, source)) {
+    const own = object === null ? undefined : pages.get(object) // fix-pg-2: the page's own fonts first
     let font: Map<string, string> | undefined
     for (const match of stream.matchAll(/\/([^\s/]+)\s+-?\d+(?:\.\d+)?\s+Tf|\[((?:\s*(?:<[0-9a-fA-F]*>|-?\d+(?:\.\d+)?))*)\s*\]\s*TJ/g)) {
       if (match[1] !== undefined) {
-        font = maps.get(match[1])
+        font = own?.get(match[1]) ?? maps.get(match[1])
         continue
       }
       const hexes = [...(match[2] ?? '').matchAll(/<([0-9a-fA-F]*)>/g)].map((hex) => hex[1] ?? '')
