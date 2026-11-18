@@ -82,6 +82,16 @@ const lineView = output({
   /** Its size grid in the style's range order (a made-to-measure unit: one entry, size null), with the progress of each. */
   sizes: z.array(output({ size: z.string().nullable(), quantity: z.number().int(), unitPrice: money.price(z.string().nullable()), progress: progressView })),
   progress: progressView,
+  // ── B-SA-035 (Sales page plan N2, N8): the line's picture and its artwork ──
+  /**
+   * The colour line's picture — the colourway's own, else the style's main picture — only with files.read over the file's
+   * company: its file and the ~320 px small preview's presigned GET (60 seconds; null until the preview exists). null: no picture
+   * the reader may open (the page draws its placeholder).
+   */
+  picture: output({ fileId: id(), contentType: z.string(), small: output({ url: z.string(), expiresAt: instant() }).nullable() }).nullable(),
+  /** The artwork files the line shows (its own and its quote line's) that the reader may open. */
+  artworkCount: z.number().int(),
+  // ── end B-SA-035 ──
 })
 
 const depositView = output({

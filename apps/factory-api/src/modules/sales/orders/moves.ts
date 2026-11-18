@@ -14,7 +14,9 @@ import { impactView, readCancelFacts } from './impact'
 import { cancelScheduleInCommand } from './schedule'
 import { orderSettlement } from './settlement'
 import { asDay, dayOrNull, lockOrder, moveFactsOf, readLines, readOrder, readOrderFacts, type OrderRow } from './store'
-import { orderView, type OrderView } from './views'
+import { orderView, withLinePictures, type OrderView } from './views'
+// B-SA-035: the lines' pictures (read with the order, presigned after the read).
+import { linePictureFiles, smallAddresses, type LinePictureFile } from '../../product/images/small-pictures'
 // B-W2b-317 (PLN-173): a typed promise change writes the lines' promise history.
 import { typedPromiseRowsInCommand } from '../../planning/promise-keep/typed'
 // B-W2b-303: a waiting order's request withdrawn when it is cancelled.
@@ -59,10 +61,14 @@ export async function recordAfter(caller: CommandCaller, orderId: string): Promi
   // B-SA-034: the reader, so the live watch list names only the work orders it reaches.
   const context = caller.factoryContext
   const viewer = context && context.audience === 'office' ? actorOf(context) : null
-  return caller.withClient(async (client) => {
+  const { view, pictures } = await caller.withClient(async (client) => {
     const order = (await readOrder(client, orderId))!
-    return orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer)
+    const view = await orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer)
+    // B-SA-035: each colour line's picture the reader may open (files.read), read with the order.
+    return { view, pictures: viewer ? await linePictureFiles(client, viewer, view.lines) : new Map<string, LinePictureFile>() }
   })
+  // B-SA-035: the small previews' addresses outside the read, one presign per distinct file.
+  return pictures.size === 0 ? view : withLinePictures(view, pictures, await smallAddresses(caller, [...pictures.values()]))
 }
 
 // B-SA-001: the payload names the order's customer, the order row's own (read on the server), never a caller's value.
