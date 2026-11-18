@@ -379,9 +379,11 @@ function OrdersContainer() {
   // ---- B-TH-230: the reader's own new messages per order on the page (threads.read; one POST /threads/unread of ≤ 200 rows) ----
   const readsThreads = session.permissions.includes('threads.read')
   const [unreadTick, setUnreadTick] = useState(0)
-  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads && layout === 'list')
+  // F-SA-213: the board's lanes too (each reads its own cards' counts).
+  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads && (layout === 'list' || layout === 'board'))
   const unreadRows = useMemo(() => (layout === 'list' ? (shownItems ?? []).map((row) => ({ recordType: 'SalesOrder', id: row.id })) : []), [layout, shownItems])
   const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  const readUnread = useMemo(() => readUnreadWith(api), [api]) // F-SA-213: the board's lanes
   // ---- end B-TH-230
 
   const model: OrdersListModel = {
@@ -395,6 +397,7 @@ function OrdersContainer() {
     collapsed: collapsed ?? [],
     invoiceDrafts,
     unread: readsThreads ? unread : null, // B-TH-230
+    boardUnread: readsThreads && layout === 'board' ? { read: readUnread, refresh: unreadTick } : null, // F-SA-213
     customer, // B-TH-201
     // ---- B-TH-225 / B-TH-226 ----
     brand: brandNamed,

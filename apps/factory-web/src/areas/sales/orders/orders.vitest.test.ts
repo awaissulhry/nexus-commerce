@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-SA-213
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -19,6 +20,10 @@ import { BOARD_LANES, DEPOSIT_KINDS, DEPOSIT_REQUEST_STATUSES, DEPOSIT_STATES, I
 import { AMEND_PREVIEW, AMENDMENTS, BOARD, BRN, CANCEL_BLOCKED, CANCEL_CHECK, canOf, deposit, LIST_ROWS, MANUAL_PREVIEW, order, PAID, PARTY, SCHEDULE, SENT_LINK, STYLE, STYLE_ID, TD02, TODAY } from './_demo/fixtures'
 import { DAILY_ORDER_ACTIONS, IMPACT_CODES, LINE_CHANGES, MILESTONE_KINDS, MILESTONE_STATUSES, type Milestone } from './api'
 import { stepVerbs, waiveHeld, waiveReasonProblem, waiveVerbOf } from './record/schedule/model'
+// F-SA-213: the board card's facts and name; the office's priority levels (the row schema's and the depth read's).
+import { cardFacts, cardName, SHIPPED_LANES } from './list/view/OrdersBoard'
+import { PRIORITY_LEVELS } from './depth/api'
+import { ORDER_PRIORITY_LEVELS } from './api'
 import {
   AMEND_STATUSES,
   amendHeld,
@@ -638,3 +643,62 @@ describe('one customer’s orders from the address (B-TH-201)', () => {
 
 })
 // ── end B-TH-201 ──
+
+// ---- F-SA-213 (sales page plan N8, picks P13, P15, P18; 12-lists-board §3.3): the board card with the photo -----------------------
+describe('the board card (F-SA-213): photo left, the label that adds something, priority, the customer\'s mark, a held verb', () => {
+  const can = { makeWorkOrders: true, createShipment: true }
+  const base = LIST_ROWS[0]!
+  const card = (over: Partial<typeof base>) => cardFacts({ ...base, ...over }, can)
+
+  it('the shipped bar only in Ready · Partly shipped · Shipped (elsewhere "0 of 40" is noise)', () => {
+    expect([...SHIPPED_LANES]).toEqual(['READY', 'PARTLY_SHIPPED', 'SHIPPED'])
+    for (const status of ORDER_STATUSES) expect(card({ status }).shippedBar, status).toBe(SHIPPED_LANES.includes(status))
+  })
+  it('the label only when it adds something: never the customer\'s own label; our own collection and a hidden label say so', () => {
+    expect(card({ brands: [{ partyId: base.partyId, name: base.partyName, own: false }] }).labels).toEqual([])
+    expect(card({ brands: [{ partyId: null, name: null, own: true }] }).labels).toEqual([{ kind: 'own' }])
+    expect(card({ brands: [{ partyId: null, name: null, own: false }] }).labels).toEqual([{ kind: 'hidden' }])
+    expect(card({ brands: [{ partyId: 'label-b', name: 'Brand Beta', own: false }] }).labels).toEqual([{ kind: 'named', name: 'Brand Beta' }])
+  })
+  it('"Priority · <level>" only when not Normal; "Urgent (customer)" only for the customer\'s own mark', () => {
+    expect(card({ priority: { level: 'NORMAL', number: 0, urgentReason: null } }).priority).toBeNull()
+    expect(card({ priority: undefined }).priority).toBeNull()
+    expect(card({ priority: { level: 'HIGH', number: 1, urgentReason: null } }).priority).toBe('HIGH')
+    expect(card({ priority: { level: 'URGENT', number: 1, urgentReason: 'Fair' } }).priority).toBe('URGENT')
+    expect(card({ customerUrgency: 'URGENT' }).customerUrgent).toBe(true)
+    expect(card({ customerUrgency: 'REGULAR' }).customerUrgent).toBe(false)
+    expect([...ORDER_PRIORITY_LEVELS]).toEqual([...PRIORITY_LEVELS])
+  })
+  it('the verb is held with why while the deposit waits (never hidden); without the right there is none', () => {
+    expect(card({ status: 'CONFIRMED', deposit: { state: 'OPEN', dueDate: '2026-11-30' } }).verb).toEqual({ kind: 'makeWorkOrders', held: 'board.held.deposit' })
+    expect(card({ status: 'CONFIRMED', deposit: { state: 'MISSING', dueDate: null } }).verb).toEqual({ kind: 'makeWorkOrders', held: 'board.held.deposit' })
+    expect(card({ status: 'CONFIRMED', deposit: { state: 'PAID', dueDate: null } }).verb).toEqual({ kind: 'makeWorkOrders', held: null })
+    expect(card({ status: 'READY' }).verb).toEqual({ kind: 'createShipment', held: null })
+    expect(cardFacts({ ...base, status: 'CONFIRMED' }, { makeWorkOrders: false, createShipment: false }).verb).toBeNull()
+    expect(card({ status: 'IN_PRODUCTION' }).verb).toBeNull()
+  })
+  it('the words in both languages; the card\'s accessible name says number, customer, pieces, promise and new messages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['board.priority', 'board.customerUrgent', 'board.held.deposit', 'board.cardPromised', 'board.cardNoPromise']) expect(t(key, { level: 'X', date: 'D' }), `${locale} ${key}`).not.toBe(key)
+      expect(t('board.cardPieces', { count: 2 }), locale).not.toBe('board.cardPieces')
+      expect(t('board.cardNew', { count: 2 }), locale).not.toBe('board.cardNew')
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const named = cardName(en, { number: 'SO-2026-0142', partyName: 'Brand Alpha', units: 40, promiseDate: '2026-11-18' }, 'en', 2)
+    expect(named.startsWith('SO-2026-0142, Brand Alpha, 40 pieces, promised ')).toBe(true)
+    expect(named.endsWith(', 2 new messages')).toBe(true)
+    expect(cardName(en, { number: 'SO-1', partyName: 'Brand Beta', units: 1, promiseDate: null }, 'en', 0)).toBe('SO-1, Brand Beta, 1 piece, no promise')
+    expect(en('board.priority', { level: 'Top' })).toBe('Priority · Top')
+  })
+  it('the card mounts the ONE picture part at its board size (fit) and the lanes are 260 px, an empty one 160 px', () => {
+    const view = readFileSync(new URL('./list/view/OrdersBoard.tsx', import.meta.url), 'utf8')
+    const css = readFileSync(new URL('./orders.css', import.meta.url), 'utf8')
+    expect(view).toContain('size="board"')
+    expect(view).toContain('<PictureViewer')
+    expect(css).toMatch(/\.fw-so-lane \{\s*flex: 1 0 260px;/)
+    expect(css).toMatch(/\.fw-so-lane\.is-empty \{\s*flex: 0 0 160px;/)
+    expect(css).toContain('scroll-snap-type: x proximity')
+  })
+})
+// ---- end F-SA-213

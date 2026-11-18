@@ -16,6 +16,8 @@ import type { PickBody } from '../quotes/record/configurator/api'
 // B-TH-244: the customer's own mark on an order (apps/factory-api modules/sales/orders/customer-urgency).
 export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
 export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
+// F-SA-213: the office's priority levels (as depth/api PRIORITY_LEVELS, which reads this file: kept here so no import goes round).
+export const ORDER_PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
@@ -143,6 +145,8 @@ export const orderRowSchema = z.object({
   /** The customer's own mark (read-only); null: none known. */
   customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable().optional(),
   // ── end B-TH-244 ──
+  /** F-SA-213: the office's own priority (its level; the API's words are not drawn: the screen says its own). */
+  priority: z.object({ level: z.enum(ORDER_PRIORITY_LEVELS), number: z.number(), urgentReason: z.string().nullable() }).optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 

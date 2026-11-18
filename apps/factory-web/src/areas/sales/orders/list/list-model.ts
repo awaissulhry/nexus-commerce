@@ -39,6 +39,7 @@ export interface NewOrderDialogModel {
 }
 // B-TH-230
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'
+import type { ReadUnread } from '../../../../lib/last-message-cell/use-unread' // F-SA-213
 
 export interface OrdersListModel {
   /** `/w/<company>`. */
@@ -66,6 +67,8 @@ export interface OrdersListModel {
   margins?: ReadonlyMap<string, string | null> | null
   /** B-TH-230: the reader's own new messages per order (one read per page); null/absent: no threads.read, the column is not drawn. */
   unread?: UnreadMap | null
+  /** F-SA-213: the board's lanes read their own new-message counts (≤ 50 rows each), again on `refresh`; null: no threads.read. */
+  boardUnread?: { readonly read: ReadUnread; readonly refresh: number } | null
   // ---- B-W2b-323 (orders in depth on screen) ----
   /** The Priority and Season columns, the inline priority, Set priority on a selection; null/absent: not drawn. */
   depth?: ListDepthModel | null

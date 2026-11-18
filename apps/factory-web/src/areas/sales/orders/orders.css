@@ -117,19 +117,32 @@ p.fw-so-hint[role='status'] {
 }
 
 /* ---- the board by state: lanes side by side on a wide screen (the width is used), one under the other on a phone ---- */
+/* F-SA-213 (sales page plan N8; 12-lists-board §3.1–§3.3): from 720 px the lanes are 260 px wide and scroll sideways inside the
+   card (never the page), snapping at a lane's start; an empty lane draws 160 px (0 is an answer, but it does not eat a photo lane's
+   width). Below 720 px one lane under the other. The card: the photo on the left (the one picture part, 64 / 72 / 48 px), the text
+   beside it, the shipped bar and the verb across both columns. */
 .fw-so-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--nds-space-12);
   padding: var(--nds-space-12);
   min-width: 0;
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 720px) {
   .fw-so-board {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-    grid-template-columns: none;
+    flex-direction: row;
+    align-items: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+  }
+  .fw-so-lane {
+    flex: 1 0 260px;
+    scroll-snap-align: start;
+  }
+  .fw-so-lane.is-empty {
+    flex: 0 0 160px;
   }
 }
 
@@ -184,12 +197,13 @@ p.fw-so-hint[role='status'] {
 }
 
 .fw-so-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--nds-space-6);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--nds-space-10, var(--nds-space-8));
+  row-gap: var(--nds-space-8);
   min-width: 0;
-  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12) var(--nds-space-10, var(--nds-space-8)) var(--nds-space-10, var(--nds-space-8));
   border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-md);
   background: var(--nds-surface);
@@ -199,13 +213,35 @@ p.fw-so-hint[role='status'] {
   border-color: var(--nds-border-strong);
 }
 
-.fw-so-card > .nds-btn,
-.fw-so-card > a.nds-btn {
-  align-self: flex-start;
+/* A phone card's photo is 48 px (the part's board size is 64, 72 from 1680 px wide). */
+@media (max-width: 719px) {
+  .fw-so-card .fw-rp-board {
+    --fw-rp-size: 48px;
+  }
+}
+
+.fw-so-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-so-card-span {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-so-card-verb {
+  align-items: flex-start;
 }
 
 .fw-so-card-top,
-.fw-so-card-facts {
+.fw-so-card-facts,
+.fw-so-card-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -214,7 +250,8 @@ p.fw-so-hint[role='status'] {
   min-width: 0;
 }
 
-.fw-so-card-facts {
+.fw-so-card-facts,
+.fw-so-card-line {
   justify-content: flex-start;
   font-size: var(--nds-font-size-sm);
 }
@@ -222,6 +259,14 @@ p.fw-so-hint[role='status'] {
 .fw-so-card-customer {
   color: var(--nds-text-strong);
   font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-so-card-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
