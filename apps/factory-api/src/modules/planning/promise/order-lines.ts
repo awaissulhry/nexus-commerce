@@ -379,7 +379,8 @@ export async function recordPromise(caller: CommandCaller, orderLineId: string, 
           subject: line.orderId,
           companyId: line.companyId,
           siteId: site.id,
-          payload: { orderId: line.orderId, orderLineId: line.id, siteId: checked.planVersionId ? site.id : null, rows: written.map((row) => ({ size: row.size, promisedDate: row.promisedDate, kind: row.kind })) },
+          // B-SA-004: the order line's own customer (read on the server), for the office's live wall.
+          payload: { orderId: line.orderId, orderLineId: line.id, siteId: checked.planVersionId ? site.id : null, rows: written.map((row) => ({ size: row.size, promisedDate: row.promisedDate, kind: row.kind })), partyId: line.partyId },
         })
       }
       return { written, unchanged: planned.unchanged }

@@ -386,7 +386,7 @@ async function reverseInCommand(caller: CommandCaller, match: MatchRow, line: Li
         const target = allocation.invoiceId ? ('INVOICE' as const) : ('DEPOSIT_REQUEST' as const)
         const targetId = (allocation.invoiceId ?? allocation.depositRequestId)!
         tools.audit({ action: 'payments.reverseAllocation', recordType: 'PaymentAllocation', recordId: id, companyId: line.companyId, after: { paymentId, reversalOfId: allocation.id, target, targetId, amount: markMoney('price', -allocation.amount) }, reason })
-        tools.emit({ type: 'payment.allocation_reversed', subject: paymentId, companyId: line.companyId, payload: { paymentId, allocationId: id, reversalOfId: allocation.id, target, targetId } })
+        tools.emit({ type: 'payment.allocation_reversed', subject: paymentId, companyId: line.companyId, payload: { paymentId, allocationId: id, reversalOfId: allocation.id, target, targetId, partyId: current.partyId /* B-SA-004 */ } })
       }
       await settleOrders(tools, [...(await ordersOfInvoices(tx, live.flatMap((row) => (row.invoiceId ? [row.invoiceId] : [])))), ...(await ordersOfRequests(tx, live.flatMap((row) => (row.depositRequestId ? [row.depositRequestId] : []))))])
       const payment = (await readPayment(tx, paymentId))!
@@ -394,7 +394,7 @@ async function reverseInCommand(caller: CommandCaller, match: MatchRow, line: Li
       await honourPeriodLocks(tools, [{ companyId: line.companyId, day: receivedOn, refused: `the payment received on ${dayWords(receivedOn)} (bank reference ${payment.externalRef}) is not voided`, path: 'matchId', record: { type: 'Payment', id: paymentId } }], body.periodLockOverride)
       await tx.payment.update({ where: { id: paymentId }, data: { status: 'VOIDED', voidedAt: tools.now, voidReason: reason, version: { increment: 1 } }, select: { id: true } })
       tools.audit({ recordType: 'Payment', recordId: paymentId, companyId: line.companyId, before: { status: 'RECEIVED' }, after: { status: 'VOIDED' }, reason })
-      tools.emit({ type: 'payment.voided', subject: paymentId, companyId: line.companyId, payload: { paymentId } })
+      tools.emit({ type: 'payment.voided', subject: paymentId, companyId: line.companyId, payload: { paymentId, partyId: payment.partyId /* B-SA-004 */ } })
       voided = true
     }
     await tx.bankMatch.update({ where: { id: current.id }, data: { reversedAt: tools.now, reversedById: actorIdOf(tools), reverseReason: reason }, select: { id: true } })

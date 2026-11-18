@@ -79,7 +79,7 @@ export async function makeReplacementOrder(caller: CommandCaller, returnId: stri
     }
     await touchReturn(tools, rma, { replacementOrderId: made.orderId })
     tools.audit({ recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { replacementOrderId: null }, after: { replacementOrderId: made.orderId, replacementOrderNumber: made.number } })
-    tools.emit({ type: 'return.replacement_ordered', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, orderId: made.orderId, orderNumber: made.number, lineIds: orderLines.map((line) => line.lineId) } })
+    tools.emit({ type: 'return.replacement_ordered', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, orderId: made.orderId, orderNumber: made.number, lineIds: orderLines.map((line) => line.lineId), partyId: rma.partyId /* B-SA-004: the return's customer (the RMA row's own) */ } })
     return { order: { id: made.orderId, number: made.number } }
   })
   return { return: await recordOf(caller, seen.id), order: result.order }

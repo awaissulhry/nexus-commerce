@@ -112,11 +112,11 @@ async function clearTestLabels(tools: CommandTools, site: Site): Promise<number>
   await tx.$queryRaw`SELECT 1 FROM "Shipment" WHERE "id" = ANY(${shipmentIds}::uuid[]) ORDER BY "id" FOR UPDATE`
   const parcels = await tx.parcel.findMany({
     where: { ...testLabelsWhere(site.id), shipmentId: { in: shipmentIds } },
-    select: { id: true, seq: true, shipmentId: true, trackingNumber: true, carrierParcelId: true, labelledAt: true, shipment: { select: { number: true, status: true } } },
+    select: { id: true, seq: true, shipmentId: true, trackingNumber: true, carrierParcelId: true, labelledAt: true, shipment: { select: { number: true, status: true, /* B-SA-004 */ partyId: true } } },
     orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }],
   })
   const reason = 'Switched to live labels: the TEST label of test mode is cleared (label the parcel again before it leaves).'
-  const touched = new Map<string, { number: string; status: 'DRAFT' | 'PACKED' }>()
+  const touched = new Map<string, { number: string; status: 'DRAFT' | 'PACKED'; partyId: string /* B-SA-004 */ }>()
   for (const parcel of parcels) {
     await tx.parcel.update({ where: { id: parcel.id }, data: { trackingNumber: null, carrierParcelId: null, labelledAt: null, trackingUrl: null, version: { increment: 1 } }, select: { id: true } })
     tools.audit({
@@ -129,11 +129,11 @@ async function clearTestLabels(tools: CommandTools, site: Site): Promise<number>
       after: { trackingNumber: null, carrier: 'NOT_SENT', test: true },
       reason,
     })
-    tools.emit({ type: 'shipment.label_voided', subject: parcel.shipmentId, companyId: site.companyId, siteId: site.id, payload: { shipmentId: parcel.shipmentId, number: parcel.shipment.number, parcelId: parcel.id, seq: parcel.seq, queued: false } })
-    touched.set(parcel.shipmentId, { number: parcel.shipment.number, status: parcel.shipment.status as 'DRAFT' | 'PACKED' })
+    tools.emit({ type: 'shipment.label_voided', subject: parcel.shipmentId, companyId: site.companyId, siteId: site.id, payload: { shipmentId: parcel.shipmentId, number: parcel.shipment.number, parcelId: parcel.id, seq: parcel.seq, queued: false, partyId: parcel.shipment.partyId /* B-SA-004 */ } })
+    touched.set(parcel.shipmentId, { number: parcel.shipment.number, status: parcel.shipment.status as 'DRAFT' | 'PACKED', partyId: parcel.shipment.partyId /* B-SA-004 */ })
   }
   for (const [shipmentId, shipment] of touched) {
-    tools.emit({ type: 'shipment.packing_changed', subject: shipmentId, companyId: site.companyId, siteId: site.id, payload: { shipmentId, number: shipment.number, status: shipment.status, change: 'parcels' } })
+    tools.emit({ type: 'shipment.packing_changed', subject: shipmentId, companyId: site.companyId, siteId: site.id, payload: { shipmentId, number: shipment.number, status: shipment.status, change: 'parcels', partyId: shipment.partyId /* B-SA-004 */ } })
   }
   return parcels.length
 }

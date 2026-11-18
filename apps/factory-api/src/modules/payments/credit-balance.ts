@@ -123,12 +123,12 @@ export async function releaseOverpayment(caller: CommandCaller, body: { invoiceI
       const reversalId = newId()
       await tx.paymentAllocation.create({ data: { id: reversalId, companyId: current.companyId, partyId: current.buyerPartyId, paymentId: step.paymentId, invoiceId: current.id, amount: -step.reversed, reversalOfId: step.allocationId, note: `${note} (carried to the credit balance)`, createdAt: tools.now, createdById: actorIdOf(tools) }, select: { id: true } })
       tools.audit({ action: 'payments.reverseAllocation', recordType: 'PaymentAllocation', recordId: reversalId, companyId: current.companyId, after: { paymentId: step.paymentId, reversalOfId: step.allocationId, target: 'INVOICE', targetId: current.id, amount: markMoney('price', -step.reversed) }, reason: note })
-      tools.emit({ type: 'payment.allocation_reversed', subject: step.paymentId, companyId: current.companyId, payload: { paymentId: step.paymentId, allocationId: reversalId, reversalOfId: step.allocationId, target: 'INVOICE', targetId: current.id } })
+      tools.emit({ type: 'payment.allocation_reversed', subject: step.paymentId, companyId: current.companyId, payload: { paymentId: step.paymentId, allocationId: reversalId, reversalOfId: step.allocationId, target: 'INVOICE', targetId: current.id, partyId: current.buyerPartyId /* B-SA-004: the allocation's party, the invoice's buyer */ } })
       if (step.placedAgain > 0) {
         const againId = newId()
         await tx.paymentAllocation.create({ data: { id: againId, companyId: current.companyId, partyId: current.buyerPartyId, paymentId: step.paymentId, invoiceId: current.id, amount: step.placedAgain, createdAt: tools.now, createdById: actorIdOf(tools) }, select: { id: true } })
         tools.audit({ action: 'payments.allocate', recordType: 'PaymentAllocation', recordId: againId, companyId: current.companyId, after: { paymentId: step.paymentId, target: 'INVOICE', targetId: current.id, amount: markMoney('price', step.placedAgain) } })
-        tools.emit({ type: 'payment.allocated', subject: step.paymentId, companyId: current.companyId, payload: { paymentId: step.paymentId, allocationId: againId, target: 'INVOICE', targetId: current.id } })
+        tools.emit({ type: 'payment.allocated', subject: step.paymentId, companyId: current.companyId, payload: { paymentId: step.paymentId, allocationId: againId, target: 'INVOICE', targetId: current.id, partyId: current.buyerPartyId /* B-SA-004 */ } })
       }
       if (!touched.includes(step.paymentId)) touched.push(step.paymentId)
     }

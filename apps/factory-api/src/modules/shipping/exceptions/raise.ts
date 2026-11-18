@@ -90,7 +90,7 @@ export async function raiseDueInCommand(tools: CommandTools, shipmentId: string)
       select: { id: true },
     })
     tools.audit({ action: 'shipping.trackingProblem', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { exceptionId, kind: problem.kind, raisedAt: toUtcIso(problem.raisedAt), taskId } })
-    tools.emit(eventFor(raised, { subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, exceptionId, kind: problem.kind, taskId } }))
+    tools.emit(eventFor(raised, { subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, exceptionId, kind: problem.kind, taskId, partyId: shipment.partyId /* B-SA-004 */ } }))
     out.push({ exceptionId, kind: problem.kind, taskId })
   }
   return out
@@ -101,13 +101,13 @@ export async function resolveInCommand(tools: CommandTools, exceptionId: string,
   const { tx, now } = tools
   const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "TrackingException" WHERE "id" = ${exceptionId}::uuid FOR UPDATE`
   if (rows.length === 0) return false
-  const row = await tx.trackingException.findUniqueOrThrow({ where: { id: exceptionId }, select: { id: true, kind: true, raisedAt: true, resolvedAt: true, taskId: true, shipment: { select: { id: true, number: true, companyId: true, siteId: true } } } })
+  const row = await tx.trackingException.findUniqueOrThrow({ where: { id: exceptionId }, select: { id: true, kind: true, raisedAt: true, resolvedAt: true, taskId: true, shipment: { select: { id: true, number: true, companyId: true, siteId: true, /* B-SA-004 */ partyId: true } } } })
   if (row.resolvedAt !== null) return false
   const at = now.getTime() < row.raisedAt.getTime() ? row.raisedAt : now
   await tx.trackingException.update({ where: { id: exceptionId }, data: { resolvedAt: at, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   const shipment = row.shipment
   tools.audit({ action: 'shipping.resolveTrackingProblem', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { exceptionId, kind: row.kind, resolvedAt: toUtcIso(at), automatic }, ...(note ? { reason: note } : {}) })
-  tools.emit(eventFor(resolved, { subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, exceptionId, kind: row.kind, automatic } }))
+  tools.emit(eventFor(resolved, { subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, exceptionId, kind: row.kind, automatic, partyId: shipment.partyId /* B-SA-004 */ } }))
   // The problem's task is done with it (by the person who resolved it, or by the system).
   if (row.taskId) {
     const task = await tx.task.findUnique({ where: { id: row.taskId }, select: { id: true, status: true } })

@@ -524,3 +524,22 @@ describe('the gate check of a shipment decides for the Rome day, not the UTC day
     expect(atNoon).not.toContain('F35-UNTIL-12')
   })
 })
+
+// ── B-SA-004 (Sales page plan P17'): every shipment event names the shipment's own customer (the office's live wall) ──────────────
+describe('live: shipment events name the shipment’s customer (B-SA-004)', () => {
+  it('each live shipment.* row the commands above wrote carries partyId = the shipment row’s own (the order’s customer)', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string; order: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, s."partyId"::text AS own, o."partyId"::text AS "order"
+         FROM "OutboxEvent" e JOIN "Shipment" s ON s.id = (e.payload->>'shipmentId')::uuid JOIN "SalesOrder" o ON o.id = s."salesOrderId"
+        WHERE e."tenantId" = $1 AND e.type LIKE 'shipment.%' AND e.type <> 'shipment.tracking_poll_due'
+        ORDER BY e.type, e.id`,
+      [A.tenant],
+    )
+    // Planned, packed and unpacked, cancelled, split across parcels: the shipment's own life in this file.
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['shipment.created', 'shipment.packing_changed', 'shipment.status_changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+    // A shipment is its order's: the same customer.
+    expect(rows.filter((row) => row.own !== row.order)).toEqual([])
+  })
+})
+// ── end B-SA-004 ──

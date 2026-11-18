@@ -153,7 +153,7 @@ async function packCommand<Extra extends object = Record<never, never>>(
       const current = (await readShipment(tools.tx, shipment.id))!
       const extra = ((await work(tools, current)) ?? {}) as Extra
       const after = (await readShipment(tools.tx, shipment.id))!
-      tools.emit({ type: 'shipment.packing_changed', subject: after.id, companyId: after.companyId, siteId: after.siteId, payload: { shipmentId: after.id, number: after.number, status: after.status, change: spec.change } })
+      tools.emit({ type: 'shipment.packing_changed', subject: after.id, companyId: after.companyId, siteId: after.siteId, payload: { shipmentId: after.id, number: after.number, status: after.status, change: spec.change, partyId: after.partyId /* B-SA-004 */ } })
       return { shipment: await packingView(tools.tx, after), ...extra }
     },
   )
@@ -385,7 +385,7 @@ async function move(tools: CommandTools, shipment: ShipmentHeader, from: 'DRAFT'
   assertTransition(shipmentMachine, from, to, await shipmentFacts(tools.tx, shipment.id))
   await tools.tx.shipment.update({ where: { id: shipment.id }, data: { status: to, packedAt: to === 'PACKED' ? tools.now : null }, select: { id: true } })
   tools.audit({ action: to === 'PACKED' ? 'shipping.packShipment' : 'shipping.unpackShipment', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: from }, after: { status: to } })
-  tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from, to } })
+  tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from, to, partyId: shipment.partyId /* B-SA-004 */ } })
 }
 
 /** shipping.pack: DRAFT → PACKED once every garment is in a weighed parcel (and every serial-tracked garment has its serial). */

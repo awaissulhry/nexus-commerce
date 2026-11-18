@@ -134,7 +134,7 @@ export async function allocateInCommand(tools: CommandTools, payment: Pick<Payme
       select: { id: true },
     })
     tools.audit({ action: 'payments.allocate', recordType: 'PaymentAllocation', recordId: id, companyId: payment.companyId, after: { paymentId: payment.id, target: allocation.target, targetId: allocation.targetId, amount: markMoney('price', allocation.amount) } })
-    tools.emit({ type: 'payment.allocated', subject: payment.id, companyId: payment.companyId, payload: { paymentId: payment.id, allocationId: id, target: allocation.target, targetId: allocation.targetId } })
+    tools.emit({ type: 'payment.allocated', subject: payment.id, companyId: payment.companyId, payload: { paymentId: payment.id, allocationId: id, target: allocation.target, targetId: allocation.targetId, partyId: payment.partyId /* B-SA-004 */ } })
     written.push({ allocationId: id, ...allocation })
   }
   for (const [requestId, request] of requests) {
@@ -377,7 +377,7 @@ export async function reverseAllocation(caller: CommandCaller, paymentId: string
     const target: AllocationTarget = original.invoiceId ? 'INVOICE' : 'DEPOSIT_REQUEST'
     const targetId = (original.invoiceId ?? original.depositRequestId)!
     tools.audit({ action: 'payments.reverseAllocation', recordType: 'PaymentAllocation', recordId: id, companyId: payment.companyId, after: { paymentId: payment.id, reversalOfId: original.id, target, targetId, amount: markMoney('price', -original.amount) }, reason: note })
-    tools.emit({ type: 'payment.allocation_reversed', subject: payment.id, companyId: payment.companyId, payload: { paymentId: payment.id, allocationId: id, reversalOfId: original.id, target, targetId } })
+    tools.emit({ type: 'payment.allocation_reversed', subject: payment.id, companyId: payment.companyId, payload: { paymentId: payment.id, allocationId: id, reversalOfId: original.id, target, targetId, partyId: payment.partyId /* B-SA-004 */ } })
     return { payment: await paymentDetail(tools.tx, (await readPayment(tools.tx, payment.id))!) }
   })
   return result
@@ -398,7 +398,7 @@ export async function voidPayment(caller: CommandCaller, paymentId: string, body
     await honourPeriodLocks(tools, [{ companyId: current.companyId, day: receivedOn, refused: `the payment received on ${dayWords(receivedOn)} (bank reference ${current.externalRef}) is not voided`, path: 'paymentId', record: { type: 'Payment', id: current.id } }], body.periodLockOverride)
     await tools.tx.payment.update({ where: { id: current.id }, data: { status: 'VOIDED', voidedAt: tools.now, voidReason: reason }, select: { id: true } })
     tools.audit({ recordType: 'Payment', recordId: current.id, companyId: current.companyId, before: { status: 'RECEIVED' }, after: { status: 'VOIDED' }, reason })
-    tools.emit({ type: 'payment.voided', subject: current.id, companyId: current.companyId, payload: { paymentId: current.id } })
+    tools.emit({ type: 'payment.voided', subject: current.id, companyId: current.companyId, payload: { paymentId: current.id, partyId: current.partyId /* B-SA-004 */ } })
     return { payment: await paymentDetail(tools.tx, (await readPayment(tools.tx, current.id))!) }
   })
   return result

@@ -13,6 +13,7 @@ import { sourceOfPayment, storedSourceOf, termsJsonOf } from '../terms'
 import { coreLineOf, partyFacts, reviewIssue } from '../facts'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type InvoiceRow, type LineRow } from '../store'
 import { lockInvoice, readSends } from './store'
+import { invoiceLiveParty } from '../store' // B-SA-004
 // B-W2b-F47: the correction's new lines take the company's tax rules as every draft does (the stamp duty decided again).
 import { stampDutyAtCorrection, taxedLines } from '../tax-codes/apply'
 // B-W2b-GF2: the new lines rest on the declaration of intent the invoice names, and its use follows them.
@@ -197,7 +198,7 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
     before: { status: 'REJECTED', netTotal: markMoney('price', current.netTotal), vatTotal: markMoney('price', current.vatTotal), grossTotal: markMoney('price', current.grossTotal), causale: current.causale },
     after: { lines: prepared === null ? 'kept' : prepared.length, netTotal: markMoney('price', after.netTotal), vatTotal: markMoney('price', after.vatTotal), grossTotal: markMoney('price', after.grossTotal), causale: after.causale, problems: problems.map((problem) => problem.code) },
   })
-  tools.emit({ type: 'invoice.sdi_corrected', subject: invoiceId, companyId: current.companyId, payload: { invoiceId, linesReplaced: prepared !== null } })
+  tools.emit({ type: 'invoice.sdi_corrected', subject: invoiceId, companyId: current.companyId, payload: { invoiceId, linesReplaced: prepared !== null, partyId: await invoiceLiveParty(tools.tx, invoiceId) /* B-SA-004 */ } })
   return { problems, linesReplaced: prepared !== null }
 }
 

@@ -366,7 +366,7 @@ export const events = [
     type: 'return.replacement_ordered',
     context: 'sales',
     description: "The replacement order of a customer return was made (a sales order of the same customer) for its lines decided Replace.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-004: the return's customer (the RMA row's own) */ }),
     live: { ...returnLive, fields: ['returnId', 'number', 'orderId', 'orderNumber'] },
   }),
   defineEvent({

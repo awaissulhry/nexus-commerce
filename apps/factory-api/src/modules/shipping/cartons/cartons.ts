@@ -75,7 +75,7 @@ export async function takeOut(caller: CommandCaller, shipmentId: string, parcelI
       siteId: current.siteId,
       after: { code: body.code.trim(), kind: piece.kind, parcelId: carton.id, cartonSeq: carton.seq, fromLineId: line.id, toLineId: holder.id, serialId: piece.kind === 'SERIAL' ? piece.serialId : null, reopened },
     })
-    tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: piece.kind === 'SERIAL' ? 'serials' : 'lines' } })
+    tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: piece.kind === 'SERIAL' ? 'serials' : 'lines', partyId: current.partyId /* B-SA-004 */ } })
     const after = (await readShipment(tools.tx, current.id))!
     return { takenOut: { parcelId: carton.id, cartonSeq: carton.seq, cellId: line.workOrderSizeId, serialId: piece.kind === 'SERIAL' ? piece.serialId : null, reopened }, bench: await benchView(tools.tx, after) }
   })
@@ -149,7 +149,7 @@ export async function closeCarton(callers: { caller: CommandCaller; system: (ten
         after: { ...changes, garments, renumbered: renumberedIds },
       })
       tools.emit({ type: 'shipping.carton_packed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: parcel.id, cartonNumber: parcel.seq, cartonCount: count, garments } })
-      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels' } })
+      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels', partyId: current.partyId /* B-SA-004 */ } })
       return { closed: { parcelId: parcel.id, cartonNumber: parcel.seq, cartonCount: count, packagingTypeId: type.id, garments, warnings: overweight(gross, type.maxWeightKg?.toFixed(4) ?? null) ? ['OVERWEIGHT' as const] : [] } }
     },
   )

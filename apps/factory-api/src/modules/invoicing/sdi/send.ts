@@ -15,6 +15,7 @@ import { recordPoll } from './poll'
 import { recordSendResult } from './record'
 import type { SdiRuntime, SendResult } from './runtime'
 import { lockInvoice, readSends, sdiAccountOf } from './store'
+import { invoiceLiveParty } from '../store' // B-SA-004
 import { sdiView, type SdiView } from './view'
 
 /**
@@ -137,7 +138,7 @@ async function startInCommand(tools: CommandTools, invoiceId: string, expected: 
     type: 'invoice.sdi_status_changed',
     subject: invoiceId,
     companyId: current.companyId,
-    payload: { invoiceId, submissionId, attempt, sendStatus: 'SENDING', invoiceStatus: current.status, previousStatus: current.status },
+    payload: { invoiceId, submissionId, attempt, sendStatus: 'SENDING', invoiceStatus: current.status, previousStatus: current.status, partyId: await invoiceLiveParty(tools.tx, invoiceId) /* B-SA-004 */ },
   })
   return { submissionId, attempt, fileName, xmlFileId, accountId: account.id }
 }

@@ -101,7 +101,7 @@ export async function setServices(caller: CommandCaller, shipmentId: string, bod
         select: { id: true },
       })
       tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before, after: { ...next, customerDefaults: body.customerDefaults === true } })
-      tools.emit(eventFor(servicesChanged, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, ...next } }))
+      tools.emit(eventFor(servicesChanged, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, ...next, partyId: current.partyId /* B-SA-004 */ } }))
       return { shipmentId: current.id }
     }),
   )

@@ -118,7 +118,7 @@ export async function recordCollection(caller: CommandCaller, shipmentId: string
   if (body.vehiclePlate !== undefined) data.vehiclePlate = body.vehiclePlate === null ? null : plateOf(body.vehiclePlate)
   if (body.signatureFileId !== undefined) data.collectionSignatureFileId = body.signatureFileId
   await command(caller, { name: 'shipping.recordCollection', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
-    const current = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipment.id }, select: { status: true, transportBy: true, number: true, companyId: true, siteId: true, ...COLLECTION_SELECT } })
+    const current = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipment.id }, select: { status: true, transportBy: true, number: true, companyId: true, siteId: true, /* B-SA-004 */ partyId: true, ...COLLECTION_SELECT } })
     const again = recordRefusal({ status: current.status as ShipmentStatus, transportBy: current.transportBy as TransportBy })
     if (again) refused(again.code, again.message)
     await tools.tx.shipment.update({ where: { id: shipment.id }, data, select: { id: true } })
@@ -131,7 +131,7 @@ export async function recordCollection(caller: CommandCaller, shipmentId: string
       before: { collectedByName: current.collectedByName !== null, vehiclePlate: current.vehiclePlate, signatureFileId: current.collectionSignatureFileId },
       after: { collectedByName: (data.collectedByName === undefined ? current.collectedByName : data.collectedByName) !== null, vehiclePlate: data.vehiclePlate === undefined ? current.vehiclePlate : data.vehiclePlate, signatureFileId: data.collectionSignatureFileId === undefined ? current.collectionSignatureFileId : data.collectionSignatureFileId },
     })
-    tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: shipment.id, number: current.number, status: current.status, change: 'details' } })
+    tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: shipment.id, number: current.number, status: current.status, change: 'details', partyId: current.partyId /* B-SA-004 */ } })
     return { shipmentId: shipment.id }
   })
   return getCollection(caller, shipment.id)

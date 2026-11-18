@@ -318,8 +318,9 @@ async function shipToOf(db: CommandTx, partyId: string, addressId: string, path:
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 
-const changed = (tools: CommandTools, shipment: { id: string; number: string; companyId: string; siteId: string }, status: ShipmentStatus, change: 'lines' | 'parcels' | 'serials' | 'details' | 'status') =>
-  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status, change } })
+// B-SA-004: `shipment` is a row read on the server (or the new shipment's own scope); its partyId names the customer.
+const changed = (tools: CommandTools, shipment: { id: string; number: string; companyId: string; siteId: string; partyId: string }, status: ShipmentStatus, change: 'lines' | 'parcels' | 'serials' | 'details' | 'status') =>
+  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status, change, partyId: shipment.partyId /* B-SA-004 */ } })
 
 // ---- create ---------------------------------------------------------------------------------------------------------
 
@@ -403,7 +404,7 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
       siteId,
       after: { number: number.formatted, status: 'DRAFT', salesOrderId: order.id, siteId, transportBy, carrierCode, carrierName, serviceCode, shipToAddressId: body.shipToAddressId ?? null, lines: added },
     })
-    tools.emit({ type: 'shipment.created', subject: id, companyId: order.companyId, siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: order.id, siteId, lines: added.length, garments } })
+    tools.emit({ type: 'shipment.created', subject: id, companyId: order.companyId, siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: order.id, siteId, lines: added.length, garments, partyId: order.partyId /* B-SA-004: the order row's customer, the shipment's */ } })
     changed(tools, scope, 'DRAFT', 'lines')
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, id))!) }
   })
@@ -570,7 +571,7 @@ export async function cancelShipment(caller: CommandCaller, shipmentId: string, 
     }
     await tools.tx.shipment.update({ where: { id: current.id }, data: { status: 'CANCELLED', cancelledAt: tools.now, cancelReason: body.reason }, select: { id: true } })
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: 'CANCELLED', unpackedSerials: serials.map((serial) => serial.serial) }, reason: body.reason })
-    tools.emit({ type: 'shipment.status_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, from: current.status, to: 'CANCELLED' } })
+    tools.emit({ type: 'shipment.status_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, from: current.status, to: 'CANCELLED', partyId: current.partyId /* B-SA-004 */ } })
     changed(tools, current, 'CANCELLED', 'status')
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })

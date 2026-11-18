@@ -128,7 +128,7 @@ export async function makeInvoiceFiles(runtime: FilesRuntime, caller: CommandCal
       if (!xmlFileId || !pdfFileId) throw new ApiError('internal_error', 'An invoice file was not made.')
       if (xmlFileId !== current.xmlFileId || pdfFileId !== current.pdfFileId) {
         await tools.tx.invoice.update({ where: { id: invoiceId }, data: { xmlFileId, pdfFileId }, select: { id: true } })
-        tools.emit({ type: 'invoice.files_attached', subject: invoiceId, companyId, payload: { invoiceId, xmlFileId, pdfFileId } })
+        tools.emit({ type: 'invoice.files_attached', subject: invoiceId, companyId, payload: { invoiceId, xmlFileId, pdfFileId, partyId: current.buyerPartyId /* B-SA-004 */ } })
       }
       tools.audit({ recordType: 'Invoice', recordId: invoiceId, companyId, before: { xmlFileId: current.xmlFileId, pdfFileId: current.pdfFileId }, after: { xmlFileId, pdfFileId, fileName: doc.fileName } })
       return { xmlFileId, pdfFileId }

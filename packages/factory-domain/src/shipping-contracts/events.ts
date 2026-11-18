@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 import { CARRIER_SERVICES } from '../shipping/services/catalogue'
 
 /**
@@ -49,6 +49,7 @@ export const events = [
       express: z.boolean(),
       dutyPayer: z.enum(['SENDER', 'RECEIVER']).nullable(),
       paperless: z.boolean(),
+      partyId: livePartyId(), // B-SA-004: the shipment's customer (Shipment.partyId, read on the server)
     }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'carrierCode', 'serviceCode', 'express', 'dutyPayer', 'paperless'] },
   }),
@@ -56,7 +57,7 @@ export const events = [
     type: 'shipment.parcel_values_changed',
     context: 'shipping-contracts',
     description: "A shipment's parcels' declared or insured values changed (typed, or by the site's insurance rule); the values stay behind the price grain.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), parcelIds: z.array(z.uuid()), byRule: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), parcelIds: z.array(z.uuid()), byRule: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'parcelIds', 'byRule'] },
   }),
   defineEvent({

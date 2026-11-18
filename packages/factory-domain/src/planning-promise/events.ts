@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 
 /**
  * Promise dates' events (B-W2b-301; PLN-171; the code is factory-domain planning/promise). A module folder of its own, as
@@ -34,6 +34,9 @@ export const events = [
         )
         .min(1)
         .max(201),
+      // B-SA-004 (Sales page plan P17'): the order's customer (the order line's own, read on the server) for the office's live
+      // wall; never in the live fields; optional, so an older event still parses.
+      partyId: livePartyId(),
     }),
     live: { permission: 'orders.view', fields: ['orderId', 'orderLineId'] },
   }),

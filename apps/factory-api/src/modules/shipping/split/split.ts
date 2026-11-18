@@ -216,14 +216,14 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
       after: { number: number.formatted, status: 'DRAFT', salesOrderId: parent.salesOrderId, splitFromId: parent.id, splitReason: group.reason, byRule, ...delivery, lines: added },
     })
     tools.audit({ action: 'shipping.split', recordType: 'Shipment', recordId: parent.id, companyId: parent.companyId, siteId: parent.siteId, after: { into: { shipmentId: id, number: number.formatted }, reason: group.reason, byRule, moved: group.moves } })
-    tools.emit({ type: 'shipment.created', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: parent.salesOrderId, siteId: parent.siteId, lines: added.length, garments } })
-    tools.emit({ type: 'shipment.split', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, splitFromId: parent.id, fromNumber: parent.number, reason: group.reason, byRule, lines: added.length, garments } })
-    tools.emit({ type: 'shipment.packing_changed', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, status: 'DRAFT', change: 'lines' } })
+    tools.emit({ type: 'shipment.created', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: parent.salesOrderId, siteId: parent.siteId, lines: added.length, garments, partyId: parent.partyId /* B-SA-004 */ } })
+    tools.emit({ type: 'shipment.split', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, splitFromId: parent.id, fromNumber: parent.number, reason: group.reason, byRule, partyId: parent.partyId /* B-SA-004 */, lines: added.length, garments } })
+    tools.emit({ type: 'shipment.packing_changed', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, status: 'DRAFT', change: 'lines', partyId: parent.partyId /* B-SA-004 */ } })
     const to = await lockShipmentRow(tx, id)
     await carryHoldsInCommand(tools, from, to)
     made.push(id)
   }
-  tools.emit({ type: 'shipment.packing_changed', subject: parent.id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: parent.id, number: parent.number, status: 'DRAFT', change: 'lines' } })
+  tools.emit({ type: 'shipment.packing_changed', subject: parent.id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: parent.id, number: parent.number, status: 'DRAFT', change: 'lines', partyId: parent.partyId /* B-SA-004 */ } })
   // The system's holds of the new shipments settle as their causes stand (most were carried over already).
   await syncSystemHoldsInCommand(tools, made)
   return made

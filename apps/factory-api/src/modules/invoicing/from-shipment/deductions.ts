@@ -29,7 +29,7 @@ export async function removeDeduction(caller: CommandCaller, invoiceId: string, 
       before: { depositInvoiceId: line.depositInvoiceId, deductedNet: markMoney('price', -line.netAmount), grossTotal: markMoney('price', current.grossTotal) },
       after: { depositInvoiceId: null, grossTotal: markMoney('price', totals.grossTotal) },
     })
-    tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
+    tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false, partyId: current.buyerPartyId /* B-SA-004 */ } })
     return { invoice: await invoiceDetail(tools.tx, (await readInvoice(tools.tx, current.id))!) }
   })
 }

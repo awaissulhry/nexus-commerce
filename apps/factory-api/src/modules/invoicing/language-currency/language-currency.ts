@@ -77,7 +77,7 @@ export async function putLanguage(caller: CommandCaller, invoiceId: string, body
       const language = asked ?? (await draftLanguageFor(tools.tx, current.buyerPartyId)).language
       await tools.tx.invoice.update({ where: { id: current.id }, data: { language, updatedAt: tools.now }, select: { id: true } })
       tools.audit({ recordType: 'Invoice', recordId: current.id, companyId: current.companyId, before: { language: before }, after: { language, decided: asked === null } })
-      tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
+      tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false, partyId: current.buyerPartyId /* B-SA-004 */ } })
       return { languageCurrency: await viewOf(tools.tx, (await readInvoice(tools.tx, current.id))!) }
     }),
   )
@@ -110,7 +110,7 @@ export async function putRate(caller: CommandCaller, invoiceId: string, body: { 
         before: { exchangeRate: before?.exchangeRate ?? null, rateDate: before?.rateDate ?? null },
         after: { exchangeRate: body.exchangeRate === null ? null : normalRate(body.exchangeRate), rateDate: body.rateDate ?? null, currency: current.currency },
       })
-      tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
+      tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false, partyId: current.buyerPartyId /* B-SA-004 */ } })
       return { languageCurrency: await viewOf(tools.tx, (await readInvoice(tools.tx, current.id))!) }
     }),
   )

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 
 /**
  * Fittings, alterations and remakes (B-W2b-360; SAL-054, SAL-297, SAL-353; the code is factory-domain sales/fittings).
@@ -69,7 +69,7 @@ export const events = [
     type: 'remake_order.made',
     context: 'fittings',
     description: "A return's made-to-measure units decided Remake got their remake order (a new unit at no price, made to the measures named).",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()), waits: z.boolean() }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()), waits: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'sales.returns.view', fields: ['returnId', 'number', 'orderId', 'orderNumber', 'lineIds', 'waits'] },
   }),
 ] as const
