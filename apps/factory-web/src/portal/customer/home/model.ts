@@ -2,7 +2,7 @@ import type { ApprovalDecision, ApprovalKind, ApprovalStatus } from '@nexus/fact
 import { milestonesOf } from '@nexus/factory-domain/sales/portal-orders/status'
 import type { MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import type { Locale } from '../../../lib/i18n/locales'
-import { isPreviewable, mainFileOf } from '../documents/preview/model'
+import { isPreviewable, mainFileOf, orderWords /* fix-portal-numbers-1 */ } from '../documents/preview/model'
 import type { ApprovalRead, Conversation, CustomerDocument, DocumentsRead, HomeRead, OpenItemsRead, OrderRow, OrdersRead } from './api'
 // B-TH-253: the projects the person was added to join the Messages card (PROJ.portal-F01).
 import type { ProjectStatus } from '@nexus/factory-domain/projects/rules'
@@ -194,7 +194,7 @@ export interface DocumentRow {
   readonly id: string
   readonly title: string
   readonly kind: string
-  /** "Order SO-…" or the record it is of. */
+  /** "Order PO-77 · #12" (never the office's series) or the record it is of. */
   readonly forWords: { readonly key: 'documents.forOrder' | 'documents.for'; readonly params: Readonly<Record<string, string>> } | null
   readonly date: string
   readonly version: number
@@ -213,7 +213,8 @@ export function documentRowOf(document: CustomerDocument, locale: Locale): Docum
     id: document.id,
     title: document.title[locale],
     kind: document.kind,
-    forWords: order ? { key: 'documents.forOrder', params: { number: order.customerRef ? `${order.customerRef} · ${order.number}` : order.number } } : label ? { key: 'documents.for', params: { label } } : null,
+    // fix-portal-numbers-1 (B-TH-303): their PO and the customer's own number ("PO-77 · #12"), as the Documents page says it.
+    forWords: order ? { key: 'documents.forOrder', params: { number: orderWords(order) } } : label ? { key: 'documents.for', params: { label } } : null,
     date: document.date,
     version: document.version,
     isNew: document.new,

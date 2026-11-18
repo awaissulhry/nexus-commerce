@@ -51,8 +51,12 @@ export interface PreviewRow {
   readonly previewable: boolean
 }
 
-/** "PO-77 · SO-2026-0042" (their reference first) or our number alone. */
-export const orderWords = (order: { number: string; customerRef: string | null }): string => (order.customerRef ? `${order.customerRef} · ${order.number}` : order.number)
+/**
+ * fix-portal-numbers-1 (B-TH-303, plan §0.5): "PO-77 · #12" — their reference first, then the customer's OWN order number; never
+ * the office's series (SO-…), which counts every customer's orders. "—" when the order has neither yet.
+ */
+export const orderWords = (order: { readonly customerRef: string | null; readonly yourNumber: { readonly seq: number } | null }): string =>
+  [order.customerRef, order.yourNumber ? `#${order.yourNumber.seq}` : null].filter((part): part is string => part !== null && part !== '').join(' · ') || '—'
 
 export function previewRowOf(document: CustomerDocument, locale: Locale): PreviewRow {
   const file = mainFileOf(document)

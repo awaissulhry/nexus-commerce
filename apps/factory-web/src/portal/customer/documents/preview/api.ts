@@ -10,6 +10,8 @@ import { readFromStore } from '../../../../record-panels/store'
 
 const words = z.object({ it: z.string(), en: z.string() })
 const replacementSchema = z.object({ id: z.string().nullable(), title: words, version: z.number() })
+/** fix-portal-numbers-1 (B-TH-303): an order as the customer reads it — its PO and its own number, never the office's series. */
+export const ownOrderSchema = z.object({ id: z.string(), customerRef: z.string().nullable(), yourNumber: z.object({ seq: z.number(), words }).nullable() })
 
 export const DOCUMENT_FORMATS = ['PDF', 'XML', 'FILE'] as const
 export type DocumentFormat = (typeof DOCUMENT_FORMATS)[number]
@@ -24,7 +26,7 @@ export const documentSchema = z.object({
   group: z.string(),
   title: words,
   for: z
-    .object({ type: z.string(), id: z.string(), label: z.string().nullable(), order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() }).nullable() })
+    .object({ type: z.string(), id: z.string(), label: z.string().nullable(), order: ownOrderSchema.nullable() /* fix-portal-numbers-1 */ })
     .nullable(),
   style: z.object({ code: z.string(), name: z.string() }).nullable().optional(),
   date: z.string(),

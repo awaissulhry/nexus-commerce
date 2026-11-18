@@ -1,3 +1,4 @@
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { formatTime } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
@@ -63,6 +64,8 @@ const PERSON: Readonly<Record<string, { displayName: string; email: string }>> =
 
 // ── the documents ─────────────────────────────────────────────────────────────────────────────────────────────────────
 type DocOver = Partial<CustomerDocument>
+// fix-portal-numbers-1 (B-TH-303): the customer's own order numbers, never the office's SO-… series.
+const ORDER_1 = { id: id(900), customerRef: 'PO-BA-883', yourNumber: customerNumberOf('ORDER', 42) }
 const pdf = (n: number, name: string, size = 180_000) => [{ fileId: id(n), format: 'PDF' as const, name, contentType: 'application/pdf', sizeBytes: size }]
 const doc = (n: number, kind: string, group: string, title: [string, string], over: DocOver = {}): CustomerDocument => ({
   id: id(n),
@@ -70,7 +73,7 @@ const doc = (n: number, kind: string, group: string, title: [string, string], ov
   kindWords: { it: kind, en: kind },
   group,
   title: { it: title[0], en: title[1] },
-  for: { type: 'Shipment', id: id(n + 5000), label: 'SH-2026-0031', order: { id: id(900), number: 'SO-2026-0042', customerRef: 'PO-BA-883' } },
+  for: { type: 'Shipment', id: id(n + 5000), label: 'SH-2026-0031', order: ORDER_1 },
   style: null,
   date: at(-n * 9),
   version: 1,
@@ -87,21 +90,22 @@ const doc = (n: number, kind: string, group: string, title: [string, string], ov
 
 const JACKET = { code: 'JKT-ESEMPIO-01', name: 'Giacca da moto Esempio' }
 const GLOVE = { code: 'GLV-ESEMPIO-02', name: 'Guanto Esempio' }
-const ORDER_2 = { id: id(901), number: 'SO-2026-0039', customerRef: 'PO-BA-871' }
+// fix-portal-numbers-1 (B-TH-303): an order as GET /portal/customer-documents answers it — its PO and the customer's own number.
+const ORDER_2 = { id: id(901), customerRef: 'PO-BA-871', yourNumber: customerNumberOf('ORDER', 39) }
 
 const DOCS: readonly CustomerDocument[] = [
   doc(1, 'DECLARATION_OF_CONFORMITY', 'CONFORMITY', ['Dichiarazione di conformità UE · JKT-ESEMPIO-01 · rev. 3', 'EU declaration of conformity · JKT-ESEMPIO-01 · rev. 3'], { version: 3, style: JACKET, new: true }),
   doc(2, 'USER_INFORMATION', 'CONFORMITY', ['Nota informativa · JKT-ESEMPIO-01', 'User information · JKT-ESEMPIO-01'], { version: 3, style: JACKET, new: true }),
   doc(3, 'DDT', 'DELIVERY', ['DDT 2026/0144', 'Delivery note 2026/0144'], { new: true }),
   doc(4, 'INVOICE', 'FINANCE', ['Fattura FT-2026-0310', 'Invoice FT-2026-0310'], {
-    for: { type: 'Invoice', id: id(60), label: 'FT-2026-0310', order: { id: id(900), number: 'SO-2026-0042', customerRef: 'PO-BA-883' } },
+    for: { type: 'Invoice', id: id(60), label: 'FT-2026-0310', order: ORDER_1 },
     files: [...pdf(4, 'FT-2026-0310.pdf', 64_000), { fileId: id(404), format: 'XML', name: 'IT00000000000_00310.xml', contentType: 'application/xml', sizeBytes: 9_400 }],
     grossTotal: 124_000,
     currency: 'EUR',
   }),
   doc(5, 'INSPECTION_REPORT', 'CONFORMITY', ['Rapporto di ispezione INS-2026-0021', 'Inspection report INS-2026-0021'], { style: JACKET, language: 'en', version: 2 }),
   doc(6, 'PACKING_LIST', 'DELIVERY', ['Distinta colli SH-2026-0027', 'Packing list SH-2026-0027'], { for: { type: 'Shipment', id: id(5006), label: 'SH-2026-0027', order: ORDER_2 } }),
-  doc(7, 'ORDER_CONFIRMATION', 'ORDERS', ["Conferma d'ordine Q-2026-0042 v2", 'Order confirmation Q-2026-0042 v2'], { version: 2, for: { type: 'SalesOrder', id: id(900), label: 'SO-2026-0042', order: { id: id(900), number: 'SO-2026-0042', customerRef: 'PO-BA-883' } } }),
+  doc(7, 'ORDER_CONFIRMATION', 'ORDERS', ["Conferma d'ordine · #42", 'Order confirmation · #42'], { version: 2, for: { type: 'SalesOrder', id: id(900), label: '#42', order: ORDER_1 } }),
   doc(8, 'DECLARATION_OF_CONFORMITY', 'CONFORMITY', ['Dichiarazione di conformità UE · GLV-ESEMPIO-02 · rev. 1', 'EU declaration of conformity · GLV-ESEMPIO-02 · rev. 1'], { style: GLOVE, for: { type: 'Shipment', id: id(5006), label: 'SH-2026-0027', order: ORDER_2 } }),
   doc(9, 'CREDIT_NOTE', 'FINANCE', ['Nota di credito NC-2026-0012', 'Credit note NC-2026-0012'], { for: { type: 'Invoice', id: id(61), label: 'FT-2026-0288', order: ORDER_2 }, files: [{ fileId: id(409), format: 'XML', name: 'IT00000000000_00012.xml', contentType: 'application/xml', sizeBytes: 7_100 }] }),
   doc(10, 'OTHER', 'OTHER', ['Scheda lavaggio esempio.pdf', 'Scheda lavaggio esempio.pdf'], { for: { type: 'Party', id: id(70), label: 'Brand Alpha S.r.l.', order: null }, language: null }),
@@ -181,7 +185,7 @@ const CONFORMITY: ConformityRead = {
       received: [
         {
           shipment: { id: id(5001), number: 'SH-2026-0031' },
-          order: { id: id(900), number: 'SO-2026-0042', customerRef: 'PO-BA-883' },
+          order: ORDER_1,
           shippedOn: dayAt(-3),
           revision: 3,
           pieces: 120,
@@ -193,7 +197,7 @@ const CONFORMITY: ConformityRead = {
         },
         {
           shipment: { id: id(5002), number: 'SH-2026-0018' },
-          order: { id: id(902), number: 'SO-2026-0030', customerRef: null },
+          order: { id: id(902), customerRef: null, yourNumber: customerNumberOf('ORDER', 30) },
           shippedOn: dayAt(-70),
           revision: 2,
           pieces: 60,
