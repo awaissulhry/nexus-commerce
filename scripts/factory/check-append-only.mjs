@@ -93,10 +93,41 @@ const tableRef = (table) => `(?:(?:"public"|public)\\s*\\.\\s*)?${ident(table)}`
 const NAME = `("(?:[^"]+)"|[A-Za-z_]\\w*)`
 const unquote = (name) => name.replace(/^"|"$/g, '')
 
+// Speed (end check 11-19): the migrations are ~90 MB of SQL (the policy migrations write every policy again), and each
+// ledger's patterns used to read all of it, ~8 times per ledger. Every pattern below starts with a statement head, so
+// the heads are found once (one pass each) and a pattern is tried, sticky, only where one starts: the same matches as a
+// search of the whole text (a match can start nowhere else, and no head can start inside another), in the same order.
+const headsOf = (head) => [...all.matchAll(new RegExp(head, 'gi'))].map((match) => match.index)
+const CREATE_HEADS = headsOf('CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:TRIGGER|FUNCTION)\\s')
+const DROP_HEADS = headsOf('DROP\\s+(?:FUNCTION|TRIGGER)\\s')
+// `[^;]*` cannot pass a semicolon: an ALTER TABLE can disable a trigger only when its own text, up to the next one, says so.
+const DISABLE_HEADS = headsOf('ALTER\\s+TABLE\\s').filter((start) => {
+  const end = all.indexOf(';', start)
+  return /\bDISABLE\s+TRIGGER\b/i.test(all.slice(start, end === -1 ? undefined : end))
+})
+/** Every match of `source` (case-insensitive) in the migrations, as matchAll finds them: tried at `heads` only. */
+function matchesAt(heads, source, first = false) {
+  const sticky = new RegExp(source, 'iy')
+  const found = []
+  let end = 0
+  for (const start of heads) {
+    if (start < end) continue
+    sticky.lastIndex = start
+    const match = sticky.exec(all)
+    if (!match) continue
+    found.push(match)
+    if (first) break
+    end = start + match[0].length
+  }
+  return found
+}
+const firstAt = (heads, source) => matchesAt(heads, source, true)[0] ?? null
+
 function functionRaises(fn) {
-  const definitions = [
-    ...all.matchAll(new RegExp(`CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+(?:(?:"public"|public)\\s*\\.\\s*)?${ident(fn)}\\s*\\(\\s*\\)[\\s\\S]*?\\$(\\w*)\\$([\\s\\S]*?)\\$\\1\\$`, 'gi')),
-  ]
+  const definitions = matchesAt(
+    CREATE_HEADS,
+    `CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+(?:(?:"public"|public)\\s*\\.\\s*)?${ident(fn)}\\s*\\(\\s*\\)[\\s\\S]*?\\$(\\w*)\\$([\\s\\S]*?)\\$\\1\\$`,
+  )
   const last = definitions.at(-1)
   return last !== undefined && /\bRAISE\s+EXCEPTION\b/i.test(last[2])
 }
@@ -108,25 +139,24 @@ for (const ledger of ledgers) {
     { what: 'statement trigger BEFORE TRUNCATE', events: 'TRUNCATE', each: 'STATEMENT' },
   ]
   for (const { what, events, each } of wanted) {
-    const pattern = new RegExp(
+    const found = firstAt(
+      CREATE_HEADS,
       `CREATE\\s+(?:OR\\s+REPLACE\\s+)?TRIGGER\\s+${NAME}\\s+BEFORE\\s+${events}\\s+ON\\s+${tableRef(ledger.table)}\\s+FOR\\s+EACH\\s+${each}\\s+EXECUTE\\s+(?:FUNCTION|PROCEDURE)\\s+(?:(?:"public"|public)\\s*\\.\\s*)?${NAME}\\s*\\(\\s*\\)`,
-      'i',
     )
-    const found = pattern.exec(all)
     if (!found) {
       violations.push(`${where} has no ${what} (write it in a hand-written migration of the module)`)
       continue
     }
     const [trigger, fn] = [unquote(found[1]), unquote(found[2])]
     if (!functionRaises(fn)) violations.push(`${where}: the function ${fn} of trigger ${trigger} does not RAISE EXCEPTION`)
-    if (new RegExp(`DROP\\s+FUNCTION\\s+(?:IF\\s+EXISTS\\s+)?(?:(?:"public"|public)\\s*\\.\\s*)?${ident(fn)}`, 'i').test(all)) {
+    if (firstAt(DROP_HEADS, `DROP\\s+FUNCTION\\s+(?:IF\\s+EXISTS\\s+)?(?:(?:"public"|public)\\s*\\.\\s*)?${ident(fn)}`)) {
       violations.push(`${where}: a migration drops the function ${fn} of trigger ${trigger}`)
     }
-    if (new RegExp(`DROP\\s+TRIGGER\\s+(?:IF\\s+EXISTS\\s+)?${ident(trigger)}`, 'i').test(all)) {
+    if (firstAt(DROP_HEADS, `DROP\\s+TRIGGER\\s+(?:IF\\s+EXISTS\\s+)?${ident(trigger)}`)) {
       violations.push(`${where}: a migration drops trigger ${trigger}`)
     }
   }
-  if (new RegExp(`ALTER\\s+TABLE\\s+(?:ONLY\\s+)?(?:IF\\s+EXISTS\\s+)?${tableRef(ledger.table)}[^;]*\\bDISABLE\\s+TRIGGER\\b`, 'i').test(all)) {
+  if (firstAt(DISABLE_HEADS, `ALTER\\s+TABLE\\s+(?:ONLY\\s+)?(?:IF\\s+EXISTS\\s+)?${tableRef(ledger.table)}[^;]*\\bDISABLE\\s+TRIGGER\\b`)) {
     violations.push(`${where}: a migration disables a trigger of the table`)
   }
 }
@@ -168,18 +198,49 @@ function codeFiles(dir) {
 }
 
 const lineOf = (text, index) => text.slice(0, index).split('\n').length
+// Speed (end check 11-19): each ledger's two patterns, built once. A file is read for them only where a write on SOME
+// ledger can start (a lookahead, so no position is skipped), and each ledger's own pattern is tried there, sticky, as
+// matchAll would find it. A file with no write call and no UPDATE / DELETE FROM / TRUNCATE at all is not read further.
+const WRITE_LIST = WRITES.join('|')
+const SQL_HEAD = 'UPDATE|DELETE\\s+FROM|TRUNCATE(?:\\s+TABLE)?'
+const SQL_TABLE = '(?:\\\\?"?public\\\\?"?\\s*\\.\\s*)?\\\\?"?'
+const patterns = ledgers.map((ledger) => {
+  const delegate = ledger.model.charAt(0).toLowerCase() + ledger.model.slice(1)
+  return {
+    ledger,
+    delegate,
+    call: new RegExp(`\\b${escape(delegate)}\\s*\\??\\.\\s*(${WRITE_LIST})\\s*\\(`, 'y'),
+    sql: new RegExp(`\\b(${SQL_HEAD})\\s+(?:ONLY\\s+)?${SQL_TABLE}${escape(ledger.table)}\\b`, 'iy'),
+  }
+})
+const ANY_CALL = new RegExp(`\\.\\s*(?:${WRITE_LIST})\\s*\\(`)
+const ANY_SQL = new RegExp(`\\b(?:${SQL_HEAD})\\s`, 'i')
+const CALL_AT = new RegExp(`\\b(?=(?:${patterns.map((entry) => escape(entry.delegate)).join('|')})\\s*\\??\\.\\s*(?:${WRITE_LIST})\\s*\\()`, 'g')
+const SQL_AT = new RegExp(`\\b(?=(?:${SQL_HEAD})\\s+(?:ONLY\\s+)?${SQL_TABLE}(?:${ledgers.map((ledger) => escape(ledger.table)).join('|')})\\b)`, 'gi')
+const startsOf = (code, test, at) => (test.test(code) ? [...code.matchAll(at)].map((match) => match.index) : [])
+function* stickyMatches(pattern, code, starts) {
+  let end = 0
+  for (const start of starts) {
+    if (start < end) continue
+    pattern.lastIndex = start
+    const match = pattern.exec(code)
+    if (!match) continue
+    end = start + match[0].length
+    yield match
+  }
+}
 let scanned = 0
 for (const file of CODE_DIRS.flatMap((dir) => codeFiles(join(ROOT, dir)))) {
   scanned++
   const code = stripComments(readFileSync(file, 'utf8'))
-  for (const ledger of ledgers) {
-    const delegate = ledger.model.charAt(0).toLowerCase() + ledger.model.slice(1)
-    const call = new RegExp(`\\b${escape(delegate)}\\s*\\??\\.\\s*(${WRITES.join('|')})\\s*\\(`, 'g')
-    for (const match of code.matchAll(call)) {
+  const callStarts = startsOf(code, ANY_CALL, CALL_AT)
+  const sqlStarts = startsOf(code, ANY_SQL, SQL_AT)
+  if (callStarts.length === 0 && sqlStarts.length === 0) continue
+  for (const { ledger, delegate, call, sql } of patterns) {
+    for (const match of stickyMatches(call, code, callStarts)) {
       violations.push(`${shown(file)}:${lineOf(code, match.index)}  ${delegate}.${match[1]}() on the append-only ${ledger.model}; write a new row instead`)
     }
-    const sql = new RegExp(`\\b(UPDATE|DELETE\\s+FROM|TRUNCATE(?:\\s+TABLE)?)\\s+(?:ONLY\\s+)?(?:\\\\?"?public\\\\?"?\\s*\\.\\s*)?\\\\?"?${escape(ledger.table)}\\b`, 'gi')
-    for (const match of code.matchAll(sql)) {
+    for (const match of stickyMatches(sql, code, sqlStarts)) {
       violations.push(`${shown(file)}:${lineOf(code, match.index)}  SQL ${match[1].toUpperCase().replace(/\s+/g, ' ')} on the append-only ${ledger.table}`)
     }
   }
