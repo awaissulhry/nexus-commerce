@@ -179,6 +179,10 @@ model PortalOrderRequestSize {
 /// may also counter: OPEN → COUNTERED (a COUNTER_OFFER approval request the customer answers) → ACCEPTED (the customer said
 /// yes to the counter) | REFUSED | WITHDRAWN. One OPEN or COUNTERED request per order and kind (the API's, serialised per
 /// order). A bulk ask of one customer gives its requests one batch.
+/// B-SA-005 (sales page plan, schema wave "sales page 1/1"; lead picks R3, R10, P21): a DESIGN request (their words, the
+/// lines it is about, up to 10 of the order's files); the ask's own message in the order's conversation; the product change
+/// requests an accepted DESIGN request raised (changes.prisma ChangeRequest.orderChangeRequestId); the work-order changes an
+/// accepted request left to do (order-apply.prisma).
 model OrderChangeRequest {
   id              String                   @id @db.Uuid
   tenantId        String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -190,7 +194,7 @@ model OrderChangeRequest {
   /// A cancel's reason: a code of the CANCEL reason list (reasons.prisma ReasonCode, kept as text); required on a CANCEL,
   /// none on a CHANGE.
   reasonCode      String?
-  /// Their words: a change's note, a cancel's note.
+  /// Their words: a change's note, a cancel's note. B-SA-005: a DESIGN request's words, required there (1 to 4000).
   reason          String?
   /// A change: the delivery date they would like, and the address they ask the goods to go to (one of their own
   /// addresses); null: unchanged. B-PR-23: the date also on a RUSH ("Urgent – asked": the need-by date, optional) and on a
@@ -231,6 +235,17 @@ model OrderChangeRequest {
   /// A customer's bulk ask (lead pick L26): its requests, one per order, share one batch; a batch holds one customer's
   /// requests of one kind (the database refuses a batch that would span two customers or two kinds). Never changes.
   batchId           String?                @db.Uuid
+  // B-SA-005 (sales page plan, schema wave "sales page 1/1"; lead picks R3, R10, P21).
+  /// DESIGN only: the order's files the customer sends with its words (0 to 10, each once): AVAILABLE files of this order or
+  /// of one of its lines, shared with its own customer (the API also checks the content wall; they are uploaded first through
+  /// the portal thread route). Never copied onto a style. The default is the database's ('{}'), so a portal insert may leave
+  /// the column out, as Message.mentionedUserIds. Written with the request, never changed.
+  fileIds           String[]               @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
+  /// The ask's own message in the order's conversation (P21, B-SA-048): the customer's INBOUND message shared with it, on the
+  /// order's thread (threads.prisma Message, of the same customer: the reference). Set with the ask, or once while the
+  /// request still waits (OPEN or COUNTERED); never changed (withdrawing and answering never touch it); one request per
+  /// message.
+  askMessageId      String?                @db.Uuid
   version         Int                      @default(1)
   createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
@@ -247,6 +262,12 @@ model OrderChangeRequest {
   counterApproval ApprovalRequest? @relation("OrderChangeRequestCounter", fields: [tenantId, partyId, counterApprovalId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   counteredBy     User?            @relation("OrderChangeRequestCounteredBy", fields: [tenantId, counteredById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   sampleRound     SampleRound?     @relation("OrderChangeRequestSampleRound", fields: [tenantId, sampleRoundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-SA-005: the ask's message, shared with the request's own party (the party is in the reference); Restrict, not Prisma's
+  // SetNull default for an optional relation: that would also clear tenantId and partyId. The product change requests an
+  // accepted DESIGN request raised, and the work-order changes an accepted request left to do (order-apply.prisma).
+  askMessage            Message?          @relation("OrderChangeRequestAskMessage", fields: [tenantId, partyId, askMessageId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  productChangeRequests ChangeRequest[]   @relation("ChangeRequestOrderChangeRequest")
+  workOrderChanges      WorkOrderChange[] @relation("WorkOrderChangeRequest")
 
   // The target of its rows' reference: a row of the same party.
   @@unique([tenantId, partyId, id])
@@ -255,6 +276,8 @@ model OrderChangeRequest {
   // B-PR-23: a counter-offer counters one request; a sample round answers one request.
   @@unique([tenantId, counterApprovalId])
   @@unique([tenantId, sampleRoundId])
+  // B-SA-005: a message asks one request.
+  @@unique([tenantId, askMessageId])
   // The order's requests, and the office's Approvals source (what waits).
   @@index([tenantId, orderId, status])
   @@index([tenantId, status])
@@ -281,6 +304,12 @@ enum OrderChangeRequestKind {
   SPLIT_SHIPMENT
   /// One more sample round before production.
   SAMPLE_ROUND
+  // B-SA-005 (sales page plan, schema wave "sales page 1/1"; lead picks P7', R3, R10): asked from the portal while the
+  // customer's ask-kinds switch lists it (PortalSettings.productionAskKinds, B-SA-046), answered by Sales.
+  /// A change to the design of some of the order's lines: their words (required), the lines (one row each, no size, the
+  /// pieces unchanged) and up to 10 of the order's files. Accepted only for a style of the customer's own private label: the
+  /// office raises a product change request per style (changes.prisma ChangeRequest.orderChangeRequestId).
+  DESIGN
 }
 
 /// OPEN → ACCEPTED | REFUSED (the office) | WITHDRAWN (the customer).
@@ -299,7 +328,8 @@ enum OrderChangeRequestStatus {
 /// removes them; a cancel asks 0). Written with the request, while it is OPEN; never changed or removed. A CANCEL with no
 /// rows asks for the whole order. B-PR-23: a change may also ask a line in another colourway; a SPLIT_SHIPMENT's rows are
 /// its first part (1 to the pieces before); a SAMPLE_ROUND names at most one line; a RUSH, HOLD or RESUME asks for the
-/// whole order (no rows).
+/// whole order (no rows). B-SA-005: a DESIGN request names at least one line, each once, as a whole (no size), the pieces
+/// unchanged (asked = before).
 model OrderChangeRequestLine {
   id             String   @id @db.Uuid
   tenantId       String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
