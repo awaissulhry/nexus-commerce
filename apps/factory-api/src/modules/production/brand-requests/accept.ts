@@ -97,21 +97,22 @@ export interface AcceptedWorkOrder {
   readonly changed: boolean
 }
 
+/** The accept's answer as the contract sends it (fix-pr-4: its lists are the response's own arrays, not read-only ones). */
 export interface AcceptDone {
   readonly kind: OrderRequestKind
   /** HOLD: the work orders paused now. */
-  readonly paused: readonly AcceptedWorkOrder[]
+  readonly paused: AcceptedWorkOrder[]
   /** RESUME: the work orders whose pause was lifted now. */
-  readonly resumed: readonly AcceptedWorkOrder[]
+  readonly resumed: AcceptedWorkOrder[]
   // B-PR-27b
   /** RUSH: the order's urgency in the customer's own list after the accept. */
   readonly urgency: AcceptedUrgency | null
   /** RUSH with rushFloor: the work orders rushed now (changed), or rushed already. */
-  readonly rushed: readonly AcceptedWorkOrder[]
+  readonly rushed: AcceptedWorkOrder[]
   /** RUSH with rushFloor: the mixed work orders left alone (rush them by hand). */
   readonly rushSkipped: Words | null
   /** RUSH: the new date proposed to sales per line, and the lines not proposed with why. */
-  readonly repromise: { readonly proposals: readonly { readonly id: string; readonly orderLineId: string; readonly seq: number; readonly sizes: readonly { readonly size: string | null; readonly from: string | null; readonly to: string }[] }[]; readonly skipped: AcceptProposals['skipped'] } | null
+  readonly repromise: { readonly proposals: { readonly id: string; readonly orderLineId: string; readonly seq: number; readonly sizes: { readonly size: string | null; readonly from: string | null; readonly to: string }[] }[]; readonly skipped: AcceptProposals['skipped'][number][] } | null
   /** SAMPLE_ROUND: the round it made. */
   readonly sampleRound: { readonly id: string; readonly number: string; readonly kind: string } | null
   /** What was done, in the office's words. */
@@ -126,7 +127,7 @@ export interface AcceptBody {
   readonly rushFloor?: boolean | undefined
 }
 
-const NONE_27B = { urgency: null, rushed: [], rushSkipped: null, repromise: null, sampleRound: null } as const
+const none27b = (): Pick<AcceptDone, 'urgency' | 'rushed' | 'rushSkipped' | 'repromise' | 'sampleRound'> => ({ urgency: null, rushed: [], rushSkipped: null, repromise: null, sampleRound: null })
 
 const blank = (value: string | null | undefined): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
 
@@ -156,7 +157,7 @@ async function pauseInCommand(tools: CommandTools, row: OfficeRequestRow): Promi
   if (!plan.ok) throw new DomainError('invalid_state', plan.words.en, [{ path: `request/${plan.code}`, message: plan.words.en }])
   const placed = plan.hold.length === 0 ? [] : await placeWorkOrderHoldsInCommand(tools, { workOrderIds: plan.hold, kind: 'BRAND', reasonCode: CUSTOMER_PAUSE_REASON.code, requestId: row.id })
   const paused = placed.map((entry) => ({ id: entry.workOrder.id, number: entry.workOrder.number, status: entry.workOrder.status, changed: entry.held }))
-  return { kind: 'HOLD', paused, resumed: [], ...NONE_27B, words: pauseDoneWords('HOLD', paused.map((entry) => entry.number)) }
+  return { kind: 'HOLD', paused, resumed: [], ...none27b(), words: pauseDoneWords('HOLD', paused.map((entry) => entry.number)) }
 }
 
 /** RESUME: every ACTIVE BRAND hold of the order's HOLD asks lifted, work order by work order in id order. */
@@ -172,7 +173,7 @@ async function resumeInCommand(tools: CommandTools, row: OfficeRequestRow): Prom
     const workOrder = (await tx.workOrder.findUnique({ where: { id: hold.workOrderId }, select: { number: true, status: true } }))!
     resumed.push({ id: hold.workOrderId, number: workOrder.number, status: workOrder.status as WorkOrderStatus, changed: lifted.lifted })
   }
-  return { kind: 'RESUME', paused: [], resumed, ...NONE_27B, words: pauseDoneWords('RESUME', resumed.map((entry) => entry.number)) }
+  return { kind: 'RESUME', paused: [], resumed, ...none27b(), words: pauseDoneWords('RESUME', resumed.map((entry) => entry.number)) }
 }
 
 // ── B-PR-27b: "Urgent – asked" and another sample round ─────────────────────────────────────────────────────────────────────────
@@ -258,13 +259,13 @@ async function rushInCommand(tools: CommandTools, context: OfficeContext, row: O
     ...(rushSkipped ? [rushSkipped] : []),
     ACCEPT_DONE_WORDS.repromised(proposals.length),
   ])
-  return { kind: 'RUSH', paused: [], resumed: [], urgency, rushed, rushSkipped, repromise: { proposals, skipped: input.proposals.skipped }, sampleRound: null, words }
+  return { kind: 'RUSH', paused: [], resumed: [], urgency, rushed, rushSkipped, repromise: { proposals, skipped: [...input.proposals.skipped] }, sampleRound: null, words }
 }
 
 /** SAMPLE_ROUND inside the command: the round of the kind asked (sales/samples createRoundInCommand), named on the request. */
 async function sampleInCommand(tools: CommandTools, round: NonNullable<AcceptReads['round']>): Promise<AcceptDone> {
   const made = await createRoundInCommand(tools, round.checked, round.body, newId())
-  return { kind: 'SAMPLE_ROUND', paused: [], resumed: [], ...NONE_27B, sampleRound: { id: made.id, number: made.number, kind: round.body.kind }, words: ACCEPT_DONE_WORDS.sampleRound(made.number) }
+  return { kind: 'SAMPLE_ROUND', paused: [], resumed: [], ...none27b(), sampleRound: { id: made.id, number: made.number, kind: round.body.kind }, words: ACCEPT_DONE_WORDS.sampleRound(made.number) }
 }
 // ── end B-PR-27b ──
 
