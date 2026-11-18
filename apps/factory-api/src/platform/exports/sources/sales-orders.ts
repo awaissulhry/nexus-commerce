@@ -262,7 +262,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       ...priorityWords('it'),
       // ── B-TH-059 ──
       'progress.text': 'Tagliati {cut} · Cuciti {sewn} · Finiti {finished} su {inWork}',
-      'atRisk.text': 'A rischio (mancano {days} giorni)',
+      'atRisk.text': 'Vicino alla data promessa (mancano {days} giorni)', // F-SA-216: the list rule reads "Close to promise" (P15)
       'urgency.URGENT': 'Urgente',
       'urgency.REGULAR': 'Regolare',
     },
@@ -290,7 +290,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       ...priorityWords('en'),
       // ── B-TH-059 ──
       'progress.text': 'Cut {cut} · Sewn {sewn} · Finished {finished} of {inWork}',
-      'atRisk.text': 'At risk ({days} days left)',
+      'atRisk.text': 'Close to promise ({days} days left)', // F-SA-216: "At risk / Late" is order health only (P15)
       'urgency.URGENT': 'Urgent',
       'urgency.REGULAR': 'Regular',
     },

@@ -26,7 +26,7 @@
     "site": "Sede",
     "note": "Nota d’ordine",
     "noteHint": "La nota d'ufficio: il cliente non la vede mai",
-    "atRisk": "A rischio",
+    "atRisk": "Vicino alla data promessa",
     "atRiskHint": "La promessa è vicina e l’ordine è ancora in lavorazione (i giorni della regola di avviso)",
     "customerUrgency": "Segno del cliente",
     "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)"
@@ -115,7 +115,7 @@
     "reaccept": "In attesa del cliente",
     "uninvoiced": "Spedito, non fatturato",
     "invoiced": "Fatturato: {state}",
-    "atRisk": "A rischio",
+    "atRisk": "Vicino alla data promessa",
     "currency": "Valuta: {currency}",
     "urgency": "Segno del cliente: {urgency}"
   },
@@ -199,9 +199,9 @@
     "filter": "Mostra solo gli ordini che il cliente segna {urgency}"
   },
   "atRisk": {
-    "filter": "Mostra solo gli ordini a rischio",
-    "days_one": "A rischio · manca {count} giorno",
-    "days_other": "A rischio · mancano {count} giorni"
+    "filter": "Mostra solo gli ordini vicini alla data promessa",
+    "days_one": "Vicino alla data promessa · manca {count} giorno",
+    "days_other": "Vicino alla data promessa · mancano {count} giorni"
   },
   "progress": {
     "none": "Non ancora in lavorazione",
@@ -214,7 +214,7 @@
     "shipped": "{n} spediti",
     "open": "{n} ancora aperti",
     "late": "In ritardo {n}",
-    "atRisk": "A rischio {n}",
+    "atRisk": "Vicini alla data promessa {n}",
     "invoiced": {
       "NONE": "Non fatturati {n}",
       "PART": "Fatturati in parte {n}",

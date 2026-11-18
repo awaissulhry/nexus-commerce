@@ -32,7 +32,7 @@
       "LOW": "Low",
       "NORMAL": "Normal",
       "HIGH": "High",
-      "URGENT": "Urgent"
+      "URGENT": "Top"
     },
     "means": {
       "LOW": "Served after the others when capacity is short.",
@@ -41,13 +41,13 @@
       "URGENT": "Planned first; say why in one line."
     },
     "title": "Priority of {number}",
-    "titleOne": "Urgent: why?",
+    "titleOne": "Top: why?",
     "legend": "Priority",
     "go": "Set priority",
-    "reason": "Why it is urgent",
+    "reason": "Why it is top priority",
     "reasonHint": "One line, at most {max} characters; the planner and the board see it.",
     "problem": {
-      "reason": "Say why it is urgent (one line).",
+      "reason": "Say why it is top priority (one line).",
       "long": "The reason is too long (500 characters at most).",
       "oneLine": "The reason is one line."
     }
