@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DESIGN_SCREENS, designScreens, findCase, findScreen } from './_registry'
+import { DESIGN_SCREENS, designScreens, findCase, findScreen, readerOf } from './_registry'
 
 describe('the design index finds the fixtures by itself (PLAN §3.1)', () => {
   it('lists the W0 screens by SCR id, in order', () => {
@@ -25,5 +25,14 @@ describe('the design index finds the fixtures by itself (PLAN §3.1)', () => {
 
   it('skips a file named fixtures.ts that exports no design screen', () => {
     expect(designScreens({ './a/fixtures.ts': undefined })).toEqual([])
+  })
+})
+
+// fix-voi-2 (#1633), moved here from lib/i18n/outside-words.vitest.test.ts: only src/app/design may import the design index
+// (scripts/factory/check-no-design-route.mjs, rule 4).
+describe('the design index says who reads a screen (fix-voi-2)', () => {
+  it('a portal or link screen is read from outside, an office or floor screen from the office', () => {
+    for (const file of ['portal/customer/orders/fixtures.ts', 'portal/shell/fixtures.ts', 'links/claim/fixtures.ts', 'shell/links/fixtures.ts']) expect(readerOf({ file }), file).toBe('outside')
+    for (const file of ['areas/sales/orders/list/fixtures.ts', 'shell/office/fixtures.ts', 'floor/fixtures.ts', 'lib/design/ds-portal-lab/fixtures.ts']) expect(readerOf({ file }), file).toBe('office')
   })
 })

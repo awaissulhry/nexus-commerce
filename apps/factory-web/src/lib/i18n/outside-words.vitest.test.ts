@@ -2,7 +2,6 @@ import { createElement, type ComponentType, type ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import LinksLayout from '../../app/(links)/layout'
 import PortalLayout from '../../app/(portal)/layout'
-import { readerOf } from '../../app/design/_registry'
 import { designScreen as officeChangeRecord } from '../../areas/products/changes/record/fixtures'
 import { designScreen as portalNewOrder } from '../../portal/customer/neworder/fixtures'
 import { usePhotoWords } from '../ds-words/photo-capture'
@@ -78,11 +77,6 @@ describe('who reads', () => {
     expect(probe(PortalLayout)).toBe('outside')
     expect(probe(LinksLayout)).toBe('outside')
     expect(read(null, useReader)).toBe('office')
-  })
-
-  it('the design index: a portal or link screen is read from outside, an office or floor screen from the office', () => {
-    for (const file of ['portal/customer/orders/fixtures.ts', 'portal/shell/fixtures.ts', 'links/claim/fixtures.ts', 'shell/links/fixtures.ts']) expect(readerOf({ file }), file).toBe('outside')
-    for (const file of ['areas/sales/orders/list/fixtures.ts', 'shell/office/fixtures.ts', 'floor/fixtures.ts', 'lib/design/ds-portal-lab/fixtures.ts']) expect(readerOf({ file }), file).toBe('office')
   })
 })
 
