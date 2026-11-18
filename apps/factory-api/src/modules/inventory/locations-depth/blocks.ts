@@ -18,7 +18,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { actorOf } from '../../../core/context'
 import { officeContextOf, siteFor, stockContextOf } from '../ledger/access'
 import type { PlaceView } from './contract'
-import { blockInstant, blockToday, dayOf, PLACE_SELECT, placeIn, placeViewOf, storedBlock, toDay, visiblePlace, type PlaceRow } from './places'
+import { blockInstant, blockToday, dayOf, PLACE_SELECT, placeIn, placeViewOf, placeWall, storedBlock, toDay, visiblePlace, type PlaceRow } from './places'
 
 /**
  * Block and unblock a location (B-W2b-289; SCM-181; design warehouse.locations row ⋯ "Block location": reason (count,
@@ -125,6 +125,7 @@ export async function blockedLocations(caller: CommandCaller, query: { readonly 
     AND: [
       context.audience === 'system' ? {} : (scopeWhere(actorOf(context), INVENTORY_LOCATIONS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.LocationWhereInput),
       query.siteId ? { siteId: query.siteId } : {},
+      placeWall(context, INVENTORY_LOCATIONS_VIEW), // fix-pr-8: by its party too
       { blockedAt: { not: null } },
     ],
   }

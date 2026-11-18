@@ -1,12 +1,13 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
-import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { blockHolds, type StoredBlock } from '@nexus/factory-domain/inventory/locations-depth/blocks'
 import { INVENTORY_LOCATIONS_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import type { CommandCaller, CommandTx } from '../../../core/command'
-import { mayAt, stockContextOf } from '../ledger/access'
+import { actorOf } from '../../../core/context'
+import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
 import type { BlockView, PlaceView } from './contract'
 
 /**
@@ -94,11 +95,26 @@ export function placeViewOf(row: PlaceRow, today: BusinessDate = blockToday()): 
   }
 }
 
+// ── fix-pr-8 (the brand wall; the B-PR-10 sweep of every office route) ─────────────────────────────────────────────────────
+/**
+ * A place a party owns (a customer's place, an outside workshop) is that party's: an office person reaches it only when it
+ * reaches that party, as its records (a floor device reaches every place of its own site, as every customer there).
+ */
+export function placeReached(context: StockContext, permission: Permission, row: { readonly companyId: string; readonly siteId: string; readonly partyId: string | null }): boolean {
+  if (!mayAt(context, permission, row)) return false
+  return context.audience !== 'office' || row.partyId === null || can(actorOf(context), permission, { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId })
+}
+
+/** The places `permission` reaches by their party, for a list (`{}` for a floor device and the production unit). */
+export const placeWall = (context: StockContext, permission: Permission): Prisma.LocationWhereInput =>
+  context.audience === 'office' ? (scopeWhere(actorOf(context), permission, { party: { field: 'partyId', nullable: true } }) as Prisma.LocationWhereInput) : {}
+// ── end fix-pr-8 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** A place the caller may see with this permission (a floor device: of its own site), or not found. */
 export async function visiblePlace(caller: CommandCaller, locationId: string, permission: Permission = INVENTORY_LOCATIONS_VIEW): Promise<PlaceRow> {
   const context = stockContextOf(caller)
   const row = isUuid(locationId) ? await caller.withClient((client) => client.location.findUnique({ where: { id: locationId }, select: PLACE_SELECT })) : null
-  if (!row || !mayAt(context, INVENTORY_LOCATIONS_VIEW, row) || !mayAt(context, permission, row)) throw new NotFoundError('Location not found.')
+  if (!row || !placeReached(context, INVENTORY_LOCATIONS_VIEW, row) || !placeReached(context, permission, row)) throw new NotFoundError('Location not found.') // fix-pr-8
   return row
 }
 

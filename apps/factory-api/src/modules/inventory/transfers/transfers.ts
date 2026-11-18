@@ -47,6 +47,7 @@ import {
   type Reader,
   type TransferRowData,
 } from './store'
+import { placeWall } from '../locations-depth/places'
 
 /**
  * Transfers between sites, the draft and the reads (B-W2b-326; SCM-219; design warehouse.transfers): the list with its
@@ -159,7 +160,7 @@ export async function transferOptions(caller: CommandCaller): Promise<TransferOp
       orderBy: [{ code: 'asc' }, { id: 'asc' }],
     })
     const places = await client.location.findMany({
-      where: { siteId: { in: sites.map((site) => site.id) }, status: 'ACTIVE' },
+      where: { AND: [{ siteId: { in: sites.map((site) => site.id) }, status: 'ACTIVE' }, placeWall(context, INVENTORY_STOCK_VIEW)] }, // fix-pr-8: by its party too
       select: { id: true, siteId: true, code: true, name: true, kind: true },
       orderBy: [{ code: 'asc' }, { id: 'asc' }],
     })

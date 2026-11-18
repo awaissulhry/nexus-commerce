@@ -12,7 +12,7 @@ import { actorOf } from '../../../core/context'
 import { binLabelFacts, binLabelsPdf, queueBinLabel } from '../../../platform/print/layouts/bin'
 import { mayAt, officeContextOf, stockContextOf } from '../ledger/access'
 import type { PlaceView } from './contract'
-import { pathOf, PLACE_SELECT, placeIn, placeViewOf, visiblePlace, type PlaceRow } from './places'
+import { pathOf, PLACE_SELECT, placeIn, placeReached, placeViewOf, visiblePlace, type PlaceRow } from './places'
 
 /**
  * Bin labels (B-W2b-289; SCM-178; design warehouse.locations › Location › Labels: the label and its print history; band
@@ -135,7 +135,7 @@ async function pickPlaces(caller: CommandCaller, locationIds: readonly string[],
   const context = stockContextOf(caller)
   const ids = [...new Set(locationIds)]
   const rows = await caller.withClient((client) => client.location.findMany({ where: { id: { in: ids } }, select: PLACE_SELECT, orderBy: [{ code: 'asc' }, { id: 'asc' }] }))
-  const seen = rows.filter((row) => mayAt(context, INVENTORY_LOCATIONS_VIEW, row))
+  const seen = rows.filter((row) => placeReached(context, INVENTORY_LOCATIONS_VIEW, row)) // fix-pr-8: by its party too
   if (seen.length === 0) throw new NotFoundError('Location not found.')
   const ready: PlaceRow[] = []
   const refused: Picked['refused'] = []
@@ -216,7 +216,7 @@ export async function scanLocation(caller: CommandCaller, query: { readonly code
   const context = stockContextOf(caller)
   const code = normalizeLabelCode(query.code)
   const row = await caller.withClient((client) => client.location.findFirst({ where: { labelCode: code } as Prisma.LocationWhereInput, select: PLACE_SELECT }))
-  if (!row || !mayAt(context, INVENTORY_LOCATIONS_VIEW, row)) throw new NotFoundError(`No place carries label ${code}.`)
+  if (!row || !placeReached(context, INVENTORY_LOCATIONS_VIEW, row)) throw new NotFoundError(`No place carries label ${code}.`) // fix-pr-8
   const path = await caller.withClient((client) => pathOf(client, row))
   return { location: placeViewOf(row), path }
 }
