@@ -590,7 +590,13 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `…_production_wave5_guards` (production plan schema wave 5/5, B-PR-40, the old progress switch goes: its schema folder drops
    PortalSettings.progressShared; it redefines portal identity's `factory_portal_settings_guard` from B-PR-12's body (every rule
    kept but the two columns in step; production progress — the level PROGRESS or more, at insert or when raised to it — only for
-   a customer or a brand)):
+   a customer or a brand)), `…_production_wave5_samples_guards` (B-PR-40 EXTRA 1, no schema folder of its own, for B-PR-30b's
+   reverse: it redefines samples' `factory_sample_round_guard` (a DECIDED round back UNDER_REVIEW, its decision cleared and
+   nothing else, only by the reversal of the approval request whose answer decided it — about it, answered at its decidedAt,
+   reversed: `factory_sample_decision_reversed`), wave 4's `factory_sample_swatch_guard` (a decided swatch undecided by the same
+   rule) and `factory_order_gate_guard` (a gate passed by its round waits again, its pass cleared and nothing else, only once
+   the round is back without a decision by that reversal and no work started on its order — no cut log piece not reversed, no
+   bundle not VOID for a cell of its lines: `factory_order_gate_waits_again`, `factory_sales_order_work_started`)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

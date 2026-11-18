@@ -13,7 +13,7 @@ import { APPROVAL_TASK_KINDS } from '../approvals/rules'
 import { decidedForPartyWords, decideForPartyProblems, mayDecideForParty, mayReverse, OVERRIDE_LIMITS, OWN_WORD_KINDS, reversedWords, reverseProblems } from './rules'
 // B-PR-30a / B-PR-30b
 import { decidedForPartyPageWords, decideForRefusal, OVERRIDE_REFUSALS, reverseRefusal, withReversalWords } from './rules'
-import { overrideChanges, overrideGrantProblem, overrideOrderOf, RECORD_KEPT_WORDS } from '../production-brand/override'
+import { ANSWER_NOT_ON_RECORD_WORDS, overrideChanges, overrideGrantProblem, overrideOrderOf } from '../production-brand/override'
 
 const NOW = new Date('2026-11-07T09:00:00.000Z')
 const DAY = 86_400_000
@@ -284,8 +284,13 @@ describe('decide for the party and put its answer back (B-PR-30a, B-PR-30b)', ()
     expect(overrideGrantProblem({ requestedById: OTHER, askedById: null }, ASKER)).toBeNull()
   })
 
-  it('what is not built yet says so in words (KEPT): a decided sample round or swatch stays as the customer decided it', () => {
-    expect(RECORD_KEPT_WORDS.SampleRound.en).toMatch(/^The customer's decision on a sample round stays as it is/)
-    expect(RECORD_KEPT_WORDS.SampleSwatch.it).toMatch(/campione di materiale/)
+  // B-PR-40 (schema wave 5/5): a decided round or swatch is put back now; only one that no longer holds the answer is held.
+  it('a decided sample round goes back under review (and its gate waits again), a swatch is undecided; a record that no longer holds the answer says so', () => {
+    expect(reverseVerdict({ kind: 'SAMPLE', recordType: 'SampleRound', sampleKind: 'PRE_PRODUCTION', cut: null, passedGate: true, applied: false })).toMatchObject({ possible: true, effects: ['ROUND_UNDER_REVIEW', 'GATE_WAITING'] })
+    expect(reverseVerdict({ kind: 'SAMPLE', recordType: 'SampleRound', sampleKind: 'FIT', cut: null, passedGate: false, applied: false })).toMatchObject({ possible: true, effects: ['ROUND_UNDER_REVIEW'] })
+    expect(reverseVerdict({ kind: 'FABRIC', recordType: 'SampleSwatch', cut: null, passedGate: false, applied: false })).toMatchObject({ possible: true, effects: ['SWATCH_UNDECIDED'] })
+    expect(reverseVerdict({ kind: 'SAMPLE', recordType: 'SampleRound', sampleKind: 'PRE_PRODUCTION', cut: { day: '2026-11-10', leather: true }, passedGate: true, applied: false })).toMatchObject({ possible: false, code: 'LEATHER_CUT' })
+    expect(ANSWER_NOT_ON_RECORD_WORDS.SampleRound.en).toMatch(/^The sample round no longer holds this answer/)
+    expect(ANSWER_NOT_ON_RECORD_WORDS.SampleSwatch.it).toMatch(/campione di materiale/)
   })
 })

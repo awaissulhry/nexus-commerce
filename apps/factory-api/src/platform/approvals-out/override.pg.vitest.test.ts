@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { RECORD_KEPT_WORDS, SECOND_PERSON_WORDS } from '@nexus/factory-domain/production-brand/override'
+import { ANSWER_NOT_ON_RECORD_WORDS, REVERSE_EFFECT_WORDS, SECOND_PERSON_WORDS } from '@nexus/factory-domain/production-brand/override'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCalendar } from '../../../../../packages/factory-db/seed/calendar'
 import { callerFor } from '../../core/command'
@@ -32,9 +32,10 @@ import { systemContext } from '../outbox/system'
  *   gates       (lead decision on B-PR-38's open items) a gate waiting for A's open round is neither re-pointed nor removed
  *               (CUSTOMER_DECIDES, the hand pass's words); a gate naming no round stays ours
  *   reverse     A's answer to an artwork put back once with a reason A reads; again: refused; an open request: nothing to put
- *               back; a decided sample round: KEPT (the part that needs a schema change: the round stays as A decided it);
- *               with the switch on through a second person. Wall: office.p2 / a manager limited to B cannot reverse A's
- *               answer (404)
+ *               back; B-PR-40 (schema wave 5/5): A's decided PP round back under review and the gate it passed waiting again,
+ *               A's fabric swatch undecided, each asked again with a new request; a round that no longer holds the answer:
+ *               HELD; with the switch on through a second person. Wall: office.p2 / a manager limited to B cannot reverse
+ *               A's answer (404)
  *   new date    A's refusal of a new date put back: the date stands, A is asked again (a new request, its link once), the
  *               order no longer waits on us for the refusal; a refusal whose date moved since: refused in words (HELD)
  *
@@ -111,6 +112,9 @@ beforeAll(async () => {
   adminPerson = await world.officePerson('ada.admin@pr3h-office.example.com', 'admin')
   alpha = await world.portalPerson('paola.production@brand-alpha.example.com', world.ids.a, ['customer-production', 'partner-approve'])
   blk = (await one<{ colourwayId: string }>('SELECT "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [world.w.a.salesOrderLineId])).colourwayId
+  // B-PR-40: a lining of the seeds for brand A's fabric swatch (sample-decisions no-silent-decision.pg's).
+  const item = await one<{ id: string }>('SELECT id FROM "Item" WHERE "tenantId" = $1 AND code = $2', [world.ids.tenantId, 'SEED-LIN-200'])
+  lining = { itemId: item.id, colourId: (await one<{ id: string }>('SELECT id FROM "ItemColour" WHERE "itemId" = $1 ORDER BY code LIMIT 1', [item.id])).id }
 }, 600_000)
 
 beforeEach(() => {
@@ -123,6 +127,8 @@ afterAll(async () => {
 
 let decidedRound: Json = {}
 let decidedRequest = ''
+let decidedGate = '' // B-PR-40
+let lining = { itemId: '', colourId: '' } // B-PR-40
 
 describe('B-PR-30a decide for the customer', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it("a production manager decides brand A's PP round for it: the round decided as ours, its gate passes, A reads why and never who", async () => {
@@ -180,6 +186,7 @@ describe('B-PR-30a decide for the customer', { timeout: SLOW_TEST_TIMEOUT_MS }, 
     expect(pathOf(await stepped(manager, url, { ...body, version: done.request.version }, 409))).toBe('refusal/ANSWERED')
     decidedRound = pp
     decidedRequest = request.id
+    decidedGate = gate.id
   })
 
   it("with A's switch on a second person grants it: nothing is written before the yes; never by the one who asked; office.p2 reaches no such task", async () => {
@@ -275,13 +282,78 @@ describe('B-PR-30b put the customer\'s answer back', { timeout: SLOW_TEST_TIMEOU
     expect(JSON.stringify(page)).not.toMatch(/Marco|marco\.manager/)
   })
 
-  it('a decided sample round stays as the customer decided it (KEPT: putting it back needs a schema change)', async () => {
+  // B-PR-40 (schema wave 5/5): the database lets the reversal of a sample decision through, so it is put back.
+  it("A's decided PP round goes back under review and the gate it passed waits again, and is asked again; a rejection too; a round not holding the answer: HELD", async () => {
     const row = await requestRow(decidedRequest)
-    const refused = await stepped(manager, `/approvals-out/${decidedRequest}/reverse`, { version: row.version, reason: PUT_BACK }, 409)
-    expect(pathOf(refused)).toBe('refusal/KEPT')
-    expect(refused.error.message).toBe(RECORD_KEPT_WORDS.SampleRound.en)
+    const reverseUrl = `/approvals-out/${decidedRequest}/reverse`
+    // The wall first: a person limited to B reaches nothing of A's round (404, nothing changed).
+    await stepped(managerB, reverseUrl, { version: row.version, reason: PUT_BACK }, 404)
+    await session('office.p2', 'POST', reverseUrl, 404, { version: row.version, reason: PUT_BACK })
     expect(await one('SELECT stage::text, decision::text FROM "SampleRound" WHERE id = $1', [decidedRound.id])).toEqual({ stage: 'DECIDED', decision: 'APPROVED' })
-    expect((await requestRow(decidedRequest)).reversedAt).toBeNull()
+
+    const done = await stepped(manager, reverseUrl, { version: row.version, reason: PUT_BACK })
+    expect(done).toMatchObject({ override: { outcome: 'DONE', taskId: null }, effects: ['ROUND_UNDER_REVIEW', 'GATE_WAITING'], asked: null })
+    // The request: its answer kept, the reversal beside it; the round back under review, still naming it; the gate waits again.
+    expect(await requestRow(decidedRequest)).toMatchObject({ status: 'APPROVED', decidedBy: manager.id, reversedBy: manager.id, reverseReason: PUT_BACK, version: row.version + 1 })
+    expect(await one('SELECT stage::text, decision::text, "decisionComments" AS comments, "decidedAt", "decidedVia"::text AS via, "decidedById"::text AS by, "approvalRequestId"::text AS request FROM "SampleRound" WHERE id = $1', [decidedRound.id]))
+      .toEqual({ stage: 'UNDER_REVIEW', decision: null, comments: null, decidedAt: null, via: null, by: null, request: decidedRequest })
+    expect(await one('SELECT "passedAt", "passedById" FROM "OrderGate" WHERE id = $1', [decidedGate])).toEqual({ passedAt: null, passedById: null })
+    // Told: the board's card moved back, the gate changed, the reversal; OUR message on the round's thread says what it did.
+    expect((await outbox('sample_round.changed')).map((entry) => entry.payload).filter((payload) => payload.sampleRoundId === decidedRound.id).at(-1)).toMatchObject({ stage: 'UNDER_REVIEW', previousStage: 'DECIDED', change: 'MOVED' })
+    expect((await outbox('order_gate.changed')).map((entry) => entry.payload).filter((payload) => payload.gateId === decidedGate).at(-1)).toMatchObject({ change: 'EDITED', passed: false, partyId: world.ids.a })
+    expect((await outbox('approval_request.reversed')).map((entry) => entry.payload).filter((payload) => payload.requestId === decidedRequest)).toHaveLength(1)
+    const message = await one(`SELECT m.direction::text AS direction, m."bodyText" AS text FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SampleRound' AND t."recordId" = $1 ORDER BY m."createdAt" DESC LIMIT 1`, [decidedRound.id])
+    expect(message.direction).toBe('OUTBOUND')
+    expect(message.text).toMatch(/(Put back by us|Revocato da noi)/)
+    expect([REVERSE_EFFECT_WORDS.ROUND_UNDER_REVIEW.en, REVERSE_EFFECT_WORDS.ROUND_UNDER_REVIEW.it].some((words) => message.text.includes(words))).toBe(true)
+    expect(message.text).not.toContain('Marco')
+    expect((await admin<{ action: string }>('SELECT action FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2', ['SampleRound', decidedRound.id])).map((entry) => entry.action)).toContain('sales.samples.reverse')
+    // Put back once; the brand is asked again with a new request (the round is under review, nothing waits).
+    expect(pathOf(await stepped(manager, reverseUrl, { version: row.version + 1, reason: PUT_BACK }, 409))).toBe('refusal/REVERSED')
+    const again = await ask('SAMPLE', 'SampleRound', decidedRound.id)
+    expect(again.status).toBe('OPEN')
+    expect(await one('SELECT "approvalRequestId"::text AS request FROM "SampleRound" WHERE id = $1', [decidedRound.id])).toEqual({ request: again.id })
+
+    // A rejection put back the same way: the FIT round back under review.
+    const fit = await roundOf('FIT', world.ids.a)
+    const first = await ask('SAMPLE', 'SampleRound', fit.id)
+    await as(alpha.browser, 'POST', `/portal/approvals/${first.id}/answer`, { decision: 'REFUSED', answer: 'Made-up: the collar is too wide.', typedName: 'Paola Production', version: first.version })
+    expect(await one('SELECT stage::text, decision::text FROM "SampleRound" WHERE id = $1', [fit.id])).toEqual({ stage: 'DECIDED', decision: 'REJECTED' })
+    expect((await stepped(manager, `/approvals-out/${first.id}/reverse`, { version: (await requestRow(first.id)).version, reason: PUT_BACK })).effects).toEqual(['ROUND_UNDER_REVIEW'])
+    expect(await one('SELECT stage::text, decision::text FROM "SampleRound" WHERE id = $1', [fit.id])).toEqual({ stage: 'UNDER_REVIEW', decision: null })
+
+    // A round whose decision is not the answer (planted: decided at another time than the answer, the rules off): HELD in words,
+    // nothing put back — the database would refuse it too (factory_sample_decision_reversed).
+    const second = await ask('SAMPLE', 'SampleRound', fit.id)
+    await as(alpha.browser, 'POST', `/portal/approvals/${second.id}/answer`, { decision: 'APPROVED', typedName: 'Paola Production', version: second.version })
+    await world.replica([{ sql: `UPDATE "SampleRound" SET "decidedAt" = "decidedAt" - interval '1 minute' WHERE id = $1`, values: [fit.id] }])
+    const held = await stepped(manager, `/approvals-out/${second.id}/reverse`, { version: (await requestRow(second.id)).version, reason: PUT_BACK }, 409)
+    expect(pathOf(held)).toBe('refusal/HELD')
+    expect(held.error.message).toBe(ANSWER_NOT_ON_RECORD_WORDS.SampleRound.en)
+    expect((await requestRow(second.id)).reversedAt).toBeNull()
+    expect(await one('SELECT stage::text, decision::text FROM "SampleRound" WHERE id = $1', [fit.id])).toEqual({ stage: 'DECIDED', decision: 'APPROVED' })
+  })
+
+  it("A's fabric swatch decided in its portal goes back to undecided, and is asked again; office.p2 cannot reverse it (404)", async () => {
+    const sentAt = new Date(Date.now() - 3_600_000).toISOString()
+    const { swatch } = await as(owner.browser, 'POST', '/sales/samples/swatches', { styleId: world.w.styleId, partyId: world.ids.a, kind: 'FABRIC', itemId: lining.itemId, itemColourId: lining.colourId, sentAt }, 201)
+    const request = await ask('FABRIC', 'SampleSwatch', swatch.id)
+    await as(alpha.browser, 'POST', `/portal/approvals/${request.id}/answer`, { decision: 'APPROVED', typedName: 'Paola Production', version: request.version })
+    expect(await one('SELECT decision::text, "decidedVia"::text AS via FROM "SampleSwatch" WHERE id = $1', [swatch.id])).toEqual({ decision: 'APPROVED', via: 'PORTAL' })
+    const reverseUrl = `/approvals-out/${request.id}/reverse`
+    const row = await requestRow(request.id)
+    await session('office.p2', 'POST', reverseUrl, 404, { version: row.version, reason: PUT_BACK })
+
+    const done = await stepped(manager, reverseUrl, { version: row.version, reason: PUT_BACK })
+    expect(done).toMatchObject({ override: { outcome: 'DONE' }, effects: ['SWATCH_UNDECIDED'], asked: null })
+    expect(await one('SELECT decision::text, "decisionComments" AS comments, "decidedAt", "decidedVia"::text AS via, "decidedById"::text AS by, "approvalRequestId"::text AS request FROM "SampleSwatch" WHERE id = $1', [swatch.id]))
+      .toEqual({ decision: null, comments: null, decidedAt: null, via: null, by: null, request: request.id })
+    expect((await outbox('sample_swatch.changed')).map((entry) => entry.payload).filter((payload) => payload.sampleSwatchId === swatch.id).at(-1)).toMatchObject({ change: 'UPDATED', decision: null, via: null })
+    expect(await requestRow(request.id)).toMatchObject({ status: 'APPROVED', portalPerson: alpha.id, reversedBy: manager.id })
+    // Asked again: a new request; its yes decides the swatch again.
+    const again = await ask('FABRIC', 'SampleSwatch', swatch.id)
+    await as(alpha.browser, 'POST', `/portal/approvals/${again.id}/answer`, { decision: 'APPROVED', typedName: 'Paola Production', version: again.version })
+    expect(await one('SELECT decision::text, "approvalRequestId"::text AS request FROM "SampleSwatch" WHERE id = $1', [swatch.id])).toEqual({ decision: 'APPROVED', request: again.id })
   })
 
   it("with A's switch on, a reversal waits for a second person and is done as the person who asked for it", async () => {

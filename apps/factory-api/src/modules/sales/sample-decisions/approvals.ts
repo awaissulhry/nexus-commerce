@@ -5,11 +5,12 @@ import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisio
 import { answerHeldWords, askRefusal, decisionOfAnswer, noCompanyRefusal, swatchAnswerHeldWords, swatchAskRefusal, SWATCH_WORDS, type SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules'
 import { SALES_SAMPLES_VIEW } from '@nexus/factory-domain/sales/samples/permissions'
 import { cellsOf, isOpenStage, roundLabel, type SampleKind, type SampleStage } from '@nexus/factory-domain/sales/samples/rules'
-import { RECORD_KEPT_WORDS } from '@nexus/factory-domain/production-brand/override'
+import { ANSWER_NOT_ON_RECORD_WORDS } from '@nexus/factory-domain/production-brand/override'
 import type { CutStart } from '@nexus/factory-domain/sales/change-requests/rules'
-import { OPEN_ORDER_STATUSES } from '@nexus/factory-domain/planning/milestones/rules'
+import { OPEN_ORDER_STATUSES, type GateKind } from '@nexus/factory-domain/planning/milestones/rules'
+import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import type { CommandTools } from '../../../core/command'
-import { words, type ApprovalRecord, type RecordAdapter, type RecordReverseFacts, type RequestRef } from '../../../platform/approvals-out/adapter'
+import { words, type ApprovalRecord, type RecordAdapter, type RecordReverseFacts, type RequestRef, type ReverseInput } from '../../../platform/approvals-out/adapter'
 import { readCuts } from '../change-requests/store'
 import { readRoundRow, type Reader } from '../samples/store'
 import { readSwatchRow, swatchCompanyOf, swatchFacts, waitingRequest } from './store'
@@ -38,9 +39,14 @@ import { readSwatchRow, swatchCompanyOf, swatchFacts, waitingRequest } from './s
  *              person when its switch is on) → OFFICE, decidedById = the office person who decided (the request's
  *              decidedForPartyById), the comments our words — the same request, so the gate passes by its round's event.
  *   reverseFacts B-PR-30b: the live cut of the brand's open lines of the style (a cut of leather logged, a bundle made), the
- *              gate the round passed — and, until the database lets a decided round or swatch change again (a schema change:
- *              factory_sample_round_guard, factory_sample_swatch_guard, factory_order_gate_guard), `held` KEPT: the brand's
- *              decision stays as it is and the office makes a new round or swatch to ask again.
+ *              gate the round passed; `held` (HELD) only when the round or swatch no longer holds the answer being put back
+ *              (decided another way, or cancelled).
+ *   reverse    B-PR-40 (schema wave 5/5: the database lets it through once the request names its reversal, which
+ *              platform/approvals-out writes first): ROUND_UNDER_REVIEW — the round back UNDER_REVIEW, its decision cleared
+ *              (sample_round.changed MOVED); GATE_WAITING — each gate it passed waits again (order_gate.changed EDITED; the
+ *              database refuses it once work started on the gate's order, as the verdict does); SWATCH_UNDECIDED — the swatch's
+ *              decision cleared (sample_swatch.changed UPDATED). The round or swatch keeps naming the request: the office asks
+ *              the brand again with a new one.
  * The answer itself lands on the round's thread (the brand's own signed message), the engine's settle.
  */
 
@@ -77,6 +83,13 @@ async function cutOfStyle(client: Reader, styleId: string, partyId: string | nul
   return cuts.reduce<CutStart | null>((first, cut) => (first === null || cut.day < first.day || (cut.day === first.day && cut.leather && !first.leather) ? cut : first), null)
 }
 
+/**
+ * B-PR-40: the record's decision is the answer being put back — decided by this request, at its answer's time (a portal, link or
+ * decided-for answer; the database's own test, factory_sample_decision_reversed).
+ */
+const holdsAnswer = (row: { readonly decision: string | null; readonly decidedAt: Date | null; readonly approvalRequestId: string | null }, request: RequestRef): boolean =>
+  row.decision !== null && row.approvalRequestId === request.id && row.decidedAt !== null && request.answeredAt !== null && row.decidedAt.getTime() === request.answeredAt.getTime()
+
 async function roundReverseFacts(client: Reader, request: RequestRef): Promise<RecordReverseFacts> {
   const round = await readRoundRow(client, request.recordId)
   const gates = round ? await client.orderGate.findMany({ where: { sampleRoundId: round.id, passedAt: { not: null } }, select: { salesOrderId: true } }) : []
@@ -85,8 +98,8 @@ async function roundReverseFacts(client: Reader, request: RequestRef): Promise<R
     cut: round ? await cutOfStyle(client, round.styleId, round.partyId, gates.map((gate) => gate.salesOrderId)) : null,
     passedGate: gates.length > 0,
     applied: false,
-    // Until the round guard lets a decided round go back under review (a schema change), the brand's decision stays.
-    held: { code: 'KEPT', words: RECORD_KEPT_WORDS.SampleRound },
+    // B-PR-40: put back only while the round still holds this answer (DECIDED by it); else nothing is marked put back.
+    held: round && round.stage === 'DECIDED' && holdsAnswer(round, request) ? null : { code: 'HELD', words: ANSWER_NOT_ON_RECORD_WORDS.SampleRound },
   }
 }
 
@@ -97,9 +110,85 @@ async function swatchReverseFacts(client: Reader, request: RequestRef): Promise<
     cut: swatch ? await cutOfStyle(client, swatch.styleId, swatch.partyId) : null,
     passedGate: false,
     applied: false,
-    // Until the swatch guard lets a decided swatch be undecided again (a schema change), the brand's decision stays.
-    held: { code: 'KEPT', words: RECORD_KEPT_WORDS.SampleSwatch },
+    // B-PR-40: put back only while the swatch still holds this answer (decided by it); else nothing is marked put back.
+    held: swatch && holdsAnswer(swatch, request) ? null : { code: 'HELD', words: ANSWER_NOT_ON_RECORD_WORDS.SampleSwatch },
   }
+}
+
+/** A row the verdict let through changed meanwhile (the request's lock does not hold the record): the command stops. */
+const MOVED_MEANWHILE = 'The sample changed meanwhile: read it again.'
+
+/**
+ * B-PR-40: the round back UNDER_REVIEW with its decision cleared, then (GATE_WAITING) each gate it passed waiting again, in the
+ * office's reversal command after the request's reversal (the database checks both against it).
+ */
+async function roundReverse(tools: CommandTools, request: RequestRef, input: ReverseInput): Promise<Prisma.InputJsonObject | null> {
+  if (!input.effects.includes('ROUND_UNDER_REVIEW')) return null
+  const round = await readRoundRow(tools.tx, request.recordId)
+  if (!round || round.stage !== 'DECIDED' || !holdsAnswer(round, request)) throw new InvalidStateError(MOVED_MEANWHILE)
+  const { count } = await tools.tx.sampleRound.updateMany({
+    where: { id: round.id, version: round.version, stage: 'DECIDED' },
+    data: { stage: 'UNDER_REVIEW', decision: null, decisionComments: null, decidedAt: null, decidedVia: null, decidedById: null, version: { increment: 1 }, updatedAt: tools.now },
+  })
+  if (count !== 1) throw new InvalidStateError(MOVED_MEANWHILE)
+  tools.audit({
+    action: 'sales.samples.reverse',
+    recordType: SAMPLE_ROUND_RECORD,
+    recordId: round.id,
+    companyId: round.companyId,
+    before: { stage: 'DECIDED', decision: round.decision, decidedVia: round.decidedVia, decidedAt: round.decidedAt ? toUtcIso(round.decidedAt) : null, approvalRequestId: request.id },
+    after: { stage: 'UNDER_REVIEW', decision: null, reversedBy: input.actorId },
+  })
+  tools.emit({ type: 'sample_round.changed', subject: round.id, companyId: round.companyId, payload: { sampleRoundId: round.id, number: round.number, styleId: round.styleId, stage: 'UNDER_REVIEW', previousStage: 'DECIDED', change: 'MOVED', workOrderId: null } })
+  const gatesWaiting: string[] = []
+  if (input.effects.includes('GATE_WAITING')) {
+    const gates = await tools.tx.orderGate.findMany({
+      where: { sampleRoundId: round.id, passedAt: { not: null } },
+      select: { id: true, companyId: true, salesOrderId: true, partyId: true, kind: true, overriddenAt: true, version: true, salesOrder: { select: { number: true } } },
+      orderBy: { id: 'asc' },
+    })
+    for (const gate of gates) {
+      const moved = await tools.tx.orderGate.updateMany({ where: { id: gate.id, version: gate.version }, data: { passedAt: null, passedById: null, version: { increment: 1 }, updatedAt: tools.now } })
+      if (moved.count !== 1) throw new InvalidStateError(MOVED_MEANWHILE)
+      tools.audit({ action: 'planning.gates.reverse', recordType: 'OrderGate', recordId: gate.id, companyId: gate.companyId, before: { passed: true }, after: { passed: false, sampleRoundId: round.id, reversedBy: input.actorId } })
+      tools.emit({
+        type: 'order_gate.changed',
+        subject: gate.id,
+        companyId: gate.companyId,
+        payload: { gateId: gate.id, salesOrderId: gate.salesOrderId, number: gate.salesOrder.number, partyId: gate.partyId, kind: gate.kind as GateKind, change: 'EDITED', via: null, passed: false, startedBefore: gate.overriddenAt !== null },
+      })
+      gatesWaiting.push(gate.id)
+    }
+  }
+  return { sampleRoundId: round.id, stage: 'UNDER_REVIEW', gatesWaiting }
+}
+
+/** B-PR-40: the swatch's decision cleared, in the office's reversal command after the request's reversal. */
+async function swatchReverse(tools: CommandTools, request: RequestRef, input: ReverseInput): Promise<Prisma.InputJsonObject | null> {
+  if (!input.effects.includes('SWATCH_UNDECIDED')) return null
+  const swatch = await readSwatchRow(tools.tx, request.recordId)
+  if (!swatch || !holdsAnswer(swatch, request)) throw new InvalidStateError(MOVED_MEANWHILE)
+  const companyId = await swatchCompanyOf(tools.tx, swatch)
+  const { count } = await tools.tx.sampleSwatch.updateMany({
+    where: { id: swatch.id, version: swatch.version },
+    data: { decision: null, decisionComments: null, decidedAt: null, decidedVia: null, decidedById: null, version: { increment: 1 }, updatedAt: tools.now },
+  })
+  if (count !== 1) throw new InvalidStateError(MOVED_MEANWHILE)
+  tools.audit({
+    action: 'sales.samples.swatchReverse',
+    recordType: SAMPLE_SWATCH_RECORD,
+    recordId: swatch.id,
+    companyId,
+    before: { decision: swatch.decision, decidedVia: swatch.decidedVia, decidedAt: swatch.decidedAt ? toUtcIso(swatch.decidedAt) : null, approvalRequestId: request.id },
+    after: { decision: null, reversedBy: input.actorId },
+  })
+  tools.emit({
+    type: 'sample_swatch.changed',
+    subject: swatch.id,
+    companyId,
+    payload: { sampleSwatchId: swatch.id, styleId: swatch.styleId, roundId: swatch.roundId, partyId: swatch.partyId, kind: swatch.kind as SwatchKind, change: 'UPDATED', decision: null, via: null },
+  })
+  return { sampleSwatchId: swatch.id, decision: null }
 }
 
 export const SAMPLE_ROUND_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
@@ -177,6 +266,7 @@ export const SAMPLE_ROUND_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
     return { decided: true, decision: answer.decision, via: answer.via }
   },
   reverseFacts: roundReverseFacts, // B-PR-30b
+  reverse: roundReverse, // B-PR-40
 })
 
 // ---- swatches -------------------------------------------------------------------------------------------------------------
@@ -287,6 +377,7 @@ export const SAMPLE_SWATCH_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>
     return { decided: true, decision: answer.decision, via: answer.via }
   },
   reverseFacts: swatchReverseFacts, // B-PR-30b
+  reverse: swatchReverse, // B-PR-40
 })
 
 export const SAMPLE_DECISION_ADAPTERS: readonly RecordAdapter[] = Object.freeze([SAMPLE_ROUND_ADAPTER, SAMPLE_SWATCH_ADAPTER])
