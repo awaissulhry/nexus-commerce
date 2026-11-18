@@ -10,6 +10,15 @@ import { markThreadRead, setThreadOwner } from './api'
 import { readMarker } from './state'
 // B-TH-255
 import { readHiddenNew, readThreadPage } from './api'
+// F-SA-260: THE dock pick, and the work order's dock that draws it.
+import { createElement } from 'react'
+import { LOCALES } from '../../../lib/i18n/locales'
+import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
+import { render } from '../../../lib/record-thread/parts/testing'
+import { WorkOrderThreads } from '../../production/work-orders/record/view/WorkOrderThreads'
+import { pickedChoice, pickShown, ThreadPick, type ThreadChoice } from './ThreadPick'
+/** Words as the server markup writes them (an apostrophe, a quote, an ampersand). */
+const escaped = (words: string): string => words.replace(/&/g, '&amp;').replace(/'/g, '&#x27;').replace(/"/g, '&quot;')
 
 /** B-TH-212 — the office container of RecordThread v1: its calls, a live read that never drops the draft, the errors in words. */
 
@@ -463,3 +472,64 @@ describe('TH-9 — pins, the draft on the server, Done, search, the follow-up', 
   })
 })
 // ---- end TH-9
+
+// ── F-SA-260 (sales page plan N4, picks P9, P19; review C-13): THE pick of a record's dock, lifted from the work order's ─────────────
+describe('F-SA-260 — ThreadPick: which ONE thread the dock shows, and the one line that says whose it is', () => {
+  const choices: ThreadChoice[] = [
+    { value: 'workOrder', label: 'Work order notes', title: 'Office only.', line: 'Office only: never shared with a customer.' },
+    { value: 'order-1', label: 'SO-0142 · Brand Alpha', line: 'SO-0142’s thread is shared with Brand Alpha.' },
+  ]
+
+  it('the picker model: the value asked for, else the first (the default) — never a choice the host did not offer', () => {
+    expect(pickedChoice(choices, 'order-1')?.value).toBe('order-1')
+    expect(pickedChoice(choices, 'an-order-the-reader-may-not-open')?.value).toBe('workOrder')
+    expect(pickedChoice(choices, null)?.value).toBe('workOrder')
+    expect(pickedChoice([], 'order-1')).toBeNull()
+    // One thread alone needs no pick.
+    expect(pickShown(choices)).toBe(true)
+    expect(pickShown(choices.slice(0, 1))).toBe(false)
+    expect(pickShown([])).toBe(false)
+  })
+
+  it('draws the DS SegmentedControl (small, wrapping, named), the picked segment checked, and the picked choice’s line under it', () => {
+    const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order-1', children: createElement('p', null, 'THE THREAD') }))
+    expect(html).toContain('role="radiogroup" aria-label="Which thread"')
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>SO-0142 · Brand Alpha</)
+    expect(html).toMatch(/role="radio" aria-checked="false"[^>]*title="Office only\."[^>]*>Work order notes</)
+    expect(html).toContain('<p class="fw-thread-pick-line">SO-0142’s thread is shared with Brand Alpha.</p>')
+    expect(html.indexOf('fw-thread-pick-line')).toBeLessThan(html.indexOf('THE THREAD'))
+    // One choice: the thread alone, no pick and no line.
+    const alone = render(createElement(ThreadPick, { label: 'Which thread', choices: choices.slice(0, 1), value: 'workOrder', children: createElement('p', null, 'THE THREAD') }))
+    expect(alone).not.toContain('radiogroup')
+    expect(alone).toContain('THE THREAD')
+  })
+
+  it('the work order page behaves exactly as today: its own words, its orders as choices, an unknown pick shows its notes', () => {
+    const orders = [{ orderId: 'order-1', number: 'SO-0142', party: { id: 'p1', name: 'Brand Alpha' }, customerRef: null, companyId: 'c1' }]
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['production']).production!)
+      const picked = render(createElement(WorkOrderThreads, { choices: orders, pick: 'order-1', children: createElement('p', null, 'THE THREAD') }), locale)
+      expect(picked, locale).toContain(`aria-label="${escaped(t('thread.pickLabel'))}"`)
+      expect(picked, locale).toContain(escaped(t('thread.orderShared', { number: 'SO-0142', customer: 'Brand Alpha' })))
+      expect(picked, locale).toMatch(/aria-checked="true"[^>]*>SO-0142 · Brand Alpha</)
+      expect(picked, locale).toContain(`title="${escaped(t('thread.workOrderHint'))}"`)
+      const unknown = render(createElement(WorkOrderThreads, { choices: orders, pick: 'gone', children: null }), locale)
+      expect(unknown, locale).toContain(`aria-checked="true" tabindex="0" class="nds-seg-opt on" title="${escaped(t('thread.workOrderHint'))}"`)
+      expect(unknown, locale).toContain(`<p class="fw-thread-pick-line">${escaped(t('thread.workOrderHint'))}</p>`)
+      // No order thread the reader may read: the work order's notes alone, no pick.
+      expect(render(createElement(WorkOrderThreads, { choices: [], pick: 'workOrder', children: createElement('p', null, 'THE THREAD') }), locale), locale).not.toContain('radiogroup')
+    }
+  })
+
+  it('one part, never a fork: the work order draws the shared pick; its old class and rule went; the same look (flex column, gap 4, muted small line)', () => {
+    const workOrder = readFileSync(new URL('../../production/work-orders/record/view/WorkOrderThreads.tsx', import.meta.url), 'utf8')
+    expect(workOrder).toContain("from '../../../../_shared/record-thread/ThreadPick'")
+    expect(workOrder).not.toContain('SegmentedControl')
+    expect(readFileSync(new URL('../../production/_shared/production.css', import.meta.url), 'utf8')).not.toMatch(/\.fw-pr-threadpick\s*\{/)
+    const css = readFileSync(new URL('./thread-pick.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-thread-pick \{\s*flex: none;\s*display: flex;\s*flex-direction: column;\s*gap: var\(--nds-space-4\);\s*min-width: 0;\s*\}/)
+    expect(css).toMatch(/\.fw-thread-pick-line \{\s*margin: 0;\s*color: var\(--nds-text-muted\);\s*font-size: var\(--nds-font-size-sm\);\s*line-height: 1\.45;\s*\}/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
+  })
+})
+// ── end F-SA-260
