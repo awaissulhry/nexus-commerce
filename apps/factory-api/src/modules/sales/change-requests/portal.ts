@@ -63,6 +63,10 @@ import { earliestAskOf, earliestOf, freezeOf, impactAskOf, impactFrom, impactLin
 import { feeView, impactOut } from './store'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { partnerOrder, portalReader, type PortalReader } from '../portal-orders/access'
+// B-SA-046c: an accepted request's follow-up, from the order's own Still to do (read as the system: it names no work order).
+import { followUpOf, type RequestFollowUp } from '@nexus/factory-domain/sales/change-requests/rules'
+import { systemContext } from '../../../platform/outbox/system'
+import { stillToDoOf } from '../orders/still-to-do'
 import { readLines, type PortalLine, type PortalOrderRow } from '../portal-orders/store'
 import {
   addressesOf,
@@ -817,11 +821,31 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   }
 }
 
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): "Accepted · we are carrying it out" / "Accepted · done" on the customer's face ──
+/**
+ * The follow-up of the order's accepted requests: the order's Still to do (the one computation from the records, B-SA-050) read in
+ * the tenant's scope as the SYSTEM — which reaches no work order, so nothing is named — and only whether a step carries each request
+ * out leaves here, as a code. Nothing is read when no request of the order is accepted.
+ */
+async function followUpsOf(reader: PortalReader, order: PortalOrderRow, rows: readonly { readonly id: string; readonly status: string }[]): Promise<Map<string, RequestFollowUp | null>> {
+  const accepted = rows.filter((row) => row.status === 'ACCEPTED')
+  if (accepted.length === 0) return new Map()
+  const open = await reader.inTenant(async (client) => {
+    const facts = await client.salesOrder.findUnique({ where: { id: order.id }, select: { id: true, companyId: true, partyId: true, reapprovalNeededAt: true } })
+    if (!facts) return new Set<string>()
+    const still = await stillToDoOf(client, systemContext(reader.session.tenantId, newId()), facts)
+    return new Set(still.rows.flatMap((row) => (row.requestId ? [row.requestId] : [])))
+  })
+  return new Map(accepted.map((row) => [row.id, followUpOf(row.status, open.has(row.id))]))
+}
+// ── end B-SA-046c ──
+
 async function partnerRequestView(request: FastifyRequest, reader: PortalReader, order: PortalOrderRow, requestId: string) {
   const row = await request.withClient((client) => client.orderChangeRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS }))
   if (!row || row.orderId !== order.id) throw new NotFoundError('Request not found.')
   const { cells, facts } = await viewFacts(request, reader, order, [row])
-  return { ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId }
+  const followUps = await followUpsOf(reader, order, [row]) // B-SA-046c
+  return { ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId, followUp: followUps.get(row.id) ?? null }
 }
 
 export async function partnerList(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
@@ -829,9 +853,10 @@ export async function partnerList(app: FastifyInstance, request: FastifyRequest,
   const order = await partnerOrder(request, reader, orderId)
   const rows = await request.withClient((client) => client.orderChangeRequest.findMany({ where: { orderId: order.id }, select: REQUEST_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 }))
   const { cells, facts } = await viewFacts(request, reader, order, rows)
+  const followUps = await followUpsOf(reader, order, rows) // B-SA-046c
   return {
     asOf: toUtcIso(now),
-    items: rows.map((row) => ({ ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId })),
+    items: rows.map((row) => ({ ...requestView(row, cells.get(row.id) ?? [], facts), mine: row.createdById === reader.session.userId, followUp: followUps.get(row.id) ?? null })),
     live: { events: [...LIVE_EVENTS] },
   }
 }

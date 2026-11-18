@@ -6,6 +6,8 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-046b: which pieces a design change is for.
 import { DESIGN_APPLIES_TO, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046c: an accepted request we are carrying out, or done.
+import { REQUEST_FOLLOW_UPS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
@@ -399,6 +401,9 @@ export const changeRequestSchema = z.object({
   impact: z.object({ appliesTo: z.enum(DESIGN_APPLIES_TO).nullable().optional() }).nullable().optional(),
   version: z.number(),
   mine: z.boolean(),
+  // B-SA-046c: an accepted request: CARRYING_OUT while a step of it is still to do on our side, DONE once none (null or left out:
+  // not accepted, or an older answer). A code only: never a step, a work order or a name.
+  followUp: z.enum(REQUEST_FOLLOW_UPS).nullable().optional(),
 })
 export type ChangeRequest = z.infer<typeof changeRequestSchema>
 

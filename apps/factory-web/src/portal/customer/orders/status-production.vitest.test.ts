@@ -10,7 +10,7 @@ import { PORTAL_AREAS } from '../../shell/nav/portal-nav'
 import { productionOrderSchema, type ProductionGates, type ProductionOrder } from '../production/api'
 import { holdsOf, stageNoteOf, waitingHrefOf } from '../production/model'
 import { gatesEmpty, gatesWaitOnYou, piecesOf, productionOwnsProgress } from '../production/model' // F-PR-12b
-import type { OrderRecord } from './api'
+import type { ChangeRequest, OrderRecord } from './api'
 import { at, dayAt, documentsRead, ORDER_ID, orderRecord, progressRead, requestsOf, shipmentsRead } from './design-data'
 import type { OrderRecordActions, OrderRecordViewModel } from './view/OrderRecordView'
 import { StatusTab } from './view/StatusTab'
@@ -373,3 +373,34 @@ describe('the rules behind it (production/model, F-PR-12b block)', () => {
     for (const key of ['production.gates.title', 'production.gates.states.WAITING_YOU', 'production.approvals.states.REFUSED', 'production.planned.hint', 'production.pieces.oneSize']) expect(keys('en')).toContain(key)
   })
 })
+
+// ---- B-SA-046b / B-SA-046c (14-change-flow §2.0 S6, S8; §2.4): a request's row says which pieces a design change is for, and whether
+// an accepted request is still being carried out — a code from the API, never a step, a work order or a name ----
+describe('B-SA-046b, B-SA-046c: the rows of your requests on Status & progress', () => {
+  const base = () => requestsOf()[0]!
+  const withRows = (...rows: ChangeRequest[]): Partial<OrderRecordViewModel> => ({ requests: { state: 'ready', items: rows.map((row) => ({ ...row, orderNumber: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef })) } })
+  const accepted = (followUp: ChangeRequest['followUp']): ChangeRequest => ({ ...base(), status: 'ACCEPTED', words: w('Accepted', 'Accettata'), answeredAt: at(-1), followUp })
+
+  it('an accepted request reads "we are carrying it out", then "done"; an older answer keeps the API\'s words', () => {
+    for (const locale of ['en', 'it'] as const) {
+      expect(textOf(draw(withRows(accepted('CARRYING_OUT')), locale)), locale).toContain(locale === 'en' ? 'Accepted · we are carrying it out' : 'Accettata · la stiamo eseguendo')
+      expect(textOf(draw(withRows(accepted('DONE')), locale)), locale).toContain(locale === 'en' ? 'Accepted · done' : 'Accettata · eseguita')
+    }
+    const older = textOf(draw(withRows(accepted(undefined))))
+    expect(older).toContain('Accepted')
+    expect(older).not.toMatch(/carrying it out|Accepted · done/)
+    // Waiting for our answer keeps its own words, whatever a stray code says.
+    expect(textOf(draw(withRows({ ...base(), followUp: 'DONE' })))).not.toContain('Accepted · done')
+  })
+
+  it('a design change says which pieces it is for; one asked before the choice says nothing about it', () => {
+    const design: ChangeRequest = { ...base(), kind: 'DESIGN', kindWords: w('Design change request', 'Richiesta di modifica del design'), cells: [{ ...base().cells[0]!, size: null, before: 6, asked: 6 }], requestedDate: null, impact: { appliesTo: 'ALSO_MADE' } }
+    for (const locale of ['en', 'it'] as const) expect(textOf(draw(withRows(design), locale)), locale).toContain(locale === 'en' ? 'Also pieces already made (rework may cost)' : 'Anche ai pezzi già fatti (la rilavorazione può costare)')
+    expect(textOf(draw(withRows({ ...design, impact: null })))).not.toMatch(/pieces already made|not started yet/)
+  })
+
+  it("names nothing of the office or of another customer: Brand Beta's rows hold nothing of Brand Alpha", () => {
+    for (const locale of ['en', 'it'] as const) expect(scanText(draw(withRows(accepted('CARRYING_OUT'), accepted('DONE')), locale), BRAND_ALPHA), locale).toEqual([])
+  })
+})
+// ---- end B-SA-046b / B-SA-046c

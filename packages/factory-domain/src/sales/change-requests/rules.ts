@@ -72,6 +72,19 @@ export const REQUEST_STATUS_WORDS: Readonly<Record<RequestStatus, Words>> = Obje
   COUNTERED: { it: 'Controproposta: in attesa della vostra risposta', en: 'Our counter-offer: waiting for your answer' },
 })
 
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): what an accepted request's customer reads while we carry it out ──
+/**
+ * An accepted request, on the customer's face: CARRYING_OUT while the order's Still to do (modules/sales/orders/still-to-do, the
+ * one computation from the records) holds a step that carries it out, DONE once none does. A code only: never a step, a work
+ * order, a team, a name or a count — the customer reads "Accepted · we are carrying it out" / "Accepted · done".
+ */
+export const REQUEST_FOLLOW_UPS = ['CARRYING_OUT', 'DONE'] as const
+export type RequestFollowUp = (typeof REQUEST_FOLLOW_UPS)[number]
+
+/** The follow-up of one request: null unless accepted. */
+export const followUpOf = (status: string, stepsOpen: boolean): RequestFollowUp | null => (status !== 'ACCEPTED' ? null : stepsOpen ? 'CARRYING_OUT' : 'DONE')
+// ── end B-SA-046c ──
+
 // ---- B-PR-23 (production plan, schema wave 4/5; review fixes R-14, R-50): every kind a request may be ------------------------
 
 /**

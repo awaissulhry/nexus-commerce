@@ -38,6 +38,8 @@ import { ASK_NOT_OPEN_WORDS, DESIGN_ASK_WORDS } from '../../production-brand/wor
 import { designCellsOf, designProblems, designVerdict, isDesignOpen, MAX_DESIGN_FILES, MAX_DESIGN_WORDS, type DesignAsk, type DesignFacts } from './rules'
 // B-SA-046b: which pieces a design change is for.
 import { DEFAULT_DESIGN_APPLIES_TO, DESIGN_APPLIES_TO, DESIGN_APPLIES_WORDS, isDesignAppliesTo } from './rules'
+// B-SA-046c: an accepted request's follow-up on the customer's face.
+import { followUpOf, REQUEST_FOLLOW_UPS } from './rules'
 import { suggestedAnswer } from '../inquiries/production-answer'
 import type { FreezeRuleFacts } from '../order-changes/freeze'
 import { acceptedWithCounter, counterAnswerHeld, counterAnswerOf, counteredWords, counterForReader, counterOutcome, counterPriced, counterProblems, counterQuestion, isCounterable } from './counter'
@@ -809,3 +811,17 @@ describe('B-SA-046b: a design change applies to the pieces not started yet, or a
   })
 })
 // ── end B-SA-046b ──
+
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): "Accepted · we are carrying it out" / "Accepted · done" ──
+describe('B-SA-046c: an accepted request is carried out, then done; any other state has no follow-up', () => {
+  it('reads the steps left of the order\'s Still to do as a code, and nothing before the request is accepted', () => {
+    expect(REQUEST_FOLLOW_UPS).toEqual(['CARRYING_OUT', 'DONE'])
+    expect(followUpOf('ACCEPTED', true)).toBe('CARRYING_OUT')
+    expect(followUpOf('ACCEPTED', false)).toBe('DONE')
+    for (const status of ['OPEN', 'COUNTERED', 'REFUSED', 'WITHDRAWN']) {
+      expect(followUpOf(status, true), status).toBeNull()
+      expect(followUpOf(status, false), status).toBeNull()
+    }
+  })
+})
+// ── end B-SA-046c ──

@@ -512,7 +512,12 @@ function Requests({ model, actions }: { model: OrderRecordViewModel; actions?: O
             <li key={request.id} className="fw-pord-request" id={`change-request:${request.id}`}>
               <div className="fw-pord-request-head">
                 <strong>{request.kindWords[locale]}</strong>
-                <Pill tone={requestTone(request.status)}>{request.words[locale]}</Pill>
+                {/* B-SA-046c: an accepted request says whether we are still carrying it out, or it is done (never the steps). */}
+                {request.status === 'ACCEPTED' && request.followUp ? (
+                  <Pill tone={request.followUp === 'DONE' ? 'success' : 'info'}>{t(`requests.followUp.${request.followUp}`)}</Pill>
+                ) : (
+                  <Pill tone={requestTone(request.status)}>{request.words[locale]}</Pill>
+                )}
                 <span className="fw-pord-sub">{t(request.mine ? 'requests.askedByYou' : 'requests.asked', { when: at(request.askedAt) })}</span>
                 {/* B-PR-23: the customer withdraws a change or a cancel here; a production ask is withdrawn where it was asked. */}
                 {request.status === 'OPEN' && (request.kind === 'CHANGE' || request.kind === 'CANCEL') ? (

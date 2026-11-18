@@ -31,6 +31,8 @@ import { readThread } from '../../../platform/threads/threads'
 import { askMessageText } from './portal'
 // B-SA-046b: the office's impact read of a request (what the customer saw at Send, and the same read now).
 import { brandRequestImpact } from '../../production/brand-requests/read'
+// B-SA-046c: the planner's "Left as is" closes the work-order change an accepted request left.
+import { declineChange } from '../../production/work-order-changes/apply'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -883,6 +885,54 @@ describe('B-SA-046b: a design change applies to the pieces not started yet, or a
 })
 // ── end B-SA-046b ──
 // ── end B-SA-046 ──
+
+// ── B-SA-046c (14-change-flow §2.0 S6, S8): the customer reads "Accepted · we are carrying it out", then "Accepted · done" ──
+describe('B-SA-046c: an accepted request says on the portal whether we are still carrying it out — a code from Still to do, never the steps', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let made = 0
+  /** An order of Brand Alpha in production, 4 of size 52 made by a work order with nothing cut, and its request for 3 (planted). */
+  async function lowered() {
+    const so2 = await orderOf('SEED-SO-0002')
+    const [line] = await admin<{ id: string; colourwayId: string }>('SELECT id::text AS id, "colourwayId"::text AS "colourwayId" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [so2.id])
+    const [cell] = await admin<{ id: string; workOrderId: string }>('SELECT id::text AS id, "workOrderId"::text AS "workOrderId" FROM "WorkOrderSize" WHERE "salesOrderLineId" = $1 LIMIT 1', [line!.id])
+    const ids = { order: newId(), line: newId(), workOrder: newId(), cell: newId(), request: newId() }
+    const tag = `T-SA046C-${++made}-${ids.order.slice(-4)}`
+    await plantedRows([
+      copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+      copyOf('SalesOrderLine', line!.id, { id: ids.line, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
+      { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line, P1] },
+      copyOf('WorkOrder', cell!.workOrderId, { id: ids.workOrder, number: `${tag}-WO`, batchNumber: `${tag}-BT`, status: 'IN_PROGRESS', version: 1 }),
+      copyOf('WorkOrderSize', cell!.id, { id: ids.cell, workOrderId: ids.workOrder, salesOrderLineId: ids.line, colourwayId: line!.colourwayId, size: '52', quantity: 4, version: 1 }),
+      { sql: `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, version) VALUES ($1, $2, $3, $4, $5, 'CHANGE', 'OPEN', 1)`, values: [ids.request, T, companyA, P1, ids.order] },
+      { sql: `INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity) VALUES ($1, $2, $3, $4, $5, '52', 4, 3)`, values: [newId(), T, P1, ids.request, ids.line] },
+    ])
+    return { ...ids, number: tag }
+  }
+  const theirs = async (orderId: string, requestId: string): Promise<Json> => (await ok(browsers.buyer, `/portal/sales-orders/${orderId}/change-requests`)).items.find((item: Json) => item.id === requestId)
+
+  it('none before the answer; "carrying it out" while the work-order change waits; "done" once the planner decided it', async () => {
+    const world = await lowered()
+    expect((await theirs(world.order, world.request)).followUp).toBeNull()
+    await acceptRequest(office(), world.request, { version: 1 }, undefined, h.clock)
+    const carrying = await theirs(world.order, world.request)
+    expect(carrying).toMatchObject({ status: 'ACCEPTED', followUp: 'CARRYING_OUT' })
+    // A code only: no step, no work order, no team, no count of anything on the customer's face.
+    expect(JSON.stringify(carrying)).not.toContain(`${world.number}-WO`)
+    for (const key of ['stillToDo', 'steps', 'workOrders', 'waitingOn']) expect(carrying, key).not.toHaveProperty(key)
+
+    const change = await one<{ id: string; version: number }>('SELECT id::text AS id, version FROM "WorkOrderChange" WHERE "requestId" = $1', [world.request])
+    await declineChange(office(['orders.view', 'orders.manage', 'workorders.view', 'workorders.manage']), change.id, { version: change.version, words: 'Left as is: the four are made as planned (made-up).' })
+    expect((await theirs(world.order, world.request)).followUp).toBe('DONE')
+  })
+
+  it('a refused or withdrawn request has none; the reads write nothing', async () => {
+    const world = await lowered()
+    await refuseRequest(office(), world.request, { version: 1, answer: 'We cannot change it now (made-up).' }, undefined, h.clock)
+    const before = Number((await one<{ n: string }>('SELECT count(*) AS n FROM "AuditLog" WHERE "tenantId" = $1', [T])).n)
+    expect((await theirs(world.order, world.request)).followUp).toBeNull()
+    expect(Number((await one<{ n: string }>('SELECT count(*) AS n FROM "AuditLog" WHERE "tenantId" = $1', [T])).n)).toBe(before)
+  })
+})
+// ── end B-SA-046c ──
 
 // ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): accepting a design change ──
 describe('B-SA-047: a design change is accepted only for the customer\'s own private label, as a product change request per style', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

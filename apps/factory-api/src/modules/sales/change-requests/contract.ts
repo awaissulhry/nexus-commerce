@@ -11,6 +11,8 @@ import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS } from '@nexus/factory-domain/o
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES, MAX_DESIGN_FILES, MAX_DESIGN_WORDS } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-046b: which pieces a design change is for.
 import { DESIGN_APPLIES_TO } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046c: an accepted request's follow-up on the customer's face.
+import { REQUEST_FOLLOW_UPS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 // B-PR-26: our counter-offer on a request.
@@ -164,8 +166,11 @@ export const requestFields = {
   version: z.number().int(),
 }
 
-/** The customer's view of a request: `mine` when the person asked it. */
-const partnerRequest = output({ ...requestFields, mine: z.boolean() })
+/**
+ * The customer's view of a request: `mine` when the person asked it. B-SA-046c: `followUp` — an accepted request CARRYING_OUT while
+ * the order's Still to do holds a step of it, DONE once none (null: not accepted). A code only: no step, work order, name or count.
+ */
+const partnerRequest = output({ ...requestFields, mine: z.boolean(), followUp: z.enum(REQUEST_FOLLOW_UPS).nullable() })
 
 const orderParams = input({ orderId: id() })
 const requestParams = input({ orderId: id(), requestId: id() })

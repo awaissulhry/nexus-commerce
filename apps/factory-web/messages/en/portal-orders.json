@@ -205,7 +205,11 @@
     "cell": "Line {seq} · {size}: {old} → {new}",
     "date": "Wanted by {date}",
     "shipTo": "Deliver to {address}",
-    "note": "Your note: {note}"
+    "note": "Your note: {note}",
+    "followUp": {
+      "CARRYING_OUT": "Accepted · we are carrying it out",
+      "DONE": "Accepted · done"
+    }
   },
   "progress": {
     "title": "Production progress",

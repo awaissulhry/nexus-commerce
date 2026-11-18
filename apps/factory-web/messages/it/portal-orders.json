@@ -205,7 +205,11 @@
     "cell": "Riga {seq} · {size}: {old} → {new}",
     "date": "Desiderato entro il {date}",
     "shipTo": "Consegna a {address}",
-    "note": "La vostra nota: {note}"
+    "note": "La vostra nota: {note}",
+    "followUp": {
+      "CARRYING_OUT": "Accettata · la stiamo eseguendo",
+      "DONE": "Accettata · eseguita"
+    }
   },
   "progress": {
     "title": "Avanzamento della produzione",
