@@ -18,14 +18,16 @@ import { MIGRATIONS_DIR } from './tools'
  * real login and the scoped client.
  *   - PW-15 (DB part): the partner role has no grant on PortalSettings (nor OrderFreezeRule), so a customer never reads its
  *     supervisor, backup, quota or switches;
- *   - PW-S01 (DB part): the limits hold for every login: the level and progressShared in step, the urgent quota 0 to 20, the
+ *   - PW-S01 (DB part): the limits hold for every login: the level alone shares production progress (B-PR-40 dropped the old
+ *     switch B-PR-12 kept in step with it), from PROGRESS on only for a customer or a brand, the urgent quota 0 to 20, the
  *     supervisor with since when, the backup only beside a supervisor and never the same person, office people only; the
  *     production asks HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND only (RUSH follows the urgency switch); the named approver
  *     a person of the customer itself (a refusal names no other customer); limits only for a customer or a brand;
  *   - freeze rules per customer: one active rule per company, customer (or none), field and stage; a customer's set and the
  *     company's are never compared; the customer is fixed;
  *   - the copy step (…_production_brand_limits_copy): progress shared → the level PROGRESS; customers listed for a second
- *     person at release → overrideFourEyes.
+ *     person at release → overrideFourEyes (B-PR-40: run on the schema it saw, the dropped column put back for one
+ *     transaction).
  * The refusals are check_violation (SQLSTATE 23514); their messages are read through raw SQL.
  */
 
@@ -73,7 +75,7 @@ const refusal = (work: Promise<unknown>): Promise<string | null> => work.then(
   (error: Error) => error.message,
 )
 const settingsOf = async (id: string) => (await admin(
-  `SELECT "progressShared", "productionLevel"::text AS level, "productionUrgencyOn" AS "urgencyOn", "productionUrgentMax" AS "urgentMax", "productionSupervisorId"::text AS supervisor,
+  `SELECT "productionLevel"::text AS level, "productionUrgencyOn" AS "urgencyOn", "productionUrgentMax" AS "urgentMax", "productionSupervisorId"::text AS supervisor,
           "productionBackupId"::text AS backup, "productionAskKinds"::text[] AS "askKinds", "productionApproverId"::text AS approver, "overrideFourEyes"
      FROM "PortalSettings" WHERE id = $1`,
   [id],
@@ -128,42 +130,41 @@ describe('the partner role reads no limits (PW-15, DB part)', () => {
 describe("a customer's production limits (PW-S01, DB part)", () => {
   it('ship with their defaults: Status only, urgency off, 3 urgent, nobody named, no production ask, no second person', async () => {
     expect(await settingsOf(seeded.settingsIds.p1)).toEqual({
-      progressShared: false, level: 'STATUS', urgencyOn: false, urgentMax: 3, supervisor: null, backup: null, askKinds: [], approver: null, overrideFourEyes: false,
+      level: 'STATUS', urgencyOn: false, urgentMax: 3, supervisor: null, backup: null, askKinds: [], approver: null, overrideFourEyes: false,
     })
     // The levels in the domain's order: the database compares them in that order.
     expect((await admin(`SELECT enum_range(NULL::"ProductionShareLevel")::text[] AS levels`))[0]!.levels).toEqual([...PRODUCTION_SHARE_LEVELS])
   })
 
-  it('keeps progressShared equal to "the level is PROGRESS or more": one written moves the other, both must agree', async () => {
+  // B-PR-40 (schema wave 5/5): the old progress switch is dropped; the level alone says what the customer sees.
+  it('shares production progress by the level alone: it moves only when written, and from PROGRESS on only for a customer or a brand', async () => {
     const id = seeded.settingsIds.p1
-    // The office switch of today (until B-PR-14) moves the level.
-    expect(await update('PortalSettings', id, { progressShared: true })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: true, level: 'PROGRESS' })
+    expect(await admin(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'PortalSettings' AND column_name = 'progressShared'`)).toEqual([{ n: 0 }])
+    for (const level of ['PROGRESS', 'GATES', 'STATUS', 'QUALITY', 'PROGRESS', 'STATUS'] as const) {
+      expect(await update('PortalSettings', id, { productionLevel: level }), level).toBe(1)
+      expect(await settingsOf(id), level).toMatchObject({ level })
+    }
+    // Another setting written leaves the level as it is (nothing moves it on its own any more).
     expect(await update('PortalSettings', id, { productionLevel: 'GATES' })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: true, level: 'GATES' })
-    expect(await update('PortalSettings', id, { progressShared: false })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: false, level: 'STATUS' })
-    expect(await update('PortalSettings', id, { productionLevel: 'QUALITY' })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: true, level: 'QUALITY' })
-    expect(await update('PortalSettings', id, { progressShared: true })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: true, level: 'QUALITY' })
-    // Both changed and disagreeing: refused. A value written as it already is counts as not written (the office writes every
-    // field it holds, so its unchanged switch never overrules a new level).
-    await expect(update('PortalSettings', id, { progressShared: false, productionLevel: 'GATES' })).rejects.toThrow(/share production progress exactly from the level PROGRESS on/)
-    expect(await update('PortalSettings', id, { progressShared: true, productionLevel: 'STATUS' })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: false, level: 'STATUS' })
-    expect(await update('PortalSettings', id, { progressShared: true, productionLevel: 'GATES' })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: true, level: 'GATES' })
-    expect(await update('PortalSettings', id, { progressShared: false, productionLevel: 'STATUS' })).toBe(1)
-    expect(await settingsOf(id)).toMatchObject({ progressShared: false, level: 'STATUS' })
-    // An insert takes the higher of the two (a new row of P3, then of P4).
+    expect(await update('PortalSettings', id, { maxUsers: 6 })).toBe(1)
+    expect(await settingsOf(id)).toMatchObject({ level: 'GATES' })
+    expect(await update('PortalSettings', id, { productionLevel: 'STATUS', maxUsers: 5 })).toBe(1)
+    // An insert keeps the level written (a new row of P3, then of P4: two customers).
     expect(await insert(office(), 'PortalSettings', { id: P.p3, partyId: P.p3, productionLevel: 'GATES' })).toBe(1)
-    expect(await settingsOf(P.p3)).toMatchObject({ progressShared: true, level: 'GATES' })
-    expect(await insert(office(), 'PortalSettings', { id: P.p4, partyId: P.p4, progressShared: true })).toBe(1)
-    expect(await settingsOf(P.p4)).toMatchObject({ progressShared: true, level: 'PROGRESS' })
-    // Owner answer C1 still holds through the level: a supplier sees no production.
-    await expect(update('PortalSettings', seeded.settingsIds.p2, { productionLevel: 'PROGRESS' })).rejects.toThrow(/only with a customer or a brand/)
-    await expect(update('PortalSettings', seeded.settingsIds.p2, { progressShared: true })).rejects.toThrow(/only with a customer or a brand/)
+    expect(await settingsOf(P.p3)).toMatchObject({ level: 'GATES' })
+    expect(await insert(office(), 'PortalSettings', { id: P.p4, partyId: P.p4, productionLevel: 'PROGRESS' })).toBe(1)
+    expect(await settingsOf(P.p4)).toMatchObject({ level: 'PROGRESS' })
+    // Owner answer C1 through the level: a supplier sees no production — raised to PROGRESS or more refused, at insert too.
+    const words = /production progress is shared only with a customer or a brand/
+    for (const level of ['PROGRESS', 'GATES', 'QUALITY'] as const) {
+      await expect(update('PortalSettings', seeded.settingsIds.p2, { productionLevel: level }), level).rejects.toThrow(words)
+    }
+    expect(await update('PortalSettings', seeded.settingsIds.p2, { productionLevel: 'STATUS' })).toBe(1)
+    const supplier = randomUUID()
+    await plant('Party', P.p2, { id: supplier, code: `T-${supplier.slice(0, 8)}`, legalName: 'Supplier Delta Test', tradeName: null, carrierAccountSecretId: null })
+    await expect(insert(office(), 'PortalSettings', { id: supplier, partyId: supplier, productionLevel: 'PROGRESS' })).rejects.toThrow(words)
+    expect(await insert(office(), 'PortalSettings', { id: supplier, partyId: supplier })).toBe(1)
+    expect(await settingsOf(supplier)).toMatchObject({ level: 'STATUS' })
   })
 
   it('lets 0 to 20 orders be urgent at once', async () => {
@@ -306,9 +307,14 @@ describe('the copy step (…_production_brand_limits_copy)', () => {
     const copy = readMigrations(MIGRATIONS_DIR).filter((migration) => migration.folder.endsWith('_production_brand_limits_copy'))
     expect(copy).toHaveLength(1)
     // As the schema step leaves them: P1 shares progress at the level STATUS (planted with the triggers off); P3 is listed
-    // for a second person at release, P1 is not.
+    // for a second person at release, P1 is not. B-PR-40 dropped progressShared, which the step reads: it runs on the schema
+    // it saw, the column put back inside ONE transaction that is rolled back at the end (the triggers on for the step itself).
+    const after = (id: string) => admin(`SELECT "progressShared", "productionLevel"::text AS level, "overrideFourEyes" FROM "PortalSettings" WHERE id = $1`, [id]).then((rows) => rows[0])
+    const notices: string[] = []
+    const listen = (notice: { message?: string }) => notices.push(notice.message ?? '')
     await db.admin.query('BEGIN')
     try {
+      await db.admin.query(`ALTER TABLE "PortalSettings" ADD COLUMN "progressShared" boolean NOT NULL DEFAULT false`)
       await db.admin.query("SET LOCAL session_replication_role = 'replica'")
       await db.admin.query(`UPDATE "PortalSettings" SET "progressShared" = true, "productionLevel" = 'STATUS', "overrideFourEyes" = false WHERE id = ANY($1::uuid[])`, [[seeded.settingsIds.p1, P.p3]])
       await db.admin.query(`UPDATE "PortalSettings" SET "progressShared" = false, "productionLevel" = 'STATUS' WHERE id = $1`, [P.p3])
@@ -317,25 +323,21 @@ describe('the copy step (…_production_brand_limits_copy)', () => {
            ON CONFLICT (id) DO UPDATE SET "secondPersonPartyIds" = EXCLUDED."secondPersonPartyIds"`,
         [a.companies[0]!.id, a.tenantId, P.p3],
       )
-      await db.admin.query('COMMIT')
-    } catch (error) {
-      await db.admin.query('ROLLBACK')
-      throw error
-    }
-    const notices: string[] = []
-    const listen = (notice: { message?: string }) => notices.push(notice.message ?? '')
-    db.admin.on('notice', listen)
-    try {
+      await db.admin.query("SET LOCAL session_replication_role = 'origin'")
+      db.admin.on('notice', listen)
       await db.admin.query(copy[0]!.sql)
       expect(notices.at(-1)).toMatch(/^portal \(B-PR-12\): 1 portal setting\(s\) that share production progress now show the level PROGRESS; 1 customer\(s\) listed for a second person at release need one for overrides too/)
       // Run again: it changes nothing (it only raises a default).
       await db.admin.query(copy[0]!.sql)
       expect(notices.at(-1)).toMatch(/: 0 portal setting\(s\) .*; 0 customer\(s\)/)
+      expect(await after(seeded.settingsIds.p1)).toMatchObject({ progressShared: true, level: 'PROGRESS', overrideFourEyes: false })
+      expect(await after(P.p3)).toMatchObject({ progressShared: false, level: 'STATUS', overrideFourEyes: true })
+      expect(await after(seeded.settingsIds.p2)).toMatchObject({ progressShared: false, level: 'STATUS', overrideFourEyes: false })
     } finally {
       db.admin.off('notice', listen)
+      await db.admin.query('ROLLBACK')
     }
-    expect(await settingsOf(seeded.settingsIds.p1)).toMatchObject({ progressShared: true, level: 'PROGRESS', overrideFourEyes: false })
-    expect(await settingsOf(P.p3)).toMatchObject({ progressShared: false, level: 'STATUS', overrideFourEyes: true })
-    expect(await settingsOf(seeded.settingsIds.p2)).toMatchObject({ progressShared: false, level: 'STATUS', overrideFourEyes: false })
+    // Rolled back: the column is gone again.
+    expect(await admin(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'PortalSettings' AND column_name = 'progressShared'`)).toEqual([{ n: 0 }])
   })
 })

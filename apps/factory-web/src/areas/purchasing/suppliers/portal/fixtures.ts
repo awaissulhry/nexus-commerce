@@ -43,7 +43,7 @@ export const designScreen = defineDesignScreen<PortalAccessModel>({
   view: SupplierPortalDesign,
   cases: [
     { id: 'normal', label: 'Portal on: an admin, an orders contact, an invited one (no prices column)', model: base() },
-    { id: 'empty', label: 'Nobody has portal access: links still work without an account', model: base({ access: supplierAccess({ people: [], seats: { taken: 0, max: null }, settings: { portalOn: false, progressShared: false, maxUsers: null, allowedRoleKeys: [], version: 0 } }) }) },
+    { id: 'empty', label: 'Nobody has portal access: links still work without an account', model: base({ access: supplierAccess({ people: [], seats: { taken: 0, max: null }, settings: { portalOn: false, maxUsers: null, allowedRoleKeys: [], version: 0 } }) }) },
     { id: 'workshop', label: 'A workshop (subcontractor): Jobs and Admin roles', model: base({ access: workshop() }) },
     { id: 'two-portals', label: 'Supplier and workshop at once: the invite asks which portal', model: base({ access: both(), dialog: { kind: 'invite' }, inviteDraft: blankInvite(both()) }) },
     { id: 'invite', label: 'Invite a supplier contact: Orders, no price', model: base({ dialog: { kind: 'invite' } }) },

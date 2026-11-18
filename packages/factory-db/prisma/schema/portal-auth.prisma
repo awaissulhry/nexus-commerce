@@ -65,8 +65,8 @@ enum PortalSignInCodePurpose {
 }
 
 /// A partner organisation's portal (PLT-006; design sales.customers › Portal access, purchasing.suppliers › Portal access,
-/// portal.customer account › colleagues): whether its people may sign in, whether it sees production progress, and what
-/// its own admin may give. One per party: its id is the party's id by the module's convention (a unique key of ids alone
+/// portal.customer account › colleagues): whether its people may sign in, what it sees of its production, and what its
+/// own admin may give. One per party: its id is the party's id by the module's convention (a unique key of ids alone
 /// cannot be copied by the generated isolation tests), and it names its party. No row: the portal is OFF.
 model PortalSettings {
   /// The party's id: a party has at most one row, read by its id.
@@ -76,11 +76,6 @@ model PortalSettings {
   /// Its people may sign in to the portal. OFF for every party until the office switches it on, one partner at a time;
   /// live sign-in also waits for a published PORTAL_TERMS notice (GATE-PRIVACY, checked by the API).
   portalOn        Boolean  @default(false)
-  /// Owner answer C1: production progress (cut, sewn, inspected, packed per line and size) shows in this customer's
-  /// portal only while this is on; OFF by default. Only for a party with the CUSTOMER or BRAND role. B-PR-12: on exactly
-  /// while productionLevel is PROGRESS or more (the database keeps the two in step); dropped once every reader reads the
-  /// level (B-PR-40).
-  progressShared  Boolean  @default(false)
   /// How many people (active and invited partner users) the portal holds, 1 to 1000; null: no limit.
   maxUsers        Int?
   /// The partner roles (Role.key, audience PARTNER) its people may hold, each once; empty: every partner role of its
@@ -92,9 +87,9 @@ model PortalSettings {
   // default only for a party with the CUSTOMER or BRAND role.
   /// What this customer sees of its orders in production (the portal's My production), each level adding to the one
   /// before: STATUS (stage, since when, expected date), PROGRESS (+ pieces per line and size), GATES (+ its gates and
-  /// dates), QUALITY (+ quality results and photos). Copied once from progressShared (on → PROGRESS); until progressShared
-  /// is dropped (B-PR-40) the database keeps it equal to "productionLevel is PROGRESS or more" (either one written moves the
-  /// other; both written must agree).
+  /// dates), QUALITY (+ quality results and photos). Copied once from the old progress switch (on → PROGRESS, B-PR-12),
+  /// which B-PR-40 dropped: the level alone says it now (Owner answer C1: production progress from PROGRESS on, only for a
+  /// party with the CUSTOMER or BRAND role; STATUS by default).
   productionLevel           ProductionShareLevel     @default(STATUS)
   /// This customer may mark its orders Urgent on My production (L18); off by default (the preset "Production partner"
   /// turns it on). While on, a RUSH request ("Urgent – asked") is open to it too (R-50); switched off, its marks stay but

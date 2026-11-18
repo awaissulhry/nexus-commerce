@@ -4,13 +4,15 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PROGRESS_REFRESH_SECONDS, PROGRESS_STAGE_WORDS, PROGRESS_STAGES, progressOf, type ProgressView, type StageCount } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { scanProgressOf } from '../../production/scans/progress'
 import { partnerOrder, portalReader, type PortalReader } from './access'
-import { namesOf, progressShared, readLines, type PortalLine, type Reader } from './store'
+import { shares } from '@nexus/factory-domain/production-brand/levels'
+import { namesOf, readLines, shareLevelOf, type PortalLine, type Reader } from './store'
 
 /**
  * Production progress for the customer, read side (B-W2b-175, SAL-076; Owner answer C1): the counts per line and size from
  * the floor's records, read in the tenant's scope (they are the office's, never a partner's) and only for an order of the
- * customer's that the partner read found first, while its PortalSettings.progressShared is on (the caller checks it on
- * every request, so switching it off hides the counts at once). Sums only: no worker, no station, no line of the floor.
+ * customer's that the partner read found first, while its share level shares production progress (PortalSettings.productionLevel
+ * PROGRESS or more; B-PR-40: the old switch dropped) — the caller checks it on every request, so a lower level hides the counts
+ * at once. Sums only: no worker, no station, no line of the floor.
  *
  *   cells      the work order cells of the order's lines (not REPAIR work orders, not CANCELLED ones)
  *   cut, sewn  production/scans WIP of each work order past its DRAFT (`bundled`, `sewn`; a held one keeps its scans)
@@ -106,7 +108,7 @@ export function progressFor(reader: PortalReader, orderId: string, lines: readon
 export async function orderProgressView(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
   const reader = portalReader(app, request)
   const order = await partnerOrder(request, reader, orderId)
-  if (!(await reader.inTenant((client) => progressShared(client, reader.session.partyId)))) throw new NotFoundError('Production progress is not shared for this account.')
+  if (!shares(await reader.inTenant((client) => shareLevelOf(client, reader.session.partyId)), 'progress')) throw new NotFoundError('Production progress is not shared for this account.')
   const lines = await request.withClient((client) => readLines(client, [order.id]))
   const answer = await progressFor(reader, order.id, lines, now)
   const names = await reader.inTenant((client) => namesOf(client, [...new Set(lines.map((line) => line.styleId))], [...new Set(lines.map((line) => line.colourwayId))]))

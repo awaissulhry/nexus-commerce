@@ -128,8 +128,7 @@ const row = output({
 const levelFields = {
   level: z.enum(PRODUCTION_SHARE_LEVELS),
   levelWords: words,
-  /** The old switch, kept in every contract until B-PR-40: true from + Progress. */
-  progressShared: z.boolean(),
+  // B-PR-40: the old progress switch is gone; the level says it (progress from + Progress on).
   /** The customer's urgency switch (off: no urgency in the read; its marks are kept, not used). */
   urgencyOn: z.boolean(),
   urgentUse: urgentUse.nullable(),

@@ -49,7 +49,6 @@ export type OrderRow = z.infer<typeof orderRowSchema>
 
 export const ordersSchema = z.object({
   asOf: z.string(),
-  progressShared: z.boolean(),
   chips: z.array(z.object({ chip: z.string(), count: z.number() })),
   count: z.number(),
   items: z.array(orderRowSchema),

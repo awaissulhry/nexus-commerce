@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 // B-TH-105: the customer's own numbers.
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
+import { shares } from '@nexus/factory-domain/production-brand/levels'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { orderProgress, type OrderProgress } from '@nexus/factory-domain/sales/orders/orders'
@@ -19,7 +20,6 @@ import {
   lastPromiseMoves,
   namesOf,
   orderHistory,
-  progressShared,
   readDeposits,
   readLines,
   readOrders,
@@ -28,6 +28,7 @@ import {
   readTracking,
   requestSends,
   sentRequests,
+  shareLevelOf,
   shippedPieces,
   stylesMatching,
   type PortalLine,
@@ -134,7 +135,8 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
   const tenant = await reader.inTenant(async (client) => ({
     moved: await lastPromiseMoves(client, read.orders.map((order) => order.id), since),
     matching: q === '' ? new Set<string>() : await stylesMatching(client, styleIds, q),
-    shared: await progressShared(client, reader.session.partyId),
+    // B-PR-40: the customer's share level (the old progress switch dropped): progress from PROGRESS on.
+    shared: shares(await shareLevelOf(client, reader.session.partyId), 'progress'),
   }))
   const latest = latestByShipment(read.tracking)
   const pieces = piecesOfLines(read.lines, read.shipped)
@@ -210,7 +212,6 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
   return {
     asOf: toUtcIso(now),
     seesPrices: reader.seesPrices,
-    progressShared: tenant.shared,
     chip: query.chip,
     chips: chipCounts(searched.map((entry) => entry.row)),
     count: inChipRows.length,
@@ -249,7 +250,8 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     history: await orderHistory(client, order.id),
     names: await namesOf(client, [...new Set(read.lines.map((line) => line.styleId))], [...new Set(read.lines.map((line) => line.colourwayId))]),
     released: await firstRelease(client, read.lines.map((line) => line.id)),
-    shared: await progressShared(client, reader.session.partyId),
+    // B-PR-40: the customer's share level, in the answer (the old progress switch dropped).
+    level: await shareLevelOf(client, reader.session.partyId),
   }))
   const status = statusOfOrder(order, read.shipments)
   const left = read.shipments.filter((row) => hasLeft(row.status))
@@ -340,7 +342,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     deposits: read.deposits.map((row) => ({ id: row.id, kind: row.kind, status: row.status, amount: asMoney('price', row.amount), currency: row.currency, dueDate: dayOf(row.dueDate), paidAt: row.paidAt ? toUtcIso(row.paidAt) : null })),
     lines,
     pieces: { ordered: progress.totals.ordered, shipped: progress.totals.shipped, open: progress.totals.toShip, closedShort: progress.totals.closedShort },
-    progressShared: tenant.shared,
+    productionLevel: tenant.level,
     shipments: { shown: read.shipments.length, onTheWay: read.shipments.filter((row) => isOnTheWay(row.status)).length },
     live: LIVE,
   }

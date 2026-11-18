@@ -6,6 +6,7 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
 
 /**
  * Every call of the customer's Orders & tracking (B-W2b-191, SCR-184; design portal.customer.orders), each answer checked
@@ -87,7 +88,6 @@ export type OrderRow = z.infer<typeof orderRowSchema>
 export const ordersSchema = z.object({
   asOf: z.string(),
   seesPrices: z.boolean(),
-  progressShared: z.boolean(),
   chip: z.enum(ORDER_CHIPS),
   chips: z.array(z.object({ chip: z.enum(ORDER_CHIPS), count: z.number(), words })),
   count: z.number(),
@@ -244,7 +244,8 @@ export const orderRecordSchema = z.object({
   deposits: z.array(depositSchema),
   lines: z.array(orderLineSchema),
   pieces: pieces.extend({ closedShort: z.number() }),
-  progressShared: z.boolean(),
+  /** B-PR-40: the customer's own share level (C1); …/progress answers when shares(level, 'progress'). */
+  productionLevel: z.enum(PRODUCTION_SHARE_LEVELS),
   shipments: z.object({ shown: z.number(), onTheWay: z.number() }),
   live,
 })

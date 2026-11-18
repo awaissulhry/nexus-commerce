@@ -395,17 +395,21 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     const list = await as(R.buyer, 'GET', '/portal/sales-orders?chip=ALL')
     expect((list.items as Json[]).map((item) => item.number)).toEqual(expect.arrayContaining(['SEED-SO-0001', 'SEED-SO-0002']))
     const record = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}`)
-    expect(record).toMatchObject({ order: { number: 'SEED-SO-0002' }, progressShared: false })
+    expect(record).toMatchObject({ order: { number: 'SEED-SO-0002' }, productionLevel: 'STATUS' }) // B-PR-40: the level, the old switch dropped
     G.so2Line = record.lines[0]
     const off = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}/progress`, undefined, 404)
     expect(off.error.message).toMatch(/not shared/)
-    // B-PR-14: the sales office shares progress through the customer's limits card (the share level; progressShared derived).
-    const share = async (progressShared: boolean) => {
+    // B-PR-14: the sales office shares progress through the customer's limits card (the share level). B-PR-40: the level alone
+    // (the old progressShared switch is dropped from every answer).
+    const share = async (shared: boolean) => {
+      const level = shared ? 'PROGRESS' : 'STATUS'
       const card = await ok(P.sales, 'GET', `/partners/${id('party:P1')}/production`)
       await stepped(w, P.sales)
-      const changed = await ok(P.sales, 'PUT', `/partners/${id('party:P1')}/production`, { productionLevel: progressShared ? 'PROGRESS' : 'STATUS', version: card.production.version })
-      expect(changed.production).toMatchObject({ level: progressShared ? 'PROGRESS' : 'STATUS', progressShared })
-      expect((await ok(P.sales, 'GET', `/partners/${id('party:P1')}`)).settings).toMatchObject({ progressShared })
+      const changed = await ok(P.sales, 'PUT', `/partners/${id('party:P1')}/production`, { productionLevel: level, version: card.production.version })
+      expect(changed.production).toMatchObject({ level })
+      expect(changed.production).not.toHaveProperty('progressShared')
+      expect((await ok(P.sales, 'GET', `/partners/${id('party:P1')}`)).settings).not.toHaveProperty('progressShared')
+      expect((await as(R.buyer, 'GET', `/portal/sales-orders/${so2}`)).productionLevel).toBe(level)
     }
     await share(true)
     const progress = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}/progress`)

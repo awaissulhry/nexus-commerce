@@ -16,8 +16,9 @@ import { seed as seedParties } from './parties'
  *                office preview of P1's portal, all signed out long ago.
  *   codes        the buyer's sign-in code (used, with its link) and step-up code (replaced by a newer one), the order
  *                desk's sign-in code (five wrong tries): every code is dead.
- *   settings     P1 and P2 have portal settings, both with the portal OFF and production progress OFF (Owner answer C1;
- *                every party ships OFF); P1 may have 5 people (buyer and viewer roles), P2 3 (any supplier role).
+ *   settings     P1 and P2 have portal settings, both with the portal OFF and the share level Status only: production
+ *                progress not shared (Owner answer C1; every party ships OFF; B-PR-40: the level, the old switch dropped); P1
+ *                may have 5 people (buyer and viewer roles), P2 3 (any supplier role).
  *   branding     company A: an accent, a sender name and a portal label, no logo; company B keeps the DS colours.
  *   terms        company A's PORTAL_TERMS version 2026-11 PUBLISHED (Italian and English), and the buyer's acknowledgement
  *                of it at the first visit.
@@ -149,8 +150,9 @@ export async function seed(context: SeedContext): Promise<PortalAuthSeed> {
     },
   ]
   const settings = [
-    { id: settingsIds.p1, partyId: p1, portalOn: false, progressShared: false, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer'] },
-    { id: settingsIds.p2, partyId: p2, portalOn: false, progressShared: false, maxUsers: 3, allowedRoleKeys: [] as string[] },
+    // B-PR-40: the share level, not the dropped progress switch: Status only (production progress not shared).
+    { id: settingsIds.p1, partyId: p1, portalOn: false, productionLevel: 'STATUS' as const, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer'] },
+    { id: settingsIds.p2, partyId: p2, portalOn: false, productionLevel: 'STATUS' as const, maxUsers: 3, allowedRoleKeys: [] as string[] },
   ]
   const branding = { companyId: companyA, accentColour: '#1f5fa8', senderDisplayName: 'Seed Factory A', portalLabel: 'Seed Factory A portal' }
 

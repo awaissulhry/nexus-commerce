@@ -135,7 +135,7 @@ async function get(who: keyof typeof people, url: string, status = 200): Promise
 
 const day = (offsetDays: number) => businessDate(new Date(Date.now() + offsetDays * 86_400_000))
 const setLimits = (partyId: string, level: string, urgencyOn: boolean, max: number) =>
-  admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", "progressShared" = $3, "productionUrgencyOn" = $4, "productionUrgentMax" = $5, version = version + 1 WHERE "partyId" = $1`, [partyId, level, level !== 'STATUS', urgencyOn, max])
+  admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", "productionUrgencyOn" = $3, "productionUrgentMax" = $4, version = version + 1 WHERE "partyId" = $1`, [partyId, level, urgencyOn, max]) // B-PR-40: the level alone
 
 beforeAll(async () => {
   h = await startHarness('pr18_brand_portal')
@@ -319,7 +319,8 @@ const alphaRegular = async (urgent: readonly string[]) =>
 describe('B-PR-18 My production (GET /portal/production)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('PW-P01: B lists only its own orders in production, in its own order (Regular by the day sent), every row, no cut', async () => {
     const list = await get('beta', '/portal/production')
-    expect(list).toMatchObject({ level: 'GATES', progressShared: true, urgencyOn: true, chip: 'ALL' })
+    expect(list).toMatchObject({ level: 'GATES', urgencyOn: true, chip: 'ALL' })
+    expect(list).not.toHaveProperty('progressShared') // B-PR-40: the level alone says it
     expect(list.items.map((row: Json) => row.id)).toEqual([beta2.orderId, w.b.salesOrderId])
     expect(list.count).toBe(2)
     expect(list.items.map((row: Json) => [row.number, row.customerRef])).toEqual([

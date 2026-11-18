@@ -56,8 +56,6 @@ const personView = output({
 
 const settingsView = output({
   portalOn: z.boolean(),
-  /** Owner answer C1: production progress in this customer's portal (OFF by default; only for a customer or a brand). */
-  progressShared: z.boolean(),
   maxUsers: z.number().int().nullable(),
   allowedRoleKeys: z.array(z.string()),
   /** 0: no settings row yet (everything off). */
@@ -77,7 +75,6 @@ export const organisationsContract = defineContract({
           party: partyView,
           kinds: z.array(kind),
           portalOn: z.boolean(),
-          progressShared: z.boolean(),
           maxUsers: z.number().int().nullable(),
           people: output({ active: z.number().int(), invited: z.number().int(), suspended: z.number().int() }),
           accessEndingSoon: z.number().int(),
@@ -109,7 +106,6 @@ export const settingsContract = defineContract({
   params: partyParams,
   body: input({
     portalOn: z.boolean().optional(),
-    progressShared: z.boolean().optional(),
     maxUsers: z.number().int().min(1).max(1000).nullable().optional(),
     allowedRoleKeys: z.array(roleKey).max(50).optional(),
     /** The version read (0: no row yet). */
@@ -268,8 +264,6 @@ const namedView = output({ id: id(), name: z.string(), active: z.boolean() })
 const productionView = output({
   /** What the customer sees of its orders in production (each level adds to the one before). */
   level: z.enum(PRODUCTION_SHARE_LEVELS),
-  /** Kept in every contract until B-PR-40 drops it: derived from the level (PROGRESS or more). */
-  progressShared: z.boolean(),
   urgency: output({
     /** The customer may mark its orders Urgent (off: its marks are kept but count for nothing). */
     on: z.boolean(),

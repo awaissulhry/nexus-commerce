@@ -10,7 +10,8 @@ import { definePartnerPermissions } from '../../auth/partners/permissions'
  *                      promise date with every move and its reason in customer words, the lines and sizes with what is
  *                      still open, the shipments with their parcels and tracking, the parcels on the way; and the
  *                      production progress per line and size (cut, sewn, inspected, packed) only while the factory shares
- *                      it with that customer (PortalSettings.progressShared, Owner answer C1). Prices only with the price
+ *                      it with that customer (its share level PROGRESS or more, PortalSettings.productionLevel; Owner answer
+ *                      C1; B-PR-40: the old progressShared switch dropped). Prices only with the price
  *                      grain of the role (customer Buyer, Finance, Admin).
  *
  * Given to the customer Buyer, Finance, Quality and Viewer (../../auth/roles/templates PARTNER_ADDS); the customer Admin

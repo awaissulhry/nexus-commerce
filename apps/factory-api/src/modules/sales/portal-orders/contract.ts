@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { grainedJson, money, notMoney } from '@nexus/factory-domain/money/marked'
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
 import { SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
@@ -77,7 +78,6 @@ export const listContract = defineContract({
     200: output({
       asOf: instant(),
       seesPrices: notMoney(z.boolean()),
-      progressShared: z.boolean(),
       chip: z.enum(ORDER_CHIPS),
       chips: z.array(output({ chip: z.enum(ORDER_CHIPS), count: z.number().int(), words })),
       /** Rows in the chip (after the search). */
@@ -158,8 +158,11 @@ export const recordContract = defineContract({
       deposits: z.array(output({ id: id(), kind: z.enum(STORED_DEPOSIT_KINDS), status: z.string(), amount: money.price(z.number().int()), currency: z.string(), dueDate: day, paidAt: instant().nullable() })),
       lines: z.array(line),
       pieces: pieces.extend({ closedShort: z.number().int() }),
-      /** The customer sees production progress (C1): GET …/progress answers. */
-      progressShared: z.boolean(),
+      /**
+       * What the customer sees of its production (its own share level, C1; B-PR-40: the old progress switch dropped): GET
+       * …/progress answers from PROGRESS on (production-brand/levels shares(level, 'progress')).
+       */
+      productionLevel: z.enum(PRODUCTION_SHARE_LEVELS),
       shipments: output({ shown: z.number().int(), onTheWay: z.number().int() }),
       live,
     }),
@@ -281,7 +284,6 @@ export const sheetContract = defineContract({
     200: output({
       asOf: instant(),
       seesPrices: notMoney(z.boolean()),
-      progressShared: z.boolean(),
       chip: z.enum(ORDER_CHIPS),
       chips: z.array(output({ chip: z.enum(ORDER_CHIPS), count: z.number().int(), words })),
       count: z.number().int(),

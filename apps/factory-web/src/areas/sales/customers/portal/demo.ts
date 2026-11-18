@@ -69,7 +69,7 @@ export function customerAccess(over: Partial<PortalAccess> = {}): PortalAccess {
   return {
     party: { id: '0190f0e2-1000-7000-8000-000000000001', code: 'MODA-DEMO', name: 'Moda Demo', roles: ['CUSTOMER'], status: 'ACTIVE', companyId: '0190f0e2-0001-7000-8000-000000000001' },
     kinds: ['CUSTOMER'],
-    settings: { portalOn: true, progressShared: false, maxUsers: 10, allowedRoleKeys: [], version: 4 },
+    settings: { portalOn: true, maxUsers: 10, allowedRoleKeys: [], version: 4 },
     seats: { taken: 5, max: 10 },
     roles: rolesOf(['CUSTOMER']),
     people: CUSTOMER_PEOPLE,
@@ -82,7 +82,7 @@ export function supplierAccess(over: Partial<PortalAccess> = {}): PortalAccess {
   return {
     party: { id: '0190f0e2-1000-7000-8000-000000000011', code: 'CONCERIA-DEMO', name: 'Conceria Demo', roles: ['SUPPLIER'], status: 'ACTIVE', companyId: '0190f0e2-0001-7000-8000-000000000001' },
     kinds: ['SUPPLIER'],
-    settings: { portalOn: true, progressShared: false, maxUsers: null, allowedRoleKeys: [], version: 2 },
+    settings: { portalOn: true, maxUsers: null, allowedRoleKeys: [], version: 2 },
     seats: { taken: 3, max: null },
     roles: rolesOf(['SUPPLIER']),
     people: SUPPLIER_PEOPLE,
@@ -170,7 +170,6 @@ export function productionLimits(over: Partial<ProductionLimitsView> = {}, mayMa
     party,
     production: {
       level: 'STATUS',
-      progressShared: false,
       urgency: { on: false, max: 3, now: 0, dormant: null, overQuota: null },
       askKinds: [],
       openAsks: [],

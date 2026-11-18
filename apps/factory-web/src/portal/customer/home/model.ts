@@ -174,7 +174,7 @@ export function nextOrderRows(read: OrdersRead | null, locale: Locale, prefix: s
       promise: to,
       requested: dayOnly(row.requestedDate),
       moved: row.promiseMoved && from && to && from !== to ? { from, to } : null,
-      progress: read.progressShared && row.progressPercent !== null ? Math.max(0, Math.min(100, Math.round(row.progressPercent))) : null,
+      progress: row.progressPercent !== null ? Math.max(0, Math.min(100, Math.round(row.progressPercent))) : null,
       pieces: row.pieces,
       shipment: row.nextShipment ? { number: row.nextShipment.number, words: row.nextShipment.words[locale] } : null,
       href: row.kind === 'ORDER' ? `${prefix}/open/SalesOrder/${encodeURIComponent(row.id)}` : null,

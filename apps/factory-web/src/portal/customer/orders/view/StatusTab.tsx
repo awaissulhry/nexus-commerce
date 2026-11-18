@@ -5,6 +5,7 @@ import { ArrowUpRight, CheckCircle2, Clock, History, Hourglass } from 'lucide-re
 import { Banner, Card, ChangeReview, DetailPopover, Disclosure, KeyValue, ProgressBar, SummaryTable, type KeyValueItem } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill } from '@nexus/ui/primitives'
+import { shares } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { ApprovalPage, ChangeRequest, DepositRead, OrderRecord, ProgressRead } from '../api'
 import { milestoneSteps, movesOf, netMoved, openDeposits, promiseMoves, promiseOf, requestTone, shipToLines, sizeMoves } from '../model'
@@ -81,7 +82,7 @@ export function StatusTab({ model, record, actions }: { model: OrderRecordViewMo
       {production && model.quality && model.quality.state !== 'hidden' ? (
         <ProductionQualityCard quality={{ state: model.quality.state, read: model.quality.read }} refreshSeconds={production.progress?.refreshSeconds ?? null} offline={model.offlineSince !== null} fileHeld={model.fileHeld} actions={actions} />
       ) : null}
-      {!productionOwnsProgress(model.production) && record.progressShared && model.progress.state !== 'hidden' ? <Progress model={model} actions={actions} /> : null}
+      {!productionOwnsProgress(model.production) && shares(record.productionLevel, 'progress') && model.progress.state !== 'hidden' ? <Progress model={model} actions={actions} /> : null}
       {record.deposits.length > 0 && record.seesPrices ? <Deposits model={model} deposits={record.deposits} depositRequired={record.order.depositRequired} actions={actions} /> : null}
       <Facts record={record} />
     </div>

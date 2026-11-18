@@ -74,7 +74,8 @@ async function ok(browser: Browser, url: string): Promise<Json> {
 }
 
 const office = () => callerFor(h.database, { audience: 'office', tenantId: T, actorId: newId(), requestId: newId(), grants: [{ permissions: ['orders.view', 'orders.manage'], companies: 'all', sites: 'all', parties: 'all' }] })
-const setShared = (on: boolean) => admin('UPDATE "PortalSettings" SET "progressShared" = $2, version = version + 1 WHERE "partyId" = $1', [P1, on])
+// B-PR-40: sharing progress is the share level (PROGRESS on, STATUS off), the old switch dropped.
+const setShared = (on: boolean) => admin('UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", version = version + 1 WHERE "partyId" = $1', [P1, on ? 'PROGRESS' : 'STATUS'])
 
 beforeAll(async () => {
   h = await startHarness('portal_sales_orders')
@@ -119,7 +120,8 @@ afterAll(async () => {
 describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('lists the customer orders, their PO first, in customer words, with pieces, value and the next shipment', async () => {
     const list = await ok(browsers.buyer, '/portal/sales-orders')
-    expect(list).toMatchObject({ seesPrices: true, progressShared: false, chip: 'OPEN', count: 3 })
+    expect(list).toMatchObject({ seesPrices: true, chip: 'OPEN', count: 3 })
+    expect(list).not.toHaveProperty('progressShared') // B-PR-40
     expect(list.items.map((row: Json) => [row.customerRef, row.number, row.status])).toEqual([
       ['SEED-PO-78', 'SEED-SO-0002', 'CONFIRMED'],
       ['SEED-PO-91', 'SEED-SO-0003', 'CONFIRMED'],
@@ -211,7 +213,7 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
 describe('production progress per customer switch (SAL-076, C1)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('is not there while the customer does not share it, counts per line and size once it does, at most once a minute', async () => {
     const so2 = await orderId('SEED-SO-0002')
-    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).progressShared).toBe(false)
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).productionLevel).toBe('STATUS')
     expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(404)
     await setShared(true)
     const progress = await ok(browsers.viewer, `/portal/sales-orders/${so2}/progress`)
@@ -238,7 +240,6 @@ describe('production progress per customer switch (SAL-076, C1)', { timeout: SLO
     expect(later.asOf).not.toBe(progress.asOf)
     // The list's next deliveries carry the percent; Home counts.
     const list = await ok(browsers.buyer, '/portal/sales-orders?limit=5&progress=true')
-    expect(list.progressShared).toBe(true)
     expect(list.items.find((row: Json) => row.id === so2).progressPercent).toBeGreaterThan(0)
     // Switched off: gone at once, even while counts are kept.
     await setShared(false)
@@ -248,23 +249,28 @@ describe('production progress per customer switch (SAL-076, C1)', { timeout: SLO
   })
 })
 
-// B-PR-14: the progress read asks the customer's share level (PROGRESS or more); progressShared stays in step and in the answer.
+// B-PR-14: the progress read asks the customer's share level (PROGRESS or more). B-PR-40: the record says the level itself (the
+// old progressShared switch is dropped from the database and from every answer).
 describe('production progress by the share level (B-PR-14)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const setLevel = (level: 'STATUS' | 'PROGRESS' | 'GATES' | 'QUALITY') => admin('UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", version = version + 1 WHERE "partyId" = $1', [P1, level])
 
-  it('shows the progress from PROGRESS on (GATES and QUALITY too), not at STATUS; the answers still say progressShared, derived from the level', async () => {
+  it('shows the progress from PROGRESS on (GATES and QUALITY too), not at STATUS; the record says the level, no answer says progressShared', async () => {
     const so2 = await orderId('SEED-SO-0002')
     await setLevel('GATES')
     expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(200)
-    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).progressShared).toBe(true)
-    expect((await ok(browsers.buyer, '/portal/sales-orders?limit=5&progress=true')).progressShared).toBe(true)
+    const record = await ok(browsers.buyer, `/portal/sales-orders/${so2}`)
+    expect(record.productionLevel).toBe('GATES')
+    expect(record).not.toHaveProperty('progressShared')
+    const list = await ok(browsers.buyer, '/portal/sales-orders?limit=5&progress=true')
+    expect(list).not.toHaveProperty('progressShared')
+    expect(list.items.find((row: Json) => row.id === so2).progressPercent).not.toBeNull()
     await setLevel('QUALITY')
     expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(200)
     await setLevel('STATUS')
     expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(404)
-    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).progressShared).toBe(false)
-    // The database keeps the old switch in step with the level (B-PR-12).
-    expect(await admin('SELECT "progressShared" FROM "PortalSettings" WHERE "partyId" = $1', [P1])).toEqual([{ progressShared: false }])
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).productionLevel).toBe('STATUS')
+    // B-PR-40: the database holds the level alone (the old switch's column is dropped).
+    expect(await admin(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'PortalSettings' AND column_name = 'progressShared'`)).toEqual([{ n: 0 }])
     // Another customer's level never opens this customer's order.
     expect((await browsers.other.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(404)
   })

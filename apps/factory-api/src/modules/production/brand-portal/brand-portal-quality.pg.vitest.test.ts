@@ -158,7 +158,7 @@ async function get(who: keyof typeof people, url: string, status = 200): Promise
 const quality = (orderId: string) => `/portal/production/${orderId}/quality`
 const reportOf = (orderId: string, inspectionId: string) => `/portal/production/${orderId}/quality/report/${inspectionId}`
 const setLevel = (partyId: string, level: string) =>
-  admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", "progressShared" = $3, version = version + 1 WHERE "partyId" = $1`, [partyId, level, level !== 'STATUS'])
+  admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", version = version + 1 WHERE "partyId" = $1`, [partyId, level]) // B-PR-40: the level alone
 
 beforeAll(async () => {
   h = await startHarness('pr19_brand_quality')

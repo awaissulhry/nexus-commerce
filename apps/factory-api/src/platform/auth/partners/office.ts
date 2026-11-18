@@ -11,7 +11,6 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { askKindsProblems, openAskKinds, PRODUCTION_ASK_KINDS, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
-import { progressSharedOf } from '@nexus/factory-domain/production-brand/levels'
 import { CUSTOMER_PRODUCTION_ROLE, PARTNERS_PRODUCTION_MANAGE } from '@nexus/factory-domain/production-brand/permissions'
 import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import { dormantMarksWords, overQuotaWords, PRODUCTION_ROLE_NOT_OFFERED_WORDS } from '@nexus/factory-domain/production-brand/words'
@@ -120,8 +119,8 @@ export function rolesView(kinds: readonly PartnerKind[], allowedRoleKeys: readon
   })
 }
 
-// B-PR-14: progressShared kept in every contract, derived from the level (the database keeps the two in step until B-PR-40).
-const settingsBody = (settings: PortalSettingsView) => ({ portalOn: settings.portalOn, progressShared: progressSharedOf(settings.productionLevel), maxUsers: settings.maxUsers, allowedRoleKeys: [...settings.allowedRoleKeys], version: settings.version })
+// B-PR-40: the old progress switch is dropped; what the customer sees of its production is the limits card's level.
+const settingsBody = (settings: PortalSettingsView) => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers, allowedRoleKeys: [...settings.allowedRoleKeys], version: settings.version })
 const partyBody = (party: PartnerParty) => ({ id: party.id, code: party.code, name: party.name, roles: [...party.roles], status: party.status, companyId: party.companyId })
 
 /** GET /partners/:partyId — the party's Portal access tab. */
@@ -164,7 +163,6 @@ export async function organisations(auth: OfficeAuth, request: FastifyRequest) {
           party: { id: row.id, code: row.code, name: row.tradeName ?? row.legalName, roles: row.roles, status: row.status, companyId: row.companyId },
           kinds: partnerKindsOf(row.roles),
           portalOn: own?.portalOn ?? false,
-          progressShared: own ? progressSharedOf(own.productionLevel) : false,
           maxUsers: own?.maxUsers ?? null,
           people: { active: count(row.id, 'ACTIVE'), invited: count(row.id, 'INVITED'), suspended: count(row.id, 'SUSPENDED') },
           accessEndingSoon: ending.find((entry) => entry.partyId === row.id)?._count._all ?? 0,
@@ -181,14 +179,11 @@ export async function organisations(auth: OfficeAuth, request: FastifyRequest) {
   })
 }
 
-/** POST /partners/:partyId/settings — the portal switch, the limits and the production-progress switch (C1). */
+/** POST /partners/:partyId/settings — the portal switch and the limits (people, roles); B-PR-40: the progress switch is gone (the limits card's level). */
 export async function changeSettings(auth: OfficeAuth, request: FastifyRequest, partyId: string, body: SettingsBody, idempotencyKey?: string) {
   const context = officeContextOf(request)
   const party = await reachParty(request, partyId, 'partners.manage')
   requireStepUp(auth, request)
-  if (body.progressShared === true && !kindFits('CUSTOMER', party.roles)) {
-    throw new DomainError('conflict', PARTNER_WORDS.progressOnlyCustomers, [{ path: 'progressShared', message: PARTNER_WORDS.progressOnlyCustomers }])
-  }
   if (body.portalOn === true && party.kinds.length === 0) throw new ConflictError(PARTNER_WORDS.noKind)
   if (body.allowedRoleKeys) {
     const issues = allowedRoleKeysProblems(body.allowedRoleKeys)
@@ -205,7 +200,6 @@ export async function changeSettings(auth: OfficeAuth, request: FastifyRequest, 
     if (body.version !== before.version) throw new StaleVersionError('PortalSettings', party.id, before.version, body.version)
     const next = {
       portalOn: body.portalOn ?? before.portalOn,
-      progressShared: body.progressShared ?? before.progressShared,
       maxUsers: body.maxUsers === undefined ? before.maxUsers : body.maxUsers,
       allowedRoleKeys: body.allowedRoleKeys ?? [...before.allowedRoleKeys],
     }
@@ -224,7 +218,7 @@ export async function changeSettings(auth: OfficeAuth, request: FastifyRequest, 
       before: before.exists ? Object.fromEntries(fields.map((field) => [field, before[field]])) : null,
       after: Object.fromEntries(fields.map((field) => [field, next[field]])),
     })
-    // B-PR-14: the event carries the production limits as they are after the write (the old switch moves the level).
+    // B-PR-14: the event carries the production limits as they are after the write (B-PR-40: the settings no longer move them).
     const settings = await settingsOf(tx, party.id)
     emit({ type: 'partner_portal.settings_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields, ...settingsEventFields(settings) } })
     const seats = (await peopleOf(tx, party.id, now)).filter((person) => person.seat).length
@@ -236,13 +230,13 @@ export async function changeSettings(auth: OfficeAuth, request: FastifyRequest, 
 // ── B-PR-14: a customer's production limits (the limits card; plan §3, §7.1, §7.7; lead picks L18, L21; review fixes R-46, R-66) ──
 
 /**
- * The settings event's fields after a change (partner_portal.settings_changed): the portal switch, progressShared derived from
- * the level, and the production limits — never the supervisor, the backup or the approver (PW-15).
+ * The settings event's fields after a change (partner_portal.settings_changed): the portal switch and the production limits
+ * (B-PR-40: the level says what the customer sees; the old progress switch is gone) — never the supervisor, the backup or the
+ * approver (PW-15).
  */
 export function settingsEventFields(settings: PortalSettingsView) {
   return {
     portalOn: settings.portalOn,
-    progressShared: progressSharedOf(settings.productionLevel),
     productionLevel: settings.productionLevel,
     productionUrgencyOn: settings.productionUrgencyOn,
     productionUrgentMax: settings.productionUrgentMax,
@@ -276,7 +270,6 @@ async function productionAnswer(client: SettingsReader, party: PartnerParty, act
     party: partyBody(party),
     production: {
       level: settings.productionLevel,
-      progressShared: progressSharedOf(settings.productionLevel),
       urgency: {
         on: settings.productionUrgencyOn,
         max: settings.productionUrgentMax,
@@ -309,8 +302,8 @@ export async function productionLimits(request: FastifyRequest, partyId: string)
  * PUT /partners/:partyId/production — the level, the urgency switch, the urgent quota, the production asks, the named approver
  * and the second-person switch (partners.production.manage over the customer, step-up; the supervisor and the backup are
  * B-PR-42a's route). ONE command: the party locked, the version compared, the row written (made with the portal OFF when the
- * customer has none: limits need no portal), one audit row and one event. progressShared is written with the level it derives
- * from. Switching urgency off keeps the marks (dormant: not cleared, the audit says so); a quota lowered below today's urgent
+ * customer has none: limits need no portal), one audit row and one event (B-PR-40: the level alone, the old progress switch
+ * dropped). Switching urgency off keeps the marks (dormant: not cleared, the audit says so); a quota lowered below today's urgent
  * count keeps the marked orders and only stops new marks.
  */
 export async function changeProduction(auth: OfficeAuth, request: FastifyRequest, partyId: string, body: ProductionBody, idempotencyKey?: string) {
@@ -358,26 +351,22 @@ export async function changeProduction(auth: OfficeAuth, request: FastifyRequest
     const was = { ...next, productionLevel: before.productionLevel, productionUrgencyOn: before.productionUrgencyOn, productionUrgentMax: before.productionUrgentMax, productionAskKinds: inCardOrder(before.productionAskKinds), productionApproverId: before.productionApproverId, overrideFourEyes: before.overrideFourEyes }
     const fields = (Object.keys(next) as (keyof typeof next)[]).filter((field) => JSON.stringify(next[field]) !== JSON.stringify(was[field]))
     if (fields.length === 0) throw new InvalidStateError('Nothing changes: these are the limits already.')
-    const progressShared = progressSharedOf(next.productionLevel)
-    const data = { ...next, progressShared }
     if (before.exists) {
-      await tx.portalSettings.update({ where: { id: party.id }, data: { ...data, version: { increment: 1 } }, select: { id: true } })
+      await tx.portalSettings.update({ where: { id: party.id }, data: { ...next, version: { increment: 1 } }, select: { id: true } })
     } else {
       // One row per party, its id the party's (B-W2b-152); the portal stays OFF (R-53: limits need no portal).
-      await tx.portalSettings.create({ data: { id: party.id, partyId: party.id, portalOn: false, ...data, createdAt: now, createdById: context.actorId }, select: { id: true } })
+      await tx.portalSettings.create({ data: { id: party.id, partyId: party.id, portalOn: false, ...next, createdAt: now, createdById: context.actorId }, select: { id: true } })
     }
     const urgentNow = await urgentNowOf(tx, party.id)
     const switchedOff = before.productionUrgencyOn && !next.productionUrgencyOn
     const quotaBelow = next.productionUrgencyOn && next.productionUrgentMax < before.productionUrgentMax && urgentNow > next.productionUrgentMax
-    const progressMoved = progressShared !== before.progressShared
     audit({
       recordType: 'PortalSettings',
       recordId: party.id,
       companyId: party.companyId,
-      before: before.exists ? { ...Object.fromEntries(fields.map((field) => [field, was[field]])), ...(progressMoved ? { progressShared: before.progressShared } : {}) } : null,
+      before: before.exists ? Object.fromEntries(fields.map((field) => [field, was[field]])) : null,
       after: {
         ...Object.fromEntries(fields.map((field) => [field, next[field]])),
-        ...(progressMoved ? { progressShared } : {}),
         ...(preset ? { preset: body.preset } : {}),
         // R-46: the marks are kept, not cleared; they order nothing while urgency is off.
         ...(switchedOff ? { urgencyMarksKept: urgentNow, urgencyMarks: 'kept, not used while urgency is off' } : {}),
@@ -386,7 +375,7 @@ export async function changeProduction(auth: OfficeAuth, request: FastifyRequest
       },
     })
     const after = await settingsOf(tx, party.id)
-    emit({ type: 'partner_portal.settings_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields: progressMoved ? [...fields, 'progressShared'] : [...fields], ...settingsEventFields(after) } })
+    emit({ type: 'partner_portal.settings_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields: [...fields], ...settingsEventFields(after) } })
     return productionAnswer(tx, party, actorOf(context))
   })
   return result

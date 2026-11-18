@@ -285,12 +285,11 @@ describe('the brand wall walk seed (B-PR-39)', () => {
       { id: made.portalUserIds.viewer, audience: 'PARTNER', party: second, key: 'customer-viewer', partyIds: [second] },
       { id: made.officeUserId, audience: 'OFFICE', party: null, key: 'production_manager', partyIds: [second] },
     ])
-    // B-PR-15: the Production role allowed too, and its share level PROGRESS (progressShared in step); the portal still OFF.
-    expect((await admin(`SELECT "portalOn", "allowedRoleKeys", "productionLevel"::text AS level, "progressShared" FROM "PortalSettings" WHERE "partyId" = $1`, [second]))[0]).toEqual({
+    // B-PR-15: the Production role allowed too, and its share level PROGRESS (B-PR-40: the level alone); the portal still OFF.
+    expect((await admin(`SELECT "portalOn", "allowedRoleKeys", "productionLevel"::text AS level FROM "PortalSettings" WHERE "partyId" = $1`, [second]))[0]).toEqual({
       portalOn: false,
       allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer', 'customer-production'],
       level: 'PROGRESS',
-      progressShared: true,
     })
     // Idempotent: a second run adds nothing.
     const count = async () => (await admin(`SELECT (SELECT count(*) FROM "WorkOrder") + (SELECT count(*) FROM "WorkOrderSize") + (SELECT count(*) FROM "User") + (SELECT count(*) FROM "RoleAssignment") + (SELECT count(*) FROM "SalesOrderLine") AS n`))[0]!.n
