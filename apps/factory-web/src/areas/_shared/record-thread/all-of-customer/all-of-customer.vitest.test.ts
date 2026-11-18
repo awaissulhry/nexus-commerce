@@ -1,0 +1,232 @@
+import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
+import { describe, expect, it } from 'vitest'
+import { CUSTOMER_FEED_KINDS } from '@nexus/factory-domain/sales/customer-feed/kinds'
+import type { ApiClient } from '../../../../lib/api/client'
+import { leftKeys, render, textOf } from '../../../../lib/record-thread/parts/testing'
+import { MessageCard } from '../../../../lib/record-thread/card/view/MessageCard'
+import { feedAnswerSchema, feedEntrySchema, readCustomerFeed, type FeedAnswer, type FeedEntry } from './api'
+import {
+  afterFirst,
+  afterFresh,
+  afterOlder,
+  audienceOfView,
+  cardOfEntry,
+  chipOf,
+  EMPTY_FEED,
+  FEED_KIND_CHOICES,
+  feedModel,
+  kindsOfChoice,
+  liveTouches,
+  messageHrefOf,
+  opensItself,
+  pendingOf,
+  recordHrefOf,
+  showFresh,
+  type FeedState,
+} from './model'
+import { AllOfCustomerFeed } from './view/AllOfCustomerFeed'
+
+/**
+ * F-SA-261 (sales page plan R4, P9, N4, N5) — "All of <Customer>", the read-only merged view: its one call, paging (Show older, no
+ * repeat), "N new · Show" (the list never moves by itself), View ▾ and Kind ▾, the record chips ("SO-0142 · Your order 12",
+ * "<Customer> (general)"), the doors (the chip and "Answer in its conversation"; ⌘-click is the browser's), the card READ ONLY, and
+ * the words in both languages.
+ */
+
+const ORDER = { type: 'SalesOrder', id: 'so-1', label: 'SO-0142', ownNumber: 12, companyId: 'c-1', kind: 'ORDERS' } as const
+const GENERAL = { type: 'Party', id: 'p-a', label: 'SEED-C1 Brand Alpha S.r.l.', ownNumber: null, companyId: null, kind: 'GENERAL' } as const
+const PROJECT = { type: 'Project', id: 'prj-1', label: 'PRJ-0004 Capsule', ownNumber: null, companyId: 'c-1', kind: 'PROJECTS' } as const
+const at = (minute: number) => new Date(Date.UTC(2026, 10, 18, 9, minute)).toISOString()
+const entry = (id: string, minute: number, record: FeedEntry['record'] = ORDER, over: Partial<{ new: boolean; direction: string; audience: string }> = {}): FeedEntry =>
+  feedEntrySchema.parse({
+    record,
+    new: over.new ?? false,
+    message: {
+      id,
+      direction: over.direction ?? 'INBOUND',
+      audience: over.audience ?? 'PARTNER',
+      channel: 'PORTAL',
+      author: { kind: 'PARTY', name: 'Madeup Buyer' },
+      body: `Message ${id}`,
+      bodyHtml: null,
+      attachments: [],
+      at: at(minute),
+    },
+  })
+const answer = (entries: FeedEntry[], nextCursor: string | null = null, extra: Partial<FeedAnswer> = {}): FeedAnswer =>
+  feedAnswerSchema.parse({ customer: { id: 'p-a', code: 'SEED-C1', name: 'Brand Alpha' }, entries, nextCursor, threadsNotShown: 0, olderThreads: 0, ...extra })
+const ids = (state: FeedState) => state.entries.map((item) => item.message.id)
+const ready = (entries: FeedEntry[], nextCursor: string | null = null) => afterFirst(EMPTY_FEED, answer(entries, nextCursor))
+
+describe('F-SA-261 the one call', () => {
+  it('GET /sales/customers/:partyId/feed with a page of 30, the view’s audience, the kinds and the cursor', async () => {
+    const asked: { path: string; query: unknown }[] = []
+    const api = { get: async (path: string, options: { query?: unknown; schema?: { parse: (value: unknown) => unknown } }) => (asked.push({ path, query: options.query }), options.schema!.parse(answer([]))) } as unknown as ApiClient
+    await readCustomerFeed(api, 'p-a', { audience: 'ALL', kinds: [] })
+    await readCustomerFeed(api, 'p a', { audience: 'OFFICE', kinds: ['ORDERS', 'QUOTES'], cursor: 'c-9' })
+    expect(asked).toEqual([
+      { path: '/sales/customers/p-a/feed', query: { limit: 30, audience: 'ALL', kinds: undefined, cursor: undefined } },
+      { path: '/sales/customers/p%20a/feed', query: { limit: 30, audience: 'OFFICE', kinds: 'ORDERS,QUOTES', cursor: 'c-9' } },
+    ])
+  })
+
+  it('the container writes nothing and marks nothing read; the view fetches nothing', () => {
+    const hook = readFileSync(new URL('./use-all-of-customer.ts', import.meta.url), 'utf8')
+    expect(hook).not.toMatch(/markThreadRead|postNote|sendReply|\.post\(|\.request\(/)
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).not.toMatch(/lib\/api|lib\/session\/(server|context)|fetch\(/)
+  })
+})
+
+describe('F-SA-261 paging: Show older adds the next page, never a repeat', () => {
+  it('the first page, then the next at the foot; a message already shown is not shown twice; the cursor follows', () => {
+    const first = ready([entry('m5', 50), entry('m4', 40)], 'c-1')
+    expect(first).toMatchObject({ status: 'ready', cursor: 'c-1' })
+    const next = afterOlder({ ...first, older: 'loading' }, answer([entry('m4', 40), entry('m3', 30)], null))
+    expect(ids(next)).toEqual(['m5', 'm4', 'm3'])
+    expect(next).toMatchObject({ cursor: null, older: 'idle' })
+    const model = feedModel(first, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
+    expect(model.more).toBe(true)
+    expect(feedModel(next, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true }).more).toBe(false)
+  })
+})
+
+describe('F-SA-261 "N new · Show": the list never moves by itself', () => {
+  it('a newer page read on a live hint waits; only what is newer than the top and not shown counts', () => {
+    const shown = ready([entry('m5', 50), entry('m4', 40)], 'c-1')
+    const fresh = afterFresh(shown, answer([entry('m7', 70), entry('m6', 60), entry('m5', 50), entry('m4', 40)], 'c-2', { threadsNotShown: 2 }))
+    expect(ids(fresh)).toEqual(['m5', 'm4'])
+    expect(pendingOf(fresh).map((item) => item.message.id)).toEqual(['m7', 'm6'])
+    expect(fresh.threadsNotShown).toBe(2)
+    expect(feedModel(fresh, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true }).pending).toBe(2)
+    const after = showFresh(fresh)
+    expect(ids(after)).toEqual(['m7', 'm6', 'm5', 'm4'])
+    expect(after.fresh).toBeNull()
+    expect(after.cursor).toBe('c-1')
+  })
+
+  it('more than a page came: Show starts the list again from the newest page, so nothing is skipped between', () => {
+    const shown = ready([entry('m2', 20), entry('m1', 10)])
+    const fresh = afterFresh(shown, answer([entry('m9', 90), entry('m8', 80)], 'c-9'))
+    expect(pendingOf(fresh)).toHaveLength(2)
+    const after = showFresh(fresh)
+    expect(ids(after)).toEqual(['m9', 'm8'])
+    expect(after.cursor).toBe('c-9')
+  })
+
+  it('nothing shown yet: the new page is the list at once (nothing can jump); no news: nothing waits', () => {
+    const empty = ready([])
+    expect(ids(afterFresh(empty, answer([entry('m1', 10)])))).toEqual(['m1'])
+    const shown = ready([entry('m1', 10)])
+    expect(pendingOf(afterFresh(shown, answer([entry('m1', 10)])))).toEqual([])
+    expect(showFresh(shown)).toBe(shown)
+  })
+
+  it('a live hint about a customer-side conversation reads again; a work order’s, a hold’s or another event never', () => {
+    expect(liveTouches({ type: 'thread.message_posted', fields: { recordType: 'SalesOrder', recordId: 'x' } })).toBe(true)
+    expect(liveTouches({ type: 'thread.message_posted', fields: { recordType: 'Party', recordId: 'x' } })).toBe(true)
+    for (const recordType of ['WorkOrder', 'QualityHold', 'Nonconformance', 'OrderChangeRequest', 'PurchaseOrder']) {
+      expect(liveTouches({ type: 'thread.message_posted', fields: { recordType, recordId: 'x' } }), recordType).toBe(false)
+    }
+    expect(liveTouches({ type: 'sales_order.changed', fields: { recordType: 'SalesOrder' } })).toBe(false)
+  })
+})
+
+describe('F-SA-261 the filters', () => {
+  it('View ▾ All · With the customer · Office notes are the API’s audiences; Kind ▾ is every kind or one', () => {
+    expect(['all', 'shared', 'notes'].map((view) => audienceOfView(view as 'all'))).toEqual(['ALL', 'PARTNER', 'OFFICE'])
+    expect(FEED_KIND_CHOICES).toEqual(['every', ...CUSTOMER_FEED_KINDS])
+    expect(kindsOfChoice('every')).toEqual([])
+    expect(kindsOfChoice('QUOTES')).toEqual(['QUOTES'])
+  })
+})
+
+describe('F-SA-261 the chips and the doors', () => {
+  it('"SO-0142 · Your order 12", "<Customer> (general)", a project by its number; a record gone is said so', () => {
+    expect(chipOf(ORDER, 'Brand Alpha')).toEqual({ key: 'allOfCustomer.chip.own.ORDER', params: { number: 'SO-0142', seq: 12 } })
+    expect(chipOf({ ...ORDER, ownNumber: null }, 'Brand Alpha')).toEqual({ key: 'allOfCustomer.chip.number', params: { number: 'SO-0142' } })
+    expect(chipOf(GENERAL, 'Brand Alpha')).toEqual({ key: 'allOfCustomer.chip.general', params: { customer: 'Brand Alpha' } })
+    expect(chipOf(PROJECT, 'Brand Alpha')).toEqual({ key: 'allOfCustomer.chip.number', params: { number: 'PRJ-0004 Capsule' } })
+    expect(chipOf({ ...ORDER, label: null }, 'Brand Alpha')).toEqual({ key: 'allOfCustomer.chip.unnamed' })
+  })
+
+  it('the chip opens the record’s page (a real link), the door the message on it; a modified click is the browser’s', () => {
+    expect(recordHrefOf(ORDER, '/w/x')).toBe('/w/x/sales/orders/so-1')
+    expect(messageHrefOf(entry('m1', 10), '/w/x')).toBe('/w/x/sales/orders/so-1?message=m1')
+    const click = { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, button: 0 }
+    expect(opensItself(click)).toBe(false)
+    expect(opensItself({ ...click, metaKey: true })).toBe(true)
+    expect(opensItself({ ...click, ctrlKey: true })).toBe(true)
+    expect(opensItself({ ...click, button: 1 })).toBe(true)
+  })
+
+  it('the card is the thread’s own card of the message (its audience), without mentions', () => {
+    expect(cardOfEntry(entry('m1', 10))).toMatchObject({ id: 'm1', kind: 'theirs', channel: 'PORTAL', author: 'Madeup Buyer', mentions: [] })
+    expect(cardOfEntry(entry('m2', 20, ORDER, { direction: 'INTERNAL_NOTE', audience: 'OFFICE' })).kind).toBe('note')
+  })
+})
+
+describe('F-SA-261 the view, in both languages', () => {
+  const model = (state: FeedState, over: Partial<Parameters<typeof feedModel>[1]> = {}) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, ...over })
+  const state = afterFresh(
+    afterFirst(EMPTY_FEED, answer([entry('m3', 30, ORDER, { new: true }), entry('m2', 20, GENERAL), entry('m1', 10, ORDER, { direction: 'INTERNAL_NOTE', audience: 'OFFICE' })], 'c-1', { threadsNotShown: 1 })),
+    answer([entry('m4', 40), entry('m3', 30)], 'c-0', { threadsNotShown: 1 }),
+  )
+
+  it('read only: the line, the filters, the chips, "1 new · Show", the New dot, the door, Show older, what is left out — no ⋯ on a card', () => {
+    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
+    const text = textOf(html)
+    expect(text).toContain("Read only: messages of Brand Alpha's orders, quotes, requests, projects and general conversation. To write, pick one conversation.")
+    expect(text).toContain('Open a conversation to mark it read.')
+    expect(text).toContain('View: All')
+    expect(text).toContain('Kind: Every kind')
+    expect(text).toContain('SO-0142 · Your order 12')
+    expect(text).toContain('Brand Alpha (general)')
+    expect(text).toContain('1 new · Show')
+    expect(text).toContain('New')
+    expect(text).toContain('Answer in its conversation')
+    expect(text).toContain('Show older')
+    expect(text).toContain('1 conversation of Brand Alpha you cannot open is left out.')
+    expect(html).not.toContain('fw-rt-msg-more')
+    // The chip is a real link to the record (⌘-click opens a new tab).
+    expect(html).toContain('href="/w/x/sales/orders/so-1"')
+    expect(leftKeys(html, ['allOfCustomer', 'view', 'kind', 'chip'])).toEqual([])
+    const italian = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }), 'it')
+    expect(textOf(italian)).toContain('Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di Brand Alpha. Per scrivere, scegli una conversazione.')
+    expect(textOf(italian)).toContain('Rispondi nella sua conversazione')
+    expect(textOf(italian)).toContain('Brand Alpha (generale)')
+    expect(textOf(italian)).toContain('Vista: Tutto')
+    expect(textOf(italian)).toContain('Tipo: Ogni tipo')
+    expect(textOf(italian)).toContain('SO-0142 · Ordine 12 del cliente')
+    expect(leftKeys(italian, ['allOfCustomer', 'view', 'kind', 'chip'])).toEqual([])
+  })
+
+  it('without a dock to switch, the door is a link to the message on its record’s page', () => {
+    const html = render(createElement(AllOfCustomerFeed, { model: model(state) }))
+    expect(html).toContain('href="/w/x/sales/orders/so-1?message=m3"')
+  })
+
+  it('the states: reading, nothing yet (and with a filter), failed with Try again, out of reach; older conversations said', () => {
+    expect(render(createElement(AllOfCustomerFeed, { model: model({ ...EMPTY_FEED, status: 'loading' }) }))).toContain('aria-busy="true"')
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model(ready([])) })))).toContain('No message with Brand Alpha yet')
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model(ready([]), { view: 'notes' }) })))).toContain('choose All and Every kind')
+    const failed = textOf(render(createElement(AllOfCustomerFeed, { model: model({ ...EMPTY_FEED, status: 'failed' }) })))
+    expect(failed).toContain("Couldn't read the messages.")
+    expect(failed).toContain('Try again')
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model({ ...EMPTY_FEED, status: 'gone' }) })))).toContain('out of your reach')
+    const older = afterFirst(EMPTY_FEED, answer([entry('m1', 10)], null, { olderThreads: 4 }))
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model(older) })))).toContain('Older conversations: open their record')
+  })
+})
+
+describe('F-SA-261 MessageCard read only', () => {
+  it('the same card without its ⋯ menu; the thread keeps its menu', () => {
+    const card = cardOfEntry(entry('m1', 10))
+    const context = { partyName: 'Brand Alpha', canReadFiles: true, canReply: true }
+    expect(render(createElement(MessageCard, { message: card, context }))).toContain('fw-rt-msg-more')
+    const readOnly = render(createElement(MessageCard, { message: card, context, readOnly: true }))
+    expect(readOnly).not.toContain('fw-rt-msg-more')
+    expect(textOf(readOnly)).toContain('Message m1')
+  })
+})
