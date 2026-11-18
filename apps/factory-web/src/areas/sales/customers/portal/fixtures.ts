@@ -3,7 +3,8 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { STEP_UP_CLOSED } from '../../../admin/shared/model'
 import { blankInvite, settingsDraftOf } from '../../../admin/users/partners/model'
 import { CUSTOMERS, inShell, partyThread, RECORD_CAN, recordModel } from '../../../parties/_shared/fixtures'
-import { PartyRecordView } from '../../../parties/_shared/view/PartyRecordView'
+// F-SA-270: the customer's own record view (split from the supplier's).
+import { CustomerRecordView } from '../record/view/CustomerRecordView'
 import { dormantMarksWords, PRODUCTION_ROLE_NOT_OFFERED_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { CUSTOMER_PEOPLE, customerAccess, freezeList, limitsModel, OFFICE_PEOPLE, portalModel, productionLimits, READ_ONLY, REQUESTS, rolesOf } from './demo'
 import { blankFreezeDraft, limitsDraftOf, withPreset } from './limits/model'
@@ -21,7 +22,7 @@ const party = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!
 
 export function PortalDesign({ model }: { model: PortalAccessModel }) {
   const record = recordModel(model.side, party, { tab: 'portal', can: { ...RECORD_CAN, partners: true } })
-  return inShell(`/sales/customers/${party.id}`, createElement(PartyRecordView, { model: record, thread: partyThread(party, model.side) /* B-TH-260 */, portal: createElement(PortalAccessView, { model }) }))
+  return inShell(`/sales/customers/${party.id}`, createElement(CustomerRecordView, { model: record, thread: partyThread(party, model.side) /* B-TH-260 */, portal: createElement(PortalAccessView, { model }) }))
 }
 
 const base = (over: Partial<PortalAccessModel> = {}) => portalModel('customers', over)
