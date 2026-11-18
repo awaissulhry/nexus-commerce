@@ -110,7 +110,7 @@ describe('Floor now’s work in progress (F-PR-17, PW-06)', { timeout: 60_000 },
     expect(a.total).toBe(2)
     // The customer filter: inside the reader's reach only.
     expect(idsOf((await wip('office.all', `&partyId=${w.b.partyId}`)).workOrders)).toEqual([w.b.workOrderId])
-    expect(await wip('office.p2', `&partyId=${w.a.partyId}`)).toEqual({ workOrders: [], total: 0 })
+    expect(await wip('office.p2', `&partyId=${w.a.partyId}`)).toEqual({ workOrders: [], total: 0, held: 0 /* B-PR-33: of them on hold (fix-pr-3) */ })
   })
 
   it('no silent cap: the total is every work order on the floor, and the next page starts where the first ended', async () => {
