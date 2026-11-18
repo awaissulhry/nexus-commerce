@@ -350,7 +350,9 @@ beforeAll(async () => {
   const people = [owner, adminPerson, planner, supervisor, backup, orderSupervisor, buyerA, productionA, productionB].map((person) => person.id)
   await world.replica([{ sql: `UPDATE "RoleAssignment" SET "validFrom" = now() - interval '1 day' WHERE "userId" = ANY($1::uuid[])`, values: [people] }])
 
-  for (const name of ['u1', 'u2', 'u3', 'n1', 'p1', 'p2', 'p3', 'q1', 'q2', 'g1'] as const) A[name] = await world.addOrder(world.ids.a, `PR36-${name.toUpperCase()}`, '2026-10-01')
+  // fix-pr-7: q2 is never promised (its computed health NO_DATE, so a person may raise it At risk in K): promised and planned by
+  // nobody, an order's computed health is already At risk ("nothing says when"), and a raise is refused.
+  for (const name of ['u1', 'u2', 'u3', 'n1', 'p1', 'p2', 'p3', 'q1', 'q2', 'g1'] as const) A[name] = await world.addOrder(world.ids.a, `PR36-${name.toUpperCase()}`, '2026-10-01', name === 'q2' ? { promiseDate: null } : {})
   for (const name of ['b1', 'b2'] as const) B[name] = await world.addOrder(world.ids.b, `PR36-${name.toUpperCase()}`, '2026-10-02')
   // What the set-up wrote is the worker's first job; what it tells nobody is this flow's news.
   await settle()
@@ -841,8 +843,10 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect(refused.error.message).toMatch(/Cutting started on|Il taglio è iniziato il/)
 
     // At risk, raised by a person with a reason code: A reads the chip and the reason, never our note.
+    // fix-pr-7: the keeper's nightly look keeps q2's health first (the flow does not lean on whichever event kept it before).
+    await keepOrder(system(), A.q2.orderId, { what: 'nightly' })
     const health = await ok(planner, 'GET', `/production/brand-orders/${A.q2.orderId}/health`)
-    expect(['ON_TRACK', 'NO_DATE']).toContain(health.health.computed)
+    expect(health.health.computed).toBe('NO_DATE') // fix-pr-7: never promised (the set-up)
     const raised = await ok(planner, 'PUT', `/production/brand-orders/${A.q2.orderId}/health`, { reasonCode: 'MATERIAL_LATE', note: HEALTH_NOTE })
     expect(raised.health).toMatchObject({ orderId: A.q2.orderId, health: 'AT_RISK', reasonCode: 'MATERIAL_LATE' })
     await settle()
