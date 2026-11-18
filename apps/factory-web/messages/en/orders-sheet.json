@@ -300,6 +300,9 @@
     "note_one": "Note to {count}…",
     "note_other": "Note to {count}…",
     "oneCustomer": "Pick the orders of one customer: these are of {count} customers.",
-    "notThisCustomer": "An order of another customer is ticked: tick this customer's orders only."
+    "notThisCustomer": "An order of another customer is ticked: tick this customer's orders only.",
+    "addTask_one": "Add task to {count}…",
+    "addTask_other": "Add task to {count}…",
+    "tooMany": "At most {max} orders at once."
   }
 }

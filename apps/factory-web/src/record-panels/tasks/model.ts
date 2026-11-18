@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { FOLLOW_REASONS } from '@nexus/factory-domain/threads/followers'
 import { BULK_ACTIONS, BULK_MAX, CHECKLIST_MAX, CHECKLIST_TEXT_MAX, DESCRIPTION_MAX, TASK_STATUSES, TASK_TILES, TITLE_MAX } from '@nexus/factory-domain/tasks/rules'
+import { BATCH_MAX, BATCH_SKIPS } from '@nexus/factory-domain/tasks/rules' // F-SA-281
 
 /**
  * Tasks and followers on any record (B-W2a-40 screens on B-W2a-20's API; COL-037, COL-011; design home.tasks, shell.panels
@@ -180,3 +181,65 @@ export function followersChangeFor(change: { readonly type: string; readonly fie
 
 /** The task as done locally (the optimistic tick), until the API answers. */
 export const doneLocally = (task: TaskItem): TaskItem => ({ ...task, status: 'DONE', tile: 'DONE_7D' })
+
+// ---- F-SA-281 (sales page plan N5, pick P10; 11-customer-page §3.9; the API's B-SA-071 POST /tasks/batch): one task on each of N records ----
+
+export { BATCH_MAX }
+export type BatchSkip = (typeof BATCH_SKIPS)[number]
+
+/** Who gets the tasks: each record's production supervisor (the default; an order's own, else its customer's), or one person. */
+export type BatchAssignee = { readonly kind: 'SUPERVISOR' } | { readonly kind: 'PERSON'; readonly userId: string }
+
+/** One record the batch makes a task on, as the screen knows it: its supervisor known set (true), known not set (false), or not read (null). */
+export interface BatchRecord {
+  readonly type: string
+  readonly id: string
+  readonly label: string
+  readonly supervisor: boolean | null
+}
+
+/** The API's answer: the tasks made, and each record left out with why (its words; its label only for a record the maker reads). */
+export const batchAnswerSchema = z.object({
+  batchId: z.string(),
+  made: z.array(z.object({ record: z.object({ type: z.string(), id: z.string() }), task: taskSchema })),
+  skipped: z.array(z.object({ record: z.object({ type: z.string(), id: z.string() }), label: z.string().nullable(), code: z.enum(BATCH_SKIPS), words: z.object({ it: z.string(), en: z.string() }) })),
+})
+export type BatchAnswer = z.infer<typeof batchAnswerSchema>
+
+/** The next working day after `today` (Monday to Friday; a holiday the company keeps is the server's: the person may change it). */
+export function nextWorkingDay(today: string): string {
+  const day = new Date(`${today}T12:00:00Z`)
+  do day.setUTCDate(day.getUTCDate() + 1)
+  while (day.getUTCDay() === 0 || day.getUTCDay() === 6)
+  return day.toISOString().slice(0, 10)
+}
+
+/** The orders "Each order's supervisor" cannot reach: their supervisor is known not to be set (the screen says so before Send). */
+export const withoutSupervisor = (records: readonly BatchRecord[]): BatchRecord[] => records.filter((record) => record.supervisor === false)
+
+/** Why the batch cannot be sent yet (a message key of `home-tasks` / `records`, with its params), or null. The API checks again. */
+export function batchHeld(draft: Pick<TaskDraft, 'title' | 'description'>, assignee: BatchAssignee | null, records: readonly BatchRecord[]): { key: string; params?: Record<string, number> } | null {
+  if (records.length === 0) return { key: 'batch.held.none' }
+  if (records.length > BATCH_MAX) return { key: 'batch.held.tooMany', params: { count: records.length, max: BATCH_MAX } }
+  if (!assignee) return { key: 'batch.held.assignee' }
+  const problem = draftProblem({ title: draft.title, description: draft.description, assigneeId: null, dueDate: '', checklist: '' })
+  return problem
+}
+
+/** The body of POST /tasks/batch: the same title, note and due day on each record; SUPERVISOR or one person. */
+export function batchBody(draft: Pick<TaskDraft, 'title' | 'description' | 'dueDate'>, assignee: BatchAssignee, records: readonly Pick<BatchRecord, 'type' | 'id'>[]): Record<string, unknown> {
+  const description = draft.description.trim()
+  return {
+    title: draft.title.replace(/\s+/g, ' ').trim(),
+    records: records.map((record) => ({ type: record.type, id: record.id })),
+    assignee: assignee.kind === 'SUPERVISOR' ? 'SUPERVISOR' : { userId: assignee.userId },
+    description: description || null,
+    dueDate: draft.dueDate || null,
+  }
+}
+
+/** The receipt: how many were made, how many left out, and each left out with its label (when the maker reads it) and why. */
+export function batchReceipt(answer: BatchAnswer, locale: 'it' | 'en'): { made: number; left: number; lines: string[] } {
+  return { made: answer.made.length, left: answer.skipped.length, lines: answer.skipped.map((skip) => `${skip.label ? `${skip.label}: ` : ''}${skip.words[locale]}`) }
+}
+// ---- end F-SA-281

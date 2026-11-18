@@ -44,6 +44,12 @@ import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-
 import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
 import { noteTargetsOf, supervisorTargetsOf } from './sheet/model'
 // ---- end F-SA-280
+// ---- F-SA-281: Add task… on one order and Add task to N… (one batch: POST /tasks/batch) ----
+import { newIdempotencyKey } from '../../../../lib/api/client'
+import { createTask, createTasks, listAssignees, taskReadProblem } from '../../../../record-panels/tasks/api'
+import { addTaskHeld, batchBody, createBody, type Assignable, type BatchAnswer, type BatchAssignee, type BatchRecord, type TaskDraft } from '../../../../record-panels/tasks/model'
+import type { PanelRead } from '../../../../record-panels/model'
+// ---- end F-SA-281
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -560,6 +566,64 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const note = useNoteDialog(api, { can: noteCan, onDone: () => void load(true) })
   const pickedRows = (ids: readonly string[]) => (shownItems ?? []).filter((row) => ids.includes(row.id))
   // ---- end F-SA-280
+  // ---- F-SA-281: the one New task window — on one order (a row's ⋯: its people, "Me" first) or on N orders (the selection: one task
+  // on each, Assign to each order's supervisor by default or one person who may read the customer's records; one batch, its receipt).
+  const [task, setTask] = useState<OrdersListModel['task']>(null)
+  const taskKey = useRef<string | null>(null)
+  const taskHeld = addTaskHeld(new Set(session.permissions), true)
+  const readTaskPeople = useCallback(
+    (record: { type: string; id: string }) => {
+      setTask((now) => (now ? { ...now, people: { status: 'loading' } } : now))
+      listAssignees(api, record).then(
+        (people) => setTask((now) => (now ? { ...now, people: { status: 'ready', data: people } } : now)),
+        (error: unknown) => setTask((now) => (now ? { ...now, people: { status: 'error', problem: taskReadProblem(error) } } : now)),
+      )
+    },
+    [api],
+  )
+  const openTask = (ids: readonly string[], from: 'row' | 'selection') => {
+    const rows = pickedRows(ids)
+    if (rows.length === 0 || taskHeld) return
+    taskKey.current = newIdempotencyKey()
+    const records: BatchRecord[] = rows.map((row) => ({ type: 'SalesOrder', id: row.id, label: row.number, supervisor: row.production && !row.production.withheld.includes('supervisorMark') && row.production.supervisorMark !== null ? row.production.supervisorMark !== 'NOT_SET' : null }))
+    const many = from === 'selection'
+    const people: PanelRead<readonly Assignable[]> = { status: 'loading' }
+    setTask({ mode: many ? 'many' : 'one', records, people, busy: false })
+    // N orders of one customer: the people who may read this customer's records; one order: its own.
+    readTaskPeople(many ? { type: 'Party', id: rows[0]!.partyId } : { type: 'SalesOrder', id: rows[0]!.id })
+  }
+  const taskActions: NonNullable<OrdersListActions['task']> = {
+    onCreate: async (draft: TaskDraft) => {
+      const record = task?.records[0]
+      if (!record) return false
+      setTask((now) => (now ? { ...now, busy: true } : now))
+      try {
+        await createTask(api, createBody(draft, record))
+        setTask(null)
+        return true
+      } catch {
+        setTask((now) => (now ? { ...now, busy: false } : now))
+        return false
+      }
+    },
+    onSend: async (draft: TaskDraft, assignee: BatchAssignee): Promise<BatchAnswer | null> => {
+      if (!task) return null
+      try {
+        const answer = await createTasks(api, batchBody(draft, assignee, task.records), taskKey.current ?? newIdempotencyKey())
+        void load(true)
+        return answer
+      } catch (error) {
+        setNotice({ tone: 'danger', words: { key: readProblem(error) } })
+        return null
+      }
+    },
+    onRetryPeople: () => {
+      const first = task?.records[0]
+      if (task && first) readTaskPeople(task.mode === 'many' ? { type: 'Party', id: pickedRows([first.id])[0]?.partyId ?? '' } : { type: first.type, id: first.id })
+    },
+    onClose: () => setTask(null),
+  }
+  // ---- end F-SA-281
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -628,7 +692,9 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     // ---- F-SA-280 ----
     assign: assign.model,
     note: note.model,
-    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan },
+    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */ },
+    task, // F-SA-281
+    me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
@@ -684,6 +750,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     supervisor: assign.actions,
     onNote: (ids) => note.open(noteTargetsOf(pickedRows(ids)), 'selection'),
     note: note.actions,
+    onAddTask: (ids, from = 'row') => openTask(ids, from), // F-SA-281
+    task: taskActions, // F-SA-281
     // ---- end F-SA-280
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onSort: (next) => go({ sort: next }), // B-TH-057

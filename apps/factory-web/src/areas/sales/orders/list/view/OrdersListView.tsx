@@ -63,6 +63,11 @@ import { NoteDialog } from '../../../../production/_shared/notes/view/NoteDialog
 import { NOTES_NS, openHeld } from '../../../../production/_shared/notes/model'
 import { oneCustomerHeld, supervisorTargetsOf } from '../sheet/model'
 // ---- end F-SA-280
+// ---- F-SA-281: the one New task window (one order, or N in one batch) ----
+import { ListPlus } from 'lucide-react'
+import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
+import { BATCH_MAX } from '../../../../../record-panels/tasks/model'
+// ---- end F-SA-281
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -79,7 +84,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */, 'records' /* F-SA-281: the tasks' held words */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -93,6 +98,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const m = useT(SUPERVISOR_NS) // F-SA-275
   const n = useT(NOTES_NS) // F-SA-280
+  const r = useT('records') // F-SA-281
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -155,6 +161,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const assignWords = oneCustomerWords ?? (assignWait ? m(assignWait.key, assignWait.params) : null)
   const noteWords = oneCustomerWords ?? (noteWait ? n(noteWait.key, noteWait.params) : null)
   // ---- end F-SA-280
+  // F-SA-281: Add task to N… — one customer, the tasks' right, at most BATCH_MAX (the dialog and the API check again).
+  const taskWords = oneCustomerWords ?? (model.bulkCan?.task ? r(model.bulkCan.task) : picked.length > BATCH_MAX ? s('bulk.tooMany', { max: BATCH_MAX }) : null)
   const ownKeys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
     ...(model.can.manage && !model.embedded ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
@@ -199,9 +207,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
   const cardFields = useMemo(() => cardFieldsOf((row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />), [])
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer }),
+    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */],
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
@@ -454,6 +462,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <UserCog size={13} aria-hidden /> <SelectionLabel>{s('bulk.assign')}</SelectionLabel>
                   </Button>
                 )}
+                {/* F-SA-281: Add task to N… (Assign to each order's supervisor by default; one batch, its receipt). */}
+                {actions?.onAddTask && (
+                  <Button size="sm" aria-label={s('bulk.addTask', { count: picked.length })} heldReason={taskWords} onClick={() => actions.onAddTask?.(picked.map((row) => row.id), 'selection')}>
+                    <ListPlus size={13} aria-hidden /> <SelectionLabel>{s('bulk.addTask', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                )}
                 {actions?.onNote && (
                   <Button size="sm" aria-label={s('bulk.note', { count: picked.length })} heldReason={noteWords} onClick={() => actions.onNote?.(picked.map((row) => row.id))}>
                     <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{s('bulk.note', { count: picked.length })}</SelectionLabel>
@@ -487,6 +501,19 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {/* F-SA-280: production's one assign dialog and one note dialog (their results: changed / unchanged / skipped with why). */}
       {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
       {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
+      {/* F-SA-281: the one New task window — on one order (a row's ⋯), or on N orders in one batch (the selection). */}
+      {model.task && (
+        <TaskNewDialog
+          recordLabel={model.task.mode === 'one' ? (model.task.records[0]?.label ?? null) : null}
+          people={model.task.people}
+          me={model.me ?? null}
+          busy={model.task.busy}
+          onRetryPeople={actions?.task?.onRetryPeople}
+          onCreate={actions?.task?.onCreate}
+          onClose={() => actions?.task?.onClose()}
+          batch={model.task.mode === 'many' && actions?.task ? { records: model.task.records, today: model.today, onSend: actions.task.onSend } : null}
+        />
+      )}
       {model.importer && <OrdersImportView model={model.importer} actions={actions?.importActions} />}
 
       {help && (
@@ -684,6 +711,8 @@ interface ColumnsInput {
   l?: Translate
   /** F-SA-275: the supervisor marks' words (production-supervisor). */
   m?: Translate
+  /** F-SA-281: the tasks' words (records). */
+  r?: Translate
   locale: Locale
   model: OrdersListModel
   wide: boolean
@@ -723,8 +752,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, locale, model, wide, latest, onViewer }
+function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -933,7 +962,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer }: 
           // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
           ...(model.depth ? [printVerb(data, prefix, d)] : []),
           // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
-          ...(act()?.onAddTask ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id]) }] : []),
+          ...(act()?.onAddTask ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row'), disabled: !!latest.current.model.bulkCan?.task, ...(latest.current.model.bulkCan?.task && r ? { description: r(latest.current.model.bulkCan.task) } : {}) }] : []),
           ...answerItem(data),
           // ---- end F-SA-275
         ]}

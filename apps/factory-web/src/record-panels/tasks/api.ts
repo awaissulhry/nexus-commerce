@@ -1,6 +1,8 @@
 import { newIdempotencyKey, type ApiClient } from '../../lib/api/client'
 import { isApiError, issuePath } from '../../lib/api/errors'
 import {
+  batchAnswerSchema, // F-SA-281
+  type BatchAnswer, // F-SA-281
   assigneesSchema,
   bulkAnswerSchema,
   followersSchema,
@@ -67,6 +69,11 @@ export async function getTask(api: ApiClient, id: string, signal?: AbortSignal):
 /** POST /tasks (the body from model.ts createBody). */
 export async function createTask(api: ApiClient, body: Record<string, unknown>): Promise<TaskItem> {
   return (await api.post('/tasks', { body, schema: oneTaskSchema, idempotencyKey: newIdempotencyKey() })).task
+}
+
+/** F-SA-281: POST /tasks/batch — one task on each record (the body from model.ts batchBody); one batch: each assignee's bell, one item. */
+export function createTasks(api: ApiClient, body: Record<string, unknown>, idempotencyKey: string = newIdempotencyKey()): Promise<BatchAnswer> {
+  return api.post('/tasks/batch', { body, schema: batchAnswerSchema, idempotencyKey })
 }
 
 /** PUT /tasks/:id: its title, description, due day and time, checklist (an OPEN task). */

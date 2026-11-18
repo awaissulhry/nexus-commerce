@@ -300,6 +300,9 @@
     "note_one": "Nota a {count}…",
     "note_other": "Nota a {count}…",
     "oneCustomer": "Scegli gli ordini di un solo cliente: questi sono di {count} clienti.",
-    "notThisCustomer": "È spuntato un ordine di un altro cliente: spunta solo gli ordini di questo cliente."
+    "notThisCustomer": "È spuntato un ordine di un altro cliente: spunta solo gli ordini di questo cliente.",
+    "addTask_one": "Aggiungi attività a {count}…",
+    "addTask_other": "Aggiungi attività a {count}…",
+    "tooMany": "Al massimo {max} ordini alla volta."
   }
 }

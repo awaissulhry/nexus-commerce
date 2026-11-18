@@ -20,6 +20,8 @@ import type { InvoiceDraftsState } from './sheet/overall-parts'
 import type { WaitingMarks } from './sheet/model' // F-SA-275
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model' // F-SA-280
 import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model' // F-SA-280
+import type { Assignable, BatchAnswer, BatchAssignee, BatchRecord, TaskDraft } from '../../../../record-panels/tasks/model' // F-SA-281
+import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -155,8 +157,12 @@ export interface OrdersListModel {
   // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
   assign?: AssignSupervisorModel | null
   note?: NoteDialogModel | null
-  bulkCan?: { readonly supervisor: boolean; readonly note: boolean }
+  bulkCan?: { readonly supervisor: boolean; readonly note: boolean; /** F-SA-281: why a task is held (a `records` key), or null. */ readonly task?: string | null }
   // ---- end F-SA-280
+  // ---- F-SA-281: the New task window while open — on one order, or on N (one batch) — and who the person is ("Me") ----
+  task?: { readonly mode: 'one' | 'many'; readonly records: readonly BatchRecord[]; readonly people: PanelRead<readonly Assignable[]>; readonly busy: boolean } | null
+  me?: string | null
+  // ---- end F-SA-281
 }
 
 export interface OrdersListActions {
@@ -222,8 +228,10 @@ export interface OrdersListActions {
   onProfile?: (profile: null) => void
   /** F-SA-214: a board card has the focus or its picture is open large (true): live re-reads wait behind "N updates · Show". */
   onBoardHold?: (held: boolean) => void
-  /** F-SA-275 / F-SA-281: Add task… on these orders (a row's ⋯, the selection's Add task to N…); absent: no such door. */
-  onAddTask?: (ids: readonly string[]) => void
+  /** F-SA-275 / F-SA-281: Add task… on these orders (a row's ⋯: one order; the selection's Add task to N…: one batch); absent: no such door. */
+  onAddTask?: (ids: readonly string[], from?: 'row' | 'selection') => void
+  /** F-SA-281: the New task window's own actions. */
+  task?: { readonly onCreate: (draft: TaskDraft) => Promise<boolean>; readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
   /** F-SA-276: the waiting term (null clears it); `rows` with it (the built-in view "Waiting on us": the open ones). */
   onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
   // ---- F-SA-280 ----
