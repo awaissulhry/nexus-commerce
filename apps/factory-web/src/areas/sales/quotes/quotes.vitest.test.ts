@@ -397,3 +397,16 @@ describe('Export N (CSV): the selected quotes, never more than the screen shows'
     expect(priceOnly).not.toContain('list.col.margin')
   })
 })
+
+// ---- F-SA-212 (sales page plan N8, picks P13, P18): the quote list's Picture is the ONE picture part ----------------------------
+describe('Sales › Quotes mounts the ONE picture part (F-SA-212)', () => {
+  const view = readFileSync(join(fileURLToPath(new URL('.', import.meta.url)), 'list/view/QuotesListView.tsx'), 'utf8')
+  it('the cell and the picture large come from lib/record-picture; the quote list keeps no copy and no word set of its own', () => {
+    expect(view).toContain("from '../../../../../lib/record-picture/view/RecordPicture'")
+    expect(view).toContain('source="quote"')
+    expect(view).toContain('size="cell"')
+    expect(readdirSync(join(fileURLToPath(new URL('.', import.meta.url)), 'list/view'))).not.toContain('QuotePicture.tsx')
+    for (const locale of LOCALES) expect(Object.keys(CATALOGUE[locale].sales ?? {}).filter((key) => key.startsWith('list.picture.')), locale).toEqual([])
+  })
+})
+// ---- end F-SA-212

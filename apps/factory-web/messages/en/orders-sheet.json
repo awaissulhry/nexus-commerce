@@ -72,19 +72,6 @@
     "filter": "Show only {name} (filters the sheet)",
     "unknown": "a company"
   },
-  "picture": {
-    "open": "Show the picture of {number} large · {style}",
-    "noneOf": "{number} has no picture yet",
-    "alt": "{style} main picture",
-    "more": "+{count}",
-    "viewerOf": "The picture of {number}",
-    "close": "Close",
-    "openStyle": "Open style",
-    "none": "No picture yet",
-    "small": "A small preview. The full picture is on the style.",
-    "moreStyles_one": "The order has {count} more style: open its lines",
-    "moreStyles_other": "The order has {count} more styles: open its lines"
-  },
   "peek": {
     "customer": "About the customer",
     "order": "About the order",

@@ -24,7 +24,9 @@ import { QuotesPageLinks } from '../../new-from/view/PageLinks'
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue } from '../../../../../lib/last-message-cell/model'
 // ---- TH-6 part B (B-TH-257 follow-up; grid-F01): the Picture column, as the Orders sheet's ----
-import { QuotePictureCell, QuotePictureViewer } from './QuotePicture'
+// F-SA-212: the ONE picture part (the cell and the picture large).
+import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
+import { PictureViewer } from '../../../../../lib/record-picture/view/PictureViewer'
 
 export type { QuotesListViewModel, QuotesListActions } from '../list-model'
 
@@ -95,7 +97,19 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const columns = useMemo<ColDef<QuoteListRow>[]>(() => {
     // TH-6 part B (grid-F01): the first style's small preview ("+2"), opening the picture large; the placeholder without a file.
     const PictureCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
-      data ? <QuotePictureCell row={data} load={latest.current.actions?.loadPicture} demo={latest.current.model.demoPictures?.[data.id]} t={t} onOpen={() => setViewer(data.id)} /> : null
+      data ? (
+        <RecordPicture
+          source="quote"
+          recordId={data.id}
+          number={data.number}
+          picture={data.picture ?? null}
+          styleCount={data.styleCount ?? 1}
+          size="cell"
+          read={latest.current.actions?.readPictures}
+          demo={latest.current.model.demoPictures?.[data.id]}
+          onOpen={() => setViewer(data.id)}
+        />
+      ) : null
     const NumberCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
         <span className="fw-ql-cell">
@@ -368,7 +382,20 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       {/* TH-6 part B (grid-F01): the picture large of the row whose Picture was opened (Esc closes it). */}
       {(() => {
         const row = viewer ? (shown ?? []).find((item) => item.id === viewer) : undefined
-        return row ? <QuotePictureViewer row={row} load={actions?.loadPicture} demo={model.demoPictures?.[row.id]} prefix={model.prefix} quoteHref={recordHref(row)} t={t} onClose={() => setViewer(null)} /> : null
+        return row ? (
+          <PictureViewer
+            source="quote"
+            recordId={row.id}
+            number={row.number}
+            picture={row.picture ?? null}
+            styleCount={row.styleCount ?? 1}
+            read={actions?.readPictures}
+            demo={model.demoPictures?.[row.id]}
+            prefix={model.prefix}
+            recordHref={recordHref(row)}
+            onClose={() => setViewer(null)}
+          />
+        ) : null
       })()}
       {dialog === 'cancel' && <CancelManyDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
       {dialog === 'help' && (

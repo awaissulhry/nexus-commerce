@@ -324,16 +324,7 @@ export function listOrderCustomers(api: ApiClient, query: { q?: string; companyI
 }
 // ── end B-TH-226 ──
 
-// ── B-TH-225: the Picture cell's small preview (GET /sales/orders/:orderId/picture, B-TH-017 / B-TH-063) ──
-const pictureSchema = z.object({
-  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
-})
-export type OrderPicture = z.infer<typeof pictureSchema>['picture']
-
-export async function getOrderPicture(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<OrderPicture> {
-  return (await api.get(`/sales/orders/${encodeURIComponent(orderId)}/picture`, { schema: pictureSchema, signal })).picture
-}
-// ── end B-TH-225 ──
+// F-SA-212: the Picture cell's small previews are the one picture part's batch read (lib/record-picture/api.ts).
 
 // ---- the record ----------------------------------------------------------------------------------------------------------
 

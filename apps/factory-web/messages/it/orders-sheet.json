@@ -72,19 +72,6 @@
     "filter": "Mostra solo {name} (filtra il foglio)",
     "unknown": "un'azienda"
   },
-  "picture": {
-    "open": "Mostra in grande la foto di {number} · {style}",
-    "noneOf": "{number} non ha ancora una foto",
-    "alt": "{style} foto principale",
-    "more": "+{count}",
-    "viewerOf": "La foto di {number}",
-    "close": "Chiudi",
-    "openStyle": "Apri il modello",
-    "none": "Ancora nessuna foto",
-    "small": "Un'anteprima piccola. La foto intera è sul modello.",
-    "moreStyles_one": "L'ordine ha {count} altro modello: apri le sue righe",
-    "moreStyles_other": "L'ordine ha altri {count} modelli: apri le sue righe"
-  },
   "peek": {
     "customer": "Sul cliente",
     "order": "Sull'ordine",

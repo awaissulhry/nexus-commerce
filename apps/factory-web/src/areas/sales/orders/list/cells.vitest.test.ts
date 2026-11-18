@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs' // F-SA-212
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../../lib/i18n/messages'
@@ -100,3 +101,25 @@ describe('the clash and the words', () => {
     }
   })
 })
+
+// ---- F-SA-212 (sales page plan N8, picks P13, P18): the Picture cell, the phone card and the picture large are the ONE part -----
+describe('the Orders sheet mounts the ONE picture part (F-SA-212)', () => {
+  const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+  const parts = readFileSync(new URL('./sheet/parts.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('./sheet/sheet.css', import.meta.url), 'utf8')
+  it('the cell (76 px column, the cell size), the phone card\'s aside (the phone size) and the viewer come from lib/record-picture', () => {
+    expect(view).toContain("from '../../../../../lib/record-picture/view/RecordPicture'")
+    expect(view).toContain('size="cell"')
+    expect(view).toContain('size="phone"')
+    expect(view).toContain("picture: { role: 'aside' as const, draw: picture }")
+    expect(view).toContain("{ colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76")
+    expect(view).toContain('read={input.latest.current.actions?.readPictures}')
+  })
+  it('the old copy is gone: no own cache, thumb or viewer, no thumb or viewer styles, no word set of its own', () => {
+    for (const gone of ['SMALL_CACHE', 'useSmallPicture', 'PictureThumb', 'export function PictureViewer']) expect(parts, gone).not.toContain(gone)
+    expect(css).not.toMatch(/\.fw-sheet-(thumb|viewer)/)
+    for (const locale of LOCALES) expect(Object.keys(CATALOGUE[locale][NAMESPACE] ?? {}).filter((key) => key.startsWith('picture.')), locale).toEqual([])
+    expect(existsSync(new URL('../../../../lib/record-picture/view/RecordPicture.tsx', import.meta.url))).toBe(true)
+  })
+})
+// ---- end F-SA-212

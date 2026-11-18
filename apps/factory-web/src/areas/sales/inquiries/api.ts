@@ -286,18 +286,7 @@ export async function uploadFile(api: ApiClient, inquiry: { id: string; companyI
   await completeUpload(api, stored.id)
 }
 
-// ---- B-TH-216 (Sales › Incoming): the Picture cell, and the facts of the list's one notice ----------------------------------------
-
-const instant = z.string()
-const pictureAnswer = z.object({
-  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
-})
-export type InquiryPicture = z.infer<typeof pictureAnswer>['picture']
-
-/** GET /sales/inquiries/:id/picture: the small preview (~320 px, a presigned GET of 60 s) of the row's style picture; never the original. */
-export async function readPicture(api: ApiClient, inquiryId: string, signal?: AbortSignal): Promise<InquiryPicture> {
-  return (await api.get(`${one(inquiryId)}/picture`, { schema: pictureAnswer, signal })).picture
-}
+// ---- B-TH-216 (Sales › Incoming): the facts of the list's one notice (F-SA-212: the Picture cell is the one picture part's batch read)
 
 /** GET /numbering/series (numbering.view): the companies of these with no ACTIVE request (INQUIRY) series — their portal and mail doors are off. */
 export async function companiesWithoutNumbering(api: ApiClient, companyIds: readonly string[], signal?: AbortSignal): Promise<string[]> {

@@ -202,7 +202,7 @@ export const listRowSchema = z.object({
   madeFrom: madeFromSchema.optional(),
   order: quoteOrderSchema.optional(),
   // TH-6 part B (B-TH-257 follow-up; grid-F01): the current version's first style and its main picture (fileId null: the
-  // placeholder; `small`: its ~320 px preview exists — readQuotePicture reads it), and how many styles ("+2").
+  // placeholder; `small`: its ~320 px preview exists — the one picture part's batch read reads it), and how many styles ("+2").
   picture: z.object({ styleId: z.string(), styleCode: z.string(), styleName: z.string(), fileId: z.string().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable().optional(),
   styleCount: z.number().optional(),
 })
@@ -417,15 +417,7 @@ export async function getQuote(api: ApiClient, id: string, signal?: AbortSignal)
   return (await api.get(quotePath(id), { schema: oneQuote, signal })).quote
 }
 
-// ---- TH-6 part B (B-TH-257 follow-up): the list's Picture cell ---------------------------------------------------------------------
-const quotePictureAnswer = z.object({
-  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
-})
-/** GET /sales/quotes/:id/picture: the small preview (~320 px, a presigned GET of 60 s) of the row's style picture; never the original. */
-export async function readQuotePicture(api: ApiClient, id: string, signal?: AbortSignal): Promise<z.infer<typeof quotePictureAnswer>['picture']> {
-  return (await api.get(`${quotePath(id)}/picture`, { schema: quotePictureAnswer, signal })).picture
-}
-// ---- end TH-6 part B
+// F-SA-212: the list's Picture cell reads the one picture part's batch read (lib/record-picture/api.ts).
 
 export function listVersions(api: ApiClient, id: string, signal?: AbortSignal): Promise<VersionsAnswer> {
   return api.get(`${quotePath(id)}/versions`, { schema: versionsSchema, signal })
