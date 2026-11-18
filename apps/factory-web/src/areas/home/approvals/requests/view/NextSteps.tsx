@@ -105,7 +105,7 @@ interface StepDoors {
 function stepDoor(step: ApplyPlanStep, doors: StepDoors, prefix: string, say: (key: string, params?: Record<string, string | number>) => string) {
   const ref = step.ref
   if (ref?.type === 'WorkOrderChange') return { href: `${prefix}/home/approvals?open=${encodeURIComponent(ref.id)}`, label: say(`${CR}.next.openChange`) }
-  if (ref && (ref.type === 'ChangeRequest' || ref.type === 'ChangeOrder')) return { href: `${prefix}${recordAddress({ type: ref.type, id: ref.id, label: ref.number, companyId: doors.companyId, siteId: null }, OFFICE_PAGES)}`, label: say(`${CR}.next.open`, { number: ref.number ?? '' }) }
+  if (ref && (ref.type === 'ChangeRequest' || ref.type === 'ChangeOrder')) return { href: `${prefix}${recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: doors.companyId, siteId: null }, OFFICE_PAGES)}`, label: say(`${CR}.next.open`, { number: ref.number ?? '' }) }
   if (step.kind === 'REPROMISE' && doors.orderHref && step.state !== 'DONE') return { href: doors.orderHref, label: say(`${CR}.review.openOrder`, { order: doors.orderNumber }) }
   return null
 }
