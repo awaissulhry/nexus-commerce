@@ -24,6 +24,9 @@ on:
       # The factory's own database kit (only factory-db and factory-api use it).
       - 'packages/db-kit/**'
       - 'scripts/factory/**'
+      # The design system factory-web compiles from source, and the installed packages: either can break the factory.
+      - 'packages/ui/**'
+      - 'package-lock.json'
       - '.github/workflows/factory-quick-check.yml'
       - '.github/actions/factory-setup/**'
       - '.github/factory-test-floor.json'
