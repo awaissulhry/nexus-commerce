@@ -56,7 +56,9 @@ const officeKey = () => `th3-decline-${++keySerial}-${Date.now()}`
 const version = async (id: string) => (await one<{ version: number }>('SELECT version FROM "Inquiry" WHERE id = $1', [id])).version
 const statusOf = async (id: string) => one<{ status: string; reason: string | null }>('SELECT status::text AS status, "declineReason"::text AS reason FROM "Inquiry" WHERE id = $1', [id])
 const outbound = (id: string) => admin(`SELECT m.channel::text AS channel, m."bodyText", m."partyId" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'Inquiry' AND t."recordId" = $1 AND m.direction = 'OUTBOUND' ORDER BY m.at`, [id])
-const mails = (id: string) => admin(`SELECT "to", subject FROM "EmailOutbound" WHERE "recordType" = 'Inquiry' AND "recordId" = $1 ORDER BY "queuedAt"`, [id])
+// fix-pg-2 (th-backend-g step 2, #1591): a portal request mails its sender a receipt at Send ('request.received'); the decline's
+// mails are the others.
+const mails = (id: string) => admin(`SELECT "to", subject FROM "EmailOutbound" WHERE "recordType" = 'Inquiry' AND "recordId" = $1 AND "templateKey" IS DISTINCT FROM 'request.received' ORDER BY "queuedAt"`, [id])
 const seeded = async (number: string) => (await one<{ id: string }>(`SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND number = $2`, [T, number])).id
 
 async function partnerPerson(email: string, partyId: string, roleKeys: string[]): Promise<void> {

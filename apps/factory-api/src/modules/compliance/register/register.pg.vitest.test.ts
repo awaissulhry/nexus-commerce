@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { EVERY_PARTY_WORDS, type Grant, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { Clock } from '@nexus/factory-domain/core/time'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -359,11 +359,16 @@ describe('the PPE register (QHS-118; Reg. (EU) 2016/425 art. 8(4))', () => {
     await refused('companyB', 'POST', url(entry.id, '/close'), { version: entry.version, reason: 'x' }, 404)
     await refused('companyB', 'POST', '/compliance/register/trace', { companyId: A.companyA, styleId: jkt02, batchNumbers: ['SEED-BT-0001'] }, 403)
 
-    // A grant over the party P2 reaches P2's complaint and the entries no party reported, never P1's.
-    const partyList = (await ok('partyP2', 'GET', '/compliance/register')).entries.map((row: Json) => row.reference)
-    expect(partyList).toContain(entry.reference)
-    expect(partyList).not.toContain('SEED-REG-2026-001')
-    await refused('partyP2', 'GET', url(seedA.quality.registerEntryId), undefined, 404)
+    // ---- B-PR-10 (the brand wall, production plan §2 "a view that mixes brands needs access to every brand"; fix-pg-2 follows it):
+    // the register is the manufacturer's one register, its traces follow lots into every customer's work orders and shipments, so a
+    // grant limited to the party P2 opens no route of it: 403 in words that name no customer, P2's own complaint included.
+    for (const target of ['/compliance/register', url(entry.id), url(seedA.quality.registerEntryId)]) {
+      const held = await refused('partyP2', 'GET', target, undefined, 403)
+      expect(held.message, target).toBe(EVERY_PARTY_WORDS.en)
+      expect(JSON.stringify(held), target).not.toMatch(/SEED-REG|SEED-C\d|P1|P2/)
+    }
+    await refused('partyP2', 'POST', '/compliance/register', { companyId: A.companyA, kind: 'COMPLAINT', styleId: jkt02, description: 'x' }, 403)
+    // ---- end B-PR-10
 
     // Another tenant: nothing of tenant A, whatever its grants (row-level security).
     await refused('otherTenant', 'GET', url(entry.id), undefined, 404)

@@ -148,7 +148,8 @@ describe('B-TH-072: linked news in the project’s feed, merged when read', { ti
     expect(lines.find((entry) => entry.id === rows.style)).toMatchObject({ recordType: 'Style', label: 'SEED-JKT-01', status: { from: 'DEVELOPMENT', to: 'RELEASED' }, folded: 1 })
     // A change that moves no status and decides nothing is no news; nothing of it is ever a value.
     expect(lines.map((entry) => entry.id)).not.toContain(rows.orderNote)
-    expect(JSON.stringify(lines)).not.toMatch(/officeNote|Made-up a|Made-up b/)
+    // fix-pg-2: the note's two values exactly ("Made-up a" is also the start of the office person's name, Made-up ada).
+    expect(JSON.stringify(lines)).not.toMatch(/officeNote|"Made-up [ab]"/)
   })
 
   it('the default feed holds no linked line; nothing is copied into the project’s thread', async () => {

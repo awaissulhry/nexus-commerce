@@ -77,6 +77,12 @@ beforeAll(async () => {
   const brandB = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-C2B'`, [world.tenantId])).id
   const buyerB = await one<{ id: string; email: string; displayName: string }>(`SELECT id, email, "displayName" FROM "User" WHERE "tenantId" = $1 AND "partyId" = $2 AND email LIKE 'buyer.second-brand.%' LIMIT 1`, [world.tenantId, brandB])
   await inTenant(h, world, (client) => client.portalSettings.updateMany({ where: { partyId: brandB }, data: { portalOn: true } }))
+  // fix-pg-2: brand B's buyer may write in its portal (partner-comment, as brand A's buyer), so a post on A's repair is refused by
+  // the record (404, as unknown), never by a missing right (403 for any record).
+  await inTenant(h, world, async (client) => {
+    const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key: 'partner-comment' } }, select: { id: true } })
+    await client.roleAssignment.create({ data: { id: newId(), userId: buyerB.id, roleId: role.id, allCompanies: true, partyIds: [brandB], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+  })
   repairA = (await one<{ id: string }>(`SELECT id FROM "RepairOrder" WHERE "tenantId" = $1 AND number = 'SEED-REP-0001' AND "partyId" = $2`, [world.tenantId, world.p1])).id
   alpha = await signIn(h, world, world.people.buyer)
   beta = await signIn(h, world, { id: buyerB.id, email: buyerB.email, name: buyerB.displayName } satisfies Person)
@@ -128,6 +134,10 @@ describe('T09 / W14: brand B never opens, finds, lists or writes on brand A’s 
     neutral404(await thread(beta, repairA), 'SEED-REP-0001')
     neutral404(await post(beta, repairA, { body: 'Made-up.' }), 'SEED-REP-0001')
     neutral404(await beta.get(`/records/RepairOrder/${repairA}/summary`), 'SEED-REP-0001')
+    // fix-pg-2: as unknown as a wrong id, word for word (the request id aside).
+    const words = (answer: { status: number; body: Json }) => ({ status: answer.status, error: { ...answer.body.error, requestId: null } })
+    expect(words(await post(beta, repairA, { body: 'Made-up.' }))).toEqual(words(await post(beta, newId(), { body: 'Made-up.' })))
+    expect(words(await thread(beta, repairA))).toEqual(words(await thread(beta, newId())))
     const found = await search(beta, 'SEED-REP-0001')
     expect(found.found).toBe(0)
     expect(JSON.stringify(found)).not.toContain(repairA)

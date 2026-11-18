@@ -673,7 +673,9 @@ describe('the pay period (MES-260), the statement (MES-261) and waiting (MES-148
 
   it('the statement PDF (B-W2b-62): only with the right, each opening recorded; an approved one stored once, read only through this route', async () => {
     const [row] = await admin<{ id: string; employeeId: string }>(`SELECT id, "employeeId" FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND status = 'APPROVED' ORDER BY id LIMIT 1`, [periodId])
-    // Without the company's legal data (c.c. art. 2250) no document prints, in words; the seed has none.
+    // Without the company's legal data (c.c. art. 2250) no document prints, in words. fix-pg-2 (B-W2b-F59, #1520): the seed gives
+    // its companies legal data now; taken away here first.
+    await admin(`UPDATE "Company" SET "vatNumber" = NULL, "fiscalCode" = NULL, "reaOffice" = NULL, "reaNumber" = NULL WHERE id = (SELECT "companyId" FROM "WorkerStatement" WHERE id = $1)`, [row!.id])
     const refused = await call('hr', 'POST', `/people/statements/${row!.id}/pdf`, {})
     expect(refused.statusCode).toBe(400)
     expect(refused.json().error.issues[0].path).toMatch(/^company\//)

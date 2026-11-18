@@ -104,7 +104,8 @@ beforeAll(async () => {
     SESSIONS[person] = { audience: 'office', tenantId: A.tenant, actorId: PEOPLE[person], grants: grantsOf(role) }
   }
   p1 = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-C1'`, [A.tenant])).id
-  p3 = (await one<{ id: string }>(`SELECT p.id FROM "Party" p WHERE p."tenantId" = $1 AND 'CUSTOMER' = ANY(p.roles::text[]) AND p.status = 'ACTIVE' AND NOT EXISTS (SELECT 1 FROM "PartyCompanyTerms" t WHERE t."partyId" = p.id AND t."creditLimitAmount" IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM "PartyHold" x WHERE x."partyId" = p.id AND x."releasedAt" IS NULL) AND (p."companyId" IS NULL OR p."companyId" = $2) ORDER BY p.code LIMIT 1`, [A.tenant, A.companyA])).id
+  // fix-pg-2: a customer a quote can price (a tax identity in force): the second brand's seed (B-TH-001, SEED-C2B) has none.
+  p3 = (await one<{ id: string }>(`SELECT p.id FROM "Party" p WHERE p."tenantId" = $1 AND 'CUSTOMER' = ANY(p.roles::text[]) AND p.status = 'ACTIVE' AND NOT EXISTS (SELECT 1 FROM "PartyCompanyTerms" t WHERE t."partyId" = p.id AND t."creditLimitAmount" IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM "PartyHold" x WHERE x."partyId" = p.id AND x."releasedAt" IS NULL) AND EXISTS (SELECT 1 FROM "PartyTaxIdentity" i WHERE i."partyId" = p.id AND i."validFrom" <= CURRENT_DATE) AND (p."companyId" IS NULL OR p."companyId" = $2) ORDER BY p.code LIMIT 1`, [A.tenant, A.companyA])).id
   termsA = await one(`SELECT id, version FROM "PartyCompanyTerms" WHERE "partyId" = $1 AND "companyId" = $2 AND "endedAt" IS NULL`, [p1, A.companyA])
   ruleId = (await one<{ id: string }>(`SELECT id FROM "ApprovalRule" WHERE "tenantId" = $1 AND kind = 'CREDIT_OVERRIDE' ORDER BY "createdAt", id LIMIT 1`, [A.tenant])).id
   // A size-grid line of SEED-SO-0001 (a released style with an offered size), typed again on the made-up orders.
