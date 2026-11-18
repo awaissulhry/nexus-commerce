@@ -9,6 +9,8 @@ import { diffView, extraPiecesView, impactView } from '../orders/daily-contract'
 import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS } from '@nexus/factory-domain/order-apply/rules'
 // B-PR-25: the production asks from the portal, the impact before Send.
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES, MAX_DESIGN_FILES, MAX_DESIGN_WORDS } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046b: which pieces a design change is for.
+import { DESIGN_APPLIES_TO } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 // B-PR-26: our counter-offer on a request.
@@ -94,6 +96,11 @@ export const askImpact = output({
   earliest: output({ date: day.nullable(), partial: z.boolean(), meetsWanted: z.boolean().nullable(), words }).nullable(),
   notes: z.array(words),
   words,
+  /**
+   * B-SA-046b: a design change: the pieces not started yet, or also the pieces already made (rework may cost), as the customer
+   * chose before Send; null on every other kind, and on an impact kept before it.
+   */
+  appliesTo: z.enum(DESIGN_APPLIES_TO).nullable(),
 })
 // ---- end B-PR-25
 
@@ -239,6 +246,8 @@ const askBody = input({
   note: z.string().max(MAX_DESIGN_WORDS).nullable().optional(),
   /** B-SA-046: a design change: up to 10 files of the order or its lines, shared with the customer (uploaded first). */
   fileIds: z.array(id()).max(MAX_DESIGN_FILES).optional(),
+  /** B-SA-046b: a design change: the pieces not started yet (left out: the default) or also the pieces already made. */
+  appliesTo: z.enum(DESIGN_APPLIES_TO).optional(),
   /** B-PR-25: a sample round: the line the sample is of, and the kind of round. */
   lineId: id().nullable().optional(),
   sampleKind: z.enum(ASK_SAMPLE_KINDS).nullable().optional(),

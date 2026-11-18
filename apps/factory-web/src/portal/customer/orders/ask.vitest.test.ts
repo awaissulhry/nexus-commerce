@@ -20,6 +20,9 @@ import { PortalRecordFrame } from '../../shell/record/PortalRecordFrame'
 import type { PortalOrderFiles } from './api'
 import { availableIdsOf, cleanedUploads, designAskRefusal, designBodyOf, designFilesOf, designProblem, MAX_DESIGN_FILES, scanningUploadsOf, sentUploadsOf, takesSteps, uploadFailureOf } from './ask-model'
 import type { DesignAskModel } from './view/AskDialog'
+// B-SA-046b: which pieces a design change is for.
+import { appliesToOf, APPLIES_TO_CHOICES } from './ask-model'
+import { askImpactSchema, changeRequestSchema } from './api'
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3 "Brand asks, we decide", §5; 06-tree B.2 P-ORD-ask; wall PW-P06): step 1
@@ -399,3 +402,42 @@ describe('F-SA-246: the doors, the request card and the words', () => {
   })
 })
 // ── end F-SA-246 ──
+
+// ── B-SA-046b (14-change-flow §2.4): the design change applies to the pieces not started yet (the default) or also to the made ones ──
+describe('B-SA-046b: which pieces the design change is for', () => {
+  const asked = { ...EMPTY_ASK, lineIds: [lineOne()], note: 'A shorter collar' }
+
+  it('a new draft reads the pieces not started yet; Send says the choice; a draft without one sends none (the API reads the default)', () => {
+    expect(EMPTY_ASK.appliesTo).toBe('NOT_STARTED')
+    expect(APPLIES_TO_CHOICES).toEqual(['NOT_STARTED', 'ALSO_MADE'])
+    expect(appliesToOf({})).toBe('NOT_STARTED')
+    expect(designBodyOf(designRules(), asked, [])).toEqual({ kind: 'DESIGN', lineIds: [lineOne()], note: 'A shorter collar', appliesTo: 'NOT_STARTED' })
+    expect(designBodyOf(designRules(), { ...asked, appliesTo: 'ALSO_MADE' }, []).appliesTo).toBe('ALSO_MADE')
+    expect(designBodyOf(designRules(), { lineIds: [lineOne()], note: 'x', fileIds: [] }, [])).not.toHaveProperty('appliesTo')
+  })
+
+  it('step 2 offers both, the default picked; step 3 says the choice; in both languages, "voi" in Italian', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const details = drawWhat({ rules: designRules(), step: 'details', kind: 'DESIGN', draft: asked, design: designModel() }, locale)
+      const text = textOf(details)
+      expect(text, locale).toContain(locale === 'en' ? 'Which pieces' : 'Quali pezzi')
+      expect(text, locale).toContain(locale === 'en' ? 'Apply to pieces not started yet' : 'Applicare ai pezzi non ancora iniziati')
+      expect(text, locale).toContain(locale === 'en' ? 'Also pieces already made (rework may cost)' : 'Anche ai pezzi già fatti (la rilavorazione può costare)')
+      expect(details, locale).toMatch(/value="NOT_STARTED"[^>]*checked|checked[^>]*value="NOT_STARTED"/)
+      const review = textOf(drawWhat({ rules: designRules(), step: 'impact', kind: 'DESIGN', draft: { ...asked, appliesTo: 'ALSO_MADE' }, design: designModel() }, locale))
+      expect(review, locale).toContain(locale === 'en' ? 'Also pieces already made (rework may cost)' : 'Anche ai pezzi già fatti (la rilavorazione può costare)')
+    }
+    expect(CATALOGUE.it['portal-orders']!['ask.design.appliesTo.hint.ALSO_MADE']).toContain('vi diciamo')
+  })
+
+  it('reads the choice back from the impact and the request (the rest of the kept impact is not read here)', () => {
+    const impact = askImpactSchema.parse({ kind: 'DESIGN', frozen: [], blocked: false, priced: true, earliest: null, notes: [], appliesTo: 'ALSO_MADE' })
+    expect(impact.appliesTo).toBe('ALSO_MADE')
+    // An answer from before it, and another kind: no choice.
+    expect(askImpactSchema.parse({ kind: 'CHANGE', frozen: [], blocked: false, priced: false, earliest: null, notes: [] }).appliesTo).toBeUndefined()
+    const request = changeRequestSchema.parse({ ...requestsOf()[0]!, kind: 'DESIGN', impact: { kind: 'DESIGN', frozen: [], words: say('x'), notes: [], appliesTo: 'ALSO_MADE' } })
+    expect(request.impact).toEqual({ appliesTo: 'ALSO_MADE' })
+    expect(changeRequestSchema.parse({ ...requestsOf()[0]!, impact: null }).impact).toBeNull()
+  })
+})
+// ── end B-SA-046b ──

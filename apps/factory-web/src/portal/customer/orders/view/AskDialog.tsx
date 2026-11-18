@@ -10,6 +10,8 @@ import type { ChangeRules, ProductionAskKind } from '../api'
 import { askBodyOf, sampleKindsOf, splitCells, splitLines, takesDate, type AskChoice, type AskDraft, type AskKind } from '../ask-model'
 // F-SA-246: the design change — its lines, their words, its files (from the device through the order's conversation, or already on it).
 import { designBodyOf, MAX_DESIGN_FILES, MAX_DESIGN_WORDS, takesSteps, type PickableFile } from '../ask-model'
+// B-SA-046b: which pieces a design change is for.
+import { appliesToOf, APPLIES_TO_CHOICES } from '../ask-model'
 import { ComposeFiles, type ComposeFilesModel } from '../../../../lib/request-compose/view/ComposeFiles'
 import { MAX_NOTE } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
@@ -356,6 +358,22 @@ function DesignDetails({ model, rules, actions, words }: { model: AskDialogModel
           <Textarea value={draft.note} rows={5} maxLength={MAX_DESIGN_WORDS + 200} onChange={(event) => set({ note: event.target.value })} />
         </Field>
       </div>
+      {/* B-SA-046b (14-change-flow §2.4): the pieces not started yet (the default), or also the pieces already made (rework may cost). */}
+      <div className="fw-pord-stack" role="radiogroup" aria-label={t('ask.design.appliesTo.label')}>
+        <h3 className="fw-pord-h3">{t('ask.design.appliesTo.label')}</h3>
+        {APPLIES_TO_CHOICES.map((choice) => (
+          <RadioCard
+            key={choice}
+            name="ask-design-applies-to"
+            value={choice}
+            checked={appliesToOf(draft) === choice}
+            selected={appliesToOf(draft) === choice}
+            onChange={() => set({ appliesTo: choice })}
+            title={t(`ask.design.appliesTo.${choice}`)}
+            description={t(`ask.design.appliesTo.hint.${choice}`)}
+          />
+        ))}
+      </div>
       <section className="fw-pord-stack" aria-label={t('ask.design.files')}>
         <h3 className="fw-pord-h3">{t('ask.design.files')}</h3>
         <p className="fw-pord-sub">{t('ask.design.filesHint', { max: MAX_DESIGN_FILES })}</p>
@@ -407,6 +425,8 @@ function DesignReview({ model, rules, actions, words }: { model: AskDialogModel;
     { label: t('ask.review.what'), value: t('ask.kind.DESIGN.title') },
     { label: t('ask.design.lines'), value: rules.lines.filter((line) => body.lineIds.includes(line.lineId)).map((line) => lineName(line, t)).join(' · ') },
     { label: t('ask.design.what'), value: body.note },
+    // B-SA-046b: which pieces it is for.
+    { label: t('ask.design.appliesTo.label'), value: t(`ask.design.appliesTo.${appliesToOf(model.draft)}`) },
     { label: t('ask.design.files'), value: count > 0 ? t('ask.design.review.files', { count }) : t('ask.design.review.noFiles') },
   ]
   return (

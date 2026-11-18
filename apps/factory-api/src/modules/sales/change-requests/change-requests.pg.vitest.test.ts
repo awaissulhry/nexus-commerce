@@ -29,6 +29,8 @@ import { applyPlan } from './apply-plan'
 // B-SA-048: the ask as the customer's own message; the request's thread points at the order's conversation.
 import { readThread } from '../../../platform/threads/threads'
 import { askMessageText } from './portal'
+// B-SA-046b: the office's impact read of a request (what the customer saw at Send, and the same read now).
+import { brandRequestImpact } from '../../production/brand-requests/read'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -834,6 +836,52 @@ describe('B-SA-046: a design change of some lines, asked from the portal while t
     expect(told.every((row) => row.party === P1 && row.messageKey === 'portal.order.design_received' && row.anchor === `change-request:${asked.body.request.id}`)).toBe(true)
   })
 })
+
+// ── B-SA-046b (14-change-flow §2.4): which pieces a design change is for — kept in the impact shown at Send, no column of its own ──
+describe('B-SA-046b: a design change applies to the pieces not started yet, or also to the pieces already made, kept with what they saw', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the impact before Send says which pieces; left out it reads the pieces not started yet; the kept impact holds the code', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ cut: 2 })
+    const preview = (body: Json) => browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests/impact`, { kind: 'DESIGN', note: 'Rework the logo on the made pieces too.', lineIds: [design.line10], ...body })
+    expect((await preview({})).body.impact).toMatchObject({ kind: 'DESIGN', appliesTo: 'NOT_STARTED' })
+    expect((await preview({ appliesTo: 'ALSO_MADE' })).body.impact).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE', priced: true })
+
+    const asked = await designAsk(design.order, { note: 'Rework the logo on the made pieces too.', lineIds: [design.line10], appliesTo: 'ALSO_MADE' })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    expect(asked.body.request.impact).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE' })
+    // No new column: the code rides in the impact JSON the database already checks (words, codes, dates and yes or no; no number).
+    const stored = await one(`SELECT impact->>'appliesTo' AS "appliesTo", "reasonCode" FROM "OrderChangeRequest" WHERE id = $1`, [asked.body.request.id])
+    expect(stored).toEqual({ appliesTo: 'ALSO_MADE', reasonCode: null })
+    // The customer's list reads it back.
+    const mine = await ok(browsers.buyer, `/portal/sales-orders/${design.order}/change-requests`)
+    expect(mine.items.find((item: Json) => item.id === asked.body.request.id).impact).toMatchObject({ appliesTo: 'ALSO_MADE' })
+  })
+
+  it("the office reads the customer's choice, kept and now (the read now never falls back to the default)", async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld({ cut: 1 })
+    const asked = await designAsk(design.order, { note: 'Also the pieces already sewn.', lineIds: [design.line10], appliesTo: 'ALSO_MADE' })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const read = (await brandRequestImpact(office(), asked.body.request.id, h.clock.now())) as Json
+    expect(read.kept).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE' })
+    expect(read.now).toMatchObject({ kind: 'DESIGN', appliesTo: 'ALSO_MADE' })
+  })
+
+  it('only a design change says which pieces; an unknown choice is refused in words; other kinds read null', async () => {
+    await designSwitch(['DESIGN'])
+    const design = await designWorld()
+    const cancel = await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME', appliesTo: 'ALSO_MADE' }, { headers: { 'idempotency-key': `design-${newId()}` } })
+    expect(cancel.status).toBe(400)
+    expect(cancel.body.error.issues.map((issue: Json) => issue.path)).toContain('body/appliesTo')
+    const unknown = await designAsk(design.order, { note: 'Move the logo.', lineIds: [design.line10], appliesTo: 'EVERYTHING' })
+    expect(unknown.status).toBe(400)
+    expect(unknown.body.error.issues.map((issue: Json) => issue.path)).toEqual(['body/appliesTo'])
+    const change = await browsers.buyer.post(`/portal/sales-orders/${design.order}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: design.line10, size: '52', quantity: 3 }] })
+    expect(change.status, JSON.stringify(change.body)).toBe(200)
+    expect(change.body.impact.appliesTo).toBeNull()
+  })
+})
+// ── end B-SA-046b ──
 // ── end B-SA-046 ──
 
 // ── B-SA-047 (sales page plan R3, P7; 13-backend B5; review BW-2, BW-3, BW-9): accepting a design change ──

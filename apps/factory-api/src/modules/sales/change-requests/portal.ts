@@ -16,6 +16,8 @@ import {
 } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-046 (sales page plan P7, R3; review C-10): the design change, and the kinds that keep one request waiting between them.
 import { CHANGE_OR_CANCEL, DESIGN_KIND, dayWords, designCellsOf, designProblems, designVerdict, isDesignOpen } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-SA-046b: which pieces a design change is for (kept in the impact shown at Send: no column of its own).
+import { DEFAULT_DESIGN_APPLIES_TO, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
 import { DESIGN_ASK_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { contentWalledFor } from '../../../platform/files/content-wall'
 // B-SA-048 (sales page plan P21; review F-6): the customer's ask is also their own message in the order's conversation.
@@ -321,6 +323,8 @@ export interface AskBody {
   readonly colourways?: readonly { readonly lineId: string; readonly colourwayId: string }[] | undefined
   /** B-SA-046: a design change: files of the order or its lines, shared with the customer (uploaded first). */
   readonly fileIds?: readonly string[] | undefined
+  /** B-SA-046b: a design change: the pieces not started yet (left out: the default) or also the pieces already made. */
+  readonly appliesTo?: DesignAppliesTo | undefined
 }
 
 // B-PR-25: a production ask's refusal by the order's state names its code too (body/NOT_OPEN, body/WAITING, …).
@@ -343,6 +347,8 @@ function shapeProblems(body: AskBody): Issue[] {
   if (body.kind !== 'CHANGE' && (body.colourways ?? []).length > 0) issues.push({ path: 'body/colourways', message: 'Only a change asks another colourway.' })
   // B-SA-046: files only on a design change; a design change names lines and its words, nothing else.
   if (body.kind !== DESIGN_KIND && (body.fileIds ?? []).length > 0) issues.push({ path: 'body/fileIds', message: 'Only a design change sends files.' })
+  // B-SA-046b: which pieces it is for: only a design change says it.
+  if (body.kind !== DESIGN_KIND && body.appliesTo !== undefined) issues.push({ path: 'body/appliesTo', message: 'Only a design change says which pieces it is for.' })
   if (body.kind === DESIGN_KIND) {
     if ((body.cells ?? []).length > 0) issues.push({ path: 'body/cells', message: 'A design change names lines, not sizes.' })
     if ((body.requestedDate ?? null) !== null || (body.shipToAddressId ?? null) !== null) issues.push({ path: 'body', message: 'A design change asks no date and no address.' })
@@ -379,6 +385,8 @@ interface PreparedAsk {
   readonly sampleKind: AskSampleKind | null
   /** B-SA-046: a design change's files (none on any other kind). */
   readonly fileIds: readonly string[]
+  /** B-SA-046b: a design change: which pieces it is for (null on every other kind). */
+  readonly appliesTo?: DesignAppliesTo | null
 }
 
 /** B-SA-046: a design change's facts as the domain's rules read them. */
@@ -391,7 +399,7 @@ function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
     const ask = { note: body.note, lineIds: body.lineIds, fileIds: body.fileIds }
     const problems = designProblems(ask, designFactsOf(facts))
     if (problems.length > 0) throw refused(problems)
-    return { cells: designCellsOf(ask, facts.rule), requestedDate: null, shipToAddressId: null, reasonCode: null, reason: blankToNull(body.note), sampleKind: null, fileIds: [...(body.fileIds ?? [])] }
+    return { cells: designCellsOf(ask, facts.rule), requestedDate: null, shipToAddressId: null, reasonCode: null, reason: blankToNull(body.note), sampleKind: null, fileIds: [...(body.fileIds ?? [])], /* B-SA-046b */ appliesTo: body.appliesTo ?? DEFAULT_DESIGN_APPLIES_TO }
   }
   if (isProductionKind(body.kind)) {
     const ask = { kind: body.kind, requestedDate: body.requestedDate ?? null, reasonCode: body.reasonCode ?? null, note: body.note, cells: body.cells, lineId: body.lineId ?? null, sampleKind: body.sampleKind ?? null }
@@ -420,7 +428,7 @@ function preparedAsk(body: AskBody, facts: AskFacts): PreparedAsk {
 async function impactOfAsk(reader: PortalReader, facts: AskFacts, kind: OrderRequestKind, prepared: PreparedAsk, now: Date, requestId: string): Promise<Impact> {
   const goods = facts.lines.filter((line) => line.kind !== 'FEE')
   const open = goods.filter((line) => line.closedShortQuantity === null).map((line) => line.id)
-  const ask = impactAskOf(kind, prepared.cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId })
+  const ask = impactAskOf(kind, prepared.cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId, /* B-SA-046b */ appliesTo: prepared.appliesTo ?? null })
   const planning = earliestAskOf(kind, prepared.cells, prepared.requestedDate, open)
   return reader.inTenant(async (client) => {
     const reads = await readImpactFacts(client, facts.order, goods.map((line) => line.id))
