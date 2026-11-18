@@ -23,6 +23,7 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { readWorld } from '../../planning/milestones/world'
 import { LINES_LIMIT, promiseLinesOf } from '../../planning/promise-keep/lines'
+import type { FinishSource } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 import { SITE_COLUMNS, type SiteRow } from '../../planning/store'
 import { GOODS_LINE_KINDS, readOrderProductionFacts } from '../../production/brand/facts'
 import { countedUrgencyOf } from '../../production/brand/urgency-of'
@@ -466,7 +467,8 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
 async function forecastOf(caller: CommandCaller, context: OfficeContext, lines: readonly LineRecord[], companyId: string, now: Date) {
   const open = lines.filter((line) => isGoods(line) && line.closedShortQuantity === null)
   if (open.length === 0) return []
-  const out: { lineId: string; seq: number; finish: BusinessDate | null; risk: string | null; slackDays: number | null; sizes: { size: string | null; finish: BusinessDate | null; risk: string | null }[] }[] = []
+  // F-SA-234b: + source (what sets the day), as the planner's promise lines say it.
+  const out: { lineId: string; seq: number; finish: BusinessDate | null; risk: string | null; slackDays: number | null; source: FinishSource; sizes: { size: string | null; finish: BusinessDate | null; risk: string | null }[] }[] = []
   // Its own transaction: a planning read that fails is answered without its lines (never the rest of the order's read).
   await caller.withClient(async (db) => {
     const siteIds = unique(open.flatMap((line) => (line.siteId ? [line.siteId] : [])))
@@ -484,7 +486,7 @@ async function forecastOf(caller: CommandCaller, context: OfficeContext, lines: 
     for (const { site, ids } of bySite.values()) {
       for (let at = 0; at < ids.length; at += LINES_LIMIT) {
         const read = await promiseLinesOf(db, context, site, now, { orderLineIds: ids.slice(at, at + LINES_LIMIT), limit: LINES_LIMIT })
-        for (const line of read.lines) out.push({ lineId: line.id, seq: line.seq, finish: line.finish, risk: line.risk, slackDays: line.slackDays, sizes: line.sizes.map((size) => ({ size: size.size, finish: size.finish, risk: size.risk })) })
+        for (const line of read.lines) out.push({ lineId: line.id, seq: line.seq, finish: line.finish, risk: line.risk, slackDays: line.slackDays, source: line.finishSource /* F-SA-234b */, sizes: line.sizes.map((size) => ({ size: size.size, finish: size.finish, risk: size.risk })) })
       }
     }
   }).catch(() => undefined)

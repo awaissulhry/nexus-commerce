@@ -6,6 +6,7 @@ import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
 import { BLOCKER_KINDS, WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
+import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -222,6 +223,8 @@ export const datesView = output({
         finish: businessDate().nullable(),
         risk: z.string().nullable(),
         slackDays: z.number().int().nullable(),
+        // F-SA-234b: what sets the day (the board, a work order's due day, a planned order, …): the order page's by-line forecast says it.
+        source: z.enum(FINISH_SOURCES),
         sizes: z.array(output({ size: z.string().nullable(), finish: businessDate().nullable(), risk: z.string().nullable() })),
       }),
     )

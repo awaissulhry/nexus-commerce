@@ -7,6 +7,10 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { productionWordsFor } from '../../../../lib/production/words'
 import { COUNTED_STEPS, madeForOf, ownProgress, productionProgress } from './production'
+// F-SA-234b
+import { forecastPart } from './production'
+import { FAILED_STATE, LOADING_STATE, ready, WORK_READ } from './overview/fixtures'
+import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
 
 /**
  * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
@@ -105,3 +109,45 @@ describe('F-SA-235: Production’s holds, quality & problems — each block held
   })
 })
 // ---- end F-SA-235
+
+// ---- F-SA-234b (sa-7's follow-up): the by-line finish forecast reads the order's own production read (`dates.forecast`) ----------
+describe('F-SA-234b — the by-line finish forecast from the order’s own production read, not every site’s promise lines', () => {
+  it('ready: per line its finish, what sets it, the days to spare or short; an unknown risk word is no risk', () => {
+    const part = forecastPart(ready(WORK_READ))
+    expect(part?.problem).toBeNull()
+    expect(part?.value?.get(LINE_BLK)).toEqual({ finish: '2026-12-08', source: 'BOARD', slackDays: 7, risk: 'ON_TIME' })
+    expect(part?.value?.get(LINE_RED)).toEqual({ finish: '2026-12-29', source: 'WORK_ORDER_DUE', slackDays: -7, risk: 'AT_RISK' })
+    const odd = forecastPart(ready({ ...WORK_READ, dates: { ...WORK_READ.dates!, forecast: [{ ...WORK_READ.dates!.forecast![0]!, risk: 'SOMETHING_NEW' }] } }))
+    expect(odd?.value?.get(LINE_BLK)?.risk).toBeNull()
+  })
+
+  it('withheld (no planning.promise.view) or not read: null — "—" per line, never "not planned"; reading and failed as the read is', () => {
+    expect(forecastPart(ready({ ...WORK_READ, withheld: ['dates.forecast'], dates: { ...WORK_READ.dates!, forecast: null } }))).toBeNull()
+    expect(forecastPart(null)).toBeNull()
+    expect(forecastPart(undefined)).toBeNull()
+    expect(forecastPart(LOADING_STATE)).toEqual({ value: null, problem: null })
+    expect(forecastPart(FAILED_STATE)).toEqual({ value: null, problem: 'problem.read.unavailable' })
+  })
+
+  it('Production draws it by line: 7 days to spare (the planning board), 7 days short (a work order’s due day); withheld: no figure', () => {
+    const text = textOf(draw('w2b-323-dates'))
+    expect(text).toContain('7 days to spare')
+    expect(text).toContain('7 days short')
+    expect(text).toContain('The planning board')
+    expect(text).toContain('A work order’s due day')
+    const held = textOf(draw('w2b-323-dates-withheld'))
+    expect(held).not.toContain('days to spare')
+    expect(held).not.toContain('Not planned')
+  })
+
+  it('the order page makes no read of every site’s promise lines any more (the wide per-site read is gone)', () => {
+    const depth = readFileSync(new URL('../depth/use-order-depth.ts', import.meta.url), 'utf8')
+    expect(depth).not.toContain('listPromiseLines')
+    expect(depth).not.toContain('forecasts')
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('const forecast = forecastPart(model.production)')
+    expect(tab).toContain('<ForecastCell key="f" part={forecast} lineId={line.id} />')
+    expect(tab).not.toContain('ForecastNote')
+  })
+})
+// ---- end F-SA-234b

@@ -19,7 +19,6 @@ import {
   getMaterials,
   getOrderDepth,
   getTechPack,
-  listPromiseLines,
   listSeasons,
   makeConfirmation,
   planMaterials,
@@ -43,7 +42,7 @@ import {
   type TechPack,
 } from './api'
 import { outsideRefusalOf } from '../../../_shared/document-send/model'
-import { confirmationRecipient, confirmationSendBody, depthCanOf, forecastSites, forecastsOf, PRICED_EMPTY, pricedBodyOf, pricedProblems, priorityBody, readProblemOf, writeProblemOf, type DepthCan, type Forecast, type PricedDraft } from './model'
+import { confirmationRecipient, confirmationSendBody, depthCanOf, PRICED_EMPTY, pricedBodyOf, pricedProblems, priorityBody, readProblemOf, writeProblemOf, type DepthCan, type PricedDraft } from './model'
 import type { Phrase } from '../model'
 
 /** One part the depth reads: null value while it loads; a problem when the read failed (never drawn as empty). */
@@ -90,8 +89,7 @@ export interface OrderDepthModel {
   confirmationPdf: DepthPart<string> | null
   /** null without sales.inquiries.view. */
   techPack: DepthPart<TechPack> | null
-  /** null without planning.promise.view. */
-  forecasts: DepthPart<ReadonlyMap<string, Forecast>> | null
+  // F-SA-234b: the finish forecast per line comes with the order's own production read (`dates.forecast`), not from here.
   seasons: Season[] | null
   depositKinds: DepositKinds | null
   dialog: DepthDialog | null
@@ -117,7 +115,7 @@ export interface OrderDepthActions {
   onPricedStart?: (amendment: PricedState['amendment']) => void
   onPricedDraft?: (next: Partial<PricedDraft>) => void
   onPricedApply?: () => void
-  onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack' | 'forecasts') => void
+  onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack') => void
   onOpenFile?: (fileId: string) => void
   onDismissNotice?: () => void
 }
@@ -151,7 +149,7 @@ function usePart<T>(key: string | null, read: (signal: AbortSignal) => Promise<T
 /**
  * The order studio's depth (B-W2b-323): reads what each tab shows — the band's priority, season and the yes it waits for on
  * every tab; what is frozen on Lines and Changes; the customer's materials on Lines; the changes on Changes; the confirmation,
- * its PDF and the tech pack on Documents; the milestones and the finish forecast on Dates — again whenever the order's version
+ * its PDF and the tech pack on Documents (the milestones and the finish forecast come with the production read) — again whenever the order's version
  * moves (every write moves it), and does the writes, one at a time, each with the order's version as read and one
  * Idempotency-Key per dialog. A write that answers the order hands it to the studio (`onOrder`).
  */
@@ -173,11 +171,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   // F-SA-230: the tech pack is read ONCE per order (the band's "Made from INQ-…" and Production's Specs in force both draw it).
   const [techPack, againTechPack] = usePart(can.inquiries && at ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
   // F-SA-234: the milestones come with the order's own production read (orders.view, P16), no longer the planner's read here.
-  const sites = useMemo(() => (order ? forecastSites(order, session.sites) : []), [order, session.sites])
-  const [forecasts, againForecasts] = usePart<ReadonlyMap<string, Forecast>>(can.promise && at && tab === 'production' && sites.length > 0 /* B-TH-214 */ ? `${at}:${sites.join(',')}` : null, async (signal) => {
-    const lines = await Promise.all(sites.map((site) => listPromiseLines(api, site, { q: order!.number, limit: 300 }, signal).then((answer) => answer.lines).catch(() => [])))
-    return forecastsOf(lines.flat(), id!)
-  })
+  // F-SA-234b: and the finish forecast per line too (`dates.forecast`): no read of every site's promise lines from the order page.
 
   // The newest confirmation's PDF (Confirmation & changes, B-TH-214): a presigned address the browser reads (60 s).
   const newestFile = confirmation?.value?.versions[0]?.fileId ?? null
@@ -289,7 +283,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       open(next)
     },
     onDismissNotice: () => setNotice(null),
-    onRetry: (part) => ({ depth: againDepth, approval: againApproval, freeze: againFreeze, changes: againChanges, materials: againMaterials, confirmation: againConfirmation, techPack: againTechPack, forecasts: againForecasts })[part](),
+    onRetry: (part) => ({ depth: againDepth, approval: againApproval, freeze: againFreeze, changes: againChanges, materials: againMaterials, confirmation: againConfirmation, techPack: againTechPack })[part](),
     onPriority: () => {
       const now = dialogRef.current
       if (now?.kind !== 'priority' || !order) return
@@ -420,7 +414,6 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       confirmation,
       confirmationPdf,
       techPack,
-      forecasts,
       seasons,
       depositKinds,
       dialog,

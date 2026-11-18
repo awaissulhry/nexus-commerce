@@ -1,5 +1,10 @@
 import { progressFigure, type ProgressFigure } from '../../../../lib/production/model'
 import type { OrderWorkOrder } from '../api'
+// F-SA-234b
+import { RISK_STATES, type RiskState } from '../depth/api'
+import type { Forecast } from '../depth/model'
+import type { DepthPart } from '../depth/use-order-depth'
+import type { ProductionState } from './overview/model'
 
 /**
  * Lead fix (production-page lane): the order's Production tab showed `sewn ?? 0` — "0 sewn" where the site does not scan
@@ -51,3 +56,19 @@ export function madeForOf(own: OwnShare, total: number | null, also: { readonly 
   return out
 }
 // ── end F-SA-234
+
+// ── F-SA-234b (sales page plan N2, P16; sa-7's follow-up): the by-line finish forecast from the order's OWN production read ─────────
+/**
+ * The finish forecast per line, from the production read's `dates.forecast` (planning.promise.view; the API reads the plan for this
+ * order's own lines only) — no longer a wide read of every site's promise lines. Null: the reader has no promise right (withheld) or
+ * the page has not asked the production read; reading / failed as the read is (its one failure is said once on the tab).
+ */
+export function forecastPart(state: ProductionState | null | undefined): DepthPart<ReadonlyMap<string, Forecast>> | null {
+  if (!state) return null
+  if (state.status === 'loading') return { value: null, problem: null }
+  if (state.status === 'failed') return { value: null, problem: state.problem }
+  const forecast = state.read.dates?.forecast ?? null
+  if (state.read.withheld.includes('dates.forecast') || forecast === null) return null
+  const risks = new Set<string>(RISK_STATES)
+  return { value: new Map(forecast.map((line) => [line.lineId, { finish: line.finish, source: line.source, slackDays: line.slackDays, risk: line.risk && risks.has(line.risk) ? (line.risk as RiskState) : null }])), problem: null }
+}
