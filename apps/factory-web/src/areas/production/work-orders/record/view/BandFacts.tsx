@@ -7,7 +7,7 @@ import { useT } from '../../../../../lib/i18n/provider'
 import { healthView, waitingView } from '../../../../../lib/production/model'
 import { useProductionWords } from '../../../../../lib/production/words'
 import type { WorkOrder } from '../../../_shared/api'
-import { bandHealthOf, bandWaitingOf } from '../health/model'
+import { bandHealthOf, bandWaitingOf } from '../../../../../lib/production/health/model' // F-SA-235: moved to lib (one card)
 import { customerFactOf, doneFact } from '../overview/model'
 import type { WorkOrderRecordModel } from '../record-model'
 // F-PR-21: the supervisor fact ("Supervisor Bea Esempio · this order", Change…, "You muted this order").

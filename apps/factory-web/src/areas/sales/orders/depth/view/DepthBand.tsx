@@ -20,7 +20,7 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
  */
 export function DepthPills({ model }: { model: OrderDepthModel }) {
   return (
-    <WithMessages namespaces={[NAMESPACE]}>
+    <WithMessages namespaces={[NAMESPACE, 'orders' /* F-SA-230 */]}>
       <Pills model={model} />
     </WithMessages>
   )
@@ -28,6 +28,7 @@ export function DepthPills({ model }: { model: OrderDepthModel }) {
 
 function Pills({ model }: { model: OrderDepthModel }) {
   const d = useT(NAMESPACE)
+  const o = useT('orders') // F-SA-230: "Priority · High" / "Priority · Top", the board card's words (one word per meaning)
   const depth = model.depth.value
   if (!depth) return null
   const level = depth.priority.level
@@ -35,7 +36,7 @@ function Pills({ model }: { model: OrderDepthModel }) {
     <>
       {level !== 'NORMAL' && (
         <Pill tone={PRIORITY_TONE[level]} title={depth.priority.urgentReason ?? undefined}>
-          {d(`priority.level.${level}`)}
+          {o('board.priority', { level: d(`priority.level.${level}`) })}
         </Pill>
       )}
       {level === 'URGENT' && depth.priority.urgentReason && <span className="fw-sod-reason">{depth.priority.urgentReason}</span>}

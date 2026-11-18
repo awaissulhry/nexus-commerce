@@ -26,6 +26,7 @@ import { useStripOpen } from '../../../lib/record-thread/files/use-strip-open'
 import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileStrip'
 import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
+import { useOrderFiles } from './use-order-files' // F-SA-237
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
 import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
 import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
@@ -332,6 +333,16 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const viewerFiles: ViewerFile[] = viewer ? viewer.files.map((file) => toViewerFile(file, links[file.id] ?? { src: null, downloadHref: null }, fw('locked.sheet'))) : []
 
   const [filesOpen, setFilesOpen] = useState(false)
+  // ---- F-SA-237 (sales page plan N9, P14; the T9 rule changes for a SalesOrder, by the lane agreement): on a sales order the Files
+  // window lists EVERY file of the order from its one walled read — the same body as the order's Files tab (one read, one way to open).
+  const orderFiles = useOrderFiles(api, {
+    orderId: key.type === 'SalesOrder' ? key.id : null,
+    enabled: filesOpen && key.type === 'SalesOrder' && can.readFiles,
+    partyId: partyId ?? null,
+    canShare: can.share,
+    onProblem: (problem) => base.notify({ ns: FILES_VIEW_NS, key: problem, tone: 'danger' }),
+  })
+  // ---- end F-SA-237
   const [selected, setSelected] = useState<readonly string[]>([])
   const [upload, setUpload] = useState<UploadAsk | null>(null)
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
@@ -902,6 +913,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             upload,
             busy: filesBusy,
             now: Date.now(),
+            // F-SA-237: a sales order's window draws the order's files (the same body as its Files tab).
+            order: key.type === 'SalesOrder' ? orderFiles.model : null,
           }}
           actions={{
             onClose: () => setFilesOpen(false),
@@ -926,6 +939,20 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             onDismissRefused: () => setRefused([]),
             // B-TH-231: one row's file, or the chosen ones.
             onUseOn: (ids) => openUseOn(ids),
+            // ---- F-SA-237: the order's files: its own open route, the bulk bar, its message in this thread ----
+            ...(key.type === 'SalesOrder'
+              ? {
+                  ...orderFiles.actions,
+                  onRetry: () => {
+                    void base.loadFiles()
+                    orderFiles.reload()
+                  },
+                  onOrderMessage: (messageId: string) => {
+                    setFilesOpen(false)
+                    void base.jumpTo(messageId)
+                  },
+                }
+              : {}),
           }}
           slots={depthSlots /* B-TH-280 */}
         />

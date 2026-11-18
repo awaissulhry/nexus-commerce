@@ -968,7 +968,8 @@
         "CUT": "Tagliati e in fasci",
         "SEWN": "Cuciti",
         "INSPECTED": "Controllati",
-        "PACKED": "Imballati"
+        "PACKED": "Imballati",
+        "SHIPPED": "Spediti"
       },
       "of": "{done} di {total}",
       "notCounted": "Non contato qui",

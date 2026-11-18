@@ -1,13 +1,12 @@
 'use client'
 
 import { ExternalLink, FileSignature, FileText, Send } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, Disclosure, EmptyState, KeyValue } from '@nexus/ui/components'
 import { FileRow } from '../../../../../lib/i18n/ds-parts'
-import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
-import { Button, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Spinner } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { pdfViewerLabels } from '../../../../../lib/pdf/labels'
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame' // F-SA-236: the thread's one viewer
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
 import { confirmationHeld, confirmationHref, confirmationState, NAMESPACE, packRows } from '../../depth/model'
@@ -15,16 +14,16 @@ import type { OrderDepthActions, OrderDepthModel } from '../../depth/use-order-d
 import '../../depth/depth.css'
 
 /**
- * Documents › Order confirmation (design order.docs.confirmation, SAL-208; on B-W2b-303's API): the newest confirmation in the
- * DS PdfViewer (lines with sizes, prices, dates, terms and each style's certificate class), its version, when it was made and
- * whether it still prints the order as it is, "Sent to, when" (the version sent and the day; the mail itself is on the order's
+ * Changes › Confirmation & the customer's yes (design order.docs.confirmation, SAL-208; on B-W2b-303's API; F-SA-236): the newest
+ * confirmation as ONE row — its version, when it was made, whether it still prints the order as it is, when it was sent — whose Open
+ * shows it in the thread's one viewer (the versions walk there; no 70 % tall PDF block on the page), the versions behind a disclosure, "Sent to, when" (the version sent and the day; the mail itself is on the order's
  * thread), and Make confirmation (the same contents give the newest back), Send… (the one send dialog) and Open in new tab.
  * Refused while the order waits for a yes or was cancelled (said before the click). Fetches nothing.
  */
 export function ConfirmationCard({ order, model, actions, prefix }: { order: Order; model: OrderDepthModel | undefined; actions?: OrderDepthActions; prefix: string }) {
   if (!model?.confirmation) return null
   return (
-    <WithMessages namespaces={[NAMESPACE, 'shell']}>
+    <WithMessages namespaces={[NAMESPACE]}>
       <Confirmation order={order} model={model} actions={actions} prefix={prefix} />
     </WithMessages>
   )
@@ -32,8 +31,8 @@ export function ConfirmationCard({ order, model, actions, prefix }: { order: Ord
 
 function Confirmation({ order, model, actions, prefix }: { order: Order; model: OrderDepthModel; actions?: OrderDepthActions; prefix: string }) {
   const d = useT(NAMESPACE)
-  const shell = useT('shell')
   const locale = useLocale()
+  const frame = useRecordFrame()
   const part = model.confirmation!
   const value = part.value
   const head = (
@@ -107,44 +106,55 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
       ) : (
         <>
           {state === 'outdated' && <Banner tone="warning" title={d('confirmation.outdated', { version: newest?.version ?? 1 })} />}
-          <div className="fw-sod-confirm">
-            <div className="fw-sod-confirm-pdf">
-              {model.confirmationPdf?.value ? (
-                <PdfViewer src={model.confirmationPdf.value} title={d('confirmation.pdfTitle', { number: order.number, version: newest?.version ?? 1 })} fileName={`${order.number}-v${newest?.version ?? 1}.pdf`} labels={pdfViewerLabels(shell)} height="min(70vh, 900px)" />
-              ) : model.confirmationPdf?.problem ? (
-                <Banner tone="danger" title={d('confirmation.pdfFailed')} />
-              ) : !model.can.files ? (
-                <p className="fw-sod-hint">{d('confirmation.noFiles')}</p>
-              ) : (
-                <p className="fw-sod-hint" role="status">
-                  <Spinner size={14} /> {d('confirmation.pdfReading')}
-                </p>
+          {/* F-SA-236: the confirmation is a ROW that opens in the thread's ONE viewer (never a 70 % tall PDF block on the page). */}
+          <div className="fw-so-confirm-row">
+            <span className="fw-so-cell">
+              <strong>{newest ? d('confirmation.rowTitle', { version: newest.version }) : d('confirmation.title')}</strong>
+              <span className="fw-so-cell-sub">
+                {[
+                  newest ? d('confirmation.rowMade', { date: formatDate(newest.createdAt, { locale }) }) : null,
+                  value.sentAt && value.sentVersion !== null ? d('confirmation.rowSent', { date: formatDate(value.sentAt, { locale }), version: value.sentVersion }) : d('confirmation.notSent'),
+                  d(`confirmation.stateValue.${state}`),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </span>
+            <span className="fw-sod-actions">
+              {newest && model.can.files && (
+                <Button
+                  size="sm"
+                  onClick={(event) =>
+                    frame?.openFiles
+                      ? frame.openFiles({ files: value.versions.map((entry) => ({ id: entry.fileId, name: `${order.number}-v${entry.version}.pdf`, contentType: 'application/pdf' })), fileId: newest.fileId, returnTo: event.currentTarget })
+                      : window.open(confirmationHref(prefix, order.id), '_blank', 'noopener')
+                  }
+                >
+                  <FileText size={13} aria-hidden /> {d('confirmation.open')}
+                </Button>
               )}
-            </div>
-            <div className="fw-sod-confirm-side">
+              {model.can.manage && (
+                <>
+                  {send}
+                  {make}
+                </>
+              )}
+            </span>
+          </div>
+          {!model.can.files && <p className="fw-sod-hint">{d('confirmation.noFiles')}</p>}
+          {value.versions.length > 1 && (
+            <Disclosure summary={d('confirmation.versionsCount', { count: value.versions.length })}>
               <KeyValue
                 dense
                 labelCase="sentence"
-                items={[
-                  { label: d('confirmation.version'), value: newest ? (newest.number ?? d('confirmation.versionValue', { version: newest.version })) : '—' },
-                  { label: d('confirmation.made'), value: newest ? formatDateTime(newest.createdAt, { locale }) : '—', hint: newest?.createdBy ?? undefined },
-                  { label: d('confirmation.state'), value: <Tag tone={state === 'upToDate' ? 'success' : 'warning'}>{d(`confirmation.stateValue.${state}`)}</Tag> },
-                  {
-                    label: d('confirmation.sent'),
-                    value: value.sentAt && value.sentVersion !== null ? d('confirmation.sentValue', { version: value.sentVersion, date: formatDate(value.sentAt, { locale }) }) : d('confirmation.notSent'),
-                    hint: value.sentAt ? d('confirmation.sentWhere') : undefined,
-                  },
-                  { label: d('confirmation.versions'), value: String(value.versions.length) },
-                ]}
+                items={value.versions.map((entry) => ({
+                  label: entry.number ?? d('confirmation.versionValue', { version: entry.version }),
+                  value: `${formatDateTime(entry.createdAt, { locale })}${entry.sent ? ` · ${d('confirmation.wasSent')}` : ''}`,
+                  hint: entry.createdBy ?? undefined,
+                }))}
               />
-              {model.can.manage && (
-                <span className="fw-sod-actions">
-                  {send}
-                  {make}
-                </span>
-              )}
-            </div>
-          </div>
+            </Disclosure>
+          )}
         </>
       )}
     </Card>

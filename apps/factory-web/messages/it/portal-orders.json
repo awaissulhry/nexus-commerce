@@ -444,7 +444,10 @@
     "downloadFailed": "Non è stato possibile scaricare il documento. Riprovate tra poco.",
     "withdrawn": "Questa versione è stata sostituita: aprite la più recente in Documenti.",
     "noConfirmation": "Per questo ordine non è ancora condivisa una conferma d’ordine.",
-    "confirmation": "Conferma d’ordine"
+    "confirmation": "Conferma d’ordine",
+    "filesTitle": "File di questo ordine",
+    "filesNotFound": "Non trovato.",
+    "versionsTitle": "Versioni dei documenti"
   },
   "dialog": {
     "close": "Chiudi",

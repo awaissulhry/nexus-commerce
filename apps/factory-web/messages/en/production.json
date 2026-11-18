@@ -968,7 +968,8 @@
         "CUT": "Cut and bundled",
         "SEWN": "Sewn",
         "INSPECTED": "Checked",
-        "PACKED": "Packed"
+        "PACKED": "Packed",
+        "SHIPPED": "Shipped"
       },
       "of": "{done} of {total}",
       "notCounted": "Not counted here",
