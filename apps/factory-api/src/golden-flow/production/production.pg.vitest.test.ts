@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { ErrorReport } from '@nexus/factory-domain/observability/report'
+import { NOTE_WORDS } from '@nexus/factory-domain/production-brand/notes'
 import { SUPERVISOR_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/words'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCalendar } from '../../../../../packages/factory-db/seed/calendar'
@@ -513,8 +514,14 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     const check = await ok(planner, 'POST', '/production/notes/check', { records, body: NOTE_BODY, askSupervisor: true })
     expect(check.held).toBe(false)
     expect((check.records as Json[]).map((record) => [record.id, record.canWrite, record.supervisor])).toEqual(records.map((record) => [record.id, true, 'SOMEONE_ELSE']))
-    // PW-13: a person limited to B checks nothing of A's (not found, never named).
-    await session('office.p2', 'POST', '/production/notes/check', { records, body: NOTE_BODY, askSupervisor: true }, 404)
+    // PW-13: a person limited to B checks nothing of A's: A's records are only counted, never named (the check is read only, as
+    // the module's PW-13 test reads it); the note itself is refused as not found and writes nothing.
+    const blind = await session('office.p2', 'POST', '/production/notes/check', { records, body: NOTE_BODY, askSupervisor: true })
+    expect(blind).toMatchObject({ records: [], unknown: records.length, customers: 0, people: [], noSupervisor: [], namesOtherCustomer: [], held: false })
+    const notes = async () => (await one<{ n: number }>(`SELECT count(*)::int AS n FROM "Message" WHERE "tenantId" = $1 AND direction = 'INTERNAL_NOTE'`, [T()])).n
+    const before = await notes()
+    expect((await session('office.p2', 'POST', '/production/notes', { records, body: NOTE_BODY, askSupervisor: true }, 404)).error.message).toBe(NOTE_WORDS.NONE_FOUND.en)
+    expect(await notes()).toBe(before)
 
     const batch = await ok(planner, 'POST', '/production/notes', { records, body: NOTE_BODY, askSupervisor: true })
     expect((batch.written as Json[]).map((row) => [row.id, row.supervisorAsked])).toEqual(records.map((record) => [record.id, true]))
