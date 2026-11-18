@@ -329,7 +329,7 @@ export function underCut(lines: readonly DraftLine[], floors: Readonly<Record<st
 // ── end F-SA-231
 
 /** Why the draft cannot be reviewed yet (in this app's words), or null. F-SA-231: under the cut floor holds; under work orders does not. */
-export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, minimums: Readonly<Record<string, Readonly<Record<string, number>>>>, header: { changed: boolean }, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): Phrase | null {
+export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, header: { changed: boolean }, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): Phrase | null {
   if (lines.some(badPrice)) return phrase('amend.held.price')
   if (underCut(lines, floors).length > 0) return phrase('amend.held.cut')
   if (amendLines(lines, order).length === 0) return phrase('amend.held.empty')

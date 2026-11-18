@@ -178,8 +178,6 @@ export function lineStageOf(figures: Readonly<Record<LineColumn, Figure>>): Plai
   return 'READY'
 }
 
-const figuresOf = (line: Pick<ProductionLine, LineColumn>): Record<LineColumn, Figure> => ({ ordered: line.ordered, cut: line.cut, sewn: line.sewn, checked: line.checked, packed: line.packed, shipped: line.shipped })
-
 /**
  * The rows of "Progress by line": one per colour line in the order's own figures; the made-to-measure units of one style × colourway
  * are ONE row (R9). Fees are left out (no pieces). The order read's lines give the ids of the style and colourway (the picture).

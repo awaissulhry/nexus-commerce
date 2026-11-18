@@ -213,7 +213,7 @@ export function StillRow({ row, order, model }: { row: StillRowOf; order: Order;
   const locale = useLocale()
   const state = stillStateOf(row)
   const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
-  const href = stillDoorOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number, companyId: order.companyId, siteId: null }, OFFICE_PAGES) })
+  const href = stillDoorOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: order.companyId, siteId: null }, OFFICE_PAGES) })
   return (
     <li className="fw-so-still">
       <span className="fw-so-stack-tight">

@@ -449,8 +449,8 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
       [lineOf(value, 20).id, '440', false],
     ])
     expect(changeCount(draft, value)).toBe(0)
-    expect(reviewHeld(draft, value, minimumsOf(value), { changed: false })?.key).toBe('amend.held.nothing')
-    expect(reviewHeld(draft, value, minimumsOf(value), { changed: true })).toBeNull()
+    expect(reviewHeld(draft, value, { changed: false })?.key).toBe('amend.held.nothing')
+    expect(reviewHeld(draft, value, { changed: true })).toBeNull()
   })
   it('a size changed, a colour added, a line removed: every kept line whole, the new line with its pieces', () => {
     const black = lineOf(value, 10)
@@ -468,9 +468,9 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
     const priced = draft.map((line) => (line.lineId === black.id ? { ...line, price: '460' } : line))
     expect(amendLines(priced, value)[0]).toMatchObject({ unitPrice: '460' })
     expect(amendLines(draft.map((line) => (line.lineId === black.id ? { ...line, price: '450.00' } : line)), value)[0]).not.toHaveProperty('unitPrice')
-    expect(reviewHeld(draft.map((line) => (line.lineId === black.id ? { ...line, price: '4,5,0' } : line)), value, {}, { changed: false })?.key).toBe('amend.held.price')
+    expect(reviewHeld(draft.map((line) => (line.lineId === black.id ? { ...line, price: '4,5,0' } : line)), value, { changed: false })?.key).toBe('amend.held.price')
     // Every line at 0: an order keeps at least one line.
-    expect(reviewHeld(withCells(draftOf(value), { [black.id]: {}, [red.id]: {} }), value, {}, { changed: false })?.key).toBe('amend.held.empty')
+    expect(reviewHeld(withCells(draftOf(value), { [black.id]: {}, [red.id]: {} }), value, { changed: false })?.key).toBe('amend.held.empty')
   })
   // F-SA-231 (lead note after B-SA-042, R1): a size may go under what work orders make (the work order follows as "Still to do"), never
   // under what is already CUT.
@@ -479,15 +479,15 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
     const black = lineOf(production, 10)
     const draft = withCells(draftOf(production), { [black.id]: { '48': 1, '50': 2, '52': 2, '54': 2 } })
     expect(underWorkOrders(draft, minimumsOf(production))).toEqual([{ key: black.id, size: '48', made: 2 }])
-    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false })).toBeNull()
+    expect(reviewHeld(draft, production, { changed: false })).toBeNull()
     // 2 already cut in 48: 1 is under the cut floor — held, and not also said as "under work orders".
     const floors = cutFloorsOf([{ lineId: black.id, sizes: [{ size: '48', cut: 2 }, { size: '50', cut: null }, { size: '52', cut: 0 }] }])
     expect(floors).toEqual({ [black.id]: { '48': 2 } })
     expect(underCut(draft, floors)).toEqual([{ key: black.id, size: '48', cut: 2 }])
     expect(underWorkOrders(draft, minimumsOf(production), floors)).toEqual([])
-    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false }, floors)?.key).toBe('amend.held.cut')
+    expect(reviewHeld(draft, production, { changed: false }, floors)?.key).toBe('amend.held.cut')
     // At the cut floor: open again.
-    expect(reviewHeld(withCells(draftOf(production), { [black.id]: { '48': 2, '50': 2, '52': 2, '54': 1 } }), production, minimumsOf(production), { changed: false }, floors)).toBeNull()
+    expect(reviewHeld(withCells(draftOf(production), { [black.id]: { '48': 2, '50': 2, '52': 2, '54': 1 } }), production, { changed: false }, floors)).toBeNull()
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['amend.held.cut', 'editor.underCut', 'editor.underWorkOrders']) expect(t(key, { size: '48', cut: 2, made: 2 }), `${locale}: ${key}`).not.toBe(key)

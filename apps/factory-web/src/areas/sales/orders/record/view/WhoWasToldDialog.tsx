@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Banner, EmptyState, KeyValue } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { useOfficeApi } from '../../../../../lib/session/context'
-import { readProblem } from '../../model'
-import { readWhoWasTold, type WhoWasTold } from '../told'
+import type { WhoWasTold } from '../told'
+
+/** The window's read (the container, ../WhoWasTold.tsx, reads `…/told?messageId=`): reading, read, or refused in this app's words. */
+export type WhoWasToldRead = { readonly state: 'loading' } | { readonly state: 'ready'; readonly told: WhoWasTold } | { readonly state: 'error'; readonly problem: string }
 
 /**
  * F-SA-244 (sales page plan P8, P8', R2, R7, R8; 14-change-flow §4.1 "Told: … opens the Who was told window", §5.2; review WP-1, WP-2)
@@ -21,21 +21,8 @@ import { readWhoWasTold, type WhoWasTold } from '../told'
  *   The workshops   "Told the workshop at 10:44 · SC-0007" per subcontract order; still waiting counted
  * WHO WAS TOLD, NEVER WHO READ IT: no "seen", no "read", no "not yet" for anyone — the floor least of all (Statuto dei Lavoratori art. 4).
  */
-export function WhoWasToldDialog({ orderId, messageId, onClose }: { orderId: string; messageId: string; onClose: () => void }) {
+export function WhoWasToldWindow({ read, onRetry, onClose }: { read: WhoWasToldRead; onRetry: () => void; onClose: () => void }) {
   const t = useT('orders')
-  const api = useOfficeApi()
-  const [read, setRead] = useState<{ state: 'loading' } | { state: 'ready'; told: WhoWasTold } | { state: 'error'; problem: string }>({ state: 'loading' })
-  const [seq, setSeq] = useState(0)
-  useEffect(() => {
-    const controller = new AbortController()
-    setRead({ state: 'loading' })
-    readWhoWasTold(api, orderId, messageId, controller.signal)
-      .then((told) => setRead({ state: 'ready', told }))
-      .catch((error: unknown) => {
-        if ((error as { name?: string } | null)?.name !== 'AbortError') setRead({ state: 'error', problem: readProblem(error) })
-      })
-    return () => controller.abort()
-  }, [api, orderId, messageId, seq])
   return (
     <Modal
       open
@@ -61,7 +48,7 @@ export function WhoWasToldDialog({ orderId, messageId, onClose }: { orderId: str
           tone="danger"
           title={t(read.problem)}
           action={
-            <Button size="sm" onClick={() => setSeq((value) => value + 1)}>
+            <Button size="sm" onClick={onRetry}>
               {t('common.retry')}
             </Button>
           }

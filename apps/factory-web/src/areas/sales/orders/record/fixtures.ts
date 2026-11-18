@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { defineDesignScreen } from '../../../../lib/design/design-screen'
+import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { Order, OrderLine } from '../api'
 import { draftOf, newKey, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
@@ -169,7 +169,6 @@ const withUnit = (value: Order, rider: OrderLine['rider']): Order => {
 }
 const withArtwork = (value: Order): Order => ({ ...value, lines: value.lines.map((line, index) => (index === 0 ? { ...line, artwork: ARTWORK_FILES, artworkCount: ARTWORK_FILES.length } : line)) })
 // ---- end F-SA-231b
-const partly = order('PARTLY_SHIPPED')
 const shipped = order('SHIPPED')
 const settled = order('SHIPPED', { settled: true })
 const closed = order('CLOSED', { settled: true, actions: [] })
@@ -332,7 +331,7 @@ const STILL_ROWS = [
 ]
 const STILL_READ = { ...PRODUCTION_READ, changes: { openRequests: [{ id: ASK.id, kind: 'CHANGE', status: 'OPEN', since: ASK.askedAt, batchId: null }], stillToDo: { rows: STILL_ROWS, count: STILL_ROWS.length, workOrdersLeftOut: 0 } } }
 const DOOR_STUB = { parts: { window: { review: null, grains: { price: true }, offline: false, nav: { ids: [ASK.id, ASKED_ALSO.id] } }, notice: null, lift: null, can: { lift: true, rush: true } }, hrefOf: (id: string) => `${PREFIX}/sales/orders/${ORDER_ID}?tab=changes&open=${id}` }
-const F_SA_243: RecordCase[] = [
+const F_SA_243: DesignCase<RecordCase>[] = [
   { id: 'f-sa-243-band', label: 'F-SA-243 · Sales · Overview: the band "Brand Alpha asks: Change · line 10 · 50 6 → 4 · Answer…" (1 more request), Waiting on us · Answer…, Still to do: 2 with its rows', model: base('sales', production, { tab: 'overview', production: ready(STILL_READ), requests: { value: [ASK, ASKED_ALSO, ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-sa-243-changes', label: 'F-SA-243 · Sales · Changes: Waiting on us with Answer… (the window here), Still to do under the change of 17 Nov: the work-order change is your turn, the scrap waits for planning', model: base('sales', production, { tab: 'changes', production: ready(STILL_READ), requests: { value: [ASK, ASKED_ALSO, ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-sa-243-nothing-mine', label: 'F-SA-243 · Sales · no row asks this reader: no "needs a decision" band (R-5)', model: base('sales', production, { tab: 'changes', production: ready({ ...STILL_READ, changes: { openRequests: [], stillToDo: { rows: STILL_ROWS.map((row) => ({ ...row, mayAct: false })), count: 2, workOrdersLeftOut: 1 } } }), requests: { value: [ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
