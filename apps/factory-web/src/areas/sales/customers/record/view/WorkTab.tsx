@@ -21,9 +21,8 @@ import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
-import { useOfficeApi } from '../../../../../lib/session/context'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
+import type { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 // ---- end F-SA-279
 import { WaitingStrip, type StripDoors } from './WaitingStrip'
@@ -181,6 +180,9 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   )
 }
 
+type CustomerFeed = ReturnType<typeof useAllOfCustomer>
+type DockProps = { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; feed: CustomerFeed; prefix: string }
+
 /**
  * F-SA-276 (11-customer-page §9.1, review C-13): the customer page's dock — the customer's own thread, and beside it the record a
  * row picked (an order of the Work tab, a quote or a request of Quotes & incoming): ONE thread at a time, picked with the shared
@@ -189,20 +191,19 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
  * F-SA-279 (sales page plan N5, N4; picks R5, R9, P9; 11-customer-page §3.7, §9.1, §9.2): the third choice "All of <customer>" — the
  * read-only merged feed (F-SA-261), whose lines open their ONE conversation at that message; the record follows the row (the page's
  * `dock=` term, useCustomerDock); "Draft kept on SO-…" under the pick when the dock left a record with a draft; the words of the pick
- * the same as the order page's (C-13). No threads.read: no dock at all.
+ * the same as the order page's (C-13). No threads.read: no dock at all. The page reads All of <customer> (useAllOfCustomer) and
+ * hands the dock its feed (end check: a view fetches nothing).
  */
-export function CustomerDock({ customer, general, dock, prefix, canReadFiles }: { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; prefix: string; canReadFiles: boolean }) {
+export function CustomerDock(props: DockProps) {
   return (
     <WithMessages namespaces={ALL_OF_CUSTOMER_NS}>
-      <Dock customer={customer} general={general} dock={dock} prefix={prefix} canReadFiles={canReadFiles} />
+      <Dock {...props} />
     </WithMessages>
   )
 }
 
-function Dock({ customer, general, dock, prefix, canReadFiles }: { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; prefix: string; canReadFiles: boolean }) {
+function Dock({ customer, general, dock, feed, prefix }: DockProps) {
   const t = useT('parties')
-  const api = useOfficeApi()
-  const feed = useAllOfCustomer(api, { partyId: customer.id, customerName: customer.name, enabled: general !== null && general !== undefined && dock.scope === 'all', prefix, canReadFiles })
   if (general === null || general === undefined) return null
   const pick = dock.pick
   const choices: ThreadChoice<'general' | 'record' | 'all'>[] = [

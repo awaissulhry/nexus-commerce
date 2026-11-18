@@ -6,12 +6,9 @@ import { Banner, Card, Field } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { Combobox, EditModeBar } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
-import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
-import { useLiveBus } from '../../../../../shell/live/use-live'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
 import { changeCount, limitsDraftOf, limitsProblems, slotChoices, supervisorHeld, supervisorMove, type LimitsDraft, type SupervisorActions, type SupervisorModel } from '../limits/model'
-import { useCustomerSupervisor } from '../limits/use-limits'
 import { NoticeLine, PortalAccessMessages, usePortalT } from './parts'
 import type { PortalNotice } from '../model'
 
@@ -31,18 +28,6 @@ export function CustomerSupervisorCard({ model, actions, name, notice, onDismiss
       </WithMessages>
     </PortalAccessMessages>
   )
-}
-
-/** The page's part: the card's reads and its Apply (portal/limits/use-limits.ts useCustomerSupervisor), live on its supervisor's change. */
-export function CustomerSupervisor({ partyId, name }: { partyId: string; name: string }) {
-  const api = useOfficeApi()
-  const session = useOfficeSession()
-  const enabled = session.permissions.includes('partners.view')
-  const [notice, setNotice] = useState<PortalNotice | null>(null)
-  const supervisor = useCustomerSupervisor({ api, partyId, enabled, supervise: session.permissions.includes('production.brand.manage'), onNotice: setNotice })
-  useLiveBus({ onChange: supervisor.onLive }, enabled)
-  if (!supervisor.model) return null
-  return <CustomerSupervisorCard model={supervisor.model} actions={supervisor.actions} name={name} notice={notice} onDismissNotice={() => setNotice(null)} />
 }
 
 function SupervisorCard({ model, actions, name, notice, onDismissNotice }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; notice: PortalNotice | null; onDismissNotice?: (() => void) | undefined }) {

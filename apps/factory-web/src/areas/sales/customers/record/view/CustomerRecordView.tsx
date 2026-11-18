@@ -318,8 +318,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
           },
         ]
       : []),
-    // B-W2a-81: what the customer owes that is overdue — its door is Money (F-SA-272).
-    ...(overview?.overdue ? [{ ...overview.overdue, href: can.money ? tabHref('money') : overview.overdue.href }] : []),
+    // B-W2a-81: what the customer owes that is overdue — its door is Money (F-SA-272), else the tile as the money read gave it.
+    ...(overview?.overdue ? [can.money ? { label: overview.overdue.label, value: overview.overdue.value, hint: overview.overdue.hint, href: tabHref('money') } : overview.overdue] : []),
   ].slice(0, 6)
   const main = (
     <div className="fw-pty-stack">

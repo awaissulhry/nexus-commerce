@@ -1,18 +1,18 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { WithMessages } from '../../../../../record-panels/i18n'
-import { useT } from '../../../../../lib/i18n/provider'
-import { useOfficeSession } from '../../../../../lib/session/context'
-import { companyPrefix } from '../../../../../lib/session/session'
-import { CardHead } from '../../../../parties/_shared/view/cards'
-import { ScopedListTools } from '../../../_shared/scoped-list-tools/ScopedListTools'
-import { activeFilterCount } from '../../../quotes/model'
-import { QUOTES_LIST_KEY, QUOTES_PATH, useQuotesList, type QuotesListHost } from '../../../quotes/list/use-quotes-list'
-import { QuotesListView } from '../../../quotes/list/view/QuotesListView'
-import { INQUIRIES_LIST_KEY, rowPageHref, useInquiriesList, type InquiriesListHost } from '../../../inquiries/use-inquiries-list'
-import { InquiriesView } from '../../../inquiries/view/InquiriesView'
-import { CUSTOMER_REPLIES, HOME_ADDRESS, isFiltered, PAGE_PATH, THREAD_TYPE, type ListAddress } from '../../../inquiries/model'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { useT } from '../../../../lib/i18n/provider'
+import { useOfficeSession } from '../../../../lib/session/context'
+import { companyPrefix } from '../../../../lib/session/session'
+import { CardHead } from '../../../parties/_shared/view/cards'
+import { ScopedListTools } from '../../_shared/scoped-list-tools/ScopedListTools'
+import { activeFilterCount } from '../../quotes/model'
+import { QUOTES_LIST_KEY, QUOTES_PATH, useQuotesList, type QuotesListHost } from '../../quotes/list/use-quotes-list'
+import { QuotesListView } from '../../quotes/list/view/QuotesListView'
+import { INQUIRIES_LIST_KEY, rowPageHref, useInquiriesList, type InquiriesListHost } from '../../inquiries/use-inquiries-list'
+import { InquiriesView } from '../../inquiries/view/InquiriesView'
+import { CUSTOMER_REPLIES, HOME_ADDRESS, isFiltered, PAGE_PATH, THREAD_TYPE, type ListAddress } from '../../inquiries/model'
 
 /**
  * F-SA-277 (sales page plan R5, P18; 11-customer-page §3.6): the customer's Quotes & incoming tab — two lists stacked, each that
@@ -26,7 +26,7 @@ import { CUSTOMER_REPLIES, HOME_ADDRESS, isFiltered, PAGE_PATH, THREAD_TYPE, typ
  */
 
 /** What a row's click hands the page's dock: the record whose thread it shows (the Work tab's one DockPick). */
-import type { DockPick } from './WorkTab'
+import type { DockPick } from './view/WorkTab'
 
 export function QuotesIncomingTab({ party, onPick, onFocus, shown }: { party: { id: string; name: string }; onPick?: (pick: DockPick) => void; /* F-SA-279 */ onFocus?: (pick: DockPick) => void; shown?: DockPick | null }) {
   return (

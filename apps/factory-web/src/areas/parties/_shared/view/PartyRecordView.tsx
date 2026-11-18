@@ -24,8 +24,13 @@ import {
   SIDES,
   viesApplies,
   writable,
+  type AddressDraft,
+  type ContactDraft,
+  type DealFilter,
+  type IdentityDraft,
   type PartyDraft,
   type PartyRecordModel,
+  type RecordDialog,
   type RecordTab,
 } from '../model'
 import { PartyFields } from './dialogs'
