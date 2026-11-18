@@ -3,9 +3,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue' // B-SA-004c
 import { ROLE_TEMPLATES } from '../auth/roles/templates'
 import { createCatalogue, EVENT_CATALOGUE, EVENT_DEFINITIONS, EventPayloadError, UndeclaredEventError } from './catalogue'
-import { defineEvent } from './define'
+import { defineEvent, /* B-SA-004c */ isFloorPermission } from './define'
 import { LIVE_PARTY_KEYS } from './live' // B-SA-004
 
 const v1 = defineEvent({ type: 'lot.released', context: 'quality', description: 'A lot was released.', payload: z.strictObject({ lotId: z.string() }) })
@@ -211,3 +212,35 @@ describe('quote, return and order events declare their customer (B-SA-004b)', ()
   })
 })
 // ── end B-SA-004b ──
+
+// ── B-SA-004c ──
+/**
+ * B-SA-004c: a live rule's second office permission (`also`, events/define.ts) is a declared permission other than its first,
+ * never a floor one; the work order changes name it (their read: orders.view OR workorders.view, production
+ * work-order-changes/read.ts), and still name their customer, so the second permission widens no customer wall.
+ */
+describe('a second office permission on a live rule (B-SA-004c)', () => {
+  const withAlso = EVENT_DEFINITIONS.filter((definition) => definition.live?.also !== undefined)
+
+  it('the work order changes name orders.view and also workorders.view, with their customer', () => {
+    const changes = EVENT_DEFINITIONS.filter((definition) => definition.type.startsWith('work_order_change.'))
+    expect(changes.map((definition) => definition.type).sort()).toEqual(['work_order_change.applied', 'work_order_change.declined', 'work_order_change.proposed', 'work_order_change.stale'])
+    for (const definition of changes) {
+      expect(definition.live, definition.type).toMatchObject({ permission: 'orders.view', also: 'workorders.view', floor: null })
+      expect(Object.keys(definition.payload.shape), definition.type).toContain('partyId')
+      expect(definition.live!.fields, definition.type).not.toContain('partyId')
+    }
+  })
+
+  it('every `also` is a declared office permission, other than the rule’s first, and its event names a party key', () => {
+    expect(withAlso.length).toBeGreaterThan(0)
+    for (const definition of withAlso) {
+      const also = definition.live!.also!
+      expect(FACTORY_PERMISSIONS.isDeclared(also), `${definition.type}: ${also}`).toBe(true)
+      expect(also, definition.type).not.toBe(definition.live!.permission)
+      expect(isFloorPermission(also), `${definition.type}: ${also} is the floor's`).toBe(false)
+      expect(Object.keys(definition.payload.shape).some((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key)), definition.type).toBe(true)
+    }
+  })
+})
+// ── end B-SA-004c ──
