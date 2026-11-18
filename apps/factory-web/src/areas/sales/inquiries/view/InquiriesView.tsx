@@ -74,6 +74,7 @@ import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/m
 import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { waitingOf } from '../model'
+import { THREAD_TYPE } from '../model' // F-SA-279
 import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
 import { joined } from './cells'
 // F-SA-212: the ONE picture part (the cell with the file-kinds fallback, the pane's row 1, the picture large).
@@ -168,6 +169,9 @@ export interface InquiriesModel {
   /** The customer is the host's (in every read, never cleared): no From switcher, no customer chip, not counted as a filter. */
   locked?: boolean
   // ---- end F-SA-277
+  // ---- F-SA-279: the record the host's dock shows (its row marked; null: none); absent: the list drives no dock.
+  active?: { readonly pick: { readonly type: string; readonly id: string } | null } | null
+  // ---- end F-SA-279
 }
 
 export interface InquiriesActions {
@@ -206,6 +210,8 @@ export interface InquiriesActions {
   readPictures?: ReadPictures
   /** B-TH-217: the pane's own acts — the next request, an erasure request, closing the thread. */
   pane?: { onNext?: () => void; onErase?: () => void; onCloseThread?: () => void; onConfirmClose?: () => void; onCancelClose?: () => void }
+  /** F-SA-279: the keys moved the focus to a row (the host's dock follows after its rest). */
+  onFocusRow?: (row: IncomingRow) => void
 }
 
 /** B-TH-233: the request's slots and the catalogue order's thread. */
@@ -890,6 +896,16 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             withheld={model.can.price ? [] : [{ label: t('col.targetPrice'), reason: t('list.withheldPrice') }]}
             // On a phone a card opens the request's full page (B-TH-219), the list kept for Back; any other kind its own place.
             cards={{ fields: CARD_FIELDS, hrefOf: (row) => (placeOf(row) === 'request' ? fullPageHref(model.prefix, row.id, model.address) : rowHref(model.prefix, model.address, row)) }}
+            // F-SA-279: on the customer page a row drives the host's dock (its row marked by its key; the keys' row reported; ⌘↵ a new tab).
+            active={
+              model.active
+                ? {
+                    id: model.active.pick ? (rows ?? []).find((row) => THREAD_TYPE[row.kind] === model.active?.pick?.type && row.id === model.active?.pick?.id)?.key ?? null : null,
+                    onFocusRow: (row) => actions?.onFocusRow?.(row),
+                    onOpenNewTab: (row) => actions?.onOpenRow?.(row, true),
+                  }
+                : null
+            }
           />
           )}
           </div>

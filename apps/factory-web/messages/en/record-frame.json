@@ -31,5 +31,14 @@
     "more_other": "{count} more notices",
     "fewer_one": "Hide 1 notice",
     "fewer_other": "Hide {count} notices"
+  },
+  "discuss": {
+    "label": "Discuss",
+    "hint": "Discuss in the thread",
+    "of": "Discuss {thing} in the thread",
+    "showOnPage": "Show on the page",
+    "showInThread": "Show in the thread",
+    "followers": "Followers…",
+    "notInThread": "This change is not in the thread's history."
   }
 }

@@ -20,7 +20,8 @@
     "range": "Seleziona tutte le righe fino a questa",
     "help": "Tutte le scorciatoie",
     "edit": "Modifica la cella (o inizia a scrivere; Invio salva, Esc annulla)",
-    "paste": "Incolla una colonna di valori da un foglio"
+    "paste": "Incolla una colonna di valori da un foglio",
+    "openNewTab": "Apri la riga in una nuova scheda"
   },
   "lab": {
     "title": "Cornice degli elenchi",

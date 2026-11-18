@@ -19,6 +19,9 @@ import { amountProblem, floorPriceFound } from '../helpers/amount'
  * (409 NAMES_OTHER_CUSTOMER, never naming whom): the box says why in words and offers the tick "This text names no other customer";
  * Send waits until the text changes or the tick is set, then goes again with the tick. Both go with a change of the text (the API
  * checks the new text again) and when the box leaves the portal; neither is kept with a draft.
+ *
+ * F-SA-282 (Reply to <customer> on N, the Orders sheet): the same box in N mode (`many`) — the portal only, one text for the own
+ * conversation of each of N orders of one customer; the window (areas/sales/orders/list/view/ReplyManyDialog) gives no clip.
  */
 
 export const COMPOSER_MODES = ['note', 'reply', 'portal'] as const
@@ -62,6 +65,9 @@ export interface ComposerContext {
    * with its customer, and the API has not said that nobody of the customer reads it in the portal (NO_PORTAL).
    */
   portal?: boolean
+  // ---- F-SA-282 (sales page plan R7; the Orders sheet's Reply to N): N mode — the same words go into the own conversation of each of
+  // N records of ONE customer, in the portal only (an office note on N records is Note to N…; a mail goes per record).
+  many?: boolean
 }
 
 /** B-TH-236 (B-TH-050): the message a draft answers or corrects, as the box names it ("Replying to Alma, 14 Nov ×"). */
@@ -95,7 +101,75 @@ export interface ComposerDraft {
   // writer's tick "This text names no other customer" (`namesNoOtherCustomer`), sent with the next try.
   namesOther?: boolean
   namesNoOtherCustomer?: boolean
+  // ---- F-SA-265 (Discuss): what the message is about — the chip "About: …" above the text, removable (×).
+  about?: DraftAbout
 }
+
+// ---- F-SA-265 (sales page plan N2, N4; picks P2, P9, R10; 10-order-page §6.4; B-SA-061) ------------------------------------------
+/** The parts of an order a message may be about (the API's ABOUT_KINDS, B-SA-061). */
+export const ABOUT_KINDS = ['SalesOrderLine', 'Shipment', 'Invoice', 'DepositRequest', 'OrderGate', 'OrderChangeRequest', 'WorkOrder'] as const
+export type AboutKind = (typeof ABOUT_KINDS)[number]
+
+/**
+ * The kinds whose chip stays in office notes: a work order (the API's own rule: never shared with a customer) and — stricter here, the
+ * money rows (10-order-page §6.4 M2–M4; sa-14 D1) — a deposit request and an invoice. Switching to a reply drops their chip, said.
+ */
+export const OFFICE_ONLY_ABOUT: ReadonlySet<AboutKind> = new Set<AboutKind>(['WorkOrder', 'DepositRequest', 'Invoice'])
+
+/**
+ * What a draft is about (Discuss on a row): the part it names (kept with the message: "Show on the page" jumps back) or none (a part
+ * the conversation cannot keep: its words go as the note's first line), and the chip's words for each audience — the office's own
+ * ("SO-2026-0142 · line 2"), the customer's own ("your order · line 2": never a price, never a work-order number), null: office only.
+ */
+export interface DraftAbout {
+  readonly ref: { readonly kind: AboutKind; readonly id: string } | null
+  readonly office: string
+  readonly customer: string | null
+  /** A part with no ref: the office note's first line, in words ("About: Cut start planned · 22 Nov"). */
+  readonly line?: string
+}
+
+/** The about as the box keeps it: an office-only kind (and a part with no ref) never has words for the customer. */
+export function aboutOf(about: DraftAbout): DraftAbout {
+  const officeOnly = !about.ref || OFFICE_ONLY_ABOUT.has(about.ref.kind)
+  return officeOnly && about.customer !== null ? { ...about, customer: null } : about
+}
+
+/** The chip's words in the box's audience (null: no chip). */
+export function aboutWords(draft: Pick<ComposerDraft, 'mode' | 'about'>): string | null {
+  if (!draft.about) return null
+  return draft.mode === 'note' ? draft.about.office : draft.about.customer
+}
+
+/** Discuss: the box on Office note (rule 34) with the chip — what was typed stays, the earlier chip is replaced. */
+export function withAbout(draft: ComposerDraft, about: DraftAbout, people: readonly ComposerPerson[]): { draft: ComposerDraft; notes: SwitchNote[] } {
+  const onNote = draft.mode === 'note' ? { draft, notes: [] as SwitchNote[] } : switchMode(draft, 'note', people)
+  return { draft: { ...onNote.draft, about: aboutOf(about) }, notes: onNote.notes }
+}
+
+/** The chip's × (the reference goes; the text stays). */
+export function withoutAbout(draft: ComposerDraft): ComposerDraft {
+  if (draft.about === undefined) return draft
+  const { about: _about, ...rest } = draft
+  void _about
+  return rest
+}
+
+/** What the message sends as its `about` (null: none) — never an office-only chip in a message to the customer. */
+export function aboutRefOf(draft: Pick<ComposerDraft, 'mode' | 'about'>): { kind: AboutKind; id: string } | null {
+  const about = draft.about
+  if (!about?.ref) return null
+  if (draft.mode !== 'note' && about.customer === null) return null
+  return { kind: about.ref.kind, id: about.ref.id }
+}
+
+/** The text sent: a part with no ref puts its words as the office note's first line. */
+export function bodyWithAbout(draft: Pick<ComposerDraft, 'mode' | 'about' | 'body'>): string {
+  const about = draft.about
+  if (!about || about.ref || !about.line || draft.mode !== 'note') return draft.body
+  return draft.body.trim() === '' ? about.line : `${about.line}\n${draft.body}`
+}
+// ---- end F-SA-265
 
 /** th-backend-g step 1: one record number as the office writes it and as its customer reads it (null: none of its own yet). */
 export interface NumberSwap {
@@ -132,7 +206,9 @@ export const COUNTER_FROM = 18_000
  * The modes offered, in order: a note needs threads.post; a reply needs email.send AND a customer (or a prospect, held);
  * B-TH-237: "In the portal only" needs threads.post, a customer, and the record offered to the portal (`portal`).
  */
-export function composerModes(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal'>>): ComposerMode[] {
+export function composerModes(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal' | 'many'>>): ComposerMode[] {
+  // F-SA-282: N mode offers the portal only (and nothing when the record's customer may not read it there).
+  if (context.many) return context.portal && context.can.post && context.party ? ['portal'] : []
   const modes: ComposerMode[] = []
   if (context.can.post) modes.push('note')
   if (context.can.email && (context.party !== null || context.prospect)) modes.push('reply')
@@ -160,12 +236,12 @@ export function withSavedReply(draft: ComposerDraft, filled: { body: string; aud
 // ---- end th-backend-g step 1
 
 /** Every visit starts on Office note (P3); a person who may only send mail starts on the reply. */
-export function startDraft(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'>): ComposerDraft {
+export function startDraft(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal' | 'many'>> /* F-SA-282 */): ComposerDraft {
   return { mode: composerModes(context)[0] ?? 'note', body: '', forFloor: false }
 }
 
 /** What stands in place of the box: the closed thread, no right to write, or the box itself. */
-export function boxState(context: Pick<ComposerContext, 'can' | 'party' | 'prospect' | 'closed'> & Partial<Pick<ComposerContext, 'portal'>>): 'closed' | 'noRight' | 'open' {
+export function boxState(context: Pick<ComposerContext, 'can' | 'party' | 'prospect' | 'closed'> & Partial<Pick<ComposerContext, 'portal' | 'many'>> /* F-SA-282 */): 'closed' | 'noRight' | 'open' {
   if (context.closed) return 'closed'
   if (composerModes(context).length === 0) return 'noRight'
   return 'open'
@@ -219,7 +295,10 @@ export function switchMode(draft: ComposerDraft, to: ComposerMode, people: reado
     body = swapped.body
     if (swapped.swapped.length > 0) notes.push({ key: 'switch.numbers', params: { numbers: swapped.swapped.join(', ') } })
   }
-  return { draft: { mode: to, body, forFloor: false, ...keptLink }, notes: [...notes, ...linkNotes] }
+  // F-SA-265: the chip goes with the box when the customer has its own words for it; an office-only one stays in office notes (said).
+  const keptAbout = draft.about && draft.about.customer !== null ? { about: draft.about } : {}
+  if (draft.about && draft.about.customer === null) notes.push({ key: 'switch.about' })
+  return { draft: { mode: to, body, forFloor: false, ...keptLink, ...keptAbout }, notes: [...notes, ...linkNotes] }
 }
 
 /**

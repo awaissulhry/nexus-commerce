@@ -28,31 +28,32 @@ import { CUSTOMER_REPLIES, HOME_ADDRESS, isFiltered, PAGE_PATH, THREAD_TYPE, typ
 /** What a row's click hands the page's dock: the record whose thread it shows (the Work tab's one DockPick). */
 import type { DockPick } from './WorkTab'
 
-export function QuotesIncomingTab({ party, onPick }: { party: { id: string; name: string }; onPick?: (pick: DockPick) => void }) {
+export function QuotesIncomingTab({ party, onPick, onFocus, shown }: { party: { id: string; name: string }; onPick?: (pick: DockPick) => void; /* F-SA-279 */ onFocus?: (pick: DockPick) => void; shown?: DockPick | null }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <Tab party={party} onPick={onPick} />
+      <Tab party={party} onPick={onPick} onFocus={onFocus} shown={shown ?? null} />
     </WithMessages>
   )
 }
 
-type SectionProps = { party: { id: string; name: string }; onPick?: ((pick: DockPick) => void) | undefined }
+// F-SA-279: `onFocus` — the keys moved the focus to a row (the page's dock follows after its rest); `shown` — the record docked (its row marked).
+type SectionProps = { party: { id: string; name: string }; onPick?: ((pick: DockPick) => void) | undefined; onFocus?: ((pick: DockPick) => void) | undefined; shown?: DockPick | null }
 
-function Tab({ party, onPick }: SectionProps) {
+function Tab({ party, onPick, onFocus, shown }: SectionProps) {
   const session = useOfficeSession()
   const quotes = session.permissions.includes('quotes.view')
   const incoming = session.permissions.includes('sales.inquiries.view')
   if (!quotes && !incoming) return null
   return (
     <div className="fw-pty-stack">
-      {quotes && <QuotesSection party={party} onPick={onPick} />}
-      {incoming && <IncomingSection party={party} onPick={onPick} />}
+      {quotes && <QuotesSection party={party} onPick={onPick} onFocus={onFocus} shown={shown} />}
+      {incoming && <IncomingSection party={party} onPick={onPick} onFocus={onFocus} shown={shown} />}
     </div>
   )
 }
 
 /** Quotes: the customer's quotes (GET /sales/quotes?partyId), the Quotes page's own list. */
-function QuotesSection({ party, onPick }: SectionProps) {
+function QuotesSection({ party, onPick, onFocus, shown }: SectionProps) {
   const t = useT('parties')
   const session = useOfficeSession()
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -80,7 +81,11 @@ function QuotesSection({ party, onPick }: SectionProps) {
         <p className="fw-pty-hint">{t('customers.quotesTab.noQuotes', { customer: party.name })}</p>
       ) : (
         <ScopedListTools listKey={QUOTES_LIST_KEY} page={`${prefix}${QUOTES_PATH}`} scope={scope}>
-          <QuotesListView model={model} actions={actions} />
+          <QuotesListView
+            // F-SA-279: the docked quote's row marked; the keys' row docks after the rest.
+            model={onFocus ? { ...model, active: { id: shown?.type === 'Quote' ? shown.id : null } } : model}
+            actions={onFocus ? { ...actions, onFocusRow: (row) => onFocus({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId }) } : actions}
+          />
         </ScopedListTools>
       )}
     </section>
@@ -88,7 +93,7 @@ function QuotesSection({ party, onPick }: SectionProps) {
 }
 
 /** Incoming requests: the customer's requests, catalogue orders and change requests (GET /sales/incoming?partyId), Incoming's own list. */
-function IncomingSection({ party, onPick }: SectionProps) {
+function IncomingSection({ party, onPick, onFocus, shown }: SectionProps) {
   const t = useT('parties')
   const session = useOfficeSession()
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -120,7 +125,12 @@ function IncomingSection({ party, onPick }: SectionProps) {
         <p className="fw-pty-hint">{t('customers.quotesTab.noRequests', { customer: party.name })}</p>
       ) : (
         <ScopedListTools listKey={INQUIRIES_LIST_KEY} page={`${prefix}${PAGE_PATH}`} scope={scope}>
-          <InquiriesView model={model} actions={actions} slots={slots} />
+          <InquiriesView
+            // F-SA-279: the docked request's row marked; the keys' row docks after the rest (a change request never: its talk is its order's).
+            model={onFocus ? { ...model, active: { pick: shown ? { type: shown.type, id: shown.id } : null } } : model}
+            actions={onFocus ? { ...actions, onFocusRow: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : onFocus({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null })) } : actions}
+            slots={slots}
+          />
         </ScopedListTools>
       )}
     </section>

@@ -58,6 +58,8 @@ export interface CardActions {
   onPin?: (messageId: string) => void
   onUnpin?: (messageId: string) => void
   // ---- end B-TH-286
+  // ---- F-SA-265: "Show on the page" — a message about a part of its record jumps back to that row (the record page's own door).
+  onShowOnPage?: (messageId: string) => void
 }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
@@ -74,6 +76,7 @@ const MAX_NAMES = 10
  */
 export function MessageCard({ message, context, actions, remind, readOnly = false }: { message: CardMessage; context: CardContext; actions?: CardActions; remind?: ReactNode; readOnly?: boolean }) {
   const t = useT('record-thread-card')
+  const frameWords = useT('record-frame') // F-SA-265: the record frame's door words (loaded by the frame around a record page)
   const locale = useLocale()
   const intl = INTL_LOCALE[locale]
   const quotedId = useId()
@@ -279,6 +282,14 @@ export function MessageCard({ message, context, actions, remind, readOnly = fals
           <a className="fw-rt-link-to" href={`#message-${message.correctedBy.id}`}>
             {t('link.correctedBelow', { time: timeOf(message.correctedBy.at, locale) })}
           </a>
+        </p>
+      )}
+      {/* F-SA-265: a message about a part of its record (a line, a shipment…) jumps back to its row on the page. */}
+      {!readOnly && message.about && actions?.onShowOnPage && (
+        <p className="fw-rt-details">
+          <Button size="sm" variant="link" onClick={() => actions.onShowOnPage?.(message.id)}>
+            {frameWords('discuss.showOnPage')}
+          </Button>
         </p>
       )}
       {!readOnly /* F-SA-261 */ && message.email && showsUndo(message, context.now ?? Date.now()) && <UndoLine until={message.email.undoUntil!} start={context.now} party={party} onUndo={actions?.onUndo ? () => actions.onUndo?.(message.id) : undefined} />}

@@ -192,8 +192,13 @@
       "dock": {
         "label": "Quale conversazione",
         "general": "{customer} (generale)",
-        "generalLine": "La conversazione generale di {customer} è condivisa con {customer}: ciò che invii lì arriva al cliente.",
-        "recordLine": "La conversazione di {record} è condivisa con {customer}: ciò che invii lì arriva al cliente."
+        "generalLine": "La conversazione generale di {customer}: ciò che rispondi arriva a {customer}; le note d'ufficio restano qui.",
+        "recordLine": "La conversazione di {record} è condivisa con {customer}: ciò che invii lì arriva al cliente.",
+        "all": "Tutto di {customer}",
+        "readOnly": "Sola lettura",
+        "draftKept": "Bozza tenuta su {record}",
+        "button": "Conversazione · {record}",
+        "cardDoor": "Conversazione"
       },
       "window": {
         "customerTitle": "In attesa di {customer}",

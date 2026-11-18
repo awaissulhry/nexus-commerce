@@ -58,6 +58,8 @@ import { TaskNewDialog } from '../../../record-panels/tasks/view/TaskNewDialog'
 import { fillReply, listReplies } from '../document-send/template/api'
 import { useRecordFrame } from '../record-frame/RecordFrame'
 import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
+import { stepNearest } from '../record-frame/model' // F-SA-265: Show in thread
+import { withAbout } from '../../../lib/record-thread/composer/model' // F-SA-265: Discuss
 import { officeOnly, removeFile, shareWithParty } from './api'
 // B-TH-231: carry a file to another record (same customer or none); a refused file read in words.
 import { readUseOnTargets, useFileOn } from './api'
@@ -95,6 +97,12 @@ export interface DockedHost extends RecordThreadHost {
   printHref?: string
   /** TH-5 follow-up (B-TH-249): the record reopens its thread with itself (a closed project): neither the head nor the box offers Reopen. */
   reopenWithRecord?: boolean
+  // ---- F-SA-279: the box holds a draft (words or files) — the host keeps "Draft kept on SO-…" when its dock moves on.
+  onDraft?: (kept: boolean) => void
+  // ---- end F-SA-279
+  // ---- F-SA-265: "Show on the page" — a message about a part of the record (a line, a shipment…) jumps back to its row; absent: no door.
+  showOnPage?: (about: { kind: string; id: string }) => void
+  // ---- end F-SA-265
 }
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork']
@@ -617,6 +625,51 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       setOwning({ busy: false, problem: th(`owner.problem.${kind === 'forbidden' || kind === 'step_up' ? 'forbidden' : kind === 'invalid' ? 'invalid' : kind === 'not_found' ? 'notFound' : kind === 'network' || kind === 'unavailable' ? 'network' : 'failed'}`) })
     }
   }
+  // ---- F-SA-265 (10-order-page §6.4): Discuss — a row of the body asks the conversation about it: the box goes to Office note with
+  // the chip "About: …" (what was typed stays) and takes the focus; Show in thread — a history row's step scrolls into view and takes
+  // the focus (none near it: said); Followers… — the followers open. Each ask once, and only for THIS record's own conversation.
+  const latestBox = useRef({ composer: model.composer, onDraft: actions.onDraft, events: model.feed.events })
+  latestBox.current = { composer: model.composer, onDraft: actions.onDraft, events: model.feed.events }
+  const discussAsk = frame?.discussAsk ?? null
+  const clearDiscuss = frame?.clearDiscuss
+  useEffect(() => {
+    if (!discussAsk || discussAsk.record.type !== key.type || discussAsk.record.id !== key.id) return
+    clearDiscuss?.()
+    const { composer, onDraft: setDraft } = latestBox.current
+    const next = withAbout(composer.draft, discussAsk.about, composer.context.people)
+    setDraft?.(next.draft, next.notes)
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.fw-rcf-dock .fw-rt-composer textarea')?.focus())
+  }, [discussAsk, clearDiscuss, key])
+  const showAsk = frame?.showAsk ?? null
+  const clearShow = frame?.clearShow
+  useEffect(() => {
+    if (!showAsk || showAsk.record.type !== key.type || showAsk.record.id !== key.id) return
+    clearShow?.()
+    setView('all')
+    const step = stepNearest(latestBox.current.events, showAsk.at)
+    if (!step) {
+      notify({ ns: 'record-frame', key: 'discuss.notInThread', tone: 'warning' })
+      return
+    }
+    requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(`[data-event-ids~="${CSS.escape(step)}"]`)
+      target?.scrollIntoView({ block: 'center' })
+      target?.focus({ preventScroll: true })
+    })
+  }, [showAsk, clearShow, key, notify])
+  const followersAsked = frame?.door === 'followers'
+  const clearDoor = frame?.clearDoor
+  useEffect(() => {
+    if (!followersAsked) return
+    setFollowersOpen(true)
+    clearDoor?.()
+  }, [followersAsked, clearDoor])
+  // ---- end F-SA-265
+  // ---- F-SA-279: whether the box holds a draft, told to a host that keeps it in words when its dock moves on.
+  const draftKept = model.composer.draft.body.trim() !== '' || model.composer.files.length > 0
+  const onDraft = host.onDraft
+  useEffect(() => onDraft?.(draftKept), [onDraft, draftKept])
+  // ---- end F-SA-279
   const reportNew = frame?.reportNew
   useEffect(() => reportNew?.(base.newCount), [reportNew, base.newCount])
   useEffect(() => () => reportNew?.(0), [reportNew])
@@ -778,6 +831,15 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     ...(searchOffered ? { onSlash: () => openSearch(true) } : {}),
     // B-TH-231: the message's files the reader opens, carried to another record.
     onUseOn: (messageId) => openUseOn(model.feed.messages.find((item) => item.id === messageId)?.files.map((file) => file.id) ?? []),
+    // F-SA-265: a message about a part of the record: back to its row on the page.
+    ...(host.showOnPage
+      ? {
+          onShowOnPage: (messageId: string) => {
+            const about = model.feed.messages.find((item) => item.id === messageId)?.about
+            if (about) host.showOnPage?.(about)
+          },
+        }
+      : {}),
   }
 
   const doorResults = (

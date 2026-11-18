@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 // F-SA-271: the band's ⋯ "Add task for <customer>…" — the record's ONE New task dialog (the Party record's task).
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -24,6 +24,8 @@ import { partyName } from '../../../parties/_shared/model'
 // ---- F-SA-276: the Work tab (the strip's reads, the Orders sheet locked to the customer) and the dock that follows its rows ----
 import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer-work'
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
+import { useCustomerDock } from './use-customer-work' // F-SA-279: the dock follows the row (`dock=`), All of <customer>
+import { useT } from '../../../../lib/i18n/provider' // F-SA-279: the band's "Thread · SO-…" below 1280 px
 // ---- end F-SA-276
 // ---- F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks) ----
 import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
@@ -80,23 +82,20 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const workCan: WorkCan = { orders: can.orders, workorders: can.workorders === true, threads: can.threads, partners: can.partners }
   const work = useCustomerWork(partyId, workCan)
   const tab = record.model.tab
-  const [pick, setPick] = useState<DockPick | null>(null)
-  const [scope, setScope] = useState<'general' | 'record'>('general')
-  useEffect(() => {
-    if (tab === 'work' || tab === 'quotes') return
-    setPick(null)
-    setScope('general')
-  }, [tab])
-  const onPick = useCallback((next: DockPick) => {
-    setPick(next)
-    setScope('record')
-  }, [])
+  // ---- F-SA-279: the dock follows the row — a click at once, the keys after 300 ms of rest; `dock=` in the address (a replace: Back
+  // leaves the page); the record any row (or a window's row, or a line of All of <customer>) picks, checked against this customer.
+  const customerDock = useCustomerDock(partyId, tab)
+  const session = useOfficeSession()
+  const onPick = customerDock.onRow
+  const t = useT('parties')
   const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
-  const dock = named && record.thread ? <CustomerDock customer={named} general={record.thread} pick={pick} scope={scope} onScope={setScope} prefix={prefix} /> : record.thread
+  const dock = named && record.thread ? <CustomerDock customer={named} general={record.thread} dock={customerDock} prefix={prefix} canReadFiles={session.permissions.includes('files.read')} /> : record.thread
+  const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null
+  // ---- end F-SA-279
   // ---- F-SA-278: the strip's windows — each row picks its record in the dock (the customer's own record: its thread).
   const [win, setWin] = useState<'customer' | 'tasks' | null>(null)
   const reaccept = useReacceptOrders(partyId, win === 'customer', can.orders)
-  const pickOrGeneral = (next: DockPick | null) => (next ? onPick(next) : setScope('general'))
+  const pickOrGeneral = (next: DockPick | null) => (next ? onPick(next) : customerDock.onScope('general'))
   const windows =
     named && win === 'customer' ? (
       <WaitingForCustomerDialog party={{ ...named, companyId: record.party?.companyId ?? null }} can={{ partners: can.partners }} requests={work.reads.requests} reaccept={reaccept} onPick={onPick} onClose={() => setWin(null)} />
@@ -105,8 +104,8 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     ) : null
   // ---- end F-SA-278
   // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
-  const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} /> : null
-  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={pick} onPick={onPick} onWindow={setWin /* F-SA-278 */} /> : null
+  const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null
+  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} /> : null
   // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
   const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
@@ -120,7 +119,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   return (
     <>
       {windows /* F-SA-278 */}
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
     </>
   )
 }

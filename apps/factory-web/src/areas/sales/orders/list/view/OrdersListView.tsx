@@ -68,6 +68,11 @@ import { ListPlus } from 'lucide-react'
 import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
 import { BATCH_MAX } from '../../../../../record-panels/tasks/model'
 // ---- end F-SA-281
+// ---- F-SA-282: Reply to <customer> on N… (one customer, ≤ 50, one batchId; each order's own conversation, the portal only) ----
+import { Globe } from 'lucide-react'
+import { replyManyHeld, replyManyLabel } from '../reply-many'
+import { ReplyManyDialog } from './ReplyManyDialog'
+// ---- end F-SA-282
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -163,6 +168,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // ---- end F-SA-280
   // F-SA-281: Add task to N… — one customer, the tasks' right, at most BATCH_MAX (the dialog and the API check again).
   const taskWords = oneCustomerWords ?? (model.bulkCan?.task ? r(model.bulkCan.task) : picked.length > BATCH_MAX ? s('bulk.tooMany', { max: BATCH_MAX }) : null)
+  // F-SA-282: Reply to <customer> on N… — held in words before the click: another customer's order on this customer's page, orders of
+  // more than one customer (one message never reaches two customers), no right, more than 50 (the window and the API check again).
+  const replyHold = replyManyHeld(picked, model.locked?.party ? (model.customer?.id ?? null) : null, !!model.bulkCan?.reply)
+  const replyWords = replyHold ? s(replyHold.key, replyHold.params) : null
+  const replyPhrase = replyManyLabel(picked)
+  const replyLabel = s(replyPhrase.key, replyPhrase.params)
   const ownKeys: ListKey[] = [
     { keys: ['v'], does: t('list.keyView') },
     ...(model.can.manage && !model.embedded ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
@@ -473,6 +484,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{s('bulk.note', { count: picked.length })}</SelectionLabel>
                   </Button>
                 )}
+                {/* F-SA-282: Reply to <customer> on N… — the same words in each order's own conversation, in the portal (never one message to two customers). */}
+                {actions?.onReplyMany && (
+                  <Button size="sm" aria-label={replyLabel} heldReason={replyWords} onClick={() => actions.onReplyMany?.(picked.map((row) => row.id))}>
+                    <Globe size={13} aria-hidden /> <SelectionLabel>{replyLabel}</SelectionLabel>
+                  </Button>
+                )}
                 {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
                 {model.can.manageInvoices && (
                   <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
@@ -489,6 +506,17 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           onOpen={(row) => actions?.onOpen?.(row.id)}
           state={state}
           focusRow={model.focusRow}
+          // F-SA-279: on the customer page the row drives the dock (marked; the keys' row reported; ⌘↵ a new tab; a phone card's door).
+          active={
+            model.active
+              ? {
+                  id: model.active.id,
+                  onFocusRow: (row) => actions?.onFocusRow?.(row),
+                  onOpenNewTab: (row) => actions?.onOpenRow?.(row.id, true),
+                  cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,
+                }
+              : null
+          }
         />
       )}
       {model.rows !== 'open' && model.rows !== model.defaultRows /* F-SA-276 */ && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
@@ -501,6 +529,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {/* F-SA-280: production's one assign dialog and one note dialog (their results: changed / unchanged / skipped with why). */}
       {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
       {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
+      {/* F-SA-282: Reply to <customer> on N… (one line per order after Send: posted, or not with why). */}
+      {model.replyMany && <ReplyManyDialog model={model.replyMany} actions={actions?.replyMany} />}
       {/* F-SA-281: the one New task window — on one order (a row's ⋯), or on N orders in one batch (the selection). */}
       {model.task && (
         <TaskNewDialog

@@ -5,6 +5,9 @@ import { Banknote, CalendarClock, CheckCircle2, Circle, Clock, Send } from 'luci
 import { Card, EmptyState, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
 import { Timeline } from '../../../../../lib/i18n/ds-parts'
+// F-SA-266: Money's rows are discussed in office notes only (the stricter money rule: a chip here never goes into a reply)
+import { DiscussDoor } from './Discuss'
+import { rowAnchor } from '../dock/discuss'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
@@ -165,10 +168,12 @@ export function ScheduleCard({ order, model, actions }: { order: Order; model: O
               key: step.id,
               tone: overdue ? 'info' : MILESTONE_TONE[step.status],
               label: (
-                <span className="fw-so-inline">
+                <span className="fw-so-inline" id={rowAnchor('Step', step.id) /* F-SA-266 */} tabIndex={-1}>
                   <span>{stepWords(step)}</span>
                   {model.can.price && <strong>{money(step.amount, currency, locale)}</strong>}
                   <Pill tone={overdue ? 'danger' : MILESTONE_TONE[step.status]}>{overdue ? t('schedule.overdue') : t(`schedule.status.${step.status}`)}</Pill>
+                  {/* F-SA-266: a payment step is discussed in an office note (no reference: its words open the note). */}
+                  <DiscussDoor order={order} part={stepWords(step)} target={null} officeOnly />
                 </span>
               ),
               detail: (
@@ -221,12 +226,15 @@ export function DepositCard({ request, order, model, actions }: { request: Depos
 
   return (
     <Card padded className="fw-so-deposit">
-      <div className="fw-so-card-head">
+      <div className="fw-so-card-head" id={rowAnchor('DepositRequest', request.id) /* F-SA-266 */} tabIndex={-1}>
         <h2 className="fw-so-h2">
           <Banknote size={16} aria-hidden /> {t('deposit.title', { kind: t(`depositKind.${request.kind}`) })}
           {request.depositPct ? <span className="fw-so-title-sub">{percent(request.depositPct, locale)}</span> : null}
         </h2>
-        <Pill tone={overdue ? 'danger' : REQUEST_TONE[request.status]}>{overdue ? t('deposit.overdue') : t(`requestStatus.${request.status}`)}</Pill>
+        <span className="fw-so-inline">
+          <Pill tone={overdue ? 'danger' : REQUEST_TONE[request.status]}>{overdue ? t('deposit.overdue') : t(`requestStatus.${request.status}`)}</Pill>
+          <DiscussDoor order={order} part={t('discuss.deposit')} target={{ kind: 'DepositRequest', id: request.id }} officeOnly />
+        </span>
       </div>
       <KeyValue
         dense
@@ -375,10 +383,13 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
             return {
               id: invoice.id,
               cells: [
-                <span key="n" className="fw-so-cell">
-                  <Link className="fw-so-link" href={invoiceHref(invoice)}>
-                    {invoice.number ?? t('money.draft')}
-                  </Link>
+                <span key="n" className="fw-so-cell" id={rowAnchor('Invoice', invoice.id) /* F-SA-266 */} tabIndex={-1}>
+                  <span className="fw-so-inline">
+                    <Link className="fw-so-link" href={invoiceHref(invoice)}>
+                      {invoice.number ?? t('money.draft')}
+                    </Link>
+                    <DiscussDoor order={order} part={t('discuss.invoice', { number: invoice.number ?? t('money.draft') })} target={{ kind: 'Invoice', id: invoice.id }} officeOnly />
+                  </span>
                   <span className="fw-so-cell-sub">{invoice.issueDate ? formatDate(dayInstant(invoice.issueDate), { locale }) : '—'}</span>
                 </span>,
                 t(`docType.${invoice.docType}`),

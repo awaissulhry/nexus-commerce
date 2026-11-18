@@ -9,6 +9,7 @@ import { boxState, composerModes, floorOffered, floorTooLong, heldReason, keyMod
 // B-TH-236 / B-TH-237
 import { floorLocked, sendKey, toCustomer } from './model'
 import { replyAudienceOf, swapNumbers, withSavedReply } from './model' // th-backend-g step 1
+import { aboutOf, aboutRefOf, aboutWords, bodyWithAbout, OFFICE_ONLY_ABOUT, withAbout, withoutAbout } from './model' // F-SA-265
 import { Composer } from './view/Composer'
 
 /** B-TH-205 — the composer's audience switch (T5): starts on Office note, the switch keeps the text, the floor tick, every state. */
@@ -405,3 +406,83 @@ describe('F-SA-282a: the portal’s hold of a text that names another customer, 
   })
 })
 // ---- end F-SA-282a
+
+// ---- F-SA-265 (sales page plan N2, N4; picks P2, P9, R10; 10-order-page §6.4; B-SA-061): Discuss — the chip "About: …"
+describe('F-SA-265: the chip "About: …" follows the audience', () => {
+  const line = { ref: { kind: 'SalesOrderLine' as const, id: 'line-2' }, office: 'SO-2026-0142 · line 2', customer: 'your order · line 2' }
+  const deposit = { ref: { kind: 'DepositRequest' as const, id: 'dep-1' }, office: 'SO-2026-0142 · deposit 30 %', customer: 'your order · deposit' }
+  const workOrder = { ref: { kind: 'WorkOrder' as const, id: 'wo-1' }, office: 'SO-2026-0142 · WO-2026-0311', customer: 'your order · WO-2026-0311' }
+  const planned = { ref: null, office: 'SO-2026-0142 · cut start planned 22 Nov', customer: 'your order · cut start', line: 'About: SO-2026-0142 · cut start planned 22 Nov' }
+
+  it('Discuss opens on Office note with the chip; what was typed stays; the earlier chip is replaced', () => {
+    const typed = { ...draft({ mode: 'reply' }), body: 'Can we check this?' }
+    const opened = withAbout(typed, line, OFFICE_PEOPLE)
+    expect(opened.draft.mode).toBe('note')
+    expect(opened.draft.body).toBe('Can we check this?')
+    expect(aboutWords(opened.draft)).toBe('SO-2026-0142 · line 2')
+    expect(withAbout(opened.draft, deposit, OFFICE_PEOPLE).draft.about?.ref?.kind).toBe('DepositRequest')
+    expect(withoutAbout(opened.draft).about).toBeUndefined()
+  })
+
+  it('in a reply the customer reads its own words — no office number, no price, no work-order number', () => {
+    const note = withAbout(draft(), line, OFFICE_PEOPLE).draft
+    const reply = switchMode(note, 'reply', OFFICE_PEOPLE)
+    expect(reply.notes).toEqual([])
+    expect(aboutWords(reply.draft)).toBe('your order · line 2')
+    expect(aboutRefOf(reply.draft)).toEqual({ kind: 'SalesOrderLine', id: 'line-2' })
+    expect(aboutWords(switchMode(note, 'portal', OFFICE_PEOPLE).draft)).toBe('your order · line 2')
+  })
+
+  it('an office-only chip (a work order; the money rows: deposit, invoice; a part with no reference) drops on Reply, said', () => {
+    expect(OFFICE_ONLY_ABOUT.has('WorkOrder')).toBe(true)
+    expect(OFFICE_ONLY_ABOUT.has('DepositRequest')).toBe(true)
+    expect(OFFICE_ONLY_ABOUT.has('Invoice')).toBe(true)
+    expect(OFFICE_ONLY_ABOUT.has('SalesOrderLine')).toBe(false)
+    for (const about of [deposit, workOrder, planned]) {
+      // Whatever words the row gave, the kind decides: an office-only chip has none for the customer.
+      expect(aboutOf(about).customer, about.office).toBeNull()
+      const note = withAbout(draft(), about, OFFICE_PEOPLE).draft
+      const reply = switchMode(note, 'reply', OFFICE_PEOPLE)
+      expect(reply.draft.about, about.office).toBeUndefined()
+      expect(reply.notes).toContainEqual({ key: 'switch.about' })
+      expect(aboutRefOf(reply.draft)).toBeNull()
+    }
+    // Back on the note the chip is gone (the person discusses the row again for it).
+    const back = switchMode(switchMode(withAbout(draft(), workOrder, OFFICE_PEOPLE).draft, 'reply', OFFICE_PEOPLE).draft, 'note', OFFICE_PEOPLE)
+    expect(back.draft.about).toBeUndefined()
+  })
+
+  it('what is sent: the reference in an office note; a part with no reference as the note\'s first line', () => {
+    const note = { ...withAbout(draft(), workOrder, OFFICE_PEOPLE).draft, body: 'Hold the cut.' }
+    expect(aboutRefOf(note)).toEqual({ kind: 'WorkOrder', id: 'wo-1' })
+    expect(bodyWithAbout(note)).toBe('Hold the cut.')
+    const words = { ...withAbout(draft(), planned, OFFICE_PEOPLE).draft, body: 'Move it a day?' }
+    expect(aboutRefOf(words)).toBeNull()
+    expect(bodyWithAbout(words)).toBe('About: SO-2026-0142 · cut start planned 22 Nov\nMove it a day?')
+  })
+
+  it('the box draws the chip with ×, in both languages; the switch note in words', () => {
+    const en = textOf(composer(ORDER, withAbout(draft(), line, OFFICE_PEOPLE).draft))
+    expect(en).toContain('About: SO-2026-0142 · line 2')
+    const it = textOf(composer(ORDER, withAbout(draft(), line, OFFICE_PEOPLE).draft, 'it'))
+    expect(it).toContain('Riguardo: SO-2026-0142 · line 2')
+    const reply = textOf(composer(ORDER, switchMode(withAbout(draft(), line, OFFICE_PEOPLE).draft, 'reply', OFFICE_PEOPLE).draft))
+    expect(reply).toContain('About: your order · line 2')
+    expect(reply).not.toContain('SO-2026-0142')
+    const html = composer(ORDER, withAbout(draft(), line, OFFICE_PEOPLE).draft)
+    expect(html).toContain('aria-label="Remove the reference"')
+    const notes = render(createElement(Composer, { context: ORDER, draft: draft({ mode: 'reply' }), notes: [{ key: 'switch.about' }], onDraft: () => undefined, onSend: () => undefined }), 'it')
+    expect(textOf(notes)).toContain("Il riferimento resta nelle note d'ufficio")
+  })
+
+  it('the container sends it with the note, the portal reply and the mail (never an office-only chip to the customer)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const hook = readFileSync(new URL('../../../areas/_shared/record-thread/use-record-thread.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('const about = aboutRefOf(now.draft)')
+    expect(hook).toContain('const noteBody = bodyWithAbout(now.draft)')
+    expect(hook).toContain('...linksOf(now.draft.link), ...(about ? { about } : {}) }')
+    const api = readFileSync(new URL('../../../areas/_shared/record-thread/api.ts', import.meta.url), 'utf8')
+    expect(api.match(/\.\.\.\(input\.about \? \{ about: \{ kind: input\.about\.kind, id: input\.about\.id \} \} : \{\}\), \/\/ F-SA-265/g)?.length).toBe(2)
+  })
+})
+// ---- end F-SA-265

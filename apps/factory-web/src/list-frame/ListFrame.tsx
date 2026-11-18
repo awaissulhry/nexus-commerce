@@ -18,7 +18,7 @@ import {
   type GridRowKind,
   type IRowNode,
 } from '@nexus/ui/grid'
-import { X } from 'lucide-react'
+import { MessageSquare, X } from 'lucide-react'
 import { Banner, useToast } from '@nexus/ui/components'
 import { SaveStatus } from '@nexus/ui/components/SaveStatus/index'
 import { GridCardList, useCardList } from '@nexus/ui/grid/card-list/index'
@@ -31,6 +31,7 @@ import { WithMessages } from '../record-panels/i18n'
 import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
 import { clickedColumn, FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
+import { ACTIVE_KEYS, ACTIVE_ROW_CLASS, focusReported, isNewTabKey } from './model' // F-SA-279
 import { ListToolsBar, type ExportAbout, type ListBuiltInViews, type WithheldColumn } from './tools/ListToolsBar'
 import { useListTools } from './tools/useListTools'
 import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
@@ -188,6 +189,27 @@ export interface ListFrameProps<T> {
   /** The columns on screen changed (their ids, left to right): a list reads a costly column's data only while it is shown. */
   onShownColumns?: (ids: readonly string[]) => void
   // ── end B-TH-244 ──
+  // ── F-SA-279 (11-customer-page §3.7): a list that drives a dock, opt-in ──
+  /**
+   * The row a dock beside the list shows (`id`, marked by a row class and kept marked while the focus moves on) and the report of
+   * the row the KEYS move the focus to (↑ / ↓, j / k): the page decides (the customer page waits 300 ms of rest before it follows).
+   * A click is the row click's (`onRowClick`); ⌘↵ opens the row in a new tab (`onOpenNewTab`); on a phone `cardDoor` puts a button
+   * on each card that shows the row's conversation. Absent: the list as before.
+   */
+  active?: ListActive<T> | null
+  // ── end F-SA-279 ──
+}
+
+/** F-SA-279: what a list that drives a dock tells the frame (see ListFrameProps.active). */
+export interface ListActive<T> {
+  /** The row the dock shows now (null: none, the dock shows the page's own conversation). */
+  readonly id: string | null
+  /** The keys moved the focus to this row. */
+  readonly onFocusRow: (row: T) => void
+  /** ⌘↵ on a row: its record in a new tab. */
+  readonly onOpenNewTab?: (row: T) => void
+  /** On a phone's card: a button (its words) on the card's column `column` that shows the row's conversation. */
+  readonly cardDoor?: { readonly column: string; readonly label: string; readonly onOpen: (row: T) => void } | null
 }
 
 /** Today in the site's zone (YYYY-MM-DD). */
@@ -221,7 +243,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns, active /* F-SA-279 */ }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -302,8 +324,11 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   const cardFields = useMemo(() => {
     const last = listTools.columns[listTools.columns.length - 1]
     const id = last ? (last.colId ?? (typeof last.field === 'string' ? last.field : null)) : null
-    return { ...(last && id && last.pinned === 'right' ? { [id]: { role: 'actions' as const } } : {}), ...(cards?.fields ?? {}) }
-  }, [listTools.columns, cards?.fields])
+    // F-SA-279: on a phone each card's door to the row's conversation, on the column the list names.
+    const door = active?.cardDoor ?? null
+    const doorField = door ? { [door.column]: { role: 'aside' as const, draw: (row: T) => <CardDoor label={door.label} onOpen={() => door.onOpen(row)} /> } } : {}
+    return { ...(last && id && last.pinned === 'right' ? { [id]: { role: 'actions' as const } } : {}), ...(cards?.fields ?? {}), ...doorField }
+  }, [listTools.columns, cards?.fields, active?.cardDoor])
   const selected = useMemo(() => selection?.selected ?? [], [selection?.selected])
   const selectedRef = useRef(selected)
   selectedRef.current = selected
@@ -393,12 +418,42 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     return () => window.removeEventListener('keydown', onKey)
   }, [focusRowAt, isRowSelectable, onHelp, rowId, selection])
 
+  // ── F-SA-279: the row a dock shows (marked), the rows the keys move to (reported), ⌘↵ a new tab ──
+  const activeRef = useRef(active)
+  activeRef.current = active
+  const activeId = active ? active.id : undefined
+  const rowClassRules = useMemo(
+    () => (activeId === undefined ? undefined : { [ACTIVE_ROW_CLASS]: (params: { data?: T }) => activeId !== null && !!params.data && !isGroupMarker(params.data) && rowId(params.data) === activeId }),
+    [activeId, rowId],
+  )
+  const pointerAt = useRef(0)
+  const onCellFocused = useCallback(
+    (event: { rowIndex: number | null; rowPinned?: string | null }) => {
+      const wants = activeRef.current
+      const api = apiRef.current
+      if (!wants || !api || api.isDestroyed()) return
+      if (!focusReported({ rowIndex: event.rowIndex, pinned: event.rowPinned, sincePointer: Date.now() - pointerAt.current })) return
+      const node = api.getDisplayedRowAtIndex(event.rowIndex as number)
+      if (!node?.data || isGroupMarker(node.data)) return
+      wants.onFocusRow(node.data)
+    },
+    [],
+  )
+  // ── end F-SA-279 ──
+
   // Enter on a row opens it (not on its checkbox: Space ticks there; not on a cell that edits: Enter edits it).
   const onCellKeyDown = useCallback(
     (event: { data?: T; event?: Event | null; column?: { getColId(): string } }) => {
       const key = (event.event as KeyboardEvent | null | undefined)?.key
       const colId = event.column?.getColId()
       if (key !== 'Enter' || !event.data || colId === SELECTION_COLUMN) return
+      // F-SA-279: ⌘↵ opens the row in a new tab (a list that drives a dock).
+      const pressed = event.event as KeyboardEvent | null | undefined
+      if (pressed && isNewTabKey(pressed) && activeRef.current?.onOpenNewTab && !isGroupMarker(event.data)) {
+        pressed.preventDefault()
+        activeRef.current.onOpenNewTab(event.data)
+        return
+      }
       // B-TH-241: Enter on a group's header folds or opens it; on its "Show more" reads more.
       if (isGroupMarker(event.data)) {
         const marker = event.data as GroupMarker
@@ -558,7 +613,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
         </Button>
       )}
       <GridFooterSpacer />
-      <ListKeysInfo keys={listKeys(inline.active ? [...(keys ?? []), ...EDIT_KEYS] : keys, !!selection)} onHelp={onHelp} open={keysOpen} />
+      <ListKeysInfo keys={listKeys([...(active?.onOpenNewTab ? ACTIVE_KEYS : []) /* F-SA-279 */, ...(keys ?? []), ...(inline.active ? EDIT_KEYS : [])], !!selection)} onHelp={onHelp} open={keysOpen} />
     </GridFooterStrip>
   )
 
@@ -623,7 +678,13 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     const long = !printing && !!endless && !(endless.done && rows.length <= FIT_ROWS)
     const layout = long ? { domLayout: 'normal' as const, fit: false } : gridLayout(gridRows.length)
     body = (
-      <div className={printing ? 'fw-list-grid printing' : long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
+      <div
+        className={printing ? 'fw-list-grid printing' : long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'}
+        role="region"
+        aria-label={label}
+        // F-SA-279: a pointer press in the grid: the focus it moves is the click's, never reported as the keys'.
+        {...(active ? { onPointerDownCapture: () => (pointerAt.current = Date.now()) } : {})}
+      >
         <NexusGrid<T>
           domLayout={printing ? 'print' : layout.domLayout}
           {...(printing ? { height: 'auto' } : {})}
@@ -641,6 +702,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
           {...(onRowClick ? { onRowClicked } : {}) /* B-TH-225 */}
           {...(onSortChanged ? { onSortChanged: onGridSortChanged } : {}) /* B-TH-057 */}
           {...(grouped ? { isFullWidthRow: isGroupLine, fullWidthCellRenderer: GroupCell } : {}) /* B-TH-241 */}
+          {...(active && !printing ? { rowClassRules, onCellFocused } : {}) /* F-SA-279 */}
           suppressCellFocus={false}
           {...(inline.active ? { readOnlyEdit: true, onCellEditRequest: inline.onCellEditRequest, cellSelection: true } : {})}
         />
@@ -766,6 +828,15 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
       </GridCard>
       {bulk}
     </div>
+  )
+}
+
+/** F-SA-279: a phone card's door to the row's conversation (the DS button; the card's link keeps its own tap). */
+function CardDoor({ label, onOpen }: { label: string; onOpen: () => void }) {
+  return (
+    <Button size="sm" variant="quiet" onClick={onOpen}>
+      <MessageSquare size={13} aria-hidden /> {label}
+    </Button>
   )
 }
 

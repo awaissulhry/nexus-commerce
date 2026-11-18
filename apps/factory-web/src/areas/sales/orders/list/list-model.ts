@@ -22,6 +22,7 @@ import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_s
 import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model' // F-SA-280
 import type { Assignable, BatchAnswer, BatchAssignee, BatchRecord, TaskDraft } from '../../../../record-panels/tasks/model' // F-SA-281
 import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
+import type { ReplyManyActions, ReplyManyModel } from './reply-many' // F-SA-282
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -157,12 +158,18 @@ export interface OrdersListModel {
   // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
   assign?: AssignSupervisorModel | null
   note?: NoteDialogModel | null
-  bulkCan?: { readonly supervisor: boolean; readonly note: boolean; /** F-SA-281: why a task is held (a `records` key), or null. */ readonly task?: string | null }
+  bulkCan?: { readonly supervisor: boolean; readonly note: boolean; /** F-SA-281: why a task is held (a `records` key), or null. */ readonly task?: string | null; /** F-SA-282: threads.post (Reply to N). */ readonly reply?: boolean }
   // ---- end F-SA-280
   // ---- F-SA-281: the New task window while open — on one order, or on N (one batch) — and who the person is ("Me") ----
   task?: { readonly mode: 'one' | 'many'; readonly records: readonly BatchRecord[]; readonly people: PanelRead<readonly Assignable[]>; readonly busy: boolean } | null
   me?: string | null
   // ---- end F-SA-281
+  // ---- F-SA-282: Reply to <customer> on N… while open (one customer, ≤ 50, one batchId; each order's own conversation)
+  replyMany?: ReplyManyModel | null
+  // ---- F-SA-279 (the customer page: a row drives the dock) ----
+  /** The order the page's dock shows (marked; null: none), and the words of a phone card's door to its conversation; absent: not a dock list. */
+  active?: { readonly id: string | null; readonly cardDoor?: string | null } | null
+  // ---- end F-SA-279
 }
 
 export interface OrdersListActions {
@@ -240,4 +247,11 @@ export interface OrdersListActions {
   onNote?: (ids: readonly string[]) => void
   note?: NoteDialogActions
   // ---- end F-SA-280
+  // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions
+  onReplyMany?: (ids: readonly string[]) => void
+  replyMany?: ReplyManyActions
+  // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
+  onFocusRow?: (row: OrderRow) => void
+  onCardThread?: (row: OrderRow) => void
+  // ---- end F-SA-279
 }

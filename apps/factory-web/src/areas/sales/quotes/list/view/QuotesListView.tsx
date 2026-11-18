@@ -388,6 +388,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         onRowClick={(row, event) => (actions?.onOpenRow ? actions.onOpenRow(row.id, event.metaKey || event.ctrlKey) : event.metaKey || event.ctrlKey ? window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : actions?.onOpen?.(row.id))}
         state={state}
         focusRow={model.focusRow}
+        // F-SA-279: on the customer page a row drives the host's dock (marked; the keys' row reported; ⌘↵ a new tab).
+        active={model.active ? { id: model.active.id, onFocusRow: (row) => actions?.onFocusRow?.(row), onOpenNewTab: (row) => (actions?.onOpenRow ? actions.onOpenRow(row.id, true) : window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener')) } : null}
       />
       {!model.grains.margin && <p className="fw-q-hint">{t('list.noMarginNote')}</p>}
 
