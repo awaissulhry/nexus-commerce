@@ -399,14 +399,15 @@ describe('office approvals by e-mail (PLT-089)', () => {
 describe('F-PR-16 — the customer reads its own order and quote numbers, never the office series (portal and link); the office its own', () => {
   const OFFICE_SERIES = /\b(?:SEED-)?(?:SO|QT|QU|Q)-\d/
 
-  it('an artwork asked on an order and on a quote: the portal list, the portal page and the link page say "#912" / "#913"', async () => {
+  it('an artwork asked on an order and on a quote: the portal list, the portal page and the link page say "#<its own number>"', async () => {
     const orderId = pricing.money.sales.orderId
     const quoteId = pricing.money.sales.quoteId
-    const order = await one<{ number: string }>('SELECT number FROM "SalesOrder" WHERE id = $1', [orderId])
-    const quote = await one<{ number: string }>('SELECT number FROM "Quote" WHERE id = $1', [quoteId])
-    await admin('UPDATE "SalesOrder" SET "customerSeq" = 912 WHERE id = $1', [orderId])
-    await admin('UPDATE "Quote" SET "customerSeq" = 913 WHERE id = $1', [quoteId])
-    for (const [recordType, recordId, office, mine] of [['SalesOrder', orderId, order.number, '#912'], ['Quote', quoteId, quote.number, '#913']] as const) {
+    // The customer's own numbers are given by the database once (never set here).
+    const order = await one<{ number: string; customerSeq: number }>('SELECT number, "customerSeq" FROM "SalesOrder" WHERE id = $1', [orderId])
+    const quote = await one<{ number: string; customerSeq: number }>('SELECT number, "customerSeq" FROM "Quote" WHERE id = $1', [quoteId])
+    expect(order.customerSeq).toBeGreaterThan(0)
+    expect(quote.customerSeq).toBeGreaterThan(0)
+    for (const [recordType, recordId, office, mine] of [['SalesOrder', orderId, order.number, `#${order.customerSeq}`], ['Quote', quoteId, quote.number, `#${quote.customerSeq}`]] as const) {
       const photo = await photoOf(recordType, recordId, `Made-up artwork ${recordType}.png`)
       const made = await as(owner, 'POST', '/approvals-out', { kind: 'ARTWORK', recordType, recordId, email: BRAND_QA, question: 'Approve the artwork.', fileIds: [photo], send: true, language: 'en' }, 201)
       const id = made.request.id as string
