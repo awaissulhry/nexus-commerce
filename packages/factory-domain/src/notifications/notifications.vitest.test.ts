@@ -177,5 +177,15 @@ describe('one bell item per change of an order (B-SA-051)', () => {
     // An older message (no change keys) still parses.
     expect(posted.payload.safeParse({ threadId: ORDER, messageId: OTHER, recordType: 'SalesOrder', recordId: ORDER, direction: 'INTERNAL_NOTE', audience: 'OFFICE' }).success).toBe(true)
   })
+
+  // B-SA-052: the people another notice of the same act already told (B-PR-32's withdrawal notice), ids only, never on a screen.
+  it('thread.message_posted names who another notice of the same act already told (ids only, never live)', () => {
+    const posted = EVENT_CATALOGUE.get('thread.message_posted', 1)
+    const shape = posted.payload.shape
+    expect(shape.alreadyTold!.safeParse([ORDER, OTHER]).success).toBe(true)
+    expect(shape.alreadyTold!.safeParse(undefined).success).toBe(true)
+    expect(shape.alreadyTold!.safeParse(['Bea Esempio']).success).toBe(false)
+    expect(posted.live!.fields).not.toContain('alreadyTold')
+  })
 })
 // ── end B-SA-051 ──
