@@ -67,7 +67,19 @@ export const mineSchema = z.object({
 
 export const messagesSchema = z.object({
   asOf: z.string(),
-  messages: z.array(z.object({ id: z.string(), workOrder: z.object({ id: z.string(), number: z.string() }), from: z.enum(['OFFICE', 'FLOOR']), text: z.string(), cut: z.boolean(), at: z.string() })),
+  messages: z.array(
+    z.object({
+      id: z.string(),
+      workOrder: z.object({ id: z.string(), number: z.string() }),
+      from: z.enum(['OFFICE', 'FLOOR']),
+      text: z.string(),
+      cut: z.boolean(),
+      at: z.string(),
+      // F-SA-247: an order change's note and how it opens (B-SA-053); optional, so an answer kept from before still reads.
+      kind: z.enum(['NOTE', 'ORDER_CHANGE']).optional(),
+      check: z.enum(['STOP', 'CHECK']).nullable().optional(),
+    }),
+  ),
 }) satisfies z.ZodType<MyMessages>
 
 export const helpSchema = z.object({
@@ -107,6 +119,28 @@ export async function fetchMyMessages(api: ApiClient): Promise<TaskOutcome<MyMes
 export function keptMyMessages(): Remembered<MyMessages> | null {
   return KEPT_MESSAGES.get(KEY)
 }
+
+// ---- F-SA-247: one work order in hand (the operation and cutting screens read its notes before a Start) -------------------------
+const KEPT_IN_HAND = new AsOfMemory<MyMessages>(60)
+
+/**
+ * The open notes of ONE work order in hand (`GET /production/dispatch/mine/messages?workOrderId=`), kept for the visit by work
+ * order, so a bundle read before opens its order change offline too. A read only: nothing here (or anywhere) sends a "Got it".
+ */
+export async function fetchWorkOrderNotes(api: ApiClient, workOrderId: string): Promise<TaskOutcome<MyMessages>> {
+  const answer = await floorRead(api, '/production/dispatch/mine/messages', { query: { workOrderId }, schema: messagesSchema })
+  if (answer.ok) KEPT_IN_HAND.keep(workOrderId, answer.value)
+  return answer
+}
+
+/** What this tablet read of one work order's notes in this visit: its own read, else what My work read of it; null: none. */
+export function keptWorkOrderNotes(workOrderId: string): Remembered<MyMessages> | null {
+  const own = KEPT_IN_HAND.get(workOrderId)
+  if (own) return own
+  const mine = KEPT_MESSAGES.get(KEY)
+  return mine && mine.value.messages.some((message) => message.workOrder.id === workOrderId) ? { ...mine, value: { ...mine.value, messages: mine.value.messages.filter((message) => message.workOrder.id === workOrderId) } } : null
+}
+// ---- end F-SA-247
 
 /** The station's help types and open calls, kept for the visit: offline, a call still knows its type. */
 export async function fetchStationHelp(api: ApiClient): Promise<TaskOutcome<StationHelp>> {

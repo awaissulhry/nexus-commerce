@@ -42,6 +42,9 @@ import {
 } from './api'
 import { applyKeptCount, applyKeptRoll, applyKeptUndo, countProblem, fabricBody, fabricScan, fabricStart, isTrolleyCode, rollBody, rollDraftOf, rollHeld, sameCode, sendHeld, stepOf, toggleMissing, trolleyCodeOf } from './model'
 import { FabricCutView, type FabricAction, type FabricStep, type Wrong } from './view/FabricCutView'
+// F-SA-247: an order change on a work order of the ticket opens before its lay is started, once per tablet ("Got it" never sent).
+import { useOrderChangeGate } from '../mywork/use-order-change-gate'
+import { OrderChangeGate } from '../mywork/view/OrderChangeGate'
 import type { DoneLine } from './view/parts'
 
 /**
@@ -93,6 +96,9 @@ export function FloorFabricCut() {
   const shown = useRef(step)
   shown.current = step
   const taken = useRef(false)
+  // F-SA-247: the work orders of the ticket on the table — their newest order changes, read with the ticket, live, kept for the visit.
+  const ticketOrders = step.kind === 'ticket' ? ordersOf(step.card) : []
+  const orderGate = useOrderChangeGate({ api, online, workOrderIds: ticketOrders, enabled: mayCut && permissions.has('floor.work') })
 
   const ended = useCallback(
     (problem: TaskProblem) => {
@@ -347,7 +353,14 @@ export function FloorFabricCut() {
     setNotice(problem)
   }
 
-  const startTicket = () =>
+  const startTicket = (): Promise<void> | void => {
+    // F-SA-247: a CHECK order change not "got" here, on any work order of the lay, opens first; after Got it the start goes on.
+    const first = shown.current
+    if (first.kind === 'ticket' && !orderGate.before(ordersOf(first.card), () => void startTicket())) return
+    return startLay()
+  }
+
+  const startLay = () =>
     once(async () => {
       const now = shown.current
       if (now.kind !== 'ticket' || !online) return
@@ -842,7 +855,25 @@ export function FloorFabricCut() {
 
   const doneLine: DoneLine | null = done ? { ...done, ticks: done.queued ? (queuedView(queueSnapshot, done.queued)?.ticks ?? 'saved') : 'recorded' } : null
 
-  return <FabricCutView model={{ frame, online, step, done: doneLine, notice, may }} onFrame={onFrame} onAction={onAction} camera={zxingCamera} />
+  return (
+    <>
+      <FabricCutView model={{ frame, online, step, done: doneLine, notice, may }} onFrame={onFrame} onAction={onAction} camera={zxingCamera} />
+      {/* F-SA-247: the order change before the lay is started. */}
+      <OrderChangeGate
+        open={orderGate.open}
+        onGotIt={() => {
+          feedback('success')
+          orderGate.gotItNow()
+        }}
+        onBack={orderGate.close}
+      />
+    </>
+  )
+}
+
+/** F-SA-247: the work orders a ticket's lay cuts for, once each, in the ticket's order. */
+function ordersOf(card: TicketCard): string[] {
+  return [...new Set(card.lines.map((line) => line.workOrder.id))]
 }
 
 /** The card with its lay as the table left it (status and count), so the next step opens without a read. */

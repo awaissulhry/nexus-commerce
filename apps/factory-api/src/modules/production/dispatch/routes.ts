@@ -53,7 +53,8 @@ export default defineRoutes('production.dispatch', manifest, async (app) => {
   app.post('/production/dispatch/moves', { schema: moveContract }, async (request) => moveWork(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/production/dispatch/mine', { schema: mineContract }, async (request) => myWork(request))
-  app.get('/production/dispatch/mine/messages', { schema: myMessagesContract }, async (request) => myWorkMessages(request))
+  // F-SA-247: `?workOrderId=` — one work order in hand (the operation and cutting screens, before a Start).
+  app.get('/production/dispatch/mine/messages', { schema: myMessagesContract }, async (request) => myWorkMessages(request, request.query))
   app.get('/production/dispatch/floor/line', { schema: floorLineContract }, async (request) => floorLine(request, request.query))
 
   app.get('/production/dispatch/handover', { schema: handoverContract }, async (request) => lineHandover(request, request.query))

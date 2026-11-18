@@ -12,6 +12,8 @@ import { NOT_STARTED, afterPause, afterStart, type OpenItem, type Timing } from 
 import type { TaskProblem } from '../shared/task-api'
 import { NO_WORK, OperationView, type CountsStep, type LastStrip, type OperationStep, type OperationViewModel, type Work } from './view/OperationView'
 import type { OverrideModel } from './view/OverrideDialog'
+// F-SA-247: an order change on the bundle's work order.
+import type { OrderChangeNote } from '../mywork/order-change-seen'
 
 /**
  * SCR-090's cases (design floor.operation): scan a bundle ticket, its card, the counts (reason-first), Finish, the two
@@ -130,6 +132,20 @@ const STEPS: OperationSteps = {
 }
 const work = (extra: Partial<Work>): Work => ({ ...NO_WORK, timing: NOT_STARTED, check: CHECK, ...extra })
 const started = (extra: Partial<Work> = {}) => counts({ work: work({ timing: RUNNING, ...extra }) })
+
+// ---- F-SA-247: the office's order-change note on WO-DEMO-0042 (made up; the customer's code, never a name; no price) -----------
+const ORDER_CHANGE: OrderChangeNote = {
+  id: 'oc-1',
+  workOrder: { id: 'wo-42', number: 'WO-DEMO-0042' },
+  from: 'OFFICE',
+  text: "Modifica d'ordine su WO-DEMO-0042 (ALP): taglia 52 ora 18 (erano 20). Aspetta i nuovi numeri dell'ordine di lavoro prima di tagliare la 52.",
+  cut: false,
+  at: '2026-10-29T08:20:00.000Z',
+  kind: 'ORDER_CHANGE',
+  check: 'CHECK',
+}
+const ORDER_STOP: OrderChangeNote = { ...ORDER_CHANGE, id: 'oc-2', text: 'Ordine WO-DEMO-0042 (ALP) in pausa mentre la modifica viene eseguita.', check: 'STOP' }
+// ---- end F-SA-247
 const PAUSE_REASONS: PickerReason[] = [
   ['BREAK', 'Pausa', 'Break', 'coffee'],
   ['MATERIAL_WAIT', 'Attesa materiale', 'Waiting for material', 'package'],
@@ -429,5 +445,27 @@ export const designScreen = defineDesignScreen<OperationViewModel>({
     { id: 'note-posted', label: 'Note posted', model: model(started(), { done: { kind: 'note', bundleCode: BUNDLE, ticks: 'recorded' } }) },
     { id: 'notice-held', label: 'Scans held by the worker notice', model: model({ kind: 'scan' }, { held: true }) },
     { id: 'no-permission', label: 'No permission', model: model({ kind: 'noPermission' }), note: 'A person without production.scan at this station: nothing to scan here (fail closed).' },
+    // ---- F-SA-247 (R2; 14-change-flow §5.3): an order change on the bundle's work order
+    {
+      id: 'f-sa-247-before-start',
+      label: 'SA: an order change before the Start',
+      model: model(counts({ work: work({}) }), { orderChange: { note: ORDER_CHANGE, got: false } }),
+      note: 'The bundle is not started: the line says to read it first, with its door. Start opens the note itself (once per tablet), then goes on after Got it — kept on this tablet only, never sent.',
+    },
+    {
+      id: 'f-sa-247-gate',
+      label: 'SA: the note opened by Start',
+      model: model(counts({ work: work({}) }), { orderChange: { note: ORDER_CHANGE, got: false }, orderGate: { note: ORDER_CHANGE, asOf: null, beforeStart: true } }),
+      note: 'A centred window over the bundle: the office\'s words as written (the customer\'s code, never a name), Read aloud, Got it (the Start goes on) or Back (nothing started). Nothing records who read it.',
+    },
+    { id: 'f-sa-247-got', label: 'SA: the order change got on this tablet', model: model(counts({ work: work({}) }), { orderChange: { note: ORDER_CHANGE, got: true } }), note: 'Once per tablet: nothing more is said, and Start goes at once.' },
+    { id: 'f-sa-247-running', label: 'SA: a running bundle is never interrupted', model: model(started(), { orderChange: { note: ORDER_CHANGE, got: false } }), note: 'The bundle was started before the change reached the tablet: no line, no window; it finishes to the spec it was started with.' },
+    {
+      id: 'f-sa-247-stop',
+      label: 'SA: held for the change (STOP)',
+      model: model({ kind: 'refused', code: 'ON_HOLD', message: '', fix: null, card: CARD, scanned: BUNDLE }, { orderChange: { note: ORDER_STOP, got: false } }),
+      note: 'The hold refuses the scan; the office\'s words say why, and the line says to stop and ask the team leader. Nothing to tap: no Got it.',
+    },
+    // ---- end F-SA-247
   ],
 })

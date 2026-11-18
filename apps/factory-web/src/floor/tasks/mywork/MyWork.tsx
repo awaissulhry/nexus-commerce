@@ -26,6 +26,8 @@ import { doneStill, outCounts, repairHeld, rowOfCode, withDone, type RepairDone,
 import type { RepairLineModel } from './repair/view/RepairViews'
 // B-W2b-109: the inspector queue (QHS-068).
 import { fetchInspectorQueue, fetchOfflinePack, keptInspectorQueue } from './inspections/api'
+// F-SA-247: an order change's "Got it", kept on this tablet only (never sent).
+import { gotItHere, markGotIt } from './order-change-seen'
 import { changedCount, codeOfRow, mayQueue, movesQueue, openHeld, queueChanged, queueFirst, taskOfKind, type InspectorQueue, type OpenHeld } from './inspections/model'
 
 /** B-W2b-109: the offline pack is read once a visit (my open final inspections kept on the tablet, QHS-062). */
@@ -45,7 +47,9 @@ let packRead = false
  */
 
 /** The live changes after which the station's list may differ (each a hint: the screen reads again). */
-const MOVES = new Set(['planning.schedule_published', 'production.scan_recorded', 'quality.hold_placed', 'quality.hold_released', 'workorder.status_changed', 'dispatch.assignment_changed'])
+const MOVES = new Set(['planning.schedule_published', 'production.scan_recorded', 'quality.hold_placed', 'quality.hold_released', 'workorder.status_changed', 'dispatch.assignment_changed', /* F-SA-247: a hold turns an order change into STOP, its lift back into CHECK */ 'work_order_hold.placed', 'work_order_hold.lifted'])
+/** F-SA-247: an order change's note was written for the floor (B-SA-053): For your work reads again at once (the 30 s beat stays). */
+const NOTE_MOVES = new Set(['production.floor_note_posted'])
 /** B-W2b-126: the live changes after which the repair queue may differ (a repair scanned elsewhere, rework sent back or moved). */
 const REPAIR_MOVES = new Set(['production.repair_scanned', 'production.rework_opened', 'production.rework_moved'])
 /**
@@ -113,6 +117,8 @@ export function FloorMyWork() {
   const [messagesAsOf, setMessagesAsOf] = useState<string | null>(null)
   const [messagesFailed, setMessagesFailed] = useState(false)
   const [seen, setSeen] = useState<string[]>([])
+  // F-SA-247: the order changes tapped "Got it" on this tablet.
+  const [gotIt, setGotIt] = useState<string[]>([])
   const [help, setHelp] = useState<StationHelp | null>(null)
   const [helpProblem, setHelpProblem] = useState<'reading' | 'offline' | 'failed' | null>('reading')
   const [called, setCalled] = useState<{ id: string | null; number: string; seq: number } | null>(null)
@@ -138,6 +144,7 @@ export function FloorMyWork() {
   useEffect(() => {
     setPutLast(loadPutLast())
     setSeen(loadSeen())
+    setGotIt(gotItHere())
   }, [])
 
   /** My inspections: the first answer goes on screen; a later one that differs waits behind "List changed · Show". */
@@ -288,6 +295,7 @@ export function FloorMyWork() {
     {
       onChange: (change) => {
         if (MOVES.has(change.type)) void read(false)
+        else if (NOTE_MOVES.has(change.type)) void readMessages()
         else if (REPAIR_MOVES.has(change.type)) void readRepair()
         else if (movesQueue(change.type)) void readInspections(false)
       },
@@ -511,6 +519,11 @@ export function FloorMyWork() {
         return router.push(TASK_ROUTES.instructions)
       case 'message':
         return openMessage(action.id, action.workOrderId)
+      // F-SA-247: Got it on an order change: marked on THIS tablet only (no queue, no route, no "seen"), then back.
+      case 'gotIt':
+        setGotIt(markGotIt(action.id))
+        feedback('success')
+        return back()
       case 'putLast':
         setCantFind(null)
         return void openReasons(action.slotId)
@@ -594,6 +607,7 @@ export function FloorMyWork() {
         mode: modeOf(me.device.station, me.device.mode),
         messages,
         seen,
+        gotIt,
         messagesAsOf: messagesAsOf ?? (!online && messages ? messages.asOf : null),
         messagesFailed,
         instructions: dueCount(myInstructions, seenHere(me.worker.id)),
