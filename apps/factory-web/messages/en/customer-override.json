@@ -1,0 +1,162 @@
+{
+  "read": {
+    "loading": "Reading what the customer was asked…",
+    "retry": "Try again",
+    "failed": "What the customer was asked could not be read.",
+    "offline": "Offline: what the customer was asked is read again once the connection is back."
+  },
+  "act": {
+    "decide": "Decide for {customer}…",
+    "reverse": "Reverse…"
+  },
+  "held": {
+    "noRight": "Needs the right to override for customers (a production manager’s or an admin’s).",
+    "ownWord": "A {kind} is the customer’s own word: nobody decides it for them or reverses their answer.",
+    "pending": "A second person is asked already: see it in Home › Approvals.",
+    "answered": "Answered already: reverse the answer instead.",
+    "notOpen": "Withdrawn or expired: there is nothing to decide. Ask them again first.",
+    "notYours": "Someone else decides it for the customer: you asked them for it, or your right does not reach this customer.",
+    "reversed": "Reversed already: an answer is reversed once.",
+    "notAnswered": "There is no answer to reverse yet.",
+    "noReach": "Your right to override does not reach this customer.",
+    "busy": "Working…",
+    "offline": "Offline: wait for the connection.",
+    "reason": "Say why, in words the customer reads.",
+    "reasonLong": "At most {max} characters."
+  },
+  "fact": {
+    "decidedFor": "Decided for {customer} by {name}: “{reason}”",
+    "decidedForUs": "Decided by us for {customer}: “{reason}”",
+    "reversed": "Reversed by {name} on {when}: “{reason}”",
+    "reversedUs": "Reversed by us on {when}: “{reason}”",
+    "pending": {
+      "DECIDE_FOR": "A decision for {customer} waits for a second person.",
+      "REVERSE": "Reversing {customer}’s answer waits for a second person."
+    },
+    "openTask": "Open in Approvals"
+  },
+  "row": {
+    "decidedFor": "Decided by us",
+    "reversed": "Reversed",
+    "pending": "Waits for a second person",
+    "done": "Done",
+    "asked": "Second person asked"
+  },
+  "done": {
+    "decided": "Decided for {customer}: they read why, and their task to answer is gone.",
+    "reversed": "{customer}’s answer is reversed: they read why.",
+    "secondPerson": "A second person is asked: it is done once a colleague grants it in Home › Approvals.",
+    "copy": "Copy link",
+    "copied": "Link copied.",
+    "copyFailed": "The link could not be copied: select it and copy it.",
+    "linkOnce": "{customer} answers outside its portal: pass this link on. It is shown only now."
+  },
+  "effect": {
+    "ROUND_UNDER_REVIEW": "The sample round is back under review.",
+    "GATE_WAITING": "The gate it passed waits again.",
+    "SWATCH_UNDECIDED": "The swatch is undecided again.",
+    "ASK_AGAIN": "The new date stands: the customer is asked again.",
+    "MARK_ONLY": "The answer stays, marked as reversed.",
+    "other": "The answer is marked as reversed."
+  },
+  "decide": {
+    "title": "Decide for {customer}",
+    "go": "Decide for {customer}",
+    "body": "We record the answer in {customer}’s place. They are told at once with your reason, signed with our company’s name — never who of us.",
+    "asked": "Asked of them: “{question}” · due {due}",
+    "legend": "Our decision for them",
+    "why": "Why it is refused",
+    "changes": "What should change",
+    "answerHint": "{customer} reads it.",
+    "reason": "Why we decide for them",
+    "reasonHint": "{customer} reads it: “Decided by us for you: …” (at most {max} characters).",
+    "typedName": "Your name, typed to sign",
+    "typedNameHint": "Kept in our records; {customer} reads our company’s name.",
+    "stepUp": "A fresh code from your authenticator app is asked before it is done.",
+    "secondPerson": "When this customer needs a second person (its limits card), a colleague grants it in Home › Approvals first.",
+    "held": {
+      "pick": "Pick our decision for them.",
+      "why": "Say why it is refused.",
+      "changes": "Say what should change.",
+      "answerLong": "At most {max} characters.",
+      "typedName": "Type your full name to sign.",
+      "typedNameLong": "At most {max} characters."
+    }
+  },
+  "decision": {
+    "APPROVED": "Approved",
+    "APPROVED_WITH_CHANGES": "Approved with changes",
+    "REFUSED": "Refused",
+    "hint": {
+      "APPROVED": "As it stands: what follows from their yes goes ahead.",
+      "APPROVED_WITH_CHANGES": "Yes, with the changes you write: {customer} reads them.",
+      "REFUSED": "No: say why; {customer} reads it."
+    }
+  },
+  "reverse": {
+    "title": "Reverse {customer}’s answer",
+    "go": "Reverse the answer",
+    "answer": "{customer} answered: {state} · {when} · signed {name}",
+    "answerOurs": "Decided by us: {state} · {when} · signed {name}",
+    "body": "Their answer is kept and marked as reversed; {customer} reads why. It is refused in words when the effect cannot be undone (for example once cutting started).",
+    "what": {
+      "SampleRound": "The sample round goes back under review, and a gate it passed waits again.",
+      "SampleSwatch": "The swatch is undecided again.",
+      "REPROMISE": "The new date stands: {customer} is asked again.",
+      "COUNTER_OFFER": "Our counter-offer no longer stands (refused once it was carried out): refuse or answer their request again.",
+      "other": "The answer stays, marked as reversed."
+    },
+    "reason": "Why we reverse it",
+    "reasonHint": "{customer} reads it: “Put back by us: …” (at most {max} characters)."
+  },
+  "status": {
+    "OPEN": "waiting",
+    "APPROVED": "approved",
+    "APPROVED_WITH_CHANGES": "approved with changes",
+    "REFUSED": "refused",
+    "WITHDRAWN": "withdrawn",
+    "EXPIRED": "expired"
+  },
+  "refusal": {
+    "OWN_WORD": "It is the customer’s own word: nobody decides it for them or reverses their answer.",
+    "NOT_OPEN": "It is withdrawn or expired: there is nothing to decide.",
+    "ANSWERED": "The customer answered meanwhile: reverse the answer instead.",
+    "OWN_ASK": "You asked the customer for this approval: someone else decides it for them.",
+    "NOT_ANSWERED": "There is no answer to reverse.",
+    "REVERSED": "The answer was reversed already.",
+    "PENDING": "What we do for the customer here waits for a second person already: see it in Home › Approvals.",
+    "HELD": "The record moved on since it was asked (decided another way, a newer revision, or cancelled): read it again.",
+    "NO_APPROVER": "This customer needs a second person, and no office role may grant it: give a role the right to override for customers and to decide approvals, or switch the second person off on its limits card.",
+    "CUT": "Cutting started on the lines it is about: it can no longer be reversed.",
+    "LEATHER_CUT": "The leather for the lines it is about was cut: it can no longer be reversed.",
+    "APPLIED": "Our counter-offer was carried out already: it can no longer be reversed.",
+    "other": "It was refused as it stands.",
+    "stale": "It changed since you read it: it has been read again.",
+    "invalid": "Check the fields marked.",
+    "forbidden": "Your role does not allow it for this customer.",
+    "notFound": "It is not there any more.",
+    "stepUp": "It needs a fresh code from your authenticator app.",
+    "rateLimited": "Too many tries. Wait a minute.",
+    "unavailable": "The factory service did not answer. Try again in a moment.",
+    "failed": "It could not be done. Try again."
+  },
+  "field": {
+    "decision": "Pick a decision this kind allows.",
+    "answer": "Say what should change, or why it is refused.",
+    "reason": "Say why, in words the customer reads.",
+    "typedName": "Type your full name to sign."
+  },
+  "stepUp": {
+    "title": "Confirm with your authenticator app",
+    "sentence": "Deciding for {customer}, or reversing its answer, needs a fresh code.",
+    "confirm": "Confirm",
+    "problem": {
+      "wrong": "That code was not accepted. Type the newest code.",
+      "locked": "Too many wrong codes. Wait a few minutes.",
+      "unavailable": "The code could not be checked. Try again."
+    }
+  },
+  "common": {
+    "cancel": "Cancel"
+  }
+}

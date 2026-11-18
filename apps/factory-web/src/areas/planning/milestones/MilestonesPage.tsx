@@ -9,6 +9,7 @@ import { addGate, editGate, getChoices, getMilestones, passGates, removeGate, st
 import { bodyOf, canOf, controlsOf, draftOfGate, emptyDraft, kindsLeft, queryOf, readProblemOf, reasonHeld, refusalOf, type Controls } from './model'
 import type { Loaded, MilestonesDialog, MilestonesModel, Notice } from './view-model'
 import { MILESTONES_NAMESPACES, MilestonesView, useMilestonesWords } from './view/MilestonesView'
+import { CustomerOverrideProvider } from '../../_shared/customer-override/CustomerOverride' // F-PR-09
 
 /**
  * `/w/<company>/planning/milestones` (SCR-253; Planning › Dates › Time & action, planning.view): ONE read of the company's open
@@ -182,7 +183,7 @@ function MilestonesContainer() {
 
   const model: MilestonesModel = { prefix, can, me: session.user.id, controls, world, live, updates: 0, notice, dialog }
 
-  return (
+  const page = (
     <MilestonesView
       model={model}
       actions={{
@@ -227,4 +228,6 @@ function MilestonesContainer() {
       }}
     />
   )
+  // F-PR-09: "Decide for <customer>" / "Reverse" on a gate's round read the page again once done (the gate may pass or wait again).
+  return <CustomerOverrideProvider onDone={() => void load()}>{page}</CustomerOverrideProvider>
 }

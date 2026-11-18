@@ -56,6 +56,10 @@ import { SWATCH_KINDS as DOMAIN_SWATCH_KINDS, SWATCH_MATERIAL_KINDS } from '@nex
 import { emptySwatchDraft, swatchAddHeld, swatchBodyOf, swatchDraftHeld, swatchMaterialKinds, SWATCH_KINDS } from './model'
 import { addSwatchHeld } from './view/SwatchDialog'
 // ---- end F-PR-19
+// ---- F-PR-09
+import { readFileSync } from 'node:fs'
+import { APPROVAL } from './demo/fixtures'
+// ---- end F-PR-09
 
 const owner = samplesCan(ROLE_PERMISSIONS.owner)
 
@@ -365,3 +369,29 @@ describe('F-PR-19: size set and TOP rounds, fabric and trim swatches in the offi
   })
 })
 // ── end F-PR-19 ──
+
+// ── F-PR-09 (production plan §3 "No silent decisions": the plain office decision on a customer-owned item shows why it is held and
+// points to Decide for the customer; B-PR-38's 409 CUSTOMER_DECIDES) ──
+describe('F-PR-09: a customer’s own round or swatch says why the plain decision is held, and where to decide for the customer', () => {
+  const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['products-samples'] as Record<string, string>
+  const theirs = { ...APPROVAL, actions: { ...APPROVAL.actions, decide: { allowed: false, refusal: { code: 'CUSTOMER_DECIDES' as const, message: 'English for the logs.' }, needs: null } } }
+
+  it('Record decision is held with the customer’s rule in our words (the read’s refusal, and a 409 the same)', () => {
+    expect(approvalHeld(theirs, 'decide', false)).toEqual({ key: 'refusal.CUSTOMER_DECIDES' })
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/CUSTOMER_DECIDES', message: 'x' }])).key).toBe('refusal.CUSTOMER_DECIDES')
+    for (const locale of LOCALES) for (const key of ['refusal.CUSTOMER_DECIDES', 'approval.decideForNotAsked', 'decide.decideForLink']) expect(words(locale)[key], `${locale} ${key}`).toBeTruthy()
+    expect(words('en')['refusal.CUSTOMER_DECIDES']).toContain('Decide for the customer')
+    expect(words('it')['refusal.CUSTOMER_DECIDES']).toContain('Decidi per il cliente')
+  })
+
+  it('the board’s Decide dialog links the round’s Approval tab, where the Approval tab and each swatch offer Decide for / Reverse', () => {
+    const page = readFileSync(new URL('./SamplesPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("decideForHref: recordHref(prefix, row.id, 'approval')")
+    const dialog = readFileSync(new URL('./view/DecideDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain("model.blocked.key === 'refusal.CUSTOMER_DECIDES' && model.decideForHref")
+    const tab = readFileSync(new URL('./record/view/ApprovalTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("view.actions.decide.refusal?.code === 'CUSTOMER_DECIDES'")
+    expect(tab).toContain('customer={swatch.party.name}')
+  })
+})
+// ── end F-PR-09 ──

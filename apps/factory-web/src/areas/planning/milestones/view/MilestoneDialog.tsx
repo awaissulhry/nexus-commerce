@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { CheckCheck, ExternalLink, FastForward, Pencil, Trash2 } from 'lucide-react'
 import { Banner, KeyValue } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
@@ -7,6 +8,8 @@ import { formatDateTime } from '../../../../lib/i18n/format'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import { dayText, heldOf, lateWords, milestoneName, rowsOf, stateTone, stateWords, workOrdersWords, type MilestoneRow, type Words } from '../model'
 import type { MilestonesActions, MilestonesModel } from '../view-model'
+// F-PR-09: "Decide for <customer>" and "Reverse" on the round the gate waits for (the page's CustomerOverrideProvider draws them).
+import { CustomerOverrideSlot } from '../../../_shared/customer-override/slot'
 
 /**
  * A milestone in a centred dialog (design planning.milestones sec:calendar "Click → popover with Mark done (date) and the gate
@@ -103,6 +106,21 @@ export function MilestoneDialog({ model, actions, words }: { model: MilestonesMo
           </Banner>
         )}
         {gate && gate.state !== 'WAITING' && <p className="fw-tna-hint">{gate.state === 'PASSED' ? t('dialog.opened', { order: row.order.number }) : t('dialog.openedEarly', { order: row.order.number })}</p>}
+        {/* F-PR-09: a gate that waits for (or passed by) the customer's own sample round: its answer is decided for the customer, or
+            reversed, here — the round back under review puts the gate back to waiting. The round opens on its Approval tab. */}
+        {gate?.sampleRound && (
+          <section className="fw-tna-round" aria-label={t('dialog.customerAnswer', { round: gate.sampleRound.number })}>
+            <span className="fw-tna-inline">
+              <span className="fw-tna-sub">{t('dialog.customerAnswer', { round: gate.sampleRound.number })}</span>
+              <Button size="sm" variant="quiet" asChild>
+                <Link href={`${model.prefix}/products/samples/${encodeURIComponent(gate.sampleRound.id)}?tab=approval`}>
+                  <ExternalLink size={13} aria-hidden /> {t('dialog.openRound')}
+                </Link>
+              </Button>
+            </span>
+            <CustomerOverrideSlot source={{ record: { type: 'SampleRound', id: gate.sampleRound.id } }} customer={row.order.customer.name} version={gate.version} />
+          </section>
+        )}
       </div>
     </Modal>
   )

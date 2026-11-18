@@ -12,6 +12,8 @@ import { DecisionTag, useWords } from '../../parts'
 import type { SampleRecordActions, SampleRecordModel } from '../view-model'
 // B-TH-262 (R-ACT): "Ask the customer" opens the docked thread's Ask a partner to approve.
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+// F-PR-09: "Decide for <customer>" and "Reverse" on what was asked of the customer (the page's CustomerOverrideProvider draws them).
+import { CustomerOverrideSlot } from '../../../../_shared/customer-override/slot'
 
 /** Why a swatch's step is held, in our words (the right first, then the API's code). */
 export function swatchHeld(swatch: SwatchView, step: 'send' | 'decide', offline: boolean): Phrase | null {
@@ -156,6 +158,11 @@ function Ready({
               )}
             </div>
             {!round.party && !decision && <p className="fw-smp-hint">{t('approval.internal')}</p>}
+            {/* F-PR-09: Decide for <customer> on the open request, Reverse on its answer; before it is asked, why that door is not there yet. */}
+            {round.party && view.request && <CustomerOverrideSlot source={{ requestId: view.request.id }} customer={round.party.name} version={view.request.version} />}
+            {round.party && !decision && view.actions.decide.refusal?.code === 'CUSTOMER_DECIDES' && (!view.request || view.request.status === 'WITHDRAWN' || view.request.status === 'EXPIRED') && (
+              <p className="fw-smp-hint">{t('approval.decideForNotAsked', { customer: round.party.name })}</p>
+            )}
             {view.changeRequests && view.changeRequests.length > 0 && (
               <div className="fw-smp-section">
                 <h3 className="fw-smp-h3">{t('approval.changes')}</h3>
@@ -227,6 +234,8 @@ function Ready({
             rows={view.swatches.map((swatch) => {
               const sendHeld = say(swatchHeld(swatch, 'send', offline))
               const swatchDecideHeld = say(swatchHeld(swatch, 'decide', offline))
+              // F-PR-09: the request asked of the customer about this swatch — open (Decide for), or the one that decided it (Reverse).
+              const askedId = swatch.waiting?.requestId ?? (swatch.decision ? swatch.approvalRequestId : null)
               return {
                 id: swatch.id,
                 cells: [
@@ -244,6 +253,7 @@ function Ready({
                         {t('row.decide')}
                       </Button>
                     )}
+                    {askedId && <CustomerOverrideSlot source={{ requestId: askedId }} customer={swatch.party.name} version={swatch.version} layout="row" />}
                   </span>,
                 ],
               }

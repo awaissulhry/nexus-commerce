@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Kbd, RadioCard, Skeleton } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
@@ -31,6 +32,8 @@ export interface DecideModel {
   busy: boolean
   notice: Notice | null
   offline: boolean
+  /** F-PR-09: the round's Approval tab, where a customer-owned round is decided FOR the customer (shown when that holds it). */
+  decideForHref?: string | null
 }
 
 export interface DecideActions {
@@ -117,7 +120,20 @@ export function DecideDialog({ model, actions }: { model: DecideModel; actions?:
         {!model.reading && !model.problem && (
           <>
             {model.revision !== null && <p className="fw-smp-hint">{t('decide.onRevision', { revision: model.revision })}</p>}
-            {model.blocked && <Banner tone="info" title={say(model.blocked)} />}
+            {model.blocked && (
+              <Banner
+                tone="info"
+                title={say(model.blocked)}
+                action={
+                  // F-PR-09: a customer's own round is not decided here: its Approval tab has "Decide for <customer>".
+                  model.blocked.key === 'refusal.CUSTOMER_DECIDES' && model.decideForHref ? (
+                    <Button size="sm" variant="quiet" asChild>
+                      <Link href={model.decideForHref}>{t('decide.decideForLink')}</Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            )}
             <fieldset className="fw-smp-radios" disabled={!!model.blocked}>
               <legend className="fw-smp-legend">{t('decide.legend')}</legend>
               {SAMPLE_DECISIONS.map((decision) => (

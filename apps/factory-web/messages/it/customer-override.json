@@ -1,0 +1,162 @@
+{
+  "read": {
+    "loading": "Leggo cosa è stato chiesto al cliente…",
+    "retry": "Riprova",
+    "failed": "Non è stato possibile leggere cosa è stato chiesto al cliente.",
+    "offline": "Offline: cosa è stato chiesto al cliente si rilegge quando torna la connessione."
+  },
+  "act": {
+    "decide": "Decidi per {customer}…",
+    "reverse": "Revoca…"
+  },
+  "held": {
+    "noRight": "Serve il permesso di decidere per i clienti (di un responsabile di produzione o di un amministratore).",
+    "ownWord": "{kind}: è parola del cliente, nessuno decide al suo posto né revoca la sua risposta.",
+    "pending": "È già chiesta una seconda persona: la trovi in Home › Approvazioni.",
+    "answered": "Ha già risposto: revoca la risposta, invece.",
+    "notOpen": "Ritirata o scaduta: non c’è nulla da decidere. Prima chiediglielo di nuovo.",
+    "notYours": "Decide un collega per il cliente: gliel’hai chiesto tu, oppure il tuo permesso non arriva a questo cliente.",
+    "reversed": "Già revocata: una risposta si revoca una volta sola.",
+    "notAnswered": "Non c’è ancora una risposta da revocare.",
+    "noReach": "Il tuo permesso di decidere per i clienti non arriva a questo cliente.",
+    "busy": "In corso…",
+    "offline": "Offline: attendi la connessione.",
+    "reason": "Scrivi il motivo, con parole che il cliente legge.",
+    "reasonLong": "Al massimo {max} caratteri."
+  },
+  "fact": {
+    "decidedFor": "Deciso per {customer} da {name}: «{reason}»",
+    "decidedForUs": "Deciso da noi per {customer}: «{reason}»",
+    "reversed": "Revocato da {name} il {when}: «{reason}»",
+    "reversedUs": "Revocato da noi il {when}: «{reason}»",
+    "pending": {
+      "DECIDE_FOR": "Una decisione per {customer} aspetta una seconda persona.",
+      "REVERSE": "La revoca della risposta di {customer} aspetta una seconda persona."
+    },
+    "openTask": "Apri in Approvazioni"
+  },
+  "row": {
+    "decidedFor": "Deciso da noi",
+    "reversed": "Revocata",
+    "pending": "Aspetta una seconda persona",
+    "done": "Fatto",
+    "asked": "Seconda persona chiesta"
+  },
+  "done": {
+    "decided": "Deciso per {customer}: legge il motivo, e il suo compito di rispondere non c’è più.",
+    "reversed": "La risposta di {customer} è revocata: legge il motivo.",
+    "secondPerson": "È chiesta una seconda persona: si fa quando un collega la approva in Home › Approvazioni.",
+    "copy": "Copia link",
+    "copied": "Link copiato.",
+    "copyFailed": "Non è stato possibile copiare il link: selezionalo e copialo.",
+    "linkOnce": "{customer} risponde fuori dal portale: passagli questo link. Si vede solo ora."
+  },
+  "effect": {
+    "ROUND_UNDER_REVIEW": "Il giro di campionatura torna in revisione.",
+    "GATE_WAITING": "La tappa che aveva superato torna in attesa.",
+    "SWATCH_UNDECIDED": "Il campione di materiale torna da decidere.",
+    "ASK_AGAIN": "La nuova data resta: lo chiediamo di nuovo al cliente.",
+    "MARK_ONLY": "La risposta resta, segnata come revocata.",
+    "other": "La risposta è segnata come revocata."
+  },
+  "decide": {
+    "title": "Decidi per {customer}",
+    "go": "Decidi per {customer}",
+    "body": "Registriamo la risposta al posto di {customer}. Viene avvisato subito con il tuo motivo, firmato con il nome della nostra azienda — mai chi di noi.",
+    "asked": "Gli è stato chiesto: «{question}» · entro {due}",
+    "legend": "La nostra decisione per lui",
+    "why": "Perché è rifiutato",
+    "changes": "Cosa deve cambiare",
+    "answerHint": "{customer} lo legge.",
+    "reason": "Perché decidiamo noi per lui",
+    "reasonHint": "{customer} lo legge: «Deciso da noi per voi: …» (al massimo {max} caratteri).",
+    "typedName": "Il tuo nome, scritto per firmare",
+    "typedNameHint": "Resta nei nostri registri; {customer} legge il nome della nostra azienda.",
+    "stepUp": "Prima di farlo viene chiesto un codice nuovo dall’app di autenticazione.",
+    "secondPerson": "Se per questo cliente serve una seconda persona (la sua scheda dei limiti), prima la approva un collega in Home › Approvazioni.",
+    "held": {
+      "pick": "Scegli la nostra decisione per lui.",
+      "why": "Scrivi perché è rifiutato.",
+      "changes": "Scrivi cosa deve cambiare.",
+      "answerLong": "Al massimo {max} caratteri.",
+      "typedName": "Scrivi il tuo nome e cognome per firmare.",
+      "typedNameLong": "Al massimo {max} caratteri."
+    }
+  },
+  "decision": {
+    "APPROVED": "Approvato",
+    "APPROVED_WITH_CHANGES": "Approvato con modifiche",
+    "REFUSED": "Rifiutato",
+    "hint": {
+      "APPROVED": "Così com’è: ciò che segue dal suo sì va avanti.",
+      "APPROVED_WITH_CHANGES": "Sì, con le modifiche che scrivi: {customer} le legge.",
+      "REFUSED": "No: scrivi perché; {customer} lo legge."
+    }
+  },
+  "reverse": {
+    "title": "Revoca la risposta di {customer}",
+    "go": "Revoca la risposta",
+    "answer": "{customer} ha risposto: {state} · {when} · firmato {name}",
+    "answerOurs": "Deciso da noi: {state} · {when} · firmato {name}",
+    "body": "La sua risposta resta, segnata come revocata; {customer} legge il motivo. Viene rifiutata a parole quando l’effetto non si può più annullare (per esempio dopo l’inizio del taglio).",
+    "what": {
+      "SampleRound": "Il giro di campionatura torna in revisione, e la tappa che aveva superato torna in attesa.",
+      "SampleSwatch": "Il campione di materiale torna da decidere.",
+      "REPROMISE": "La nuova data resta: lo chiediamo di nuovo a {customer}.",
+      "COUNTER_OFFER": "La nostra controproposta non vale più (rifiutata se è già stata eseguita): rifiuta o rispondi di nuovo alla sua richiesta.",
+      "other": "La risposta resta, segnata come revocata."
+    },
+    "reason": "Perché la revochiamo",
+    "reasonHint": "{customer} lo legge: «Revocato da noi: …» (al massimo {max} caratteri)."
+  },
+  "status": {
+    "OPEN": "in attesa",
+    "APPROVED": "approvato",
+    "APPROVED_WITH_CHANGES": "approvato con modifiche",
+    "REFUSED": "rifiutato",
+    "WITHDRAWN": "ritirato",
+    "EXPIRED": "scaduto"
+  },
+  "refusal": {
+    "OWN_WORD": "È parola del cliente: nessuno decide al suo posto né revoca la sua risposta.",
+    "NOT_OPEN": "È ritirata o scaduta: non c’è nulla da decidere.",
+    "ANSWERED": "Nel frattempo il cliente ha risposto: revoca la risposta, invece.",
+    "OWN_ASK": "Hai chiesto tu questa approvazione al cliente: decide un collega per lui.",
+    "NOT_ANSWERED": "Non c’è una risposta da revocare.",
+    "REVERSED": "La risposta è già stata revocata.",
+    "PENDING": "Ciò che facciamo qui per il cliente aspetta già una seconda persona: la trovi in Home › Approvazioni.",
+    "HELD": "Da quando è stato chiesto il documento è cambiato (deciso in altro modo, una revisione più nuova, o annullato): rileggilo.",
+    "NO_APPROVER": "Per questo cliente serve una seconda persona e nessun ruolo dell’ufficio può approvarla: dai a un ruolo il permesso di decidere per i clienti e di decidere le approvazioni, oppure spegni la seconda persona sulla sua scheda dei limiti.",
+    "CUT": "Il taglio delle righe interessate è iniziato: non si può più revocare.",
+    "LEATHER_CUT": "La pelle delle righe interessate è stata tagliata: non si può più revocare.",
+    "APPLIED": "La nostra controproposta è già stata eseguita: non si può più revocare.",
+    "other": "È stato rifiutato così com’è.",
+    "stale": "È cambiato da quando l’hai letto: è stato riletto.",
+    "invalid": "Controlla i campi segnati.",
+    "forbidden": "Il tuo ruolo non lo consente per questo cliente.",
+    "notFound": "Non c’è più.",
+    "stepUp": "Serve un codice nuovo dall’app di autenticazione.",
+    "rateLimited": "Troppi tentativi. Attendi un minuto.",
+    "unavailable": "Il servizio della fabbrica non ha risposto. Riprova tra poco.",
+    "failed": "Non è stato possibile farlo. Riprova."
+  },
+  "field": {
+    "decision": "Scegli una decisione che questo tipo consente.",
+    "answer": "Scrivi cosa deve cambiare, o perché è rifiutato.",
+    "reason": "Scrivi il motivo, con parole che il cliente legge.",
+    "typedName": "Scrivi il tuo nome e cognome per firmare."
+  },
+  "stepUp": {
+    "title": "Conferma con l’app di autenticazione",
+    "sentence": "Decidere per {customer}, o revocare la sua risposta, richiede un codice nuovo.",
+    "confirm": "Conferma",
+    "problem": {
+      "wrong": "Il codice non è stato accettato. Scrivi il codice più recente.",
+      "locked": "Troppi codici sbagliati. Attendi qualche minuto.",
+      "unavailable": "Non è stato possibile controllare il codice. Riprova."
+    }
+  },
+  "common": {
+    "cancel": "Annulla"
+  }
+}
