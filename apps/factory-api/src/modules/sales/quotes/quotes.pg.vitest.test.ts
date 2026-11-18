@@ -5,7 +5,11 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant, Permission, ScopeSet } from '@nexus/factory-domain/core/permissions'
+import type { Actor, Grant, Permission, ScopeSet } from '@nexus/factory-domain/core/permissions'
+// B-SA-004b: the office's live wall.
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { liveMessageFor, liveViewFor } from '@nexus/factory-domain/events/live'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
 import { businessDate } from '@nexus/factory-domain/core/time'
 // The factory-db seeds are no package export: a test reads them where they live.
@@ -598,3 +602,50 @@ describe('the sales settings: the quote rules of the tenant and of a company (SA
     expect((await ok('otherTenant', 'GET', settingsUrl)).settings).toMatchObject({ tenant: null, inForce: { source: 'DEFAULT' } })
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every quote.* event names its quote's own customer (`partyId`, from the quote row the command read; never a caller's value),
+ * so an office person limited to some customers is sent the live changes of their own customers' quotes and never another's.
+ * The commands above: create, header, lines, recompute, the approval asked, decided and withdrawn, cancel — over P1, P3 and P4.
+ * Then what each office person's live screen is sent (factory-domain events/live.ts liveViewFor, the SSE endpoint's own function).
+ */
+describe('live: every quote event names its quote’s customer (B-SA-004b)', () => {
+  type Row = { id: string; type: string; version: number; context: string; tenantId: string; companyId: string | null; siteId: string | null; subject: string; correlationId: string; causationId: string | null; source: string; occurredAt: Date; payload: Json; own: string }
+  const envelopeOf = (row: Row): EventEnvelope => ({ eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload })
+  const viewer = (parties: Grant['parties']): Actor => ({ audience: 'office', tenantId: tenant, grants: [{ permissions: ['quotes.view'], companies: 'all', sites: 'all', parties }] })
+  const sent = (row: Row, parties: Grant['parties']) => liveViewFor(liveMessageFor(envelopeOf(row), EVENT_CATALOGUE.get(row.type, row.version))!, viewer(parties), EVENT_CATALOGUE)
+
+  it('each quote.* row the commands above wrote carries partyId = the quote row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, q."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "Quote" q ON q.id = (e.payload->>'quoteId')::uuid
+        WHERE e.type LIKE 'quote.%'
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['quote.created', 'quote.updated', 'quote.lines_changed', 'quote.approval_requested', 'quote.approval_decided', 'quote.reopened', 'quote.cancelled']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+
+  it("a person limited to P3 is sent none of P1's quote events; one limited to P1 all of them; every customer all; no party reaches the browser", async () => {
+    const rows = await admin<Row>(
+      `SELECT e.*, q."partyId"::text AS own FROM "OutboxEvent" e JOIN "Quote" q ON q.id = (e.payload->>'quoteId')::uuid
+        WHERE e."tenantId" = $1 AND e.type LIKE 'quote.%' AND q."partyId" IN ($2::uuid, $3::uuid) ORDER BY e."occurredAt", e.id`,
+      [tenant, P1, P3],
+    )
+    const ofP1 = rows.filter((row) => row.own === P1)
+    const ofP3 = rows.filter((row) => row.own === P3)
+    expect(ofP1.length).toBeGreaterThan(0)
+    expect(ofP3.length).toBeGreaterThan(0)
+    expect(ofP1.filter((row) => sent(row, [P3]) !== null).map((row) => row.type)).toEqual([])
+    expect(ofP1.filter((row) => sent(row, [P1]) === null).map((row) => row.type)).toEqual([])
+    expect(ofP3.filter((row) => sent(row, [P3]) === null).map((row) => row.type)).toEqual([])
+    expect(rows.filter((row) => sent(row, 'all') === null).map((row) => row.type)).toEqual([])
+    for (const row of ofP3) {
+      const view = sent(row, [P3])!
+      expect(view).not.toHaveProperty('partyIds')
+      expect(view.fields).not.toHaveProperty('partyId')
+    }
+  })
+})
+// ── end B-SA-004b ──

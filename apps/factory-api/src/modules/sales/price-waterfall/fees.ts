@@ -79,7 +79,7 @@ export async function addFee(caller: CommandCaller, quoteId: string, body: AddFe
     })
     await refreshVersion(tools, current, version, new Set([id]))
     tools.audit({ action: 'quotes.addFee', recordType: 'Quote', recordId: current.id, companyId: current.companyId, after: { lineId: id, ...feeAudit({ seq, feeKind: body.feeKind, styleId: target.style.id, colourwayId: target.colourwayId, quantity, unitPrice, description, note }) } })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }
@@ -118,7 +118,7 @@ export async function editFee(caller: CommandCaller, quoteId: string, lineId: st
     await tx.quoteLine.update({ where: { id: line.id }, data: { feeKind: after.feeKind, quantity: after.quantity, unitPrice: after.unitPrice, description: after.description, note: after.note, version: { increment: 1 } }, select: { id: true } })
     await refreshVersion(tools, current, version, new Set())
     tools.audit({ action: 'quotes.editFee', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { lineId: line.id, ...feeAudit(before) }, after: { lineId: line.id, ...feeAudit(after) } })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }

@@ -76,12 +76,12 @@ async function expireVersion(caller: CommandCaller, settings: CommandSettings, v
       const version = await tx.quoteVersion.findUniqueOrThrow({ where: { id: versionId }, select: VERSION_FACTS })
       const until = day(version.validUntil)
       if (version.status !== 'SENT' || until === null || until >= today) return { expired: false }
-      const quote = await tx.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { id: true, companyId: true, number: true, currentRevision: true, status: true } })
+      const quote = await tx.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { id: true, companyId: true, number: true, currentRevision: true, status: true, partyId: true /* B-SA-004b */ } })
       await tx.quoteVersion.update({ where: { id: version.id }, data: { status: 'EXPIRED', closedAt: now, version: { increment: 1 } }, select: { id: true } })
       const current = quote.currentRevision === version.revision
       if (current) await tx.quote.update({ where: { id: quote.id }, data: { status: 'EXPIRED' }, select: { id: true } })
       audit({ action: EXPIRE_COMMAND, recordType: 'Quote', recordId: quote.id, companyId: quote.companyId, before: { versionId: version.id, revision: version.revision, status: 'SENT', quoteStatus: quote.status }, after: { versionId: version.id, revision: version.revision, status: 'EXPIRED', quoteStatus: current ? 'EXPIRED' : quote.status, validUntil: until, closedAt: toUtcIso(now) } })
-      emit({ type: 'quote.expired', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, number: quote.number, revision: version.revision, validUntil: until } })
+      emit({ type: 'quote.expired', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, number: quote.number, revision: version.revision, validUntil: until, partyId: quote.partyId /* B-SA-004b */ } })
       return { expired: true }
     },
     settings,
@@ -127,7 +127,7 @@ async function remindVersion(caller: CommandCaller, settings: CommandSettings, v
       pending.delivery = { outboundId: sent.outbound.id, text: mail.withLink(`${runtime().webOrigin}/l#token=${encodeURIComponent(minted.token)}`) }
       await tx.quoteVersion.update({ where: { id: version.id }, data: { reminderSentAt: now }, select: { id: true } })
       tools.audit({ action: REMIND_COMMAND, recordType: 'Quote', recordId: quote.id, companyId: quote.companyId, after: { versionId: version.id, revision: version.revision, mailed: true, outboundId: sent.outbound.id, validUntil, reminderSentAt: toUtcIso(now) } })
-      tools.emit({ type: 'quote.reminder_sent', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, number: quote.number, revision: version.revision, validUntil, outboundId: sent.outbound.id } })
+      tools.emit({ type: 'quote.reminder_sent', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, number: quote.number, revision: version.revision, validUntil, outboundId: sent.outbound.id, partyId: quote.partyId /* B-SA-004b */ } })
       return { outcome: 'sent' as const }
     },
     settings,

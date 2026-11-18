@@ -222,7 +222,7 @@ export async function setQuoteSeason(caller: CommandCaller, quoteId: string, bod
     const before = (await tools.tx.quoteVersion.findUniqueOrThrow({ where: { id: version.id }, select: { seasonId: true } })).seasonId
     if (before !== (season?.id ?? null)) await tools.tx.quoteVersion.update({ where: { id: version.id }, data: { seasonId: season?.id ?? null }, select: { id: true } })
     tools.audit({ action: 'quotes.season', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { versionId: version.id, seasonId: before }, after: { versionId: version.id, seasonId: season?.id ?? null } })
-    tools.emit({ type: 'quote.season_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, number: current.number, seasonId: season?.id ?? null, code: season?.code ?? null } })
+    tools.emit({ type: 'quote.season_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, number: current.number, seasonId: season?.id ?? null, code: season?.code ?? null, partyId: current.partyId /* B-SA-004b */ } })
     return { quoteId: current.id, versionId: version.id, seasonId: season?.id ?? null, code: season?.code ?? null }
   })
   return { season: result }

@@ -525,3 +525,24 @@ describe("the company's bank account (Q12; a step-up to change it)", () => {
     await expect(admin(`UPDATE "Company" SET "bankName" = 'Banca' WHERE id = $1`, [companyB])).rejects.toThrow(/bank details without an IBAN/)
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every quote.* event names its quote's own customer (`partyId`, from the quote row the command read; never a caller's value),
+ * so an office person limited to some customers is sent the live changes of their own customers' quotes and never another's.
+ * The commands above: the send, a new link, a new version, the customer's accept, decline and ask for a new link (a link
+ * write: the quote is read in the command, never the link's caller).
+ */
+describe('live: every quote event names its quote’s customer (B-SA-004b)', () => {
+  it('each quote.* row the send, the link, the new version and the answers wrote carries partyId = the quote row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, q."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "Quote" q ON q.id = (e.payload->>'quoteId')::uuid
+        WHERE e.type LIKE 'quote.%'
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['quote.sent', 'quote.link_sent', 'quote.revised', 'quote.declined', 'quote.link_requested', 'quote.accepted']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

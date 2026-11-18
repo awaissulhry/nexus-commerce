@@ -365,3 +365,23 @@ describe('a new version starts without proofs: carry them over', () => {
     expect(again.status).toBe(409)
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every quote.* event names its quote's own customer (`partyId`, from the quote row the command read; never a caller's value),
+ * so an office person limited to some customers is sent the live changes of their own customers' quotes and never another's.
+ * The commands above: proofs added, replaced, removed and carried over.
+ */
+describe('live: every quote event names its quote’s customer (B-SA-004b)', () => {
+  it('each quote.* row the proofs (added, replaced, removed, carried) wrote carries partyId = the quote row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, q."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "Quote" q ON q.id = (e.payload->>'quoteId')::uuid
+        WHERE e.type LIKE 'quote.%'
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['quote.proofs_changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

@@ -276,8 +276,8 @@ export async function pasteLines(caller: CommandCaller, quoteId: string, body: P
       companyId: current.companyId,
       after: { rows: planned.map((row) => ({ row: row.row, style: row.style, colourway: row.colourway, action: row.action, sizes: row.landed, leftOut: row.leftOut.length })) },
     })
-    for (const row of landing) if (row.action === 'CHANGE') tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: row.line!.id } })
-    for (const id of recost) if (!landing.some((row) => row.line?.id === id)) tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id } })
+    for (const row of landing) if (row.action === 'CHANGE') tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: row.line!.id, partyId: current.partyId /* B-SA-004b */ } })
+    for (const id of recost) if (!landing.some((row) => row.line?.id === id)) tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id, partyId: current.partyId /* B-SA-004b */ } })
     return { ...answerOf(planned, false), ...(await detailInCommand(tools, current.id)) }
   })
 }

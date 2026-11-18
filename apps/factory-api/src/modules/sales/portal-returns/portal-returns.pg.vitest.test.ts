@@ -463,3 +463,25 @@ describe('the start dialog names the customer’s own order (plan §0.5)', { tim
   })
 })
 // ---- end follow-up
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every return.* event (and a return label's) names its RMA's own customer (`partyId`, from the RMA row the command read; never a
+ * caller's value), so an office person limited to some customers is sent the live changes of their own customers' returns and
+ * never another's.
+ * The commands above: the office authorises and rejects a request, the customer cancels one in the portal (the RMA row
+ * the portal read, of the session's own customer).
+ */
+describe('live: every return event names its RMA’s customer (B-SA-004b)', () => {
+  it("each return.* row the office's authorise and reject and the customer's cancel wrote carries partyId = the RMA row’s own", async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE (e.type LIKE 'return.%' OR e.type = 'return_label.changed')
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['return.status_changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

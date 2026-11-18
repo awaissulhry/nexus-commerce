@@ -53,7 +53,7 @@ export const events = [
     type: 'return_label.changed',
     context: 'shipping-delivery',
     description: "A return's carrier label was booked at once or offered by link, booked by the customer through the link, used (the goods came back) or cancelled.",
-    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), labelId: z.uuid(), status: z.enum(['OFFERED', 'BOOKED', 'USED', 'CANCELLED']), via: z.enum(['OFFICE', 'LINK', 'DOCK']) }),
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), labelId: z.uuid(), status: z.enum(['OFFERED', 'BOOKED', 'USED', 'CANCELLED']), via: z.enum(['OFFICE', 'LINK', 'DOCK']), partyId: livePartyId() /* B-SA-004b: the label's RMA's customer (the label row's own) */ }),
     live: { permission: 'sales.returns.view', fields: ['returnId', 'number', 'labelId', 'status'] },
   }),
 ] as const

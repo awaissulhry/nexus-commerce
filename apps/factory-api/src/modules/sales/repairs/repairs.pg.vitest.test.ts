@@ -49,6 +49,8 @@ const TENANT: TestTenant = { id: T, slug: NS, companies: [{ id: companyA, code: 
 type Json = Record<string, any>
 type Method = 'GET' | 'POST' | 'PATCH'
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
+// B-SA-004b: the repair row's own customer (what its events name).
+const partyOfRepair = async (repairId: string): Promise<string> => (await admin<{ partyId: string }>(`SELECT "partyId"::text AS "partyId" FROM "RepairOrder" WHERE id = $1`, [repairId]))[0]!.partyId
 let counter = 0
 const key = (label = 'k'): string => `repairs-${label}-${++counter}-${newId()}`
 
@@ -219,7 +221,7 @@ describe('from a complaint, or by hand: waiting for the garment, its arrival, th
     expect(steps(shipped.repair)).toEqual([['RECEIVED', 'DONE'], ['ESTIMATED', 'SKIPPED'], ['APPROVED', 'SKIPPED'], ['IN_REPAIR', 'SKIPPED'], ['REPAIRED', 'SKIPPED'], ['SHIPPED', 'CURRENT']])
     const [ddt] = await admin(`SELECT "sourceType", "sourceId", reason::text, "shipmentId", "documentRefs" FROM "Ddt" WHERE id = $1`, [shipped.ddt.id])
     expect(ddt).toMatchObject({ sourceType: 'RepairOrder', sourceId: byComplaint.id, reason: 'RETURN_FROM_WORK', shipmentId: null, documentRefs: [{ kind: 'REPAIR_ORDER', number: byComplaint.number }, { kind: 'DDT', number: 'P1-DDT-95' }] })
-    expect((await events('repair.stage_changed', byComplaint.id)).at(-1)).toEqual({ repairId: byComplaint.id, number: byComplaint.number, from: 'RECEIVED', to: 'SHIPPED', workOrderId: null, ddtId: shipped.ddt.id })
+    expect((await events('repair.stage_changed', byComplaint.id)).at(-1)).toEqual({ repairId: byComplaint.id, number: byComplaint.number, from: 'RECEIVED', to: 'SHIPPED', workOrderId: null, ddtId: shipped.ddt.id, partyId: await partyOfRepair(byComplaint.id) /* B-SA-004b */ })
     expect((await refused('sales', 'PATCH', `/sales/repairs/${byComplaint.id}`, { version: shipped.repair.version, problem: 'x' }, 409)).message).toBe(`Repair ${byComplaint.number} is shipped back: it changes no more.`)
   })
 
@@ -293,7 +295,7 @@ describe('the stages through the repair work order (SAL-390, MES-019)', () => {
     expect(incomplete.error.issues.map((issue: Json) => issue.path)).toEqual(['body/checklist/protectors/lot', 'body/checklist/protectors/level'])
     const failed = await inspectorCheck(repair, { ...PASSED, seams: 'FAIL', note: 'The new seam pulls at the shoulder.' })
     expect(failed).toMatchObject({ result: 'FAIL', failures: ['the seams'], repair: { safety: { state: 'FAILED', result: 'FAIL', checklist: { seams: 'FAIL', note: 'The new seam pulls at the shoulder.' } } } })
-    expect(await events('repair.safety_checked', repair.id)).toEqual([{ repairId: repair.id, number: 'SEED-REP-0001', result: 'FAIL' }])
+    expect(await events('repair.safety_checked', repair.id)).toEqual([{ repairId: repair.id, number: 'SEED-REP-0001', result: 'FAIL', partyId: await partyOfRepair(repair.id) /* B-SA-004b */ }])
     repair = failed.repair
     expect((await refused('warehouse', 'POST', `/sales/repairs/${repair.id}/ship`, { version: repair.version, ddt: DDT }, 409)).message).toContain('its last check failed')
   })
@@ -475,3 +477,23 @@ describe('a protective garment that fails its safety check after the repair is s
     await expect(admin(`UPDATE "RepairOrder" SET stage = 'SHIPPED', "shippedAt" = now() WHERE id = $1`, [repair.id])).rejects.toThrow(/never changes/)
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every repair.* event (and an estimate withdrawn) names its repair's own customer (`partyId`, from the repair row the command
+ * read; never a caller's value), so an office person limited to some customers is sent the live changes of their own customers'
+ * repairs and never another's. The commands above: repairs made, received, changed, moved through their stages, checked.
+ */
+describe('live: every repair event names its repair’s customer (B-SA-004b)', () => {
+  it('each repair.* row the commands above wrote carries partyId = the repair row’s own', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "RepairOrder" r ON r.id = (e.payload->>'repairId')::uuid
+        WHERE e.type LIKE 'repair.%' OR e.type LIKE 'repair_estimate.%'
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['repair.created', 'repair.stage_changed', 'repair.safety_checked']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──
