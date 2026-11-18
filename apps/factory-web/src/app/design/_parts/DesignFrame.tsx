@@ -6,8 +6,8 @@ import { Card, EmptyState } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { LOCALES } from '../../../lib/i18n/locales'
-import { I18nProvider, LocaleSwitchProvider } from '../../../lib/i18n/provider'
-import { findCase, findScreen } from '../_registry'
+import { I18nProvider, LocaleSwitchProvider, ReaderProvider } from '../../../lib/i18n/provider'
+import { findCase, findScreen, readerOf } from '../_registry'
 import { DESIGN_WIDTHS, type FrameOptions } from './frame-options'
 import '../design.css'
 
@@ -47,19 +47,22 @@ export function DesignFrame({ screenId, caseId, options }: { screenId: string; c
   const View = screen.view
   return (
     <I18nProvider locale={options.locale} messages={messages}>
-      <LocaleSwitchProvider
-        onChange={(locale) => router.replace(`${pathname}?theme=${options.theme}&width=${options.width}&lang=${LOCALES.includes(locale) ? locale : 'en'}`)}
-      >
-        <div onClickCapture={stayHere} data-design-frame={`${screen.screen}/${item.id}`} data-design-width={DESIGN_WIDTHS[options.width].width}>
-          {screen.part ? (
-            <div className="fw-design-part">
-              <View model={item.model} />
-            </div>
-          ) : (
-            <View model={item.model}>{screen.holdsPage ? <SamplePage /> : null}</View>
-          )}
-        </div>
-      </LocaleSwitchProvider>
+      {/* fix-voi-2: a portal or link screen in its readers' words, as the live page */}
+      <ReaderProvider reader={readerOf(screen)}>
+        <LocaleSwitchProvider
+          onChange={(locale) => router.replace(`${pathname}?theme=${options.theme}&width=${options.width}&lang=${LOCALES.includes(locale) ? locale : 'en'}`)}
+        >
+          <div onClickCapture={stayHere} data-design-frame={`${screen.screen}/${item.id}`} data-design-width={DESIGN_WIDTHS[options.width].width}>
+            {screen.part ? (
+              <div className="fw-design-part">
+                <View model={item.model} />
+              </div>
+            ) : (
+              <View model={item.model}>{screen.holdsPage ? <SamplePage /> : null}</View>
+            )}
+          </div>
+        </LocaleSwitchProvider>
+      </ReaderProvider>
     </I18nProvider>
   )
 }

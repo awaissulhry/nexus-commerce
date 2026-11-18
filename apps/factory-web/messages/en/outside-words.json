@@ -1,0 +1,74 @@
+{
+  "ds-words": {
+    "fileDropzone": {
+      "prompt": "Drag & drop or click to upload"
+    },
+    "orderedList": {
+      "reorder": "Reorder {item}; use arrow keys"
+    },
+    "stepUp": {
+      "codeHint": "The 6-digit code we sent you by e-mail."
+    }
+  },
+  "last-message": {
+    "cell": {
+      "label_one": "{count} new message on {record}: open the thread at the first new one",
+      "label_other": "{count} new messages on {record}: open the thread at the first new one"
+    },
+    "columnHint": "Your own new messages on the record since you last read its thread. A click opens the thread at the first new one."
+  },
+  "photo-kit": {
+    "photo": {
+      "cameraBusy": "Another app is using the camera. Close it, or use a file.",
+      "cameraDenied": "The camera is blocked for this page. Allow it in the browser, or use a file.",
+      "cameraFailed": "The camera did not start. Try again, or use a file.",
+      "cameraLive": "Camera on. Take the photo when the item is in the frame.",
+      "cameraOff": "The camera is off. Start it, or use a file.",
+      "cameraUnavailable": "There is no camera here. Use a file instead.",
+      "fileUnreadable": "That file could not be read as a photo. Choose another one.",
+      "guideFrame": "Fit the item inside the frame",
+      "guideSilhouette": "Stand inside the outline",
+      "instructions": "Drag on the photo to draw, or tap to mark a spot. With the keyboard: the arrow keys move the crosshair (Shift moves further), Enter sets the start, Enter again draws the mark, Escape cancels it.",
+      "prepareFailed": "The photo could not be prepared. Try again.",
+      "startArrow": "Arrow start set at {at}. Move to where it points and press Enter.",
+      "startCircle": "Circle centre set at {at}. Move to its edge and press Enter.",
+      "tooShort": "Move the crosshair away from the start first."
+    }
+  },
+  "safety-reports": {
+    "held": {
+      "offline": "No connection: try again when you are back online."
+    },
+    "intake": {
+      "injuryWordsHint": "In your own words. Optional.",
+      "whatHappenedHint": "What happened to the garment, and when you noticed it. Please do not describe an injury here: there is a field for it below.",
+      "whenWhereHint": "If you know them."
+    },
+    "photos": {
+      "dialogIntro": "Take a photo or choose one, then circle the problem if you like.",
+      "held": {
+        "offline": "No connection: try again when you are back online."
+      },
+      "intro": "Photos of the garment and the damage help quality. Keep faces out of the picture."
+    },
+    "problem": {
+      "consent": "Tick the consent first: the injury words are health data.",
+      "occurredOnNeeded": "Say the day it happened: an accident goes in the accident log.",
+      "placeNeeded": "Say where it happened: an accident goes in the accident log.",
+      "whatHappened": "Say what happened, and to the garment."
+    },
+    "refused": {
+      "failed": "It could not be sent. Try again in a moment.",
+      "network": "No connection: nothing was sent. Try again when you are back online."
+    },
+    "scan": {
+      "intro": "Point the camera at the code on the label: the serial fills in by itself.",
+      "noCamera": "No camera can be used here: type the serial instead."
+    }
+  },
+  "shell": {
+    "pdf": {
+      "previewUnavailable": "The page preview is not available on this device. Download the document to read it."
+    }
+  }
+}

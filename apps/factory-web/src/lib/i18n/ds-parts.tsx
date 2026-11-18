@@ -33,9 +33,9 @@ import { Lightbox as DsLightbox, ReplyComposer as DsReplyComposer } from '@nexus
 import { TagInput as DsTagInput } from '@nexus/ui/primitives'
 import { ChangeValue as DsChangeValue } from '@nexus/ui/grid'
 import { dsLabels, type DsLabels } from './ds-labels'
-import { CATALOGUE, createTranslator } from './messages'
-import { DEFAULT_LOCALE, type Locale } from './locales'
-import { useLocale } from './provider'
+import { catalogueFor, createTranslator, type Reader } from './messages'
+import type { Locale } from './locales'
+import { useLocale, useReader } from './provider'
 
 /**
  * The design system's speaking parts in the person's language, wired once (B-W2b-18). Each export here IS the DS part —
@@ -57,22 +57,22 @@ import { useLocale } from './provider'
  * DS step's rule). The design labs keep passing `labels={ds.x}` explicitly: they show the mapping.
  */
 
-const CACHE = new Map<Locale, DsLabels>()
+const CACHE = new Map<string, DsLabels>()
 
-/** Every DS part's words in this language (built once per language). */
-export function dsWordsFor(locale: Locale): DsLabels {
-  let words = CACHE.get(locale)
+/** Every DS part's words in this language (built once per language and reader; fix-voi-2: outside, the portal's own words). */
+export function dsWordsFor(locale: Locale, reader: Reader = 'office'): DsLabels {
+  const id = `${locale}:${reader}`
+  let words = CACHE.get(id)
   if (!words) {
-    const catalogue = CATALOGUE[locale] ?? CATALOGUE[DEFAULT_LOCALE]
-    words = dsLabels(createTranslator(locale, catalogue['ds-words'] ?? {}), locale)
-    CACHE.set(locale, words)
+    words = dsLabels(createTranslator(locale, catalogueFor(locale, 'ds-words', reader)), locale)
+    CACHE.set(id, words)
   }
   return words
 }
 
-/** The DS words of the page's language (no catalogue provider needed). */
+/** The DS words of the page's language, as its reader reads them (no catalogue provider needed). */
 export function useDsWords(): DsLabels {
-  return dsWordsFor(useLocale())
+  return dsWordsFor(useLocale(), useReader())
 }
 
 /** The catalogue's words with the screen's own over them, key by key. */

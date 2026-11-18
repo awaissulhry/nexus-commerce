@@ -27,8 +27,8 @@
     "cancel": "Annulla",
     "close": "Chiudi",
     "discard": "Scarta",
-    "discardBody": "La segnalazione non è ancora inviata: chiudendo ora perdi quello che hai scritto.",
-    "discardTitle": "Scartare quello che hai scritto?",
+    "discardBody": "La segnalazione non è ancora inviata: chiudendo ora perdete quello che avete scritto.",
+    "discardTitle": "Scartare quello che avete scritto?",
     "dismiss": "Chiudi l'avviso",
     "loading": "Caricamento…",
     "next": "Avanti",
@@ -69,9 +69,9 @@
     },
     "formIntro": "Arriva oggi al gruppo qualità del fabbricante. I campi obbligatori servono per esaminarla.",
     "formIntroPortal": "Arriva oggi al nostro gruppo qualità, separata da resi e reclami.",
-    "photosLater": "Puoi aggiungere le foto subito dopo l'invio.",
-    "privacy": "Quello che invii serve solo a esaminare questa segnalazione, come dice l'informativa privacy del fabbricante in fondo alla pagina.",
-    "privacyPortal": "Quello che invii serve solo a esaminare questa segnalazione, come dice la nostra informativa privacy.",
+    "photosLater": "Potete aggiungere le foto subito dopo l'invio.",
+    "privacy": "Quello che inviate serve solo a esaminare questa segnalazione, come dice l'informativa privacy del fabbricante in fondo alla pagina.",
+    "privacyPortal": "Quello che inviate serve solo a esaminare questa segnalazione, come dice la nostra informativa privacy.",
     "reason": "Di chi è la richiesta, e quando è arrivata",
     "reasonHint": "Resta insieme alla cancellazione.",
     "recordInjury": {
@@ -102,13 +102,13 @@
     "send": "Invia la segnalazione",
     "sending": "Invio in corso…",
     "sentBody": "Il nostro gruppo qualità la legge oggi. Grazie per avercelo detto.",
-    "sentKeep": "Conserva il capo così com'è: potremmo chiedere di vederlo.",
-    "sentNext": "Indica il numero se scrivi al fabbricante.",
-    "sentNextPortal": "Indica il numero se ci scrivi.",
+    "sentKeep": "Conservate il capo così com'è: potremmo chiedere di vederlo.",
+    "sentNext": "Indicate il numero se scrivete al fabbricante.",
+    "sentNextPortal": "Indicate il numero se ci scrivete.",
     "sentTitle": "Segnalazione di sicurezza {number} ricevuta",
     "step": {
-      "form": "Raccontaci",
-      "review": "Controlla e invia"
+      "form": "Raccontateci",
+      "review": "Controllate e inviate"
     },
     "title": "Segnala un problema",
     "titlePortal": "Segnala un incidente di sicurezza"
@@ -144,11 +144,11 @@
     "SEEN": "Già vista (resta chi l'ha vista per primo).",
     "TOLD": "L'autorità è già stata informata.",
     "offline": "Nessuna connessione: riprova quando sei di nuovo online.",
-    "wait": "Aspetta prima di inviare di nuovo.",
-    "waitMinutes_one": "Aspetta {count} minuto.",
-    "waitMinutes_other": "Aspetta {count} minuti.",
-    "waitSeconds_one": "Aspetta {count} secondo.",
-    "waitSeconds_other": "Aspetta {count} secondi.",
+    "wait": "Aspettate prima di inviare di nuovo.",
+    "waitMinutes_one": "Aspettate {count} minuto.",
+    "waitMinutes_other": "Aspettate {count} minuti.",
+    "waitSeconds_one": "Aspettate {count} secondo.",
+    "waitSeconds_other": "Aspettate {count} secondi.",
     "NO_INJURY_ROLE": "Aprire, registrare o cancellare la lesione spetta al ruolo sicurezza prodotto.",
     "NO_MANAGE_ROLE": "Per modificare una segnalazione serve il permesso di gestire le segnalazioni di sicurezza prodotto: lo concede un amministratore."
   },
@@ -156,7 +156,7 @@
     "accident": "È successo in un incidente o in una caduta",
     "accidentHint": "Un incidente, o una persona ferita, va nel registro degli incidenti del fabbricante: servono allora il giorno e il luogo.",
     "batch": "Lotto",
-    "batchFromQr": "Dal codice che hai inquadrato",
+    "batchFromQr": "Dal codice che avete inquadrato",
     "batchHint": "Il numero di lotto sull'etichetta (per esempio L-2231).",
     "consent": "Acconsento che {keeper} conservi quello che scrivo sulla lesione, solo per esaminare questa segnalazione.",
     "consentLaw": "I dati sulla salute si conservano solo con un consenso esplicito.",
@@ -164,9 +164,9 @@
     "consentWhy": "I dettagli di una lesione sono dati sulla salute: si conservano solo con questo consenso, li legge solo il gruppo sicurezza prodotto e si cancellano su richiesta.",
     "email": "E-mail",
     "garment": "Il capo",
-    "garmentHintBatch": "Il lotto viene dal codice che hai inquadrato. Aggiungi il numero di serie se lo trovi sull'etichetta interna.",
+    "garmentHintBatch": "Il lotto viene dal codice che avete inquadrato. Aggiungete il numero di serie se lo trovate sull'etichetta interna.",
     "garmentHintOffice": "Il numero di serie o il lotto come li ha dati chi segnala: i nostri vengono riconosciuti al salvataggio.",
-    "garmentHintOutside": "Indica il numero di serie o il lotto: sono entrambi sull'etichetta interna del capo.",
+    "garmentHintOutside": "Indicate il numero di serie o il lotto: sono entrambi sull'etichetta interna del capo.",
     "injured": "Qualcuno si è fatto male?",
     "injuredNo": "No, nessuno si è fatto male",
     "injuredUnsaid": "Non detto",
@@ -178,8 +178,8 @@
     "phone": "Telefono",
     "place": "Dove è successo",
     "placeHint": "Una riga: una strada, un circuito, una città.",
-    "reporter": "Come possiamo contattarti?",
-    "reporterHint": "Facoltativo. Usato solo per chiederti di questa segnalazione.",
+    "reporter": "Come possiamo contattarvi?",
+    "reporterHint": "Facoltativo. Usato solo per chiedervi di questa segnalazione.",
     "reporterOffice": "Chi l'ha segnalato",
     "reporterOfficeHint": "Come si è presentato. Si cancella su richiesta.",
     "scan": "Inquadra l'etichetta",
@@ -360,7 +360,7 @@
     "held": {
       "full": "Una segnalazione prende al massimo {max} foto.",
       "offline": "Nessuna connessione: riprova quando sei di nuovo online.",
-      "over": "Il tempo per le foto è finito: scrivi al fabbricante per mandarne altre.",
+      "over": "Il tempo per le foto è finito: scrivete al fabbricante per mandarne altre.",
       "sending": "Una foto è in invio."
     },
     "intro": "Le foto del capo e del danno aiutano la qualità. Tieni i volti fuori dall'inquadratura.",
@@ -373,9 +373,9 @@
   },
   "portal": {
     "held": {
-      "closed": "Non ancora aperto: la nostra informativa privacy per le segnalazioni di sicurezza non è pubblicata. Nel frattempo scrivici con Fai una domanda.",
-      "failed": "Non siamo riusciti a verificare se si possono inviare segnalazioni: ricarica la pagina.",
-      "noRequest": "Il tuo accesso permette di seguire le pratiche, non di inviarle: chiedi al tuo amministratore.",
+      "closed": "Non ancora aperto: la nostra informativa privacy per le segnalazioni di sicurezza non è pubblicata. Nel frattempo scriveteci con Fai una domanda.",
+      "failed": "Non siamo riusciti a verificare se si possono inviare segnalazioni: ricaricate la pagina.",
+      "noRequest": "Il vostro accesso permette di seguire le pratiche, non di inviarle: chiedete al vostro amministratore.",
       "offline": "Nessuna connessione.",
       "preview": "Un'anteprima dall'ufficio non può inviare segnalazioni.",
       "reading": "Verifica in corso se si possono inviare segnalazioni…"
@@ -392,7 +392,7 @@
     "facts": {
       "nothing": "Non è ancora cambiato niente."
     },
-    "injured": "Di' se qualcuno si è fatto male.",
+    "injured": "Dite se qualcuno si è fatto male.",
     "injuryNotHurt": "La lesione si descrive solo se qualcuno si è fatto male.",
     "injuryWords": "Al massimo 2000 caratteri.",
     "label": "Una riga di al massimo 100 caratteri.",
@@ -417,20 +417,20 @@
       "toldFuture": "L'autorità è stata informata oggi o prima.",
       "toldOn": "Di' il giorno in cui è stata informata l'autorità."
     },
-    "serialOrBatch": "Indica il numero di serie o il lotto dall'etichetta del capo.",
+    "serialOrBatch": "Indicate il numero di serie o il lotto dall'etichetta del capo.",
     "size": "Una riga di al massimo 20 caratteri.",
     "whatHappened": "Di' cosa è successo, e al capo.",
     "whatHappenedLong": "Al massimo 4000 caratteri."
   },
   "public": {
     "closedTitle": "Da questa pagina non si possono ancora inviare segnalazioni",
-    "closedWrite": "Il fabbricante non ha ancora pubblicato l'informativa privacy per le segnalazioni di sicurezza. Nel frattempo scrivi a {email} con il lotto, il numero di serie e cosa è successo.",
-    "closedWriteNoMail": "Il fabbricante non ha ancora pubblicato l'informativa privacy per le segnalazioni di sicurezza. Nel frattempo scrivi al fabbricante all'indirizzo qui sopra.",
-    "failedBody": "Il resto della pagina funziona. Riprova tra poco.",
+    "closedWrite": "Il fabbricante non ha ancora pubblicato l'informativa privacy per le segnalazioni di sicurezza. Nel frattempo scrivete a {email} con il lotto, il numero di serie e cosa è successo.",
+    "closedWriteNoMail": "Il fabbricante non ha ancora pubblicato l'informativa privacy per le segnalazioni di sicurezza. Nel frattempo scrivete al fabbricante all'indirizzo qui sopra.",
+    "failedBody": "Il resto della pagina funziona. Riprovate tra poco.",
     "failedTitle": "Non siamo riusciti a verificare se qui si possono inviare segnalazioni",
     "heading": "Segnala un problema",
     "hint": "Per problemi di sicurezza e incidenti con questo capo.",
-    "lead": "Qualcosa non va con questo capo, o un incidente mentre lo indossavi? Dillo al fabbricante: arriva oggi al suo gruppo qualità.",
+    "lead": "Qualcosa non va con questo capo, o un incidente mentre lo indossavate? Ditelo al fabbricante: arriva oggi al suo gruppo qualità.",
     "open": "Segnala un problema"
   },
   "read": {
@@ -516,10 +516,10 @@
     "photos": "Foto"
   },
   "refused": {
-    "check": "Il breve controllo del dispositivo non è riuscito. Riprova tra poco.",
+    "check": "Il breve controllo del dispositivo non è riuscito. Riprovate tra poco.",
     "failed": "Non è stato possibile inviarla. Riprova tra poco.",
     "fields": "Alcuni campi vanno controllati: sono segnati qui sotto.",
-    "forbidden": "Il tuo accesso permette di seguire le pratiche, non di inviarle: chiedi al tuo amministratore.",
+    "forbidden": "Il vostro accesso permette di seguire le pratiche, non di inviarle: chiedete al vostro amministratore.",
     "forbiddenOffice": "Serve il permesso di registrare segnalazioni di sicurezza prodotto e di aprire casi di assistenza: lo concede un amministratore.",
     "invalid": "La segnalazione l'ha rifiutato così com'è: controlla i campi.",
     "network": "Nessuna connessione: non è stato inviato nulla. Riprova quando sei di nuovo online.",
@@ -528,12 +528,12 @@
     "offPortal": "Dal portale non si possono ancora inviare segnalazioni di sicurezza: la nostra informativa privacy per queste segnalazioni non è pubblicata.",
     "photo": "Non è stato possibile aprire la foto. Riprova.",
     "stale": "Qualcuno ha modificato la segnalazione nel frattempo: è stata riletta. Controlla e riprova.",
-    "unknownCode": "Il codice di questa pagina non è più riconosciuto: controlla il codice sull'etichetta.",
-    "wait": "Troppe segnalazioni da questa rete: riprova più tardi.",
-    "waitMinutes_one": "Troppe segnalazioni da questa rete: riprova tra {count} minuto.",
-    "waitMinutes_other": "Troppe segnalazioni da questa rete: riprova tra {count} minuti.",
-    "waitSeconds_one": "Troppe segnalazioni da questa rete: riprova tra {count} secondo.",
-    "waitSeconds_other": "Troppe segnalazioni da questa rete: riprova tra {count} secondi."
+    "unknownCode": "Il codice di questa pagina non è più riconosciuto: controllate il codice sull'etichetta.",
+    "wait": "Troppe segnalazioni da questa rete: riprovate più tardi.",
+    "waitMinutes_one": "Troppe segnalazioni da questa rete: riprovate tra {count} minuto.",
+    "waitMinutes_other": "Troppe segnalazioni da questa rete: riprovate tra {count} minuti.",
+    "waitSeconds_one": "Troppe segnalazioni da questa rete: riprovate tra {count} secondo.",
+    "waitSeconds_other": "Troppe segnalazioni da questa rete: riprovate tra {count} secondi."
   },
   "register": {
     "accidentLog": "Registro degli incidenti",

@@ -1,0 +1,74 @@
+{
+  "ds-words": {
+    "fileDropzone": {
+      "prompt": "Trascinate qui un file o fate clic per caricarlo"
+    },
+    "orderedList": {
+      "reorder": "Riordina {item}; usate le frecce"
+    },
+    "stepUp": {
+      "codeHint": "Il codice di 6 cifre che vi abbiamo inviato per e-mail."
+    }
+  },
+  "last-message": {
+    "cell": {
+      "label_one": "{count} messaggio nuovo su {record}: aprite la conversazione al primo nuovo",
+      "label_other": "{count} messaggi nuovi su {record}: aprite la conversazione al primo nuovo"
+    },
+    "columnHint": "I vostri nuovi messaggi sul record da quando avete letto la sua conversazione. Un clic apre la conversazione al primo nuovo."
+  },
+  "photo-kit": {
+    "photo": {
+      "cameraBusy": "Un'altra app sta usando la fotocamera. Chiudetela, oppure usate un file.",
+      "cameraDenied": "La fotocamera è bloccata per questa pagina. Consentitela nel browser, oppure usate un file.",
+      "cameraFailed": "La fotocamera non si è avviata. Riprovate, oppure usate un file.",
+      "cameraLive": "Fotocamera accesa. Scattate quando il pezzo è nella cornice.",
+      "cameraOff": "La fotocamera è spenta. Avviatela, oppure usate un file.",
+      "cameraUnavailable": "Qui non c'è una fotocamera. Usate un file.",
+      "fileUnreadable": "Questo file non si può leggere come foto. Sceglietene un altro.",
+      "guideFrame": "Tenete il pezzo dentro la cornice",
+      "guideSilhouette": "Mettetevi dentro la sagoma",
+      "instructions": "Trascinate sulla foto per disegnare, oppure toccate per segnare un punto. Con la tastiera: le frecce spostano il mirino (con Maiusc si sposta di più), Invio fissa l'inizio, di nuovo Invio disegna il segno, Esc lo annulla.",
+      "prepareFailed": "Non è stato possibile preparare la foto. Riprovate.",
+      "startArrow": "Inizio della freccia fissato {at}. Spostatevi dove punta e premete Invio.",
+      "startCircle": "Centro del cerchio fissato {at}. Spostatevi sul bordo e premete Invio.",
+      "tooShort": "Prima allontanate il mirino dall'inizio."
+    }
+  },
+  "safety-reports": {
+    "held": {
+      "offline": "Nessuna connessione: riprovate quando siete di nuovo online."
+    },
+    "intake": {
+      "injuryWordsHint": "Con parole vostre. Facoltativo.",
+      "whatHappenedHint": "Cosa è successo al capo e quando ve ne siete accorti. Per favore non descrivete qui una lesione: c'è un campo apposito più sotto.",
+      "whenWhereHint": "Se li conoscete."
+    },
+    "photos": {
+      "dialogIntro": "Scattate o scegliete una foto, poi cerchiate il problema se volete.",
+      "held": {
+        "offline": "Nessuna connessione: riprovate quando siete di nuovo online."
+      },
+      "intro": "Le foto del capo e del danno aiutano la qualità. Tenete i volti fuori dall'inquadratura."
+    },
+    "problem": {
+      "consent": "Prima spuntate il consenso: le parole sulla lesione sono dati sulla salute.",
+      "occurredOnNeeded": "Dite il giorno in cui è successo: un incidente va nel registro degli incidenti.",
+      "placeNeeded": "Dite dove è successo: un incidente va nel registro degli incidenti.",
+      "whatHappened": "Dite cosa è successo, e al capo."
+    },
+    "refused": {
+      "failed": "Non è stato possibile inviarla. Riprovate tra poco.",
+      "network": "Nessuna connessione: non è stato inviato nulla. Riprovate quando siete di nuovo online."
+    },
+    "scan": {
+      "intro": "Puntate la fotocamera sul codice dell'etichetta: il numero di serie si compila da solo.",
+      "noCamera": "Qui non si può usare una fotocamera: scrivete il numero di serie."
+    }
+  },
+  "shell": {
+    "pdf": {
+      "previewUnavailable": "L'anteprima delle pagine non è disponibile su questo dispositivo. Scaricate il documento per leggerlo."
+    }
+  }
+}

@@ -809,7 +809,7 @@
     "reference": "Riferimento",
     "copyReference": "Copia il riferimento {value}",
     "copied": "Copiato",
-    "copyFailed": "Copia non riuscita: selezionalo e copialo a mano",
+    "copyFailed": "Copia non riuscita: selezionatelo e copiatelo a mano",
     "yourCopy": "Scarica la vostra copia",
     "yourCopyNamed": "Scarica la vostra copia ({file})",
     "contact": "Domande?",
@@ -833,7 +833,7 @@
     "ours": "Nostro rif.",
     "copy": "Copia {value}",
     "copied": "Copiato",
-    "copyFailed": "Copia non riuscita: selezionalo e copialo a mano",
+    "copyFailed": "Copia non riuscita: selezionatelo e copiatelo a mano",
     "pair": "{theirs} · {ours}"
   },
   "milestoneTracker": {

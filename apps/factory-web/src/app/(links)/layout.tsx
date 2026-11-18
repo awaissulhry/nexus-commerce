@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { ReaderProvider } from '../../lib/i18n/provider'
 
 /**
  * The Links view (A2 §1.7, §3.2; SAL-099, PLT-007): pages a customer or supplier opens from a one-off link, with no
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   referrer: 'no-referrer',
 }
 
+// fix-voi-2: a link page is read from outside the office: the portal's own words over the shared catalogues (voi).
 export default function LinksLayout({ children }: { children: ReactNode }) {
-  return children
+  return <ReaderProvider reader="outside">{children}</ReaderProvider>
 }

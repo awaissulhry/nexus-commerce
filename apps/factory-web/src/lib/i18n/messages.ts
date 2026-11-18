@@ -51,6 +51,49 @@ function buildCatalogue(): Readonly<Record<Locale, LocaleMessages>> {
 /** Every catalogue, by language and namespace. */
 export const CATALOGUE: Readonly<Record<Locale, LocaleMessages>> = buildCatalogue()
 
+// ---- fix-voi-2: the words a reader outside the office reads -------------------------------------------------------
+
+/**
+ * Who reads a page: the office's own people (`office`), or someone outside it (`outside`) — a partner in the portal, or
+ * whoever holds a link. The portal and the link pages say "voi" (a business writes to a business, #1618), but a few
+ * catalogues are read by office screens too and say "tu" there. Their outside words live in ONE catalogue,
+ * `messages/<locale>/outside-words.json`, under the namespace they belong to (`ds-words.stepUp.codeHint` is the
+ * outside word for `ds-words:stepUp.codeHint`): for an outside reader each one wins over the shared catalogue's text,
+ * key by key; the office reads the shared text unchanged. The portal's and the links' route groups say who reads
+ * (provider.tsx `ReaderProvider`), the design index by the screen's folder. A key only portal or link pages read is
+ * written in voi in its own catalogue: this file holds only what the office says otherwise.
+ */
+export type Reader = 'office' | 'outside'
+export const OUTSIDE_WORDS = 'outside-words'
+
+/** The outside words by language and namespace (`outside-words.json`'s first level names the namespace). */
+const OUTSIDE: Readonly<Record<Locale, Readonly<Record<string, Dictionary>>>> = Object.fromEntries(
+  LOCALES.map((locale) => {
+    const byNamespace: Record<string, Record<string, string>> = {}
+    for (const [path, text] of Object.entries(CATALOGUE[locale][OUTSIDE_WORDS] ?? {})) {
+      const dot = path.indexOf('.')
+      ;(byNamespace[path.slice(0, dot)] ??= {})[path.slice(dot + 1)] = text
+    }
+    return [locale, Object.freeze(Object.fromEntries(Object.entries(byNamespace).map(([namespace, words]) => [namespace, Object.freeze(words)])))]
+  }),
+) as Record<Locale, Readonly<Record<string, Dictionary>>>
+
+/** One namespace's outside words in a language (empty when the office and the outside say it the same way). */
+export function outsideWordsOf(locale: Locale, namespace: string): Dictionary {
+  return OUTSIDE[locale]?.[namespace] ?? {}
+}
+
+/** A namespace's dictionary as `reader` reads it: outside, its outside words over the shared ones, key by key. */
+export function dictionaryFor(locale: Locale, namespace: string, dictionary: Dictionary, reader: Reader): Dictionary {
+  const own = reader === 'outside' ? OUTSIDE[locale]?.[namespace] : undefined
+  return own ? { ...dictionary, ...own } : dictionary
+}
+
+/** A namespace straight from the catalogue, as `reader` reads it (for parts that need no provider: ds-parts). */
+export function catalogueFor(locale: Locale, namespace: string, reader: Reader): Dictionary {
+  return dictionaryFor(locale, namespace, (CATALOGUE[locale] ?? CATALOGUE[DEFAULT_LOCALE])[namespace] ?? {}, reader)
+}
+
 /** The catalogues a page needs, for one language: the provider passes only these to the browser. */
 export function messagesFor(locale: Locale, namespaces: readonly string[]): LocaleMessages {
   const own = CATALOGUE[locale] ?? CATALOGUE[DEFAULT_LOCALE]
@@ -102,13 +145,13 @@ export function createTranslator(locale: Locale, dictionary: Dictionary): Transl
   }
 }
 
-/** A translator over `namespace:key` keys, for code that holds keys of several namespaces (navigation labels). */
-export function createScopedTranslator(locale: Locale, messages: LocaleMessages, fallbackNamespace: string): Translate {
+/** A translator over `namespace:key` keys, for code that holds keys of several namespaces (navigation labels); fix-voi-2: as `reader` reads them. */
+export function createScopedTranslator(locale: Locale, messages: LocaleMessages, fallbackNamespace: string, reader: Reader = 'office'): Translate {
   const cache = new Map<string, Translate>()
   const forNamespace = (namespace: string) => {
     let t = cache.get(namespace)
     if (!t) {
-      t = createTranslator(locale, messages[namespace] ?? {})
+      t = createTranslator(locale, dictionaryFor(locale, namespace, messages[namespace] ?? {}, reader))
       cache.set(namespace, t)
     }
     return t
