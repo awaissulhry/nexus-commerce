@@ -14,6 +14,8 @@ import { money } from '../../../../sales/quotes/model'
 import { openIdOf } from '../../inbox'
 import { DEPTH_NS, type InboxActions, type InboxViewModel } from '../../model'
 import type { BrandRequest } from '../api'
+// F-PR-09: "Decide for <customer>" and "Reverse" on our counter-offer's approval (the page's CustomerOverrideProvider draws them).
+import { CustomerOverrideSlot } from '../../../../_shared/customer-override/slot'
 import {
   answerHeld,
   cardInputOf,
@@ -208,6 +210,8 @@ function OneReview({ model, review, actions }: { model: InboxViewModel; review: 
                 {[said(request.counter.words, locale), record?.counterApproval?.answer ? t(`${CR}.counter.theirWords`, { words: record.counterApproval.answer }) : null].filter(Boolean).join(' · ')}
               </Banner>
             )}
+            {/* F-PR-09: our counter-offer asked of the customer — decided for them while it waits, or their answer reversed. */}
+            {request.counter && <CustomerOverrideSlot source={{ requestId: request.counter.approvalRequestId }} customer={request.party.name} version={request.version} />}
             <section aria-labelledby="fw-apv-cr-does">
               <h3 id="fw-apv-cr-does" className="fw-apv-h">
                 {t(`${CR}.does.title`)}

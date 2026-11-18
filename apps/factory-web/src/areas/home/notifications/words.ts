@@ -69,6 +69,8 @@ export function sentenceWords(notification: Pick<Notification, 'messageKey' | 'p
 
 /** B-TH-239: a row's words — folded new requests say "5 new requests came in" (the numbers stay on the chip), any other its sentence. */
 export function rowWords(row: Pick<NotificationRow, 'messageKey' | 'params' | 'record' | 'actor' | 'people' | 'fold'> & { readonly group?: { readonly records?: number | undefined } }, t: Translate, locale: Locale): string {
+  // F-PR-09: one customer's Approve N, folded (model.ts foldCustomerApprovals): its name, how many, the newest record.
+  if (row.fold?.kind === 'CUSTOMER_APPROVED') return t('fold.customerApproved', { customer: row.fold.customer ?? '', count: formatNumber(row.fold.requests, locale), record: row.record.label })
   if (row.fold) return t('fold.newRequests', { count: row.fold.requests })
   // ---- F-PR-22: one "Note to N" batch on several records is one row (threads T6, B-TH-045's batch group): "Alex Demo mentioned you on
   // 12 orders" — the records this reader may read only (the API's `records`), never another customer's count.

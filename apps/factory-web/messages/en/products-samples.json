@@ -512,7 +512,8 @@
       "pick": "Choose the decision.",
       "comments": "Say why in the comments.",
       "long": "At most {max} characters."
-    }
+    },
+    "decideForLink": "Decide for the customer on its round"
   },
   "record": {
     "back": "Samples & prototypes",
@@ -674,7 +675,8 @@
       "sent": "Sent",
       "decision": "Decision",
       "actions": "Actions"
-    }
+    },
+    "decideForNotAsked": "Decide for {customer} opens once they are asked to approve it (Ask the customer)."
   },
   "ship": {
     "cellFailed": "Not saved: see the notice above.",

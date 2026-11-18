@@ -1,0 +1,64 @@
+/* F-PR-09 — Decide for the customer and Reverse (semantic tokens only). */
+.fw-cov-part,
+.fw-cov-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cov-form {
+  gap: var(--nds-space-12);
+}
+
+.fw-cov-line,
+.fw-cov-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cov-row {
+  display: inline-flex;
+  gap: var(--nds-space-4) var(--nds-space-6);
+}
+
+.fw-cov-text,
+.fw-cov-hint,
+.fw-cov-error {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-cov-hint {
+  color: var(--nds-text-2);
+}
+
+.fw-cov-error {
+  color: var(--nds-danger-text);
+}
+
+.fw-cov-radios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-cov-legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-cov-url {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}

@@ -369,6 +369,7 @@
   },
   "fold": {
     "newRequests_one": "{count} new request came in: take it or give it to someone",
-    "newRequests_other": "{count} new requests came in: take them or give them to someone"
+    "newRequests_other": "{count} new requests came in: take them or give them to someone",
+    "customerApproved": "{customer} approved {count} samples and materials at once, among them {record}"
   }
 }

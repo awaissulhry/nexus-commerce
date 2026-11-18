@@ -164,6 +164,16 @@
   width: 100%;
 }
 
+/* F-PR-09: the customer's answer on the round a gate waits for (Decide for <customer>, Reverse), under the gate's facts. */
+.fw-tna-round {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
 @media (max-width: 960px) {
   .fw-tna-cal {
     grid-template-columns: minmax(0, 1fr);
