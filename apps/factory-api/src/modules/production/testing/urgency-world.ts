@@ -14,6 +14,7 @@ import { seed as seedShipping } from '../../../../../../packages/factory-db/seed
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator } from '../../../core/context'
+import { useServerClock } from '../../../core/time'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
@@ -34,10 +35,25 @@ import { productionTwoBrands, twoBrandIds, twoBrandSessions, type ProductionTwoB
  *   - `addOrder`: a CONFIRMED order of a brand with one goods line and its production state (Regular), as the keeper makes it;
  *   - portal people signed in by code (`portalPerson`), office people signed in with two-factor for the step-up routes
  *     (`officePerson`, optionally limited to some customers), and the office test sessions `office.all`, `office.p1`,
- *     `office.p2` on `officeApp` (reads only need them).
+ *     `office.p2` on `officeApp` (reads only need them);
+ *   - ONE clock (fix-pr-9, as the golden flows' oneClock): the harness clock is the server clock too, so the office's commands,
+ *     the internal approvals engine and the portal all date their rows by the same clock (sign-ins and step-ups move it on).
  *
  * Every name, address and number is made up (example.com; no real company).
  */
+
+// ── fix-pr-9: ONE clock ───────────────────────────────────────────────────────────────────────────────────────────────────────
+// Lead decision (production end check): the world runs on ONE clock, as golden-flow/testing/world.ts oneClock does. Before, the
+// office's commands, platform/approvals (a second person's yes) and planning/promise-keep wrote on the server clock while the
+// portal, the sign-ins and the step-ups wrote on the harness clock, minutes ahead after the sign-ins: an answer read as older than
+// its request. The harness clock does not run by itself: every two-factor act moves it 30 s on, each portal sign-in 61 s. The
+// database still reads its own clock and refuses a time more than 5 minutes ahead of it (factory_recall_not_future), so a file
+// that moves the clock far on starts it further back (`clockBehindMs`). close() puts the system clock back.
+export interface UrgencyWorldOptions {
+  /** How far the world's clock starts behind the database's (default 0: now, as the golden flows). */
+  readonly clockBehindMs?: number
+}
+// ── end fix-pr-9 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface UrgencyWorld {
   readonly h: Harness
@@ -60,13 +76,14 @@ export interface UrgencyWorld {
 
 const OFFICE_PERMISSIONS = FACTORY_PERMISSIONS.all.filter((definition) => definition.link === undefined && definition.partner === undefined).map((definition) => definition.name) as Permission[]
 
-export async function urgencyWorld(label: string, namespace: string): Promise<UrgencyWorld> {
+export async function urgencyWorld(label: string, namespace: string, options: UrgencyWorldOptions = {}): Promise<UrgencyWorld> {
   const ids = twoBrandIds(namespace)
   const T = ids.tenantId
   const companyA = seedUuid(namespace, 'company:A')
   const sessions = twoBrandSessions(T, ids.a, ids.b, OFFICE_PERMISSIONS)
   const h = await startHarness(label)
-  h.clock.set(new Date())
+  h.clock.set(new Date(Date.now() - (options.clockBehindMs ?? 0)))
+  useServerClock(h.clock) // fix-pr-9: ONE clock
   usePortalOptions({ answerFloorMs: 0 })
   await seedCore({ db: h.database, namespace })
   await seedFiles({ db: h.database, namespace })
@@ -200,8 +217,8 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
     const person = await addUser(h, tenant, { email })
     await h.database.withScope({ audience: 'office', tenantId: T, actorId: person.id }, async (client) => {
       const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: T, key: roleKey } }, select: { id: true } })
-      // fix-pr-5: valid from a minute before the earlier of the world's clock and the server's: the sign-ins move the world's clock
-      // minutes ahead, and the internal approvals engine (a second person's yes) reads the roles on the server clock.
+      // fix-pr-5: valid from a minute before the earlier of the world's clock and the system's: the sign-ins move the world's clock
+      // minutes ahead (fix-pr-9: the internal approvals engine reads the roles on the world's one clock too).
       const validFrom = new Date(Math.min(h.clock.now().getTime(), Date.now()) - 60_000)
       await client.roleAssignment.create({ data: { id: newId(), userId: person.id, roleId: role.id, allCompanies: true, partyIds: parties ? [...parties] : [], validFrom }, select: { id: true } })
     })
@@ -225,6 +242,7 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
     portalPerson,
     officePerson,
     async close() {
+      useServerClock(undefined) // fix-pr-9
       useAbuseGuard(undefined)
       usePortalOptions({})
       await officeApp.close()

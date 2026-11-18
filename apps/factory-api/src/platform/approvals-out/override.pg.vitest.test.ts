@@ -12,6 +12,7 @@ import { KEEPER_EVENTS } from '../../modules/production/brand/keeper'
 import { urgencyWorld, type UrgencyWorld } from '../../modules/production/testing/urgency-world'
 import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 import { freshGuard } from '../auth/portal/testing/portal'
+import { STEP_UP_VALID_MS } from '../auth/sessions/session-store'
 import { storeGeneratedFile } from '../files/files'
 import { systemContext } from '../outbox/system'
 
@@ -73,9 +74,19 @@ async function as(browser: Office['browser'], method: 'GET' | 'POST' | 'PATCH', 
 }
 /** An office person's write after a fresh step-up (production.brand.override asks one). */
 async function stepped(person: Office, url: string, body: unknown, status = 200): Promise<Json> {
-  await person.stepUp()
+  // fix-pr-9 (one clock): a new code only when the person's last one is older than four of its five minutes. Every step-up moves
+  // the world's one clock 30 s on, and the database refuses a time more than 5 minutes ahead of its own: a code before each of the
+  // file's 24 writes ran the clock 12 minutes ahead.
+  const at = world.h.clock.now().getTime()
+  const last = steppedUpAt.get(person.id)
+  if (last === undefined || at - last > STEP_UP_VALID_MS - 60_000) {
+    await person.stepUp()
+    steppedUpAt.set(person.id, at)
+  }
   return as(person.browser, 'POST', url, body, status)
 }
+/** fix-pr-9: when each office person last stepped up, on the world's clock. */
+const steppedUpAt = new Map<string, number>()
 async function session(name: 'office.all' | 'office.p1' | 'office.p2', method: 'GET' | 'POST', url: string, status = 200, body?: unknown): Promise<Json> {
   const response = await world.officeApp.inject({ method, url, headers: { 'x-test-session': name, ...(method === 'POST' ? { 'idempotency-key': `pr3h-${newId()}` } : {}) }, ...(method === 'POST' ? { payload: (body ?? {}) as object } : {}) })
   expect(response.statusCode, `${name} ${method} ${url}: ${response.body.slice(0, 600)}`).toBe(status)
@@ -102,7 +113,10 @@ async function granterOf(taskId: string): Promise<Office> {
 }
 
 beforeAll(async () => {
-  world = await urgencyWorld('pr3h_decide_for', NS)
+  // fix-pr-9: the world's one clock starts 10 minutes behind the database's: the sign-ins, the step-ups and the artwork test's
+  // wait past the step-up window move it about 12 minutes on in a run of seconds (the database allows 5 minutes ahead, a portal
+  // sign-in code lives 15).
+  world = await urgencyWorld('pr3h_decide_for', NS, { clockBehindMs: 10 * 60_000 })
   await seedCalendar({ db: world.h.database, namespace: NS })
   today = businessDate(new Date(), 'Europe/Rome')
   owner = await world.officePerson('olga.owner@pr3h-office.example.com', 'owner')
@@ -257,7 +271,9 @@ describe('B-PR-30b put the customer\'s answer back', { timeout: SLOW_TEST_TIMEOU
     await as(alpha.browser, 'POST', `/portal/approvals/${request.id}/answer`, { decision: 'APPROVED', typedName: 'Paola Production', version: request.version })
     const answered = await requestRow(request.id)
 
-    // A fresh code first; the wall (a person limited to B: 404, nothing changed).
+    // A fresh code first; the wall (a person limited to B: 404, nothing changed). fix-pr-9: the manager's last code (the
+    // NOT_ANSWERED write above ran on it) is valid for STEP_UP_VALID_MS: the clock moves past that window first.
+    world.h.clock.advance(STEP_UP_VALID_MS)
     const unstepped = await as(manager.browser, 'POST', reverseUrl, { version: answered.version, reason: PUT_BACK }, 403)
     expect(unstepped.error.issues).toEqual([{ path: 'stepUp', message: 'Required.' }])
     const hidden = await stepped(managerB, reverseUrl, { version: answered.version, reason: PUT_BACK }, 404)
