@@ -277,6 +277,78 @@ describe('B-PR-10 the brand-wall sweep', () => {
     expect((await as('office.p2', 'GET', `/inventory/kits/${ofA.id}`)).status).toBe(404)
   })
 
+  // ── fix-pr-8: a person limited to some customers still does its OWN work ─────────────────────────────────────────────────────
+  // Every route the wide sweep closed by FILTERING (not by needing every customer) still shows a limited person its own
+  // customer's rows: here `office.p1`, every office permission limited to A, reads A's records on each of them (B, the sweep's
+  // reader, does not; the production unit reads all). The routes closed as views that mix customers (403 EVERY_PARTY) are
+  // listed in build notes fix-pr-8 (b).
+  it('fix-pr-8 (a): a person limited to a customer still reads that customer’s own rows on every route the sweep filtered', async () => {
+    const rows = async (sql: string, values: unknown[] = [ids.a]) => admin<Json>(sql, values)
+    const first = async (sql: string, values?: unknown[]) => (await rows(sql, values))[0]
+    const ofA = `SELECT id FROM "Style" WHERE "brandPartyId" = $1`
+    const aStyles = (await rows(ofA)).map((row) => String(row.id))
+    const style = String((await first(`SELECT s.id FROM "Style" s WHERE s."brandPartyId" = $1 AND EXISTS (SELECT 1 FROM "StyleRevision" r WHERE r."styleId" = s.id) ORDER BY s.code DESC LIMIT 1`))?.id)
+    const companyA = String((await first(`SELECT id FROM "Company" WHERE code = 'SCA' AND "tenantId" = $1`, [ids.tenantId]))?.id)
+    const problems: string[] = []
+    /** As office.p1: the answer's status, and that it names `wanted` (one of the ids, when given). */
+    const check = async (label: string, url: string, wanted: readonly (string | null | undefined)[] | null) => {
+      const answer = await as('office.p1', 'GET', url)
+      const text = JSON.stringify(answer.body)
+      if (answer.status !== 200) problems.push(`${label}: ${url} answered ${answer.status} ${text.slice(0, 200)}`)
+      else if (wanted !== null && !wanted.some((id) => typeof id === 'string' && text.includes(id))) problems.push(`${label}: ${url} names none of A's ${wanted.filter(Boolean).length} record(s)`)
+    }
+    const claim = await first(`SELECT c.id FROM "SustainabilityClaim" c JOIN "Style" s ON s.id = c."styleId" WHERE s."brandPartyId" = $1 LIMIT 1`)
+    await check('claims', '/compliance/claims?state=all', [claim?.id])
+    await check('claim choices', '/compliance/claims/choices', aStyles)
+    const request = await first(`SELECT id FROM "SupplierDeclarationRequest" WHERE "partyId" = $1 LIMIT 1`)
+    await check('declarations asked', '/compliance/declarations-asked', [request?.id])
+    await check('declaration asked', `/compliance/declarations-asked/${request?.id}`, [request?.id])
+    await check('operators of a style', `/compliance/rules/operators/resolve?styleId=${style}`, [style])
+    await check('standards watch', '/compliance/rules/standard-changes', aStyles)
+    const rule = await first(`SELECT id FROM "SubstanceRule" WHERE "customerPartyId" = $1 LIMIT 1`)
+    await check('substance rules', '/compliance/substances/rules?status=ALL', [rule?.id])
+    await check('substances of a style', `/compliance/substances/styles/${style}/evaluation`, [style])
+    await check('textile rules of a style', `/compliance/textile-rules/styles/${style}`, [style])
+    await check('type changes of a style', `/compliance/type-changes/styles/${style}`, [style])
+    const label = await first(`SELECT id FROM "LabelTemplate" WHERE "makerPartyId" = $1 OR "styleId" IN (${ofA}) LIMIT 1`)
+    await check('labels', '/compliance/labels', [label?.id])
+    await check('cost sheets of a style', `/costing/cost-sheets?styleId=${style}`, [style])
+    const place = await first(`SELECT id FROM "Location" WHERE "partyId" = $1 LIMIT 1`)
+    await check('a customer’s place', `/inventory/locations/${place?.id}/label`, [place?.id])
+    await check('transfer options', '/inventory/transfer-orders/options', [place?.id])
+    const item = await first(`SELECT i.id, i.code FROM "Item" i JOIN "Variant" v ON v.id = i."variantId" WHERE v."styleId" IN (${ofA}) LIMIT 1`)
+    await check('item parameters', `/planning/item-parameters?siteId=${w.siteId}&q=${encodeURIComponent(String(item?.code))}&limit=50`, [item?.id])
+    await check('die styles', '/plant/dies/styles', aStyles)
+    const table = await first(`SELECT id FROM "PieceRateTable" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('piece-rate tables', '/people/piece-rates/tables?includeArchived=true', [table?.id])
+    const step = await first(`SELECT "operationId" AS id, "styleId" FROM "RoutingOperation" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('an operation where used', `/product/operations/${step?.id}`, [step?.styleId])
+    const prepack = await first(`SELECT id FROM "Prepack" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('a prepack', `/product/prepacks/${prepack?.id}`, [prepack?.id])
+    await check('branding-set brands', '/product/branding-sets/brands', [ids.a])
+    await check('sample-order choices', `/purchasing/sample-orders/choices?companyId=${companyA}`, aStyles)
+    await check('safety contacts', `/safety/organisation/contacts?companyId=${companyA}`, [ids.a])
+    const measured = await first(`SELECT "measurementTemplateId" AS id, id AS "styleId" FROM "Style" WHERE "brandPartyId" = $1 AND "measurementTemplateId" IS NOT NULL LIMIT 1`)
+    await check('measurement template where used', `/product/measurement-templates/${measured?.id}/where-used`, [measured?.styleId])
+    const price = await first(`SELECT e."versionId" AS id, v."listId", e."styleId" FROM "PriceListEntry" e JOIN "PriceListVersion" v ON v.id = e."versionId" WHERE e."styleId" IN (${ofA}) LIMIT 1`)
+    await check('a price-list version', `/sales/price-lists/${price?.listId}/versions/${price?.id}`, [price?.styleId])
+    await check('size surcharges of a style', `/sales/styles/${style}/size-surcharges`, [style])
+    const template = await first(`SELECT "templateId" AS id FROM "QuoteTemplateLine" WHERE "styleId" IN (${ofA}) LIMIT 1`)
+    await check('quote templates', '/sales/quote-templates?status=ALL', [template?.id])
+    await check('a quote template', `/sales/quote-templates/${template?.id}`, [template?.id])
+    const report = await first(`SELECT r.id FROM "ProductSafetyReport" r JOIN "AccidentLogEntry" e ON e."reportId" = r.id WHERE r."styleId" IN (${ofA}) LIMIT 1`)
+    await check('the accident log', '/sales/safety-reports/accident-log', [report?.id])
+    // A record's own history, by both doors; the custom fields of A's work order.
+    const history = await as('office.p1', 'GET', `/audit/WorkOrder/${w.a.workOrderId}`)
+    if (!((history.body.entries as unknown[] | undefined)?.length)) problems.push(`audit history of A's work order: ${history.status}, no entry`)
+    const named = await as('office.p1', 'GET', `/audit?recordType=WorkOrder&recordId=${w.a.workOrderId}`)
+    if (!((named.body.entries as unknown[] | undefined)?.length)) problems.push(`audit log naming A's work order: ${named.status}, no entry`)
+    await check('custom fields of a work order', `/fields/values/WorkOrder/${w.a.workOrderId}`, [w.a.workOrderId])
+    const alertRule = await first(`SELECT id FROM "AlertRule" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [ids.tenantId])
+    await check('alert routes’ customers', `/alerts/rules/${alertRule?.id}/routes`, [ids.a])
+    expect(problems).toEqual([])
+  })
+
   // fix-pr-8: the write sweep runs last — it calls EVERY office write, so the named checks above read the world before it.
   it('PW-10: every office write, called by brand B with brand A ids, is refused as unknown and writes no row about A', async () => {
     const findings: Finding[] = []
