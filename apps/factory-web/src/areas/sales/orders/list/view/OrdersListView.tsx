@@ -513,7 +513,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                   id: model.active.id,
                   onFocusRow: (row) => actions?.onFocusRow?.(row),
                   onOpenNewTab: (row) => actions?.onOpenRow?.(row.id, true),
-                  cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions.onCardThread?.(row) } : null,
+                  cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,
                 }
               : null
           }
