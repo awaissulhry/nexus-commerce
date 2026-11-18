@@ -15,6 +15,8 @@ import { prefillFrom } from './sources'
 import { factsOf, NCR_COLUMNS, ncrSummary, summaryFactsOf, type NcrRow, type Reader } from './store'
 // B-PR-06 (the brand wall): an NCR names the customers of what it is about.
 import { customersOf, ncrListWhere, NO_CUSTOMER, reachesCustomers } from '../wall'
+// B-SA-033: one sales order's NCRs (the order checked with orders.view first, as the issues' filter).
+import { orderFilterOf, type OrderFilter } from '../../production/issues/list'
 
 /**
  * The NCRs' reads (B-W2a-47; design quality.ncr ncr-metrics, ncr-grid, ncr-board, the NCR record, ncr-new's prefill).
@@ -53,7 +55,34 @@ export interface ListQuery {
   readonly q?: string | undefined
   /** B-PR-06: the customer filter (the NCRs about that customer's work). */
   readonly partyId?: string | undefined
+  /** B-SA-033: one sales order's NCRs. */
+  readonly salesOrderId?: string | undefined
 }
+
+// ── B-SA-033 ──
+/** The NCRs of one sales order: of one of its live work orders, raised from it, or linked to it. */
+function ncrsOfOrderWhere(order: OrderFilter): Prisma.NonconformanceWhereInput {
+  return {
+    OR: [
+      ...(order.workOrderIds.length > 0 ? [{ workOrderId: { in: [...order.workOrderIds] } }] : []),
+      { sourceType: 'SalesOrder', sourceId: order.id },
+      { links: { some: { recordType: 'SalesOrder', recordId: order.id } } },
+    ],
+  }
+}
+
+/** The order's filter (checked with orders.view, else "Sales order not found."), or none. */
+async function orderOf(client: Reader, caller: CommandCaller, query: Pick<ListQuery, 'salesOrderId'>): Promise<OrderFilter | null> {
+  return query.salesOrderId ? orderFilterOf(client, actorOf(officeOf(caller)), query.salesOrderId) : null
+}
+
+/** Of the NCRs shown, those whose work order also makes another customer's work (no single customer: before the rule). */
+async function sharedWorkOrdersOf(client: Reader, rows: readonly Pick<NcrRow, 'workOrderId'>[]): Promise<Set<string>> {
+  const ids = [...new Set(rows.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))]
+  if (ids.length === 0) return new Set()
+  return new Set((await client.workOrder.findMany({ where: { id: { in: ids }, partyId: null }, select: { id: true } })).map((row) => row.id))
+}
+// ── end B-SA-033 ──
 
 function stagesOf(query: ListQuery): NcrStage[] | null {
   if (!query.stage) return query.open === false ? null : [...OPEN_NCR_STAGES]
@@ -114,8 +143,11 @@ export async function listNcrs(caller: CommandCaller, query: ListQuery) {
   const now = serverClock.now()
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
+    // B-SA-033: one order's NCRs — the order checked first, then its NCRs behind the same wall.
+    const order = await orderOf(client, caller, query)
+    const own: Prisma.NonconformanceWhereInput = order ? { AND: [whereOf(caller, query, now), ncrsOfOrderWhere(order)] } : whereOf(caller, query, now)
     // B-PR-06: less the NCRs about a customer the caller does not reach (several customers: every customer only).
-    const where = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, whereOf(caller, query, now), query.partyId)
+    const where = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, own, query.partyId)
     let rows = await client.nonconformance.findMany({ where, select: NCR_COLUMNS, orderBy: ORDER, take: query.waiting ? 1000 : NCR_LIMITS.list + 1 })
     if (query.waiting) {
       const waiting = await waitingIds(client, rows)
@@ -123,7 +155,9 @@ export async function listNcrs(caller: CommandCaller, query: ListQuery) {
     }
     const shown = rows.slice(0, NCR_LIMITS.list)
     const facts = await summaryFactsOf(client, shown, context)
-    return { items: shown.map((row) => ncrSummary(row, facts, now)), truncated: rows.length > NCR_LIMITS.list }
+    // B-SA-033: on one order's list, each NCR says whether its work order also makes other customers' work (no one named).
+    const shared = order ? await sharedWorkOrdersOf(client, shown) : null
+    return { items: shown.map((row) => ({ ...ncrSummary(row, facts, now), ...(shared ? { sharedWorkOrder: row.workOrderId !== null && shared.has(row.workOrderId) } : {}) })), truncated: rows.length > NCR_LIMITS.list }
   })
 }
 
@@ -155,10 +189,12 @@ export async function ncrBoard(caller: CommandCaller, query: Omit<ListQuery, 'st
   const closedSince = new Date(now.getTime() - NCR_LIMITS.closedLaneDays * 86_400_000)
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
+    // B-SA-033: the board narrowed to one order takes the list's rule (the order checked first).
+    const order = await orderOf(client, caller, query)
     const lanes = []
     for (const stage of BOARD_LANES) {
       // B-PR-06: each lane less the NCRs about a customer the caller does not reach.
-      const where: Prisma.NonconformanceWhereInput = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, { AND: [whereOf(caller, { ...query, stage }, now), stage === 'CLOSED' ? { closedAt: { gte: closedSince } } : {}] } as Prisma.NonconformanceWhereInput, query.partyId)
+      const where: Prisma.NonconformanceWhereInput = await ncrListWhere(client, actorOf(context), QUALITY_NCR_VIEW, { AND: [whereOf(caller, { ...query, stage }, now), stage === 'CLOSED' ? { closedAt: { gte: closedSince } } : {}, order ? ncrsOfOrderWhere(order) : {}] } as Prisma.NonconformanceWhereInput, query.partyId)
       let rows = await client.nonconformance.findMany({ where, select: NCR_COLUMNS, orderBy: stage === 'CLOSED' ? [{ closedAt: 'desc' }, { id: 'desc' }] : ORDER, take: query.waiting ? 1000 : NCR_LIMITS.list + 1 })
       if (query.waiting) {
         const waiting = await waitingIds(client, rows)

@@ -58,6 +58,11 @@ const SESSIONS: Record<string, SessionContext> = {
   raiser: office([grant(['quality.ncr.view', 'quality.ncr.raise'])]),
   viewer: office([grant(['quality.ncr.view'])]),
   companyB: office([grant(QUALITY, { companies: [A.companyB] })]),
+  // B-SA-033: the order page's readers (orders.view beside the NCR right): every customer, the seeds' customer P1 only, and a
+  // person limited to another customer (Brand Beta: a made-up party with no record here).
+  orderAll: office([grant([...QUALITY, 'orders.view'])]),
+  orderP1: office([grant([...QUALITY, 'orders.view'], { parties: [id('party:P1')] })]),
+  orderBeta: office([grant([...QUALITY, 'orders.view'], { parties: [`ffffffff${id('sa033:party:beta').slice(8)}`] })]),
 }
 
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await h.db.admin.query(sql, values)).rows as T[]
@@ -377,3 +382,62 @@ describe('nobody approves a decision they changed (B-W2b-F24)', () => {
     expect(record.decisions[0]).toMatchObject({ state: 'TO_CARRY_OUT', approvedById: (SESSIONS.buyer as { actorId: string }).actorId })
   })
 })
+
+// ── B-SA-033 (Sales page plan P2, the order page's Quality section; 13-backend B3) ─────────────────────────────────────────────
+describe('B-SA-033 one sales order’s NCRs (GET /quality/ncr?salesOrderId=)', () => {
+  const so2 = id('production:sales-order:SO-0002')
+  const made = { onWorkOrder: newId(), fromOrder: newId(), onMixed: newId(), otherOrder: newId(), mixedWorkOrder: newId() }
+  const copyNcr = (ncrId: string, number: string, fields: string) =>
+    `INSERT INTO "Nonconformance" SELECT (jsonb_populate_record(NULL::"Nonconformance", to_jsonb(n) || jsonb_build_object('id', '${ncrId}', 'number', '${number}', 'capaId', NULL, 'sourceType', NULL, 'sourceId', NULL, 'styleId', NULL, 'lotId', NULL, 'itemId', NULL, 'workOrderId', NULL) || ${fields})).* FROM "Nonconformance" n WHERE n.id = '${A.seedNcr2}';`
+
+  beforeAll(async () => {
+    // One NCR on SO-0002's own work order SEED-WO-0001, one raised from the order itself, one on a work order made before the
+    // one-customer rule that also makes SO-0002's cells (no customer: A's copy of WO-0001), and one on SO-0003's SEED-WO-0003.
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "WorkOrder" SELECT (jsonb_populate_record(NULL::"WorkOrder", to_jsonb(w) || jsonb_build_object('id', '${made.mixedWorkOrder}', 'number', 'T-SA033-MIX-${run}', 'partyId', NULL))).* FROM "WorkOrder" w WHERE w.id = '${A.wo1}';
+       INSERT INTO "WorkOrderSize" SELECT (jsonb_populate_record(NULL::"WorkOrderSize", to_jsonb(c) || jsonb_build_object('id', '${newId()}', 'workOrderId', '${made.mixedWorkOrder}'))).* FROM "WorkOrderSize" c WHERE c."workOrderId" = '${A.wo1}' ORDER BY c.id LIMIT 1;
+       ${copyNcr(made.onWorkOrder, `T-SA033-1-${run}`, `jsonb_build_object('workOrderId', '${A.wo1}')`)}
+       ${copyNcr(made.fromOrder, `T-SA033-2-${run}`, `jsonb_build_object('sourceType', 'SalesOrder', 'sourceId', '${so2}')`)}
+       ${copyNcr(made.onMixed, `T-SA033-3-${run}`, `jsonb_build_object('workOrderId', '${made.mixedWorkOrder}')`)}
+       ${copyNcr(made.otherOrder, `T-SA033-4-${run}`, `jsonb_build_object('workOrderId', '${A.wo3}')`)}
+       COMMIT;`,
+    )
+  })
+
+  it('narrows to the order’s own NCRs (its live work orders, raised from it); the mixed work order’s NCR says sharedWorkOrder, for every-customer readers only', async () => {
+    const all = await ok('orderAll', 'GET', `/quality/ncr?salesOrderId=${so2}&open=false`)
+    const shown = new Map((all.items as Json[]).map((item) => [item.id, item]))
+    expect(shown.has(made.onWorkOrder) && shown.has(made.fromOrder) && shown.has(made.onMixed)).toBe(true)
+    // Another order's work order is not this order's.
+    expect(shown.has(made.otherOrder)).toBe(false)
+    expect(shown.get(made.onMixed)!.sharedWorkOrder).toBe(true)
+    expect(shown.get(made.onWorkOrder)!.sharedWorkOrder).toBe(false)
+    expect(shown.get(made.fromOrder)!.sharedWorkOrder).toBe(false)
+    // Without the filter the list carries no sharedWorkOrder at all.
+    expect((await ok('orderAll', 'GET', '/quality/ncr?open=false')).items.every((item: Json) => !('sharedWorkOrder' in item))).toBe(true)
+    // P1's own person: its NCRs, never the one of the work order that also makes another customer's work (counted nowhere).
+    const own = await ok('orderP1', 'GET', `/quality/ncr?salesOrderId=${so2}&open=false`)
+    const ownIds = (own.items as Json[]).map((item) => item.id)
+    expect(ownIds).toEqual(expect.arrayContaining([made.onWorkOrder, made.fromOrder]))
+    expect(ownIds).not.toContain(made.onMixed)
+    expect(JSON.stringify(own)).not.toContain(made.mixedWorkOrder)
+    // The board narrowed to the order: the same NCRs.
+    const board = await ok('orderAll', 'GET', `/quality/ncr/board?salesOrderId=${so2}`)
+    const cards = (board.lanes as Json[]).flatMap((lane) => (lane.cards as Json[]).map((card) => card.id))
+    expect(cards).not.toContain(made.otherOrder)
+  })
+
+  it('the brand wall: a Beta-limited reader with Alpha’s order gets the words of an unknown order (404, no list, no count); no orders.view: the same', async () => {
+    const unknown = await call('orderBeta', 'GET', `/quality/ncr?salesOrderId=${newId()}`)
+    const alpha = await call('orderBeta', 'GET', `/quality/ncr?salesOrderId=${so2}`)
+    expect([alpha.statusCode, (alpha.json() as Json).error.message]).toEqual([404, 'Sales order not found.'])
+    expect([unknown.statusCode, (unknown.json() as Json).error.message]).toEqual([404, 'Sales order not found.'])
+    expect(alpha.body).not.toContain(so2)
+    expect((await call('orderBeta', 'GET', `/quality/ncr/board?salesOrderId=${so2}`)).statusCode).toBe(404)
+    // The NCR right alone does not open an order's list.
+    expect((await call('qa', 'GET', `/quality/ncr?salesOrderId=${so2}`)).statusCode).toBe(404)
+  })
+})
+// ── end B-SA-033 ──
