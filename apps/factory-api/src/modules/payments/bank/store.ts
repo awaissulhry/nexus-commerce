@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, EVERY_PARTY_WORDS, reachesEveryParty, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { PAYMENTS_BANK_VIEW } from '@nexus/factory-domain/payments/bank/permissions'
@@ -22,6 +22,9 @@ export function bankAccess(caller: CommandCaller, companyId: string, permission:
   const context = officeContextOf(caller)
   if (!can(actorOf(context), PAYMENTS_BANK_VIEW, { companyId })) throw new NotFoundError('Company not found.')
   if (!can(actorOf(context), permission, { companyId })) throw new ForbiddenError()
+  // fix-pr-8 (the brand wall): the company's bank — its statements, lines and matches — is every customer's money: a view that
+  // mixes customers, refused to a person limited to some in words that name none.
+  if (!reachesEveryParty(actorOf(context), permission, { companyId })) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
   return context
 }
 

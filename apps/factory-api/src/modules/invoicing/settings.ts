@@ -10,6 +10,7 @@ import { serverClock } from '../../core/time'
 import { companyFacts } from './facts'
 import { numberPreview } from './issue'
 import { officeContextOf } from './store'
+import { assertEveryParty } from '../production/work-orders/scope'
 
 /**
  * Finance settings as invoicing reads them today (A2 SCR-083; FIN-084, FIN-092): per company the caller may see invoices
@@ -25,6 +26,9 @@ const SERIES_KINDS = ['INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE'] as const sati
 
 export async function financeSettings(caller: CommandCaller) {
   const context = officeContextOf(caller)
+  // fix-pr-8 (the brand wall): the companies' invoicing set-up — their next invoice numbers, the e-invoicing archive — is every
+  // customer's: a person limited to some customers is refused in words that name none.
+  assertEveryParty(actorOf(context), INVOICES_VIEW)
   const today = businessDate(serverClock.now())
   return caller.withClient(async (client) => {
     const where = scopeWhere(actorOf(context), INVOICES_VIEW, { company: 'id' }) as Prisma.CompanyWhereInput
