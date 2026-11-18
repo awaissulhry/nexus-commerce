@@ -322,6 +322,11 @@ export function ecoStepOf(facts: { readonly style: string; readonly status: stri
 }
 // ── end B-SA-047 ──
 
+// ── B-SA-050 (R1, P6; review C-8): the order's "Still to do" rows, each named by the record that closes it ──
+export const STILL_KINDS = ['WORK_ORDER_CHANGE', 'EXTRA_PIECES', 'STYLE_CHANGE', 'WORK_IN_PROGRESS_TASK', 'REPROMISE', 'TELL_WORKSHOP'] as const
+export type StillKind = (typeof STILL_KINDS)[number]
+// ── end B-SA-050 ──
+
 /** The plan's steps in order, numbered from 1 by the caller's list order (AMEND first). */
 export function numbered<T extends ApplyStep>(steps: readonly (T | null)[]): (T & { readonly seq: number })[] {
   return steps.filter((step): step is T => step !== null).map((step, index) => ({ ...step, seq: index + 1 }))

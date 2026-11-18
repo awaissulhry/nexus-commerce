@@ -33,6 +33,7 @@ import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { officeContextOf } from '../orders/access'
 import { dayOrNull, readLines, type LineRecord, type OrderRow } from '../orders/store'
 import { officeProgressFor } from '../portal-orders/progress'
+import { openSubcontractsOf, toldSubcontractsOf } from '../orders/still-to-do' // B-SA-050
 import { acceptPreviewOf, designStylesOf, officeRequest, officeViews, type AcceptPreview } from './office'
 import { keptImpactOf, LIVE_EVENTS, readCells, type OfficeRequestRow, type Reader } from './store'
 
@@ -59,7 +60,6 @@ import { keptImpactOf, LIVE_EVENTS, readCells, type OfficeRequestRow, type Reade
  * order's own cells only, no door, no person. Nothing here names another customer, its order or its pieces. A read: no command.
  */
 
-const AT_WORKSHOP = ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] as const
 const IN_WORK = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
 const GOODS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
 
@@ -219,12 +219,9 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
   // TELL_WORKSHOP (R8): the outside workshops making the asked lines; told once a notice is written on their subcontract order.
   const askedLineIds = unique(askedRowsOf(cells, lines).map((entry) => entry.lineId))
   const lineCells = (await workCellsOf(db, context.tenantId, askedLineIds)).filter((cell) => cell.status !== 'CANCELLED')
-  const madeBy = unique(lineCells.map((cell) => cell.workOrderId))
-  const outside = madeBy.length > 0 ? await db.subcontractOrder.findMany({ where: { workOrderId: { in: madeBy }, status: { in: [...AT_WORKSHOP] } }, select: { id: true } }) : []
-  const told =
-    accepted && row.answeredAt && outside.length > 0
-      ? (await db.notification.findMany({ where: { recordType: 'SubcontractOrder', recordId: { in: outside.map((entry) => entry.id) }, partyId: { not: null }, createdAt: { gte: row.answeredAt } }, select: { recordId: true }, distinct: ['recordId'] })).length
-      : 0
+  // B-SA-050: the same reads as the order's Still to do (one rule of "told").
+  const outside = await openSubcontractsOf(db, unique(lineCells.map((cell) => cell.workOrderId)))
+  const told = accepted && row.answeredAt ? (await toldSubcontractsOf(db, outside.map((entry) => entry.id), row.answeredAt)).size : 0
   const workshop = waiting || accepted ? workshopStepOf({ workshops: outside.length, told }) : null
 
   const extraNone: Omit<PlanStep, keyof ApplyStep | 'seq'> = { person: null, ref: null, workOrder: null, cells: [], extra: 0 }
