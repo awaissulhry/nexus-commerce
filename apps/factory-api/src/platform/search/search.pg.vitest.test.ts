@@ -126,6 +126,8 @@ describe('the index (worker side)', () => {
       ...['TransferOrder'],
       // B-TH-040: catalogue orders (orders.view); B-TH-097: the messages of record threads (threads.read, found only when asked).
       ...['PortalOrderRequest', 'Message'],
+      // B-TH-066: projects (Products › Development › Projects; threads.read).
+      ...['Project'],
     ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])

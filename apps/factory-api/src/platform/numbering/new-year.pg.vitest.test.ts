@@ -78,9 +78,12 @@ async function take(context: RequestContext, companyId: string, kind: DocumentKi
   return result
 }
 
-/** The number a pattern prints for a value in a year (the seed's patterns: {YYYY}, {N} and {N:width}). */
+/** The number a pattern prints for a value in a year (the seed's patterns: {YYYY}, {YY} — B-TH-066's PRJ-{YY}-{N:3} — {N} and {N:width}). */
 const printed = (pattern: string, value: number, year: number) =>
-  pattern.replace('{YYYY}', String(year)).replace(/\{N(?::(\d+))?\}/, (_match, width?: string) => String(value).padStart(Number(width ?? 1), '0'))
+  pattern
+    .replace('{YYYY}', String(year))
+    .replace('{YY}', String(year % 100).padStart(2, '0'))
+    .replace(/\{N(?::(\d+))?\}/, (_match, width?: string) => String(value).padStart(Number(width ?? 1), '0'))
 
 beforeAll(async () => {
   db = await migratedDatabase('numbering_new_year')
