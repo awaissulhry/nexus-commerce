@@ -278,3 +278,65 @@ function partsWords(answer: Json): void {
   }
   walk(answer)
 }
+
+describe('B-SA-032 work, dates and quality: what is made together with other work lends nothing of another customer', { timeout: 60_000 }, () => {
+  it('a work order made before the one-customer rule: shown and marked for an every-customer reader, counted (never named) for an Alpha-limited one — its Alpha cell still counts in the order’s own pieces', async () => {
+    const all = await ok('office.all', production(w.a.salesOrderId, 'lines,work'))
+    const mixed = workOrderOf(all, w.mixed.workOrderId)!
+    expect(mixed).toMatchObject({ number: w.mixed.number, sharedWithOtherCustomers: true })
+    // Beta's order is neither named nor counted in "also makes".
+    expect(mixed.alsoMakes).toEqual({ orders: [], more: 0 })
+    expect(all.work.workOrdersLeftOut).toBe(0)
+    expect(findMarkers(all.work, bMarkers)).toEqual([])
+    const limited = await ok('office.p1', production(w.a.salesOrderId, 'lines,work,people'))
+    expect(workOrderOf(limited, w.mixed.workOrderId)).toBeUndefined()
+    expect(limited.work.workOrdersLeftOut).toBe(1)
+    expect(JSON.stringify(limited)).not.toContain(w.mixed.workOrderId)
+    expect(JSON.stringify(limited)).not.toContain(w.mixed.number)
+    // The order's own pieces: Alpha's size 54 cell on the mixed work order counts (2 + 2 + 1 = 5 of the 10 in work orders).
+    expect(limited.lines.find((line: Json) => line.lineId === w.a.salesOrderLineId)).toMatchObject({ ordered: 10, inWorkOrders: 5 })
+    expect(all.lines.find((line: Json) => line.lineId === w.a.salesOrderLineId)).toMatchObject({ inWorkOrders: 5 })
+    expect(findMarkers(limited, bMarkers)).toEqual([])
+  })
+
+  it('dates: the Sales template (no planning.view) reads its order’s gates and milestones, read only — no action; the forecast only with planning.promise.view', async () => {
+    const answer = await ok('sales.p1', production(w.a.salesOrderId, 'dates'))
+    const gate = (answer.dates.gates as Json[]).find((row) => row.id === alpha.gate)
+    expect(gate).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING' })
+    expect(gate).not.toHaveProperty('actions')
+    expect(answer.dates).not.toHaveProperty('mayAddGate')
+    expect((answer.dates.milestones as Json[]).map((row) => row.kind)).toEqual(expect.arrayContaining(['GATE', 'SHIP']))
+    expect(answer.dates.planned).toEqual({ cutStart: null, sewStart: null, finish: null })
+    expect(answer.withheld).toEqual(['dates.forecast'])
+    expect(answer.dates.forecast).toBeNull()
+    const full = await ok('office.all', production(w.a.salesOrderId, 'dates'))
+    expect(Array.isArray(full.dates.forecast)).toBe(true)
+    expect(full.withheld).toEqual([])
+  })
+
+  it('GET …/milestones is the dates part alone (orders.view); Beta-limited: 404 as an unknown order', async () => {
+    const answer = await ok('sales.all', `/sales/orders/${w.a.salesOrderId}/milestones`)
+    expect(Object.keys(answer).sort()).toEqual(['asOf', 'dates', 'order', 'withheld'])
+    expect((answer.dates.gates as Json[]).map((row) => row.id)).toContain(alpha.gate)
+    const unknown = await call('office.p2', `/sales/orders/${newId()}/milestones`)
+    const refused = await call('office.p2', `/sales/orders/${w.a.salesOrderId}/milestones`)
+    expect([refused.status, refused.body.error?.message]).toEqual([404, 'Sales order not found.'])
+    expect(refused.body.error?.message).toBe(unknown.body.error?.message)
+  })
+
+  it('quality: the order’s own open issues and NCRs behind the wall; Beta’s order reads its harness issue', async () => {
+    const answer = await ok('office.p2', production(w.b.salesOrderId, 'quality'))
+    expect((answer.quality.issues as Json[]).map((issue) => issue.id)).toContain(w.production.issue.id)
+    expect(Array.isArray(answer.quality.ncrs)).toBe(true)
+    expect(Array.isArray(answer.quality.final)).toBe(true)
+    expect(findMarkers(answer, aMarkers)).toEqual([])
+    // Alpha's order has none of Beta's issues.
+    const alphaAnswer = await ok('office.all', production(w.a.salesOrderId, 'quality'))
+    expect((alphaAnswer.quality.issues as Json[]).map((issue) => issue.id)).not.toContain(w.production.issue.id)
+  })
+
+  it('nothing Beta’s person got names anything of Alpha', () => {
+    expect(seenByB.length).toBeGreaterThan(0)
+    for (const body of seenByB) expect(findMarkers(body, aMarkers)).toEqual([])
+  })
+})

@@ -270,3 +270,15 @@ export const orderProductionContract = defineContract({
   }),
   response: { 200: productionAnswer },
 })
+
+export const orderMilestonesContract = defineContract({
+  params: orderParams,
+  response: {
+    200: output({
+      order: output({ id: id(), number: z.string(), status: z.string(), version: z.number().int() }),
+      asOf: instant(),
+      withheld: z.array(z.enum(WITHHELD_KEYS)),
+      dates: datesView,
+    }),
+  },
+})

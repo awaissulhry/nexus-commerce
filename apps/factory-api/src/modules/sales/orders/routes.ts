@@ -39,9 +39,9 @@ import { orderPicture } from './picture'
 import { orderSummary } from './summary'
 // B-TH-077: what points at the order (its complaints and returns, planning's open re-promises, the gates' refusals).
 import { orderLinks, recordLinksContract } from './record-links'
-// B-SA-031: one order's production as the office reads it.
-import { orderProductionContract } from './production-contract'
-import { orderProduction } from './production-read'
+// B-SA-031 / B-SA-032: one order's production as the office reads it, and its dates alone.
+import { orderMilestonesContract, orderProductionContract } from './production-contract'
+import { orderMilestones, orderProduction } from './production-read'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -130,6 +130,7 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   // B-TH-077: what points at the order, for its record (W27: only its own customer's).
   app.get('/sales/orders/:orderId/links', { schema: recordLinksContract }, async (request) => orderLinks(request, request.params.orderId))
 
-  // B-SA-031 (Sales page plan P2): the order page's production read (parts by right).
+  // B-SA-031 / B-SA-032 (Sales page plan P2, P16): the order page's production read (parts by right) and its milestones.
   app.get('/sales/orders/:orderId/production', { schema: orderProductionContract }, async (request) => orderProduction(request, request.params.orderId, request.query))
+  app.get('/sales/orders/:orderId/milestones', { schema: orderMilestonesContract }, async (request) => orderMilestones(request, request.params.orderId))
 })

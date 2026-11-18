@@ -629,3 +629,12 @@ export async function orderProduction(caller: CommandCaller, orderId: string, qu
   const order = await officeOrder(caller, orderId)
   return readOrderProduction(caller, context, order, parts, serverClock.now())
 }
+
+/** GET /sales/orders/:orderId/milestones (B-SA-032, P16): the `dates` part alone, for any caller of the order's own dates. */
+export async function orderMilestones(caller: CommandCaller, orderId: string) {
+  const context = officeContextOf(caller)
+  const order = await officeOrder(caller, orderId)
+  const answer = await readOrderProduction(caller, context, order, ['dates'], serverClock.now())
+  if (!('dates' in answer) || !answer.dates) throw new Error('the dates part was asked')
+  return { order: answer.order, asOf: answer.asOf, withheld: answer.withheld, dates: answer.dates }
+}

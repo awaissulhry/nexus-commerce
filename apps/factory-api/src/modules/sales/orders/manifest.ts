@@ -43,7 +43,8 @@ export const manifest = defineManifest({
   'GET /sales/orders/summary': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-077: what points at the order (can() on the order; complaints, returns and the gates' events each by their own right).
   'GET /sales/orders/:orderId/links': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
-  // B-SA-031 (Sales page plan P2): one order's production as the office reads it (can() on the order; each part by its own right,
-  // named in `withheld` without it).
+  // B-SA-031 / B-SA-032 (Sales page plan P2, P16): one order's production as the office reads it (can() on the order; each part by
+  // its own right, named in `withheld` without it), and its dates alone (gates, milestones, the published plan; no action).
   'GET /sales/orders/:orderId/production': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'GET /sales/orders/:orderId/milestones': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })
