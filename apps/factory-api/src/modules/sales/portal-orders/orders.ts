@@ -51,7 +51,9 @@ import {
  */
 
 const PROGRESS_ROWS = 10
-const LIVE = { events: ['partner_notification.created'] }
+// B-SA-055 (Sales page plan R6; review OW-5): the customer's own request answered (accepted, refused) or countered reaches its
+// portal live channel at once (portal/notifications/live.ts PARTNER_LIVE_EVENTS): the order and the list read again on it.
+const LIVE = { events: ['partner_notification.created', /* B-SA-055 */ 'order_change_request.answered', 'order_change_request.countered'] }
 
 const text = (value: { toString(): string } | null): string | null => (value === null ? null : priceText(value.toString()))
 

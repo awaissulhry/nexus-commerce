@@ -23,7 +23,9 @@ import { PORTAL_PRODUCTION_VIEW } from '../../production-brand/permissions'
  *
  *   permission   the partner permission the viewer needs (can() over the event's company and the viewer's party)
  *   party        the payload field (copied into the live message by the event's own live rule) that names the party: the
- *                message reaches only that party's sessions; an event without it reaches no partner
+ *                message reaches only that party's sessions; an event without it reaches no partner. B-SA-055 `partyFrom:
+ *                'payload'`: a party the office rule keeps out of its fields is the message's server-side parties instead
+ *                (exactly one, the viewer's; never sent)
  *   fields       what of the message's fields the partner receives (never a money field, never more than the event's live
  *                rule copied)
  *
@@ -35,6 +37,12 @@ export interface PartnerLiveRule {
   readonly permission: Permission
   readonly party: string
   readonly fields: readonly string[]
+  // ---- B-SA-055 (review BW-7: party ids never reach an office browser): where the party is read. 'fields' (left out): the live
+  // fields — the event's own live rule copies `party` into them. 'payload': the event's office live rule keeps its party out of
+  // its fields, so `party` names the PAYLOAD key, and the message's server-side parties (events/live.ts liveMessageFor's
+  // `partyIds`, from the payload's party keys; never sent to any screen) must be exactly that one party: the viewer's.
+  readonly partyFrom?: 'fields' | 'payload'
+  // ---- end B-SA-055
 }
 
 const tasks = (fields: readonly string[]): PartnerLiveRule => ({ permission: PORTAL_HOME_VIEW, party: 'partyId', fields: ['taskId', 'partyId', 'kind', ...fields] })
@@ -83,6 +91,14 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'brand_production.urgency_changed': { permission: PORTAL_PRODUCTION_VIEW, party: 'partyId', fields: ['partyId', 'orderIds', 'urgency', 'by', 'change', 'locked', 'batchId'] },
   'brand_production.hold_changed': { permission: PORTAL_PRODUCTION_VIEW, party: 'partyId', fields: ['orderId', 'partyId', 'held'] },
   // ── end B-PR-16
+  // ── B-SA-055 (Sales page plan R6, P17'; 14-change-flow §6.1; review OW-5): the customer learns of its OWN request's answer at
+  // once — accepted or refused, or answered with a counter-offer it now answers — without waiting for the bell's hop
+  // (partner_notification.created). Only to the request's own customer (the payload's `partyId`, the request row's; its own
+  // request, so no timing of another customer's), ids, kind and answer only: never who answered, why, the counter's date, fee or
+  // words. Never thread.message_posted: an office note must never wake a portal tab.
+  'order_change_request.answered': { permission: PORTAL_SALES_ORDERS_VIEW, party: 'partyId', partyFrom: 'payload', fields: ['requestId', 'orderId', 'kind', 'answer'] },
+  'order_change_request.countered': { permission: PORTAL_SALES_ORDERS_VIEW, party: 'partyId', partyFrom: 'payload', fields: ['requestId', 'orderId', 'kind'] },
+  // ── end B-SA-055
 })
 
 /**
@@ -95,7 +111,9 @@ export function partnerLiveViewFor(message: LiveMessage, viewer: Actor, catalogu
   if (!catalogue.find(message.type, message.version)?.live) return null
   const rule = Object.hasOwn(PARTNER_LIVE_EVENTS, message.type) ? PARTNER_LIVE_EVENTS[message.type] : undefined
   if (!rule) return null
-  if (message.fields[rule.party] !== viewer.partyId) return null
+  // B-SA-055: a party kept out of the live fields is the message's server-side parties — exactly one, the viewer's.
+  const party = rule.partyFrom === 'payload' ? (message.partyIds?.length === 1 ? message.partyIds[0] : undefined) : message.fields[rule.party]
+  if (party !== viewer.partyId) return null
   if (!can(viewer, rule.permission, { companyId: message.companyId, partyId: viewer.partyId })) return null
   const fields: Record<string, unknown> = {}
   for (const key of rule.fields) if (!isMoneyField(key) && Object.hasOwn(message.fields, key)) fields[key] = message.fields[key]
