@@ -741,6 +741,7 @@ export async function batchTasks(caller: CommandCaller, body: BatchBody, idempot
       made.push(await insertTaskInCommand(tools, context, { title: body.title, description: body.description, dueDate: body.dueDate, dueTime: body.dueTime, record, scope: found, label, assigneeId, batchId }))
     }
     const names = await namesOf(tx, made)
+    if (made.length === 0) tools.audit({ recordType: 'Task', recordId: batchId, after: { batchId, made: 0, skipped: skipped.length } }) // fx-3: every record skipped is still an answer (200), its attempt audited
     return {
       batchId,
       made: made.map((row) => ({ record: { type: row.recordType!, id: row.recordId! }, task: taskView(row, names, context, now) })),
