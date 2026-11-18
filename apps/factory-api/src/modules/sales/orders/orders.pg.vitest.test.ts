@@ -887,5 +887,26 @@ describe('the lines carry their picture and their artwork count, by the readerâ€
     expect(JSON.stringify(lines)).not.toContain(files.main)
     expect((await call('a.otherParty', 'GET', orderUrl(order()))).status).toBe(404)
   })
+
+  // ---- B-SA-035b: the artwork files themselves (the Lines chip opens them in the thread's ONE viewer), by the same rule as the count.
+  it('B-SA-035b: the line lists the artwork files the reader may open â€” the same ones artworkCount counts, never one still uploading', async () => {
+    const lines = await linesOf('a.files')
+    expect(lines.BLK.artwork).toEqual([{ fileId: files.artwork, name: 'T-SA035 logo.pdf', contentType: 'application/pdf', sizeBytes: 2048 }])
+    expect(lines.BLK.artwork).toHaveLength(lines.BLK.artworkCount)
+    expect(lines.RED.artwork).toEqual([])
+    expect(JSON.stringify(lines.BLK.artwork)).not.toContain(files.pending)
+    // files.read of another company only, or none: no file named at all (the chip is not drawn).
+    const other = await linesOf('a.files.companyB')
+    expect([other.BLK.artwork, other.RED.artwork]).toEqual([[], []])
+    const viewer = await linesOf('a.viewer')
+    expect([viewer.BLK.artwork, viewer.RED.artwork]).toEqual([[], []])
+    expect(JSON.stringify(viewer)).not.toContain('T-SA035 logo')
+  })
+
+  it('B-SA-035b: a size-grid line names no rider (rider: null), whatever the reader holds', async () => {
+    const lines = await linesOf('a.files')
+    expect([lines.BLK.rider, lines.RED.rider]).toEqual([null, null])
+  })
+  // ---- end B-SA-035b
 })
 // ---- end B-SA-035
