@@ -7,6 +7,11 @@ import { groupedMenu, landingOf, MENU_GROUPS, MERGED_TABS, recordTabs, tabOf } f
 import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
 import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-SA-263
 import { designScreen } from './fixtures'
+// F-SA-262: the order dock's scope (the pick of ONE conversation)
+import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'
+import { viewOpenOf } from '../../../_shared/record-frame/model'
+import { LOCALES } from '../../../../lib/i18n/locales'
+import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -336,3 +341,108 @@ describe('F-SA-263 — the order’s dock: each tab its own default width, the p
   })
 })
 // ---- end F-SA-263
+
+// ---- F-SA-262 (sales page plan N4; picks P9, P9', R4, R9; 10-order-page §6.1; review C-13): the order dock's scope picker
+describe('F-SA-262 — the order dock picks ONE conversation, the scope in the address', () => {
+  const P = '22222222-2222-4222-8222-222222222222'
+  const W = '33333333-3333-4333-8333-333333333333'
+  it('?thread=general|project:<id>|wo:<id>|all; none, `open`, `new` or a made-up value: this order\'s own', () => {
+    expect(SCOPE_PARAM).toBe('thread')
+    expect(scopeOfParam('general')).toEqual({ kind: 'general' })
+    expect(scopeOfParam('all')).toEqual({ kind: 'all' })
+    expect(scopeOfParam(`project:${P}`)).toEqual({ kind: 'project', id: P })
+    expect(scopeOfParam(`wo:${W}`)).toEqual({ kind: 'wo', id: W })
+    for (const value of [null, '', 'open', 'new', 'wo:not-an-id', 'project:', 'Party']) expect(scopeOfParam(value), String(value)).toEqual(ORDER_SCOPE)
+    expect(scopeParamOf(ORDER_SCOPE)).toBeNull()
+    expect(scopeParamOf({ kind: 'wo', id: W })).toBe(`wo:${W}`)
+    expect(scopeParamOf({ kind: 'project', id: P })).toBe(`project:${P}`)
+  })
+  it('a replace keeps every other term; the narrow view stays open (`open` for this order); a line of All of opens at its message', () => {
+    const base = '/w/DEMO/sales/orders/o1'
+    expect(scopeAddress(base, '?tab=lines', { kind: 'general' }, false)).toBe(`${base}?tab=lines&thread=general`)
+    expect(scopeAddress(base, '?tab=lines&thread=general', ORDER_SCOPE, false)).toBe(`${base}?tab=lines`)
+    expect(scopeAddress(base, '?tab=lines&thread=general', ORDER_SCOPE, true)).toBe(`${base}?tab=lines&thread=open`)
+    expect(scopeAddress(base, '?tab=lines&thread=all&message=m1', { kind: 'wo', id: W }, false)).toBe(`${base}?tab=lines&thread=wo%3A${W}`)
+    expect(scopeAddress(base, '?thread=all', ORDER_SCOPE, false, 'm7')).toBe(`${base}?message=m7`)
+  })
+  it('the frame keeps the narrow view open while a scope is in the address (Back keeps the scope)', () => {
+    expect(viewOpenOf('open')).toBe(true)
+    expect(viewOpenOf('general')).toBe(true)
+    expect(viewOpenOf(`wo:${W}`)).toBe(true)
+    expect(viewOpenOf('new')).toBe(false)
+    expect(viewOpenOf(null)).toBe(false)
+  })
+  it('only what the reader may read is offered; a scope not offered shows this order\'s own, with no word that it existed', () => {
+    const offer = { general: true, all: true, projects: [P], workOrders: [W] }
+    expect(choicesOffered(offer)).toEqual(['order', 'general', 'projects', 'workOrders', 'all'])
+    // Without workorders.view (no work orders given) and no project: no such segment.
+    expect(choicesOffered({ ...offer, projects: [], workOrders: [] })).toEqual(['order', 'general', 'all'])
+    expect(scopeShown({ kind: 'wo', id: W }, offer)).toEqual({ kind: 'wo', id: W })
+    expect(scopeShown({ kind: 'wo', id: 'another-customers-work-order' }, offer)).toEqual(ORDER_SCOPE)
+    expect(scopeShown({ kind: 'wo', id: W }, { ...offer, workOrders: [] })).toEqual(ORDER_SCOPE)
+    expect(scopeShown({ kind: 'project', id: 'not-linked' }, offer)).toEqual(ORDER_SCOPE)
+    expect(scopeShown({ kind: 'general' }, { ...offer, general: false })).toEqual(ORDER_SCOPE)
+    expect(choiceOfScope({ kind: 'project', id: P })).toBe('projects')
+    expect(choiceOfScope({ kind: 'wo', id: W })).toBe('workOrders')
+    expect(choiceOfScope(ORDER_SCOPE)).toBe('order')
+  })
+  it('a segment picks the project or work order last shown, else the first', () => {
+    const offer = { general: true, all: true, projects: ['p1', 'p2'], workOrders: ['w1', 'w2'] }
+    expect(scopeOfChoice('projects', offer, { project: null, wo: null })).toEqual({ kind: 'project', id: 'p1' })
+    expect(scopeOfChoice('projects', offer, { project: 'p2', wo: null })).toEqual({ kind: 'project', id: 'p2' })
+    expect(scopeOfChoice('workOrders', offer, { project: null, wo: 'w2' })).toEqual({ kind: 'wo', id: 'w2' })
+    expect(scopeOfChoice('workOrders', offer, { project: null, wo: 'gone' })).toEqual({ kind: 'wo', id: 'w1' })
+    expect(scopeOfChoice('all', offer, { project: null, wo: null })).toEqual({ kind: 'all' })
+    expect(scopeOfChoice('order', offer, { project: null, wo: null })).toEqual(ORDER_SCOPE)
+  })
+  it('made-to-measure units: the work orders grouped per style × colourway (R9)', () => {
+    const groups = workOrderGroups([
+      { id: 'w1', number: 'WO-1', style: 'JKT-01 · Rider jacket', colourway: 'Black' },
+      { id: 'w2', number: 'WO-2', style: 'JKT-01 · Rider jacket', colourway: 'Red' },
+      { id: 'w3', number: 'WO-3', style: 'JKT-01 · Rider jacket', colourway: 'Black' },
+    ])
+    expect(groups.map((group) => [group.label, group.items.map((item) => item.number)])).toEqual([
+      ['JKT-01 · Rider jacket · Black', ['WO-1', 'WO-3']],
+      ['JKT-01 · Rider jacket · Red', ['WO-2']],
+    ])
+  })
+  it('the dock: ThreadPick, the work order\'s notes office only (no party: never shared, the floor tick), drafts per conversation', () => {
+    const dock = readFileSync(new URL('./dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(dock).toContain('<ThreadPick label={t(\'record.dock.label\')}')
+    // Each conversation is its own thread (its own key: its own server draft and this device's), the box on Office note (rule 34).
+    for (const key of ['key="order"', 'key="general"', 'key={`project-${project.id}`}', 'key={`wo-${workOrder.id}`}']) expect(dock).toContain(key)
+    const wo = dock.slice(dock.indexOf("scope.kind === 'wo' && workOrder"), dock.indexOf("scope.kind === 'all'", dock.indexOf("scope.kind === 'wo' && workOrder")))
+    expect(wo).toContain("record={{ type: 'WorkOrder'")
+    expect(wo).toContain('party={null}')
+    // Work orders only with workorders.view, from the production read (this reader's wall).
+    expect(dock).toContain("const seesWork = held.includes('workorders.view')")
+    // All of <customer>: read only, "Write in: This order · General".
+    expect(dock).toContain('<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />')
+    expect(dock).toContain("t('record.dock.writeIn')")
+    // The scope is written by a replace (Back keeps it).
+    expect(dock).toContain('router.replace(address, { scroll: false })')
+    const page = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('<OrderDock')
+  })
+  it('ONE set of choice words with the customer page (C-13), in both languages, the catalogue\'s "conversazione" (R9)', () => {
+    for (const locale of LOCALES) {
+      const o = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const p = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      for (const [order, party] of [
+        ['record.dock.label', 'customers.work.dock.label'],
+        ['record.dock.general', 'customers.work.dock.general'],
+        ['record.dock.generalLine', 'customers.work.dock.generalLine'],
+        ['record.dock.all', 'customers.work.dock.all'],
+        ['record.dock.readOnly', 'customers.work.dock.readOnly'],
+      ] as const)
+        expect(o(order, { customer: 'Brand Alpha' }), `${locale} ${order}`).toBe(p(party, { customer: 'Brand Alpha' }))
+      for (const key of ['order', 'orderLine', 'projects', 'projectLine', 'projectPick', 'workOrders', 'workOrderLine', 'workOrderPick', 'writeIn', 'writeGeneral'])
+        expect(o(`record.dock.${key}`, { customer: 'Brand Alpha', project: 'PRJ-1', wo: 'WO-1' }), `${locale} ${key}`).not.toBe(`record.dock.${key}`)
+      expect(o('record.dock.withNew', { label: 'This order', count: 2 }), locale).toContain('2')
+    }
+    const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(it('record.dock.label')).toBe('Quale conversazione')
+    expect(it('record.dock.workOrders')).toBe('Ordini di lavoro')
+  })
+})
+// ---- end F-SA-262

@@ -297,7 +297,26 @@
     "typed": "Inserito dall'ufficio",
     "madeFrom": "Creato da {number} — Apri",
     "madeToMeasure": "Su misura",
-    "changedBy": "Modificato da {name} alle {time}"
+    "changedBy": "Modificato da {name} alle {time}",
+    "dock": {
+      "label": "Quale conversazione",
+      "order": "Questo ordine",
+      "orderLine": "La conversazione di questo ordine è condivisa con {customer}: una risposta arriva al cliente.",
+      "general": "{customer} (generale)",
+      "generalLine": "La conversazione generale di {customer}: ciò che rispondi arriva a {customer}; le note d'ufficio restano qui.",
+      "projects": "Progetti",
+      "projectLine": "La conversazione di {project} è condivisa con {customer}: una risposta arriva al cliente.",
+      "projectPick": "Quale progetto",
+      "workOrders": "Ordini di lavoro",
+      "workOrderLine": "Note di {wo}: solo ufficio, mai condivise con un cliente. Spunta «Per il reparto» per raggiungere i tablet.",
+      "workOrderPick": "Quale ordine di lavoro",
+      "all": "Tutto di {customer}",
+      "readOnly": "Sola lettura",
+      "writeIn": "Scrivi in:",
+      "writeGeneral": "Generale",
+      "withNew_one": "{label} · {count} nuovo",
+      "withNew_other": "{label} · {count} nuovi"
+    }
   },
   "held": {
     "busy": "Sto salvando l'ultima modifica…",

@@ -89,6 +89,8 @@ import { useBrandHealth } from '../../../../lib/production/health/use-health' //
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
+import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
+import type { Work } from './overview/api' // F-SA-262
 // F-SA-243: the order page is a door of the ONE review window (Home › Approvals' own), its "Decide for <customer>" too.
 import { useRequestReviewDoor } from '../../../home/approvals/requests/use-request-review-door'
 import { doorListOf } from '../../../home/approvals/requests/model'
@@ -669,17 +671,27 @@ function RecordContainer({ orderId }: { orderId: string }) {
       model={model}
       delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
       // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view prints the thread with ThreadPrint (B-TH-280).
+      // F-SA-262: the dock's pick — This order · <Customer> (general) · Projects ▾ · Work orders ▾ (office only) · All of <Customer>.
       thread={
         value ? (
-          <OfficeRecordThread
-            docked
-            record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }}
-            title={`${value.number} · ${value.party?.legalName ?? ''}`}
-            recordLabel={value.number}
-            party={value.party ? { id: value.partyId, name: value.party.legalName } : null}
-            partyRole="customer"
-            printHref={printHref(pathname, params?.toString() ?? '')}
-          />
+          value.party ? (
+            <OrderDock
+              order={{ id: value.id, number: value.number, companyId: value.companyId, partyId: value.partyId, partyName: value.party.legalName, partyCode: value.party.code }}
+              workOrders={dockWorkOrders(readWork, value)}
+              prefix={prefix}
+              printHref={printHref(pathname, params?.toString() ?? '')}
+            />
+          ) : (
+            <OfficeRecordThread
+              docked
+              record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }}
+              title={`${value.number} · ${value.party?.legalName ?? ''}`}
+              recordLabel={value.number}
+              party={value.party ? { id: value.partyId, name: value.party.legalName } : null}
+              partyRole="customer"
+              printHref={printHref(pathname, params?.toString() ?? '')}
+            />
+          )
         ) : null
       }
       printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
@@ -869,3 +881,18 @@ function RecordContainer({ orderId }: { orderId: string }) {
     </CustomerOverrideProvider>
   )
 }
+
+// ---- F-SA-262: the work orders the dock may show the notes of — the production read's (this reader's wall), each with its site
+// from the order's chain (a floor note goes to that site's tablets); null while the read is not there.
+function dockWorkOrders(work: Work | null | undefined, order: Order): (DockWorkOrderRow & { siteId: string | null })[] | null {
+  if (!work) return null
+  return work.workOrders.map((row) => ({
+    id: row.id,
+    number: row.number,
+    style: row.style ? `${row.style.code} · ${row.style.name}` : null,
+    colourway: row.colourways.length > 0 ? row.colourways.map((colour) => colour.name).join(', ') : null,
+    siteId: order.chain.workOrders.find((chained) => chained.id === row.id)?.siteId ?? null,
+  }))
+}
+type DockWorkOrderRow = { id: string; number: string; style: string | null; colourway: string | null }
+// ---- end F-SA-262

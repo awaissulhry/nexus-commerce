@@ -297,7 +297,26 @@
     "typed": "Typed by the office",
     "madeFrom": "Made from {number} — Open",
     "madeToMeasure": "Made to measure",
-    "changedBy": "Changed by {name} at {time}"
+    "changedBy": "Changed by {name} at {time}",
+    "dock": {
+      "label": "Which thread",
+      "order": "This order",
+      "orderLine": "This order's thread is shared with {customer}: a reply reaches the customer.",
+      "general": "{customer} (general)",
+      "generalLine": "{customer}'s general thread: what you reply reaches {customer}; office notes stay here.",
+      "projects": "Projects",
+      "projectLine": "{project}'s thread is shared with {customer}: a reply reaches the customer.",
+      "projectPick": "Which project",
+      "workOrders": "Work orders",
+      "workOrderLine": "{wo} notes: office only, never shared with a customer. Tick 'For the floor' to reach the tablets.",
+      "workOrderPick": "Which work order",
+      "all": "All of {customer}",
+      "readOnly": "Read only",
+      "writeIn": "Write in:",
+      "writeGeneral": "General",
+      "withNew_one": "{label} · {count} new",
+      "withNew_other": "{label} · {count} new"
+    }
   },
   "held": {
     "busy": "Working on the last change…",

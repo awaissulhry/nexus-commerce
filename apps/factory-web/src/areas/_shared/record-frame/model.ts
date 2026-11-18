@@ -62,6 +62,13 @@ export function showsOnArrival(search: string | { get(name: string): string | nu
 }
 // ---- end F-SA-263
 
+// ---- F-SA-262 (10-order-page §6.1): the narrow page's full-width conversation is open while the address names it — `?thread=open`,
+// or a dock scope the page's pick keeps there (`general`, `project:<id>`, `wo:<id>`, `all`); `new` is an arrival the frame takes.
+export function viewOpenOf(value: string | null | undefined): boolean {
+  return value !== null && value !== undefined && value !== '' && value !== 'new'
+}
+// ---- end F-SA-262
+
 /** The body : thread columns of each width (the gap is the grid's). Full leaves the body out. */
 export const DOCK_COLUMNS: Readonly<Record<DockWidth, string>> = {
   third: 'minmax(0, 2fr) minmax(0, 1fr)',

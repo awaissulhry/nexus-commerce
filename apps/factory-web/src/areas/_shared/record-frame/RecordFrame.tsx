@@ -16,6 +16,7 @@ import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width
 import { usePrintMode } from '../../../shell/print/print-mode'
 import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
 import { showsOnArrival, type DockDefault } from './model' // F-SA-263
+import { viewOpenOf } from './model' // F-SA-262
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
@@ -207,7 +208,8 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, tab: dockTab ?? null, rememberHidden: dockTab !== undefined })
   const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })
   const hasThread = thread !== null
-  const viewOpen = params?.get(THREAD_PARAM) === 'open'
+  // F-SA-262: a dock scope in the address (`general`, `project:…`, `wo:…`, `all`: the order page's pick) keeps the narrow view open too.
+  const viewOpen = viewOpenOf(params?.get(THREAD_PARAM) ?? null)
   const [details, setDetails] = useState(false)
   const [keys, setKeys] = useState(false)
   const [door, setDoor] = useState<'approve' | null>(null)
