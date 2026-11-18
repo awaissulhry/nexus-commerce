@@ -23,6 +23,11 @@ import { customerUrgencyWhere, type CustomerUrgency } from './customer-urgency'
 import { orderLaterColumns } from './later-columns'
 import { atRiskWhere, invoicedByOrder, riskRulesOf } from './view-facts'
 import { piecesOf } from './view-facts' // B-TH-244
+// B-SA-021: the rider term and the rider-name search, only for a reader of measurements.
+import { ForbiddenError } from '@nexus/factory-domain/core/errors'
+import { holds } from '@nexus/factory-domain/core/permissions'
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
+import { chainWhere } from '../mtm/profiles'
 import { shippedNotInvoiced } from '@nexus/factory-domain/sales/orders/invoiced' // B-TH-244
 import { officeOrder, recordAfter } from './moves'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
@@ -76,6 +81,10 @@ export interface ListFilters {
   // ── end B-TH-058 / B-TH-059 ──
   /** B-TH-244: shipped goods no issued invoice bills yet (factory-domain sales/orders/invoiced shippedNotInvoiced). */
   readonly shippedNotInvoiced?: 'true' | 'false' | undefined
+  /** B-SA-020: `mtm` — orders with a made-to-measure unit. */
+  readonly kind?: 'mtm' | undefined
+  /** B-SA-021: a rider's orders: a unit of any revision of that rider's garment profile (sales.measurements.view only). */
+  readonly profile?: string | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -110,6 +119,8 @@ function searchWhere(context: OfficeContext, q: string): Prisma.SalesOrderWhereI
       { party: named },
       { lines: { some: { style: { code: words } } } },
       { lines: { some: { style: { brandParty: { AND: [reached, named] } } } } },
+      // B-SA-021: a made-to-measure unit's rider, only for a reader of measurements (over the rider's customer; never otherwise).
+      ...(holds(actorOf(context), SALES_MEASUREMENTS_VIEW) ? [{ lines: { some: { kind: 'MADE_TO_MEASURE' as const, measurementProfile: { is: { AND: [scopeWhere(actorOf(context), SALES_MEASUREMENTS_VIEW, { party: 'partyId' }) as Prisma.MeasurementProfileWhereInput, { riderName: words }] } } } } }] : []),
     ],
   }
 }
@@ -133,9 +144,34 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.brand ? { lines: { some: { style: { brandPartyId: filters.brand === 'own' ? null : filters.brand } } } } : {}, // B-TH-225
       filters.currency ? { currency: filters.currency } : {}, // B-TH-058
       filters.customerUrgency ? customerUrgencyWhere(filters.customerUrgency) : {}, // B-TH-059 (agreement T10)
+      filters.kind === 'mtm' ? MTM_WHERE : {}, // B-SA-020
     ],
   }
 }
+
+// ── B-SA-020 (sales page plan N7, pick P12; 12-lists-board §4.1): one definition of a made-to-measure order ──
+/** An order with a made-to-measure unit: the list, the board's counts and tiles, the switcher's counts, the totals and the file. */
+const MTM_WHERE: Prisma.SalesOrderWhereInput = { lines: { some: { kind: 'MADE_TO_MEASURE' } } }
+// ── end B-SA-020 ──
+
+// ── B-SA-021 (sales page plan N7, pick P12; 12-lists-board §4.2): the rider term ──
+/** The refusal of the rider term to a person who does not read measurements (the riders are body data). */
+export const RIDER_TERM_REFUSAL = 'You may not narrow orders by rider.'
+
+/**
+ * `profile=<id>`: the orders with a made-to-measure unit of ANY revision of that rider's garment profile — the chain the rider list
+ * counts with (mtm/profiles.ts chainWhere: one customer, one rider name, one garment type). Only with sales.measurements.view (403 in
+ * words); a profile the reader's measurements scope does not reach (another customer's rider, or none) keeps no row and counts
+ * nothing — the same answer as a rider without orders, so nothing says another customer's rider exists.
+ */
+async function profileWhere(client: Reader, context: OfficeContext, profileId: string): Promise<Prisma.SalesOrderWhereInput> {
+  const actor = actorOf(context)
+  if (!holds(actor, SALES_MEASUREMENTS_VIEW)) throw new ForbiddenError(RIDER_TERM_REFUSAL)
+  const profile = await client.measurementProfile.findFirst({ where: { AND: [scopeWhere(actor, SALES_MEASUREMENTS_VIEW, { party: 'partyId' }) as Prisma.MeasurementProfileWhereInput, { id: profileId }] }, select: { partyId: true, riderName: true, garmentType: true } })
+  if (!profile) return { id: { in: [] } }
+  return { lines: { some: { kind: 'MADE_TO_MEASURE', measurementProfile: { is: chainWhere(profile) } } } }
+}
+// ── end B-SA-021 ──
 
 type DepositState = 'NOT_NEEDED' | 'MISSING' | 'OPEN' | 'PAID' | 'WAIVED'
 
@@ -162,7 +198,12 @@ async function customWhere(client: Reader, context: OfficeContext, cf: string | 
  */
 export async function viewWhere(client: Reader, context: OfficeContext, filters: ListFilters, today: BusinessDate): Promise<Prisma.SalesOrderWhereInput> {
   const base: Prisma.SalesOrderWhereInput = {
-    AND: [whereOf(context, filters, today), await customWhere(client, context, filters.cf), filters.atRisk === 'true' ? atRiskWhere(await riskRulesOf(client), today) : {}],
+    AND: [
+      whereOf(context, filters, today),
+      await customWhere(client, context, filters.cf),
+      filters.atRisk === 'true' ? atRiskWhere(await riskRulesOf(client), today) : {},
+      filters.profile ? await profileWhere(client, context, filters.profile) : {}, // B-SA-021
+    ],
   }
   // B-TH-244: + shipped goods not invoiced yet (the Orders sheet's built-in view "Shipped, not invoiced").
   const uninvoiced = filters.shippedNotInvoiced === 'true'
@@ -368,7 +409,7 @@ const TILES = ['late', 'waitingForApproval', 'waitingForDeposit', 'inProduction'
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */ | 'kind' /* B-SA-020 */ | 'profile' /* B-SA-021 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
   return caller.withClient(async (client) => {

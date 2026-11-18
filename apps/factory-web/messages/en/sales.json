@@ -713,10 +713,6 @@
     "keyNew": "New quote",
     "keysTitle": "Keys of the quote list",
     "bulk": {
-      "export_one": "Export {count} (CSV)",
-      "export_other": "Export {count} (CSV)",
-      "exported_one": "{count} quote exported (CSV, the columns you see).",
-      "exported_other": "{count} quotes exported (CSV, the columns you see).",
       "cancel_one": "Cancel {count} quote",
       "cancel_other": "Cancel {count} quotes",
       "cancelHeld_one": "{count} selected quote is closed already (accepted, declined, expired or cancelled): untick it.",

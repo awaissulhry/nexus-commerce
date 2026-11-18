@@ -97,6 +97,20 @@
     "copied_one": "{count} pilota copiato.",
     "copied_other": "{count} piloti copiati."
   },
+  "segment": {
+    "label": "Su misura: ordini o piloti",
+    "orders": "Ordini",
+    "riders": "Piloti"
+  },
+  "week": {
+    "held": "Legge il piano delle promesse di un solo stabilimento e non può mostrare solo gli ordini su misura."
+  },
+  "gate": {
+    "offTitle": "Nessun ordine su misura",
+    "offBody": "Il su misura non è ancora partito per nessun modello di misura: fallo partire in Prodotti › Taglie e misure › Modelli di misure.",
+    "noneTitle": "Ancora nessun ordine su misura",
+    "noneBody": "Nascono da un preventivo con un capo su misura (Piloti › Usa in un nuovo preventivo)."
+  },
   "keys": {
     "new": "Nuove misure"
   },
@@ -158,7 +172,9 @@
     "openNewTab": "Apri in una nuova scheda",
     "revision": "Nuova revisione",
     "quote": "Usa in un nuovo preventivo",
-    "worksheet": "Stampa scheda di lavoro"
+    "worksheet": "Stampa scheda di lavoro",
+    "openOrders_one": "{count} ordine aperto di {rider}: vedilo",
+    "openOrders_other": "{count} ordini aperti di {rider}: vedili"
   },
   "review": {
     "WAITING": "Da controllare",

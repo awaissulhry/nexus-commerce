@@ -88,7 +88,9 @@ describe('the list filters: outside the range, fittings this week, a customer', 
   it('keeps the views and the customer in the address, asks the API what they mean', () => {
     const address = addressOf(new URLSearchParams(`view=outside&customer=${customer}`))
     expect(address).toMatchObject({ view: 'outside', customer })
-    expect(addressText(address)).toBe(`?view=outside&customer=${customer}`)
+    // F-SA-224: written as the one customer term of every Sales list (`?party=`); the old `?customer=` is still read.
+    expect(addressText(address)).toBe(`?view=outside&party=${customer}`)
+    expect(addressOf(new URLSearchParams(`party=${customer}`)).customer).toBe(customer)
     expect(addressOf(new URLSearchParams('customer=not-an-id')).customer).toBeNull()
     expect(queryOf(address)).toMatchObject({ range: 'outside', fittings: null, partyId: customer })
     expect(queryOf({ ...HOME_ADDRESS, view: 'fittings' })).toMatchObject({ range: null, fittings: 'week', partyId: null })

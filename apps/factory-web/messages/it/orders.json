@@ -102,6 +102,7 @@
   },
   "tile": {
     "late": "In ritardo",
+    "waitingForApproval": "In attesa di approvazione",
     "waitingForDeposit": "In attesa di acconto",
     "inProduction": "In produzione",
     "readyToShip": "Pronti da spedire",
@@ -184,7 +185,6 @@
     "updates_one": "{count} aggiornamento · Mostra",
     "updates_other": "{count} aggiornamenti · Mostra",
     "valuePartial": "Valore quando sono tutti mostrati",
-    "laneEmpty": "Nessun ordine in questo stato",
     "allInList": "Tutti gli ordini «{state}» nell'elenco",
     "offBoard": "Non in bacheca: {closed} chiusi, {cancelled} annullati.",
     "seeClosed": "Vedi gli ordini chiusi",
@@ -199,6 +199,7 @@
     "cardPieces_other": "{count} pezzi",
     "cardPromised": "promesso il {date}",
     "cardNoPromise": "nessuna data promessa",
+    "cardMtm": "su misura",
     "cardNew_one": "{count} nuovo messaggio",
     "cardNew_other": "{count} nuovi messaggi",
     "promise": "Promesso il {date}",
@@ -218,6 +219,18 @@
     },
     "newTab": "Bacheca in una nuova scheda",
     "newTabHint": "Lasciala aperta su un secondo schermo: segue da sola ogni cambiamento."
+  },
+  "waits": {
+    "yes": "Aspetta un sì",
+    "credit": "Aspetta il fido",
+    "review": "Aspetta il controllo della fabbrica"
+  },
+  "offBoard": {
+    "delivered_one": "{count} consegnato · Vedilo nell'elenco",
+    "delivered_other": "{count} consegnati · Vedili nell'elenco"
+  },
+  "lane": {
+    "none": "Nessuno"
   },
   "tab": {
     "lines": "Righe",

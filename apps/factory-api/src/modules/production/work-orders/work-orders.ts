@@ -547,6 +547,20 @@ export interface PlannedWorkOrderSource {
   readonly inCommand: (tools: CommandTools, workOrder: { readonly id: string; readonly number: string; readonly pieces: number }) => Promise<void>
 }
 
+// ── B-SA-041 (sales page plan, R1): a new DRAFT made by a WorkOrderChange applied (MAKE_MORE naming no work order) ──
+/**
+ * A work order made by applying a WorkOrderChange (modules/production/work-order-changes apply.ts) through this same create (the
+ * lines, cells, site, revision, number and checks are W1's): the command is on the change (its version bump locks it, at the
+ * version the person read), and `inCommand` (its APPLIED write naming the new work order, audit row and event) runs in the same
+ * transaction once the work order is written.
+ */
+export interface ChangeWorkOrderSource {
+  readonly changeId: string
+  readonly version: number
+  readonly inCommand: (tools: CommandTools, workOrder: { readonly id: string; readonly number: string; readonly pieces: number }) => Promise<void>
+}
+// ── end B-SA-041 ──
+
 /** A revision of this style a work order may be made to: a DRAFT or the RELEASED one (an OBSOLETE one never). */
 async function revisionOf(db: Reader, styleId: string, revisionId: string, path: string): Promise<RevisionRow> {
   const revision = await db.styleRevision.findUnique({ where: { id: revisionId }, select: REVISION_COLUMNS })
@@ -562,7 +576,7 @@ async function revisionOf(db: Reader, styleId: string, revisionId: string, path:
  * the lines fix, else the style's released one. Due date: the earliest promise (or request) of its lines and orders;
  * priority: the highest.
  */
-export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder, planned?: PlannedWorkOrderSource): Promise<{ workOrder: WorkOrderView }> {
+export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder, planned?: PlannedWorkOrderSource, /* B-SA-041 */ change?: ChangeWorkOrderSource): Promise<{ workOrder: WorkOrderView }> {
   const context = officeContextOf(caller)
   const lineIds = body.lines.map((line) => line.salesOrderLineId)
   const named = new Set<string>()
@@ -615,7 +629,9 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
     ? { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
     : planned // B-W2b-293
       ? { name: 'workorders.createFromPlanned', idempotencyKey, input: { ...body, plannedWorkOrderId: planned.plannedWorkOrderId }, record: { type: 'PlannedWorkOrder', id: planned.plannedWorkOrderId, expectedVersion: planned.version } }
-      : { name: 'workorders.create', idempotencyKey, input: body }
+      : change // B-SA-041
+        ? { name: 'workorders.applyChange', idempotencyKey, input: { ...body, workOrderChangeId: change.changeId }, record: { type: 'WorkOrderChange', id: change.changeId, expectedVersion: change.version } }
+        : { name: 'workorders.create', idempotencyKey, input: body }
   const { result } = await command(caller, spec, async (tools) => {
     const { tx } = tools
     await lockOrderLines(tx, context.tenantId, lineIds)
@@ -687,6 +703,8 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
     if (sample) await sample.inCommand(tools, { id, number: number.formatted })
     // B-W2b-293: the planned work order it was made from becomes CONVERTED in this transaction.
     if (planned) await planned.inCommand(tools, { id, number: number.formatted, pieces })
+    // B-SA-041: the WorkOrderChange it was made by becomes APPLIED in this transaction, naming it.
+    if (change) await change.inCommand(tools, { id, number: number.formatted, pieces })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
   })
   return result
@@ -864,62 +882,86 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
   const duplicates = duplicateRequests(requests, 'body/cells')
   if (duplicates.length > 0) throw new ValidationError('A cell is named twice.', duplicates)
 
-  return onWorkOrder(caller, workOrder, { name: 'workorders.setCells', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
-    const { tx } = tools
-    const current = await lockedDraft(tx, workOrder.id, 'its cells change')
-    const style = await tx.style.findUniqueOrThrow({ where: { id: current.styleId }, select: STYLE_COLUMNS })
-    await lockOrderLines(tx, context.tenantId, lineIds)
-    const lines = await readOrderLines(tx, lineIds, current.id)
-    const held = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { id: true, salesOrderLineId: true, colourwayId: true, size: true, quantity: true } })
-    // B-PR-01: a line of another customer than the work order's is refused in words (B-PR-02's lineProblems). A work order of
-    // no customer (a mixed one made before the rule, a SAMPLE of a round for no customer) is left to the database's guard,
-    // which lets its cells leave (lowered, removed) and refuses any other change.
-    const target: CellTarget = { companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, styleSizes: style.sizes, styleRevisionId: current.styleRevisionId, ...(current.partyId !== null ? { partyId: current.partyId } : {}) }
-    const withColour = requests.map((request) => ({ ...request, colourwayId: lines.get(request.salesOrderLineId)!.colourwayId }))
-    // B-W2b-275: a held SAMPLE cell may name no order line; it is never the cell a request names.
-    const sameCell = (cell: { salesOrderLineId: string | null; size: string }, request: { salesOrderLineId: string; size: string }) => cell.salesOrderLineId === request.salesOrderLineId && cell.size === request.size
-    const others = held.filter((cell) => !requests.some((request) => sameCell(cell, request)))
-    const clashes = clashProblems(withColour, others, 'body/cells')
-    if (clashes.length > 0) throw new ValidationError(clashes[0]!.message, clashes)
-    assertCells(requests, lines, target, 'body/cells')
-
-    const cleared = { operations: 0, materials: await clearDraftMaterials(tx, current.id) }
-    const changes: { cellId: string; before: number; after: number; size: string; salesOrderLineId: string }[] = []
-    for (const request of requests) {
-      const line = lines.get(request.salesOrderLineId)!
-      const cell = held.find((entry) => sameCell(entry, request))
-      if (cell && request.quantity === 0) {
-        await tx.workOrderSize.delete({ where: { id: cell.id }, select: { id: true } })
-        changes.push({ cellId: cell.id, before: cell.quantity, after: 0, size: cell.size, salesOrderLineId: request.salesOrderLineId })
-      } else if (cell && request.quantity !== cell.quantity) {
-        await tx.workOrderSize.update({ where: { id: cell.id }, data: { quantity: request.quantity, version: { increment: 1 } }, select: { id: true } })
-        changes.push({ cellId: cell.id, before: cell.quantity, after: request.quantity, size: cell.size, salesOrderLineId: request.salesOrderLineId })
-      } else if (!cell && request.quantity > 0) {
-        const cellId = newId()
-        await tx.workOrderSize.create({
-          data: { id: cellId, siteId: current.siteId, workOrderId: current.id, styleId: current.styleId, colourwayId: line.colourwayId, size: request.size, quantity: request.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: (await optionValueIdsOf(tx, [line.id])).get(line.id) ?? [], createdById: actorIdOf(tools) },
-          select: { id: true },
-        })
-        changes.push({ cellId, before: 0, after: request.quantity, size: request.size, salesOrderLineId: line.id })
-      }
-    }
-    for (const change of changes) {
-      tools.audit({
-        action: 'workorders.setCell',
-        recordType: 'WorkOrderSize',
-        recordId: change.cellId,
-        companyId: current.companyId,
-        siteId: current.siteId,
-        before: change.before === 0 ? undefined : { quantity: change.before, size: change.size, salesOrderLineId: change.salesOrderLineId },
-        after: change.after === 0 ? undefined : { quantity: change.after, size: change.size, salesOrderLineId: change.salesOrderLineId },
-      })
-    }
-    const cells = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { quantity: true } })
-    tools.audit({ recordType: 'WorkOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { cells: changes, draftSpecCleared: cleared } })
-    changedEvent(tools, current, ['cells'], cells)
-    return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
-  })
+  return onWorkOrder(caller, workOrder, { name: 'workorders.setCells', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, (tools) => setCellsInCommand(tools, context, workOrder.id, body.cells))
 }
+
+// ── B-SA-041 (sales page plan; 13-backend B4b): the draft's cells set inside a command that is already open — setCells' own
+// command (the work order's version guards it), and a WorkOrderChange applied on a DRAFT (modules/production/work-order-changes
+// apply.ts, its own command on the change, the work order's row locked first). The caller checked workorders.manage over it.
+/** Sets cells of a DRAFT in an open command (see setCells): every rule of setCells, read in this transaction. */
+export async function setCellsInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, workOrderId: string, requested: CellsInput['cells']): Promise<{ workOrder: WorkOrderView }> {
+  const workOrder = await readWorkOrder(tools.tx, workOrderId)
+  if (!workOrder) throw new NotFoundError('Work order not found.')
+  if (workOrder.status !== 'DRAFT') throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; its cells are frozen (a change is a new work order).`)
+  if (workOrder.kind === 'REPAIR') throw new InvalidStateError(`Work order ${workOrder.number} repairs one garment of its repair order: its cell does not change (a different garment is a new repair work order).`)
+  if (workOrder.kind === 'SAMPLE' && (await tools.tx.workOrderSize.count({ where: { workOrderId: workOrder.id, salesOrderLineId: null } })) > 0) {
+    throw new InvalidStateError(`Work order ${workOrder.number} makes the samples of its sample round for no order line: its cells are the round's. Change the round's cells, cancel this work order and make a new one from the round.`)
+  }
+  const lineIds = [...new Set(requested.map((cell) => cell.salesOrderLineId))]
+  const visible = await readOrderLines(tools.tx, lineIds)
+  for (const lineId of lineIds) {
+    const line = visible.get(lineId)
+    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
+  }
+  assertUnitCells(workOrder, visible, requested)
+  const requests = requested.map((cell, index) => ({ ...cell, index }))
+  const duplicates = duplicateRequests(requests, 'body/cells')
+  if (duplicates.length > 0) throw new ValidationError('A cell is named twice.', duplicates)
+  const { tx } = tools
+  const current = await lockedDraft(tx, workOrder.id, 'its cells change')
+  const style = await tx.style.findUniqueOrThrow({ where: { id: current.styleId }, select: STYLE_COLUMNS })
+  await lockOrderLines(tx, context.tenantId, lineIds)
+  const lines = await readOrderLines(tx, lineIds, current.id)
+  const held = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { id: true, salesOrderLineId: true, colourwayId: true, size: true, quantity: true } })
+  // B-PR-01: a line of another customer than the work order's is refused in words (B-PR-02's lineProblems). A work order of
+  // no customer (a mixed one made before the rule, a SAMPLE of a round for no customer) is left to the database's guard,
+  // which lets its cells leave (lowered, removed) and refuses any other change.
+  const target: CellTarget = { companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, styleSizes: style.sizes, styleRevisionId: current.styleRevisionId, ...(current.partyId !== null ? { partyId: current.partyId } : {}) }
+  const withColour = requests.map((request) => ({ ...request, colourwayId: lines.get(request.salesOrderLineId)!.colourwayId }))
+  // B-W2b-275: a held SAMPLE cell may name no order line; it is never the cell a request names.
+  const sameCell = (cell: { salesOrderLineId: string | null; size: string }, request: { salesOrderLineId: string; size: string }) => cell.salesOrderLineId === request.salesOrderLineId && cell.size === request.size
+  const others = held.filter((cell) => !requests.some((request) => sameCell(cell, request)))
+  const clashes = clashProblems(withColour, others, 'body/cells')
+  if (clashes.length > 0) throw new ValidationError(clashes[0]!.message, clashes)
+  assertCells(requests, lines, target, 'body/cells')
+
+  const cleared = { operations: 0, materials: await clearDraftMaterials(tx, current.id) }
+  const changes: { cellId: string; before: number; after: number; size: string; salesOrderLineId: string }[] = []
+  for (const request of requests) {
+    const line = lines.get(request.salesOrderLineId)!
+    const cell = held.find((entry) => sameCell(entry, request))
+    if (cell && request.quantity === 0) {
+      await tx.workOrderSize.delete({ where: { id: cell.id }, select: { id: true } })
+      changes.push({ cellId: cell.id, before: cell.quantity, after: 0, size: cell.size, salesOrderLineId: request.salesOrderLineId })
+    } else if (cell && request.quantity !== cell.quantity) {
+      await tx.workOrderSize.update({ where: { id: cell.id }, data: { quantity: request.quantity, version: { increment: 1 } }, select: { id: true } })
+      changes.push({ cellId: cell.id, before: cell.quantity, after: request.quantity, size: cell.size, salesOrderLineId: request.salesOrderLineId })
+    } else if (!cell && request.quantity > 0) {
+      const cellId = newId()
+      await tx.workOrderSize.create({
+        data: { id: cellId, siteId: current.siteId, workOrderId: current.id, styleId: current.styleId, colourwayId: line.colourwayId, size: request.size, quantity: request.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: (await optionValueIdsOf(tx, [line.id])).get(line.id) ?? [], createdById: actorIdOf(tools) },
+        select: { id: true },
+      })
+      changes.push({ cellId, before: 0, after: request.quantity, size: request.size, salesOrderLineId: line.id })
+    }
+  }
+  for (const change of changes) {
+    tools.audit({
+      action: 'workorders.setCell',
+      recordType: 'WorkOrderSize',
+      recordId: change.cellId,
+      companyId: current.companyId,
+      siteId: current.siteId,
+      before: change.before === 0 ? undefined : { quantity: change.before, size: change.size, salesOrderLineId: change.salesOrderLineId },
+      after: change.after === 0 ? undefined : { quantity: change.after, size: change.size, salesOrderLineId: change.salesOrderLineId },
+    })
+  }
+  const cells = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { quantity: true } })
+  tools.audit({ recordType: 'WorkOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { cells: changes, draftSpecCleared: cleared } })
+  changedEvent(tools, current, ['cells'], cells)
+  return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
+}
+// ── end B-SA-041 ──
 
 /** Inside the command: the work order is still a DRAFT (else 409 saying what it is). */
 async function lockedDraft(tx: CommandTx, workOrderId: string, doing: string): Promise<Header> {

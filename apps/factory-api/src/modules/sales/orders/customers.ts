@@ -25,6 +25,8 @@ import { lateWhere, whereOf } from './orders'
 export interface CustomersQuery {
   readonly q?: string | undefined
   readonly companyId?: string | undefined
+  /** B-SA-020: count made-to-measure orders only (the sheet's `kind=mtm`). */
+  readonly kind?: 'mtm' | undefined
   readonly limit: number
 }
 
@@ -44,7 +46,7 @@ export async function orderCustomers(caller: CommandCaller, query: CustomersQuer
           })
         ).map((party) => party.id)
       : null
-    const base: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, { companyId: query.companyId }, today), matching ? { partyId: { in: matching } } : {}] }
+    const base: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, { companyId: query.companyId, kind: query.kind /* B-SA-020 */ }, today), matching ? { partyId: { in: matching } } : {}] }
     const all = await client.salesOrder.groupBy({ by: ['partyId'], where: base, _count: { _all: true }, _max: { orderDate: true, createdAt: true } })
     const open = await client.salesOrder.groupBy({ by: ['partyId'], where: { AND: [base, { status: { in: [...OPEN_STATUSES] } }] }, _count: { _all: true } })
     const late = await client.salesOrder.groupBy({ by: ['partyId'], where: { AND: [base, lateWhere(today)] }, _count: { _all: true } })

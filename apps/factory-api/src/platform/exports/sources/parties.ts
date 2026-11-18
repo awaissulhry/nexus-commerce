@@ -11,8 +11,8 @@ import { defineExportSource, type ExportColumn } from '../source'
  * one parties list seen from each side (apps/factory-web areas/parties/_shared PartiesList + model.ts SIDES and
  * viewQuery). The address keeps the saved filter `?view=` (customers: open|active|prospects|brands|riders|invoice|vies|blocked|
  * archived|all; suppliers: open|active|prospects|suppliers|subcontractors|carriers|blocked|archived|all; nothing: open =
- * every status but archived, the side's roles); the screen keeps its search and kind / tax-mode chips out of the
- * address, so the file reads them only when an address names them (`?q=`, `?kind=`, `?taxMode=`). Read through the
+ * every status but archived, the side's roles), its search `?q=` and its kind / tax-mode chips `?kind=`, `?taxMode=` (F-SA-225:
+ * the screen keeps them in its address too, so Export ▾ and Export N hold exactly the screen's rows). Read through the
  * module's listParties (parties.view, its companies and parties), which also counts the view before the run. No
  * money: the Customers page's Overdue column comes from the receivables read, a read of its own, and is not part of
  * this file.

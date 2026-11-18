@@ -765,28 +765,7 @@ export function reasonProblem(reason: string, required: boolean): string | null 
   return text.length > 500 ? 'form.reasonLong' : null
 }
 
-// ---- export (Export ▾ "This view (CSV)") ------------------------------------------------------------------------------
-
-const csvCell = (value: string | null | undefined) => {
-  const text = value ?? ''
-  return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-}
-
-/** The rows of the view as CSV (the columns the list shows, words in the page's language). */
-export function partiesCsv(
-  rows: readonly PartyRow[],
-  words: { header: readonly string[]; status: (row: PartyRow) => string; roles: (row: PartyRow) => string; vies: (row: PartyRow) => string; taxMode: (row: PartyRow) => string },
-): string {
-  const lines = [words.header.map(csvCell).join(',')]
-  for (const row of rows) {
-    lines.push(
-      [row.code, row.legalName, row.tradeName, words.roles(row), words.status(row), row.country, row.city, words.taxMode(row), row.vatNumber, row.fiscalCode, words.vies(row), row.language]
-        .map(csvCell)
-        .join(','),
-    )
-  }
-  return `${lines.join('\r\n')}\r\n`
-}
+// F-SA-225: Export ▾ and Export N go through the export job (exports/sources/parties.ts): no CSV is made in the browser.
 
 // ---- bulk runs (Check VIES for N, Archive N) --------------------------------------------------------------------------
 

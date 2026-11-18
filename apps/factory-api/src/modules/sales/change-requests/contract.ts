@@ -4,7 +4,9 @@ import { MAX_ANSWER, MAX_NOTE, ORDER_REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CO
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_SIZE_QUANTITY, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
-import { diffView, impactView } from '../orders/daily-contract'
+import { diffView, extraPiecesView, impactView } from '../orders/daily-contract'
+// B-SA-042 (P6', R1): Accept runs the change at once; the extra pieces' outcome, the work-order changes it proposed.
+import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS } from '@nexus/factory-domain/order-apply/rules'
 // B-PR-25: the production asks from the portal, the impact before Send.
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS } from '@nexus/factory-domain/sales/order-changes/freeze'
@@ -322,6 +324,8 @@ export const officeRecordContract = defineContract({
         cancel: impactView.nullable(),
         /** A cancel of some lines: what W2a's close of lines closes (the pieces that will not be made or shipped). */
         closes: z.array(output({ lineId: id(), seq: z.number().int(), closedShortQuantity: z.number().int() })).nullable(),
+        /** B-SA-042 (R1, Round 4): the pieces already cut beyond the new figures; Accept stays held until their outcome is chosen. */
+        workOrders: extraPiecesView,
       }).nullable(),
       live,
     }),
@@ -336,6 +340,8 @@ export const acceptContract = defineContract({
     ...answerBody,
     /** The amendment's (or the cancel's) reason, kept with the order; default: the request's own words. */
     reason: z.string().trim().min(1).max(MAX_REASON).optional(),
+    /** B-SA-042 (R1): what happens to the pieces already cut beyond the new figures; required when Accept leaves some. */
+    extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
   }),
   response: {
     200: output({
@@ -353,6 +359,12 @@ export const acceptContract = defineContract({
         skipped: z.array(output({ orderLineId: id(), seq: z.number().int(), words })),
         words,
       }).nullable(),
+      /** B-SA-042: the work-order changes Accept proposed (held for who manages each work order) and the extra pieces it left. */
+      workOrders: output({
+        proposed: z.array(output({ id: id(), kind: z.enum(WORK_ORDER_CHANGE_KINDS), workOrderId: id().nullable(), number: z.string().nullable() })),
+        extra: z.array(output({ workOrderSizeId: id(), salesOrderLineId: id(), size: z.string(), count: z.number().int(), words })),
+        extraOutcome: z.enum(EXTRA_OUTCOMES).nullable(),
+      }),
     }),
   },
 })

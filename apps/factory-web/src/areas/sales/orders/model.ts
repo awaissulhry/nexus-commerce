@@ -62,6 +62,8 @@ export interface OrderAbilities {
   price: boolean
   cost: boolean
   margin: boolean
+  /** F-SA-214 / B-SA-020: rider profiles (sales.measurements.view): the riders' names, the review's door, the rider term. */
+  measurements: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -83,6 +85,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     price: held.has('money.price'),
     cost: held.has('money.cost'),
     margin: held.has('money.margin'),
+    measurements: held.has('sales.measurements.view'), // F-SA-214
   }
 }
 
@@ -156,6 +159,19 @@ export function partyFromAddress(params: { get(name: string): string | null } | 
 
 // B-TH-226: the chip "Customer: <name>" of TH-0 went: the sheet's own chips (list/sheet) name every narrowing.
 
+// ── F-SA-221 (sales page plan N7, pick P12; 12-lists-board §4.1): made-to-measure orders, `?kind=mtm` ──
+/** The made-to-measure term of the address: `mtm`, or null (another value narrows nothing: the sheet never guesses). */
+export const kindFromAddress = (params: { get(name: string): string | null } | null): 'mtm' | null => (params?.get('kind') === 'mtm' ? 'mtm' : null)
+// ── end F-SA-221 ──
+
+// ── F-SA-222 (sales page plan N7, pick P12; 12-lists-board §4.2): a rider's orders, `?profile=<id>` ──
+/** The rider term of the address (a profile id: any revision of the rider's garment profile), or null. */
+export function profileFromAddress(params: { get(name: string): string | null } | null): string | null {
+  const value = params?.get('profile')?.trim() ?? ''
+  return UUID.test(value) ? value.toLowerCase() : null
+}
+// ── end F-SA-222 ──
+
 // ── B-TH-225: Brand and Company narrow the sheet (`?brand=<party id>|own`, `?company=<id>`) ──
 /** The label on the garment the address narrows the sheet to: a brand party's id, `own` (our own collection), or null. */
 export function brandFromAddress(params: { get(name: string): string | null } | null): string | null {
@@ -182,6 +198,10 @@ export interface Narrowing {
   readonly extra?: ExtraTerms | null
   /** B-TH-244: count each row's production progress (the Progress column is shown). */
   readonly progress?: boolean
+  /** F-SA-221: made-to-measure orders only (`?kind=mtm`). */
+  readonly kind?: 'mtm' | null
+  /** F-SA-222: a rider's orders (`?profile=<id>`, the rider list's Open orders door). */
+  readonly profile?: string | null
 }
 // ── end B-TH-225 ──
 
@@ -235,7 +255,7 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */ }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */ }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -251,6 +271,8 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   if (next.party) query.set('party', next.party) // B-TH-201
   if (next.brand) query.set('brand', next.brand) // B-TH-225
   if (next.company) query.set('company', next.company) // B-TH-225
+  if (next.kind) query.set('kind', next.kind) // F-SA-221
+  if (next.profile) query.set('profile', next.profile) // F-SA-222
   if (next.cf) query.set('cf', next.cf) // B-TH-057
   if (next.sort) query.set('sort', next.sort) // B-TH-057
   if (next.q.trim()) query.set('q', next.q.trim())
@@ -273,6 +295,8 @@ export function rowsQuery(rows: RowView, q: string, cursor?: string | null, part
 /** The tiles (the design's saved-filter tiles), each the saved rows its count stands for. */
 export const TILES: ReadonlyArray<{ key: TileKey; rows: RowView }> = Object.freeze([
   { key: 'late', rows: 'late' },
+  // F-SA-214 (12-lists-board §3.4): Waiting for approval, second (the board's first lane; PENDING_APPROVAL is a rows view).
+  { key: 'waitingForApproval', rows: 'PENDING_APPROVAL' },
   { key: 'waitingForDeposit', rows: 'deposit' },
   { key: 'inProduction', rows: 'IN_PRODUCTION' },
   { key: 'readyToShip', rows: 'READY' },
@@ -309,6 +333,8 @@ const narrowingOf = (narrow: Narrowing): OrderQuery => ({
   ...(narrow.sort ? { sort: narrow.sort } : {}),
   ...extraQueryOf(narrow.extra ?? null),
   ...(narrow.progress ? { progress: true } : {}),
+  ...(narrow.kind ? { kind: narrow.kind } : {}), // F-SA-221
+  ...(narrow.profile ? { profile: narrow.profile } : {}), // F-SA-222
 })
 
 /**
@@ -353,12 +379,61 @@ export function laneValue(lane: Lane, price: boolean): number | null {
   return lane.items.reduce((sum, row) => sum + (row.netAmount ?? 0), 0)
 }
 
-/** Closed and cancelled orders the board does not draw, from the board's counts. */
-export function offBoard(board: OrderBoard | null): { closed: number; cancelled: number } | null {
+/** Closed, cancelled and (F-SA-214) delivered orders the board does not draw, from the board's counts. */
+export function offBoard(board: OrderBoard | null): { closed: number; cancelled: number; delivered: number } | null {
   if (!board) return null
   const count = (status: OrderStatus) => board.byStatus.find((entry) => entry.status === status)?.count ?? 0
-  return { closed: count('CLOSED'), cancelled: count('CANCELLED') }
+  return { closed: count('CLOSED'), cancelled: count('CANCELLED'), delivered: count('DELIVERED') }
 }
+
+// ── F-SA-214 (sales page plan N8 / N7, picks P12, P13, P17; 12-lists-board §3.3–§3.5): the waiting lane's reasons, the live re-read ──
+/** A waiting order's reason as the card says it (`orders` words `waits.*`) and its door: where it is decided, or null (no door). */
+export interface WaitDoor {
+  readonly word: 'waits.yes' | 'waits.credit' | 'waits.review'
+  readonly href: string | null
+}
+
+/**
+ * Why a PENDING_APPROVAL card waits, each reason once with its door: a yes asked → Home › Approvals (sales orders); a yes nobody
+ * asked yet and the customer's credit → the order (where a yes is asked, or the credit read); the factory review of a
+ * made-to-measure unit → Made-to-measure › Riders waiting for the review of this customer, ONLY for a reader of measurements
+ * (sales.measurements.view: else the words without a door). An order that waits for nothing says nothing.
+ */
+export function waitDoorsOf(row: Pick<OrderRow, 'id' | 'partyId' | 'status' | 'waits'>, prefix: string, can: Pick<OrderAbilities, 'measurements'>): WaitDoor[] {
+  if (row.status !== 'PENDING_APPROVAL' || !row.waits) return []
+  const order = `${prefix}/sales/orders/${encodeURIComponent(row.id)}`
+  const out: WaitDoor[] = []
+  const add = (door: WaitDoor) => {
+    if (!out.some((seen) => seen.word === door.word)) out.push(door)
+  }
+  for (const reason of row.waits) {
+    if (reason === 'REQUEST_PENDING') add({ word: 'waits.yes', href: `${prefix}/home/approvals?kind=SALES_ORDER` })
+    else if (reason === 'NO_REQUEST') add({ word: 'waits.yes', href: order })
+    else if (reason === 'CREDIT_HOLD') add({ word: 'waits.credit', href: order })
+    else if (reason === 'MEASUREMENTS') add({ word: 'waits.review', href: can.measurements ? `${prefix}/sales/made-to-measure?segment=riders&view=waiting&party=${encodeURIComponent(row.partyId)}` : null })
+  }
+  return out
+}
+
+/** The events a new order may follow (an accepted quote makes one, waiting for a yes or confirmed). */
+const NEW_ORDER_LANES: readonly BoardLane[] = ['PENDING_APPROVAL', 'CONFIRMED']
+
+/**
+ * The lanes a live event re-reads on the board (never all of them for one change): a state that moved re-reads its `from` and `to`
+ * lanes (both are live fields of sales_order.status_changed); a new order the lanes it may enter; another order event the lane that
+ * holds the order on screen (none: nothing on the board changes, only the counts). Only the lanes the board shows.
+ */
+export function boardRereadOf(change: { type: string; fields: Readonly<Record<string, unknown>> }, lanes: readonly Pick<Lane, 'status' | 'items'>[]): BoardLane[] {
+  const shown = lanes.map((lane) => lane.status)
+  const keep = (statuses: readonly unknown[]): BoardLane[] => (BOARD_LANES as readonly BoardLane[]).filter((lane) => shown.includes(lane) && statuses.includes(lane))
+  if (change.type === 'sales_order.status_changed') return keep([change.fields.from, change.fields.to])
+  if (change.type === 'sales_order.created' || change.type === 'quote.accepted') return keep(NEW_ORDER_LANES)
+  // F-SA-221: a rider's review changes the waiting cards' "waiting for review" (and its confirm moves an order: status_changed follows).
+  if (change.type.startsWith('measurement_profile.')) return keep(['PENDING_APPROVAL'])
+  const named = new Set(idsOf(change.fields))
+  return keep(lanes.filter((lane) => (lane.items ?? []).some((row) => named.has(row.id))).map((lane) => lane.status))
+}
+// ── end F-SA-214 ──
 
 /** How far the order's garments left (shipped of ordered), 0–100. */
 export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): number => (row.units > 0 ? Math.round((row.shippedUnits / row.units) * 100) : 0)
@@ -770,8 +845,9 @@ export function liveTouches(change: { type: string; fields: Readonly<Record<stri
  * Whether a live event changes what the list shows (a new order, a state or promise that moved, a deposit paid or
  * waived): floor scans and invoice events do not, so they never count as "updates".
  */
+// F-SA-221: + a rider profile's event (a review moves a row's "waiting for review"; its confirm lets a waiting order go on).
 export const listTouches = (change: { type: string }): boolean =>
-  change.type.startsWith('sales_order.') || (change.type.startsWith('deposit_request.') && change.type !== 'deposit_request.link_sent') || change.type === 'payment.deposit_paid' || change.type === 'quote.accepted'
+  change.type.startsWith('sales_order.') || (change.type.startsWith('deposit_request.') && change.type !== 'deposit_request.link_sent') || change.type === 'payment.deposit_paid' || change.type === 'quote.accepted' || change.type.startsWith('measurement_profile.')
 
 /** The ids a record's live events may name: the order and every record of its chain. */
 export function knownIds(order: Order): Set<string> {
@@ -898,7 +974,7 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
   if (!rowsTerm && filter.open !== 'true') query.set('rows', 'all')
   if (filter.partyId) query.set('party', filter.partyId)
   if (filter.companyId) query.set('company', filter.companyId)
-  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
+  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'profile' /* F-SA-222 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }
@@ -907,8 +983,8 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
  * rows views (Invoiced, At risk, the currency, the customer's mark, "Shipped, not invoiced" beside another view). The rows view itself
  * stays the tiles' and lanes' own, as before.
  */
-export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced'> {
+export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced' | 'kind' /* F-SA-221 */ | 'profile' /* F-SA-222 */> {
   const extra = narrow.extra ?? {}
-  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced }
+  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null, profile: narrow.profile ?? null }
 }
 // ── end B-TH-244 ──

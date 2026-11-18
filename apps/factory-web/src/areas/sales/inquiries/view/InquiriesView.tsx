@@ -7,6 +7,11 @@ import { EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/compo
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
+import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
+// F-SA-224: the one customer filter of the Sales lists.
+import { CustomerSwitcher } from '../../_shared/customer-switcher/view/CustomerSwitcher'
+import { localSwitcherState } from '../../_shared/customer-switcher/model'
+
 import type { ListKey } from '../../../../list-frame/model'
 import type { LiveState } from '../../../../shell/live/use-live'
 import { formatTime } from '../../../../lib/i18n/format'
@@ -85,6 +90,9 @@ import { RequestPane, type PaneSlots } from './pane/RequestPane'
 // B-TH-290 (list-F10): the Production column — production's answer on each request.
 import { ProductionCell } from './pane/production/ProductionAnswer'
 import { companyToday, productionCell } from '../production-answer'
+
+/** F-SA-224: the From switcher's choice of the requests from prospects (no customer yet), `?prospect=1`. */
+const PROSPECTS = 'prospect'
 
 /** Assign to… or Decline N over a selection (all or none: the API's bulk routes). */
 export type BulkDialog = { readonly kind: 'assign'; readonly ids: readonly string[]; readonly model: AssignModel } | { readonly kind: 'decline'; readonly ids: readonly string[]; readonly model: DeclineModel }
@@ -240,11 +248,12 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const { t, say, locale, day, when } = useWords()
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
-  const [search, setSearch] = useState(model.address.q)
+  // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
+  const search = useListSearch(model.address.q, (q) => actions?.onAddress?.({ q }))
+  const [fromQuery, setFromQuery] = useState('') // F-SA-224
   const [noticesOpen, setNoticesOpen] = useState(model.noticesOpen ?? false)
   const [viewer, setViewer] = useState<string | null>(model.viewer ?? null)
   const wide = useWide(model.wide)
-  useEffect(() => setSearch(model.address.q), [model.address.q])
   // B-TH-233: rows of every kind; a row's key (`<kind>:<id>`) is its id in the grid and in the selection.
   const rows = model.list?.rows ?? null
   const rowsKey = rows?.map((row) => row.key).join(',') ?? ''
@@ -683,7 +692,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const partyName = model.address.party ? (model.customers?.find((party) => party.id === model.address.party)?.tradeName ?? model.customers?.find((party) => party.id === model.address.party)?.legalName ?? rows?.find((row) => row.party?.id === model.address.party)?.party?.name ?? null) : null
   const chips = chipsOf(model.address, partyName, companyName(model.address.company))
   const notices = pageNotices(model.list, new Set(model.dismissed), model.noticeFacts)
-  const fromValue = model.address.prospect ? 'prospect' : (model.address.party ?? '')
+  // F-SA-224: the From switcher's own search (in the customers read) and the chosen customer.
+  const fromCustomer = model.address.party ? ((model.customers ?? []).find((party) => party.id === model.address.party) ?? null) : null
   const exportWords = exportPhrases(model.address.tile, model.can)
 
   const tools = (
@@ -714,23 +724,24 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           </option>
         ))}
       </Select>}
-      <Select
-        size="sm"
-        aria-label={t('list.fromLabel')}
-        value={fromValue}
-        onChange={(event) => {
-          const value = event.target.value
-          actions?.onAddress?.(value === 'prospect' ? { prospect: true, party: null } : { prospect: false, party: value || null })
+      {/* F-SA-224: "From" is the Sales lists' one customer filter (`?party=`), with the prospects (no customer yet) as a choice. */}
+      <CustomerSwitcher
+        state={localSwitcherState((model.customers ?? []).map((party) => ({ id: party.id, code: party.code, name: party.tradeName ?? party.legalName })), fromQuery)}
+        party={model.address.prospect ? null : model.address.party}
+        partyName={model.address.party ? (fromCustomer?.tradeName ?? fromCustomer?.legalName ?? null) : undefined}
+        query={fromQuery}
+        searching={false}
+        onQuery={setFromQuery}
+        onPick={(value) => {
+          setFromQuery('')
+          actions?.onAddress?.(value === PROSPECTS ? { prospect: true, party: null } : { prospect: false, party: value })
         }}
-      >
-        <option value="">{t('list.allFrom')}</option>
-        <option value="prospect">{t('list.prospectsOnly')}</option>
-        {(model.customers ?? []).map((party) => (
-          <option key={party.id} value={party.id}>
-            {party.code} · {party.tradeName ?? party.legalName}
-          </option>
-        ))}
-      </Select>
+        extra={[{ value: PROSPECTS, label: t('list.prospectsOnly') }]}
+        extraValue={model.address.prospect ? PROSPECTS : null}
+        allLabel={t('list.allFrom')}
+        recent={0}
+        subject="list"
+      />
     </>
   )
 
@@ -864,12 +875,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                 className="fw-inq-search"
                 aria-label={t('list.search')}
                 placeholder={t('list.search')}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') actions?.onAddress?.({ q: search })
-                }}
-                onBlur={() => search !== model.address.q && actions?.onAddress?.({ q: search })}
+                {...search.field /* F-SA-223 */}
               />
             }
             tools={tools}

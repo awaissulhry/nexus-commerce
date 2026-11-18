@@ -29,6 +29,8 @@ const row = output({
   left: quantity,
   note: z.string().nullable(),
   version: z.number().int(),
+  /** B-SA-043 (office only): what of it the order's extra pieces took (cut beyond the order), in its base unit; null: none. */
+  usedForExtra: quantity.nullable(),
 })
 
 const view = {
@@ -40,6 +42,8 @@ const view = {
   lots: z.array(output({ id: id(), code: z.string(), itemId: id(), itemColourId: id().nullable(), siteId: id(), onHand: quantity, receiptId: id().nullable(), receiptNumber: z.string().nullable(), receivedAt: instant().nullable() })),
   problems: z.array(z.string()),
   empty: words.nullable(),
+  /** B-SA-043 (office only): the order's extra pieces per line and size ("Made extra: 4 M"), and the words of the rows' usedForExtra. */
+  extra: output({ pieces: z.array(output({ lineId: id(), size: z.string(), count: z.number().int(), words })), usedWords: words.nullable() }),
 }
 
 export const listCustomerMaterialsContract = defineContract({ params, response: { 200: output(view) } })

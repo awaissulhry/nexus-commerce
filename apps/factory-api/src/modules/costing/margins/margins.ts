@@ -36,6 +36,8 @@ import { methodInForce } from '../method/method'
 // B-W2b-416 (FIN-050, KA3:01): the floor each order is held to (the Sales settings') and its flag.
 import { belowCount, type FloorFigures } from '@nexus/factory-domain/costing/profitability/floor'
 import { flagOf, floorFields, orderFloors, type OrderFloor } from './floor'
+// B-SA-043: the order's extra pieces (cut beyond what it now wants).
+import { madeExtraOf, type MadeExtra } from '../../sales/orders/made-extra'
 
 /**
  * Order margin from estimate to actual (B-W2a-29; FIN-047; design finance.margins SCR-155 "Order margin, quote to
@@ -404,6 +406,29 @@ const stageOf = (value: number, parts: Parts | null, known = true) => {
   }
 }
 
+// ── B-SA-043 ──
+/** The order's extra pieces and their share of the actual cost (by garments, as a shared work order's cost is shared). */
+function extraPiecesOf(lines: readonly LineComputed[], extra: readonly MadeExtra[]) {
+  let cost = 0
+  const rows: { lineId: string; seq: number; size: string; count: number }[] = []
+  for (const line of lines) {
+    const mine = extra.filter((entry) => entry.lineId === line.line.id)
+    const count = mine.reduce((sum, entry) => sum + entry.count, 0)
+    if (count === 0) continue
+    for (const entry of mine) rows.push({ lineId: line.line.id, seq: line.line.seq, size: entry.size, count: entry.count })
+    const pieces = line.shares.reduce((sum, share) => sum + share.pieces, 0)
+    if (pieces > 0) cost += shareOf(totalOf(line.actualParts), [Math.min(count, pieces), Math.max(0, pieces - count)])[0]!
+  }
+  const count = rows.reduce((sum, row) => sum + row.count, 0)
+  return {
+    count,
+    cost: asMoney('cost', count > 0 ? cost : null),
+    lines: rows,
+    words: count > 0 ? `${count} piece(s) were cut beyond what the order now wants: their share of the actual cost is named here, and it stays in the order's cost.` : null,
+  }
+}
+// ── end B-SA-043 ──
+
 /** GET /costing/margins/orders/:orderId: one order's profitability (the DetailModal and the order's Margin tab). */
 export async function orderMargin(caller: CommandCaller, orderId: string): Promise<OrderMarginView> {
   const actor = actorOf(contextOf(caller))
@@ -412,6 +437,7 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
     const order = isUuid(orderId) ? await db.salesOrder.findUnique({ where: { id: orderId }, select: ORDER_COLUMNS }) : null
     if (!order || !can(actor, COSTING_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
     const [computed] = await computeOrders(db, [order], now)
+    const extra = await madeExtraOf(db, (contextOf(caller) as { readonly tenantId: string }).tenantId, order) // B-SA-043: office only (costing.view)
     const row = rowOf(computed!, (await orderFloors(db, [order.id], now)).get(order.id))
     const { lines, figures } = computed!
     const actualKnown = computed!.started && !computed!.currencyMismatch
@@ -444,6 +470,8 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
           : null,
       leather: { quoted: asMoney('cost', allKnown(quotedLeathers) && !computed!.currencyMismatch ? quotedLeathers.reduce((sum, value) => sum + value, 0) : null), actual: asMoney('cost', lines.reduce((sum, line) => sum + line.actualLeather, 0)) },
       freight: { cost: asMoney('cost', null), words: "No freight cost is recorded on an order yet (the carrier's invoices come with supplier invoices): the margin leaves freight out." },
+      // B-SA-043 (R1, review P6-4): the extra pieces' cost line — their share by garments of each line's actual cost.
+      extraPieces: extraPiecesOf(lines, extra),
       lines: lines.map((line) => {
         const quotedCost = costOf(line.quotedParts)
         const estimateCost = costOf(line.estimateParts)

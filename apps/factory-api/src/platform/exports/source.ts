@@ -3,6 +3,8 @@ import type { Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { EVERY_PARTY_WORDS, reachesEveryParty, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, type ScopedRecord } from '@nexus/factory-domain/core/permissions' // B-SA-020
+import type { AskedColumn } from '@nexus/factory-domain/views/exports' // B-SA-020
 import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import type { ExportCell, ExportFormat, ExportLocale } from '@nexus/factory-domain/views/exports'
 import { LIST_KEY } from '@nexus/factory-domain/views/state'
@@ -27,7 +29,8 @@ import type { CommandCaller } from '../../core/command'
  * W2b (B-W2b-11; PLT-184) adds, each optional:
  *   page        the list's address under /w/<company> (`/sales/orders`; default: the list key with `/` for its dots):
  *               the link of the e-mail that says the file is ready (`?export=<job>` opens the job on its list)
- *   refusal     why the person may not export it beyond `permission`, in words (a report they may not run), or null
+ *   refusal     why the person may not export it beyond `permission`, in words (a report they may not run), or null;
+ *               B-SA-021: it reads the view's query too (a term only some may use: Sales › Orders' rider, `profile=`)
  *   count       how many rows the view holds, read before the run (JobProgress "38 of 61"); without it the worker
  *               counts by reading the list once without writing (factory-domain views/export/progress.ts)
  *   reimport    "Full file for re-import (XLSX)": the importer (platform/imports registry key) whose layout the file
@@ -45,6 +48,11 @@ import type { CommandCaller } from '../../core/command'
  *               rows are written, as the person who asked (a name they may not see is never written). null: the screen's
  *               title, as before.
  *
+ * B-SA-020 (sales page plan N7), optional per column:
+ *   permission  a right the column needs beyond the list's own (over the screen's company): a person without it gets no such
+ *               column — left out and named above the header like a money column of a grain they lack, never an empty column
+ *               (Sales › Orders' Riders: sales.measurements.view, the riders are body data)
+ *
  * A list without a source shows no Export ▾ (its own "Export N" of the selected rows stays). Tests set their own
  * sources with useExportSources([...]).
  */
@@ -52,6 +60,8 @@ import type { CommandCaller } from '../../core/command'
 export interface ExportColumn<Row> {
   /** The money grain of the column; absent: not money. */
   readonly grain?: Grain
+  /** B-SA-020: a right the column needs beyond the list's (see above); absent: the list's own right is enough. */
+  readonly permission?: Permission
   /** The cell of a row. `words(code)` gives a code's words in the file's language (the source's `words`). */
   value(row: Row, words: (code: string) => string): ExportCell
 }
@@ -100,7 +110,7 @@ export interface ExportSource<Query, Row> {
   readonly words?: Readonly<Record<ExportLocale, Readonly<Record<string, string>>>>
   readonly formats?: readonly ExportFormat[]
   readonly page?: string
-  refusal?(actor: Actor): string | null
+  refusal?(actor: Actor, query: Query): string | null // B-SA-021: + the view's query
   count?(caller: CommandCaller, query: Query): Promise<number>
   readonly reimport?: ExportReimport<Row>
   idOf?(row: Row): string
@@ -135,6 +145,21 @@ export const everyCustomerRefusal =
   (actor: Actor): string | null =>
     reachesEveryParty(actor, permission) ? null : EVERY_PARTY_WORDS.en
 // ── end B-PR-09 ──
+
+// ── B-SA-020 ──
+/** Whether the person lacks the right a column of the source needs beyond the list's (an unknown or plain column: false). */
+export function lacksColumnRight(source: Pick<AnyExportSource, 'columns'>, key: string, actor: Actor, scope: ScopedRecord): boolean {
+  const permission = Object.hasOwn(source.columns, key) ? source.columns[key]?.permission : undefined
+  return permission !== undefined && !can(actor, permission, scope)
+}
+
+/** The picked columns with those whose right the person lacks moved to the omitted ones (named in the job and the file). */
+export function withColumnRights<P extends { readonly columns: readonly AskedColumn[]; readonly omitted: readonly AskedColumn[] }>(source: Pick<AnyExportSource, 'columns'>, picked: P, actor: Actor, scope: ScopedRecord): P {
+  const lacking = picked.columns.filter((column) => lacksColumnRight(source, column.key, actor, scope))
+  if (lacking.length === 0) return picked
+  return { ...picked, columns: picked.columns.filter((column) => !lacking.includes(column)), omitted: [...picked.omitted, ...lacking.map(({ key, label }) => ({ key, label }))] }
+}
+// ── end B-SA-020 ──
 
 /** A source with its types erased, as the registry and the worker hold it. */
 export type AnyExportSource = ExportSource<unknown, unknown>

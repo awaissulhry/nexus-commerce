@@ -299,18 +299,21 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     manual = applied.order
   })
 
-  it('numbers after what the order has (SEED-SO-0001 has amendment 1); a line in work orders never drops under them', async () => {
+  it('numbers after what the order has (SEED-SO-0001 has amendment 1); a line in work orders may drop under them (B-SA-042), never goes', async () => {
     const so1 = await recordOf(seeded.money.sales.orderId)
     const first = so1.lines[0]
     const bump = first.sizes.map((size: Json, index: number) => ({ size: size.size, quantity: size.quantity + (index === 0 ? 1 : 0) }))
     const applied = await ok('sales', 'POST', `${orderUrl(so1.id)}/amendments`, { version: so1.version, reason: 'One more of the first size.', lines: [{ id: first.id, sizes: bump }, ...so1.lines.slice(1).map((line: Json) => ({ id: line.id }))] }, 201)
     expect(applied.amendment.revision).toBe(2)
-    // SEED-SO-0002: WO-0001 makes BLK 52 twice (WO-0002 once more) — a size never goes under it, a line in work orders is never removed.
+    // SEED-SO-0002: WO-0001 makes BLK 52 twice (WO-0002 once more) — B-SA-042 (P6', R1): a size may now go under what work orders
+    // make (the gap is proposed to them, never below what is cut); the preview names the extra pieces it would leave. A line in work
+    // orders is still never removed.
     const so2 = await recordOf(seeded.money.shipping.quality.production.salesOrderId)
     const blk = so2.lines.find((line: Json) => line.colourway.code === 'BLK')
     const red = so2.lines.find((line: Json) => line.colourway.code === 'RED')
     const lower = await ok('sales', 'POST', `${orderUrl(so2.id)}/amendments/preview`, { reason: 'Fewer.', lines: [{ id: blk.id, sizes: grid([['50', 1], ['52', 1], ['54', 1]]) }, { id: red.id }] })
-    expect(lower.problems).toEqual([{ path: 'body/lines/0/sizes', message: 'Size 52: work orders already make 3 piece(s); lower the work order first (1 asked).' }])
+    expect((lower.problems as Json[]).some((issue) => /work orders already make/.test(issue.message))).toBe(false)
+    expect(lower.workOrders).toMatchObject({ extra: expect.any(Array), needsOutcome: expect.any(Boolean) })
     const removal = await ok('sales', 'POST', `${orderUrl(so2.id)}/amendments/preview`, { reason: 'Only black.', lines: [{ id: blk.id }] })
     expect(removal.problems.map((issue: Json) => issue.message)).toEqual([expect.stringMatching(/^Line 20 is in work orders \(3 piece\(s\)\): it cannot be removed/)])
   })

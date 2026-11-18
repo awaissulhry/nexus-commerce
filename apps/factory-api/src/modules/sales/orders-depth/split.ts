@@ -253,7 +253,8 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
         // A line no part names stays as it is; a line some sizes left keeps the rest.
         lines: lines.filter((line) => remaining.has(line.id)).map((line) => (touched.has(line.id) ? { id: line.id, sizes: remaining.get(line.id)!.map((size) => ({ size: size.size, quantity: size.quantity })) } : { id: line.id })),
       },
-      { reacceptance: false },
+      // B-SA-042: a split changes nothing the customer ordered (its parts move to new orders): it proposes no work-order change.
+      { reacceptance: false, workOrders: 'later' },
     )
     const revision = (await tx.salesOrderAmendment.findUniqueOrThrow({ where: { id: amendment.amendmentId }, select: { revision: true } })).revision
     tools.emit({ type: 'sales_order.split', subject: fresh.id, companyId: fresh.companyId, payload: { orderId: fresh.id, number: fresh.number, newOrderIds: made.map((entry) => entry.id), newNumbers: made.map((entry) => entry.number), amendmentId: amendment.amendmentId, revision, partyId: fresh.partyId /* B-SA-001: the order row read under the lock; the parts keep its customer */ } })

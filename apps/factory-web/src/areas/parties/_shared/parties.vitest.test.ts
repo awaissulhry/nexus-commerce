@@ -49,11 +49,11 @@ import {
   loaded,
   money,
   newPartyProblems,
-  partiesCsv,
   partyPatch,
   partyDraftOf,
   recordTabs,
   reasonProblem,
+  recordHref, // F-SA-225
   sdiState,
   SIDES,
   suggestCode,
@@ -256,10 +256,6 @@ describe('money only with its grain; a bulk action says its reach before the cli
     expect(bulkReach('block', rows).reach.every((row) => row.status === 'ACTIVE')).toBe(true)
   })
 
-  it('exports the view with its words, quoting what needs it', () => {
-    const csv = partiesCsv([rowOf(CUSTOMERS[0]!)], { header: ['Code', 'Name'], status: () => 'Active', roles: () => 'Customer', vies: () => 'Not needed', taxMode: () => 'Italian business' })
-    expect(csv.split('\r\n')[1]).toBe('MODA-DEMO,Moda Demo S.r.l.,Moda Demo,Customer,Active,IT,Firenze,Italian business,IT00000000000,00000000000,Not needed,it')
-  })
 })
 
 // ---- every string in both languages ----
@@ -423,3 +419,31 @@ describe('every design case draws in both languages with no key left on screen',
     expect(supplier).not.toMatch(/€/)
   })
 })
+
+// ---- F-SA-225 (sales page plan N5, picks P18, P23; 12-lists-board §5 rules 1 and 2): one row-click and one Export N rule ----------
+describe('Customers and Purchasing › Suppliers (one list): a row opens its record, the file is the export job\'s, the terms in the address (F-SA-225)', () => {
+  const view = readFileSync(new URL('./view/PartiesListView.tsx', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./PartiesList.tsx', import.meta.url), 'utf8')
+
+  it('the rest of a row opens the record on both sides (⌘ / Ctrl: a new tab)', () => {
+    expect(view).toContain("onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(recordHref(model.prefix, config, row.id), '_blank', 'noopener') : actions?.onOpen?.(row))}")
+    expect(recordHref('/w/DEMO', SIDES.customers, 'p1')).toContain('/sales/customers/p1')
+    expect(recordHref('/w/DEMO', SIDES.suppliers, 'p1')).toContain('/purchasing/suppliers/p1')
+  })
+
+  it('Export N goes through the export job with the picked rows; no CSV is made in the browser, on either side', () => {
+    expect(view).toContain('exportSelected: true')
+    expect(view).not.toContain('onExport')
+    expect(page).not.toContain('downloadText')
+    expect(page).not.toContain('partiesCsv')
+    for (const locale of LOCALES) for (const key of ['list.exportView', 'list.bulkExport_one', 'csv']) expect(key in (CATALOGUE[locale].parties ?? {}), `${locale} ${key}`).toBe(false)
+  })
+
+  it('the view, the search and the chips are address terms (the file reads the screen\'s address: screen = file)', () => {
+    expect(page).toContain("if (nextQuery) search.set('q', nextQuery)")
+    expect(page).toContain("if (nextFilters.kind) search.set('kind', nextFilters.kind)")
+    expect(page).toContain("if (nextFilters.taxMode) search.set('taxMode', nextFilters.taxMode)")
+    expect(page).toContain("const query = (params?.get('q') ?? '').slice(0, 100)")
+  })
+})
+// ---- end F-SA-225

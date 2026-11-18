@@ -113,7 +113,8 @@
       "APPROVAL_TASK": "Richieste in attesa del tuo sì",
       "INQUIRY_WAITING": "Richieste in attesa da più di un giorno lavorativo",
       "SHIPMENT_AT_RISK": "Spedizioni a rischio di mancare la data promessa",
-      "REMINDER": "Promemoria tornati"
+      "REMINDER": "Promemoria tornati",
+      "WORK_ORDER_CHANGE": "Modifiche degli ordini di lavoro da applicare"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -648,7 +649,13 @@
       "REMINDER.MESSAGE": "Promemoria su un messaggio di {record}.",
       "REMINDER.MESSAGE_NOTE": "Promemoria su un messaggio di {record} — {note}",
       "why.REMINDER.AT_TIME": "Hai chiesto di rivederlo adesso.",
-      "why.REMINDER.ON_CHANGE": "Hai chiesto di rivederlo quando cambiava, ed è cambiato."
+      "why.REMINDER.ON_CHANGE": "Hai chiesto di rivederlo quando cambiava, ed è cambiato.",
+      "WORK_ORDER_CHANGE.LOWER": "Ordine di lavoro {number}: riducilo all'ordine {order} ({cells}).",
+      "WORK_ORDER_CHANGE.LOWER_EXTRA": "Ordine di lavoro {number}: riducilo all'ordine {order} ({cells}); già tagliati oltre: {extra}.",
+      "WORK_ORDER_CHANGE.MAKE_MORE": "Ordine di lavoro {number}: fanne di più per l'ordine {order} ({cells}).",
+      "WORK_ORDER_CHANGE.MAKE_MORE_NEW": "Ordine {order}: fai un nuovo ordine di lavoro ({cells}).",
+      "WORK_ORDER_CHANGE.blocks": "L'ordine è cambiato: il suo ordine di lavoro tiene le quantità vecchie finché non applichi la modifica o la lasci com'è.",
+      "why.WORK_ORDER_CHANGE.workorders_manage": "Gestisci questo ordine di lavoro nel suo stabilimento, per il suo cliente."
     },
     "actions": {
       "menu": "Azioni su {record}",

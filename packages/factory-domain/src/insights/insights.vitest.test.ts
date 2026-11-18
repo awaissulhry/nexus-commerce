@@ -122,7 +122,8 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
     expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'SUPPLIER_DOCUMENT', 'CHANGE_ORDER', 'PLAN_VERSION', 'APPROVAL_TASK', 'REMINDER'])
     // B-W2b-307: the production manager also approves SMV changes (product.smv.approve).
     // B-PR-26: + customers' requests it answers (production.brand.manage: urgent, pause, resume; sales.samples.manage: a sample round).
-    expect(tileKindsFor(roleActor('production_manager'))).toEqual(['WORK_ORDER_HELD', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'ORDER_CHANGE_REQUEST', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK', 'REMINDER'])
+    // B-SA-044: + the work-order changes it may apply (workorders.manage).
+    expect(tileKindsFor(roleActor('production_manager'))).toEqual(['WORK_ORDER_HELD', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'ORDER_CHANGE_REQUEST', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK', 'REMINDER', 'WORK_ORDER_CHANGE'])
     // B-W2b-F13b: + the delivery addresses customers added, to check (orders.manage).
     // B-W2b-385: + inquiries waiting for us over a working day (sales.inquiries.manage).
     expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'DELIVERY_ADDRESS', 'APPROVAL_TASK', 'INQUIRY_WAITING', 'REMINDER'])
@@ -365,7 +366,8 @@ describe('the catalogue', () => {
     // B-W2b-189: a supplier's profile change and document are approvals decided on the supplier's record.
     // B-W2b-F13b: a delivery address a customer added is approved or refused on the customer's record.
     // B-W2b-307: a change order and an SMV change are decided in Products › Changes & versions, a plan version on the plan.
-    const OPEN_APPROVALS: readonly string[] = ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION']
+    // B-SA-044: a work-order change is applied or left as is on the work order (its band notice).
+    const OPEN_APPROVALS: readonly string[] = ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'WORK_ORDER_CHANGE']
     for (const kind of recordKinds) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' || OPEN_APPROVALS.includes(kind) ? 'APPROVAL' : 'ALERT')
     // B-W2b-388: a reminder that came back is one of my own rows, as a task is.
     expect(PERSONAL_KINDS.map((kind) => KIND_RULES[kind].category)).toEqual(['TASK', 'MENTION', 'ALERT', 'TASK'])

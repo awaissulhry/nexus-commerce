@@ -716,3 +716,130 @@ describe('releases at once take their turns (one transaction each, the site rele
     expect(won.batchNumber).toBe('BB-00001')
   })
 })
+
+// ── B-SA-040 (sales page plan, lead pick R1): "Lower to the order" ──
+describe('Lower to the order: a released work order goes down to its order, never below what is cut (B-SA-040)', () => {
+  /** The trigger-free insert of a row the test plants (a bundle, a cut order and its line, a reservation). */
+  async function force(sql: string, values: unknown[] = []): Promise<void> {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const lower = (workOrderId: string, body: Json, session = 'planner') => call(session, 'POST', `/production/work-orders/${workOrderId}/lower-to-order`, body)
+  const cellOf = (workOrder: Json, size: string): Json => (workOrder.cells as Json[]).find((cell) => cell.size === size)!
+  /** A RELEASED work order of one black line of these sizes. */
+  async function released(sizes: Record<string, number>) {
+    const { order, workOrder } = await draft([{ colour: 'BLK', sizes }])
+    const response = await release(workOrder.id)
+    expect(response.statusCode, response.body).toBe(200)
+    return { order, workOrder: response.json().workOrder as Json }
+  }
+  const materialsOf = (cellId: string) => admin(`SELECT "itemId", quantity::text AS q, "baseQuantity"::text AS b FROM "WorkOrderMaterial" WHERE "workOrderSizeId" = $1 ORDER BY "itemId", quantity`, [cellId])
+
+  it('lowers a released cell to the figure asked: its planned materials follow, the traveller is marked for a reprint, audited and announced', async () => {
+    const { order, workOrder } = await released({ '50': 1, '52': 4 })
+    const cell = cellOf(workOrder, '52')
+    expect((await materialsOf(cell.id)).filter((row) => row.itemId === A.leather).map((row) => row.q)).toEqual(['201.6000'])
+    const answer = await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, { version: workOrder.version, cells: [{ workOrderSizeId: cell.id, quantity: 3 }], reason: 'The customer ordered 3' })
+    expect(answer.lowered.cells).toEqual([
+      { workOrderSizeId: cell.id, salesOrderLineId: order.lineIds[0], size: '52', asked: 3, from: 4, to: 3, alreadyCut: 0, removed: false, words: { en: 'Lowered to the order: 52 4 → 3', it: "Ridotto all'ordine: 52 4 → 3" } },
+    ])
+    expect(answer.lowered.reprint).toEqual({ traveller: true, words: { en: 'Print the traveller again: its quantities changed.', it: 'Ristampa il foglio di lavorazione: le quantità sono cambiate.' } })
+    expect(answer.workOrder).toMatchObject({ status: 'RELEASED', version: workOrder.version + 1 })
+    expect(cellOf(answer.workOrder, '52').quantity).toBe(3)
+    // 201.6 ft² for 4 → 151.2 ft² for 3 (scaled, rounded up once); the other materials follow too.
+    const after = await materialsOf(cell.id)
+    expect(after.filter((row) => row.itemId === A.leather).map((row) => row.q)).toEqual(['151.2000'])
+    expect(answer.lowered.materials.lowered).toBe(after.length)
+    const [audit] = await admin(`SELECT after, reason FROM "AuditLog" WHERE "recordId" = $1 AND action = 'workorders.lowerToOrder'`, [workOrder.id])
+    expect(audit).toMatchObject({ reason: 'The customer ordered 3', after: { travellerReprint: true, cells: [{ cellId: cell.id, asked: 3, from: 4, to: 3, alreadyCut: 0 }] } })
+    expect(await admin(`SELECT payload->'changes' AS changes, payload->>'partyId' AS "partyId" FROM "OutboxEvent" WHERE type = 'workorder.changed' AND subject = $1`, [workOrder.id])).toEqual([{ changes: ['cells'], partyId: A.brand }])
+    // An old version is a conflict, never an overwrite.
+    expect((await lower(workOrder.id, { version: workOrder.version, cells: [{ workOrderSizeId: cell.id, quantity: 2 }] })).statusCode).toBe(409)
+  })
+
+  it('lowers an in-progress cell only to what is already cut (the database floor, read with SELECT), and says so', async () => {
+    const { workOrder } = await released({ '52': 4 })
+    const url = `/production/work-orders/${workOrder.id}`
+    const started = (await ok('planner', 'POST', `${url}/start`, {})).workOrder
+    const cell = cellOf(started, '52')
+    await force(`INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1, $2, $3, $4, $5, $6, 3)`, [newId(), A.tenant, A.siteA1, workOrder.id, cell.id, `T-${run}-SA040-BN`])
+    const answer = await ok('planner', 'POST', `${url}/lower-to-order`, { version: started.version, cells: [{ workOrderSizeId: cell.id, quantity: 1 }] })
+    expect(answer.lowered.cells[0]).toMatchObject({ asked: 1, from: 4, to: 3, alreadyCut: 3, removed: false, words: { en: 'Already cut: 3', it: 'Già tagliati: 3' } })
+    expect(cellOf(answer.workOrder, '52').quantity).toBe(3)
+    // The database holds the same floor for every login: never below what is cut, never up.
+    await expect(asOffice((tx) => tx.workOrderSize.update({ where: { id: cell.id }, data: { quantity: 2, version: { increment: 1 } } }))).rejects.toThrow(/goes down only to what is already cut, bundled or on a cut order \(3\)/)
+    await expect(asOffice((tx) => tx.workOrderSize.update({ where: { id: cell.id }, data: { quantity: 4, version: { increment: 1 } } }))).rejects.toThrow(/frozen/)
+    // A raise is not lowering: MAKE_MORE (a DRAFT's cells, or a new DRAFT).
+    const raise = await refused('planner', 'POST', `${url}/lower-to-order`, { cells: [{ workOrderSizeId: cell.id, quantity: 5 }] }, 409)
+    expect(raise.issues).toEqual([{ path: 'refusal/ONLY_LOWERS', message: 'Lower to the order only lowers: size 52 makes 3, 5 asked. To make more, propose making more.' }])
+  })
+
+  it('removes a size nothing of which is cut (a cancelled size), with its planned materials', async () => {
+    const { workOrder } = await released({ '50': 1, '52': 2 })
+    const cell = cellOf(workOrder, '50')
+    const answer = await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, { cells: [{ workOrderSizeId: cell.id, quantity: 0 }] })
+    expect(answer.lowered.cells[0]).toMatchObject({ size: '50', from: 1, to: 0, removed: true })
+    expect((answer.workOrder.cells as Json[]).map((entry) => entry.size)).toEqual(['52'])
+    expect(await materialsOf(cell.id)).toEqual([])
+    expect(answer.lowered.materials.removed).toBeGreaterThan(0)
+  })
+
+  it("refuses a cut order already fixed for the cell in words; a leather one still planned follows the cell down", async () => {
+    const { workOrder } = await released({ '52': 4 })
+    const cell = cellOf(workOrder, '52')
+    const cutOrderId = newId()
+    const number = `T-${run}-CO-SA040`
+    await force(
+      `INSERT INTO "CutOrder" (id, "tenantId", "companyId", "siteId", number, kind, "itemId", "itemColourId", status, "releasedAt") VALUES ($1, $2, $3, $4, $5, 'LEATHER', $6, $7, 'RELEASED', now())`,
+      [cutOrderId, A.tenant, A.companyA, A.siteA1, number, A.leather, A.leatherBLK],
+    )
+    const lineId = newId()
+    await force(`INSERT INTO "CutOrderLine" (id, "tenantId", "siteId", "cutOrderId", seq, "workOrderId", "workOrderSizeId", quantity) VALUES ($1, $2, $3, $4, 10, $5, $6, 4)`, [lineId, A.tenant, A.siteA1, cutOrderId, workOrder.id, cell.id])
+    const fixed = await refused('planner', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, { cells: [{ workOrderSizeId: cell.id, quantity: 2 }] }, 409)
+    expect(fixed).toMatchObject({ message: `Re-plan the lay of ${number} first`, issues: [{ path: 'refusal/REPLAN_LAY', message: `Re-plan the lay of ${number} first` }] })
+    expect((await admin(`SELECT quantity FROM "WorkOrderSize" WHERE id = $1`, [cell.id]))[0]).toEqual({ quantity: 4 })
+    // Back to planning: the leather cut order follows the cell down (its line to 2), and is announced.
+    await force(`UPDATE "CutOrder" SET status = 'PLANNED', "releasedAt" = NULL WHERE id = $1`, [cutOrderId])
+    const answer = await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, { cells: [{ workOrderSizeId: cell.id, quantity: 2 }] })
+    expect(answer.lowered.cutOrders).toEqual([{ cutOrderId, number, lineId, from: 4, to: 2 }])
+    expect(answer.lowered.cells[0]).toMatchObject({ from: 4, to: 2, alreadyCut: 2 })
+    expect(await admin(`SELECT quantity FROM "CutOrderLine" WHERE id = $1`, [lineId])).toEqual([{ quantity: 2 }])
+    expect(await admin(`SELECT payload->>'change' AS change FROM "OutboxEvent" WHERE type = 'cut_order.changed' AND subject = $1`, [cutOrderId])).toEqual([{ change: 'PLAN_CHANGED' }])
+  })
+
+  it("lets the work order's reservations follow its planned need down, never below what was issued", async () => {
+    const { workOrder } = await released({ '52': 4 })
+    const cell = cellOf(workOrder, '52')
+    const [lining] = await admin(`SELECT sum("baseQuantity")::text AS need, min("itemColourId"::text) AS colour FROM "WorkOrderMaterial" WHERE "workOrderId" = $1 AND "itemId" = $2`, [workOrder.id, A.lining])
+    const reservationId = newId()
+    await force(
+      `INSERT INTO "Reservation" (id, "tenantId", "companyId", "siteId", kind, "itemId", "itemColourId", quantity, "workOrderId", status) VALUES ($1, $2, $3, $4, 'QUANTITY', $5, $6, $7, $8, 'ACTIVE')`,
+      [reservationId, A.tenant, A.companyA, A.siteA1, A.lining, lining!.colour, lining!.need, workOrder.id],
+    )
+    const answer = await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, { cells: [{ workOrderSizeId: cell.id, quantity: 2 }] })
+    expect(answer.lowered.reservations).toEqual({ lowered: 1, released: 0, issued: 0 })
+    const [need] = await admin(`SELECT sum("baseQuantity")::text AS need FROM "WorkOrderMaterial" WHERE "workOrderId" = $1 AND "itemId" = $2`, [workOrder.id, A.lining])
+    expect(await admin(`SELECT quantity::text AS q, status::text AS status FROM "Reservation" WHERE id = $1`, [reservationId])).toEqual([{ q: need!.need, status: 'ACTIVE' }])
+  })
+
+  it('keeps the wall: another customer is not found, a draft keeps its own command, the viewer may not lower', async () => {
+    const { workOrder } = await released({ '52': 2 })
+    const cell = cellOf(workOrder, '52')
+    // A planner limited to another customer (Brand Beta) reaches nothing of this customer's work order: 404 as an unknown id.
+    SESSIONS.betaPlanner = office(A.tenant, [{ permissions: ALL, companies: 'all', sites: 'all', parties: [newId()] }])
+    const body = { cells: [{ workOrderSizeId: cell.id, quantity: 1 }] }
+    expect((await refused('betaPlanner', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, body, 404)).message).toBe('Work order not found.')
+    expect((await refused('betaPlanner', 'POST', `/production/work-orders/${newId()}/lower-to-order`, body, 404)).message).toBe('Work order not found.')
+    expect((await call('viewer', 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, body)).statusCode).toBe(403)
+    for (const session of ['floor', 'partner']) expect((await call(session, 'POST', `/production/work-orders/${workOrder.id}/lower-to-order`, body)).statusCode).toBe(403)
+    const { workOrder: draftOne } = await draft([{ colour: 'BLK', sizes: { '52': 2 } }])
+    const refusal = await refused('planner', 'POST', `/production/work-orders/${draftOne.id}/lower-to-order`, { cells: [{ workOrderSizeId: draftOne.cells[0].id, quantity: 1 }] }, 409)
+    expect(refusal.issues[0].path).toBe('refusal/DRAFT')
+    expect((await admin(`SELECT quantity FROM "WorkOrderSize" WHERE id = $1`, [cell.id]))[0]).toEqual({ quantity: 2 })
+  })
+})
+// ── end B-SA-040 ──

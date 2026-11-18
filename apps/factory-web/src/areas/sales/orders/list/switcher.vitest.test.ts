@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-SA-224
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
@@ -5,7 +6,10 @@ import { listHref } from '../../reports/model'
 import { getBoard, listOrderCustomers, listOrders, type OrderCustomer } from '../api'
 import { listPromiseLines } from '../depth/api'
 import { laneQuery, listAddress, partyFromAddress, rowsQuery } from '../model'
-import { NAMESPACE, switcherFace, switcherLines, type SwitcherState } from './sheet/model'
+import { NAMESPACE } from './sheet/model'
+import { switcherFace, switcherLines, type SwitcherState } from '../../_shared/customer-switcher/model' // F-SA-224: moved
+import { localSwitcherState, partyOfAddress } from '../../_shared/customer-switcher/model' // F-SA-224
+import { addressOf as mtmAddressOf, addressText as mtmAddressText, HOME_ADDRESS as MTM_HOME } from '../../mtm/model' // F-SA-224
 
 /**
  * B-TH-226 (threads plan TH-1a, picture 24; SHEET.switcher-F01…F04, X-SAL-REPORTS.drill-F01; wall W18, W19, W27, W30): the
@@ -103,3 +107,56 @@ describe('Sales › Reports’ drill lands on the switcher (X-SAL-REPORTS.drill-
     expect(switcherFace(state([customer(A, 'Brand Alpha')]), partyFromAddress(address), undefined)).toEqual({ kind: 'button', label: { key: 'switcher.chosen', params: { name: 'Brand Alpha' } } })
   })
 })
+
+// ---- F-SA-224 (sales page plan N5, pick P18; 12-lists-board §5 rule 4): ONE customer filter for every Sales list ---------------------
+describe('one customer filter: the switcher moved to areas/sales/_shared, a trailing slot, ?customer= read as ?party= (F-SA-224)', () => {
+  it('one address term ?party= everywhere; a list that used ?customer= still reads it (its old links keep working)', () => {
+    expect(partyOfAddress(new URLSearchParams(`party=${A}`))).toBe(A)
+    expect(partyOfAddress(new URLSearchParams(`customer=${A}`), 'customer')).toBe(A)
+    expect(partyOfAddress(new URLSearchParams(`customer=${A}`))).toBeNull()
+    expect(partyOfAddress(new URLSearchParams(`party=${B}&customer=${A}`), 'customer')).toBe(B)
+    expect(partyOfAddress(new URLSearchParams('party=Brand Alpha'))).toBeNull()
+    // Made-to-measure › Riders writes ?party= and reads both.
+    expect(mtmAddressText({ ...MTM_HOME, customer: A })).toBe(`?party=${A}`)
+    expect(mtmAddressOf(new URLSearchParams(`customer=${A}`)).customer).toBe(A)
+    expect(mtmAddressOf(new URLSearchParams(`party=${A}`)).customer).toBe(A)
+  })
+
+  it('a names-only list (Quotes, Incoming, Riders) searches the customers it read; no one is "Recent"; no count is said', () => {
+    const read = [customer(A, 'Brand Alpha'), customer(B, 'Brand Beta')].map(({ id, code, name }) => ({ id, code, name }))
+    expect(localSwitcherState(read, '').customers?.map((entry) => entry.id)).toEqual([A, B])
+    expect(localSwitcherState(read, 'beta').customers?.map((entry) => entry.id)).toEqual([B])
+    expect(localSwitcherState(read, 'BRAND ALPHA')).toMatchObject({ total: 1, limited: false })
+    expect(localSwitcherState(null, '').customers).toBeNull()
+    const lines = switcherLines(read, false, { all: 'All', recent: 'Recent', others: 'All (2)' }, 0)
+    expect(lines.map((line) => [line.value, line.group ?? null])).toEqual([
+      ['', null],
+      [A, 'All (2)'],
+      [B, 'All (2)'],
+    ])
+    expect(lines.every((line) => line.open === undefined && line.late === undefined)).toBe(true)
+  })
+
+  it('only Orders says "open · late" (its trailing slot); the sheet keeps no switcher of its own', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../_shared/customer-switcher/view/CustomerSwitcher'")
+    expect(view).toContain("trailing={(customer) => (")
+    const parts = readFileSync(new URL('./sheet/parts.tsx', import.meta.url), 'utf8')
+    expect(parts).not.toContain('export function CustomerSwitcher')
+    for (const file of ['../../quotes/list/view/QuotesListView.tsx', '../../inquiries/view/InquiriesView.tsx', '../../mtm/view/MtmListView.tsx']) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(source, file).toContain('<CustomerSwitcher')
+      expect(source, file).not.toContain('trailing=')
+    }
+    expect(readFileSync(new URL('../../quotes/list/QuotesPage.tsx', import.meta.url), 'utf8')).toContain("search.set('party', filters.party)")
+    expect(readFileSync(new URL('../../inquiries/view/InquiriesView.tsx', import.meta.url), 'utf8')).toContain("extra={[{ value: PROSPECTS, label: t('list.prospectsOnly') }]}")
+  })
+
+  it('the list words of the switcher in both languages', () => {
+    for (const locale of LOCALES) {
+      const words = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+      for (const key of ['switcher.triggerList', 'switcher.noneList']) expect(words(key), `${locale} ${key}`).not.toMatch(/^switcher\./)
+    }
+  })
+})
+// ---- end F-SA-224

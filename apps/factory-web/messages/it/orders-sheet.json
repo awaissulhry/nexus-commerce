@@ -29,7 +29,8 @@
     "atRisk": "Vicino alla data promessa",
     "atRiskHint": "La promessa è vicina e l’ordine è ancora in lavorazione (i giorni della regola di avviso)",
     "customerUrgency": "Segno del cliente",
-    "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)"
+    "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)",
+    "riders": "Piloti"
   },
   "door": {
     "order": "Apri l'ordine {number} · la conversazione a destra",
@@ -104,11 +105,14 @@
     "invoiced": "Fatturato: {state}",
     "atRisk": "Vicino alla data promessa",
     "currency": "Valuta: {currency}",
-    "urgency": "Segno del cliente: {urgency}"
+    "urgency": "Segno del cliente: {urgency}",
+    "rider": "Pilota: {name}",
+    "riderUnnamed": "Un pilota"
   },
   "switcher": {
     "title": "Cliente",
     "trigger": "scegli di chi sono gli ordini del foglio",
+    "triggerList": "scegli di chi sono le righe dell’elenco",
     "all": "Tutti i clienti",
     "allMine": "Tutti i miei clienti ({count})",
     "chosen": "Cliente: {name}",
@@ -130,6 +134,7 @@
     "failed": "Non è stato possibile leggere i clienti.",
     "noMatch": "Nessun cliente corrisponde a “{q}”",
     "none": "Nessun cliente ha ancora ordini",
+    "noneList": "Ancora nessun cliente",
     "unavailable": "Questo cliente non è disponibile.",
     "unavailableBody": "Il link indica un cliente che non puoi aprire, o che non esiste più.",
     "showAll": "Mostra tutti i clienti"
@@ -169,7 +174,8 @@
   },
   "views": {
     "suggest": "{customer} — monitoraggio",
-    "ofCustomer": "Ordini di {customer}"
+    "ofCustomer": "Ordini di {customer}",
+    "mtm": "Su misura"
   },
   "group": {
     "label": "Raggruppa le righe",
@@ -253,5 +259,15 @@
     "nounOne": "ordine",
     "nounOther": "ordini",
     "noManage": "Modificare le celle richiede il permesso di modificare gli ordini."
+  },
+  "mtm": {
+    "mark": "Su misura",
+    "units_one": "Su misura · {count} unità",
+    "units_other": "Su misura · {count} unità",
+    "waitingReview": "· {count} da controllare",
+    "filter": "Mostra solo gli ordini su misura (filtra il foglio)"
+  },
+  "empty": {
+    "mtmNoRight": "Nessun ordine su misura in questa vista."
   }
 }

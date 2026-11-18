@@ -207,3 +207,42 @@ describe('change orders, SMV changes and inspection plan versions in the inbox (
     expect(rowOf(await approvals('owner'), 'PLAN_VERSION', made.plan.id)).toBeUndefined()
   })
 })
+
+// ── B-SA-044 (sales page plan R1, P5; review F-8, C-11): work-order changes waiting for who may apply them ──
+describe('work-order changes in Home › Approvals (B-SA-044)', () => {
+  const SEEDED = id('order-apply:WO-0001:RED-54')
+  const WORK_ORDER = id('production:work-order:WO-0001')
+  const changeRows = (items: readonly Json[]) => items.filter((item) => item.kind === 'WORK_ORDER_CHANGE')
+
+  it('a PROPOSED change waits for who manages the work order; another customer\'s person reads no row and no count; it leaves once decided', async () => {
+    // The production manager (every customer) reads the seeds' change: it opens the work order.
+    const row = changeRows(await approvals('manager')).find((item) => item.record.id === WORK_ORDER)
+    expect(row).toMatchObject({ category: 'APPROVAL', decide: 'OPEN', state: 'PROPOSED', record: { type: 'WorkOrder', id: WORK_ORDER, label: 'SEED-WO-0001' } })
+    expect(row!.words.sentence).toMatchObject({ key: 'WORK_ORDER_CHANGE.LOWER' })
+    expect(row!.why).toBe('You manage this work order at its site, for its customer.')
+    // The finance person never manages work orders: nothing.
+    expect(changeRows(await approvals('finance'))).toEqual([])
+    // A planner limited to another customer (Brand Beta): no row, no count, nothing that names it.
+    SESSIONS.betaManager = { audience: 'office', tenantId: A.tenant, actorId: PEOPLE.manager, grants: grantsOf('production_manager').map((grant) => ({ ...grant, parties: [newId()] })) }
+    const beta = await ok('betaManager', 'GET', '/home/today?category=APPROVAL&limit=200')
+    expect(changeRows(beta.items as Json[])).toEqual([])
+    expect(JSON.stringify(beta)).not.toContain('WORK_ORDER_CHANGE')
+    // Left as is: the row leaves.
+    const { change } = await ok('manager', 'GET', `/production/work-order-changes/${SEEDED}`)
+    await ok('manager', 'POST', `/production/work-order-changes/${SEEDED}/decline`, { version: change.version, words: 'Made-up: the customer keeps the RED 54 after all.' })
+    expect(changeRows(await approvals('manager')).find((item) => item.record.id === WORK_ORDER)).toBeUndefined()
+  })
+
+  it('a new proposal appears for who may apply it, once, with its extra pieces urgent; the proposer may apply it himself (a proposal is no approval)', async () => {
+    const { workOrder } = await ok('owner', 'GET', `/production/work-orders/${WORK_ORDER}`)
+    const cell = (workOrder.cells as Json[]).find((entry) => entry.colourwayCode !== undefined && entry.quantity > 0 && entry.salesOrderLineId)!
+    const { change } = await ok('owner', 'POST', '/production/work-order-changes', { salesOrderId: (workOrder.orders as Json[])[0]!.id, workOrderId: WORK_ORDER, kind: 'LOWER_TO_ORDER', cells: [{ salesOrderLineId: cell.salesOrderLineId, size: cell.size, from: cell.quantity, to: cell.quantity - 1, workOrderSizeId: cell.id }], reason: 'Made-up: one fewer.' }, 201)
+    const rows = changeRows(await approvals('owner')).filter((item) => item.record.id === WORK_ORDER)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ severity: 'MEDIUM', state: 'PROPOSED' })
+    expect(changeRows(await approvals('manager')).filter((item) => item.record.id === WORK_ORDER)).toHaveLength(1)
+    await ok('owner', 'POST', `/production/work-order-changes/${change.id}/decline`, { version: change.version, words: 'Made-up: not after all.' })
+    expect(changeRows(await approvals('owner')).filter((item) => item.record.id === WORK_ORDER)).toEqual([])
+  })
+})
+// ── end B-SA-044 ──

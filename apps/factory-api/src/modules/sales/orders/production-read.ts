@@ -36,6 +36,8 @@ import { officeContextOf } from './access'
 import { officeOrder } from './moves'
 import { PRODUCTION_PARTS, type ProductionPart, type WithheldKey } from './production-contract'
 import { dayOf, dayOrNull, readLines, readOrderFacts, type LineRecord, type OrderRow } from './store'
+// B-SA-043: the order's extra pieces (cut beyond what it now wants), office only.
+import { madeExtraOf } from './made-extra'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2; review WP-3): the office's
@@ -335,8 +337,13 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   }
 }
 
-async function linesPart(db: Db, load: Loaders) {
+async function linesPart(db: Db, load: Loaders, /* B-SA-043 */ context: OfficeContext, order: OrderRow) {
   const lines = await load.lines()
+  // B-SA-043 (R1, review P6-4): pieces cut of the order's own cells beyond what the line now wants (office only: "Made extra: 4 M").
+  const extra = await madeExtraOf(db, context.tenantId, order)
+  // A sizeless line (a made-to-measure unit) reads its one piece's extra, of its base size.
+  const extraOf = (lineId: string, size: string | null) => extra.find((entry) => entry.lineId === lineId && (size === null || entry.size === size))
+  const extraOfLine = (lineId: string) => extra.filter((entry) => entry.lineId === lineId).reduce((sum, entry) => sum + entry.count, 0)
   const view = (await load.progress()).view
   const facts = await load.orderFacts()
   const cells = await load.cells()
@@ -362,7 +369,9 @@ async function linesPart(db: Db, load: Loaders) {
       shipped: facts.progress.lines.find((total) => total.lineId === entry.lineId)?.shipped ?? 0,
       inWorkOrders: inWork.get(entry.lineId) ?? 0,
       notInWorkOrders: !inWork.has(entry.lineId),
-      sizes: entry.sizes.map((size) => ({ size: size.size, ordered: size.ordered, cut: size.cut, sewn: size.sewn, checked: size.inspected, packed: size.packed, shipped: shippedOf(entry.lineId, size.size) })),
+      sizes: entry.sizes.map((size) => ({ size: size.size, ordered: size.ordered, cut: size.cut, sewn: size.sewn, checked: size.inspected, packed: size.packed, shipped: shippedOf(entry.lineId, size.size), /* B-SA-043 */ madeExtra: extraOf(entry.lineId, size.size)?.count ?? 0, madeExtraWords: extraOf(entry.lineId, size.size)?.words ?? null })),
+      // B-SA-043: the line's extra pieces, all sizes together.
+      madeExtra: extraOfLine(entry.lineId),
     }
   })
 }
@@ -593,7 +602,7 @@ export async function readOrderProduction(caller: CommandCaller, context: Office
     const load = loaders(db, context, order, now)
     // One after another: a scoped client is one transaction (no Promise.all on it).
     const headline = parts.includes('headline') ? await headlinePart(db, context, order, load, now, kept('headline.notes')) : undefined
-    const lines = parts.includes('lines') ? await linesPart(db, load) : undefined
+    const lines = parts.includes('lines') ? await linesPart(db, load, context, order) : undefined
     const work = parts.includes('work') ? (kept('work') ? await workPart(db, context, order, load, today) : null) : undefined
     const dates = parts.includes('dates') ? await datesPart(db, context, order, load, now) : undefined
     const quality = parts.includes('quality') ? await qualityPart(db, context, load, { issues: kept('quality.issues'), ncrs: kept('quality.ncrs'), final: kept('quality.final') }) : undefined

@@ -133,11 +133,6 @@
       "inside": "Dentro",
       "outside": "Fuori",
       "outsidePoints": "Fuori: {points}"
-    },
-    "customer": {
-      "label": "Cliente",
-      "all": "Tutti i clienti",
-      "placeholder": "Cliente…"
     }
   },
   "rules": {

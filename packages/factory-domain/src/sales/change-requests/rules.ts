@@ -442,9 +442,10 @@ export function changeCellsOf(ask: ChangeAsk, order: RuleOrder): AskedCell[] {
  * A change asks a line in another colourway of its own style. Asked from the portal while the line may change (the cut-offs,
  * as any change), and only into a colourway made in every size the line keeps (an active SKU of each). Stored size by size
  * (OrderChangeRequestLine.styleId + colourwayId: the database refuses another style or the line's own colourway). Accepted (Sales,
- * orders.manage) while no work order makes the line yet: a NEW line of the same style in the asked colourway with the sizes asked,
- * at the old line's prices (the customer asked a colour, not a price), and the old line closed short — a line a request names is
- * never removed (the amendment refuses it). Once a work order makes the line it is cancel-and-remake: answered by hand.
+ * orders.manage) while nothing of the line is cut (B-SA-042; before it, while no work order made it): a NEW line of the same style
+ * in the asked colourway with the sizes asked, at the old line's prices (the customer asked a colour, not a price), and the old line
+ * closed short — a line a request names is never removed (the amendment refuses it); its work orders' cells are proposed lowered in
+ * the same command. Once something of it is cut it is held in words (colourCutWords): a cut piece never changes colour.
  */
 export interface ColourAsk {
   readonly lineId: string
@@ -518,13 +519,10 @@ export function colourLinesOf(cells: readonly AskedCell[]): ColourLine[] {
 /** A colour change moves no money when it asks the same pieces of every size (the new line takes the old line's prices). */
 export const colourKeepsTotal = (cells: readonly AskedCell[]): boolean => cells.length > 0 && cells.every((cell) => (cell.colourwayId ?? null) !== null && cell.quantity === cell.quantityBefore)
 
-/** "Line 10 is on work order WO-1 already": a colour change is then cancel-and-remake, answered by hand (the office's words). */
-export function colourInWorkWords(seq: number, numbers: readonly string[]): Words {
-  const named = numbers.join(', ')
-  return {
-    it: `La riga ${seq} è già in ${numbers.length === 1 ? "un ordine di lavoro" : 'ordini di lavoro'} (${named}): un cambio di colore si fa solo annullando e rifacendo. Rispondi a mano: rifiuta con un motivo, o annulla e rifai la riga.`,
-    en: `Line ${seq} is on ${numbers.length === 1 ? 'a work order' : 'work orders'} already (${named}): a colour change is then cancel-and-remake. Answer by hand: refuse with words, or cancel and remake the line.`,
-  }
+// B-SA-042 (sales page plan P6', R1): a colourway change is held once anything of the line is cut (a cut piece never changes colour);
+// while nothing is cut it is accepted and the old line's cells are lowered through the same change.
+export function colourCutWords(colour: string, count: number): Words {
+  return { en: `Already cut in ${colour}: ${count} pieces. Suggest something else or refuse.`, it: `Già tagliati in ${colour}: ${count} pezzi. Proponi altro o rifiuta.` }
 }
 // ---- end B-PR-27a ----
 

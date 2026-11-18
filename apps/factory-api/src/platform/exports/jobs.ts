@@ -18,6 +18,7 @@ import type { ExportJobView, RequestExportBody } from './contract'
 import { exportFormatsFor, exportSourceOf } from './registry'
 import { reimportAdapterOf, reimportColumns } from './reimport'
 import type { AnyExportSource } from './source'
+import { withColumnRights } from './source' // B-SA-020
 
 /**
  * The export jobs of the Office (B-W2a-23; PLT-179): asked by a person for the view they are looking at, run by the
@@ -158,10 +159,11 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
   if (!exportFormatsFor(body.listKey).includes(body.format)) throw new ValidationError('This list does not export to that format.', [{ path: 'body/format', message: body.format }])
   if (!can(actor, VIEWS_EXPORT, companyId ? { companyId } : {})) throw new ForbiddenError('Exporting a list needs the right to export lists.')
   if (!can(actor, source.permission, companyId ? { companyId } : {})) throw new ForbiddenError('You may not see this list.')
-  const refusal = source.refusal?.(actor) ?? null
-  if (refusal) throw new ForbiddenError(refusal)
+  // B-SA-021: the refusal reads the view's query too (a term only some may use), so the terms are read first.
   const address = viewQuery(body.query)
   const params = paramsOf(source, address)
+  const refusal = source.refusal?.(actor, params) ?? null
+  if (refusal) throw new ForbiddenError(refusal)
   let picked: { readonly columns: readonly AskedColumn[]; readonly omitted: readonly AskedColumn[] }
   let asked: AskedColumn[]
   if (body.format === 'XLSX_REIMPORT') {
@@ -171,6 +173,7 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
     asked = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
   } else {
     picked = pickColumns(source.columns, body.columns, heldGrains(actor))
+    picked = withColumnRights(source, picked, actor, companyId ? { companyId } : {}) // B-SA-020: a column's own right (Riders)
     asked = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
     const order = new Map(body.columns.map((column, index) => [column.key, index]))
     asked.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))

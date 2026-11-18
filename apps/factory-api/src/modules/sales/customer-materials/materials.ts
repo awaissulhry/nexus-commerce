@@ -7,6 +7,9 @@ import { command, type CommandCaller } from '../../../core/command'
 import { officeOrder } from '../orders/moves'
 import type { OrderRow, Reader } from '../orders/store'
 import { expectedOfOrder, MATERIAL_COLUMNS, materialView, planInCommand, recountInCommand } from './store'
+// B-SA-043: the extra pieces and the customer's material they took.
+import { officeContextOf } from '../orders/access'
+import { madeExtraOf, MADE_EXTRA_WORDS, materialUsedForExtra } from '../orders/made-extra'
 
 /**
  * Customer-supplied materials of an order (B-W2b-309; SAL-306; design order.lines.owned "Customer-supplied materials":
@@ -71,7 +74,18 @@ async function readMaterials(db: Reader, order: OrderRow) {
 /** GET /sales/orders/:orderId/customer-materials */
 export async function listCustomerMaterials(caller: CommandCaller, orderId: string) {
   const order = await officeOrder(caller, orderId)
-  const read = await caller.withClient((db) => readMaterials(db, order))
+  const { tenantId } = officeContextOf(caller)
+  const read = await caller.withClient(async (db) => {
+    const kept = await readMaterials(db, order)
+    // B-SA-043 (R1, review P6-3): the customer's own material its extra pieces took (office only: the customer reads its order).
+    const extra = await madeExtraOf(db, tenantId, order)
+    const used = await materialUsedForExtra(db, extra, kept.rows.map((row) => ({ id: row.id, orderLineId: row.orderLineId, itemId: row.item.id, itemColourId: row.colour?.id ?? null })))
+    return {
+      ...kept,
+      rows: kept.rows.map((row) => ({ ...row, usedForExtra: used.get(row.id) ?? null })),
+      extra: { pieces: extra.map((entry) => ({ lineId: entry.lineId, size: entry.size, count: entry.count, words: entry.words })), usedWords: used.size > 0 ? MADE_EXTRA_WORDS.usedForExtra() : null },
+    }
+  })
   return { orderId: order.id, number: order.number, partyId: order.partyId, ...read, empty: read.rows.length === 0 && read.notPlanned.length === 0 ? EMPTY_WORDS : null }
 }
 

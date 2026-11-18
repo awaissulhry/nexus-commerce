@@ -11,6 +11,7 @@ import type { QuotesPageLinksModel } from '../new-from/view/PageLinks'
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'
 // F-SA-212: the Picture column is the ONE picture part (its batch read).
 import type { ReadPictures } from '../../../../lib/record-picture/cache'
+import type { SwitcherState } from '../../_shared/customer-switcher/model' // F-SA-224
 
 /** The quotes list's view model (SCR-034; design sales.quotes): the container (QuotesPage.tsx) fills it. */
 
@@ -84,6 +85,8 @@ export interface QuotesListViewModel {
   // ---- end B-TH-257
   // ---- TH-6 part B (B-TH-257 follow-up; grid-F01): design cases give each row's small preview here (no request is made).
   demoPictures?: Readonly<Record<string, string>>
+  /** F-SA-224: the one customer filter — the customers found (names only: Quotes has no count read per customer), the search typed, the chosen one's name. */
+  switcher?: { readonly state: SwitcherState; readonly query: string; readonly searching: boolean; readonly partyName: string | null | undefined } | null
 }
 
 export interface QuotesListActions extends DuplicateActions, NewFromActions {
@@ -97,6 +100,8 @@ export interface QuotesListActions extends DuplicateActions, NewFromActions {
   onPastPick?: (quoteId: string) => void
   onPastOpen?: (quoteId: string) => void
   onFilters?: (filters: ListFilters) => void
+  /** F-SA-224: the switcher's search (the customers that match). */
+  onCustomerSearch?: (query: string) => void
   onTile?: (tile: QuoteTile) => void
   onMore?: () => void
   onRetry?: () => void
@@ -111,7 +116,6 @@ export interface QuotesListActions extends DuplicateActions, NewFromActions {
   /** Enter on a row: open its record. */
   onOpen?: (id: string) => void
   /** The selected rows as a CSV file (the columns this person sees). */
-  onExport?: (ids: readonly string[]) => void
   /** Cancel the selected quotes, one by one with each one's version; resolves true when all were cancelled. */
   onCancelMany?: (ids: readonly string[], reason: string) => Promise<boolean>
   /** F-SA-212: the page's pictures in ONE batch read (POST /sales/quotes/pictures through lib/record-picture). */

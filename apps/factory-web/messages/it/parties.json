@@ -92,7 +92,6 @@
     "intro": "Chi compra da noi — aziende, marchi e piloti — con ciò che serve alla fattura elettronica e la prova VIES per le vendite UE non imponibili.",
     "search": "Cerca codice, nome, partita IVA o codice fiscale",
     "table": "Clienti",
-    "file": "clienti",
     "failedTitle": "Caricamento dei clienti non riuscito",
     "empty": {
       "title": "Ancora nessun cliente",
@@ -169,7 +168,6 @@
     "intro": "Concerie, tessiture, accessori e protezioni, terzisti e corrieri: da chi compriamo e con chi lavoriamo e spediamo.",
     "search": "Cerca codice, nome o partita IVA",
     "table": "Fornitori",
-    "file": "fornitori",
     "failedTitle": "Caricamento dei fornitori non riuscito",
     "empty": {
       "title": "Ancora nessun fornitore",
@@ -406,8 +404,6 @@
     "removeFilter": "Togli il filtro {name}",
     "bulkVies_one": "Controlla VIES per {count}",
     "bulkVies_other": "Controlla VIES per {count}",
-    "bulkExport_one": "Esporta {count} (CSV)",
-    "bulkExport_other": "Esporta {count} (CSV)",
     "bulkBlock_one": "Blocca {count}",
     "bulkBlock_other": "Blocca {count}",
     "bulkArchive_one": "Archivia {count}",
@@ -415,14 +411,10 @@
     "count": "{shown} di {total}",
     "countShown": "{shown} mostrate",
     "showMore": "Mostra altre {count}",
-    "exportView": "Esporta questa vista (CSV)",
-    "exportViewHint": "Le {count} righe mostrate, con le colonne dell’elenco",
-    "exportNothing": "Niente da esportare in questa vista",
     "recheckAll": "Ricontrolla ora tutte le partite IVA UE",
     "recheckAllHint": "Una richiesta VIES ciascuna, fino a {max} alla volta",
     "cannotInvoice": "Non ancora fatturabile",
     "noIdentity": "Nessuna identità fiscale",
-    "exported": "Esportate {count} righe.",
     "col": {
       "name": "Nome",
       "roles": "Ruoli",
@@ -463,20 +455,6 @@
     "nothingToArchive": "Nulla di selezionato si può archiviare (i bloccati vanno prima sbloccati)",
     "noEmail": "Serve prima un’email",
     "projects": "Per avviare un progetto serve il permesso {right}."
-  },
-  "csv": {
-    "code": "Codice",
-    "legalName": "Ragione sociale",
-    "tradeName": "Nome commerciale",
-    "roles": "Ruoli",
-    "status": "Stato",
-    "country": "Paese",
-    "city": "Città",
-    "taxMode": "Regime fiscale",
-    "vat": "Partita IVA",
-    "fiscalCode": "Codice fiscale",
-    "vies": "VIES",
-    "language": "Lingua"
   },
   "new": {
     "taxFirst": "Identità fiscale",
