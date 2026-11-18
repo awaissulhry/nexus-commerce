@@ -339,6 +339,10 @@ export default defineStage({
       const editor = (await flow.read(page, '/fields/editor?recordType=ORDER')).fields as Json[]
       expect(editor.find((field) => field.code === COLUMN.alpha.code)).toMatchObject({ partyId: alphaId, shownInPortal: true, type: 'TEXT' })
       // Set-up (no screen needed twice): B's own column, shown in its portal, and a column for every customer (the office only).
+      // End check (fix-browser-1): a customer's own column is made while the customer is ACTIVE (B-TH-056); the seeded P3 is a
+      // prospect, so the office activates it first, as it does a prospect that orders.
+      const b = (await flow.read(page, `/parties/${betaId}`)).party as { status: string; version: number }
+      if (b.status !== 'ACTIVE') await flow.write(page, 'POST', `/parties/${betaId}/activate`, { version: b.version })
       await flow.write(page, 'POST', '/fields', { recordType: 'ORDER', type: 'TEXT', shownInPortal: true, ...COLUMN.beta, partyId: betaId }, 201)
       await flow.write(page, 'POST', '/fields', { recordType: 'ORDER', type: 'TEXT', shownInPortal: false, ...COLUMN.every }, 201)
       const onB = await flow.write(sales.page, 'PUT', `/fields/values/ORDER/${orders.beta.id}`, { values: [{ code: COLUMN.beta.code, value: VALUE.beta, version: null }] })

@@ -267,11 +267,18 @@ export default defineStage({
       await dock.getByRole('button', { name: BOX('send.reply', { party }), exact: true }).click()
       const check = dialog(page)
       await seen(check, 60_000)
+      // End check (fix-browser-1): a reply opens with To = A's first contact with an address (the thread's defaultTo; P1's seeded
+      // buyer comes before the fixture's contact). The check, read once it has answered, names each recipient "name (organisation)",
+      // never the address: it names that contact of A, and the mailbox below proves the address.
+      const contacts = (await flow.read(page, `/parties/${alphaId}`)).party.contacts as { name: string; email: string | null; status: string }[]
+      const to = contacts.find((contact) => contact.email && contact.status === 'ACTIVE')
+      expect(to, 'A has a contact with an address').toBeTruthy()
+      await expect(check.getByText(CHECK('check.checking'))).toHaveCount(0, { timeout: 60_000 })
       const said = await check.innerText()
-      expect(said, 'the send check names A’s contact').toContain(BRAND_ALPHA.contact.email)
+      expect(said, 'the send check names A’s contact').toMatch(new RegExp(`${escape(to!.name)} \\(${escape(BRAND_ALPHA.tradeName)}`))
       expect(brandMarkersIn(said, BRAND_BETA), 'the send check names customer B').toEqual([])
       await flow.shot(page, 'office-send-check')
-      const before = await flow.mailsTo(BRAND_ALPHA.contact.email)
+      const before = await flow.mailsTo(to!.email!)
       await press(check.getByRole('button', { name: CHECK('check.send', { party }), exact: true }), 60_000)
       await check.waitFor({ state: 'hidden', timeout: 60_000 })
       await seen(dock.getByText(REPLY).first(), 60_000)
@@ -280,7 +287,7 @@ export default defineStage({
         .poll(
           async () => {
             await flow.settle()
-            return flow.mailsTo(BRAND_ALPHA.contact.email)
+            return flow.mailsTo(to!.email!)
           },
           { timeout: 90_000, intervals: [3_000] },
         )
@@ -312,7 +319,10 @@ export default defineStage({
       const contact = invite.getByRole('combobox', { name: SHARE('invite.contact') })
       await seen(contact)
       const offered = (await contact.locator('option').allTextContents()).filter((text) => text !== SHARE('invite.contactPick'))
-      expect(offered, 'A’s contacts on file').toEqual([`${BRAND_ALPHA.contact.name} · ${BRAND_ALPHA.contact.email}`])
+      // End check (fix-browser-1): every contact of A on file with an address (P1's two seeded ones and the fixture's), none other.
+      const onFile = contacts.filter((entry) => entry.email && entry.status === 'ACTIVE').map((entry) => `${entry.name} · ${entry.email}`)
+      expect(onFile, 'the fixture’s contact is on file').toContain(`${BRAND_ALPHA.contact.name} · ${BRAND_ALPHA.contact.email}`)
+      expect([...offered].sort(), 'A’s contacts on file').toEqual([...onFile].sort())
       expect(brandMarkersIn(await invite.innerText(), BRAND_BETA), 'the Share dialog names customer B').toEqual([])
       await contact.selectOption({ label: `${BRAND_ALPHA.contact.name} · ${BRAND_ALPHA.contact.email}` })
       await invite.getByRole('radio', { name: startsWith(SHARE('invite.mail')) }).check()

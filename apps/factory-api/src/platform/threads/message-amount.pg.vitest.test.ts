@@ -51,7 +51,7 @@ let order = ''
 let workOrder = ''
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 const call = (who: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
-  app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th049-${++run}` }) }, ...(payload === undefined ? {} : { payload: payload as object }) })
+  app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `th049-key-${++run}` }) }, ...(payload === undefined ? {} : { payload: payload as object }) })
 async function ok(who: string, method: 'GET' | 'POST', url: string, payload?: unknown, status = 200): Promise<Json> {
   const response = await call(who, method, url, payload)
   expect(response.statusCode, response.body).toBe(status)

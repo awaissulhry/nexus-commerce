@@ -284,6 +284,21 @@ function ReadyRecord({ invoice, model, actions, thread, printThread, depth }: { 
 
         {/* B-TH-268: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
         <RecordNotices>
+          {/* End check (B-TH-268): the answer to the person's own action first, as on every other record (a refusal never waits
+              behind the test-mode banner, a "Sent to SDI" is seen); the standing notices behind "N more notices". */}
+          {model.notice && (
+            <Banner
+              tone={model.notice.tone}
+              title={t(model.notice.words.key, model.notice.words.params)}
+              action={
+                actions?.onDismissNotice ? (
+                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                    {t('common.dismiss')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
           {/* B-W2b-417: the test-mode banner. */}
           {depth?.banner}
           {/* SDI could not deliver it: the customer gets a copy from the thread (its "Reply to", with the courtesy PDF). */}
@@ -296,19 +311,6 @@ function ReadyRecord({ invoice, model, actions, thread, printThread, depth }: { 
                 <Button size="sm" onClick={() => actions?.onReload?.()}>
                   {t('record.reload')}
                 </Button>
-              }
-            />
-          )}
-          {model.notice && (
-            <Banner
-              tone={model.notice.tone}
-              title={t(model.notice.words.key, model.notice.words.params)}
-              action={
-                actions?.onDismissNotice ? (
-                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                    {t('common.dismiss')}
-                  </Button>
-                ) : undefined
               }
             />
           )}

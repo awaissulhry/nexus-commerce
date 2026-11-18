@@ -76,7 +76,8 @@ beforeAll(async () => {
   ids.order = (await one<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0002' AND "partyId" = $2`, [world.tenantId, world.p1])).id
   ids.shipment = (await one<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SEED-SH-0001' AND "salesOrderId" = $2`, [world.tenantId, ids.order])).id
   ids.repair = (await one<{ id: string }>(`SELECT id FROM "RepairOrder" WHERE "tenantId" = $1 AND number = 'SEED-REP-0001'`, [world.tenantId])).id
-  ids.rma = (await one<{ id: string }>(`SELECT id FROM "ReturnAuthorisation" WHERE "tenantId" = $1 AND number = 'SEED-RMA-0001'`, [world.tenantId])).id
+  // fix-pg-1: SEED-REP-0001 is the repair of SEED-RMA-0002's line (seed/returns.ts); SEED-RMA-0001 is still waiting for its goods.
+  ids.rma = (await one<{ id: string }>(`SELECT id FROM "ReturnAuthorisation" WHERE "tenantId" = $1 AND number = 'SEED-RMA-0002'`, [world.tenantId])).id
   ids.workOrder = (await one<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 ORDER BY number LIMIT 1`, [world.tenantId])).id
   for (const [key, id] of Object.entries(office)) await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, locale) VALUES ($1, $2, $3, $4, \'ACTIVE\', \'en\')', [id, world.tenantId, `th076-${key}@example.com`, `Made-up ${key}`])
   app = await buildApp(
@@ -127,7 +128,7 @@ describe('B-TH-076: the office’s summary row', { timeout: SLOW_TEST_TIMEOUT_MS
     const repair = await asOffice('all', 'RepairOrder', ids.repair)
     expect(repair.status, JSON.stringify(repair.body)).toBe(200)
     expect(repair.body.summary.state.code).toBe('RECEIVED')
-    expect(repair.body.summary.parent).toMatchObject({ recordType: 'ReturnAuthorisation', recordId: ids.rma, label: 'SEED-RMA-0001' })
+    expect(repair.body.summary.parent).toMatchObject({ recordType: 'ReturnAuthorisation', recordId: ids.rma, label: 'SEED-RMA-0002' })
   })
 
   it('a person limited to brand B gets 404 on brand A’s delivery — the words of a record that does not exist', async () => {

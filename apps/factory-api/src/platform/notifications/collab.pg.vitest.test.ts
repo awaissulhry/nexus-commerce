@@ -189,7 +189,8 @@ describe('followers of a record (COL-011) and quiet defaults (PLT-142)', () => {
 
   it('adds a colleague who may read the record; refuses one who cannot, and a reader who may not write', async () => {
     const added = await ok('sales', 'POST', `/threads/Company/${companyOne}/followers`, { userId: PEOPLE.owner })
-    expect((added.followers as Json[]).find((row) => row.userId === PEOPLE.owner)).toMatchObject({ reason: 'CHOSE', addedBy: { id: PEOPLE.sales, name: 'Person sales' } })
+    // B-TH-068 (#1575): a colleague's add is ADDED ("added by"), never the person's own choice (CHOSE).
+    expect((added.followers as Json[]).find((row) => row.userId === PEOPLE.owner)).toMatchObject({ reason: 'ADDED', addedBy: { id: PEOPLE.sales, name: 'Person sales' } })
     const outsider = await call('sales', 'POST', `/threads/Company/${companyOne}/followers`, { userId: PEOPLE.outsider })
     expect(outsider.status).toBe(400)
     expect(outsider.body.error.issues[0].path).toBe('body/userId')
@@ -213,7 +214,8 @@ describe('tasks on any record (COL-037)', () => {
     const made = await ok('sales', 'POST', '/tasks', { title: '  Check   the IBAN ', record: { type: 'Company', id: companyOne }, assigneeId: PEOPLE.owner, dueDate: today, dueTime: '16:00', checklist: [{ text: 'Call the bank' }, { text: 'Note it' }] }, 201)
     taskId = made.task.id
     expect(made.task).toMatchObject({ title: 'Check the IBAN', record: { type: 'Company', id: companyOne, label: 'C1' }, assignee: { id: PEOPLE.owner }, status: 'OPEN', tile: 'TODAY', progress: { done: 0, total: 2 }, relation: 'CREATOR', canChange: true })
-    expect((await admin(`SELECT reason FROM "RecordFollower" WHERE "userId" = $1 AND "recordId" = $2`, [PEOPLE.owner, companyOne]))[0]).toEqual({ reason: 'CHOSE' })
+    // B-TH-068: the follow the colleague added above stays as it was (ADDED); the task adds no second row.
+    expect((await admin(`SELECT reason FROM "RecordFollower" WHERE "userId" = $1 AND "recordId" = $2`, [PEOPLE.owner, companyOne]))[0]).toEqual({ reason: 'ADDED' })
     expect(await fanOutSince(['task.assigned'])).toBe(1)
     const told = ((await notifications('owner', '?tab=ASSIGNMENT')).items as Json[])[0]
     expect(told).toMatchObject({ category: 'ASSIGNMENT', anchor: `task:${taskId}`, sentence: 'Person sales assigned you the task "Check the IBAN" (C1)' })

@@ -18,6 +18,7 @@ import type { ApiClient } from '../../../lib/api/client'
 import { withdrawRequest } from './api'
 import { filesDoorOf, withdrawProblemKey } from './model'
 import { partnerThreadSchema } from '../../shell/api' // B-TH-236
+import type { HeldFile } from '../../../lib/request-compose/files' // end check (B-TH-282)
 
 /**
  * B-TH-222, B-TH-303 — the customer's request page: true states only (the API's words; "Quote being prepared" for a quote not
@@ -225,3 +226,26 @@ describe('B-TH-236 — the portal reads no amount and no office link', () => {
   })
 })
 // ---- end B-TH-236
+
+// ---- End check (B-TH-282): the ONE message after Send carries EVERY file sent, the last one too
+describe('end check: the files list is in step at once, so the message carries the last file sent', () => {
+  it('a change is read back at once, before the screen’s state follows (a deferred setState left the last file out)', async () => {
+    const { heldList } = await import('./use-request-files')
+    const { holdFiles, toAttach } = await import('../../../lib/request-compose/files')
+    const shown: HeldFile[][] = []
+    // The screen's setState, which React may apply only at the next render: here it only records what it was given.
+    const list = heldList((value) => shown.push(value))
+    const dropped = [{ name: 'front.png', type: 'image/png', size: 69 }, { name: 'back.png', type: 'image/png', size: 69 }, { name: 'sizes.pdf', type: 'application/pdf', size: 326 }]
+    list.update(() => holdFiles(list.current, dropped, (index) => `k${index}`).held)
+    // The send: each file announced and completed in turn, then ONE message carries the sent ones, read right after the last "sent".
+    list.current.forEach((file, index) => list.update((current) => current.map((row) => (row.key === file.key ? { ...row, state: 'sent', fileId: `f${index}`, uploaded: true } : row))))
+    expect(toAttach(list.current, new Set())).toEqual(['f0', 'f1', 'f2'])
+    expect(shown.at(-1)).toBe(list.current)
+    // The hook keeps its list there, never in a setState updater that writes the ref when React gets to it.
+    const { readFileSync } = await import('node:fs')
+    const hook = readFileSync(new URL('./use-request-files.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('list.current = heldList(setHeld)')
+    expect(hook).not.toMatch(/setHeld\(\(current\)/)
+  })
+})
+// ---- end check (B-TH-282)
