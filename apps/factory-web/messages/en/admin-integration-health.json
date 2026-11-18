@@ -390,6 +390,10 @@
           "name": "Daily production report",
           "what": "Every 15 minutes: the daily report goes to the people subscribed, at their time."
         },
+        "issueEscalation": {
+          "name": "Unanswered customer issues",
+          "what": "Every 15 minutes: an issue a customer reported that is still unanswered goes to the backup (or the production managers) after 1 working day, to the Owner and Admin after 2, at 08:00 company time."
+        },
         "scanFindings": {
           "name": "Scan pattern checks",
           "what": "Every hour: scan patterns that look wrong are flagged."
