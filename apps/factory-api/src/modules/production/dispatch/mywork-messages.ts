@@ -135,7 +135,10 @@ export async function myWorkMessages(caller: CommandCaller, query: MyMessagesQue
         at: { gte: new Date(now.getTime() - FLOOR_MESSAGES.days * DAY_MS) },
         bodyText: { not: '' },
         // Not the reader's own comment, nor their station's at a site that names no worker (B-W2b-47: the station's code).
-        NOT: [{ authorKind: 'WORKER', authorId: context.actorId }, ...(station ? [{ authorKind: 'SYSTEM' as const, authorName: station }] : [])],
+        NOT: [{ authorKind: 'WORKER', authorId: context.actorId }],
+        // fx-3 (B-SA-053): the station's own comment out, an order change (SYSTEM, no name) in — never NOT (SYSTEM AND name = code):
+        // with no name that is NOT (true AND NULL), NULL in SQL, and the order change dropped out with the station's comment.
+        ...(station ? { OR: [{ authorKind: { not: 'SYSTEM' as const } }, { authorName: null }, { authorName: { not: station } }] } : {}),
       },
       orderBy: [{ at: 'desc' }, { id: 'desc' }],
       take: FLOOR_MESSAGES.rows,
