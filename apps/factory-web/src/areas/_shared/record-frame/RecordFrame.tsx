@@ -15,6 +15,7 @@ import type { DockWidth } from '../../../lib/record-thread/head/model'
 import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width'
 import { usePrintMode } from '../../../shell/print/print-mode'
 import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
+import { showsOnArrival, type DockDefault } from './model' // F-SA-263
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
@@ -52,8 +53,20 @@ export interface RecordFrameProps {
   readonly thread: ReactNode | null
   /** The thread's region name ("Thread of SO-2026-0142 · Brand Alpha"). */
   readonly threadLabel: string
-  /** The tab shows a wide grid (lines, a BOM, sizes, cost, cutting): one third under 1600 px unless a width was chosen. */
-  readonly wide?: boolean
+  // ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5, §6.3): each tab its own default width (replaces the `wide` boolean).
+  /**
+   * The tab's dock width when the person chose none: a width, or `grid` for a wide grid tab (the lines, a BOM, sizes, cost, cutting:
+   * one third under 1600 px, 40 % from 1600). Absent: 40 %.
+   */
+  readonly defaultWidth?: DockDefault
+  /**
+   * The tab on screen, for a page whose dock adapts per tab: the person's chosen width is kept per person + record type + THIS tab
+   * (the menu's "Default width" clears this tab's), and hiding the dock is kept per person + record type (⌘J, the band's button,
+   * `?tab=activity` or `?thread=` show it again); a private window keeps nothing. Absent: one width per person + record type, and
+   * "hidden" lasts while the page is open (every other record page, as before).
+   */
+  readonly dockTab?: string
+  // ---- end F-SA-263
   /** What the print view (`?print=1`) shows of the thread under the body (ThreadPrint: the thread for paper, B-TH-280); absent: nothing. */
   readonly printThread?: ReactNode
   /** The record's body: its tabs, its one notice, the tab's content. */
@@ -174,7 +187,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, wide = false, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */ }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -186,8 +199,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   const phone = useMedia(`(max-width: ${PHONE_BELOW - 1}px)`, false)
   const wideViewport = useMedia('(min-width: 1600px)', false)
   const mode: FrameMode = frameMode(docked ? DOCK_FROM : DOCK_FROM - 1)
-  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */ })
-  const width = dockWidth({ chosen: sizes.width, remembered: sizes.remembered, wideTab: wide, viewport: wideViewport ? 1600 : 1440 })
+  // F-SA-263: with `dockTab` the width is kept per tab and "hidden" per record type.
+  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, tab: dockTab ?? null, rememberHidden: dockTab !== undefined })
+  const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })
   const hasThread = thread !== null
   const viewOpen = params?.get(THREAD_PARAM) === 'open'
   const [details, setDetails] = useState(false)
@@ -205,6 +219,8 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   // R-8: an old address that asked for Activity opens the thread (and `panel=approvals` its "Ask a partner to approve").
   useEffect(() => {
     const asked = arrivalOf(window.location.search)
+    // F-SA-263: any `?thread=` (a dock scope, the narrow view's `open`) shows a docked thread the person had hidden.
+    if (!asked.openThread && showsOnArrival(window.location.search) && window.matchMedia(`(min-width: ${DOCK_FROM}px)`).matches) sizes.show()
     if (!asked.openThread) return
     const next = new URLSearchParams(window.location.search)
     if (next.get('tab') === 'activity') next.delete('tab')

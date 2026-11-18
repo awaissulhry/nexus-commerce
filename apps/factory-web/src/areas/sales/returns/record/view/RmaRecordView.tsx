@@ -127,7 +127,7 @@ function RmaRecord({ model, actions, thread, printThread, returnLabels }: { mode
         threadLabel={t('record.dockLabelOf', { number: rma.number })}
         thread={thread ?? null}
         printThread={printThread}
-        wide={tab === 'lines'}
+        defaultWidth={tab === 'lines' ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={`${prefix}/sales/returns`}>{t('record.back')}</Link>,
           title: <span className="fw-q-code">{rma.number}</span>,

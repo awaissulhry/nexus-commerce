@@ -9,6 +9,7 @@ import type { ThreadFile } from '../../../lib/record-thread/files/model' // B-TH
  *   foot: a 3 : 2 grid of the page (gap 16), so 40 % at every width (1440 → 519 px, 1920 → 711 px). One third on a wide grid tab
  *   (the lines, a BOM, sizes, cost, cutting) under 1600 px, unless the person chose a width; 50 % or full from the Head's width
  *   menu (Esc from full goes back); ⌘J hides and shows it; the width is remembered per person and record type on this device.
+ *   F-SA-263: a page may name each tab's own default (`defaultWidth`) and keep the choice per tab and "hidden" (`dockTab`).
  * - Below 1280 px the band's "Thread" button opens the thread as a full-width view; Back returns to the same tab and scroll.
  * - Below 720 px (the phone, PL4) the same full page, with the band's details behind its "i".
  * - ONE thread per page; banners stay in the body column, never above the thread.
@@ -28,14 +29,38 @@ export function frameMode(viewport: number): FrameMode {
   return viewport >= DOCK_FROM ? 'docked' : 'stacked'
 }
 
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): each tab its own default width (replaces the `wide` boolean).
 /**
- * The dock's width now: the person's choice when they made one; else 40 %, or one third on a wide grid tab under 1600 px (the
- * picture's rule R-18: no sideways scroll on Lines at 1440 with the thread open).
+ * A tab's dock width when the person chose none: one width, or `grid` — a wide grid tab (the lines, a BOM, sizes, cost, cutting):
+ * one third under 1600 px, 40 % from 1600 (the picture's rule R-18: no sideways scroll on Lines at 1440 with the thread open).
  */
-export function dockWidth(input: { readonly chosen: DockWidth; readonly remembered: boolean; readonly wideTab: boolean; readonly viewport: number }): DockWidth {
-  if (input.remembered) return input.chosen
-  return input.wideTab && input.viewport < THIRD_BELOW ? 'third' : input.chosen
+export type DockDefault = DockWidth | 'grid'
+
+/** A tab's default at a viewport: `grid` is one third under 1600 px and 40 % from 1600; any other default is itself. */
+export function defaultWidthAt(value: DockDefault, viewport: number): DockWidth {
+  if (value === 'grid') return viewport < THIRD_BELOW ? 'third' : 'forty'
+  return value
 }
+
+/**
+ * The dock's width now: the person's choice when they made one (for this record type, or this tab of it); else the tab's own default
+ * (40 % when the page names none).
+ */
+export function dockWidth(input: { readonly chosen: DockWidth | null; readonly defaultWidth?: DockDefault; readonly viewport: number }): DockWidth {
+  if (input.chosen) return input.chosen
+  return defaultWidthAt(input.defaultWidth ?? 'forty', input.viewport)
+}
+
+/**
+ * On arrival, the address shows a docked thread the person had hidden (10-order-page §6.3): an old `?tab=activity`, `panel=approvals`
+ * or any `?thread=` (the New messages cell's `new`, a dock scope). ⌘J and the band's button show it too.
+ */
+export function showsOnArrival(search: string | { get(name: string): string | null } | null | undefined): boolean {
+  if (!search) return false
+  const params = typeof search === 'string' ? new URLSearchParams(search.startsWith('?') ? search : `?${search}`) : search
+  return arrivalOf(params).openThread || params.get('thread') !== null
+}
+// ---- end F-SA-263
 
 /** The body : thread columns of each width (the gap is the grid's). Full leaves the body out. */
 export const DOCK_COLUMNS: Readonly<Record<DockWidth, string>> = {
