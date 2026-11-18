@@ -221,6 +221,18 @@ describe('a sample asked on an order, answered by link with changes and a marked
     expect(message).toMatchObject({ direction: 'INBOUND', authorName: 'Anna Demo' })
     expect(message.bodyText).toContain('Darker thread on the collar.')
     expect(textOf(lastMail('approvals.receipt', BRAND_QA)!.raw)).toContain('Your words: Darker thread on the collar.')
+    // ---- fix-pr-10 (B-TH-303): the receipt and the answer on the order's thread (the customer's own) name the customer's OWN order
+    // number (the seed's order may have none yet: "—"), never the office's series; the revision words of a revised order stay.
+    const order = await one<{ number: string; customerSeq: number | null }>('SELECT number, "customerSeq" FROM "SalesOrder" WHERE id = $1', [pricing.money.sales.orderId])
+    const mine = order.customerSeq === null ? '—' : `#${order.customerSeq}`
+    const receipt = textOf(lastMail('approvals.receipt', BRAND_QA)!.raw)
+    expect(receipt).toContain(`we received your answer on sample, ${mine}, for `)
+    expect(receipt).not.toContain(order.number)
+    const subject = await one<{ subject: string }>(`SELECT subject FROM "EmailOutbound" WHERE "templateKey" = 'approvals.receipt' AND "recordId" = $1`, [requestId])
+    expect(subject.subject).toBe(`Receipt of your answer: sample — ${mine}`)
+    expect(message.bodyText.split('\n')[0]).toBe(`Sample · ${mine}`)
+    expect(message.bodyText).not.toContain(order.number)
+    // ---- end fix-pr-10
     expect(await admin(`SELECT 1 FROM "AuditLog" WHERE action = 'approvalsOut.settle' AND "recordId" = $1`, [requestId])).toHaveLength(1)
     expect((await eventsOf(requestId)).find((event) => event.type === 'approval_request.answered')!.payload).toMatchObject({ status: 'APPROVED_WITH_CHANGES', via: 'LINK', markedUp: true })
     // One answer per request: the link opens nothing any more.
