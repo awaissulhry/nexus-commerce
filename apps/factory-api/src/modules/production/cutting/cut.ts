@@ -339,7 +339,7 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
   let issue: IssueResult['issue'] | null = null
   if (ledger.at.lte(0)) {
     // B-W2b-100: the table checks the shade itself (B-W2b-103: a warning a lead may pass), so the issue skips it here.
-    issue = (await issueInCommand(tools, workOrder.id, { hideId: hide.id, ...(body.occurredAt ? { occurredAt: body.occurredAt } : {}) }, `${key}:issue`, 'body', { shade: false })).issue
+    issue = (await issueInCommand(tools, workOrder.id, { hideId: hide.id, ...(body.occurredAt ? { occurredAt: body.occurredAt } : {}) }, `${key}:issue`, 'body', { shade: false, permission: PRODUCTION_CUT /* fix-pr-3: the cut's own right */ })).issue
     ledger = (await readHideLedger(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id)!
   }
   const cut = (await readCutTotals(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id) ?? ZERO

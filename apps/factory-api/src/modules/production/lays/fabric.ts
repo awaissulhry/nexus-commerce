@@ -92,6 +92,7 @@ async function issueLayFabric(tools: CommandTools, state: LayState, context: Off
         { lotId: roll.lotId, quantity: share.length.toFixed(4), uom, fromLocationId: roll.locationId!, ...(overIssueReason ? { overIssueReason } : {}) },
         layFabricKey(state.lay.id, roll.id, share.key),
         'body',
+        { permission: PRODUCTION_CUT }, // fix-pr-3: the table's own right (tableCommand checked it over every customer of the cut order)
       )
       ownMoves.push(...issued.issue.moves.map((move) => move.id))
       workOrderIds.add(share.key)
