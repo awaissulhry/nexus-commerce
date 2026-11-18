@@ -49,7 +49,10 @@ export function useRecordPicture(input: RecordPictureInput): RecordPictureState 
   const { source, recordId, read, demo, held } = input
   const own = input.picture
   const known = own === undefined ? recordOf(source, recordId) : undefined
-  const [answered, setAnswered] = useState<{ picture: RowPicture | null; styleCount: number } | undefined>(known === undefined ? undefined : known === null ? { picture: null, styleCount: 0 } : { picture: rowPictureOf(known), styleCount: known.styleCount })
+  // F-SA-283: a row that names no picture and has no read to name it (a design case; a page whose reader may not read the batch
+  // route, as a planner without workorders.view) draws the placeholder at once, never the wait for a read that never comes.
+  const unread = own === undefined && known === undefined && !read && demo === undefined && !held
+  const [answered, setAnswered] = useState<{ picture: RowPicture | null; styleCount: number } | undefined>(known === undefined ? (unread ? { picture: null, styleCount: 0 } : undefined) : known === null ? { picture: null, styleCount: 0 } : { picture: rowPictureOf(known), styleCount: known.styleCount })
   const picture = own !== undefined ? own : answered?.picture
   const styleCount = own !== undefined ? (input.styleCount ?? 1) : (answered?.styleCount ?? input.styleCount ?? 1)
   const fileId = picture?.fileId ?? null
@@ -78,7 +81,10 @@ export function useRecordPicture(input: RecordPictureInput): RecordPictureState 
     const reader = readRef.current
     // The row names no picture of its own: the batch read names the style and the file first.
     if (own === undefined) {
-      if (!reader) return setSrc(null)
+      if (!reader) {
+        setAnswered((current) => current ?? { picture: null, styleCount: 0 }) // F-SA-283: no read, the placeholder
+        return setSrc(null)
+      }
       const kept = recordOf(source, recordId)
       if (kept !== undefined) {
         setAnswered(kept === null ? { picture: null, styleCount: 0 } : { picture: rowPictureOf(kept), styleCount: kept.styleCount })

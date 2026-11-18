@@ -37,6 +37,8 @@ import type { BoardDepth, BoardDialog, BoardViewModel, ChangesState, DropChoice,
 import { BoardView } from './view/BoardView'
 // B-W2b-263: a drop held on a pre-production gate asks "Start before the gate?" (Time & action's dialog).
 import { useStartBeforeGate } from '../milestones/use-start-before'
+// F-SA-283: the one picture part's batch read (a work order's style picture in the bar's window, B-SA-074).
+import { pictureReader } from '../../../lib/record-picture/api'
 // B-W2b-337: the board in depth (pins, the floor, workshops as lanes, what-if, the change log with undo, day sheets, export).
 import { DEPTH_NAMESPACE as ALLOCATION_DEPTH_NAMESPACE, kitProblemOf, switchRefusalOf, switchRefusalWords, holdWords, workshopOf, type Words as AllocationWords } from '../allocation/depth/model'
 import { getAllocationWorkshops, getWorkOrderWorkshops, type OutsideAnswer } from '../allocation/depth/api'
@@ -117,6 +119,9 @@ function BoardContainer() {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const gate = useStartBeforeGate(api, session.company?.id ?? null) // B-W2b-263
+  // F-SA-283: only for a reader of work orders (the batch route's right); a planner without it gets the part's placeholder.
+  const readsWorkOrders = session.permissions.includes('workorders.view')
+  const readPictures = useMemo(() => (readsWorkOrders ? pictureReader(api) : null), [api, readsWorkOrders])
   const router = useRouter()
   const pathname = usePathname() ?? ''
   const params = useSearchParams()
@@ -1182,6 +1187,7 @@ function BoardContainer() {
           onShowDepthProblem: (row) => showWorkOrder(row.workOrderId, row.slotId, row.laneId, row.date),
           onExportDownload: exporter.download,
           onExportAgain: exporter.again,
+          readPictures, // F-SA-283
         }}
       />
       {gate.element}

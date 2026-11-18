@@ -20,6 +20,9 @@ import {
 import type { BoardActions, BoardDialog, BoardViewModel, Loaded, PublishRangeKind } from '../view-model'
 // B-W2b-337: the bar's W2b actions (pin, pin the order, Move to a subcontractor), its floor state and material start.
 import { floorSentence, materialWords } from '../depth/model'
+// F-SA-283 (sales page plan N8, R9; review OW-4): the ONE picture part — the work order's style picture in the bar's window (the DS
+// board's bars draw text only, and the design system is frozen: a picture ON the bar needs a DS slot). Office only.
+import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
 
 /**
  * The planning board's pop-ups (design planning.board): the bar's detail (pop:bar), the drop warning (pop:drop-warning),
@@ -119,9 +122,13 @@ function BarDialog({ dialog, board, model, actions, words, onClose }: { dialog: 
             const material = workOrder.readiness
             return (
               <>
-                <p className="fw-pb-dialog-status">
-                  <Tag tone={STATUS_TONE[workOrder.schedule.status]}>{t(`status.${workOrder.schedule.status}`)}</Tag> {scheduleWords(workOrder, words)}
-                </p>
+                {/* F-SA-283: the style's picture (the walled batch read; absent for a work order the reader does not reach) beside the status. */}
+                <div className="fw-pb-dialog-head">
+                  <RecordPicture source="workorder" recordId={dialog.workOrderId} number={number} size="board" read={actions?.readPictures} />
+                  <p className="fw-pb-dialog-status">
+                    <Tag tone={STATUS_TONE[workOrder.schedule.status]}>{t(`status.${workOrder.schedule.status}`)}</Tag> {scheduleWords(workOrder, words)}
+                  </p>
+                </div>
                 <KeyValue
                   columns={2}
                   labelCase="sentence"

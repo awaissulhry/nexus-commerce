@@ -8,6 +8,9 @@ import { liveMessageFor, liveViewFor } from './live'
 // B-PR-09: the brand wall of production's live messages.
 import { EVENT_CATALOGUE } from './catalogue'
 import { partyIdsOf } from './live'
+// B-SA-055: the portal's live list (its own request's answer).
+import { PARTNER_LIVE_EVENTS, partnerLiveViewFor } from '../portal/notifications/live'
+import { LIVE_PARTY_KEYS } from './live'
 
 const TENANT = '0190a000-0000-7000-8000-000000000001'
 const OTHER_TENANT = '0190a000-0000-7000-8000-000000000002'
@@ -461,3 +464,88 @@ describe('a scan names its work order’s customer (B-SA-003)', () => {
   })
 })
 // ── end B-SA-003 ──
+
+// ── B-SA-055 ──
+/**
+ * B-SA-055 (Sales page plan R6, P17'; review OW-5): the portal learns of its own request's answer live —
+ * order_change_request.answered and .countered reach the partner sessions of the request's OWN customer only (the payload's
+ * partyId, matched on the message's server-side parties: the office's live rule keeps the party out of its fields, review BW-7),
+ * with ids, kind and answer only. Brand Beta's portal session never receives Brand Alpha's answer; an office note
+ * (thread.message_posted) never wakes a portal tab.
+ */
+describe('the portal learns of its own request’s answer live (B-SA-055)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  const REQUEST = '0190a000-0000-7000-8000-0000000000d1'
+  const ORDER = '0190a000-0000-7000-8000-0000000000d2'
+  const APPROVAL = '0190a000-0000-7000-8000-0000000000d3'
+  const TYPES = ['order_change_request.answered', 'order_change_request.countered'] as const
+  const PAYLOAD: Record<(typeof TYPES)[number], (partyId: string) => Record<string, unknown>> = {
+    'order_change_request.answered': (partyId) => ({ requestId: REQUEST, orderId: ORDER, partyId, kind: 'CHANGE', answer: 'ACCEPTED', amendmentId: null, orderCancelled: false }),
+    'order_change_request.countered': (partyId) => ({ requestId: REQUEST, orderId: ORDER, partyId, kind: 'RUSH', approvalRequestId: APPROVAL }),
+  }
+  const messageOf = (type: string, payload: Record<string, unknown>) => {
+    const definition = EVENT_CATALOGUE.get(type, 1)
+    return liveMessageFor(envelope(definition, payload), definition)!
+  }
+  const portalOf = (partyId: string, permissions: string[] = ['portal.salesOrders.view'], parties: Grant['parties'] = [partyId]): Actor => ({ audience: 'partner', tenantId: TENANT, partyId, grants: [{ permissions: permissions as Grant['permissions'], companies: [COMPANY], sites: 'all', parties }] })
+  const officeOf = (parties: Grant['parties']): Actor => office([{ permissions: ['orders.view'], companies: 'all', sites: 'all', parties }])
+
+  it.each(TYPES)('%s is on the portal list for the customer’s order readers, by the payload’s own party, never more than the office copies', (type) => {
+    const rule = PARTNER_LIVE_EVENTS[type]!
+    expect(rule).toMatchObject({ permission: 'portal.salesOrders.view', party: 'partyId', partyFrom: 'payload' })
+    const definition = EVENT_CATALOGUE.get(type, 1)
+    // The payload names its customer by partyId alone (so its server-side parties are exactly that one), and it is required.
+    expect(Object.keys(definition.payload.shape).filter((key) => (LIVE_PARTY_KEYS as readonly string[]).includes(key))).toEqual(['partyId'])
+    expect(definition.payload.shape.partyId!.safeParse(undefined).success).toBe(false)
+    // The party never rides in the live fields (office or portal), and the portal gets only what the office rule copies.
+    expect(definition.live!.fields).not.toContain('partyId')
+    expect(rule.fields).not.toContain('partyId')
+    for (const field of rule.fields) expect(definition.live!.fields, `${type}.${field}`).toContain(field)
+    for (const field of rule.fields) expect(field).not.toMatch(/ById$|note|reason|date|fee|words|amount|price/i)
+  })
+
+  it.each(TYPES)("%s: Alpha's portal session receives Alpha's answer — ids and states only, no party; Beta's never does", (type) => {
+    const ofAlpha = messageOf(type, PAYLOAD[type](ALPHA))
+    expect(ofAlpha.partyIds).toEqual([ALPHA])
+    const seen = partnerLiveViewFor(ofAlpha, portalOf(ALPHA), EVENT_CATALOGUE)
+    expect(seen).not.toBeNull()
+    expect(seen!.fields).toEqual(type === 'order_change_request.answered' ? { requestId: REQUEST, orderId: ORDER, kind: 'CHANGE', answer: 'ACCEPTED' } : { requestId: REQUEST, orderId: ORDER, kind: 'RUSH' })
+    expect(seen).not.toHaveProperty('partyIds')
+    expect(seen).not.toHaveProperty('tenantId')
+    // Brand Beta's session — even one holding every portal permission — never receives Alpha's; it does receive its own.
+    expect(partnerLiveViewFor(ofAlpha, portalOf(BETA), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(ofAlpha, portalOf(BETA, ['portal.salesOrders.view', 'portal.production.view', 'portal.home.view'], 'all'), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(messageOf(type, PAYLOAD[type](BETA)), portalOf(BETA), EVENT_CATALOGUE)).not.toBeNull()
+    // A session without the orders read, another tenant's message, an office viewer: nothing through the portal rule.
+    expect(partnerLiveViewFor(ofAlpha, portalOf(ALPHA, ['portal.production.view']), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor({ ...ofAlpha, tenantId: OTHER_TENANT }, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(ofAlpha, officeOf('all'), EVENT_CATALOGUE)).toBeNull()
+  })
+
+  it.each(TYPES)('%s fails closed: no server-side party (an older worker), or a message naming two parties, reaches no portal', (type) => {
+    const ofAlpha = messageOf(type, PAYLOAD[type](ALPHA))
+    const { partyIds: _parties, ...older } = ofAlpha
+    expect(partnerLiveViewFor(older, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor({ ...ofAlpha, partyIds: [ALPHA, BETA] }, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+    // A party in the fields (which the office rule never copies) is not what the portal rule reads.
+    expect(partnerLiveViewFor({ ...ofAlpha, partyIds: [BETA], fields: { ...ofAlpha.fields, partyId: ALPHA } }, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+  })
+
+  it.each(TYPES)('%s keeps the office wall as it was: a person limited to Beta gets no Alpha answer', (type) => {
+    const ofAlpha = messageOf(type, PAYLOAD[type](ALPHA))
+    expect(liveViewFor(ofAlpha, officeOf([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofAlpha, officeOf([ALPHA]), EVENT_CATALOGUE)!.fields).not.toHaveProperty('partyId')
+    expect(liveViewFor(ofAlpha, officeOf('all'), EVENT_CATALOGUE)).not.toBeNull()
+  })
+
+  it('never wakes a portal tab with an office note, nor with any other request event the portal list does not name', () => {
+    const note = messageOf('thread.message_posted', { threadId: REQUEST, messageId: APPROVAL, recordType: 'SalesOrder', recordId: ORDER, direction: 'INTERNAL_NOTE', audience: 'OFFICE', partyId: ALPHA })
+    expect(Object.hasOwn(PARTNER_LIVE_EVENTS, 'thread.message_posted')).toBe(false)
+    expect(partnerLiveViewFor(note, portalOf(ALPHA, ['portal.salesOrders.view', 'portal.home.view'], 'all'), EVENT_CATALOGUE)).toBeNull()
+    expect(Object.keys(PARTNER_LIVE_EVENTS).filter((type) => type.startsWith('order_change_request.')).sort()).toEqual(['order_change_request.answered', 'order_change_request.countered'])
+    const asked = messageOf('order_change_request.asked', { requestId: REQUEST, orderId: ORDER, partyId: ALPHA, kind: 'CHANGE', lines: 1, wholeOrder: false })
+    expect(partnerLiveViewFor(asked, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+  })
+})
+// ── end B-SA-055 ──

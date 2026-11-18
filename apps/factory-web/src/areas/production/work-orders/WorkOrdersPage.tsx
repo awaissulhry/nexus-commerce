@@ -40,6 +40,8 @@ import { useAssignSupervisor } from '../../_shared/production-supervisor/use-ass
 // F-PR-22: "Note to N…" and a row's "Office note…" (THE note dialog, areas/production/_shared/notes).
 import { NOTES_NS, openHeld, targetsOfRows as noteTargetsOfRows } from '../_shared/notes/model'
 import { useNoteDialog } from '../_shared/notes/use-note-dialog'
+// F-SA-283: the one picture part's batch read (the work orders' style pictures, B-SA-074).
+import { pictureReader } from '../../../lib/record-picture/api'
 
 /**
  * `/w/<company>/production/work-orders` (SCR-069): reads the work orders of the saved view (`?view=`, default open) and
@@ -77,6 +79,7 @@ function WorkOrdersContainer() {
   const params = useSearchParams()
   const prefix = pathname.replace(/\/production\/work-orders\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
+  const readPictures = useMemo(() => pictureReader(api), [api]) // F-SA-283
   // F-PR-03: every term of the list from its address (one place: termsOf).
   const search = params?.toString() ?? ''
   const terms = useMemo(() => termsOf(params, MODES), [search])
@@ -405,6 +408,7 @@ function WorkOrdersContainer() {
           note.open(noteTargetsOfRows(picked, session.permissions.includes('parties.view')), from)
         },
         note: note.actions,
+        readPictures, // F-SA-283
         onSaved: saved,
         onReleaseMany: (ids) => {
           const picked = (rows.items ?? []).filter((row: WorkOrderRow) => ids.includes(row.id))
