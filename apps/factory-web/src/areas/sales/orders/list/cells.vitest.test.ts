@@ -123,3 +123,76 @@ describe('the Orders sheet mounts the ONE picture part (F-SA-212)', () => {
   })
 })
 // ---- end F-SA-212
+
+// ---- F-SA-275 (sales page plan N5 / N2, picks R5, P10, P4; 11-customer-page §3.5; the API's B-SA-070): the production columns —
+// Where it is, Waiting on, Supervisor (opt-in on Sales › Orders); a reader without workorders.view never gets a supervisor mark guessed.
+describe('F-SA-275: the production columns', () => {
+  const production = (over: Partial<NonNullable<OrderRow['production']>> = {}): NonNullable<OrderRow['production']> => ({ stage: 'SEWING', stageSince: '2026-11-10', health: 'AT_RISK', waitingOn: null, since: null, held: false, supervisorMark: 'SOMEONE_ELSE', openRequests: 0, openIssues: 0, withheld: [], ...over })
+  const base = LIST_ROWS[0]!
+  const withPart = (over: Partial<NonNullable<OrderRow['production']>> = {}, rest: Partial<OrderRow> = {}): OrderRow => ({ ...base, production: production(over), ...rest })
+
+  it('the API row parses its production part, and an answer without it stays valid', async () => {
+    const { orderRowSchema } = await import('../api')
+    expect(orderRowSchema.parse({ ...base, production: production() }).production?.stage).toBe('SEWING')
+    expect(orderRowSchema.parse(base).production).toBeUndefined()
+  })
+  it('Where it is: the stage and the health; no stage kept → the status; not read → nothing guessed', async () => {
+    const { whereLineOf, piecesLineOf, HEALTH_CHIP } = await import('./sheet/model')
+    expect(whereLineOf(withPart())).toEqual({ kind: 'stage', stage: 'SEWING', health: 'AT_RISK', held: false })
+    expect(whereLineOf(withPart({ stage: null }))).toEqual({ kind: 'status' })
+    expect(whereLineOf(base)).toEqual({ kind: 'unread' })
+    expect(HEALTH_CHIP).toEqual({ LATE: 'LATE', AT_RISK: 'AT_RISK', NO_DATE: 'NOT_PROMISED', ON_TRACK: 'ON_TIME' })
+    // This order's own pieces; a site that does not scan sewing says so (never 0); none in work yet; not read: no line.
+    expect(piecesLineOf({ progress: { inWork: 300, cut: 300, sewn: 120, finished: 0 } })).toEqual({ key: 'where.sewn', params: { done: 120, total: 300 } })
+    expect(piecesLineOf({ progress: { inWork: 300, cut: 300, sewn: null, finished: null } })).toEqual({ key: 'parts.stage.sewingNotCounted', production: true })
+    expect(piecesLineOf({ progress: null })).toEqual({ key: 'progress.none' })
+    expect(piecesLineOf({})).toBeNull()
+  })
+  it('Waiting on: a request first, then a reply that waits, then who acts next; the keeper\'s "us" beside a request is said once', async () => {
+    const { waitingItemsOf, answerHrefOf } = await import('./sheet/model')
+    const row = withPart({ openRequests: 1, waitingOn: 'US', since: '2026-11-17T08:00:00Z' })
+    expect(waitingItemsOf(row).map((item) => item.kind)).toEqual(['request'])
+    const marked = waitingItemsOf(row, { requestIds: ['req-1', 'req-2'], replySince: '2026-11-18T08:00:00Z' })
+    expect(marked).toEqual([{ kind: 'request', count: 2, requestId: 'req-1' }, { kind: 'reply', since: '2026-11-18T08:00:00Z' }])
+    expect(waitingItemsOf(withPart({ waitingOn: 'SUPPLIER', since: '2026-11-16T08:00:00Z' }))).toEqual([{ kind: 'keeper', on: 'SUPPLIER', since: '2026-11-16T08:00:00Z' }])
+    expect(waitingItemsOf(withPart())).toEqual([])
+    expect(waitingItemsOf(base)).toEqual([])
+    // Answer request…: the host's review window (the customer page's door), else the order's Changes tab.
+    const request = { kind: 'request' as const, count: 1, requestId: 'req-1' }
+    expect(answerHrefOf('/w/acme', { id: 'o1' }, request, (id) => `/w/acme/sales/customers/p?tab=work&open=${id}`)).toBe('/w/acme/sales/customers/p?tab=work&open=req-1')
+    expect(answerHrefOf('/w/acme', { id: 'o1' }, request, null)).toBe('/w/acme/sales/orders/o1?tab=changes')
+  })
+  it('Supervisor: the mark only — held when the reader\'s workorders.view does not reach the order (never guessed, never a name)', async () => {
+    const { supervisorCellOf } = await import('./sheet/model')
+    expect(supervisorCellOf(withPart({ supervisorMark: 'ME' }))).toEqual({ kind: 'mark', mark: 'ME' })
+    expect(supervisorCellOf(withPart({ supervisorMark: null, openIssues: null, withheld: ['supervisorMark', 'openIssues'] }))).toEqual({ kind: 'withheld' })
+    expect(supervisorCellOf(base)).toEqual({ kind: 'unread' })
+  })
+  it('the columns are the sheet\'s own (opt-in), named by the export source\'s ids (screen = file), read only while shown', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../../../../../../factory-api/src/platform/exports/sources/sales-orders.ts', import.meta.url), 'utf8')
+    for (const id of ['whereItIs', 'waitingOn', 'supervisor']) {
+      expect(view, id).toContain(`later({ colId: '${id}'`)
+      expect(source, id).toMatch(new RegExp(`\\b${id}: \\{`))
+    }
+    const hook = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('PRODUCTION_COLUMNS.includes(id)')
+    expect(hook).toContain('production: productionShown')
+    // The row's ⋯: Add task… (when the host offers it) and Answer request… while a request waits.
+    expect(view).toContain("s('row.addTask')")
+    expect(view).toContain("s('row.answer')")
+  })
+  it('every word in both languages (no key left); the marks are the supervisor catalogue\'s own (R9: no new synonym)', () => {
+    for (const locale of LOCALES) {
+      const sheet = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+      for (const key of ['col.whereItIs', 'col.whereItIsHint', 'col.waitingOn', 'col.waitingOnHint', 'col.supervisor', 'col.supervisorHint', 'waiting.request', 'waiting.answerTip', 'row.addTask', 'row.answer', 'held.workorders']) expect(sheet(key, { number: 'SO-1' }), `${locale} ${key}`).not.toBe(key)
+      expect(sheet('where.sewn', { done: 120, total: 300 }), locale).toMatch(/120.*300/)
+      expect(sheet('waiting.reply', { time: '4 h' }), locale).toContain('4 h')
+      expect(sheet('waiting.more', { count: 1 }), locale).toContain('1')
+      const marks = createTranslator(locale, messagesFor(locale, ['production-supervisor'])['production-supervisor']!)
+      for (const mark of ['ME', 'SOMEONE_ELSE', 'NOT_SET']) expect(marks(`mark.${mark}`), `${locale} ${mark}`).not.toBe(`mark.${mark}`)
+    }
+    expect(createTranslator('en', messagesFor('en', [NAMESPACE])[NAMESPACE]!)('where.sewn', { done: 120, total: 300 })).toBe('120 of 300 sewn')
+  })
+})
+// ---- end F-SA-275

@@ -202,6 +202,8 @@ export interface Narrowing {
   readonly kind?: 'mtm' | null
   /** F-SA-222: a rider's orders (`?profile=<id>`, the rider list's Open orders door). */
   readonly profile?: string | null
+  /** F-SA-275: read each row's production part (a production column is shown). */
+  readonly production?: boolean
 }
 // ── end B-TH-225 ──
 
@@ -335,6 +337,7 @@ const narrowingOf = (narrow: Narrowing): OrderQuery => ({
   ...(narrow.progress ? { progress: true } : {}),
   ...(narrow.kind ? { kind: narrow.kind } : {}), // F-SA-221
   ...(narrow.profile ? { profile: narrow.profile } : {}), // F-SA-222
+  ...(narrow.production ? { production: true } : {}), // F-SA-275
 })
 
 /**

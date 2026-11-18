@@ -37,6 +37,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
+import { PIECES_COLUMNS, PRODUCTION_COLUMNS } from './sheet/model' // F-SA-275
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -147,7 +148,9 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const extraKey = JSON.stringify(extraFromAddress(params, rows))
   const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
   const [progressShown, setProgressShown] = useState(false)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile])
+  // F-SA-275: the rows' production part only while a production column is shown (Where it is, Waiting on, Supervisor).
+  const [productionShown, setProductionShown] = useState(false)
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */, production: productionShown /* F-SA-275 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile, productionShown])
   const grouped = layout === 'list' && group === 'party' && !party
   const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
@@ -596,7 +599,11 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onSummaryRetry: () => readSummary(readId.current),
     onClearExtra: (key) => go({ extra: key === null ? null : withoutExtra(extra, key) }),
     onExtra: (next) => go({ extra: { ...extra, ...next } }),
-    onShownColumns: (ids) => setProgressShown(ids.includes('progress')),
+    // F-SA-275: Where it is reads the pieces too; the production columns read the rows' production part.
+    onShownColumns: (ids) => {
+      setProgressShown(ids.some((id) => PIECES_COLUMNS.includes(id)))
+      setProductionShown(ids.some((id) => PRODUCTION_COLUMNS.includes(id)))
+    },
     onInvoiceShipped: invoiceShipped,
     onInvoiceShippedRetry: () => invoiceShipped(invoiceAsked.current),
     onCloseInvoiceDrafts: () => setInvoiceDrafts(null),

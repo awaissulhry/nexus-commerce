@@ -4,9 +4,17 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as Rea
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Filter, X } from 'lucide-react'
-import { Button, FilterChip, Tag } from '@nexus/ui/primitives'
+import { Button, FilterChip, Pill, Tag } from '@nexus/ui/primitives' // F-SA-275: + Pill
 import type { Door, Phrase } from './model'
 import './sheet.css'
+// ---- F-SA-275: the production columns' cells (the shared health chip and the production parts' words, the supervisor marks) ----
+import { HealthPill } from '../../../../../lib/production/view/HealthPill'
+import { ageOf } from '../../../../../lib/production/model'
+import { useProductionWords } from '../../../../../lib/production/words'
+import type { OrderRow } from '../../api'
+import { STATUS_TONE } from '../../model'
+import { answerHrefOf, HEALTH_CHIP, piecesLineOf, supervisorCellOf, waitingItemsOf, whereLineOf, type WaitingMark } from './model'
+// ---- end F-SA-275
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
 const say = (t: Translate, phrase: Phrase) => t(phrase.key, phrase.params)
@@ -214,3 +222,85 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
 }
 
 // F-SA-224: the Customer switcher moved to areas/sales/_shared/customer-switcher (one customer filter for every Sales list).
+
+// ── F-SA-275 (sales page plan N5 / N2, picks R5, P10, P4; 11-customer-page §3.5): Where it is, Waiting on, Supervisor ──────────────
+
+/**
+ * Where it is: the plain stage (the words the customer reads too) and the health chip (no "why" in a dense cell), then this order's
+ * own pieces ("120 of 300 sewn") or "Sewing not counted here" (never 0). No stage kept (waiting for a yes, shipped, closed…): the
+ * order's status. Not read: "—".
+ */
+export function WhereItIsCell({ row, t, s }: { row: OrderRow; t: Translate; s: Translate }) {
+  const w = useProductionWords()
+  const line = whereLineOf(row)
+  const pieces = piecesLineOf(row)
+  if (line.kind === 'unread') return <span className="fw-sheet-plain">—</span>
+  return (
+    <span className="fw-sheet-cell">
+      {line.kind === 'status' ? (
+        <Pill tone={STATUS_TONE[row.status]}>{t(`status.${row.status}`)}</Pill>
+      ) : (
+        <span className="fw-sheet-where">
+          <b>{w.t(`parts.stage.${line.stage}`)}</b>
+          {line.health && <HealthPill face="office" explain={false} computed={HEALTH_CHIP[line.health]} daysLate={row.daysLate} />}
+          {line.held && <Tag tone="warning">{w.t('parts.stage.blocked')}</Tag>}
+        </span>
+      )}
+      {pieces && <span className="fw-sheet-sub">{pieces.production ? w.t(pieces.key, pieces.params) : s(pieces.key, pieces.params)}</span>}
+    </span>
+  )
+}
+
+/**
+ * Waiting on: the most urgent of a request to answer (a real link to the review window — on the customer page its door, else the
+ * order's Changes), a reply that waits on us ("Reply waits · 4 h"), who acts next as the keeper keeps it ("Waiting on supplier ·
+ * 2 d"); "+1 more" when more than one. Nothing waits: "—".
+ */
+export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: OrderRow; mark?: WaitingMark | null; prefix: string; doorHref?: ((requestId: string) => string) | null; s: Translate; now: number }) {
+  const w = useProductionWords()
+  const items = waitingItemsOf(row, mark)
+  const first = items[0]
+  if (!first) return <span className="fw-sheet-plain">—</span>
+  const age = (since: string | null) => {
+    const phrase = ageOf(since, now)
+    return phrase ? w.say(phrase) : null
+  }
+  const more = items.length > 1 ? <span className="fw-sheet-sub">{s('waiting.more', { count: items.length - 1 })}</span> : null
+  if (first.kind === 'request')
+    return (
+      <span className="fw-sheet-cell">
+        <Link href={answerHrefOf(prefix, row, first, doorHref)} className="fw-sheet-door" data-door="" title={s('waiting.answerTip', { number: row.number })}>
+          {first.count > 1 ? s('waiting.requests', { count: first.count }) : s('waiting.request')}
+        </Link>
+        {more}
+      </span>
+    )
+  if (first.kind === 'reply')
+    return (
+      <span className="fw-sheet-cell">
+        <span>{s('waiting.reply', { time: age(first.since) ?? '—' })}</span>
+        {more}
+      </span>
+    )
+  const since = age(first.since)
+  return (
+    <span className="fw-sheet-cell">
+      <span>{since ? s('waiting.keeper', { who: w.t(`parts.waiting.office.${first.on}`), time: since }) : w.t(`parts.waiting.office.${first.on}`)}</span>
+      {more}
+    </span>
+  )
+}
+
+/** Supervisor: Me / Someone else / Not set — never a name on a list (worker privacy); held in words without the work orders' right. */
+export function SupervisorCell({ row, s, marks }: { row: OrderRow; s: Translate; marks: Translate }) {
+  const cell = supervisorCellOf(row)
+  if (cell.kind === 'unread') return <span className="fw-sheet-plain">—</span>
+  if (cell.kind === 'withheld')
+    return (
+      <span className="fw-sheet-held" tabIndex={0} title={s('held.workorders')}>
+        —
+      </span>
+    )
+  return <span className={cell.mark === 'ME' ? 'fw-sheet-me' : undefined}>{marks(`mark.${cell.mark}`)}</span>
+}
+// ── end F-SA-275 ──

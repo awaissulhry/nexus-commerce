@@ -352,7 +352,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       'supervisor.NOT_SET': 'Non impostato',
     },
     en: {
-      'status.PENDING_APPROVAL': 'Waiting for approval', // B-TH-008
+      'status.PENDING_APPROVAL': 'Waiting for a yes', // B-TH-008; Round 5 (R9): the catalogue's word, as the pill, the lane and the tile
       'status.CONFIRMED': 'Confirmed',
       'status.IN_PRODUCTION': 'In production',
       'status.READY': 'Ready',

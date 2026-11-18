@@ -102,7 +102,7 @@
   },
   "tile": {
     "late": "Late",
-    "waitingForApproval": "Waiting for approval",
+    "waitingForApproval": "Waiting for a yes",
     "waitingForDeposit": "Waiting for deposit",
     "inProduction": "In production",
     "readyToShip": "Ready to ship",

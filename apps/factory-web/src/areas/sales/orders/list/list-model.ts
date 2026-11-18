@@ -17,6 +17,7 @@ import type { OrderSummary } from '../api'
 import type { ExtraTerms } from '../model'
 import type { GroupRows } from './sheet/overall'
 import type { InvoiceDraftsState } from './sheet/overall-parts'
+import type { WaitingMarks } from './sheet/model' // F-SA-275
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -131,6 +132,12 @@ export interface OrdersListModel {
   embedded?: boolean
   /** The terms the host holds (in every read and in the address): no switcher or chip ✕ for them, Clear all keeps them. */
   locked?: { readonly party: boolean; readonly kind: boolean }
+  // ---- F-SA-275 (the production columns): the host's ----
+  /** What the host knows of each order beside its row (the customer page: its requests and replies that wait on us), by order id. */
+  marks?: WaitingMarks | null
+  /** The review window's address on the host's page for a request (the customer page's door); absent: the order's Changes tab. */
+  doorHref?: ((requestId: string) => string) | null
+  // ---- end F-SA-275
 }
 
 export interface OrdersListActions {
@@ -196,4 +203,6 @@ export interface OrdersListActions {
   onProfile?: (profile: null) => void
   /** F-SA-214: a board card has the focus or its picture is open large (true): live re-reads wait behind "N updates · Show". */
   onBoardHold?: (held: boolean) => void
+  /** F-SA-275 / F-SA-281: Add task… on these orders (a row's ⋯, the selection's Add task to N…); absent: no such door. */
+  onAddTask?: (ids: readonly string[]) => void
 }
