@@ -369,6 +369,7 @@
   },
   "fold": {
     "newRequests_one": "È arrivata {count} nuova richiesta: prendila o affidala a qualcuno",
-    "newRequests_other": "Sono arrivate {count} nuove richieste: prendile o affidale a qualcuno"
+    "newRequests_other": "Sono arrivate {count} nuove richieste: prendile o affidale a qualcuno",
+    "customerApproved": "{customer} ha approvato in una volta {count} tra campioni e materiali, tra cui {record}"
   }
 }

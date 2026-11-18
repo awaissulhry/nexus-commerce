@@ -18,6 +18,7 @@ import { approveTask, getTask, listRejectReasons, listTasks, rejectTask, stepUp,
 import { controlsOf, countsOf, decisionProblem, heldOf, inboxAddress, listedTarget, nextReview, rowsOf, TILE_OF, type InboxControls, type InboxRow } from './inbox'
 import type { BulkLine, InboxDialog, InboxViewModel, ReviewTab } from './model'
 import { InboxView } from './view/InboxView'
+import { CustomerOverrideProvider } from '../../_shared/customer-override/CustomerOverride' // F-PR-09
 // B-W2b-188 (PLT-089): the person's own "e-mail me approvals" switch.
 import { MailMeSwitch } from '../../../record-panels/approvals/mail-me/MailMeSwitch'
 // B-W2b-382 (XF7:01, XF7:02): the request in words from its codes; its record's page (its parent's) also for the review alone.
@@ -425,7 +426,7 @@ export function Approvals() {
     followUpDialog,
   }
 
-  return (
+  const page = (
     <InboxView
       model={model}
       mailSwitch={<MailMeSwitch api={api} />}
@@ -476,5 +477,16 @@ export function Approvals() {
         },
       }}
     />
+  )
+  // F-PR-09: "Decide for <customer>" / "Reverse" on a counter-offer read the request window and the inbox again once done.
+  return (
+    <CustomerOverrideProvider
+      onDone={() => {
+        requestReview.refresh()
+        void load()
+      }}
+    >
+      {page}
+    </CustomerOverrideProvider>
   )
 }

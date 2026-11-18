@@ -222,7 +222,9 @@
     "holdsHow": "Segnalo fatto quando è vero, o fai partire il lavoro prima con un motivo (qualcuno diverso dal suo pianificatore).",
     "opened": "Superato: gli ordini di lavoro di {order} si possono pianificare.",
     "openedEarly": "Partito prima del gate: gli ordini di lavoro di {order} si possono pianificare; il gate aspetta ancora di essere superato.",
-    "workOrders": "Ordini di lavoro"
+    "workOrders": "Ordini di lavoro",
+    "customerAnswer": "La risposta del cliente sul giro campione {round}",
+    "openRound": "Apri il giro"
   },
   "decision": {
     "APPROVED": "Approvato",

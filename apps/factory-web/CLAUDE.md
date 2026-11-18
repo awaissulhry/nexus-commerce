@@ -602,6 +602,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   SPLIT_SHIPMENT and to `/production/brand-requests/:id/accept|refuse` for the others (RUSH: Accept as urgent / Accept and rush the
   floor); Suggest something else `…/counter`; a batch's Accept all / Refuse all re-read first (`batches/:batchId/accept|refuse`); the
   notice after an accept offers Lift the hold (workorders.hold, why) / Clear rush (PATCH rush false), never a generic undo.
+- F-PR-09 `src/areas/_shared/customer-override/` (catalogue `customer-override`, CSS `fw-cov-`) — THE "Decide for <customer>" and
+  "Reverse" on an approval asked of a customer (B-PR-30a/30b: `GET /approvals-out/:id` or `?recordType=&recordId=`, `POST
+  …/decide-for-party`, `POST …/reverse`; production.brand.override, the API's step-up asked at the act, a second person's task opened in
+  Home › Approvals; refusals said from their codes; another customer's id draws nothing). A view puts `slot.tsx CustomerOverrideSlot`
+  (it fetches nothing and draws nothing without a provider); its page wraps the view in `CustomerOverride.tsx CustomerOverrideProvider`
+  (`onDone` reads the page again). Mounted on the sample round's Approval tab (the round, each swatch's row), a gate's dialog in
+  Planning › Time & action (the round it names), the customer's answer to a new date (Planning › Promise dates) and our counter-offer
+  (Home › Approvals' request window); the board's Decide dialog links the round's Approval tab when CUSTOMER_DECIDES holds it. The bell
+  folds one customer's Approve N into one row (`home/notifications/model.ts foldCustomerApprovals`, words `fold.customerApproved`).
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

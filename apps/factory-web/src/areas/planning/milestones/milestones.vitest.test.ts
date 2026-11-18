@@ -9,6 +9,9 @@ import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { designScreen } from './fixtures'
 import { GATE_PICKER_KINDS, roundFitsGate, roundsForGate } from './model'
+// F-PR-09
+import { readFileSync } from 'node:fs'
+import { LOCALES } from '../../../lib/i18n/locales'
 
 /** Time & action's screen rules (B-W2b-263, SCR-253): made-up data from the design cases. */
 
@@ -154,3 +157,30 @@ describe('F-PR-19: the size set gate and the rounds each gate accepts', () => {
     }
   })
 })
+
+// ---- F-PR-09 -------------------------------------------------------------------------------------------------------------------
+/**
+ * F-PR-09 (production plan §3 "No silent decisions"; B-PR-38's hand pass, B-PR-30a/30b on the round): a gate waiting for a customer's
+ * own round says why Mark done is held and offers, in its dialog, Decide for <customer> and Reverse on that round's answer, with the
+ * round one click away. The customer is the order's own (PW-04, PW-09: nothing of another customer is named).
+ */
+describe('F-PR-09: a gate waiting for the customer’s own round — why it is held, and Decide for the customer on the round', () => {
+  it('Mark done (one or N) and a refused write say the customer’s rule in our words, in both languages', () => {
+    const held = { allowed: false, refusal: { code: 'CUSTOMER_DECIDES' as const, message: 'English for logs' }, needs: null }
+    expect(heldOf(held, t)).toBe('refusal.CUSTOMER_DECIDES')
+    expect(refusalOf(conflict(['refusal/CUSTOMER_DECIDES']))).toBe('refusal.CUSTOMER_DECIDES')
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['planning-milestones'] as Record<string, string>
+      for (const key of ['refusal.CUSTOMER_DECIDES', 'dialog.customerAnswer', 'dialog.openRound']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      expect(words['dialog.customerAnswer']).toContain('{round}')
+    }
+  })
+
+  it('the gate’s dialog mounts the part on the round the gate names, for the order’s own customer, and links the round’s Approval tab', () => {
+    const dialog = readFileSync(new URL('./view/MilestoneDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain("source={{ record: { type: 'SampleRound', id: gate.sampleRound.id } }} customer={row.order.customer.name}")
+    expect(dialog).toContain('/products/samples/${encodeURIComponent(gate.sampleRound.id)}?tab=approval')
+    expect(readFileSync(new URL('./MilestonesPage.tsx', import.meta.url), 'utf8')).toContain('<CustomerOverrideProvider onDone={() => void load()}>')
+  })
+})
+// ---- end F-PR-09

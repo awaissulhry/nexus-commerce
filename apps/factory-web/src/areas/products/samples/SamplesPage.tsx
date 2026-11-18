@@ -245,10 +245,23 @@ function Container() {
     (row: RoundRow) => {
       decideKey.current = null
       decideVersion.current = null
-      setDecide({ subject: 'round', id: row.id, name: { key: 'decide.subject', params: { number: row.number, kind: `kind.${row.kind}`, n: row.roundNo } }, revision: null, blocked: null, reading: true, problem: null, draft: { decision: null, comments: '' }, busy: false, notice: null, offline })
+      setDecide({
+        subject: 'round',
+        id: row.id,
+        name: { key: 'decide.subject', params: { number: row.number, kind: `kind.${row.kind}`, n: row.roundNo } },
+        revision: null,
+        blocked: null,
+        reading: true,
+        problem: null,
+        draft: { decision: null, comments: '' },
+        busy: false,
+        notice: null,
+        offline,
+        decideForHref: recordHref(prefix, row.id, 'approval'), // F-PR-09: where a customer's own round is decided for the customer
+      })
       readDecide(row.id)
     },
-    [readDecide, offline],
+    [readDecide, offline, prefix],
   )
   const submitDecide = useCallback(async () => {
     const version = decideVersion.current

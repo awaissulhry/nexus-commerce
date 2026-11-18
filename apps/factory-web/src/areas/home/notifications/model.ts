@@ -94,7 +94,8 @@ export interface NotificationRow extends Notification {
   /** The record chip: the record itself (a real link: ⌘-click opens a new tab). */
   readonly recordHref: string
   /** B-TH-239: new-request notices that came together, folded into this row ("5 new requests came in"); absent: one notice. */
-  readonly fold?: { readonly requests: number; readonly oldest: string }
+  /** F-PR-09: `kind` CUSTOMER_APPROVED — one customer's plain approvals that came together (its Approve N), with its name. */
+  readonly fold?: { readonly requests: number; readonly oldest: string; readonly kind?: 'NEW_REQUESTS' | 'CUSTOMER_APPROVED'; readonly customer?: string }
 }
 
 export interface NotificationsData {
@@ -199,7 +200,7 @@ export function rowsOf(items: readonly Notification[], prefix: string, built: Re
     href: `${prefix}${openAddress(item, built)}`,
     recordHref: `${prefix}${recordAddress({ type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId }, built)}`,
   }))
-  return foldNewRequests(rows, prefix, built) // B-TH-239
+  return foldCustomerApprovals(foldNewRequests(rows, prefix, built)) // B-TH-239; F-PR-09
 }
 
 // ---- B-TH-239 (threads plan TH-3; O-HOME-NOTIF.list-F01 "many at once: grouped '5 new requests'", picture 17) ---------------------
@@ -244,6 +245,62 @@ export function foldNewRequests(rows: readonly NotificationRow[], prefix: string
   }
   return out
 }
+
+// ---- F-PR-09 (production plan F-PR-09 "office bell words for every customer action (… Approve N …)"; B-PR-46b, B-PR-32) ----------
+/** The sentences of a customer's plain approval of a production approval (factory-domain production-brand/office-notices). */
+export const CUSTOMER_APPROVED_KEYS: readonly string[] = Object.freeze(['notifications.production.customerApprovedSample', 'notifications.production.customerApprovedFabric', 'notifications.production.customerApprovedTrim'])
+
+/** The customer a notice names (`params.customer`, told only to a reader of that customer's records), or null. */
+function customerOf(row: Pick<Notification, 'params'>): string | null {
+  const params = row.params
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return null
+  const customer = (params as Record<string, unknown>).customer
+  return typeof customer === 'string' && customer.trim() !== '' ? customer : null
+}
+
+/**
+ * A customer's Approve N answers each request on its own (B-PR-46b: one command per request), so the office is told once per
+ * record (B-PR-32: "Brand Alpha approved sample SR-…"). Neighbours in the list fold into ONE row, "Brand Alpha approved 5 samples
+ * and materials at once, among them SR-…", when each is a plain approval of the SAME customer, in the same state (both read or
+ * both unread), each within the API's group window (15 minutes) of the one before — foldNewRequests' rule. An approval with
+ * changes, a refusal or any other notice stays a row of its own (each asks us to read or act). The row acts on every notice it
+ * stands for and opens the newest record. It names only its own customer and counts only this reader's own notices: two
+ * customers never fold together (PW-04, PW-09).
+ */
+export function foldCustomerApprovals(rows: readonly NotificationRow[]): NotificationRow[] {
+  const out: NotificationRow[] = []
+  for (const row of rows) {
+    const last = out[out.length - 1]
+    const customer = customerOf(row)
+    if (last === undefined || customer === null || !approvedTogether(last, row, customer)) {
+      out.push(row)
+      continue
+    }
+    const idsOfRow = (one: NotificationRow) => (one.group.ids.length > 0 ? one.group.ids : [one.id])
+    const requests = (last.fold?.requests ?? 1) + 1
+    out[out.length - 1] = {
+      ...last,
+      group: { key: last.group.key, count: last.group.count + row.group.count, ids: [...idsOfRow(last), ...idsOfRow(row)], records: requests },
+      fold: { requests, oldest: row.createdAt, kind: 'CUSTOMER_APPROVED', customer },
+    }
+  }
+  return out
+}
+
+/** Whether `row` (older) folds into `last`: both plain approvals of this customer, the same state, within the group window. */
+function approvedTogether(last: NotificationRow, row: NotificationRow, customer: string): boolean {
+  const lastAt = last.fold?.oldest ?? last.createdAt
+  return (
+    CUSTOMER_APPROVED_KEYS.includes(row.messageKey) &&
+    CUSTOMER_APPROVED_KEYS.includes(last.messageKey) &&
+    customerOf(last) === customer &&
+    row.read === last.read &&
+    row.state === last.state &&
+    Date.parse(lastAt) - Date.parse(row.createdAt) <= GROUP_WINDOW_MS &&
+    Date.parse(lastAt) >= Date.parse(row.createdAt)
+  )
+}
+// ---- end F-PR-09
 
 /** The "N together" under a row: one record's notices, a batch on several records ("on 12 orders"), or folded new requests. */
 export function togetherWords(row: Pick<NotificationRow, 'group' | 'fold'>): { readonly key: string; readonly count: number; readonly records?: number } | null {
