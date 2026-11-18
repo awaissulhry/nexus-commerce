@@ -327,7 +327,7 @@ let sweepFiles: string | undefined
 
 beforeAll(async () => {
   useErrorTracker(createErrorTracker({ sink: { kind: 'fake', send: (report) => void unexpected.push(report) }, source: 'api' }))
-  world = await urgencyWorld('pr36_golden_production', NS)
+  world = await urgencyWorld('pr36_golden_prod', NS)
   await seedCalendar({ db: world.h.database, namespace: NS })
   worker = { h: world.h, tenant: world.tenant, retried: [] as string[] } as unknown as World
   handlers = [...gateHandlers(), brandKeeperHandler(), supervisorFollowsHandler(), issueAnsweredHandler(), notificationsHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET, clock: world.h.clock })]
