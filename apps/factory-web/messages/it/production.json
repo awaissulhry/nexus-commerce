@@ -968,7 +968,8 @@
         "CUT": "Tagliati e in fasci",
         "SEWN": "Cuciti",
         "INSPECTED": "Controllati",
-        "PACKED": "Imballati"
+        "PACKED": "Imballati",
+        "SHIPPED": "Spediti"
       },
       "of": "{done} di {total}",
       "notCounted": "Non contato qui",
@@ -991,7 +992,8 @@
         "HOLD": "Pausa",
         "RESUME": "Ripresa",
         "SPLIT_SHIPMENT": "Spedire ciò che è pronto",
-        "SAMPLE_ROUND": "Un altro giro di campioni"
+        "SAMPLE_ROUND": "Un altro giro di campioni",
+        "DESIGN": "Modifica del design"
       },
       "office": {
         "OPEN": "Tocca a noi",

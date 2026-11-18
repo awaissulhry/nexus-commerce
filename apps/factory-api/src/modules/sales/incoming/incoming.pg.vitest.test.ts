@@ -311,3 +311,46 @@ describe('GET /sales/incoming/waiting-count: the rows whose next move is ours (B
   })
 })
 // ---- end B-SA-010
+
+// ---- B-SA-046 (sales page plan P7, N1; review C-10): a customer's design change is a Sales row of Incoming, counted as waiting on us
+describe('B-SA-046: a design change waiting for our answer is listed and counted, under the reader\'s walls', () => {
+  it('lists the OPEN design change as a change request of its order and counts it in "waiting on us"; another customer\'s person neither', async () => {
+    const before = (await count()).count as number
+    const beforeP3 = (await countOf('onlyP3')).count as number
+    // A design change asked on the order of the open change request (its customer, its company), its one line as a whole — as the
+    // portal writes it: the request and its line in one transaction (the database wants a line at commit).
+    await h.db.admin.query('BEGIN')
+    try {
+      const made = await h.db.admin.query(
+        `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, reason)
+         SELECT gen_random_uuid(), "tenantId", "companyId", "partyId", "orderId", 'DESIGN', 'Move the logo to the left sleeve.' FROM "OrderChangeRequest" WHERE "tenantId" = $1 AND status = 'OPEN' AND kind = 'CHANGE' LIMIT 1
+         RETURNING id, "orderId", "partyId"`,
+        [T],
+      )
+      const request = made.rows[0] as { id: string; orderId: string; partyId: string }
+      await h.db.admin.query(
+        `INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity)
+         SELECT gen_random_uuid(), $1, $2, $3, l.id, NULL, l.quantity, l.quantity FROM "SalesOrderLine" l WHERE l."orderId" = $4 ORDER BY l.seq LIMIT 1`,
+        [T, request.partyId, request.id, request.orderId],
+      )
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+    const open = (await list('sales')).rows as Json[]
+    const design = open.filter((row) => row.kind === 'CHANGE_REQUEST' && row.changeRequest?.kind === 'DESIGN')
+    expect(design).toHaveLength(1)
+    expect(design[0]).toMatchObject({ waiting: { for: 'US' } })
+    expect((await count()).count).toBe(before + 1)
+    expect((await count()).count).toBe(ours((await list('sales')).rows).length)
+    // P1's design change: never listed or counted for a person limited to P3.
+    expect((await countOf('onlyP3')).count).toBe(beforeP3)
+    expect(((await list('onlyP3')).rows as Json[]).some((row) => row.changeRequest?.kind === 'DESIGN')).toBe(false)
+  })
+
+  const count = async (): Promise<Json> => get('sales', '/sales/incoming/waiting-count')
+  const countOf = async (session: string): Promise<Json> => get(session, '/sales/incoming/waiting-count')
+  const ours = (rows: readonly Json[]): Json[] => rows.filter((row) => row.waiting.for === 'US')
+})
+// ---- end B-SA-046

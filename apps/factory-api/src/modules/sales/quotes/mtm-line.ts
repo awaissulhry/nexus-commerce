@@ -192,7 +192,7 @@ export async function addUnitInCommand(tools: CommandTools, current: QuoteRow, v
     companyId: current.companyId,
     after: { lineId: id, ...unitAudit({ seq, styleId: target.style.id, colourwayId: target.colourway.id, styleRevisionId: target.revisionId, measurementProfileId: unit.profile.id, baseSize: facts.baseSize, description, note, ...price }), revision: unit.profile.revision, listVersionId: fromList ? listed.versionId : null, ...(unit.audit ?? {}) },
   })
-  tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id } })
+  tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id, partyId: current.partyId /* B-SA-004b */ } })
   return id
 }
 
@@ -247,7 +247,7 @@ export async function editMadeToMeasureLine(caller: CommandCaller, quoteId: stri
       before: { lineId: line.id, ...unitAudit({ seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, styleRevisionId: line.styleRevisionId, measurementProfileId: was.id, baseSize: line.baseSize, description: line.description, note: line.note, ...before }) },
       after: { lineId: line.id, ...unitAudit({ seq: line.seq, styleId: line.styleId, colourwayId: target.colourway.id, styleRevisionId: target.revisionId, measurementProfileId: next.id, baseSize: facts.baseSize, description, note, ...price }), revision: next.revision },
     })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }

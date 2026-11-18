@@ -80,5 +80,5 @@ export async function writePlanned(tools: CommandTools, current: QuoteRow, versi
     companyId: current.companyId,
     after: { ...what, lines: changing.map((entry) => ({ lineId: entry.line.id, seq: entry.line.seq, before: entry.before, after: entry.after })) },
   })
-  for (const entry of changing) tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: entry.line.id } })
+  for (const entry of changing) tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: entry.line.id, partyId: current.partyId /* B-SA-004b */ } })
 }

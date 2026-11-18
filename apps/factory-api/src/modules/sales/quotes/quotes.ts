@@ -314,7 +314,7 @@ export async function updateQuote(caller: CommandCaller, quoteId: string, body: 
       before: { contactId: current.contactId, customerRef: current.customerRef, internalNote: current.internalNote, ...termsOf(version) },
       after: { contactId: body.contactId === undefined ? current.contactId : body.contactId, customerRef: body.customerRef === undefined ? current.customerRef : blankToNull(body.customerRef), internalNote: body.internalNote === undefined ? current.internalNote : blankToNull(body.internalNote), ...termsOf(after) },
     })
-    tools.emit({ type: 'quote.updated', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, fields } })
+    tools.emit({ type: 'quote.updated', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, fields, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }
@@ -352,7 +352,7 @@ export async function cancelQuote(caller: CommandCaller, quoteId: string, body: 
       after: { status: 'CANCELLED', withdrawnApprovalId: withdrawn, cancelledVersionIds: ids, revokedLinkIds },
       ...(reason ? { reason } : {}),
     })
-    tools.emit({ type: 'quote.cancelled', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id } })
+    tools.emit({ type: 'quote.cancelled', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }

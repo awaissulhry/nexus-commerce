@@ -437,6 +437,11 @@ export const orderLineSchema = z.object({
   version: z.number(),
   sizes: z.array(z.object({ size: z.string().nullable(), quantity: z.number(), unitPrice: z.string().nullable().optional(), progress: progressSchema })),
   progress: progressSchema,
+  // ── B-SA-035 / F-SA-232: the colour line's picture (the colourway's, else the style's main picture; files.read) with its small
+  // preview's address (60 s), and the artwork files the reader may open. Absent in an older answer or a design case: no picture.
+  picture: z.object({ fileId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }).nullable().optional(),
+  artworkCount: z.number().optional(),
+  // ── end B-SA-035 / F-SA-232
 })
 export type OrderLine = z.infer<typeof orderLineSchema>
 
@@ -462,6 +467,9 @@ export const depositRequestSchema = z.object({
   version: z.number().default(1),
 })
 export type DepositRequest = z.infer<typeof depositRequestSchema>
+
+// F-SA-239: who changed a part last — an office person or the order's own customer by name, "the floor", "Nexus" (it + en).
+const lastChangeSchema = z.object({ by: z.object({ kind: z.enum(['OFFICE', 'CUSTOMER', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), words: z.object({ it: z.string(), en: z.string() }) }), at: instant })
 
 export const orderSchema = z.object({
   id: z.string(),
@@ -518,6 +526,18 @@ export const orderSchema = z.object({
   amendments: z.object({ count: z.number(), latestRevision: z.number().nullable(), latestAt: instant.nullable() }).default({ count: 0, latestRevision: null, latestAt: null }),
   /** SAL-209: a confirmed order's lines change only through an amendment. */
   locked: z.boolean().default(true),
+  // ── F-SA-239 (B-SA-034): the page's live watch list (the server's) and who changed each part last; absent in an older answer ──
+  live: z.object({ events: z.array(z.object({ type: z.string(), parts: z.array(z.string()) })), ids: z.record(z.string(), z.array(z.string())) }).optional(),
+  lastChange: z
+    .object({
+      order: lastChangeSchema.nullable(),
+      changes: lastChangeSchema.nullable(),
+      work: lastChangeSchema.nullable(),
+      shipments: lastChangeSchema.nullable(),
+      money: lastChangeSchema.nullable(),
+    })
+    .optional(),
+  // ── end F-SA-239
 })
 export type Order = z.infer<typeof orderSchema>
 export type ChainInvoice = Order['chain']['invoices'][number]

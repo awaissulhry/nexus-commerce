@@ -968,7 +968,8 @@
         "CUT": "Cut and bundled",
         "SEWN": "Sewn",
         "INSPECTED": "Checked",
-        "PACKED": "Packed"
+        "PACKED": "Packed",
+        "SHIPPED": "Shipped"
       },
       "of": "{done} of {total}",
       "notCounted": "Not counted here",
@@ -991,7 +992,8 @@
         "HOLD": "Pause",
         "RESUME": "Resume",
         "SPLIT_SHIPMENT": "Ship what is ready",
-        "SAMPLE_ROUND": "Another sample round"
+        "SAMPLE_ROUND": "Another sample round",
+        "DESIGN": "Design change"
       },
       "office": {
         "OPEN": "Waiting on us",

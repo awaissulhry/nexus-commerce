@@ -172,7 +172,7 @@
     "label": "Sizes locked by the production stage"
   },
   "freeze": {
-    "title": "What is frozen",
+    "title": "What can still change",
     "open": "Still open",
     "priced": "From “{stage}”: a priced change the customer accepts",
     "blocked": "From “{stage}”: it cannot change any more",
@@ -270,15 +270,6 @@
     "CANCELLED": "cancelled"
   },
   "pricedList": {
-    "title": "Priced change requests",
-    "subtitle": "A change after production started is priced and needs the customer’s yes.",
-    "col": {
-      "change": "Change",
-      "money": "Extra cost and price",
-      "decision": "Customer decision",
-      "actions": "Next"
-    },
-    "revision": "Revision {revision}",
     "count": {
       "changed_one": "{count} line changed",
       "changed_other": "{count} lines changed",
@@ -287,14 +278,8 @@
       "removed_one": "{count} line removed",
       "removed_other": "{count} lines removed"
     },
-    "pieces": "pieces {before} → {after}",
-    "feeOnly": "A fee only",
     "fee": "fee {amount}",
-    "deposit": "extra deposit {amount} ({kind}, {status})",
-    "empty": "No priced change yet",
-    "emptyBody": "A change the freeze rules hold after production started becomes a priced change from Amend order.",
-    "failed": "Couldn’t read the changes",
-    "reading": "Reading the changes…"
+    "deposit": "extra deposit {amount} ({kind}, {status})"
   },
   "decision": {
     "NOT_NEEDED": "The customer need not accept it",
@@ -371,22 +356,22 @@
     "pdfFailed": "Couldn’t open the PDF",
     "pdfReading": "Opening the PDF…",
     "noFiles": "Reading files needs the files right.",
-    "version": "Version",
     "versionValue": "Version {version}",
-    "made": "Made",
-    "state": "State",
     "stateValue": {
       "none": "Not made yet",
       "upToDate": "Prints the order as it is",
       "outdated": "The order changed since",
       "notYet": "Not possible yet"
     },
-    "sent": "Sent to the customer",
-    "sentValue": "Version {version} on {date}",
-    "sentWhere": "The mail is on the order’s thread (Activity).",
     "notSent": "Not sent yet",
-    "versions": "Versions made",
-    "sentTag": "Confirmation v{version} sent"
+    "sentTag": "Confirmation v{version} sent",
+    "rowTitle": "Order confirmation v{version}",
+    "rowMade": "made {date}",
+    "rowSent": "sent {date} (v{version})",
+    "open": "Open",
+    "versionsCount_one": "{count} version",
+    "versionsCount_other": "{count} versions",
+    "wasSent": "sent"
   },
   "send": {
     "title": "Send the confirmation of {number}",

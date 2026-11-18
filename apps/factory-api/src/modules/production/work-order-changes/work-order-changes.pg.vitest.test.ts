@@ -5,7 +5,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase, type Prisma } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import type { Actor, Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-SA-004c: the office's live wall (what each person's live screen is sent of a work order change).
+import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { liveMessageFor, liveViewFor } from '@nexus/factory-domain/events/live'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/auth'
@@ -310,3 +314,35 @@ describe('extra pieces: named on the order\'s office reads, never hidden (B-SA-0
   })
 })
 // ── end B-SA-043 ──
+
+// ── B-SA-004c (Sales lead's note: production staff see a new proposal live) ──
+/**
+ * work_order_change.* reach the order's readers (orders.view) AND its work order's (workorders.view, the rule's `also`): the
+ * change's own read (./read.ts) is the one OR the other. A production person with workorders.view and no orders.view, limited
+ * to the order's customer, is sent the proposal and its decision; one limited to another customer, or holding neither, is not.
+ */
+describe('live: a work order change reaches production staff without orders.view (B-SA-004c)', () => {
+  type Row = { id: string; type: string; version: number; context: string; tenantId: string; companyId: string | null; siteId: string | null; subject: string; correlationId: string; causationId: string | null; source: string; occurredAt: Date; payload: Json }
+  const envelopeOf = (row: Row): EventEnvelope => ({ eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload })
+  const person = (permissions: Permission[], parties: Grant['parties']): Actor => ({ audience: 'office', tenantId: A.tenant, grants: [grant(permissions, parties)] })
+  const sent = (row: Row, viewer: Actor) => liveViewFor(liveMessageFor(envelopeOf(row), EVENT_CATALOGUE.get(row.type, row.version))!, viewer, EVENT_CATALOGUE)
+
+  it("the floor's supervisor (workorders.view, no orders.view) of the customer gets it; of another customer, or with neither right, not", async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderOf(order)
+    const { change } = await propose(lowering(order, workOrder, '52', 2))
+    const rows = await admin<Row>(`SELECT * FROM "OutboxEvent" WHERE subject = $1 AND type LIKE 'work_order_change.%' ORDER BY "occurredAt", id`, [change.id])
+    expect(rows.map((row) => row.type)).toEqual(['work_order_change.proposed'])
+    const [proposed] = rows
+    expect(proposed!.payload.partyId).toBe(A.brand)
+    expect(sent(proposed!, person(['workorders.view'], [A.brand]))).not.toBeNull()
+    expect(sent(proposed!, person(['workorders.view'], 'all'))).not.toBeNull()
+    expect(sent(proposed!, person(['workorders.view'], [BETA_PARTY]))).toBeNull()
+    expect(sent(proposed!, person(['orders.view'], [A.brand]))).not.toBeNull()
+    expect(sent(proposed!, person(['threads.read', 'costing.view'], 'all'))).toBeNull()
+    const view = sent(proposed!, person(['workorders.view'], [A.brand]))!
+    expect(view).not.toHaveProperty('partyIds')
+    expect(view.fields).toEqual({ changeId: change.id, salesOrderId: order.orderId, workOrderId: workOrder.id, kind: 'LOWER_TO_ORDER' })
+  })
+})
+// ── end B-SA-004c ──

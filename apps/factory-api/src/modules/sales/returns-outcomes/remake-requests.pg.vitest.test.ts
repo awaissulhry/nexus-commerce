@@ -167,7 +167,7 @@ describe('the portal’s new return offers Remake (SAL-298, RX2:02)', { timeout:
     const lineId = record.request.lines[0].id
     expect(await one('SELECT "reasonCode", "reasonNote", quantity FROM "ReturnLine" WHERE id = $1', [lineId])).toEqual({ reasonCode: 'WRONG_SIZE', reasonNote: FIT, quantity: 1 })
     expect(await one('SELECT "actorId", after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['ReturnAuthorisation', record.id, 'returnsOutcomes.remakeAsked'])).toEqual({ actorId: userIds.buyer, after: { lineIds: [lineId], via: 'PORTAL', fit: FIT } })
-    expect((await events('return.remake_asked')).find((payload) => payload.returnId === record.id)).toEqual({ returnId: record.id, number: record.number, lineIds: [lineId], via: 'PORTAL' })
+    expect((await events('return.remake_asked')).find((payload) => payload.returnId === record.id)).toEqual({ returnId: record.id, number: record.number, lineIds: [lineId], via: 'PORTAL', partyId: P1 /* B-SA-004b */ })
     for (const view of ['front', 'back']) {
       const bytes = photo(view)
       await sendPhoto(
@@ -229,3 +229,25 @@ describe('the claim link offers Remake with its questions and photos (SAL-298, R
     expect(outcomes.body.return.remake).toMatchObject({ asked: true, via: 'LINK', photos: [{ lineId, count: 1, needed: 2 }] })
   })
 })
+
+// ── B-SA-004b (Sales page plan P17') ──
+/**
+ * Every return.* event (and a return label's) names its RMA's own customer (`partyId`, from the RMA row the command read; never a
+ * caller's value), so an office person limited to some customers is sent the live changes of their own customers' returns and
+ * never another's.
+ * The commands above: remakes asked in the portal and through a claim link (the RMA row read in the command, never the
+ * portal session's or the link's party).
+ */
+describe('live: every return event names its RMA’s customer (B-SA-004b)', () => {
+  it("each return.* row the portal's and the claim link's remake requests wrote carries partyId = the RMA row’s own", async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, r."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "ReturnAuthorisation" r ON r.id = (e.payload->>'returnId')::uuid
+        WHERE (e.type LIKE 'return.%' OR e.type = 'return_label.changed')
+        ORDER BY e.type, e.id`,
+    )
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['return.remake_asked']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+  })
+})
+// ── end B-SA-004b ──

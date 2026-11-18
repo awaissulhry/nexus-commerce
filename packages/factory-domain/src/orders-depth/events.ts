@@ -66,7 +66,7 @@ export const events = [
     type: 'quote.season_changed',
     context: 'orders-depth',
     description: "A quote's draft version names another season of its company, or none.",
-    payload: z.strictObject({ quoteId: z.uuid(), versionId: z.uuid(), number: z.string(), seasonId: z.uuid().nullable(), code: z.string().nullable() }),
+    payload: z.strictObject({ quoteId: z.uuid(), versionId: z.uuid(), number: z.string(), seasonId: z.uuid().nullable(), code: z.string().nullable(), partyId: livePartyId() /* B-SA-004b: the quote's customer */ }),
     live: { permission: 'quotes.view', fields: ['quoteId', 'versionId', 'number'] },
   }),
   defineEvent({

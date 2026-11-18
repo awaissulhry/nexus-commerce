@@ -763,9 +763,11 @@ describe('the W2b-4 golden flow: a style from concept to release with a change o
     const newer = await ok(P.manager, 'GET', `/production/work-orders/${G.sampleWo.id}/spec/newer`)
     expect(newer.spec.newer).toMatchObject({ decision: { disposition: 'FINISH_OLD', changeOrder: order.number } })
     // The first order's lines keep revision 1 (a per-order choice of version is later): its held work order cannot move.
+    // B-SA-049: the change order's HOLD line is carried out on release — a real production hold (reason CHANGE_ORDER): the work
+    // order is ON_HOLD, and a held work order's revision is frozen (409 in words).
     const { workOrder } = await ok(P.planner, 'GET', `/production/work-orders/${G.wo.id}`)
-    const pinned = await ok(P.planner, 'PATCH', `/production/work-orders/${G.wo.id}`, { version: workOrder.version, styleRevisionId: G.revision.id }, 400)
-    expect(pathsOf(pinned)).toEqual(['body/styleRevisionId'])
+    expect(workOrder.status).toBe('ON_HOLD')
+    await ok(P.planner, 'PATCH', `/production/work-orders/${G.wo.id}`, { version: workOrder.version, styleRevisionId: G.revision.id }, 409)
   })
 
   // ---- P: the production work order ------------------------------------------------------------------------------------------------

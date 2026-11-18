@@ -340,6 +340,7 @@
         "customerAskedChange": "{customer} chiede di modificare l’ordine {record}: rispondi in Approvazioni",
         "customerAskedSplit": "{customer} chiede di spedire ciò che è pronto dell’ordine {record}: rispondi in Approvazioni",
         "customerAskedSampleRound": "{customer} chiede un altro giro di campioni sull’ordine {record}: rispondi in Approvazioni",
+        "customerAskedDesign": "{customer} chiede di modificare il design dell’ordine {record}: rispondi in Approvazioni",
         "customerAskedRushMany": "{customer} chiede di rendere urgenti {count} ordini, tra cui {record}: rispondi in Approvazioni",
         "customerAskedHoldMany": "{customer} chiede di mettere in pausa {count} ordini, tra cui {record}: rispondi in Approvazioni",
         "customerAskedResumeMany": "{customer} chiede di riprendere {count} ordini, tra cui {record}: rispondi in Approvazioni",

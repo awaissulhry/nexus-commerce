@@ -283,26 +283,55 @@ export function manualLines(lines: readonly DraftLine[]): NewLineInput[] {
     })
 }
 
-/** Pieces work orders already make, per line and size: an amendment never goes under them. */
+/**
+ * Pieces work orders already make, per line and size. F-SA-231 (lead note after B-SA-042, R1): an amendment MAY go under them now —
+ * the work order follows as a work-order change ("Still to do"); the editor says so in words (a warning, never a hold). The floor is
+ * what is already CUT (`cutFloorsOf`): a cut piece is never un-cut.
+ */
 export function minimumsOf(order: Pick<Order, 'lines'>): Record<string, Record<string, number>> {
   return Object.fromEntries(order.lines.map((line) => [line.id, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && size.progress.inWorkOrders > 0 ? [[size.size, size.progress.inWorkOrders]] : [])))]))
 }
 
-/** Cells typed under what work orders already make (the grid says so; the API refuses it too). */
-export function underWorkOrders(lines: readonly DraftLine[], minimums: Readonly<Record<string, Readonly<Record<string, number>>>>): { key: string; size: string; made: number }[] {
+/**
+ * Cells typed under what work orders already make (F-SA-231: said, not held — the work order follows the change as "Still to do").
+ * A cell under what is already cut is `underCut` (held), never listed here too.
+ */
+export function underWorkOrders(lines: readonly DraftLine[], minimums: Readonly<Record<string, Readonly<Record<string, number>>>>, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): { key: string; size: string; made: number }[] {
   const out: { key: string; size: string; made: number }[] = []
   for (const line of lines) {
     const mins = line.lineId ? minimums[line.lineId] : undefined
     if (!mins || line.locked) continue
-    for (const [size, made] of Object.entries(mins)) if ((line.sizes[size] ?? 0) < made) out.push({ key: line.key, size, made })
+    const cut = line.lineId ? (floors[line.lineId] ?? {}) : {}
+    for (const [size, made] of Object.entries(mins)) {
+      const typed = line.sizes[size] ?? 0
+      if (typed < made && typed >= (cut[size] ?? 0)) out.push({ key: line.key, size, made })
+    }
   }
   return out
 }
 
-/** Why the draft cannot be reviewed yet (in this app's words), or null. */
-export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, minimums: Readonly<Record<string, Readonly<Record<string, number>>>>, header: { changed: boolean }): Phrase | null {
+// ── F-SA-231 (lead note after B-SA-042): the floor of a size is what is already CUT of the order's own cells ──
+/** The pieces already cut per line and size, from the production read's own cells (a step not counted: no floor known, 0). */
+export function cutFloorsOf(lines: readonly { readonly lineId: string; readonly sizes: readonly { readonly size: string | null; readonly cut: number | null }[] }[]): Record<string, Record<string, number>> {
+  return Object.fromEntries(lines.map((line) => [line.lineId, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && size.cut !== null && size.cut > 0 ? [[size.size, size.cut]] : [])))]))
+}
+
+/** Cells typed under what is already cut (a cut piece is never un-cut: the API refuses it; Review waits, said per cell). */
+export function underCut(lines: readonly DraftLine[], floors: Readonly<Record<string, Readonly<Record<string, number>>>>): { key: string; size: string; cut: number }[] {
+  const out: { key: string; size: string; cut: number }[] = []
+  for (const line of lines) {
+    const cut = line.lineId ? floors[line.lineId] : undefined
+    if (!cut || line.locked) continue
+    for (const [size, pieces] of Object.entries(cut)) if ((line.sizes[size] ?? 0) < pieces) out.push({ key: line.key, size, cut: pieces })
+  }
+  return out
+}
+// ── end F-SA-231
+
+/** Why the draft cannot be reviewed yet (in this app's words), or null. F-SA-231: under the cut floor holds; under work orders does not. */
+export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, minimums: Readonly<Record<string, Readonly<Record<string, number>>>>, header: { changed: boolean }, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): Phrase | null {
   if (lines.some(badPrice)) return phrase('amend.held.price')
-  if (underWorkOrders(lines, minimums).length > 0) return phrase('amend.held.workOrders')
+  if (underCut(lines, floors).length > 0) return phrase('amend.held.cut')
   if (amendLines(lines, order).length === 0) return phrase('amend.held.empty')
   if (changeCount(lines, order) === 0 && !header.changed) return phrase('amend.held.nothing')
   return null

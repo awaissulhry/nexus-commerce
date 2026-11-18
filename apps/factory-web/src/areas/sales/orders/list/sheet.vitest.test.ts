@@ -266,7 +266,7 @@ describe('F-SA-280: bulk on the Orders sheet\'s own bar', () => {
     expect(noteTargetsOf([alpha])).toEqual({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: alpha.id, label: alpha.number, partyId: alpha.partyId, partyName: alpha.partyName, companyId: alpha.companyId }], withoutOrder: 0 })
     // The note dialog opens on the orders' own threads when no work order is among the records, and asks nothing about them.
     const hook = readFileSync(new URL('../../../production/_shared/notes/use-note-dialog.ts', import.meta.url), 'utf8')
-    expect(hook).toContain("targets.workOrders.length === 0 ? { ...NEW_DRAFT, on: 'salesOrders' as const } : NEW_DRAFT")
+    expect(hook).toContain("const wanted: WriteOn = targets.workOrders.length === 0 ? 'salesOrders' : on")
     const dialog = readFileSync(new URL('../../../production/_shared/notes/view/NoteDialog.tsx', import.meta.url), 'utf8')
     expect(dialog).toContain('model.targets.workOrders.length > 0 && (model.targets.salesOrders.length > 0')
   })

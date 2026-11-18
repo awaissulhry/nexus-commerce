@@ -30,11 +30,11 @@ export function returnLabelsUsedHandler(): EventHandler {
         const { tx, now } = tools
         const receipt = await tx.returnReceipt.findUnique({ where: { id: payload.receiptId }, select: { receivedAt: true } })
         const at = receipt && receipt.receivedAt.getTime() <= now.getTime() ? receipt.receivedAt : now
-        const rows = await tx.returnLabel.findMany({ where: { returnId: payload.returnId, status: 'BOOKED' }, select: { id: true, companyId: true, siteId: true } })
+        const rows = await tx.returnLabel.findMany({ where: { returnId: payload.returnId, status: 'BOOKED' }, select: { id: true, companyId: true, siteId: true, partyId: true /* B-SA-004b */ } })
         for (const row of rows) {
           await tx.returnLabel.update({ where: { id: row.id }, data: { status: 'USED', usedAt: at, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
           tools.audit({ action: 'shipping.returnLabelUsed', recordType: 'ReturnAuthorisation', recordId: payload.returnId, companyId: row.companyId, siteId: row.siteId, before: { status: 'BOOKED' }, after: { labelId: row.id, status: 'USED', usedAt: toUtcIso(at), receiptId: payload.receiptId } })
-          tools.emit(eventFor(labelChanged, { subject: payload.returnId, companyId: row.companyId, siteId: row.siteId, payload: { returnId: payload.returnId, number: payload.number, labelId: row.id, status: 'USED', via: 'DOCK' } }))
+          tools.emit(eventFor(labelChanged, { subject: payload.returnId, companyId: row.companyId, siteId: row.siteId, payload: { returnId: payload.returnId, number: payload.number, labelId: row.id, status: 'USED', via: 'DOCK', partyId: row.partyId /* B-SA-004b */ } }))
         }
         return { used: rows.length }
       })

@@ -117,5 +117,35 @@
   },
   "design": {
     "openAgain": "Apri la vista dei file"
+  },
+  "order": {
+    "source": {
+      "thread": "nella conversazione",
+      "order": "sull'ordine",
+      "from": "da {record}"
+    },
+    "audience": {
+      "CUSTOMER_CAN_SEE": "Condiviso con il cliente",
+      "OFFICE_ONLY": "Solo ufficio"
+    },
+    "alsoOn": "anche su {record}",
+    "alsoOnOther_one": "anche su {count} altro record",
+    "alsoOnOther_other": "anche su altri {count} record",
+    "inThread": "Apri nella conversazione",
+    "leftOut_one": "{count} file che non puoi aprire",
+    "leftOut_other": "{count} file che non puoi aprire",
+    "leftOutHere_one": "+ {count} che non puoi aprire",
+    "leftOutHere_other": "+ {count} che non puoi aprire",
+    "truncated": "Sono elencati i {count} file più recenti.",
+    "empty": {
+      "title": "Ancora nessun file",
+      "body": "I file aggiunti nella conversazione compaiono qui.",
+      "customer": "Ancora nessun documento."
+    },
+    "shareOwn_one": "Condividi {count} dell'ordine con {party}",
+    "shareOwn_other": "Condividi {count} dell'ordine con {party}",
+    "noneOwn": "Da qui si condividono solo i file dell'ordine che sono solo per l'ufficio.",
+    "openFailed": "Impossibile aprire il file: riprova.",
+    "shareFailed": "La condivisione non è riuscita: riprova."
   }
 }

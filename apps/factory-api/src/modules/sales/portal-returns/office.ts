@@ -57,7 +57,7 @@ export async function authoriseReturn(caller: CommandCaller, returnId: string, b
       const lines = await tools.tx.returnLine.findMany({ where: { returnId: rma.id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } })
       tools.audit({ action: 'portalReturns.authorise', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: 'REQUESTED' }, after: { status: 'AUTHORISED', goodsDueBy, ownerId: after.ownerId } })
       tools.emit({ type: 'return.authorised', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, partyId: rma.partyId, salesOrderId: rma.salesOrderId, lineIds: lines.map((line) => line.id), goodsDueBy } })
-      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: 'REQUESTED', to: 'AUTHORISED' } })
+      tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: 'REQUESTED', to: 'AUTHORISED', partyId: rma.partyId /* B-SA-004b */ } })
       return openSafetyEntries(tools, rma, lines)
     })
   ).result
@@ -72,7 +72,7 @@ export async function rejectReturn(caller: CommandCaller, returnId: string, body
     const rma = await lockReturn(tools, seen.id, body.version, ['REQUESTED'], 'it is rejected')
     await touchReturn(tools, rma, { status: 'REJECTED', closedAt: tools.now, statusReason: reason })
     tools.audit({ action: 'portalReturns.reject', recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: 'REQUESTED' }, after: { status: 'REJECTED', statusReason: reason } })
-    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: 'REQUESTED', to: 'REJECTED' } })
+    tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: 'REQUESTED', to: 'REJECTED', partyId: rma.partyId /* B-SA-004b */ } })
     return null
   })
   return { return: await recordOf(caller, seen.id) }

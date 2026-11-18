@@ -80,13 +80,15 @@ export function useNoteDialog(api: ApiClient, options: { readonly can: boolean; 
 
   /** Opens the dialog over these records (the caller holds a selection over 100 with its words). */
   const open = useCallback(
-    (targets: NoteTargets, from: NoteFrom) => {
+    // F-SA-230: the sales order's "Ask the supervisor…" writes on the order itself (`on` 'salesOrders'); the work order's on itself.
+    (targets: NoteTargets, from: NoteFrom, on: WriteOn = NEW_DRAFT.on) => {
       writeKey.current = null
       setCheck({ status: 'idle' })
       // F-SA-280: records without work orders (the Orders sheet's orders) are written on as they are: their own threads.
-      const draft = targets.workOrders.length === 0 ? { ...NEW_DRAFT, on: 'salesOrders' as const } : NEW_DRAFT
+      const wanted: WriteOn = targets.workOrders.length === 0 ? 'salesOrders' : on
+      const draft = wanted === NEW_DRAFT.on ? NEW_DRAFT : { ...NEW_DRAFT, on: wanted }
       setState({ from, targets, draft, people: { status: 'loading' }, busy: false, problem: null, result: null })
-      readPeople(targets, draft.on)
+      readPeople(targets, wanted)
     },
     [readPeople],
   )

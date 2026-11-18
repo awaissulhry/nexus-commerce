@@ -54,12 +54,17 @@ import {
   reviewHeld,
   sizesText,
   underWorkOrders,
+  cutFloorsOf, // F-SA-231
+  underCut, // F-SA-231
   withCells,
   type DraftLine,
 } from './daily-model'
 import { confirmHeld, draftKey, headerFromAddress, manualBody, newOrderAddress, newOrderHeld, parseDraft, previewByKey } from './new/new-model'
 import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
+import { isMadeToMeasure, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
+import { bandHealthOf, healthInputOf } from './record/overview/model' // F-SA-232: the band's chip
+import { HISTORY_CHIPS, historyFor, historyOf, waitingOnCustomerOf, waitingOnUsOf } from './record/changes/model' // F-SA-236
 import { designScreen as listScreen } from './list/fixtures'
 // B-TH-201
 import { getBoard, listOrders } from './api'
@@ -78,7 +83,6 @@ import {
   linkHeld,
   listAddress,
   listTouches,
-  liveTouches,
   nextStep,
   parseAmount,
   paymentHeld,
@@ -222,23 +226,20 @@ describe('the record: the next step by state, held with its reason', () => {
     expect(promiseProblems({ date: TODAY, reason: 'ok', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({})
   })
   it('tabs from the address; the chain’s ids for live events', () => {
-    // B-TH-214: an old tab lands on the tab it merged into (?tab=activity opens the thread beside Lines); the five stay as they are.
-    expect(tabOf('money')).toBe('shipments')
-    expect(tabOf('activity')).toBe('lines')
-    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('lines') // TH-6 part B: never a name of Object's own
-    for (const tab of ['lines', 'production', 'shipments', 'changes', 'margin'] as const) expect(tabOf(tab)).toBe(tab)
-    expect(tabOf('nope')).toBe('lines')
-    // B-TH-301 (the 9 → 5 merge, done with B-TH-214): every address the old nine tabs had lands on its merged tab.
-    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'shipments', changes: 'changes', documents: 'changes', margin: 'margin', activity: 'lines' }
+    // F-SA-230: the tabs re-cut — an old tab lands on its new tab (and section); the five stay as they are.
+    expect(tabOf('money')).toBe('money')
+    // F-SA-232: Overview is the first tab (no address, an unknown one, Activity with the thread).
+    expect(tabOf('activity')).toBe('overview')
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('overview') // TH-6 part B: never a name of Object's own
+    for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments', 'files'] as const) expect(tabOf(tab)).toBe(tab)
+    expect(tabOf('nope')).toBe('overview')
+    // B-TH-301 + F-SA-230: every address the old nine tabs (and the five) had lands on its tab today.
+    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'money', invoices: 'money', changes: 'changes', documents: 'changes', confirmation: 'changes', margin: 'money', activity: 'overview' }
     for (const [old, merged] of Object.entries(OLD)) expect(tabOf(old), old).toBe(merged)
     const ids = knownIds(order('SHIPPED'))
     expect(ids.has(order('SHIPPED').id)).toBe(true)
     expect(ids.has(TD02.id)).toBe(true)
-    expect(liveTouches({ type: 'sales_order.status_changed', fields: { orderId: order().id } }, ids)).toBe(true)
-    expect(liveTouches({ type: 'payment.deposit_paid', fields: { depositRequestId: PAID.id } }, ids)).toBe(true)
-    expect(liveTouches({ type: 'sales_order.status_changed', fields: { orderId: 'another' } }, ids)).toBe(false)
-    expect(liveTouches({ type: 'thread.message_posted', fields: { recordId: order().id } }, ids)).toBe(false)
-    expect(liveTouches({ type: 'quote.accepted', fields: {} })).toBe(true)
+    // F-SA-239: which events the record re-reads on is the order read's own watch list (record/live.ts, its own tests).
     expect(listTouches({ type: 'sales_order.created' })).toBe(true)
     expect(listTouches({ type: 'payment.deposit_paid' })).toBe(true)
     expect(listTouches({ type: 'workorder.progress' })).toBe(false)
@@ -469,12 +470,26 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
     // Every line at 0: an order keeps at least one line.
     expect(reviewHeld(withCells(draftOf(value), { [black.id]: {}, [red.id]: {} }), value, {}, { changed: false })?.key).toBe('amend.held.empty')
   })
-  it('never under what work orders make: the cell says so and Review waits', () => {
+  // F-SA-231 (lead note after B-SA-042, R1): a size may go under what work orders make (the work order follows as "Still to do"), never
+  // under what is already CUT.
+  it('under what work orders make: said in words, Review stays open; under what is cut: an error and Review waits', () => {
     const production = order('IN_PRODUCTION')
     const black = lineOf(production, 10)
     const draft = withCells(draftOf(production), { [black.id]: { '48': 1, '50': 2, '52': 2, '54': 2 } })
     expect(underWorkOrders(draft, minimumsOf(production))).toEqual([{ key: black.id, size: '48', made: 2 }])
-    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false })?.key).toBe('amend.held.workOrders')
+    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false })).toBeNull()
+    // 2 already cut in 48: 1 is under the cut floor — held, and not also said as "under work orders".
+    const floors = cutFloorsOf([{ lineId: black.id, sizes: [{ size: '48', cut: 2 }, { size: '50', cut: null }, { size: '52', cut: 0 }] }])
+    expect(floors).toEqual({ [black.id]: { '48': 2 } })
+    expect(underCut(draft, floors)).toEqual([{ key: black.id, size: '48', cut: 2 }])
+    expect(underWorkOrders(draft, minimumsOf(production), floors)).toEqual([])
+    expect(reviewHeld(draft, production, minimumsOf(production), { changed: false }, floors)?.key).toBe('amend.held.cut')
+    // At the cut floor: open again.
+    expect(reviewHeld(withCells(draftOf(production), { [black.id]: { '48': 2, '50': 2, '52': 2, '54': 1 } }), production, minimumsOf(production), { changed: false }, floors)).toBeNull()
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['amend.held.cut', 'editor.underCut', 'editor.underWorkOrders']) expect(t(key, { size: '48', cut: 2, made: 2 }), `${locale}: ${key}`).not.toBe(key)
+    }
   })
   it('a closed-short line stays as it is (sent by id only) and is not in the grid', () => {
     const partly = order('IN_PRODUCTION')
@@ -782,3 +797,108 @@ describe('the board\'s Waiting for approval lane, its reasons with doors, Delive
   })
 })
 // ---- end F-SA-214
+
+// ---- F-SA-230: the order's tabs re-cut — what each counts, the band's health and Made to measure ------------------------------
+describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', () => {
+  it('each tab counts what it lists: Money the invoices (no longer Shipments), Shipments the shipments only', () => {
+    const value = order('SHIPPED')
+    expect(tabCountOf('lines', value)).toBe(value.lines.length)
+    expect(tabCountOf('production', value)).toBe(value.chain.workOrders.length)
+    expect(tabCountOf('changes', value)).toBe(value.amendments.count)
+    expect(tabCountOf('money', value)).toBe(value.chain.invoices.length)
+    expect(tabCountOf('shipments', value)).toBe(value.chain.shipments.length)
+  })
+
+  it('the health chip only for a late order still to ship (never On track), from the order read until the production read comes', () => {
+    const band = (daysLate: number | null, status: Parameters<typeof healthInputOf>[0]['status']) => healthInputOf({ daysLate, status, promiseDate: '2026-11-10' }, null)
+    expect(band(3, 'IN_PRODUCTION')).toMatchObject({ computed: 'LATE', daysLate: 3 })
+    expect(bandHealthOf(band(3, 'IN_PRODUCTION'))).toBe(true)
+    expect(bandHealthOf(band(0, 'IN_PRODUCTION'))).toBe(false)
+    expect(bandHealthOf(band(null, 'CONFIRMED'))).toBe(false)
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(bandHealthOf(band(4, status)), status).toBe(false)
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['production']).production!)('parts.health.lateBy', { count: 3 })).toMatch(/3/)
+  })
+
+  it('Made to measure when a line is made to measure; the ⋯ groups and the band words in both languages', () => {
+    expect(isMadeToMeasure(order())).toBe(false)
+    expect(isMadeToMeasure({ lines: [{ ...order().lines[0]!, kind: 'MADE_TO_MEASURE' }] })).toBe(true)
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['record.madeToMeasure', 'menu.assignSupervisor', 'menu.askSupervisor', 'ship.moneyDoor', 'money.section.totals', 'money.section.deposit', 'money.section.margin', ...MENU_GROUPS.map((group) => `menu.group.${group}`), ...RECORD_TABS.map((tab) => `tab.${tab}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+    expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('tab.money')).toBe('Importi')
+  })
+})
+// ---- end F-SA-230
+
+// ---- F-SA-236: Changes, one newest-first story — what waits, the history and its chips ---------------------------------------------
+describe('F-SA-236: Changes — waiting on us, waiting on the customer, the history chips', () => {
+  const request = (id: string, status: string, askedAt: string, extra: Record<string, unknown> = {}) => ({ id, status, askedAt, kind: 'CHANGE', answeredAt: null, withdrawnAt: null, counter: null, note: null, askedBy: 'Dora Esempio', answeredBy: null, ...extra }) as never
+  const change = (id: string, revision: number, at: string, priced = false) => ({ id, revision, reason: 'r', createdAt: at, createdBy: 'Bea Esempio', priced, diff: { lines: [{ change: 'CHANGED', piecesBefore: 8, piecesAfter: 9 }] }, changeAmount: 4500, feeAmount: null, deposit: null, yes: { state: 'NOT_ASKED', taskId: null, reason: null }, customer: { decision: priced ? 'REFUSED' : 'NOT_NEEDED', requestId: null, answeredAt: null }, putBack: { may: true } }) as never
+
+  it('waiting on us: open and countered requests, oldest first; on the customer: the new yes, our counters, open approvals we asked', () => {
+    const requests = [request('b', 'OPEN', '2026-11-18T09:00:00Z'), request('a', 'COUNTERED', '2026-11-17T09:00:00Z', { counter: { at: '2026-11-17T12:00:00Z' } }), request('c', 'ACCEPTED', '2026-11-10T09:00:00Z', { answeredAt: '2026-11-11T09:00:00Z' })]
+    expect(waitingOnUsOf(requests).map((entry) => entry.id)).toEqual(['a', 'b'])
+    const approvals = [{ id: 'x', kind: 'ARTWORK', status: 'OPEN', question: 'Approve the label artwork', createdAt: '2026-11-15T09:00:00Z', dueAt: '2026-11-20T18:00:00Z' }, { id: 'y', kind: 'ARTWORK', status: 'APPROVED', question: 'old', createdAt: '2026-11-01T09:00:00Z', dueAt: '2026-11-02T18:00:00Z' }] as never
+    const waits = waitingOnCustomerOf(requests, approvals, { id: 'o', reapprovalNeededAt: '2026-11-16T10:00:00Z' })
+    expect(waits.map((entry) => entry.kind)).toEqual(['reaccept', 'counter', 'approval'])
+    expect(waits[2]).toMatchObject({ question: 'Approve the label artwork', status: 'OPEN' })
+  })
+
+  it('the history: requests asked and answered, amendments (the changes read; priced with Put back), confirmations — newest first; chips filter', () => {
+    const entries = historyOf({
+      requests: [request('c', 'ACCEPTED', '2026-11-10T09:00:00Z', { answeredAt: '2026-11-11T09:00:00Z' })],
+      changes: [change('ch1', 1, '2026-11-12T16:48:00Z'), change('ch2', 2, '2026-11-14T10:00:00Z', true)],
+      amendments: null,
+      confirmation: { versions: [{ id: 'v1', version: 1, createdAt: '2026-11-03T11:20:00Z', createdBy: null }], sentAt: '2026-11-03T11:30:00Z', sentVersion: 1 } as never,
+    })
+    expect(entries.map((entry) => entry.kind)).toEqual(['amendment', 'amendment', 'requestAnswered', 'requestAsked', 'confirmationSent', 'confirmationMade'])
+    const priced = entries[0]!
+    expect(priced.kind === 'amendment' && priced.putBack).toBe(true)
+    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'confirmations'])
+    expect(historyFor(entries, 'requests').map((entry) => entry.kind)).toEqual(['requestAnswered', 'requestAsked'])
+    expect(historyFor(entries, 'amendments')).toHaveLength(2)
+    expect(historyFor(entries, 'confirmations')).toHaveLength(2)
+    expect(historyFor(entries, 'all')).toHaveLength(entries.length)
+    // No changes read here (a design case): the amendments read stands in; never both.
+    const fallback = historyOf({ requests: [], changes: null, amendments: AMENDMENTS.amendments, confirmation: null })
+    expect(fallback.filter((entry) => entry.kind === 'amendment')).toHaveLength(AMENDMENTS.amendments.length)
+  })
+
+  it('one changes read: the page reads the amendments only when Before → after opens; the confirmation is a row, never the 70vh PDF', () => {
+    const container = readFileSync(new URL('./record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("if (next?.kind === 'compare' && current.current && !amendments?.value) readAmendments(current.current)")
+    const loadParts = container.slice(container.indexOf('const loadParts = useCallback('), container.indexOf('const readAmendments = useCallback('))
+    expect(loadParts).not.toContain('listAmendments(')
+    const card = readFileSync(new URL('./confirmation/view/ConfirmationCard.tsx', import.meta.url), 'utf8')
+    expect(card).not.toContain('PdfViewer')
+    expect(card).toContain('frame.openFiles')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['changes.onUs.title', 'changes.onUs.nothing', 'changes.onUs.countered', 'changes.onCustomer.title', 'changes.onCustomer.reaccept', 'changes.confirmation.title', 'changes.confirmation.yes', 'changes.history.title', 'changes.history.priced', ...HISTORY_CHIPS.map((chip) => `changes.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-SA-236
+
+// ---- F-SA-231: Lines = the commercial truth — the totals strip, no layer switch, pictures and artwork ----------------------------
+describe('F-SA-231: Lines — totals by grain instead of the rail, no layer switch, the picture part and the artwork', () => {
+  it('no layer switch: Lines draws the ordered pieces only; its rail and record chain left (Money, Overview)', () => {
+    const source = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('SegmentedControl')
+    expect(source).not.toContain('SummaryRail')
+    expect(source).toContain("gridOf(group, 'ordered')")
+    expect(source).toContain('<RecordPicture')
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    expect(model).not.toContain('SIZE_LAYERS')
+  })
+
+  it('the totals by grain and the words in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['lines.totals', 'lines.units', 'lines.readOnly', 'lines.note', 'lines.closedBy', 'lines.gridCaption']) expect(t(key, { name: 'x', day: 'y', note: 'z', style: 's' }), `${locale}: ${key}`).not.toBe(key)
+      expect(t('lines.artwork', { count: 2 })).toMatch(/2/)
+    }
+  })
+})
+// ---- end F-SA-231

@@ -11,7 +11,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { dayInstant } from '../../model'
 import { MILESTONE_TONE, NAMESPACE, RISK_TONE } from '../model'
-import type { OrderDepthActions, OrderDepthModel } from '../use-order-depth'
+import type { DepthPart, OrderDepthActions, OrderDepthModel } from '../use-order-depth'
+import type { OrderMilestone } from '../api'
 
 /**
  * Production finish forecast (design order.dates.lines "Production finish forecast (from work orders, W2b)"): the day the plan
@@ -61,21 +62,28 @@ export function ForecastNote({ model, actions }: { model: OrderDepthModel | unde
  * DS MilestoneTracker — done, started before the gate, the next one, to come, each with its day and target — and how many are
  * late. Only for the planner's readers (planning.view); the gates are kept in Planning › Time & action.
  */
-export function MilestonesCard({ model, actions }: { model: OrderDepthModel | undefined; actions?: OrderDepthActions }) {
-  if (!model?.milestones) return null
+// F-SA-234: fed by the order's own read (GET /sales/orders/:id/production `dates`, orders.view — P16), no longer the planner's
+// /planning/milestones (planning.view): the part takes the milestones as a plain part and its Try again.
+export interface MilestonesValue {
+  readonly milestones: readonly OrderMilestone[]
+  readonly next: string | null
+  readonly late: number
+}
+
+export function MilestonesCard({ part, onRetry }: { part: DepthPart<MilestonesValue> | null | undefined; onRetry?: () => void }) {
+  if (!part) return null
   return (
     <WithMessages namespaces={[NAMESPACE]}>
-      <Milestones model={model} actions={actions} />
+      <Milestones part={part} onRetry={onRetry} />
     </WithMessages>
   )
 }
 
-function Milestones({ model, actions }: { model: OrderDepthModel; actions?: OrderDepthActions }) {
+function Milestones({ part, onRetry }: { part: DepthPart<MilestonesValue>; onRetry?: () => void }) {
   const d = useT(NAMESPACE)
   const locale = useLocale()
   const ds = useDsWords()
   const labels = useMemo(() => ({ ...ds.milestoneTracker, usually: (date: string) => d('milestone.target', { date }), states: { ...ds.milestoneTracker.states, skipped: d('milestone.state.STARTED_BEFORE') } }), [ds, d])
-  const part = model.milestones!
   const day = (value: string) => formatDate(dayInstant(value), { locale })
   return (
     <Card padded>
@@ -90,7 +98,7 @@ function Milestones({ model, actions }: { model: OrderDepthModel; actions?: Orde
           title={d('milestone.failed')}
           description={d(part.problem)}
           action={
-            <Button size="sm" onClick={() => actions?.onRetry?.('milestones')}>
+            <Button size="sm" onClick={() => onRetry?.()}>
               {d('common.retry')}
             </Button>
           }

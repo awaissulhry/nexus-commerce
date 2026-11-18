@@ -17,7 +17,6 @@ import {
   getDepositKinds,
   getFreeze,
   getMaterials,
-  getMilestones,
   getOrderDepth,
   getTechPack,
   listPromiseLines,
@@ -91,8 +90,6 @@ export interface OrderDepthModel {
   confirmationPdf: DepthPart<string> | null
   /** null without sales.inquiries.view. */
   techPack: DepthPart<TechPack> | null
-  /** null without planning.view (the planner's milestones). */
-  milestones: DepthPart<Awaited<ReturnType<typeof getMilestones>>> | null
   /** null without planning.promise.view. */
   forecasts: DepthPart<ReadonlyMap<string, Forecast>> | null
   seasons: Season[] | null
@@ -120,7 +117,7 @@ export interface OrderDepthActions {
   onPricedStart?: (amendment: PricedState['amendment']) => void
   onPricedDraft?: (next: Partial<PricedDraft>) => void
   onPricedApply?: () => void
-  onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack' | 'milestones' | 'forecasts') => void
+  onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack' | 'forecasts') => void
   onOpenFile?: (fileId: string) => void
   onDismissNotice?: () => void
 }
@@ -169,11 +166,13 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   const [approval, againApproval] = usePart(at && order?.status === 'PENDING_APPROVAL' ? at : null, (signal) => getApproval(api, id!, signal))
   const [freeze, againFreeze] = usePart(on('lines', 'changes'), (signal) => getFreeze(api, id!, signal))
   const [changes, againChanges] = usePart(on('changes'), (signal) => getChanges(api, id!, signal))
-  const [materials, againMaterials, putMaterials] = usePart(on('lines'), (signal) => getMaterials(api, id!, signal))
+  // F-SA-235: the customer's materials are on Production › Materials (they moved from Lines).
+  const [materials, againMaterials, putMaterials] = usePart(on('production'), (signal) => getMaterials(api, id!, signal))
   // ---- B-TH-214 (tabs 9 → 5): the confirmation is on Confirmation & changes; the tech pack and the dates on Production & dates ----
   const [confirmation, againConfirmation, putConfirmation] = usePart(at && tab === 'changes' ? at : null, (signal) => getConfirmation(api, id!, signal))
-  const [techPack, againTechPack] = usePart(can.inquiries && at && tab === 'production' ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
-  const [milestones, againMilestones] = usePart(can.planning && at && tab === 'production' ? at : null, (signal) => getMilestones(api, id!, signal))
+  // F-SA-230: the tech pack is read ONCE per order (the band's "Made from INQ-…" and Production's Specs in force both draw it).
+  const [techPack, againTechPack] = usePart(can.inquiries && at ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
+  // F-SA-234: the milestones come with the order's own production read (orders.view, P16), no longer the planner's read here.
   const sites = useMemo(() => (order ? forecastSites(order, session.sites) : []), [order, session.sites])
   const [forecasts, againForecasts] = usePart<ReadonlyMap<string, Forecast>>(can.promise && at && tab === 'production' && sites.length > 0 /* B-TH-214 */ ? `${at}:${sites.join(',')}` : null, async (signal) => {
     const lines = await Promise.all(sites.map((site) => listPromiseLines(api, site, { q: order!.number, limit: 300 }, signal).then((answer) => answer.lines).catch(() => [])))
@@ -290,7 +289,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       open(next)
     },
     onDismissNotice: () => setNotice(null),
-    onRetry: (part) => ({ depth: againDepth, approval: againApproval, freeze: againFreeze, changes: againChanges, materials: againMaterials, confirmation: againConfirmation, techPack: againTechPack, milestones: againMilestones, forecasts: againForecasts })[part](),
+    onRetry: (part) => ({ depth: againDepth, approval: againApproval, freeze: againFreeze, changes: againChanges, materials: againMaterials, confirmation: againConfirmation, techPack: againTechPack, forecasts: againForecasts })[part](),
     onPriority: () => {
       const now = dialogRef.current
       if (now?.kind !== 'priority' || !order) return
@@ -421,7 +420,6 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       confirmation,
       confirmationPdf,
       techPack,
-      milestones,
       forecasts,
       seasons,
       depositKinds,

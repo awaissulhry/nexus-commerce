@@ -370,7 +370,7 @@ export async function sendQuote(request: FastifyRequest, quoteId: string, body: 
         type: 'quote.sent',
         subject: current.id,
         companyId: current.companyId,
-        payload: { quoteId: current.id, versionId: version.id, revision: version.revision, number: current.number, documentFileId: file.id, linkId: link.linkId, supersededVersionIds: superseded },
+        payload: { quoteId: current.id, versionId: version.id, revision: version.revision, number: current.number, documentFileId: file.id, linkId: link.linkId, supersededVersionIds: superseded, partyId: current.partyId /* B-SA-004b */ },
       })
       const detail = await detailInCommand(tools, current.id)
       return {
@@ -460,7 +460,7 @@ export async function sendNewLink(request: FastifyRequest, quoteId: string, body
       const link = await insertAcceptLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
       const mail = await queueLinkMail(tools, { quoteId: current.id, sender: await senderOf(tools, context), to: plan.to, cc: body.cc ?? [], /* B-TH-004 */ sendOutside: body.sendOutside, subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: languageOf(version.language) })
       tools.audit({ action: 'quotes.sendLink', recordType: 'Quote', recordId: current.id, companyId: current.companyId, after: { versionId: version.id, linkId: link.linkId, linkExpiresAt: toUtcIso(link.expiresAt), revokedLinkIds: revoked, outboundId: mail.outbound.id } })
-      tools.emit({ type: 'quote.link_sent', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, linkId: link.linkId, revokedLinkIds: revoked } })
+      tools.emit({ type: 'quote.link_sent', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, linkId: link.linkId, revokedLinkIds: revoked, partyId: current.partyId /* B-SA-004b */ } })
       return { ...(await detailInCommand(tools, current.id)), link: { id: link.linkId, expiresAt: toUtcIso(link.expiresAt), to: plan.to, revokedLinkIds: revoked, emailId: mail.outbound.id } }
     },
   )
@@ -530,7 +530,7 @@ export async function reviseQuote(caller: CommandCaller, quoteId: string, body: 
     const after = (await readQuote(tx, current.id))!
     await refreshVersion(tools, after, await readCurrentVersion(tx, after), new Set())
     tools.audit({ action: 'quotes.revise', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: from.status, revision: from.revision }, after: { status: 'DRAFT', revision, versionId, fromVersionId: from.id, changeNote: body.changeNote ?? null } })
-    tools.emit({ type: 'quote.revised', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId, fromVersionId: from.id, revision } })
+    tools.emit({ type: 'quote.revised', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId, fromVersionId: from.id, revision, partyId: current.partyId /* B-SA-004b */ } })
     return detailInCommand(tools, current.id)
   })
 }

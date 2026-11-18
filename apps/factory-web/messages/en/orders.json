@@ -234,12 +234,14 @@
   },
   "tab": {
     "lines": "Lines",
-    "production": "Production & dates",
-    "shipments": "Shipments & invoices",
-    "money": "Invoices & payments",
-    "margin": "Margin",
+    "production": "Production",
+    "shipments": "Shipments",
+    "money": "Money",
     "depositOpen": "A deposit is open",
-    "changes": "Confirmation & changes"
+    "changes": "Changes",
+    "overview": "Overview",
+    "attention": "Needs attention: late or at risk",
+    "files": "Files"
   },
   "step": {
     "makeWorkOrders": "Make work orders",
@@ -282,8 +284,6 @@
     "tabsLabel": "Sections of the order",
     "depositOpen": "Deposit open — due {date}",
     "depositMissing": "Deposit not asked",
-    "late_one": "Late {count} day",
-    "late_other": "Late {count} days",
     "customerRef": "Customer PO {ref}",
     "fromQuote": "From quote {number} v{revision}",
     "changed": "This order changed at {time}",
@@ -295,7 +295,9 @@
     "amended": "Amended · rev {revision}",
     "reapproval": "Waiting for the customer to accept the change",
     "typed": "Typed by the office",
-    "madeFrom": "Made from {number} — Open"
+    "madeFrom": "Made from {number} — Open",
+    "madeToMeasure": "Made to measure",
+    "changedBy": "Changed by {name} at {time}"
   },
   "held": {
     "busy": "Working on the last change…",
@@ -345,9 +347,6 @@
     "depositPaid": "{amount} paid",
     "depositWaived": "Waived",
     "depositOpen": "{amount} due {date}",
-    "invoiced": "Invoiced",
-    "paid": "Paid",
-    "balance": "Balance due",
     "margin": "Estimated margin",
     "marginValue": "{pct}",
     "marginUnknown": "Not known: a cost is missing",
@@ -355,17 +354,8 @@
     "costIncomplete": "Incomplete"
   },
   "chain": {
-    "title": "From the quote to the invoices",
-    "quote": "Quote",
     "quoteValue": "{number} v{revision}",
     "noQuote": "Typed by the office",
-    "order": "Order",
-    "deposit": "Deposit",
-    "workOrders": "Work orders",
-    "shipments": "Shipments",
-    "invoices": "Invoices",
-    "count_one": "{count}",
-    "count_other": "{count}",
     "fromRequest": "Made from request {number} (no quote)"
   },
   "gate": {
@@ -384,18 +374,16 @@
     "missing": "The order needs a deposit, but none was asked: production waits.",
     "notNeeded": "No deposit needed: production may start.",
     "amount": "{amount} as {kind}",
-    "open": "Open the deposit"
+    "money": "Money ›"
   },
   "lines": {
-    "readOnly": "What the customer ordered, as accepted. The lines change only through an amendment (Amend order).",
-    "show": "Show",
+    "readOnly": "What the customer ordered, as accepted. Changes go through Amend order.",
     "vatNature": "VAT {nature}",
     "orderDate": "As the order",
     "revision": "Made to rev {revision}",
     "noRevision": "Revision chosen by the work order",
-    "gridCaption": "{style}: {layer} by colour and size",
+    "gridCaption": "{style}: ordered pieces by colour and size",
     "pricesOf": "Prices of {style}",
-    "madeHint": "Pieces made per size are counted on each work order (Production tab).",
     "col": {
       "colour": "Colour",
       "pieces": "Pieces",
@@ -407,17 +395,16 @@
       "promise": "Promise"
     },
     "closedShort_one": "Closed short: {count} piece",
-    "closedShort_other": "Closed short: {count} pieces"
-  },
-  "layer": {
-    "ordered": "Ordered",
-    "inWorkOrders": "In work orders",
-    "released": "Released",
-    "shipped": "Shipped",
-    "toShip": "Left to ship"
+    "closedShort_other": "Closed short: {count} pieces",
+    "totals": "Totals",
+    "units": "Units",
+    "artwork_one": "Artwork ({count})",
+    "artwork_other": "Artwork ({count})",
+    "closedBy": "Closed short by {name}, {day}",
+    "note": "Note: {note}"
   },
   "dates": {
-    "title": "Dates",
+    "title": "Dates & milestones",
     "ordered": "Ordered",
     "requested": "Requested",
     "promised": "Promised",
@@ -428,7 +415,7 @@
     "left_other": "in {count} days",
     "linesLabel": "Dates by line",
     "asOrder": "{date} (the order's)",
-    "historyTitle": "Promise changes",
+    "historyTitle": "Promise moves",
     "never": "Never changed",
     "neverBody": "The promise is still the one given when the order was made.",
     "someone": "Someone in the office",
@@ -443,7 +430,15 @@
       "who": "Who",
       "change": "Change",
       "reason": "Why"
-    }
+    },
+    "historyCount_one": "Promise moves ({count})",
+    "historyCount_other": "Promise moves ({count})",
+    "cutStart": "Cut start",
+    "sewStart": "Sew start",
+    "finish": "Finish",
+    "customerSees": "Customer sees {date}",
+    "shippedOn": "Shipped {shipped}",
+    "shippedDelivered": "Shipped {shipped} · delivered {delivered}"
   },
   "production": {
     "title": "Work orders",
@@ -453,18 +448,17 @@
     },
     "uncovered_one": "{count} line not fully in production",
     "uncovered_other": "{count} lines not fully in production",
-    "noProgressRight": "Floor progress is shown to people who follow production.",
     "progressLabel": "Progress of {number}: {figure}",
     "notReleased": "Not released yet",
     "col": {
       "number": "Work order",
       "style": "Style",
-      "pieces": "Pieces",
       "status": "State",
       "progress": "Progress",
       "due": "Due",
-      "site": "Site",
-      "released": "Released"
+      "released": "Released",
+      "own": "Made for this order",
+      "materials": "Materials"
     },
     "notCounted": {
       "cut": "Cutting not counted here",
@@ -475,6 +469,45 @@
       "cut": "Cut",
       "sewn": "Sewn",
       "finished": "Finished"
+    },
+    "held": "On hold",
+    "rush": "Urgent",
+    "progressHeld": "Progress needs the work orders right",
+    "mtmRow": "{style} · {colour} — Made to measure · {units} units · {workOrders} work orders",
+    "own": {
+      "of": "Made for this order: {own} of {total}",
+      "all": "Made for this order: {own}",
+      "alsoMakes": "also makes {number}",
+      "alsoMore_one": "and {count} more order of this customer",
+      "alsoMore_other": "and {count} more orders of this customer",
+      "alsoOther": "also makes work of other orders",
+      "cutTogether": "cut together with other work"
+    },
+    "quality": {
+      "title": "Holds, quality & problems",
+      "notes": "Office notes on the holds",
+      "officeOnly": "Office only · since {date}",
+      "issuesHeld": "Problems need the work orders right",
+      "needsAnswer_one": "Needs an answer: {count}",
+      "needsAnswer_other": "Needs an answer: {count}",
+      "issue": "Asked {since} · answer by {due}",
+      "escalated_one": "Escalated {count}×",
+      "escalated_other": "Escalated {count}×",
+      "ncrsHeld": "Nonconformities need the quality right",
+      "ncrs_one": "{count} open nonconformity:",
+      "ncrs_other": "{count} open nonconformities:",
+      "finalHeld": "Final inspections need the inspections right",
+      "final": "Final inspections",
+      "finalRow": "{number} · {checked} checked",
+      "finalState": {
+        "PASSED": "Passed {date}",
+        "FAILED": "Failed {date}",
+        "WAITING": "Waiting"
+      },
+      "nothing": "No holds, problems or quality findings"
+    },
+    "specs": {
+      "title": "Specs in force"
     }
   },
   "woStatus": {
@@ -499,7 +532,8 @@
       "status": "State",
       "shipped": "Left",
       "delivered": "Delivered"
-    }
+    },
+    "moneyDoor": "Invoices and payments are on Money ›"
   },
   "shipStatus": {
     "DRAFT": "Draft",
@@ -530,6 +564,11 @@
       "sdi": "SDI",
       "gross": "Total",
       "open": "Open"
+    },
+    "section": {
+      "totals": "Totals",
+      "deposit": "Deposit",
+      "margin": "Margin"
     }
   },
   "docType": {
@@ -686,16 +725,11 @@
     "acceptedTitle": "Accepted quote",
     "openQuote": "Open quote {number}",
     "noQuote": {
-      "title": "Typed by the office — no quote",
-      "body": "This order did not come from an accepted quote."
+      "title": "Typed by the office — no quote"
     },
     "noQuoteRight": "From quote {number} v{revision}. Its evidence is shown to people who see quotes.",
     "noEvidence": "Quote {number} v{revision} has no acceptance evidence on record.",
-    "version": "Version",
     "versionValue": "{number} v{revision}",
-    "signer": "Signed by",
-    "acceptedAt": "Accepted",
-    "channel": "How",
     "channelValue": {
       "LINK": "On the customer's link",
       "OFFICE": "Recorded by the office"
@@ -720,7 +754,9 @@
     "amended": "Amendment {revision} applied.",
     "amendedReaccept": "Amendment {revision} applied. The net total changed: the customer must accept the order again — tell them.",
     "reopened": "The lines were reopened.",
-    "cancelled": "The order was cancelled."
+    "cancelled": "The order was cancelled.",
+    "healthRaised": "Raised to At risk: the customer reads it with its reason.",
+    "healthCleared": "The raise is cleared: the dates speak again."
   },
   "stepUp": {
     "title": "Confirm it's you",
@@ -792,13 +828,13 @@
     "apply": "Apply amendment",
     "held": {
       "price": "A typed price is not a price: check it",
-      "workOrders": "A size is below what work orders already make",
       "empty": "An order keeps at least one line: to stop the whole order, cancel it",
       "nothing": "Nothing changes yet",
       "reading": "Checking the amendment first",
       "failed": "The check failed: try again",
       "problems": "Fix what stops the amendment first",
-      "reason": "Say why the order changes"
+      "reason": "Say why the order changes",
+      "cut": "A size is under what is already cut: raise it to the pieces cut"
     }
   },
   "editor": {
@@ -843,13 +879,14 @@
       "none": "Unchanged",
       "empty": "Type its sizes"
     },
-    "underWorkOrders": "Size {size}: work orders already make {made}",
+    "underWorkOrders": "Size {size}: work orders make {made} — the work order follows the change (Still to do)",
     "styleReading": "Reading the style…",
     "styleUnread": "The style could not be read: only its sizes on the order",
     "lockedLabel": "Lines kept as they are",
     "lockedClosed_one": "{colour}: closed short ({count} piece): reopen it first to change it",
     "lockedClosed_other": "{colour}: closed short ({count} pieces): reopen it first to change it",
-    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is"
+    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is",
+    "underCut": "Size {size}: {cut} already cut — it never goes under what is cut"
   },
   "issue": {
     "state": "The order does not take this change in its state now.",
@@ -1051,23 +1088,12 @@
     }
   },
   "changes": {
-    "title": "Amendments",
-    "subtitle": "Each change to the confirmed order, numbered, with the order before and after.",
-    "tableLabel": "Amendments of this order",
     "empty": {
       "title": "No changes since confirmation",
       "body": "An amendment appears here once it is applied (Lines › Amend order).",
       "final": "The order never changed after its confirmation."
     },
-    "waiting": "Waiting for the customer to accept the changed order (since {date}). The acceptance link is not there yet: tell the customer yourself.",
     "col": {
-      "revision": "Revision",
-      "madeBy": "Made by",
-      "reason": "Reason",
-      "lines": "Lines",
-      "money": "Money change",
-      "reacceptance": "Customer",
-      "open": "Snapshot",
       "line": "Line",
       "change": "Change",
       "sizes": "Sizes old → new",
@@ -1111,7 +1137,41 @@
     "byAt": "{name}, {date}",
     "reason": "Reason",
     "money": "Net",
-    "reacceptance": "Customer re-acceptance"
+    "reacceptance": "Customer re-acceptance",
+    "onUs": {
+      "title": "Waiting on us",
+      "approvals": "Open Approvals ›",
+      "nothing": "Nothing waits on us",
+      "countered": "Counter-offer sent · waits for the customer",
+      "answer": "Answer in Approvals ›"
+    },
+    "onCustomer": {
+      "title": "Waiting on the customer",
+      "nothing": "Nothing waits on the customer",
+      "reaccept": "The changed order waits for the customer's new yes",
+      "since": "since {date}",
+      "due": "due {date}"
+    },
+    "confirmation": {
+      "title": "Confirmation & the customer's yes",
+      "yes": "How the customer said yes"
+    },
+    "history": {
+      "title": "History",
+      "chipsLabel": "Show in the history",
+      "chips": {
+        "all": "All",
+        "requests": "Requests",
+        "amendments": "Amendments",
+        "confirmations": "Confirmations"
+      },
+      "asked": "Request asked · {kind}",
+      "by": "by {name}",
+      "priced": "Priced change",
+      "made": "Confirmation v{version} made",
+      "sent": "Confirmation v{version} sent",
+      "noneHere": "Nothing of this kind yet"
+    }
   },
   "compare": {
     "title": "Revision {revision} of {number}: before → after",
@@ -1312,5 +1372,123 @@
       "invalid": "Not sent as it is: check what you typed.",
       "unavailable": "The factory server didn't answer. Try again."
     }
+  },
+  "menu": {
+    "group": {
+      "next": "Next steps",
+      "edit": "Edit",
+      "people": "People",
+      "goTo": "Go to",
+      "copy": "Copy"
+    },
+    "assignSupervisor": "Assign supervisor…",
+    "askSupervisor": "Ask the supervisor…"
+  },
+  "overview": {
+    "where": "Where it is now",
+    "progress": "Progress by line",
+    "progressHint": "This order's own pieces · a line opens its sizes",
+    "ahead_one": "{count} line ahead",
+    "ahead_other": "{count} lines ahead",
+    "bundles_one": "Bundles in work: {count} at {stage}",
+    "bundles_other": "Bundles in work: {count} at {stage}",
+    "notInWorkOrders": "Not in work orders yet",
+    "afterDeposit": "Work orders are made after the deposit",
+    "exFactory": "Ex-factory {date}",
+    "exFactoryMovedOnly": "Ex-factory {date} · moved {count}×",
+    "exFactoryMoved": "Ex-factory {date} · moved {count}× · {days} d since first promised",
+    "piecesAsOf": "Pieces as of {time}",
+    "headline": {
+      "waitingDeposit": "Confirmed · waiting for the deposit",
+      "shipped": "Shipped {shipped}",
+      "delivered": "Shipped {shipped} · delivered {delivered}"
+    },
+    "fact": {
+      "who": "Who acts next",
+      "exFactory": "Ex-factory",
+      "health": "Health",
+      "customer": "Customer",
+      "inWork": "In work"
+    },
+    "col": {
+      "line": "Line"
+    },
+    "lineName": "Line {seq} · {stage}",
+    "lineNoStage": "Line {seq}",
+    "lineOpen": "Open the sizes of line {seq} · {name}",
+    "total_one": "Total · {count} line",
+    "total_other": "Total · {count} lines",
+    "madeExtra_one": "{count} piece made extra",
+    "madeExtra_other": "{count} pieces made extra",
+    "sizes": {
+      "label": "Shipped and the finish forecast by size",
+      "size": "Size",
+      "finish": "Finish forecast",
+      "noForecast": "—",
+      "extra": "Made extra",
+      "units": "Made to measure: one work order per unit — each unit's stage is on Production › Work orders.",
+      "openLines": "Open in Lines",
+      "noun": "line"
+    },
+    "people": {
+      "title": "People",
+      "backup": "Backup",
+      "answers": "Answers the customer",
+      "madeBy": "Made by",
+      "madeByOn": "{name} · {date}",
+      "where": "Where it is made",
+      "notPlanned": "Not planned yet",
+      "held": "Who works on it is shown to people who follow production."
+    },
+    "dates": {
+      "title": "Next dates",
+      "all": "All dates ›",
+      "none": "No dates set yet — Planning sets the gates"
+    },
+    "requests": {
+      "title": "Requests & changes",
+      "changes": "Changes ›",
+      "onUs_one": "Waiting on us: {count} request",
+      "onUs_other": "Waiting on us: {count} requests",
+      "onCustomer_one": "Waiting on the customer: {count}",
+      "onCustomer_other": "Waiting on the customer: {count}",
+      "nothing": "Nothing waits on us or on the customer",
+      "latest": "Latest change: revision {revision} · {date}"
+    },
+    "linked": {
+      "title": "Linked records",
+      "quote": "Quote",
+      "workOrders": "Work orders",
+      "shipments": "Shipments",
+      "invoices": "Invoices",
+      "deposit": "Deposit",
+      "complaints": "Complaints",
+      "returns": "Returns",
+      "sameQuote": "Same quote",
+      "sameQuoteValue": "{number}",
+      "invoicesHeld": "needs the invoices right",
+      "leftOut_one": "{count} work order not shown",
+      "leftOut_other": "{count} work orders not shown"
+    },
+    "facts": {
+      "title": "Order facts",
+      "customerRef": "Customer PO",
+      "language": "Language",
+      "lang": {
+        "it": "Italian",
+        "en": "English"
+      },
+      "made": "Made · changed",
+      "madeValue": "{made} · {changed}"
+    }
+  },
+  "mtm": {
+    "units_one": "Made to measure · {count} unit",
+    "units_other": "Made to measure · {count} units"
+  },
+  "files": {
+    "title": "Files",
+    "openFailed": "The file could not be opened: try again.",
+    "shareFailed": "Sharing did not go through: try again."
   }
 }
