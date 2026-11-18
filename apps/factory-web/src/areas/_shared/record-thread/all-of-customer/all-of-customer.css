@@ -1,0 +1,148 @@
+/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: its one line, the two filters,
+   "N new · Show", one message per line (its chip above the conversation's own card, its door under it), the foot. Tokens only. */
+.fw-aoc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-aoc-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-3);
+  min-width: 0;
+}
+
+.fw-aoc-line,
+.fw-aoc-marks,
+.fw-aoc-note {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-aoc-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+}
+
+.fw-aoc-line > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.fw-aoc-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2);
+}
+
+.fw-aoc-news:empty {
+  display: none;
+}
+
+.fw-aoc-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-3);
+}
+
+.fw-aoc-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-3);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-aoc-state > p {
+  margin: 0;
+}
+
+.fw-aoc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-aoc-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-aoc-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-3);
+  min-width: 0;
+}
+
+.fw-aoc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px var(--nds-space-3);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-raised);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: none;
+}
+
+.fw-aoc-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-aoc-chip:hover {
+  border-color: var(--nds-border);
+}
+
+.fw-aoc-chip:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
+.fw-aoc-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  color: var(--nds-info-text);
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+}
+
+.fw-aoc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nds-info);
+}
+
+.fw-aoc-doors {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-aoc-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+}

@@ -63,13 +63,16 @@ export interface CardActions {
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
 const MAX_NAMES = 10
 
+// F-SA-261 (sales page plan R4, P9; "All of <Customer>"): `readOnly` draws the card as the merged customer feed shows it — the same
+// card, its audience edge, words and files, with no ⋯ menu, no Remind me, no Undo and no Retry: nothing is done on it there (a reply
+// opens ONE conversation, the host's door beside the card).
 /**
  * One message of a record's thread (B-TH-298, T3; picture 2): a full-width card that says its side and audience in words and
  * colour, its writer and time, at most two marks in the head and the rest in a small details line, the text at ~72 characters a
  * line (quoted text and the signature behind "…", a long mail folded after 12 lines), its files, and the ⋯ menu. An article named
  * by writer, side, audience and time for screen readers. Draws its model only.
  */
-export function MessageCard({ message, context, actions, remind }: { message: CardMessage; context: CardContext; actions?: CardActions; remind?: ReactNode }) {
+export function MessageCard({ message, context, actions, remind, readOnly = false }: { message: CardMessage; context: CardContext; actions?: CardActions; remind?: ReactNode; readOnly?: boolean }) {
   const t = useT('record-thread-card')
   const locale = useLocale()
   const intl = INTL_LOCALE[locale]
@@ -91,7 +94,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const fold = longFold(text)
   const folded = fold.folds && !allShown
   const files = cardFiles(message.files, context.canReadFiles, allFiles, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0 })
-  const menu = cardActions(message, context)
+  const menu = readOnly ? [] : cardActions(message, context) // F-SA-261
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
   const names = message.mentions.map((name) => name ?? t('author.someone'))
@@ -136,7 +139,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
             </span>
           )}
           <time dateTime={message.at}>{time}</time>
-          {!message.outbox && remind}
+          {!message.outbox && !readOnly /* F-SA-261 */ && remind}
           {menu.length > 0 && (
             <Menu
               align="right"
@@ -278,7 +281,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
           </a>
         </p>
       )}
-      {message.email && showsUndo(message, context.now ?? Date.now()) && <UndoLine until={message.email.undoUntil!} start={context.now} party={party} onUndo={actions?.onUndo ? () => actions.onUndo?.(message.id) : undefined} />}
+      {!readOnly /* F-SA-261 */ && message.email && showsUndo(message, context.now ?? Date.now()) && <UndoLine until={message.email.undoUntil!} start={context.now} party={party} onUndo={actions?.onUndo ? () => actions.onUndo?.(message.id) : undefined} />}
 
       {message.email?.status === 'BOUNCED' && (
         <p className="fw-rt-bounce" role="note">
@@ -302,7 +305,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
       )}
 
       {sending && <p className="fw-rt-details">{t('outbox.sending')}</p>}
-      {message.outbox?.state === 'failed' && (
+      {!readOnly /* F-SA-261 */ && message.outbox?.state === 'failed' && (
         <p className="fw-rt-failline" role="alert">
           <span>{t('outbox.failed', { reason: t(message.outbox.reason) })}</span>
           <Button size="sm" onClick={() => actions?.onRetry?.(message.id)}>
