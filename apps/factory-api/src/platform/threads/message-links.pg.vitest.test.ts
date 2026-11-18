@@ -15,6 +15,8 @@ import { LOCAL_COOKIE_SECRET } from '../../env'
 import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 import { startHarness, type Harness } from '../auth/sessions/testing/harness'
 import { ensureThread, messageLinkProblems, messageLinksOf, writeMessage, type MessageLinkInput } from './threads'
+// B-SA-061: what a message is about.
+import { ABOUT_WORDS, type About } from './about'
 
 /**
  * B-TH-050 (threads plan TH-3, thread-G19, thread-G20; features T3-F07 Reply, T3-F09 Make a task, T3-F11 Correct; wall W08: "the
@@ -30,6 +32,11 @@ import { ensureThread, messageLinkProblems, messageLinksOf, writeMessage, type M
  *     the portal;
  *   - W08: a correction of a mail sent to customer A is shared with A only — A's own scope reads both and the link, B reads none;
  *   - "Make a task" on a message: the task names the message, a message of its own record's conversation only.
+ * B-SA-061 ("Discuss"; sales page plan R10 item 6): a note or a reply says which part of its sales order it is about (a line, a
+ * work order that makes a line of it …), written once with the message and read back by the office; another order's line, another
+ * customer's record or an id that is not there is refused in ONE neutral sentence and never stored; a reply to the customer is
+ * never about a work order; a mixed work order is named only by who reaches every customer and read without it by anyone else;
+ * the database refuses the same whatever writes it.
  * Every name and word is made up. Run with `node scripts/factory/run-pg-tests.mjs platform/threads/message-links`.
  */
 
@@ -40,9 +47,12 @@ const T = seedUuid(NS, 'tenant')
 const partyA = seedUuid(NS, 'party:P1')
 const partyB = seedUuid(NS, 'party:P3')
 const WRITER = newId()
+const ALPHA_DESK = newId() // B-SA-061: an office person limited to customer A
 const grant = (permissions: string[], parties: Grant['parties'] = 'all'): Grant => ({ permissions: permissions as Permission[], companies: 'all', sites: 'all', parties })
 const SESSIONS: Record<string, SessionContext> = {
   writer: { audience: 'office', tenantId: T, actorId: WRITER, grants: [grant(['threads.read', 'threads.post', 'files.read', 'tasks.manage', 'home.view'])] },
+  // B-SA-061
+  alphaDesk: { audience: 'office', tenantId: T, actorId: ALPHA_DESK, grants: [grant(['threads.read', 'threads.post', 'files.read'], [partyA])] },
 }
 
 let h: Harness
@@ -102,6 +112,7 @@ beforeAll(async () => {
     await module.seed({ db: h.database, namespace: NS })
   }
   await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, locale) VALUES ($1, $2, $3, $4, \'ACTIVE\', \'en\')', [WRITER, T, 'th050-writer@example.com', 'Made-up writer'])
+  await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, locale) VALUES ($1, $2, $3, $4, \'ACTIVE\', \'en\')', [ALPHA_DESK, T, 'sa061-alpha-desk@example.com', 'Made-up Alpha desk']) // B-SA-061
   orders = (await admin<{ id: string }>('SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2 ORDER BY number LIMIT 3', [T, partyA])).map((row) => row.id)
   expect(orders.length).toBe(3)
   workOrder = (await admin<{ id: string }>("SELECT id FROM \"WorkOrder\" WHERE \"tenantId\" = $1 AND number = 'SEED-WO-0001'", [T]))[0]!.id
@@ -201,3 +212,123 @@ describe('B-TH-050 messages that point at messages', { timeout: SLOW_TEST_TIMEOU
     expect(await refused('/tasks', { title: 'Made-up', messageId: asked.message.id, assigneeId: null })).toEqual([expect.objectContaining({ path: 'body/messageId' })])
   })
 })
+
+// ── B-SA-061 (sales page plan S5, lead picks P26, P9, R10 item 6; 10-order-page §6.4 "Discuss"): what a message is about ──
+describe('B-SA-061: a message says which part of its order it is about', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  // SEED-SO-0002 (customer A) and SEED-WO-0001, the work order that makes its lines (seed/production.ts).
+  const order = seedUuid(NS, 'production:sales-order:SO-0002')
+  const part = { line: '', otherOrderLine: '', otherCustomerLine: '', otherCustomerWorkOrder: '', mixedWorkOrder: '' }
+  const NOT_PART = [{ path: 'body/about', message: ABOUT_WORDS.NOT_PART.en }]
+  const as = (who: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
+    app.inject({ method, url, headers: { 'x-test-session': who, ...(method === 'GET' ? {} : { 'idempotency-key': `sa061-key-${++run}` }) }, ...(payload === undefined ? {} : { payload: payload as object }) })
+  const issuesOf = (response: { statusCode: number; body: string; json: () => unknown }): Json[] => {
+    expect(response.statusCode, response.body).toBe(400)
+    return ((response.json() as Json).error?.issues ?? []) as Json[]
+  }
+  const stored = async (body: string) => (await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Message" WHERE "bodyText" = $1', [body]))[0]!.n
+  /** One message written through the seam (the system), with what it is about. */
+  const aboutSeam = (direction: MessageDirection, channel: MessageChannel, body: string, about: About) =>
+    command(callerFor(h.database, office()), { name: 'threads.test.about', input: { direction, body, about } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: order }, WRITER)
+      const written = await writeMessage(tools, thread, { direction, channel, author: { kind: 'USER', id: WRITER, name: 'Made-up writer' }, bodyText: body, about })
+      return { id: written.id }
+    })
+
+  beforeAll(async () => {
+    const [workOrder] = await admin<{ id: string }>("SELECT id FROM \"WorkOrder\" WHERE \"tenantId\" = $1 AND number = 'SEED-WO-0001'", [T])
+    part.line = (await admin<{ id: string }>('SELECT l.id FROM "SalesOrderLine" l JOIN "WorkOrderSize" c ON c."salesOrderLineId" = l.id WHERE l."orderId" = $1 AND c."workOrderId" = $2 ORDER BY l.id LIMIT 1', [order, workOrder!.id]))[0]!.id
+    part.otherOrderLine = (await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "tenantId" = $1 AND "partyId" = $2 AND "orderId" <> $3 ORDER BY id LIMIT 1', [T, partyA, order]))[0]!.id
+    part.otherCustomerLine = (await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "tenantId" = $1 AND "partyId" <> $2 ORDER BY id LIMIT 1', [T, partyA]))[0]!.id
+    part.otherCustomerWorkOrder = (await admin<{ id: string }>('SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND "partyId" IS NOT NULL AND "partyId" <> $2 ORDER BY id LIMIT 1', [T, partyA]))[0]!.id
+    // A work order made before the one-customer rule (no customer), making a line of this order: SEED-WO-0001 copied with no
+    // customer and one cell of the order's line (the database's rules off for this one statement, as the copy step met them).
+    part.mixedWorkOrder = newId()
+    await h.db.admin.query(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "WorkOrder" SELECT (jsonb_populate_record(NULL::"WorkOrder", to_jsonb(w) || jsonb_build_object('id', '${part.mixedWorkOrder}', 'number', 'T-SA061-MIX', 'partyId', NULL))).* FROM "WorkOrder" w WHERE w.id = '${workOrder!.id}';
+       INSERT INTO "WorkOrderSize" SELECT (jsonb_populate_record(NULL::"WorkOrderSize", to_jsonb(c) || jsonb_build_object('id', '${newId()}', 'workOrderId', '${part.mixedWorkOrder}'))).* FROM "WorkOrderSize" c WHERE c."workOrderId" = '${workOrder!.id}' AND c."salesOrderLineId" = '${part.line}' ORDER BY c.id LIMIT 1;
+       COMMIT;`,
+    )
+  })
+
+  it('a note names a line of its order: written once with the message, read back by the office', async () => {
+    const made = await note('SalesOrder', order, { body: 'Made-up: line 2 needs the darker thread.', about: { kind: 'SalesOrderLine', id: part.line } })
+    expect(made.message.about).toEqual({ kind: 'SalesOrderLine', id: part.line })
+    expect((await admin<Json>('SELECT "aboutKind", "aboutId" FROM "Message" WHERE id = $1', [made.message.id]))[0]).toEqual({ aboutKind: 'SalesOrderLine', aboutId: part.line })
+    expect((await messagesOf('SalesOrder', order)).find((message) => message.id === made.message.id)?.about).toEqual({ kind: 'SalesOrderLine', id: part.line })
+    // A message about nothing reads so.
+    const plain = await note('SalesOrder', order, { body: 'Made-up: nothing in particular.' })
+    expect(plain.message.about).toBeNull()
+  })
+
+  it('an office note names a work order that makes a line of the order', async () => {
+    const [workOrder] = await admin<{ id: string }>("SELECT id FROM \"WorkOrder\" WHERE \"tenantId\" = $1 AND number = 'SEED-WO-0001'", [T])
+    const made = await note('SalesOrder', order, { body: 'Made-up: the work order waits for the zips.', about: { kind: 'WorkOrder', id: workOrder!.id } })
+    expect(made.message.about).toEqual({ kind: 'WorkOrder', id: workOrder!.id })
+    // A person limited to customer A reaches A's own work order: they may name it too.
+    const desk = await as('alphaDesk', 'POST', `/threads/SalesOrder/${order}/notes`, { body: 'Made-up: Alpha desk on the work order.', about: { kind: 'WorkOrder', id: workOrder!.id } })
+    expect(desk.statusCode, desk.body).toBe(201)
+  })
+
+  it('another record’s id is refused in ONE neutral sentence and never stored: another order’s line, another customer’s line or work order, an id that is not there', async () => {
+    const tries: Array<{ label: string; about: About }> = [
+      { label: 'another order of the same customer', about: { kind: 'SalesOrderLine', id: part.otherOrderLine } },
+      { label: 'another customer’s line', about: { kind: 'SalesOrderLine', id: part.otherCustomerLine } },
+      { label: 'another customer’s work order', about: { kind: 'WorkOrder', id: part.otherCustomerWorkOrder } },
+      { label: 'a line that is not there', about: { kind: 'SalesOrderLine', id: newId() } },
+      { label: 'a shipment that is not there', about: { kind: 'Shipment', id: newId() } },
+      { label: 'an order line named as a change request', about: { kind: 'OrderChangeRequest', id: part.line } },
+    ]
+    for (const one of tries) {
+      const body = `Made-up: about ${one.label}.`
+      expect(issuesOf(await as('writer', 'POST', `/threads/SalesOrder/${order}/notes`, { body, about: one.about })), one.label).toEqual(NOT_PART)
+      expect(await stored(body), one.label).toBe(0)
+    }
+    // Only a sales order's message is about a part of it: a work order's note is refused the same way, before anything is read.
+    const [workOrder] = await admin<{ id: string }>("SELECT id FROM \"WorkOrder\" WHERE \"tenantId\" = $1 AND number = 'SEED-WO-0001'", [T])
+    expect(issuesOf(await as('writer', 'POST', `/threads/WorkOrder/${workOrder!.id}/notes`, { body: 'Made-up: about the line.', about: { kind: 'SalesOrderLine', id: part.line } }))).toEqual(NOT_PART)
+    // A kind the database does not know is refused by the contract.
+    expect((await as('writer', 'POST', `/threads/SalesOrder/${order}/notes`, { body: 'Made-up: about a style.', about: { kind: 'Style', id: newId() } })).statusCode).toBe(400)
+  })
+
+  it('a reply to the customer is never about a work order: refused in words, nothing written', async () => {
+    const [workOrder] = await admin<{ id: string }>("SELECT id FROM \"WorkOrder\" WHERE \"tenantId\" = $1 AND number = 'SEED-WO-0001'", [T])
+    const body = 'Made-up: your work order is cut.'
+    expect(issuesOf(await as('writer', 'POST', `/threads/SalesOrder/${order}/replies`, { body, about: { kind: 'WorkOrder', id: workOrder!.id } }))).toEqual([{ path: 'body/about/kind', message: ABOUT_WORDS.OFFICE_ONLY.en }])
+    expect(await stored(body)).toBe(0)
+    // A reply's about is on a sales order's reply only.
+    expect(issuesOf(await as('writer', 'POST', `/threads/Party/${partyA}/replies`,{ body: 'Made-up: about a line.', about: { kind: 'SalesOrderLine', id: part.line } }))).toEqual(NOT_PART)
+  })
+
+  it('the wall: a mixed work order is named only by who reaches every customer, and read without it by anyone else', async () => {
+    const body = 'Made-up: the mixed work order is behind.'
+    const made = await note('SalesOrder', order, { body, about: { kind: 'WorkOrder', id: part.mixedWorkOrder } })
+    expect(made.message.about).toEqual({ kind: 'WorkOrder', id: part.mixedWorkOrder })
+    // A person limited to customer A: the same neutral sentence as for an id that is not there; nothing stored.
+    const deskBody = 'Made-up: Alpha desk on the mixed work order.'
+    expect(issuesOf(await as('alphaDesk', 'POST', `/threads/SalesOrder/${order}/notes`, { body: deskBody, about: { kind: 'WorkOrder', id: part.mixedWorkOrder } }))).toEqual(NOT_PART)
+    expect(await stored(deskBody)).toBe(0)
+    // They read the order's thread, and the message, without what it is about; the factory reads it with it.
+    const read = await as('alphaDesk', 'GET', `/threads/SalesOrder/${order}?limit=200`)
+    expect(read.statusCode, read.body).toBe(200)
+    const seen = ((read.json() as Json).messages as Json[]).find((message) => message.id === made.message.id)
+    expect(seen).toMatchObject({ body, about: null })
+    expect(read.body).not.toContain(part.mixedWorkOrder)
+    expect((await messagesOf('SalesOrder', order)).find((message) => message.id === made.message.id)?.about).toEqual({ kind: 'WorkOrder', id: part.mixedWorkOrder })
+  })
+
+  it('the database refuses the same, whatever writes it; a portal message about a line of its order is stored with the customer', async () => {
+    await expect(aboutSeam('INTERNAL_NOTE', 'APP', 'Made-up: seam about another order.', { kind: 'SalesOrderLine', id: part.otherOrderLine })).rejects.toThrow()
+    await expect(aboutSeam('INTERNAL_NOTE', 'APP', 'Made-up: seam about another customer.', { kind: 'SalesOrderLine', id: part.otherCustomerLine })).rejects.toThrow()
+    await expect(aboutSeam('OUTBOUND', 'PORTAL', 'Made-up: seam about the work order.', { kind: 'WorkOrder', id: part.mixedWorkOrder })).rejects.toThrow()
+    expect(await stored('Made-up: seam about another order.')).toBe(0)
+    expect(await stored('Made-up: seam about another customer.')).toBe(0)
+    expect(await stored('Made-up: seam about the work order.')).toBe(0)
+    const { result } = await aboutSeam('OUTBOUND', 'PORTAL', 'Made-up: your line 2 is sewn.', { kind: 'SalesOrderLine', id: part.line })
+    expect((await admin<Json>('SELECT "partyId", "aboutKind", "aboutId" FROM "Message" WHERE id = $1', [result.id]))[0]).toEqual({ partyId: partyA, aboutKind: 'SalesOrderLine', aboutId: part.line })
+    // Written once: the message never changes (the database's append-only rule), so neither does what it is about.
+    await expect(admin('UPDATE "Message" SET "aboutId" = $2 WHERE id = $1', [result.id, part.otherOrderLine])).rejects.toThrow()
+  })
+})
+// ── end B-SA-061 ──

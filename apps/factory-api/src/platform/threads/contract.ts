@@ -14,6 +14,8 @@ import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
 // ---- B-TH-079: the feed's audience view, the skipped files of an inbound mail, the mail waiting for a person.
 import { HELD_REASONS, SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
 import { FEED_AUDIENCES } from '@nexus/factory-domain/threads/timeline'
+// ---- B-SA-061: what a message is about (a part of its order).
+import { ABOUT_KINDS } from './about'
 /** Office only: a file of an inbound mail that was not kept, with why (a signature logo is never listed). */
 export const skippedAttachmentView = output({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.enum(SKIP_REASONS) })
 /** Office only: the mails for this conversation that wait for a person (HELD with why, TRIAGE: Mail to sort). */
@@ -81,6 +83,13 @@ export const messageLinkInput = {
 }
 // ---- end B-TH-050
 
+// ---- B-SA-061 ("Discuss"; R10 item 6): the part of its order a message is about — on a sales order's thread only: a line,
+// shipment, invoice, deposit request, gate, change request or work order of THAT order (a work order: one that makes a line of
+// it, and only in an office note). Anything else is refused in words ("Not a part of this record."), never stored.
+export const aboutInput = input({ kind: z.enum(ABOUT_KINDS), id: id() })
+export const aboutView = output({ kind: z.enum(ABOUT_KINDS), id: id() })
+// ---- end B-SA-061
+
 export const messageView = output({
   id: id(),
   threadId: id(),
@@ -114,6 +123,8 @@ export const messageView = output({
   corrects: linkedMessageView.nullable().optional(),
   correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
   // ---- end B-TH-049 / B-TH-050
+  // ---- B-SA-061: office only — the part of its order the message is about (null: none, or a work order this reader does not reach).
+  about: aboutView.nullable().optional(),
   // ---- B-TH-079 (thread-G09, thread-G10): erased after a privacy request ("Message removed after a privacy request"; never an
   // attachment-only message), and — office only — the files of an inbound mail that were not kept.
   erased: z.boolean().optional(),
@@ -211,6 +222,8 @@ export const postNoteContract = defineContract({
     amount: money.price(input({ value: z.number().int().min(0).max(MESSAGE_AMOUNT_MAX), currency: currency() })),
     // B-TH-050: the message it answers or corrects (an office note corrects an office note; a correction of a floor note goes to the floor).
     ...messageLinkInput,
+    // B-SA-061: the part of its order the note is about (a sales order's note only).
+    about: aboutInput.optional(),
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
@@ -230,6 +243,8 @@ export const postReplyContract = defineContract({
     ...messageLinkInput,
     /** B-SA-073: the writer's tick "This text names no other customer" (a reply whose text names one is held without it, 409). */
     namesNoOtherCustomer: z.boolean().optional(),
+    /** B-SA-061: the part of its order the reply is about (a sales order's only; never a work order: office only). */
+    about: aboutInput.optional(),
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
