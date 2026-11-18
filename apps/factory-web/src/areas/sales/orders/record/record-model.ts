@@ -4,10 +4,22 @@ import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLi
 import type { DraftLine } from '../daily-model'
 import type { MarginTabModel } from './margin/model'
 import type { StepUpState } from '../hooks'
-import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
+import type { OrderAbilities, Phrase, RecordTab } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
 import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-depth' // B-W2b-323
 import type { LinksActions, LinksModel } from './links/model' // B-TH-256
+// F-SA-230: the ⋯ menu's People (the production lane's dialogs, reused in place).
+import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
+import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model'
+// F-SA-232: Overview's production read (the order's own pieces) and the live stream's state.
+import type { ProductionState } from './overview/model'
+import type { LiveState } from '../hooks'
+import type { ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234
+import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: the one HealthCard
+import type { BrandRequest } from '../../../home/approvals/requests/api' // F-SA-236
+import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-SA-236
+import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-237
+import type { FilesViewActions } from '../../../../lib/record-thread/files-view/view/FilesView' // F-SA-237
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -87,7 +99,8 @@ export interface OrderRecordModel {
   /** B-TH-228: the source read still runs (the band says neither "Made from" nor "Typed by the office" yet). */
   madeFromReading?: boolean
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
-  changed: { at: string } | null
+  /** F-SA-239: the parts that changed under typed work (their last change names who: the order read's `lastChange`). */
+  changed: { at: string; parts?: readonly string[]; by?: string | null } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   busy: boolean
   dialog: RecordDialog | null
@@ -98,7 +111,6 @@ export interface OrderRecordModel {
   /** The payment just recorded (the dialog shows what followed: PAID, the TD02). */
   recorded: DepositReceived | null
   stepUp: StepUpState
-  sizeLayer: SizeLayer
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------
   /** The Lines tab as an amendment draft; null: read-only. */
   amend: AmendState | null
@@ -133,6 +145,24 @@ export interface OrderRecordModel {
   reviewBanner?: ReactNode
   /** B-TH-256: what points at the order (./links) — its complaints and returns, planning's open re-promises, the gates' refusals; absent: not read. */
   links?: LinksModel | null
+  /** F-SA-230: ⋯ People — Assign supervisor… (production.brand.manage) and Ask the supervisor… (threads.post), with their open dialogs. */
+  people?: { readonly mayAssign: boolean; readonly mayNote: boolean; readonly assign: AssignSupervisorModel | null; readonly note: NoteDialogModel | null }
+  /** F-SA-232: the order's production read (OR1: stage, health, waiting, own pieces per line …); absent: not read here (a design case). */
+  production?: ProductionState | null
+  /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
+  readiness?: Part<ReadinessRow[]> | null
+  /** F-SA-237: the order's files (the Files tab; the same read as the thread's Files window); absent: not read here. */
+  files?: OrderFilesModel | null
+  /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
+  requests?: Part<BrandRequest[]> | null
+  /** F-SA-236: the approvals we asked the customer on this order (partners.approvals.view); null: not read (no right, or not here). */
+  askedOfCustomer?: Part<OfficeRequest[]> | null
+  /** F-SA-235: the order's health on Production (the work order record's HealthCard; workorders.view); absent: not read. */
+  health?: HealthModel | null
+  /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
+  overviewLine?: string | null
+  /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
+  liveState?: LiveState
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -151,7 +181,7 @@ export interface OrderRecordActions {
   /** B-W2a-80: the schedule card's verbs. */
   scheduleSteps?: ScheduleStepsActions
   onRetry?: () => void
-  onRetryPart?: (part: 'workOrders' | 'settlement' | 'sdi' | 'versions' | 'schedule' | 'amendments' | 'cancelCheck') => void
+  onRetryPart?: (part: 'workOrders' | 'settlement' | 'sdi' | 'versions' | 'schedule' | 'amendments' | 'cancelCheck' | 'requests') => void
   onReload?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
@@ -161,7 +191,6 @@ export interface OrderRecordActions {
   onSendLink?: (requestId: string, message: string) => void
   onRecordPayment?: (requestId: string, input: PaymentInput) => void
   onSendSdi?: (invoiceId: string) => void
-  onSizeLayer?: (layer: SizeLayer) => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------
@@ -187,6 +216,15 @@ export interface OrderRecordActions {
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
   links?: LinksActions
+  /** F-SA-237: the Files tab's open, select and bulk actions. */
+  files?: FilesViewActions
+  /** F-SA-235: the HealthCard's Raise to At risk, Clear, Try again. */
+  health?: HealthActions
+  /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
+  onRetryProduction?: () => void
+  onOpenLine?: (rowId: string | null) => void
+  /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
+  people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */

@@ -43,7 +43,8 @@ import {
   type ShipmentsRead,
 } from './api'
 import { orderBandOf } from './band'
-import { openLater, saveBytes, useOffline } from './hooks'
+import { openLater, saveBytes, useOffline, usePortalOrderFiles } from './hooks'
+import { downloadLink } from '../../../record-panels/api' // F-SA-238: a shared order file opens through the files route (the content wall)
 import {
   askRefusal,
   cancelBodyOf,
@@ -394,6 +395,9 @@ function OrderContainer({ id }: { id: string }) {
     if (tab === 'shipments') void loadShipments()
     if (tab === 'documents') void loadDocuments()
   }, [tab, loadShipments, loadDocuments])
+  // ---- F-SA-238: the order's shared files on Documents, grouped like the office's Files tab (read again on the live channel's news) ----
+  const orderFiles = usePortalOrderFiles(api, id, tab === 'documents', record ? orderNameOf(record.order, locale, t) : '')
+  // ---- end F-SA-238
 
   useEffect(() => setOpenLine(lineParam), [lineParam])
   useEffect(() => {
@@ -413,6 +417,7 @@ function OrderContainer({ id }: { id: string }) {
       void loadRules()
       if (tab === 'shipments') void loadShipments()
       if (tab === 'documents') void loadDocuments()
+      if (tab === 'documents') orderFiles.reload() // F-SA-238: live on partner_notification.created
     },
     onReconnect: () => {
       void load()
@@ -979,6 +984,7 @@ function OrderContainer({ id }: { id: string }) {
         pay,
         shipments,
         documents,
+        files: orderFiles.model, // F-SA-238
         fileHeld,
         // B-W2b-374 (XF3:04): the lines' options and the artwork the office shows here.
         options: record ? createElement(PortalLineOptions, { api, orderId: id, fileHeld, refreshKey: loadedAt ?? '' }) : null,
@@ -1023,6 +1029,17 @@ function OrderContainer({ id }: { id: string }) {
         // B-W2b-170
         onCopyTrackingLink: copyTrackingLink,
         onPreview: previewFile,
+        // ---- F-SA-238: a file of the grouped list — a document of the library opens as today (preview / download, logged); any other
+        // shared file through the files route (the content wall again): a PDF in the viewer, anything else saved.
+        onOpenOrderFile: (file: { fileId: string; name: string; contentType: string; library: boolean }) => {
+          if (file.library) return file.contentType === 'application/pdf' ? previewFile({ fileId: file.fileId, title: file.name }) : download({ fileId: file.fileId, name: file.name })
+          downloadLink(api, file.fileId)
+            .then(({ download: link }) => readFromStore({ method: 'GET', url: link.url, headers: link.headers ?? {}, expiresAt: link.expiresAt }))
+            .then((bytes) => (file.contentType === 'application/pdf' ? setDialog({ kind: 'preview', fileId: file.fileId, title: file.name, state: 'ready', bytes }) : saveBytes(file.name, bytes, file.contentType)))
+            .catch(() => setNotice({ tone: 'danger', key: 'docs.downloadFailed' }))
+        },
+        onRetryFiles: orderFiles.reload,
+        // ---- end F-SA-238
         onDownload: download,
         onDismissNotice: () => setNotice(null),
         // ---- F-PR-12a

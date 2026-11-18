@@ -24,6 +24,8 @@ import { orderHandlers } from './handlers'
 import { moneySettlementPort, useOrderSettlement } from './settlement'
 // B-SA-034: the order read's live watch list is made of declared events only.
 import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
+// B-SA-035: the lines' pictures and artwork are files of the style, its colourway and the line.
+import { seedFile } from '../../../../../../packages/factory-db/src/seed-files'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -93,6 +95,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   // B-SA-034: the order page's readers of production (work orders), every customer and P1 only.
   'a.production': office('a', ['orders.view', 'workorders.view']),
   'a.production.p1': office('a', ['orders.view', 'workorders.view'], 'all', [P1]),
+  // B-SA-035: the order page's readers of the lines' pictures and artwork — with files.read, and with files.read of another company only.
+  'a.files': office('a', ['orders.view', 'files.read']),
+  'a.files.companyB': () => ({ audience: 'office', tenantId: T.a, actorId: newId(), grants: [grant(['orders.view']), grant(['files.read'], [companyB])] }),
 }
 
 async function call(session: string, method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown) {
@@ -800,3 +805,87 @@ describe('live: the order read names its own watch list and its last change per 
   })
 })
 // ---- end B-SA-034
+
+// ---- B-SA-035 (Sales page plan N2, N8): the order read's lines carry their picture and the artwork the reader may open ----------
+describe('the lines carry their picture and their artwork count, by the reader’s file right (B-SA-035)', () => {
+  const order = () => seeded.a.quality.production.salesOrderId
+  const files = { main: '', red: '', artwork: '', pending: '' }
+
+  /** A made-up file of a record, written as the office's runtime login writes rows (the database's file rules apply). */
+  async function fileOn(recordType: string, recordId: string, input: { name: string; kind: 'PHOTO' | 'DOCUMENT'; contentType: string; category?: 'ARTWORK'; status?: 'AVAILABLE' | 'PENDING_UPLOAD' }): Promise<string> {
+    const fileId = newId()
+    const account = await one<{ id: string }>(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2' ORDER BY id LIMIT 1`, [T.a])
+    const at = new Date()
+    await h.database.withScope({ audience: 'office', tenantId: T.a, actorId: newId() }, (client) =>
+      client.storedFile.create({
+        data: seedFile(T.a, {
+          id: fileId,
+          companyId: companyA,
+          recordType,
+          recordId,
+          kind: input.kind,
+          ...(input.category ? { category: input.category } : {}),
+          originalName: input.name,
+          contentType: input.contentType,
+          sizeBytes: 2048,
+          storeAccountId: account.id,
+          storageKey: `t/${T.a}/c/${companyA}/2026/${newId()}`,
+          status: input.status ?? 'AVAILABLE',
+          ...(input.status === 'PENDING_UPLOAD' ? {} : { availableAt: at }),
+          visibility: ['OFFICE'],
+          createdAt: at,
+          updatedAt: at,
+        }),
+        select: { id: true },
+      }),
+    )
+    return fileId
+  }
+
+  beforeAll(async () => {
+    const lines = await admin<{ id: string; colour: string }>(`SELECT l.id, c.code AS colour FROM "SalesOrderLine" l JOIN "Colourway" c ON c.id = l."colourwayId" WHERE l."orderId" = $1 ORDER BY l.seq`, [order()])
+    expect(lines.map((line) => line.colour).sort()).toEqual(['BLK', 'RED'])
+    // The style's main picture, RED's own picture (not the main one), and the BLK line's artwork (one ready, one still uploading).
+    files.main = await fileOn('Style', jacket, { name: 'T-SA035 jacket front.jpg', kind: 'PHOTO', contentType: 'image/jpeg' })
+    files.red = await fileOn('Colourway', RED, { name: 'T-SA035 jacket red.jpg', kind: 'PHOTO', contentType: 'image/jpeg' })
+    const blkLine = lines.find((line) => line.colour === 'BLK')!.id
+    files.artwork = await fileOn('SalesOrderLine', blkLine, { name: 'T-SA035 logo.pdf', kind: 'DOCUMENT', contentType: 'application/pdf', category: 'ARTWORK' })
+    files.pending = await fileOn('SalesOrderLine', blkLine, { name: 'T-SA035 logo v2.pdf', kind: 'DOCUMENT', contentType: 'application/pdf', category: 'ARTWORK', status: 'PENDING_UPLOAD' })
+    await admin(`UPDATE "StyleImage" SET "isMain" = false WHERE "tenantId" = $1 AND "styleId" = $2`, [T.a, jacket])
+    await admin(
+      `INSERT INTO "StyleImage" (id, "tenantId", "styleId", "colourwayId", "fileId", kind, seq, "isMain") VALUES ($1, $2, $3, NULL, $4, 'PHOTO', 0, true), ($5, $2, $3, $6, $7, 'PHOTO', 1, false)`,
+      [newId(), T.a, jacket, files.main, newId(), RED, files.red],
+    )
+  })
+
+  const linesOf = async (session: string): Promise<Record<'BLK' | 'RED', Json>> => {
+    const read = (await ok(session, 'GET', orderUrl(order()))).order
+    const of = (colour: string) => (read.lines as Json[]).find((line) => line.colourway?.code === colour)!
+    return { BLK: of('BLK'), RED: of('RED') }
+  }
+
+  it('with files.read: the colourway’s own picture, else the style’s main one; no small address before its preview exists', async () => {
+    const lines = await linesOf('a.files')
+    expect(lines.RED.picture).toEqual({ fileId: files.red, contentType: 'image/jpeg', small: null })
+    expect(lines.BLK.picture).toEqual({ fileId: files.main, contentType: 'image/jpeg', small: null })
+  })
+
+  it('artworkCount counts the files the reader may open: ready ones only, and only with files.read over their company', async () => {
+    const lines = await linesOf('a.files')
+    expect(lines.BLK.artworkCount).toBe(1)
+    expect(lines.RED.artworkCount).toBe(0)
+    // files.read of another company only: neither the pictures nor the artwork of company A's files.
+    const other = await linesOf('a.files.companyB')
+    expect([other.BLK.picture, other.RED.picture]).toEqual([null, null])
+    expect([other.BLK.artworkCount, other.RED.artworkCount]).toEqual([0, 0])
+  })
+
+  it('without files.read: no picture and no artwork counted (the page draws its placeholder); another customer’s person: 404', async () => {
+    const lines = await linesOf('a.viewer')
+    expect([lines.BLK.picture, lines.RED.picture]).toEqual([null, null])
+    expect([lines.BLK.artworkCount, lines.RED.artworkCount]).toEqual([0, 0])
+    expect(JSON.stringify(lines)).not.toContain(files.main)
+    expect((await call('a.otherParty', 'GET', orderUrl(order()))).status).toBe(404)
+  })
+})
+// ---- end B-SA-035

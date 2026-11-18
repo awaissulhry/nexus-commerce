@@ -11,13 +11,10 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
-import { cancelHeld, createShipmentHref, dayInstant, depositGate, isFinal, isWideTab, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, type RecordTab } from '../../model'
+import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, isWideTab, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
-import { DatesTab } from './DatesTab'
-import { DocumentsTab } from './DocumentsTab'
-import { MarginTab } from '../margin/view/MarginTab'
 import { LinesTab } from './LinesTab'
 import { MoneyTab } from './MoneyTab'
 import { ProductionTab } from './ProductionTab'
@@ -26,13 +23,23 @@ import { ShipmentsTab } from './ShipmentsTab'
 import { depthMenuItems, DepthNotice, DepthPills, WaitingBanner } from '../../depth/view/DepthBand'
 import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import { NAMESPACE as DEPTH } from '../../depth/model'
-import { TechPackCard } from '../../confirmation/view/ConfirmationCard'
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 // ---- B-TH-256: what points at the order (its complaints and returns, planning's re-promises, the gates' refusals) ----
-import { DeclineDialog, GateNotices, LinksSaid, PointsAtOrder, RePromiseNotices } from '../links/view/OrderLinks'
+import { DeclineDialog, GateNotices, LinksSaid, RePromiseNotices } from '../links/view/OrderLinks'
 import '../../orders.css'
+// ---- F-SA-230: the band's health (Late / At risk only), the ⋯ People (the production lane's dialogs, reused in place) ----
+import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
+import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
+import { NoteDialog } from '../../../../production/_shared/notes/view/NoteDialog'
+import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/notes/model'
+// ---- end F-SA-230
+// ---- F-SA-232: Overview, the first tab; the band's health and the customer's urgency from the production read ----
+import { BandHealth, BandUrgency, OverviewTab } from './OverviewTab'
+import { FilesTab } from './FilesTab' // F-SA-237
+import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
+// ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
 
@@ -50,12 +57,18 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  * the most serious first, the rest behind "N more notices".
  * B-TH-256: Shipments & invoices also lists the order's complaints and returns; the notices hold the compliance gates' refusals that
  * still block its work orders or shipments and planning's re-promises (Accept / Decline).
+ * F-SA-230 (sales page plan N2; 10-order-page §1, §2, §4): the tabs re-cut without losing anything — Lines · Production (the work
+ * orders, the dates #dates, the tech pack) · Changes (the confirmation #confirmation, the amendments) · Money (totals, deposit,
+ * payment schedule, invoices & credit notes #invoices, the margin #margin by its grain) · Shipments (left to ship, shipments,
+ * deliveries, complaints & returns); every old `?tab=` lands on its new tab and section. The band: the health chip only for Late /
+ * At risk (the Late banner went), the priority in words, Made to measure; ⋯ grouped (Next steps · Edit · People · Go to · Copy;
+ * Cancel last) with Assign supervisor… and Ask the supervisor… (the production lane's dialogs); notices most serious first.
  */
 // B-W2b-398: `delivered` is the Shipments tab's card "Delivered (from carrier)". B-TH-214: `thread` the docked thread (the
 // office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
 export function OrderRecordView({ model, actions, thread, printThread, fields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* B-TH-280: the custom fields (Lines only) */ fields?: ReactNode; delivered?: ReactNode }) {
   return (
-    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
+    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */]}>
       <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} delivered={delivered} />
     </WithMessages>
   )
@@ -139,19 +152,20 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   })
 
   const openDeposits = order.chain.depositRequests.filter((request) => request.status === 'OPEN').length
-  // B-TH-214: the five tabs (Margin only with the margin grain), each counting what it lists.
-  const tabCount = (tab: RecordTab): number | null => {
-    if (tab === 'lines') return order.lines.length
-    if (tab === 'production') return order.chain.workOrders.length
-    if (tab === 'shipments') return order.chain.shipments.length + order.chain.invoices.length
-    if (tab === 'changes') return order.amendments.count
-    return null
-  }
+  // F-SA-230: the tabs re-cut (Lines · Production · Changes · Money · Shipments), each counting what it lists; Money's dot: a deposit open.
+  // F-SA-232: Overview carries a mark while the order is late or at risk (the band's same chip, the same read).
+  const production = readOf(model.production)
+  const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
   const tabs: TabItem[] = recordTabs(model.can).map((tab) => ({
     id: tab,
     href: `${recordHref}?tab=${tab}`,
     label:
-      tab === 'shipments' && openDeposits > 0 ? (
+      tab === 'overview' && attention ? (
+        <span className="fw-so-tablabel">
+          {t(`tab.${tab}`)}
+          <span className="fw-so-dot" aria-label={t('tab.attention')} role="img" />
+        </span>
+      ) : tab === 'money' && openDeposits > 0 ? (
         <span className="fw-so-tablabel">
           {t(`tab.${tab}`)}
           <span className="fw-so-dot" aria-label={t('tab.depositOpen')} role="img" />
@@ -159,8 +173,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tabCount(tab),
+    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order), // F-SA-237: the files the reader may open
   }))
+  // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
+  useEffect(() => {
+    const id = typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1))
+    if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' })
+  }, [model.tab])
 
   const primary =
     step.kind === 'makeWorkOrders' ? (
@@ -188,42 +207,59 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const reopenWait = reopenHeld(order, model.can)
   const cancelWait = cancelHeld(order, model.can)
   const copyWait = copyHeld(model.can)
-  const daily = [
-    ...(!isFinal(order) && model.can.manage
-      ? [
-          { id: 'amend', label: t('action.amend'), disabled: !!amendWait || !!model.amend, description: model.amend ? t('held.amending') : held(amendWait), onSelect: () => actions?.onAmendStart?.() },
-          { id: 'closeLines', label: t('action.closeLines'), disabled: !!closeLinesWait, description: held(closeLinesWait), onSelect: () => actions?.onDialog?.({ kind: 'closeLines' }) },
-          ...(order.lines.some((line) => line.closedShort) ? [{ id: 'reopenLines', label: t('action.reopenLines'), disabled: !!reopenWait, description: held(reopenWait), onSelect: () => actions?.onDialog?.({ kind: 'reopenLines' }) }] : []),
-        ]
-      : []),
-    ...(model.can.manageQuotes || model.can.viewQuotes ? [{ id: 'copyQuote', label: t('action.copyAsQuote'), disabled: !!copyWait, description: held(copyWait), onSelect: () => actions?.onDialog?.({ kind: 'copyQuote' }) }] : []),
-    ...(!isFinal(order) && model.can.manage ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, disabled: !!cancelWait, description: held(cancelWait), onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
-  ]
-  const more: MenuItemDef[] = [
-    ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
-    ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
-    ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
-    ...(order.chain.quote && model.can.viewQuotes ? [{ id: 'quote', label: t('action.openQuote', { number: order.chain.quote.number }), href: `${model.prefix}/sales/quotes/${order.chain.quote.id}` }] : []),
-    // B-W2b-180 (design conn "Portal › Orders & tracking"): the order as the customer sees it in their portal, read-only.
-    ...(model.portal ? [{ id: 'portal', label: t('action.portal'), disabled: !!model.portal.held || model.portal.opening, description: model.portal.opening ? t('held.portalOpening') : held(model.portal.held), onSelect: () => actions?.onPortal?.() }] : []),
-    {
-      id: 'copy',
-      label: t('action.copyNumber'),
-      onSelect: () => {
-        void navigator.clipboard?.writeText(order.number).catch(() => undefined)
-      },
-    },
-    ...daily,
-    // B-W2b-323: Set priority…, Set season…
-    ...depthMenuItems(order, model.depth, actions?.depth, d),
-  ]
+  // ---- F-SA-230: ⋯ grouped (Next steps · Edit · People · Go to · Copy; Cancel last), every item of today kept, each held with its reason.
+  const sup = useT(SUPERVISOR_NS)
+  const notes = useT(NOTES_NS)
+  const people = model.people ?? null
+  const askWait = people ? noteHeld(people.mayNote, 1) : null
+  const groups: Partial<Record<MenuGroup, MenuItemDef[]>> = {
+    next: [
+        ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
+        ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
+        ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
+    ],
+    edit: [
+        ...(!isFinal(order) && model.can.manage
+          ? [
+              { id: 'amend', label: t('action.amend'), disabled: !!amendWait || !!model.amend, description: model.amend ? t('held.amending') : held(amendWait), onSelect: () => actions?.onAmendStart?.() },
+              { id: 'closeLines', label: t('action.closeLines'), disabled: !!closeLinesWait, description: held(closeLinesWait), onSelect: () => actions?.onDialog?.({ kind: 'closeLines' }) },
+              ...(order.lines.some((line) => line.closedShort) ? [{ id: 'reopenLines', label: t('action.reopenLines'), disabled: !!reopenWait, description: held(reopenWait), onSelect: () => actions?.onDialog?.({ kind: 'reopenLines' }) }] : []),
+            ]
+          : []),
+        // B-W2b-323: Set priority…, Set season…
+        ...depthMenuItems(order, model.depth, actions?.depth, d),
+    ],
+    people: people
+        ? [
+            { id: 'assignSupervisor', label: t('menu.assignSupervisor'), disabled: !people.mayAssign, description: people.mayAssign ? undefined : sup('held.noRight'), onSelect: () => actions?.people?.onAssign?.() },
+            { id: 'askSupervisor', label: t('menu.askSupervisor'), disabled: !!askWait, description: askWait ? notes(askWait.key, askWait.params) : undefined, onSelect: () => actions?.people?.onAsk?.() },
+          ]
+      : [],
+    goTo: [
+        ...(order.chain.quote && model.can.viewQuotes ? [{ id: 'quote', label: t('action.openQuote', { number: order.chain.quote.number }), href: `${model.prefix}/sales/quotes/${order.chain.quote.id}` }] : []),
+        // B-W2b-180 (design conn "Portal › Orders & tracking"): the order as the customer sees it in their portal, read-only.
+        ...(model.portal ? [{ id: 'portal', label: t('action.portal'), disabled: !!model.portal.held || model.portal.opening, description: model.portal.opening ? t('held.portalOpening') : held(model.portal.held), onSelect: () => actions?.onPortal?.() }] : []),
+    ],
+    copy: [
+        {
+          id: 'copy',
+          label: t('action.copyNumber'),
+          onSelect: () => {
+            void navigator.clipboard?.writeText(order.number).catch(() => undefined)
+          },
+        },
+        ...(model.can.manageQuotes || model.can.viewQuotes ? [{ id: 'copyQuote', label: t('action.copyAsQuote'), disabled: !!copyWait, description: held(copyWait), onSelect: () => actions?.onDialog?.({ kind: 'copyQuote' }) }] : []),
+    ],
+  }
+  const cancelItem: MenuItemDef[] = !isFinal(order) && model.can.manage ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, disabled: !!cancelWait, description: held(cancelWait), onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []
+  const more: MenuItemDef[] = groupedMenu(groups, cancelItem, (group) => t(`menu.group.${group}`))
+  // ---- end F-SA-230
 
-  const late = order.daysLate !== null && order.daysLate > 0
   const depositRequest = gate.request
   const depositOverdue = gate.state === 'WAITING' && !!depositRequest && depositRequest.dueDate < model.today
-  const toShipments = (
+  const toMoney = (
     <Button size="sm" variant="quiet" asChild>
-      <Link href={`${recordHref}?tab=shipments`}>{t('tab.shipments')}</Link>
+      <Link href={`${recordHref}?tab=money`}>{t('tab.money')}</Link>
     </Button>
   )
 
@@ -247,6 +283,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           status: <Pill tone={STATUS_TONE[order.status]}>{t(`status.${order.status}`)}</Pill>,
           meta: (
             <>
+              {/* F-SA-230 / F-SA-232: health only when it matters (Late · N d, At risk, from the production read; the order read's
+                  lateness until it comes), never "On track"; the customer's own urgency. */}
+              <BandHealth order={order} model={model} />
+              <BandUrgency model={model} />
               {order.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: order.customerRef })}</Tag>}
               {/* B-TH-228: an order made straight from a request names it (office only), else "Typed by the office". */}
               {!order.chain.quote && model.madeFrom && (
@@ -263,8 +303,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
                 ) : (
                   <span className="fw-so-hint">{t('record.fromQuote', { number: order.chain.quote.number, revision: order.chain.quote.revision })}</span>
                 ))}
-              {/* B-W2b-323: priority (URGENT with its reason), season, the confirmation sent. */}
+              {/* B-W2b-323: priority (Top with its reason), season, the confirmation sent. */}
               {model.depth && <DepthPills model={model.depth} />}
+              {/* F-SA-230: a made-to-measure line marks the order (the list's word). */}
+              {isMadeToMeasure(order) && <Tag tone="neutral">{t('record.madeToMeasure')}</Tag>}
             </>
           ),
           primary,
@@ -274,7 +316,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       >
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
 
-        {/* B-TH-214: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        {/* B-TH-214: ONE notice in the body column; F-SA-230: the most serious first, the rest behind "N more notices". */}
         <RecordNotices>
           {model.notice && (
             <Banner
@@ -293,6 +335,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           <LinksSaid model={model.links} actions={actions?.links} />
           {model.depth && <DepthNotice model={model.depth} actions={actions?.depth} />}
           {order.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
+          {depositOverdue && depositRequest && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
+          {gate.state === 'MISSING' && !isFinal(order) && <Banner tone="danger" title={t('record.depositMissing')} action={toMoney} />}
+          {/* B-TH-256: a compliance gate still blocks a work order or a shipment of this order (the gate's own words). */}
+          <GateNotices model={model.links} prefix={model.prefix} />
           {/* B-W2b-323: the yes the order waits for. */}
           {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
           {/* B-W2b-368: the made-to-measure units the order waits for, each with its factory review. */}
@@ -310,18 +356,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
               }
             />
           )}
-          {depositOverdue && depositRequest && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toShipments} />}
-          {gate.state === 'MISSING' && !isFinal(order) && <Banner tone="danger" title={t('record.depositMissing')} action={toShipments} />}
-          {/* B-TH-256: a compliance gate still blocks a work order or a shipment of this order (the gate's own words). */}
-          <GateNotices model={model.links} prefix={model.prefix} />
-          {late && <Banner tone="warning" title={t('record.late', { count: order.daysLate ?? 0 })} />}
-          {gate.state === 'WAITING' && !depositOverdue && depositRequest && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toShipments} />}
           {/* B-TH-256: planning proposes new dates: Accept / Decline (orders.manage, never the proposer), "Tell the customer" only ticked. */}
           <RePromiseNotices model={model.links} actions={actions?.links} />
+          {gate.state === 'WAITING' && !depositOverdue && depositRequest && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
           {model.changed && (
             <Banner
               tone="info"
-              title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
+              title={model.changed.by ? t('record.changedBy', { name: model.changed.by, time: formatTime(model.changed.at, { locale }) }) : t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
               action={
                 <Button size="sm" onClick={() => actions?.onReload?.()}>
                   {t('record.reload')}
@@ -334,36 +375,33 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         </RecordNotices>
 
         <div className="fw-so-main">
+          {model.tab === 'overview' && <OverviewTab order={order} model={model} actions={actions} />}
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
-          {/* B-TH-214: Production & dates — the production lane's tab bodies as they are, then the promise, then the tech pack in force. */}
+          {/* F-SA-230 / F-SA-234 / F-SA-235: Production — the work orders with the order's own pieces, the dates and milestones (#dates),
+              holds, quality & problems, the specs in force (the tech pack), the customer's materials. */}
           {model.tab === 'production' && (
             <div className="fw-so-merged">
               <ProductionTab order={order} model={model} actions={actions} />
-              <DatesTab order={order} model={model} actions={actions} />
-              <TechPackCard model={model.depth} actions={actions?.depth} />
             </div>
           )}
-          {model.tab === 'shipments' && (
-            <div className="fw-so-merged">
-              <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />
-              <MoneyTab order={order} model={model} actions={actions} />
-              {/* B-TH-256: the order's complaints and returns (each by its own right). */}
-              <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
-            </div>
-          )}
-          {model.tab === 'changes' && (
-            <div className="fw-so-merged">
-              <DocumentsTab order={order} model={model} actions={actions} />
-              <ChangesTab order={order} model={model} actions={actions} />
-            </div>
-          )}
-          {model.tab === 'margin' && <MarginTab margin={model.margin} prefix={model.prefix} orderId={order.id} onRetry={actions?.onRetryMargin} />}
+          {/* F-SA-230 / F-SA-236: Changes — one newest-first story: waiting on us / on the customer, the confirmation and the customer's
+              yes (#confirmation), the history, what can still change. */}
+          {model.tab === 'changes' && <ChangesTab order={order} model={model} actions={actions} />}
+          {/* F-SA-230: Money — totals, deposit, payment schedule, invoices & credit notes (#invoices), the margin (#margin, by its grain). */}
+          {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
+          {/* F-SA-230: Shipments — left to ship, shipments, deliveries, complaints & returns; the money is on Money. */}
+          {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />}
+          {/* F-SA-237: Files — every file of the order by where it comes from (the thread's Files window draws the same body). */}
+          {model.tab === 'files' && <FilesTab order={order} model={model} actions={actions} />}
         </div>
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
       <DeclineDialog model={model.links} actions={actions?.links} />
+      {/* F-SA-230: the production lane's own dialogs, mounted as they are. */}
+      {model.people?.assign && <AssignSupervisorDialog model={model.people.assign} actions={actions?.people?.assign} />}
+      {model.people?.note && <NoteDialog model={model.people.note} actions={actions?.people?.note} />}
       {/* W1 browser repair: no labels here — ds-parts' StepUpModal takes the DS words itself (this page loads no ds-words catalogue). */}
       <StepUpModal
         open={model.stepUp.open}

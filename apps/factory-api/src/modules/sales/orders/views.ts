@@ -18,6 +18,11 @@ import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { LAST_CHANGE_PARTS, type LastChangePart, type OrderPagePart } from './contract'
+// B-SA-035 (Sales page plan N2, N8): each line's picture and the artwork the reader may open.
+import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { can } from '@nexus/factory-domain/core/permissions'
+import { linePictureKey, type LinePictureFile } from '../../product/images/small-pictures'
+import { artworkOf } from '../configurator/artwork'
 
 /**
  * The order record as the office reads it (A2 SCR-039; the design's Order record): the header with its dates (the
@@ -196,8 +201,49 @@ async function lastChangeOf(db: Reader, order: OrderRow, records: PartRecords) {
 }
 // ── end B-SA-034 ──
 
+// ── B-SA-035 (Sales page plan N2, N8, picks P2, P13; 10-order-page §3 F2) ──────────────────────────────────────────────────────
+/** A line's picture as the order read answers it: the file (files.read) and its small preview's address (null until made). */
+export interface LinePicture {
+  readonly fileId: string
+  readonly contentType: string
+  readonly small: { readonly url: string; readonly expiresAt: string } | null
+}
+
+/**
+ * The artwork each line shows (its own and that of the quote line it was made from: configurator artworkOf) that the reader may
+ * OPEN: AVAILABLE, and files.read over the file's company and the order's customer (the files' own record rule for a line of this
+ * order). No reader (not an office read): none counted.
+ */
+async function artworkCountsOf(db: Reader, order: OrderRow, lines: readonly { readonly id: string; readonly quoteLineId: string | null }[], viewer: Actor | null): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  if (!viewer || lines.length === 0) return counts
+  const perLine = await Promise.all(lines.map(async (line) => ({ lineId: line.id, files: await artworkOf(db, { kind: 'ORDER', line: { id: line.id, quoteLineId: line.quoteLineId } }) })))
+  const ids = [...new Set(perLine.flatMap((entry) => entry.files.filter((file) => file.status === 'AVAILABLE').map((file) => file.fileId)))]
+  if (ids.length === 0) return counts
+  const companies = new Map((await db.storedFile.findMany({ where: { id: { in: ids }, status: 'AVAILABLE' }, select: { id: true, companyId: true } })).map((file) => [file.id, file.companyId]))
+  const opens = (fileId: string) => companies.has(fileId) && can(viewer, FILES_READ, { companyId: companies.get(fileId) ?? null, partyId: order.partyId })
+  for (const entry of perLine) counts.set(entry.lineId, new Set(entry.files.map((file) => file.fileId).filter(opens)).size)
+  return counts
+}
+
+/**
+ * The lines' pictures put into an order read (after its database read: the small previews' addresses are presigned outside it,
+ * one per distinct file — moves.ts recordAfter). A line without a picture the reader may open keeps `picture: null`.
+ */
+export function withLinePictures(view: OrderView, files: ReadonlyMap<string, LinePictureFile>, addresses: ReadonlyMap<string, { url: string; expiresAt: string }>): OrderView {
+  return {
+    ...view,
+    lines: view.lines.map((line) => {
+      const file = files.get(linePictureKey(line))
+      return file ? { ...line, picture: { fileId: file.id, contentType: file.contentType, small: addresses.get(file.id) ?? null } } : line
+    }),
+  }
+}
+// ── end B-SA-035 ──
+
 export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */) {
   const facts = await readOrderFacts(db, order)
+  const artwork = await artworkCountsOf(db, order, facts.lines, viewer) // B-SA-035
   const party = await db.party.findUnique({ where: { id: order.partyId }, select: { code: true, legalName: true } })
   const styleIds = [...new Set(facts.lines.map((line) => line.styleId))]
   const styles = new Map((styleIds.length > 0 ? await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, name: true, sizes: true } }) : []).map((row) => [row.id, row]))
@@ -314,6 +360,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
             ? sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: asMoney('price', text(size.unitPrice)), progress: strip(progressOf(line.id, size.size)!) }))
             : [{ size: null, quantity: line.quantity, unitPrice: asMoney('price', null), progress: strip(progressOf(line.id, null)!) }],
         progress: strip(totals),
+        // B-SA-035: the picture is put in after the read (withLinePictures); the artwork the reader may open, counted.
+        picture: null as LinePicture | null,
+        artworkCount: artwork.get(line.id) ?? 0,
       }
     }),
     progress: strip(facts.progress.totals),

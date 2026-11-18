@@ -1,4 +1,9 @@
 import { createElement } from 'react'
+// F-SA-238: the Documents tab's grouped files (the office Files body, its customer face).
+import { readFileSync } from 'node:fs'
+import { renderToString } from 'react-dom/server'
+import { OrderFilesBody } from '../../../lib/record-thread/files-view/view/FilesView'
+import { portalFilesRead } from '../../../lib/record-thread/files-view/model'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { APPROVAL_STATUSES as DOMAIN_APPROVAL_STATUSES } from '@nexus/factory-domain/approvals-out/kinds'
@@ -604,3 +609,52 @@ describe('B-TH-246 — the customer\'s own sheet in its portal', () => {
   })
 })
 // ── end B-TH-246 ──
+
+// ---- F-SA-238: Documents — the order's shared files grouped like the office's Files tab (the same body, its customer face) --------
+describe('F-SA-238 — the portal Documents tab: the customer’s own shared files by source, the customer face', () => {
+  const PORTAL_READ = {
+    asOf: '2026-11-18T09:00:00Z',
+    order: { id: 'o-alpha', customerRef: 'PO-7731', yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } } },
+    groups: [
+      { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [{ id: 'f1', name: 'Order sheet.pdf', kind: 'DOCUMENT', category: null, documentKind: null, documentWords: null, contentType: 'application/pdf', sizeBytes: 2048, versionNo: 1, at: '2026-11-12T10:00:00Z', from: { type: 'SalesOrder', id: 'o-alpha', label: 'Your order 12' }, line: null }] },
+      { key: 'SHIPMENTS', words: { en: 'Shipments & invoices', it: 'Spedizioni e fatture' }, files: [{ id: 'f2', name: 'DDT 41.pdf', kind: 'DOCUMENT', category: null, documentKind: 'DDT', documentWords: { en: 'Delivery note', it: 'Documento di trasporto' }, contentType: 'application/pdf', sizeBytes: 4096, versionNo: 1, at: '2026-11-15T10:00:00Z', from: { type: 'Shipment', id: 's1', label: null }, line: null }] },
+      { key: 'RETURNS', words: { en: 'Returns & complaints', it: 'Resi e reclami' }, files: [] },
+    ],
+    total: 2,
+  }
+  const draw = (locale: 'it' | 'en', model: Parameters<typeof OrderFilesBody>[0]['model']) =>
+    renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model, party: null, actions: {} })))
+
+  it('the customer’s own numbers, its groups, the library’s document words; no audience label, no also on, nothing counted, no choosing', () => {
+    const read = portalFilesRead(PORTAL_READ, 'Your order 12')
+    expect(read.order.number).toBe('Your order 12')
+    expect(read.groups.flatMap((group) => group.files).every((file) => file.audience === 'CUSTOMER_CAN_SEE' && file.alsoOn.length === 0 && file.alsoOnOther === 0)).toBe(true)
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw(locale, { read, problem: null, selected: [], canShare: false, face: 'customer' })
+      for (const words of locale === 'en' ? ['Order &amp; thread', 'Shipments &amp; invoices', 'Order sheet.pdf', 'Delivery note'] : ['Ordine e conversazione', 'Spedizioni e fatture', 'Documento di trasporto']) expect(html, words).toContain(words)
+      for (const never of ['Office only', 'Solo ufficio', 'Shared with the customer', 'Condiviso con il cliente', 'you cannot open', 'non puoi aprire', 'also on', 'anche su', 'type="checkbox"']) expect(html, never).not.toContain(never)
+      expect(html).not.toContain('Returns')
+    }
+  })
+
+  it('empty: "No documents yet."; reading: skeleton rows; a failed read says so with Try again', () => {
+    const empty = portalFilesRead({ ...PORTAL_READ, groups: [], total: 0 }, 'Your order 12')
+    expect(draw('en', { read: empty, problem: null, selected: [], canShare: false, face: 'customer' })).toContain('No documents yet.')
+    expect(draw('it', { read: empty, problem: null, selected: [], canShare: false, face: 'customer' })).toContain('Ancora nessun documento.')
+    expect(draw('en', { read: null, problem: null, selected: [], canShare: false, face: 'customer' })).toContain('role="status"')
+    expect(draw('en', { read: null, problem: 'read', selected: [], canShare: false, face: 'customer' })).toMatch(/Try again|Retry/)
+  })
+
+  it('the page reads it on Documents and again on the live channel’s news; another customer’s order: the neutral "not found"', () => {
+    const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("const orderFiles = usePortalOrderFiles(api, id, tab === 'documents'")
+    expect(page).toContain("if (tab === 'documents') orderFiles.reload() // F-SA-238: live on partner_notification.created")
+    const tab = readFileSync(new URL('./view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("t('docs.filesNotFound')")
+    for (const locale of ['en', 'it'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['portal-orders'])['portal-orders']!)
+      for (const key of ['docs.filesTitle', 'docs.filesNotFound', 'docs.versionsTitle']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-SA-238

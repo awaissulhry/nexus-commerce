@@ -65,7 +65,7 @@ import { useOrderFiles } from './order-files/use-order-files'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
 // ---- F-PR-05a: the band's health (each order's, B-PR-35) with Raise to At risk, the Overview's gates, Preview as <customer> ----
-import { useBrandHealth } from './health/use-health'
+import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: moved to lib (one card)
 import { useOrderGates } from './gates/use-gates'
 import { customerFactOf, previewRecord } from './overview/model'
 import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'

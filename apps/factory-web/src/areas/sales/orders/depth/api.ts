@@ -349,13 +349,7 @@ const milestoneSchema = z.object({
   late: z.number().nullable(),
 })
 export type OrderMilestone = z.infer<typeof milestoneSchema>
-export const milestonesSchema = z.object({ orders: z.array(z.object({ id: z.string(), number: z.string(), milestones: z.array(milestoneSchema), next: z.string().nullable(), late: z.number() })) })
-
-export async function getMilestones(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<{ milestones: OrderMilestone[]; next: string | null; late: number } | null> {
-  const answer = await api.get('/planning/milestones', { query: { orderId }, schema: milestonesSchema, signal })
-  const order = answer.orders.find((entry) => entry.id === orderId)
-  return order ? { milestones: order.milestones, next: order.next, late: order.late } : null
-}
+// F-SA-234: the milestones are read with the order's production read (record/overview/api.ts, orders.view), not here.
 
 // ---- B-W2b-317: the promises (open lines with their promise now and the planned finish) ---------------------------------------
 

@@ -118,3 +118,119 @@ export interface UploadAsk {
 export const uploadAskHeld = (ask: Pick<UploadAsk, 'sheet' | 'audience'>): string | null => (ask.sheet && ask.audience === 'FLOOR' ? 'upload.sheetFloor' : null)
 
 export const START_AUDIENCE: FileAudience = 'OFFICE'
+
+// ── F-SA-237 (sales page plan N9, picks P14, R7; 10-order-page §2.7; review BW-1) ───────────────────────────────────────────────
+/**
+ * A SALES ORDER's files (the T9 rule "one record's files" changes for a SalesOrder, by the lane agreement): every file of the order
+ * by where it comes from — the order and its thread, its lines and artwork, the customer's requests, production, quality, shipments
+ * and invoices, returns — from ONE walled read (`GET /sales/orders/:orderId/files`, B-SA-036). The order's Files tab and the thread's
+ * Files window on the order draw the SAME body from it. Each file says who can see it (shared with the customer / office only), where
+ * it hangs, "also on …" exactly as the read names it (only this customer's records the reader reaches; any other counted); files the
+ * reader may not open are counted, never named. A file opens through the read's own route, never the generic preview.
+ */
+export const ORDER_FILE_AUDIENCES = ['CUSTOMER_CAN_SEE', 'OFFICE_ONLY'] as const
+export type OrderFileAudience = (typeof ORDER_FILE_AUDIENCES)[number]
+
+export interface OrderFileRef {
+  readonly type: string
+  readonly id: string
+  readonly label: string
+}
+
+export interface OrderFile {
+  readonly id: string
+  readonly name: string
+  readonly kind: string
+  readonly category: string | null
+  readonly contentType: string
+  readonly sizeBytes: number
+  readonly versionNo: number
+  readonly at: string
+  readonly from: OrderFileRef
+  readonly line: { readonly id: string; readonly seq: number } | null
+  readonly audience: OrderFileAudience
+  readonly bodyData: boolean
+  readonly alsoOn: readonly OrderFileRef[]
+  readonly alsoOnOther: number
+  readonly inThread: { readonly messageId: string } | null
+  /** F-SA-238: a library document (a DDT, an invoice …) in its own words; absent: a plain file. */
+  readonly documentWords?: { readonly it: string; readonly en: string } | null
+}
+
+export interface OrderFilesGroup {
+  readonly key: string
+  /** The group's words as the read gives them (it + en). */
+  readonly words: { readonly it: string; readonly en: string }
+  readonly files: readonly OrderFile[]
+  readonly leftOut: number
+  readonly measurementsLeftOut: number
+}
+
+export interface OrderFilesRead {
+  readonly order: { readonly id: string; readonly number: string }
+  readonly groups: readonly OrderFilesGroup[]
+  readonly total: number
+  readonly truncated: boolean
+}
+
+/** The order's files on screen: the read (null while it is read), a failed read, and what this person may do. */
+export interface OrderFilesModel {
+  readonly read: OrderFilesRead | null
+  readonly problem: string | null
+  readonly selected: readonly string[]
+  /** files.manage: share the order's OWN files with its customer. */
+  readonly canShare: boolean
+  readonly busy?: boolean
+  /**
+   * F-SA-238: `customer` — the portal's face of the same body: the customer's own shared files only, no audience label (all are
+   * theirs), no "also on", no left-out count (never "n hidden"), no choosing or sharing; default `office`.
+   */
+  readonly face?: 'office' | 'customer'
+}
+
+/** The groups that list a file or count one the reader may not open (an empty group says nothing). */
+export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || group.leftOut + group.measurementsLeftOut > 0)
+
+/** "N files you cannot open": every group's left-out files and body data without the right, counted. */
+export const orderLeftOut = (read: OrderFilesRead): number => read.groups.reduce((sum, group) => sum + group.leftOut + group.measurementsLeftOut, 0)
+
+/** Every listed file once, in the groups' order (the keys walk it; the bulk bar counts it). */
+export const orderFilesOf = (read: OrderFilesRead): OrderFile[] => read.groups.flatMap((group) => group.files)
+
+/** A file of the order itself (not of a line, a work order, a shipment …): only these are shared from here (Share N own). */
+export const isOwnFile = (file: Pick<OrderFile, 'from'>, orderId: string): boolean => file.from.type === 'SalesOrder' && file.from.id === orderId
+
+/** What the bulk bar reaches: Download every chosen file; Share the chosen OWN files still office only (with the right). */
+export function orderBulkReach(chosen: readonly OrderFile[], orderId: string, canShare: boolean): { readonly download: readonly string[]; readonly share: readonly string[] } {
+  return {
+    download: chosen.map((file) => file.id),
+    share: canShare ? chosen.filter((file) => isOwnFile(file, orderId) && file.audience === 'OFFICE_ONLY').map((file) => file.id) : [],
+  }
+}
+
+/**
+ * F-SA-238: the portal read (GET /portal/sales-orders/:orderId/files, B-SA-037) as the body reads it — the customer's groups, every file
+ * shared with it (no audience, no "also on", nothing counted), labels by the customer's own numbers (a record with none: no chip).
+ */
+export function portalFilesRead(read: { readonly order: { readonly id: string }; readonly groups: readonly { readonly key: string; readonly words: { readonly it: string; readonly en: string }; readonly files: readonly { readonly id: string; readonly name: string; readonly kind: string; readonly category: string | null; readonly documentWords: { readonly it: string; readonly en: string } | null; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly at: string; readonly from: { readonly type: string; readonly id: string; readonly label: string | null }; readonly line: { readonly id: string; readonly seq: number } | null }[] }[]; readonly total: number }, ownNumber: string): OrderFilesRead {
+  return {
+    order: { id: read.order.id, number: ownNumber },
+    groups: read.groups.map((group) => ({
+      key: group.key,
+      words: group.words,
+      files: group.files.map((file) => ({ ...file, from: { type: file.from.type, id: file.from.id, label: file.from.label ?? '' }, audience: 'CUSTOMER_CAN_SEE' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null })),
+      leftOut: 0,
+      measurementsLeftOut: 0,
+    })),
+    total: read.total,
+    truncated: false,
+  }
+}
+
+/** Where a file sits, in words: "in the conversation" for a thread attachment, else its record ("from WO-0311"). */
+export function sourceOf(file: Pick<OrderFile, 'from' | 'inThread'>, orderId: string): { readonly key: string; readonly params?: Readonly<Record<string, string>> } {
+  if (file.inThread) return { key: 'order.source.thread' }
+  if (file.from.type === 'SalesOrder' && file.from.id === orderId) return { key: 'order.source.order' }
+  return { key: 'order.source.from', params: { record: file.from.label } }
+}
+// ── end F-SA-237

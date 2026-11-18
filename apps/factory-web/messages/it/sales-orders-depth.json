@@ -172,7 +172,7 @@
     "label": "Taglie bloccate dalla fase di produzione"
   },
   "freeze": {
-    "title": "Cosa è bloccato",
+    "title": "Cosa si può ancora cambiare",
     "open": "Ancora modificabile",
     "priced": "Da «{stage}»: una modifica con prezzo che il cliente accetta",
     "blocked": "Da «{stage}»: non si può più cambiare",
@@ -270,15 +270,6 @@
     "CANCELLED": "annullato"
   },
   "pricedList": {
-    "title": "Richieste di modifica con prezzo",
-    "subtitle": "Una modifica dopo l’avvio della produzione ha un prezzo e richiede il sì del cliente.",
-    "col": {
-      "change": "Modifica",
-      "money": "Costo extra e prezzo",
-      "decision": "Decisione del cliente",
-      "actions": "Prossimo passo"
-    },
-    "revision": "Revisione {revision}",
     "count": {
       "changed_one": "{count} riga cambiata",
       "changed_other": "{count} righe cambiate",
@@ -287,14 +278,8 @@
       "removed_one": "{count} riga tolta",
       "removed_other": "{count} righe tolte"
     },
-    "pieces": "pezzi {before} → {after}",
-    "feeOnly": "Solo un costo",
     "fee": "costo {amount}",
-    "deposit": "acconto aggiuntivo {amount} ({kind}, {status})",
-    "empty": "Ancora nessuna modifica con prezzo",
-    "emptyBody": "Una modifica bloccata dalle regole dopo l’avvio della produzione diventa una modifica con prezzo da Modifica ordine.",
-    "failed": "Impossibile leggere le modifiche",
-    "reading": "Lettura delle modifiche…"
+    "deposit": "acconto aggiuntivo {amount} ({kind}, {status})"
   },
   "decision": {
     "NOT_NEEDED": "Il cliente non deve accettarla",
@@ -371,22 +356,22 @@
     "pdfFailed": "Impossibile aprire il PDF",
     "pdfReading": "Apertura del PDF…",
     "noFiles": "Leggere i file richiede il permesso sui file.",
-    "version": "Versione",
     "versionValue": "Versione {version}",
-    "made": "Creata",
-    "state": "Stato",
     "stateValue": {
       "none": "Non ancora creata",
       "upToDate": "Riporta l’ordine com’è ora",
       "outdated": "L’ordine è cambiato da allora",
       "notYet": "Non ancora possibile"
     },
-    "sent": "Inviata al cliente",
-    "sentValue": "Versione {version} il {date}",
-    "sentWhere": "La mail è nella conversazione dell’ordine (Attività).",
     "notSent": "Non ancora inviata",
-    "versions": "Versioni create",
-    "sentTag": "Conferma v{version} inviata"
+    "sentTag": "Conferma v{version} inviata",
+    "rowTitle": "Conferma d'ordine v{version}",
+    "rowMade": "fatta il {date}",
+    "rowSent": "inviata il {date} (v{version})",
+    "open": "Apri",
+    "versionsCount_one": "{count} versione",
+    "versionsCount_other": "{count} versioni",
+    "wasSent": "inviata"
   },
   "send": {
     "title": "Invia la conferma di {number}",
