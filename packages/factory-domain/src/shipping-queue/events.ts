@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 import { SHIPMENT_HOLD_REASONS } from '../shipping/holds/holds'
 import { SPLIT_REASONS } from '../shipping/split/split'
 
@@ -7,7 +7,8 @@ import { SPLIT_REASONS } from '../shipping/split/split'
  * The events of the shipment queue in depth (B-W2b-386; LOG-005, LOG-017, LOG-018, FIN-079; apps/factory-api modules/shipping
  * holds, split, queue). Context `shipping-queue`, its own module folder (the shipping events file is W1's). A hold and a
  * split reach the office's queue and shipment record (shipping.view) and the packing benches of the shipment's site
- * (shipping.pack: B-W2b-387's bench shows a hold at once instead of on its next read). No party, no address, no words, no
+ * (shipping.pack: B-W2b-387's bench shows a hold at once instead of on its next read). No party name (B-SA-004: the shipment's
+ * customer by id only, `partyId`, for the office's live wall), no address, no words, no
  * person: ids, numbers and codes.
  *
  *   shipment.hold_placed     a shipment was put on hold with a reason (by a person, or by the system: the balance before
@@ -24,14 +25,14 @@ export const events = [
     type: 'shipment.hold_placed',
     context: 'shipping-queue',
     description: 'A shipment that has not left was put on hold with a reason, by a person or by the system: it can no longer be packed, labelled or leave until the hold is released.',
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), holdId: z.uuid(), reason, bySystem: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), holdId: z.uuid(), reason, bySystem: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'holdId', 'reason'] },
   }),
   defineEvent({
     type: 'shipment.hold_released',
     context: 'shipping-queue',
     description: "A shipment's hold was released with words, by a person or by the system when its cause was gone; another hold may still be in force.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), holdId: z.uuid(), reason, bySystem: z.boolean(), stillHeld: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), holdId: z.uuid(), reason, bySystem: z.boolean(), stillHeld: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'holdId', 'reason', 'stillHeld'] },
   }),
   defineEvent({
@@ -47,6 +48,7 @@ export const events = [
       byRule: z.boolean(),
       lines: z.number().int().min(1),
       garments: z.number().int().min(1),
+      partyId: livePartyId(), // B-SA-004: the shipment's customer (Shipment.partyId, read on the server)
     }),
     live: { permission: 'shipping.view', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'splitFromId', 'fromNumber', 'reason'] },
   }),

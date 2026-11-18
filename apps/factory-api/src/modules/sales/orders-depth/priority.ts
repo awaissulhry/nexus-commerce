@@ -29,13 +29,14 @@ export interface PriorityBody {
 
 const invalid = (issues: Issue[]) => new ValidationError(issues[0]!.message, issues)
 
-async function setInCommand(tools: CommandTools, order: { id: string; number: string; companyId: string }, wanted: { priorityLevel: SalesOrderPriorityLevel; urgentReason: string | null; priority?: number | undefined }): Promise<boolean> {
+// B-SA-001: `order` is a row read on the server (officeOrder, the selection's findMany); its partyId names the customer.
+async function setInCommand(tools: CommandTools, order: { id: string; number: string; companyId: string; partyId: string }, wanted: { priorityLevel: SalesOrderPriorityLevel; urgentReason: string | null; priority?: number | undefined }): Promise<boolean> {
   const before = await tools.tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { priorityLevel: true, urgentReason: true, priority: true } })
   const priority = wanted.priority ?? before.priority
   if (before.priorityLevel === wanted.priorityLevel && before.urgentReason === wanted.urgentReason && before.priority === priority) return false
   await tools.tx.salesOrder.update({ where: { id: order.id }, data: { priorityLevel: wanted.priorityLevel, urgentReason: wanted.urgentReason, priority, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
   tools.audit({ action: 'orders.priority', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { ...before }, after: { priorityLevel: wanted.priorityLevel, urgentReason: wanted.urgentReason, priority } })
-  tools.emit({ type: 'sales_order.priority_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: before.priorityLevel as SalesOrderPriorityLevel, to: wanted.priorityLevel, priority, urgent: wanted.priorityLevel === 'URGENT' } })
+  tools.emit({ type: 'sales_order.priority_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: before.priorityLevel as SalesOrderPriorityLevel, to: wanted.priorityLevel, priority, urgent: wanted.priorityLevel === 'URGENT', partyId: order.partyId /* B-SA-001 */ } })
   return true
 }
 

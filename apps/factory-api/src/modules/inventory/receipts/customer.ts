@@ -144,7 +144,7 @@ export async function recordCustomerReceipt(caller: CommandCaller, body: Custome
     // The customer's materials: the named order planned when it keeps none yet, then every row of these materials counted.
     if (order && (await tx.customerMaterial.count({ where: { orderId: order.id } })) === 0) await planInCommand(tools, order)
     const counted = await recountInCommand(tools, party.id, body.lines.map((line) => ({ itemId: line.itemId, itemColourId: line.itemColourId ?? null })))
-    for (const changed of counted.orders) tools.emit({ type: 'customer_material.changed', subject: changed.id, companyId: changed.companyId, payload: { orderId: changed.id, number: changed.number, change: 'RECOUNTED', rows: changed.rows } })
+    for (const changed of counted.orders) tools.emit({ type: 'customer_material.changed', subject: changed.id, companyId: changed.companyId, payload: { orderId: changed.id, number: changed.number, change: 'RECOUNTED', rows: changed.rows, partyId: changed.partyId /* B-SA-001: the order row's own */ } })
     return { receiptId, number, lotIds }
   })
   return customerReceiptView(caller, result.receiptId)
@@ -211,7 +211,7 @@ export async function returnToCustomer(caller: CommandCaller, body: CustomerRetu
     const moves = await postMoves(tools, drafts, { key: `inventory.returnToCustomer:${idempotencyKey ?? newId()}`, issuePath: (index) => `body/lines/${index}` })
     tools.audit({ action: 'inventory.returnToCustomer', recordType: 'Party', recordId: party.id, companyId: site.companyId, siteId: site.id, after: { orderId: order?.id ?? null, moves: moves.map((move) => ({ id: move.id, lotId: move.lotId, quantity: move.quantity, uom: move.uom })) }, ...(blank(body.note) ? { reason: blank(body.note)! } : {}) })
     const counted = await recountInCommand(tools, party.id, lots.map((lot) => ({ itemId: lot.itemId, itemColourId: lot.itemColourId })))
-    for (const changed of counted.orders) tools.emit({ type: 'customer_material.changed', subject: changed.id, companyId: changed.companyId, payload: { orderId: changed.id, number: changed.number, change: 'RECOUNTED', rows: changed.rows } })
+    for (const changed of counted.orders) tools.emit({ type: 'customer_material.changed', subject: changed.id, companyId: changed.companyId, payload: { orderId: changed.id, number: changed.number, change: 'RECOUNTED', rows: changed.rows, partyId: changed.partyId /* B-SA-001: the order row's own */ } })
     return { moveIds: moves.map((move) => move.id) }
   })
   return { moveIds: result.moveIds }

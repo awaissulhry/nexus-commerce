@@ -40,7 +40,8 @@ let h: Harness
 let app: FastifyInstance
 let sales: Browser
 
-const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d' } as const
+// F-SA-201: tenant e's SEED-SO-0002 ships in full and is delivered, then closed.
+const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d', e: 'orders-e' } as const
 type TenantKey = keyof typeof NS
 const idIn = (tenant: TenantKey, key: string) => seedUuid(NS[tenant], key)
 const T = Object.fromEntries((Object.keys(NS) as TenantKey[]).map((key) => [key, idIn(key, 'tenant')])) as Record<TenantKey, string>
@@ -83,6 +84,8 @@ const SESSIONS: Record<string, () => SessionContext> = {
   'a.noOrders': office('a', ['quotes.view', 'money.price']),
   'a.companyB': office('a', MANAGE, [companyB]),
   'a.otherParty': office('a', MANAGE, 'all', [P3]),
+  // F-SA-201: a person of tenant e limited to another customer (Brand Beta's people), with every right to close.
+  'e.otherParty': office('e', [...MANAGE, 'orders.close'], 'all', [idIn('e', 'party:P3')]),
   'a.floor': () => ({ audience: 'floor', tenantId: T.a, actorId: newId(), siteId: siteA, deviceId: newId(), grants: [{ permissions: ['floor.work', ...MANAGE], companies: [companyA], sites: [siteA], parties: 'all' }] }),
   'a.partner': () => ({ audience: 'partner', tenantId: T.a, actorId: newId(), partyId: P1, grants: [{ permissions: MANAGE, companies: 'all', sites: 'all', parties: [P1] }] }),
 }
@@ -200,7 +203,7 @@ beforeAll(async () => {
   sales = new Browser(h.app)
   expect((await sales.signIn(NS.a, salesUser.email, salesUser.password)).status).toBe(200)
   await enrolTotp(h, sales)
-  for (const tenant of ['b', 'c', 'd'] as const) await cutDownToShipped(tenant)
+  for (const tenant of ['b', 'c', 'd', 'e'] as const) await cutDownToShipped(tenant) // F-SA-201: and e
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
@@ -530,6 +533,46 @@ describe('closing (PLAN §4.7: the close command asks whether every line is ship
   })
 })
 
+// ---- F-SA-201 (P22): a delivered order is closed as a shipped one is ------------------------------------------------------
+describe('closing a delivered order (F-SA-201: DELIVERED → CLOSED; the record offers Close order)', () => {
+  it('delivered: Close order is offered; another customer’s person gets the words of an unknown order; not settled needs a reason and orders.close; settled closes', async () => {
+    const so = seeded.e.quality.production.salesOrderId
+    await shipped('e')
+    expect(await statusOf(so)).toBe('SHIPPED')
+    // The carrier delivered SH-0001 (the shipment's own move), then the follow handler moves the order.
+    await admin(`UPDATE "Shipment" SET status = 'DELIVERED', "deliveredAt" = now() - interval '1 hour' WHERE id = $1`, [seeded.e.shipmentId])
+    await shipped('e', 'DELIVERED')
+    expect(await statusOf(so)).toBe('DELIVERED')
+    const { order: record } = await ok('e.sales', 'GET', orderUrl(so))
+    expect(record).toMatchObject({ status: 'DELIVERED', actions: [{ action: 'changePromise' }, { action: 'close', allowed: true, needsReason: true }] })
+    // The brand wall: a person limited to another customer gets exactly the answer of an unknown order, and nothing moves.
+    const unknown = await refused('e.otherParty', 'POST', `${orderUrl(newId())}/close`, { version: record.version, reason: 'Close it.' }, 404)
+    const walled = await refused('e.otherParty', 'POST', `${orderUrl(so)}/close`, { version: record.version, reason: 'Close it.' }, 404)
+    expect({ code: walled.code, message: walled.message }).toEqual({ code: unknown.code, message: unknown.message })
+    expect(walled.message).toBe('Sales order not found.')
+    // Not settled: a reason (409 with what is missing), and the right to close unsettled orders (403 without it).
+    const noReason = await refused('e.finance', 'POST', `${orderUrl(so)}/close`, { version: record.version }, 409)
+    expect(noReason.message).toMatch(/or a reason to close it anyway/)
+    await refused('e.sales', 'POST', `${orderUrl(so)}/close`, { version: record.version, reason: 'Small balance written off.' }, 403)
+    expect(await statusOf(so)).toBe('DELIVERED')
+    expect((await auditsOf(so)).filter((row) => row.action === 'orders.close')).toEqual([])
+    // Settled: orders.manage closes it without a reason; the delivered time stays.
+    settledForTest([so])
+    try {
+      const { order: settledRecord } = await ok('e.sales', 'GET', orderUrl(so))
+      expect(settledRecord.actions.find((action: Json) => action.action === 'close')).toEqual({ action: 'close', allowed: true, needsReason: false, held: null })
+      const closed = (await ok('e.sales', 'POST', `${orderUrl(so)}/close`, { version: settledRecord.version })).order
+      expect(closed).toMatchObject({ status: 'CLOSED', actions: [] })
+    } finally {
+      useOrderSettlement(undefined)
+    }
+    expect((await auditsOf(so)).find((row) => row.action === 'orders.close')).toMatchObject({ reason: null, before: { status: 'DELIVERED' }, after: { status: 'CLOSED', settled: true, missing: [], settlementSource: 'test' } })
+    expect((await one<{ deliveredAt: Date | null }>('SELECT "deliveredAt" FROM "SalesOrder" WHERE id = $1', [so])).deliveredAt).not.toBeNull()
+    expect((await statusEvents(so)).at(-1)!.payload).toMatchObject({ from: 'DELIVERED', to: 'CLOSED', by: 'person' })
+  })
+})
+// ---- end F-SA-201
+
 describe('cancel (a reason, only before any work order is released)', () => {
   it('cancels a CONFIRMED order with its OPEN deposit request; a cancelled order never changes', async () => {
     const { order: before } = await ok('a.sales', 'GET', orderUrl(waitingOrderId))
@@ -665,3 +708,22 @@ describe('what the order screens read (SCR-039): the deposit as paid and sent, t
     expect(changed.people.map((person: Json) => person.id)).toEqual([actorId])
   })
 })
+
+// ---- B-SA-001: every order event names its order's own customer (the live wall for people limited to some customers) ----
+describe('live: every order event names its order’s customer (B-SA-001)', () => {
+  it('each sales_order.* row the commands above wrote carries partyId = the order row’s own (never a caller’s value)', async () => {
+    const rows = await admin<{ type: string; party: string | null; own: string }>(
+      `SELECT e.type, e.payload->>'partyId' AS party, o."partyId"::text AS own
+         FROM "OutboxEvent" e JOIN "SalesOrder" o ON o.id = (e.payload->>'orderId')::uuid
+        WHERE e.type LIKE 'sales_order.%' AND e."tenantId" = ANY($1::uuid[])
+        ORDER BY e.type, e.id`,
+      [Object.values(T)],
+    )
+    // The emitters this file runs: the acceptance, the moves (person and system), the promise, the close.
+    expect([...new Set(rows.map((row) => row.type))]).toEqual(expect.arrayContaining(['sales_order.created', 'sales_order.status_changed', 'sales_order.promise_changed']))
+    expect(rows.filter((row) => row.party !== row.own)).toEqual([])
+    // The order of tenant e (F-SA-201) moved by the system and by a person: both name P1 of tenant e.
+    expect(new Set((await statusEvents(seeded.e.quality.production.salesOrderId)).map((row) => row.payload.partyId))).toEqual(new Set([idIn('e', 'party:P1')]))
+  })
+})
+// ---- end B-SA-001

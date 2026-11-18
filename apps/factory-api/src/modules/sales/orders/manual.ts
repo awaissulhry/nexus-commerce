@@ -490,7 +490,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
       ...(optionsWritten.length > 0 ? { options: entryOptionsAudit(optionsWritten) } : {}),
     },
   })
-  if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, lineIds: optionLineIds, change: 'CHOSEN' } })
+  if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, lineIds: optionLineIds, change: 'CHOSEN', partyId: plan.party.row.id /* B-SA-001: the party row the order was written with (as sales_order.created) */ } })
   tools.emit({ type: 'sales_order.created', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, quoteId: null, versionId: null, partyId: plan.party.row.id, depositRequestIds: deposit ? [deposit.id] : [] } })
   // B-W2b-16: the typed order's deposit gets its own event (the quote's deposit_request.created needs a quote version).
   if (deposit) {

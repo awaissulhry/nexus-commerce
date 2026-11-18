@@ -326,7 +326,7 @@ export async function insertDraft(
     companyId: draft.companyId,
     after: { docType: draft.docType, status: 'DRAFT', buyerPartyId: draft.buyerPartyId, basis: draft.priceBasis, depositRequestId: draft.depositRequestId, creditOfId: draft.creditOfId ?? null, salesOrderId: draft.salesOrderId, lines: lines.length, deductions: lines.filter((line) => line.core.kind === 'DEPOSIT_DEDUCTION').length, ...auditedTotals(totals) },
   })
-  tools.emit({ type: 'invoice.draft_saved', subject: draft.id, companyId: draft.companyId, payload: { invoiceId: draft.id, docType: draft.docType, created: true } })
+  tools.emit({ type: 'invoice.draft_saved', subject: draft.id, companyId: draft.companyId, payload: { invoiceId: draft.id, docType: draft.docType, created: true, partyId: draft.buyerPartyId /* B-SA-004 */ } })
   return totals
 }
 
@@ -505,7 +505,7 @@ export async function replaceLines(caller: CommandCaller, invoiceId: string, bod
     const deductions = (await storedPrepared(tools.tx, current.id)).filter((line) => line.core.kind === 'DEPOSIT_DEDUCTION')
     const totals = await refreshDraft(tools, current, [...lines, ...deductions], current.priceBasis, storedSourceOf(current.paymentTerms))
     tools.audit({ recordType: 'Invoice', recordId: current.id, companyId: current.companyId, before: auditedTotals(current), after: { lines: lines.length, ...auditedTotals(totals) } })
-    tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
+    tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false, partyId: current.buyerPartyId /* B-SA-004 */ } })
     return { invoice: await invoiceDetail(tools.tx, (await readInvoice(tools.tx, current.id))!) }
   })
 }
@@ -540,7 +540,7 @@ export async function updateDraft(caller: CommandCaller, invoiceId: string, body
       before: { basis: current.priceBasis, causale: current.causale, internalNote: current.internalNote, ...auditedTotals(current) },
       after: { basis: body.priceBasis ?? current.priceBasis, causale: body.causale === undefined ? current.causale : blankToNull(body.causale), internalNote: body.internalNote === undefined ? current.internalNote : blankToNull(body.internalNote), ...auditedTotals(totals) },
     })
-    tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
+    tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false, partyId: current.buyerPartyId /* B-SA-004 */ } })
     return { invoice: await invoiceDetail(tools.tx, (await readInvoice(tools.tx, current.id))!) }
   })
 }
@@ -564,7 +564,7 @@ export async function deleteDraft(caller: CommandCaller, invoiceId: string, quer
     await tools.tx.invoiceLine.deleteMany({ where: { invoiceId: current.id } })
     await tools.tx.invoice.delete({ where: { id: current.id }, select: { id: true } })
     tools.audit({ recordType: 'Invoice', recordId: current.id, companyId: current.companyId, before: { docType: current.docType, status: 'DRAFT', buyerPartyId: current.buyerPartyId, ...auditedTotals(current) } })
-    tools.emit({ type: 'invoice.draft_deleted', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType } })
+    tools.emit({ type: 'invoice.draft_deleted', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, partyId: current.buyerPartyId /* B-SA-004 */ } })
     return { deleted: true as const, id: current.id }
   })
 }

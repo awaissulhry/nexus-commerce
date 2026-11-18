@@ -608,7 +608,9 @@ describe('B-W2b-19: a carrier-returned shipment back into finished goods (the B-
     const finished = await ok('production', 'GET', `/production/work-orders/${wo1()}/finished`)
     expect(finished.finished.cells.find((entry: Json) => entry.cellId === blk52())).toMatchObject({ canReport: 0 })
     const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.carrier_return_received' AND subject = $1`, [S.sc])
-    expect(events.map((row) => row.payload)).toEqual([{ shipmentId: S.sc, number: expect.stringMatching(/^SH-/), garments: 1, locationId: scheduleA.finishedLocationId }])
+    // B-SA-004: the event names the shipment's own customer (for the office's live wall).
+    const partyId = (await admin<{ partyId: string }>(`SELECT "partyId" FROM "Shipment" WHERE id = $1`, [S.sc]))[0]!.partyId
+    expect(events.map((row) => row.payload)).toEqual([{ shipmentId: S.sc, number: expect.stringMatching(/^SH-/), garments: 1, locationId: scheduleA.finishedLocationId, partyId }])
   })
 
   it('B-W2b-F1: received back, the shipment no longer holds its garment: the same cell ships it again, from finished goods', async () => {

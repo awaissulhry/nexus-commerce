@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 
 /**
  * Keeping promises' events (B-W2b-317; PLN-175, PLN-177, PLN-200; the code is factory-domain planning/{promise-keep,backlog}).
@@ -18,6 +18,8 @@ import { defineEvent } from '../events/define'
  * words a person typed, no person.
  */
 const size = z.string().min(1).max(20).nullable()
+// B-SA-004 (Sales page plan P17'): the order's customer (`partyId`, the order line's own, read on the server), so an office person
+// limited to some customers is sent their customers' re-promises live; never in the live fields; optional for an older event.
 
 export const events = [
   defineEvent({
@@ -31,6 +33,7 @@ export const events = [
       proposalId: z.uuid(),
       siteId: z.uuid(),
       sizes: z.array(z.strictObject({ size, from: z.iso.date().nullable(), to: z.iso.date() })).min(1).max(201),
+      partyId: livePartyId(), // B-SA-004
     }),
     live: { permission: 'orders.view', fields: ['orderId', 'orderLineId', 'proposalId'] },
   }),
@@ -45,6 +48,7 @@ export const events = [
       decision: z.enum(['ACCEPTED', 'DECLINED', 'WITHDRAWN']),
       /** The customer was sent the message (on the order's thread). */
       told: z.boolean(),
+      partyId: livePartyId(), // B-SA-004
     }),
     live: { permission: 'orders.view', fields: ['orderId', 'orderLineId', 'proposalId', 'decision'] },
   }),

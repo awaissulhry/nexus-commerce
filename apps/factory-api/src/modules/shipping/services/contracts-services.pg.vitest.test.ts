@@ -360,7 +360,9 @@ describe('the booking, its services and values (LOG-041, LOG-042)', () => {
     expect(high.parcels[0]).toMatchObject({ declaredValue: 60000, insuredValue: 60000, rule: { insure: true } })
     expect((await refused('desk', 'PUT', parcelUrl, { declaredValue: 60000, insuredValue: 70000 }, 400)).issues[0].path).toBe('body/insuredValue')
     expect(await admin(`SELECT after->'insuredValue' AS insured FROM "AuditLog" WHERE "recordType" = 'Parcel' AND "recordId" = $1 ORDER BY "at" DESC, id DESC LIMIT 1`, [seedA.draftParcelId])).toEqual([{ insured: { $money: 'price', value: 60000 } }])
-    expect((await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.parcel_values_changed' ORDER BY "occurredAt" DESC LIMIT 1`))[0]!.payload).toEqual({ shipmentId: sh2(), number: 'SEED-SH-0002', parcelIds: [seedA.draftParcelId], byRule: true })
+    // B-SA-004: the event names the shipment's own customer (for the office's live wall).
+    const partyId = (await admin<{ partyId: string }>(`SELECT "partyId" FROM "Shipment" WHERE id = $1`, [sh2()]))[0]!.partyId
+    expect((await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.parcel_values_changed' ORDER BY "occurredAt" DESC LIMIT 1`))[0]!.payload).toEqual({ shipmentId: sh2(), number: 'SEED-SH-0002', parcelIds: [seedA.draftParcelId], byRule: true, partyId })
 
     const rule = (await ok('desk', 'GET', `/shipping/sites/${A.siteA1}/insurance`)).rule
     expect(rule).toMatchObject({ insureAbove: 50000, currency: 'EUR', hasSettings: true })

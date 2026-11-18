@@ -544,7 +544,7 @@ export async function saveOrderOptions(caller: CommandCaller, orderId: string, l
       before: { lineId: line.id, options: audited(current) },
       after: { lineId: line.id, options: audited(rows), change: markMoney('price', surcharges.change), surchargeGiven: body.keepPrice === true && surcharges.change !== '0', warnings: check.check.warnings.map((finding) => finding.message.en) },
     })
-    tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: [line.id], change: 'CHOSEN' } })
+    tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: [line.id], change: 'CHOSEN', partyId: order.partyId /* B-SA-001: the order row's own */ } })
     const fresh = (await tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { version: true, status: true } }))
     return { line: await orderLineView(tx, context, { ...order, version: fresh.version, status: fresh.status }, await orderLineOf(tx, order.id, line.id)) }
   })

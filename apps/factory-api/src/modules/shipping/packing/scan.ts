@@ -117,7 +117,7 @@ export async function scanIntoCarton(caller: CommandCaller, shipmentId: string, 
         siteId: current.siteId,
         after: { code: body.code.trim(), kind: piece.kind, cellId: source.workOrderSizeId, parcelId: cartonId, cartonSeq: seq, shipmentLineId: holder.id, serialId: piece.kind === 'SERIAL' ? piece.serialId : null, newCarton: carton === null, renumbered: renumberedIds },
       })
-      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: after.status, change: piece.kind === 'SERIAL' ? 'serials' : 'lines' } })
+      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: after.status, change: piece.kind === 'SERIAL' ? 'serials' : 'lines', partyId: current.partyId /* B-SA-004 */ } })
       return {
         scan: { kind: piece.kind, cellId: source.workOrderSizeId, parcelId: cartonId, cartonSeq: seq, shipmentLineId: holder.id, serialId: piece.kind === 'SERIAL' ? piece.serialId : null, newCarton: carton === null },
         bench: await benchView(tools.tx, after),

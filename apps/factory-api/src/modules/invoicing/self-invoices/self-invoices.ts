@@ -296,7 +296,7 @@ export async function cancelSelfInvoice(caller: CommandCaller, selfInvoiceId: st
         await tools.tx.invoiceLine.deleteMany({ where: { invoiceId: draft.id } })
         await tools.tx.invoice.delete({ where: { id: draft.id }, select: { id: true } })
         tools.audit({ action: 'invoices.deleteDraft', recordType: 'Invoice', recordId: draft.id, companyId: current.companyId, before: { docType: draft.docType, status: 'DRAFT', buyerPartyId: current.partyId }, reason: 'its self-invoice was cancelled' })
-        tools.emit({ type: 'invoice.draft_deleted', subject: draft.id, companyId: current.companyId, payload: { invoiceId: draft.id, docType: draft.docType } })
+        tools.emit({ type: 'invoice.draft_deleted', subject: draft.id, companyId: current.companyId, payload: { invoiceId: draft.id, docType: draft.docType, partyId: current.partyId /* B-SA-004: the self-invoice's party, the draft's buyer (as its audit row) */ } })
       }
       tools.audit({ action: 'invoices.cancelSelfInvoice', recordType: 'SelfInvoice', recordId: selfInvoiceId, companyId: current.companyId, before: { status: 'PENDING', invoiceId: current.invoiceId }, after: { status: 'CANCELLED', reason: body.reason.trim() } })
       tools.emit({ type: 'self_invoice.changed', subject: selfInvoiceId, companyId: current.companyId, payload: { selfInvoiceId, companyId: current.companyId, supplierInvoiceId: current.supplierInvoiceId, kind: current.kind, action: 'CANCELLED', invoiceId: null } })

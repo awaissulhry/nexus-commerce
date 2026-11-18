@@ -214,7 +214,7 @@ export async function sendNotice(request: NoticeRequest): Promise<NoticeOutcome>
           mails.push({ outboundId, email: recipient.email, text: mail.text })
         }
         tools.audit({ action: 'shipping.customerNotice', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { mails: mails.length, skipped: [...suppressed], automatic: request.automatic } })
-        tools.emit(eventFor(sentEvent, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, mails: mails.length, automatic: request.automatic } }))
+        tools.emit(eventFor(sentEvent, { subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, mails: mails.length, automatic: request.automatic, partyId: current.partyId /* B-SA-004 */ } }))
         return { mails, skipped: [...suppressed] }
       },
       { ...COMMAND_SETTINGS, clock },

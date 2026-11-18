@@ -241,7 +241,7 @@ export async function makeRemakeOrder(caller: CommandCaller, returnId: string, b
     }
     await touchReturn(tools, rma)
     tools.audit({ recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, after: { remakeOrderId: order.orderId, remakeOrderNumber: order.number, lineIds: planned.map((entry) => entry.line.id), waits: status === 'PENDING_APPROVAL' } })
-    tools.emit({ type: 'remake_order.made', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, orderId: order.orderId, orderNumber: order.number, lineIds: planned.map((entry) => entry.line.id), waits: status === 'PENDING_APPROVAL' } })
+    tools.emit({ type: 'remake_order.made', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, orderId: order.orderId, orderNumber: order.number, lineIds: planned.map((entry) => entry.line.id), waits: status === 'PENDING_APPROVAL', partyId: rma.partyId /* B-SA-004: the return's customer (the RMA row's own) */ } })
     if (planned.some((entry) => entry.reviewStatus !== 'CONFIRMED') && status !== 'PENDING_APPROVAL') throw new ConflictError('The remake order did not wait for the factory review of its measures.')
     return { order: { id: order.orderId, number: order.number, status } }
   })

@@ -5,6 +5,7 @@ import { sendEmail } from '../../../platform/email-out/outbound'
 import { normaliseVisibility } from '../../../platform/files/rules'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { readInvoice, type Reader } from '../store'
+import { invoiceLiveParty } from '../store' // B-SA-004
 import { readSend } from './store'
 // B-W2b-401 (FIN-096): no courtesy copy reaches a customer for a send simulated in test mode.
 import { isTestRef } from '@nexus/factory-domain/invoicing/test-mode/test-mode'
@@ -114,7 +115,7 @@ export async function sendCourtesyCopy(caller: CommandCaller, invoiceId: string,
           locale: language,
         })
         tools.audit({ action: COPY_ACTION, recordType: 'Invoice', recordId: invoiceId, companyId: invoice.companyId, after: { submissionId, outboundId: sent.outbound.id, recipients: sent.outbound.to.length } })
-        tools.emit({ type: 'invoice.courtesy_copy_queued', subject: invoiceId, companyId: invoice.companyId, payload: { invoiceId, submissionId, outboundId: sent.outbound.id } })
+        tools.emit({ type: 'invoice.courtesy_copy_queued', subject: invoiceId, companyId: invoice.companyId, payload: { invoiceId, submissionId, outboundId: sent.outbound.id, partyId: invoice.buyerPartyId /* B-SA-004 */ } })
         return { outboundId: sent.outbound.id }
       })
       return 'queued'
@@ -125,7 +126,7 @@ export async function sendCourtesyCopy(caller: CommandCaller, invoiceId: string,
   }
   await command(caller, { name: COPY_MISSING_ACTION, idempotencyKey: `sdi-copy-missing.${submissionId}`, input: { invoiceId, submissionId }, ...(causationId ? { causationId } : {}) }, async (tools) => {
     tools.audit({ action: COPY_MISSING_ACTION, recordType: 'Invoice', recordId: invoiceId, companyId: invoice.companyId, after: { submissionId, reason: problem } })
-    tools.emit({ type: 'invoice.courtesy_copy_missing', subject: invoiceId, companyId: invoice.companyId, payload: { invoiceId, submissionId, reason: problem! } })
+    tools.emit({ type: 'invoice.courtesy_copy_missing', subject: invoiceId, companyId: invoice.companyId, payload: { invoiceId, submissionId, reason: problem!, partyId: await invoiceLiveParty(tools.tx, invoiceId) /* B-SA-004 */ } })
     return { missing: true }
   })
   return 'missing'

@@ -117,7 +117,7 @@ export async function getOwnTransport(caller: CommandCaller, shipmentId: string)
 }
 
 const changed = (tools: CommandTools, shipment: ShipmentHeader) =>
-  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'details' } })
+  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'details', partyId: shipment.partyId /* B-SA-004 */ } })
 
 export interface ArrangeBody extends ArrangementInput {
   readonly version?: number | undefined
@@ -230,13 +230,13 @@ export async function typeStatus(caller: CommandCaller, shipmentId: string, body
         select: { id: true },
       })
       tools.audit({ action: 'shipping.typeTransportStatus', recordType: 'TrackingEvent', recordId: id, companyId: current.companyId, siteId: current.siteId, after: { shipmentId: current.id, status: body.status, source: 'MANUAL', occurredAt: toUtcIso(occurredAt) } })
-      tools.emit({ type: 'shipment.tracking_recorded', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, events: 1, status: body.status, source: 'MANUAL' } })
+      tools.emit({ type: 'shipment.tracking_recorded', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, events: 1, status: body.status, source: 'MANUAL', partyId: current.partyId /* B-SA-004 */ } })
       const move = moveOfStatus(body.status)
       if (move !== null) {
         if (current.status !== 'SHIPPED') throw new InvalidStateError(`The shipment is ${current.status}; it moves to ${move} only once it left.`)
         await tools.tx.shipment.update({ where: { id: current.id }, data: { status: move, ...(move === 'DELIVERED' ? { deliveredAt: occurredAt } : { returnedAt: occurredAt }) }, select: { id: true } })
         tools.audit({ action: 'shipping.trackingMove', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: move, at: toUtcIso(occurredAt), source: 'MANUAL' } })
-        tools.emit({ type: 'shipment.status_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, from: current.status, to: move } })
+        tools.emit({ type: 'shipment.status_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, from: current.status, to: move, partyId: current.partyId /* B-SA-004 */ } })
       }
       return { eventId: id, moved: move }
     },

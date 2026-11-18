@@ -117,7 +117,7 @@ export type EvidenceView = Awaited<ReturnType<typeof evidenceView>>
 
 function changed(tools: CommandTools, shipment: ShipmentHeader, from: TransportEvidenceStatus, to: TransportEvidenceStatus, papers: number) {
   if (from === to) return
-  tools.emit({ type: 'shipment.evidence_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from, to, papers } })
+  tools.emit({ type: 'shipment.evidence_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from, to, papers, partyId: shipment.partyId /* B-SA-004 */ } })
 }
 
 /**

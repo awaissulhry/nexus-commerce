@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 import { DDT_REASONS } from '../documents/model'
 import { DDT_SOURCE_TYPES } from './ddt/sources'
 import { TRACKING_SOURCES, TRACKING_STATUSES } from './labels/tracking'
@@ -11,7 +11,9 @@ import { TRACKING_VIAS } from './tracking-link/rules'
 
 /**
  * The shipping module's events (plan A1 §3.4; LOG-001, LOG-039, LOG-117). apps/factory-api's modules/shipping emits
- * them in the commands that make the change. No money, no address, no party name in a payload.
+ * them in the commands that make the change. No money, no address, no party name in a payload. B-SA-004 (Sales page plan P17'):
+ * every live shipment.* event names the shipment's customer by id (`partyId`, Shipment.partyId read on the server) for the
+ * office's live wall only; it is never a live field, so it never reaches the browser.
  *
  *   shipment.created          a DRAFT shipment was planned for a sales order (office screens)
  *   shipment.status_changed   PACKED, unpacked (DRAFT), SHIPPED (the goods left, B-W1-47) or CANCELLED (office screens)
@@ -47,21 +49,21 @@ export const events = [
     type: 'shipment.created',
     context: 'shipping',
     description: "A DRAFT shipment was planned for a sales order's released garments.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), salesOrderId: z.uuid(), siteId: z.uuid(), lines: z.number().int().min(0), garments: z.number().int().min(0) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), salesOrderId: z.uuid(), siteId: z.uuid(), lines: z.number().int().min(0), garments: z.number().int().min(0), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'salesOrderId'] },
   }),
   defineEvent({
     type: 'shipment.status_changed',
     context: 'shipping',
     description: 'A shipment moved: packed, unpacked, shipped or cancelled.',
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), from: status, to: status }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), from: status, to: status, partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'from', 'to'] },
   }),
   defineEvent({
     type: 'shipment.packing_changed',
     context: 'shipping',
     description: "A shipment's lines, parcels, serials, details or status changed (the packing screens refresh it).",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, change: z.enum(PACKING_CHANGES) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, change: z.enum(PACKING_CHANGES), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.pack', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'status', 'change'] },
   }),
   defineEvent({
@@ -89,21 +91,21 @@ export const events = [
     type: 'shipment.labels_bought',
     context: 'shipping',
     description: "Carrier labels were bought for parcels of a shipment through the company's Sendcloud account.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), bought: z.number().int().min(0), failed: z.number().int().min(0) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), bought: z.number().int().min(0), failed: z.number().int().min(0), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.pack', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'bought', 'failed'] },
   }),
   defineEvent({
     type: 'shipment.label_voided',
     context: 'shipping',
     description: "A parcel's carrier label was voided before the goods left (cancelled at the carrier, or queued there).",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), parcelId: z.uuid(), seq: z.number().int().min(1), queued: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), parcelId: z.uuid(), seq: z.number().int().min(1), queued: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.pack', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'parcelId', 'seq'] },
   }),
   defineEvent({
     type: 'shipment.tracking_recorded',
     context: 'shipping',
     description: "The carrier's tracking events of a shipment were recorded (a Sendcloud webhook or a poll).",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), events: z.number().int().min(1), status: z.enum(TRACKING_STATUSES), source: z.enum(TRACKING_SOURCES) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), events: z.number().int().min(1), status: z.enum(TRACKING_STATUSES), source: z.enum(TRACKING_SOURCES), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'status'] },
   }),
   defineEvent({
@@ -116,14 +118,14 @@ export const events = [
     type: 'shipment.documents_attached',
     context: 'shipping',
     description: "Copies of a shipment's travelling documents (DDT, declaration of conformity, user information) were put on the shipment, shared with its party.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), attached: z.number().int().min(0), missing: z.number().int().min(0) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), attached: z.number().int().min(0), missing: z.number().int().min(0), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'attached', 'missing'] },
   }),
   defineEvent({
     type: 'shipment.documents_link_sent',
     context: 'shipping',
     description: "A link to a shipment's documents was mailed to its party's contacts.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), reason: z.enum(DOCUMENT_LINK_REASONS) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), reason: z.enum(DOCUMENT_LINK_REASONS), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'links', 'reason'] },
   }),
   // B-W2a-17 (LOG-056): DDTs for other reasons (shipping/ddt/sources).
@@ -147,7 +149,7 @@ export const events = [
     type: 'shipment.freight_changed',
     context: 'shipping',
     description: "A shipment's freight charge was set by the site's rule when the goods left, typed by the office, or put back to the rule.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), byHand: z.boolean(), basis: z.enum(FREIGHT_BASES).nullable() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), byHand: z.boolean(), basis: z.enum(FREIGHT_BASES).nullable(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'byHand'] },
   }),
   defineEvent({
@@ -161,7 +163,7 @@ export const events = [
     type: 'shipment.evidence_changed',
     context: 'shipping',
     description: "A shipment's intra-EU transport evidence moved: awaited when the goods left, a paper filed, complete, reopened, or needed or not after all.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), from: z.enum(TRANSPORT_EVIDENCE_STATUSES), to: z.enum(TRANSPORT_EVIDENCE_STATUSES), papers: z.number().int().min(0) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), from: z.enum(TRANSPORT_EVIDENCE_STATUSES), to: z.enum(TRANSPORT_EVIDENCE_STATUSES), papers: z.number().int().min(0), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'from', 'to', 'papers'] },
   }),
   // B-W2b-19 (W2a follow-ups): the carrier's freight cost (a cost: no figure in the payload) and a carrier return.
@@ -169,14 +171,14 @@ export const events = [
     type: 'shipment.freight_cost_changed',
     context: 'shipping',
     description: "What the carrier charged for a shipment (its invoice) was recorded, changed or cleared by the office.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), recorded: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), recorded: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'recorded'] },
   }),
   defineEvent({
     type: 'shipment.carrier_return_received',
     context: 'shipping',
     description: 'The garments of a shipment the carrier brought back were put back into finished goods.',
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), garments: z.number().int().min(1), locationId: z.uuid() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), garments: z.number().int().min(1), locationId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'garments'] },
   }),
   // B-W2b-170 (LOG-062): the branded tracking page's link(s) of a shipment were made (mailed, copied, found by the search).
@@ -184,7 +186,7 @@ export const events = [
     type: 'shipment.tracking_link_made',
     context: 'shipping',
     description: "Links to a shipment's branded tracking page were made: mailed when the goods left, by the office, copied in the portal, found by the public search, or asked for again.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), via: z.enum(TRACKING_VIAS), mailed: z.number().int().min(0) }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), via: z.enum(TRACKING_VIAS), mailed: z.number().int().min(0), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'links', 'via'] },
   }),
 ] as const

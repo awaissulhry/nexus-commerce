@@ -135,8 +135,8 @@ async function shipGoods(tools: CommandTools, shipment: ShipmentHeader, periodLo
   }
   // B-W2a-48: closed-short lines refused, the garments in finished goods out of stock, the freight, the EU evidence.
   await whenShipped(tools, shipment, periodLockOverride)
-  tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'PACKED', to: 'SHIPPED' } })
-  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: 'SHIPPED', change: 'status' } })
+  tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'PACKED', to: 'SHIPPED', partyId: shipment.partyId /* B-SA-004 */ } })
+  tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: 'SHIPPED', change: 'status', partyId: shipment.partyId /* B-SA-004 */ } })
   return serials.map((serial) => serial.serial)
 }
 

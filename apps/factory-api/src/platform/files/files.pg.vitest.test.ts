@@ -237,7 +237,8 @@ describe('upload → confirm → download (COL-045)', () => {
     const audits = await admin(`SELECT action FROM "AuditLog" WHERE "recordId" = $1 ORDER BY at, id`, [file.id])
     expect(audits.map((row) => row.action)).toEqual(['files.requestUpload', 'files.completeUpload'])
     const events = await admin(`SELECT type, payload FROM "OutboxEvent" WHERE subject = $1`, [file.id])
-    expect(events).toEqual([{ type: 'file.available', payload: { fileId: file.id, recordType: 'Quote', recordId: quote, kind: 'DOCUMENT' } }])
+    // B-SA-002: the event names the record's customer (the made-up quote's party one) for the office's live wall.
+    expect(events).toEqual([{ type: 'file.available', payload: { fileId: file.id, recordType: 'Quote', recordId: quote, kind: 'DOCUMENT', partyId: partyOne } }])
     const key = await keyOf(file.id)
     expect((await callsOf(fakeStore)).filter((row) => (row.requestSummary as { key?: string } | null)?.key === key).map((row) => [row.operation, row.status, row.mode])).toEqual([
       ['files.presign_upload', 'SUCCEEDED', 'FAKE'],

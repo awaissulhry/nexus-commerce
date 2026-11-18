@@ -9,6 +9,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { GatewayCallFailed, GatewayRefusal } from '../../gateway/gateway'
 import type { FileView } from '../contract'
 import { audited, checkSite, contextOf, mayWrite, presignedView, readOffice, SELECT_FOR, storeAccountOf, storeCall, tenantOf, viewOf, withRecordParty, type OfficeRow } from '../files'
+import { fileLivePartyId } from '../record-scope' // B-SA-002
 import { assertGenericPath, type UploadPath } from '../owned'
 import { cleanFileName, fileMachine, normaliseContentType, normaliseVisibility, sharingProblems, storageKeyFor, type FileAudience, type FileKind, type QuarantineReason, type Sharing } from '../rules'
 import { heldForScan } from '../scan/rules'
@@ -352,7 +353,7 @@ export async function completeLargeUpload(runtime: FilesRuntime, caller: Command
   const { result } = await command(
     caller,
     { name: 'files.completeLargeUpload', idempotencyKey, input: { sessionId }, record: { type: 'StoredFile', id: file.id, expectedVersion: file.version } },
-    async ({ tx, audit, emit, now }) => {
+    async ({ tx, audit, emit, now, context /* B-SA-002 */ }) => {
       const ended = await tx.fileUploadSession.update({ where: { id: session.id }, data: { status: 'COMPLETED', endedAt: now, version: { increment: 1 } }, select: SESSION_SELECT })
       const current = await tx.storedFile.findUniqueOrThrow({ where: { id: file.id }, select: SELECT_FOR.office })
       const to = reason === null && !scanner ? 'AVAILABLE' : 'QUARANTINED'
@@ -365,7 +366,7 @@ export async function completeLargeUpload(runtime: FilesRuntime, caller: Command
       audit({ recordType: 'StoredFile', recordId: file.id, companyId: row.companyId, before: { status: current.status }, after: { status: row.status, quarantineReason: row.quarantineReason, inParts: count, ...(scanner ? { scanStatus: row.scanStatus } : {}) } })
       audit({ recordType: 'FileUploadSession', recordId: session.id, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'COMPLETED' } })
       if (row.status === 'AVAILABLE') {
-        emit({ type: 'file.available', subject: file.id, companyId: row.companyId, payload: { fileId: file.id, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+        emit({ type: 'file.available', subject: file.id, companyId: row.companyId, payload: { fileId: file.id, recordType: row.recordType, recordId: row.recordId, kind: row.kind, partyId: await fileLivePartyId(tx, tenantOf(context), row) /* B-SA-002 */ } })
         await supersedeEarlierVersions({ tx, audit, now }, file.id)
       }
       return { file: viewOf(row), session: sessionViewOf(ended, row.sizeBytes) }

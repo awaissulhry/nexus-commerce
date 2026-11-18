@@ -88,12 +88,12 @@ export async function carryOptionsAfterYes(caller: CommandCaller, orderId: strin
   const { result } = await command(caller, { name: 'orders.carryOptions', idempotencyKey: `order-options-${orderId}`, input: { orderId }, ...(causationId ? { causationId } : {}) }, async (tools) => {
     const { tx } = tools
     await tx.$queryRaw`SELECT id FROM "SalesOrder" WHERE id = ${orderId}::uuid FOR UPDATE`
-    const order = await tx.salesOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, number: true, companyId: true, status: true } })
+    const order = await tx.salesOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, number: true, companyId: true, status: true, /* B-SA-001 */ partyId: true } })
     // Checked again under the lock: a race that changed the order meanwhile writes nothing, and its audit row says so.
     const plan = OPEN.has(order.status) ? await optionsToCarry(tx, order.id) : null
     const lineIds = plan && !plan.had ? await writeOrderOptions(tools, plan) : []
     tools.audit({ action: 'orders.carryOptions', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { lines: lineIds.length, ...(plan && !plan.had ? {} : { skipped: plan ? 'HAS_OPTIONS' : order.status }) } })
-    if (lineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds, change: 'COPIED' } })
+    if (lineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds, change: 'COPIED', partyId: order.partyId /* B-SA-001 */ } })
     return { lines: lineIds.length }
   })
   return result

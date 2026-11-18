@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 import { PAYMENT_METHODS } from './payments'
 
 /**
@@ -47,21 +47,21 @@ export const events = [
     type: 'payment.allocated',
     context: 'payments',
     description: 'Part of a payment was allocated to a deposit request or an issued invoice.',
-    payload: z.strictObject({ paymentId: z.uuid(), allocationId: z.uuid(), target, targetId: z.uuid() }),
+    payload: z.strictObject({ paymentId: z.uuid(), allocationId: z.uuid(), target, targetId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'payments.view', fields: ['paymentId', 'target', 'targetId'] },
   }),
   defineEvent({
     type: 'payment.allocation_reversed',
     context: 'payments',
     description: 'An allocation of a payment was taken back (a reversal row).',
-    payload: z.strictObject({ paymentId: z.uuid(), allocationId: z.uuid(), reversalOfId: z.uuid(), target, targetId: z.uuid() }),
+    payload: z.strictObject({ paymentId: z.uuid(), allocationId: z.uuid(), reversalOfId: z.uuid(), target, targetId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'payments.view', fields: ['paymentId', 'target', 'targetId'] },
   }),
   defineEvent({
     type: 'payment.voided',
     context: 'payments',
     description: 'A payment typed by mistake was voided (its allocations were all reversed).',
-    payload: z.strictObject({ paymentId: z.uuid() }),
+    payload: z.strictObject({ paymentId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live,
   }),
   defineEvent({

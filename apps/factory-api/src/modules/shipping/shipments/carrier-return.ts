@@ -166,7 +166,7 @@ export async function receiveCarrierReturn(caller: CommandCaller, shipmentId: st
         after: { locationId: place.id, garments, cells: cells.map((cell) => ({ cellId: cell.cellId, label: cell.label, garments: cell.garments })), moveIds: moves.map((move) => move.id), serialIds },
         ...(note ? { reason: note } : {}),
       })
-      tools.emit({ type: 'shipment.carrier_return_received', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, garments, locationId: place.id } })
+      tools.emit({ type: 'shipment.carrier_return_received', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, garments, locationId: place.id, partyId: current.partyId /* B-SA-004 */ } })
       return { carrierReturn: await carrierReturnView(tx, (await readShipment(tx, current.id))!), valued: moves.every((move) => move.valued) }
     },
   )

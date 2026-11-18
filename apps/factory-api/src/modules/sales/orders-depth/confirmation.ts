@@ -193,7 +193,7 @@ async function keepInCommand(tools: CommandTools, order: OrderRow, prepared: Pre
     select: { id: true },
   })
   tools.audit({ action: 'orders.confirmation', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { generatedDocumentId: id, version, language: prepared.language, fileId: file.id, fingerprint: prepared.fingerprint } })
-  tools.emit({ type: 'sales_order.confirmation_made', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, version, generatedDocumentId: id, fileId: file.id } })
+  tools.emit({ type: 'sales_order.confirmation_made', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, version, generatedDocumentId: id, fileId: file.id, partyId: order.partyId /* B-SA-001: the order row's own */ } })
   return { id, version, fileId: file.id, made: true }
 }
 
@@ -282,7 +282,7 @@ export async function sendConfirmation(files: FilesRuntime, caller: CommandCalle
     const before = await tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { confirmationSentAt: true, confirmationVersion: true } })
     await tx.salesOrder.update({ where: { id: order.id }, data: { confirmationSentAt: now, confirmationVersion: kept.version, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'orders.sendConfirmation', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { confirmationSentAt: before.confirmationSentAt ? toUtcIso(before.confirmationSentAt) : null, confirmationVersion: before.confirmationVersion }, after: { confirmationSentAt: toUtcIso(now), confirmationVersion: kept.version, outboundId: sent.outbound.id, to } })
-    tools.emit({ type: 'sales_order.confirmation_sent', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, version: kept.version, outboundId: sent.outbound.id } })
+    tools.emit({ type: 'sales_order.confirmation_sent', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, version: kept.version, outboundId: sent.outbound.id, partyId: order.partyId /* B-SA-001 */ } })
     return { version: kept.version, made: kept.made, outboundId: sent.outbound.id, threadId: sent.thread.id }
   })
   return { ...result, confirmation: await readState(caller, order) }

@@ -149,7 +149,7 @@ export async function applyFreightInCommand(tools: CommandTools, shipment: Shipm
   const byRule = await byRuleOf(tools.tx, shipment)
   await tools.tx.shipment.update({ where: { id: shipment.id }, data: { freightCharge: byRule.charge, freightBasis: chargeBasisOf(byRule.charge, false) }, select: { id: true } })
   tools.audit({ action: FREIGHT_BY_RULE, recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { freightCharge: markMoney('price', row?.freightCharge ?? null) }, after: { freightCharge: markMoney('price', byRule.charge), byHand: false, basis: byRule.basis } })
-  tools.emit({ type: 'shipment.freight_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, byHand: false, basis: byRule.basis } })
+  tools.emit({ type: 'shipment.freight_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, byHand: false, basis: byRule.basis, partyId: shipment.partyId /* B-SA-004 */ } })
   return byRule
 }
 
@@ -176,7 +176,7 @@ export async function setFreight(caller: CommandCaller, shipmentId: string, body
       before: { freightCharge: markMoney('price', before?.freightCharge ?? null) },
       after: { freightCharge: markMoney('price', charge), byHand: body.freightCharge !== null, basis: byRule?.basis ?? null },
     })
-    tools.emit({ type: 'shipment.freight_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, byHand: body.freightCharge !== null, basis: byRule?.basis ?? null } })
+    tools.emit({ type: 'shipment.freight_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, byHand: body.freightCharge !== null, basis: byRule?.basis ?? null, partyId: current.partyId /* B-SA-004 */ } })
     return { shipmentId: current.id, number: current.number, status: current.status, version: (await readShipment(tools.tx, current.id))!.version, freight: await freightView(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })
   return result
@@ -211,7 +211,7 @@ export async function setFreightCost(caller: CommandCaller, shipmentId: string, 
       before: { freightCost: markMoney('cost', before?.freightCost ?? null), currency: before?.freightCostCurrency ?? null },
       after: { freightCost: markMoney('cost', body.freightCost), currency },
     })
-    tools.emit({ type: 'shipment.freight_cost_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, recorded: body.freightCost !== null } })
+    tools.emit({ type: 'shipment.freight_cost_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, recorded: body.freightCost !== null, partyId: current.partyId /* B-SA-004 */ } })
     const after = (await readShipment(tools.tx, current.id))!
     return { shipmentId: after.id, number: after.number, status: after.status, version: after.version, freight: await freightView(tools.tx, after) }
   })

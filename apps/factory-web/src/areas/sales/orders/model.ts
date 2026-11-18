@@ -420,10 +420,17 @@ export interface NextStep {
   held: Phrase | null
 }
 
+// F-SA-201: a Delivered order closes as a Shipped one does (the machine: SHIPPED → CLOSED and DELIVERED → CLOSED; the
+// API's close and the database accept both). Before, nextStep had no DELIVERED case and closeHeld held it.
+const CLOSE_FROM: readonly OrderStatus[] = ['SHIPPED', 'DELIVERED']
+/** Shipped in full (Shipped or Delivered): the order's next step is closing it; its dates are no longer late. */
+export const isShippedInFull = (order: Pick<Order, 'status'>): boolean => CLOSE_FROM.includes(order.status)
+// end F-SA-201
+
 /**
  * The band's primary by state (design "Next step by state"): Confirmed → Make work orders (held while production waits
- * for the deposit); In production, Ready, Partly shipped → Change promise date; Shipped → Close order (held until
- * settled unless the person may close an unsettled order with a reason). Ready's "Create shipment" waits for the
+ * for the deposit); In production, Ready, Partly shipped → Change promise date; Shipped or Delivered → Close order (held
+ * until settled unless the person may close an unsettled order with a reason). Ready's "Create shipment" waits for the
  * Warehouse pages (no dead control): its promise is the step meanwhile.
  */
 export function nextStep(order: Order, can: OrderAbilities): NextStep {
@@ -434,14 +441,14 @@ export function nextStep(order: Order, can: OrderAbilities): NextStep {
     if (gate.state === 'MISSING') return { kind: 'makeWorkOrders', held: phrase('held.depositMissing') }
     return { kind: 'makeWorkOrders', held: null }
   }
-  if (order.status === 'SHIPPED') return { kind: 'close', held: closeHeld(order, can) }
+  if (isShippedInFull(order)) return { kind: 'close', held: closeHeld(order, can) } // F-SA-201
   if (isFinal(order)) return { kind: null, held: null }
   return { kind: 'changePromise', held: can.manage ? null : phrase('held.noManage') }
 }
 
 /** Why closing waits: no right, or not settled without the right to close it anyway. */
 export function closeHeld(order: Order, can: OrderAbilities): Phrase | null {
-  if (order.status !== 'SHIPPED') return phrase('held.closeState')
+  if (!isShippedInFull(order)) return phrase('held.closeState') // F-SA-201
   if (order.settlement.settled) return can.manage || can.close ? null : phrase('held.noClose')
   return can.close ? null : phrase('held.notSettled')
 }

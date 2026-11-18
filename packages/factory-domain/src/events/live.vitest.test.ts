@@ -326,3 +326,138 @@ describe('production events name their customer (B-PR-09, PW-04)', () => {
   })
 })
 // ── end B-PR-09 ──
+
+// ── B-SA-001 ──
+/**
+ * B-SA-001 (Sales page plan P17'; 13-backend B13a): every sales_order.* event, and the order's customer materials, name the
+ * order's customer (`partyId`, set by the emitter from the order row), so an office person limited to some customers gets the
+ * live messages of their customers' orders (it failed closed before: they got none). The rule is the B-PR-09 one: a person
+ * limited to Brand Beta never receives Brand Alpha's message; an event that names no customer (an older worker's) reaches only
+ * people of every customer; the party ids never reach the browser.
+ */
+describe('order events name their customer (B-SA-001)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  /** Every sales_order.* type the catalogue declares (a new one is held to the rule by itself), and the materials event. */
+  const ORDER_EVENTS = [...EVENT_CATALOGUE.types().filter((type) => type.startsWith('sales_order.')), 'customer_material.changed']
+  const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
+  const messageOf = (type: string, payload: Record<string, unknown>) => {
+    const definition = definitionOf(type)
+    return { ...liveMessageFor(envelope(definition, payload), definition)!, subject: 'an-order-of-a-brand' }
+  }
+
+  it('covers the order events of every module (status, promise, amended, lines, schedule, priced, decided, depth, options)', () => {
+    expect(ORDER_EVENTS).toEqual(expect.arrayContaining(['sales_order.status_changed', 'sales_order.promise_changed', 'sales_order.amended', 'sales_order.lines_closed', 'sales_order.schedule_changed', 'sales_order.change_priced', 'sales_order.change_decided', 'sales_order.priority_changed', 'sales_order.season_changed', 'sales_order.split', 'sales_order.confirmation_made', 'sales_order.confirmation_sent', 'sales_order.options_changed']))
+  })
+
+  it.each(ORDER_EVENTS)('%s declares partyId (an id only, optional for an older event) and never copies it to the browser', (type) => {
+    const definition = definitionOf(type)
+    const field = definition.payload.shape.partyId
+    expect(field, `${type} names its order's customer`).toBeDefined()
+    expect(field!.safeParse(ALPHA).success).toBe(true)
+    expect(field!.safeParse('Brand Alpha').success).toBe(false)
+    // sales_order.created always named it; the others take it from B-SA-001 on, so an event written before still parses.
+    if (type !== 'sales_order.created') expect(field!.safeParse(undefined).success).toBe(true)
+    expect(definition.live?.permission).toBe('orders.view')
+    expect(definition.live!.fields ?? []).not.toContain('partyId')
+  })
+
+  it.each(ORDER_EVENTS)("%s: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
+    const ofAlpha = messageOf(type, { orderId: 'SO-A', partyId: ALPHA })
+    const ofBeta = messageOf(type, { orderId: 'SO-B', partyId: BETA })
+    expect(ofAlpha.partyIds).toEqual([ALPHA])
+    expect(liveViewFor(ofAlpha, viewerOf(type, [BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofAlpha, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)!.fields).not.toHaveProperty('partyId')
+  })
+
+  it.each(ORDER_EVENTS)('%s without a party (an event of an older worker): every-customer viewers only (fails closed)', (type) => {
+    const older = messageOf(type, { orderId: 'SO-OLD' })
+    expect(older.partyIds).toEqual([])
+    expect(liveViewFor(older, viewerOf(type, [ALPHA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(older, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+  })
+})
+// ── end B-SA-001 ──
+
+// ── B-SA-002 ──
+/**
+ * B-SA-002 (Sales page plan P17'; 13-backend B13a): a message, a follow and a file of a record name its customer (`partyId`: the
+ * thread's party, or a work order's, hold's or NCR's wall party; none for several customers or none), so an office person
+ * limited to some customers gets the live hint of their own customers' threads and files, and never another customer's.
+ */
+describe('thread, follower and file events name their record’s customer (B-SA-002)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  const TYPES = ['thread.message_posted', 'thread.followers_changed', 'file.available']
+  const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
+  const messageOf = (type: string, payload: Record<string, unknown>) => {
+    const definition = definitionOf(type)
+    return { ...liveMessageFor(envelope(definition, payload), definition)!, subject: 'a-record-of-a-brand' }
+  }
+
+  it.each(TYPES)('%s declares an optional, nullable partyId (an id only), never in the live fields', (type) => {
+    const definition = definitionOf(type)
+    const field = definition.payload.shape.partyId
+    expect(field, `${type} names its record's customer`).toBeDefined()
+    expect(field!.safeParse(ALPHA).success).toBe(true)
+    expect(field!.safeParse(null).success).toBe(true)
+    expect(field!.safeParse(undefined).success).toBe(true)
+    expect(field!.safeParse('Brand Alpha').success).toBe(false)
+    expect(definition.live!.fields ?? []).not.toContain('partyId')
+  })
+
+  it.each(TYPES)("%s with a party: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
+    const ofAlpha = messageOf(type, { recordType: 'SalesOrder', recordId: 'SO-A', partyId: ALPHA })
+    const ofBeta = messageOf(type, { recordType: 'SalesOrder', recordId: 'SO-B', partyId: BETA })
+    expect(liveViewFor(ofAlpha, viewerOf(type, [BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofAlpha, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+  })
+
+  it.each(TYPES)('%s without a party (a record of several customers or none, or an older event): every-customer viewers only', (type) => {
+    for (const payload of [{ recordType: 'WorkOrder', recordId: 'WO-MIX', partyId: null }, { recordType: 'WorkOrder', recordId: 'WO-OLD' }]) {
+      const none = messageOf(type, payload)
+      expect(none.partyIds).toEqual([])
+      expect(liveViewFor(none, viewerOf(type, [ALPHA]), EVENT_CATALOGUE)).toBeNull()
+      expect(liveViewFor(none, viewerOf(type, [ALPHA, BETA]), EVENT_CATALOGUE)).toBeNull()
+      expect(liveViewFor(none, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    }
+  })
+})
+// ── end B-SA-002 ──
+
+// ── B-SA-003 ──
+/** B-SA-003 (Sales page plan P17'; review BW-7): a scan names its work order's customer for the office's live wall only. */
+describe('a scan names its work order’s customer (B-SA-003)', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  const definition = EVENT_CATALOGUE.get('production.scan_recorded', 1)
+  const viewer = (parties: Grant['parties']): Actor => office([{ permissions: [definition.live!.permission], companies: 'all', sites: 'all', parties }])
+  const scan = (partyId?: string | null) => liveMessageFor(envelope(definition, { workOrderId: 'WO-1', number: 'WO-1', bundleId: 'B-1', ...(partyId === undefined ? {} : { partyId }) }), definition)!
+
+  it('declares an optional, nullable partyId, never in the live fields', () => {
+    const field = definition.payload.shape.partyId
+    expect(field).toBeDefined()
+    for (const value of [ALPHA, null, undefined]) expect(field!.safeParse(value).success).toBe(true)
+    expect(field!.safeParse('Brand Alpha').success).toBe(false)
+    expect(definition.live!.fields ?? []).not.toContain('partyId')
+  })
+
+  it("a person limited to Brand Beta gets no scan of Alpha's work order and does get Beta's; a work order of no customer reaches every customer only", () => {
+    expect(liveViewFor(scan(ALPHA), viewer([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(scan(BETA), viewer([BETA]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(scan(ALPHA), viewer('all'), EVENT_CATALOGUE)).not.toBeNull()
+    for (const none of [scan(null), scan()]) {
+      expect(liveViewFor(none, viewer([ALPHA]), EVENT_CATALOGUE)).toBeNull()
+      expect(liveViewFor(none, viewer('all'), EVENT_CATALOGUE)).not.toBeNull()
+    }
+    expect(liveViewFor(scan(BETA), viewer([BETA]), EVENT_CATALOGUE)!.fields).toEqual({ workOrderId: 'WO-1', number: 'WO-1', bundleId: 'B-1' })
+  })
+})
+// ── end B-SA-003 ──

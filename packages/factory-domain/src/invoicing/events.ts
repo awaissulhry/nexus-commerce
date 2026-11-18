@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 import { INVOICE_DOC_TYPES, INVOICE_STATUSES } from './invoices'
 import { SDI_NOTIFICATION_TYPES } from '../ports/sdi'
 import { SDI_SEND_STATUSES } from './sdi/states'
@@ -51,14 +51,14 @@ export const events = [
     type: 'invoice.draft_saved',
     context: 'invoicing',
     description: 'A draft invoice was created, or its lines or text changed.',
-    payload: z.strictObject({ invoiceId: z.uuid(), docType, created: z.boolean() }),
+    payload: z.strictObject({ invoiceId: z.uuid(), docType, created: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live,
   }),
   defineEvent({
     type: 'invoice.draft_deleted',
     context: 'invoicing',
     description: 'A draft invoice was deleted (it had no number).',
-    payload: z.strictObject({ invoiceId: z.uuid(), docType }),
+    payload: z.strictObject({ invoiceId: z.uuid(), docType, partyId: livePartyId() /* B-SA-004 */ }),
     live,
   }),
   defineEvent({
@@ -72,28 +72,28 @@ export const events = [
     type: 'invoice.files_attached',
     context: 'invoicing',
     description: 'An issued invoice names its FatturaPA XML and its PDF courtesy copy.',
-    payload: z.strictObject({ invoiceId: z.uuid(), xmlFileId: z.uuid(), pdfFileId: z.uuid() }),
+    payload: z.strictObject({ invoiceId: z.uuid(), xmlFileId: z.uuid(), pdfFileId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'invoices.view', fields: ['invoiceId'] },
   }),
   defineEvent({
     type: 'invoice.sdi_status_changed',
     context: 'invoicing',
     description: 'A send of an invoice to SDI moved, and the invoice with it when its sends decided so.',
-    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), attempt: z.number().int().min(1), sendStatus: z.enum(SDI_SEND_STATUSES), invoiceStatus, previousStatus: invoiceStatus }),
+    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), attempt: z.number().int().min(1), sendStatus: z.enum(SDI_SEND_STATUSES), invoiceStatus, previousStatus: invoiceStatus, partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'invoices.view', fields: ['invoiceId', 'sendStatus', 'invoiceStatus'] },
   }),
   defineEvent({
     type: 'invoice.sdi_notification_received',
     context: 'invoicing',
     description: "SDI's notification about a send was recorded (once per message).",
-    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), notificationId: z.uuid(), type: z.enum(SDI_NOTIFICATION_TYPES), conflict: z.boolean() }),
+    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), notificationId: z.uuid(), type: z.enum(SDI_NOTIFICATION_TYPES), conflict: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'invoices.view', fields: ['invoiceId', 'type'] },
   }),
   defineEvent({
     type: 'invoice.sdi_corrected',
     context: 'invoicing',
     description: 'A rejected invoice was corrected before it is sent again under the same number and date.',
-    payload: z.strictObject({ invoiceId: z.uuid(), linesReplaced: z.boolean() }),
+    payload: z.strictObject({ invoiceId: z.uuid(), linesReplaced: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: sdiLive,
   }),
   defineEvent({
@@ -106,21 +106,21 @@ export const events = [
     type: 'invoice.sdi_archived',
     context: 'invoicing',
     description: 'The sent invoice is in legal archiving (conservazione) at the SDI intermediary.',
-    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid() }),
+    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: sdiLive,
   }),
   defineEvent({
     type: 'invoice.courtesy_copy_queued',
     context: 'invoicing',
     description: 'SDI could not deliver the invoice: a copy is queued by e-mail to the customer, saying it is in their tax drawer.',
-    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), outboundId: z.uuid() }),
+    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), outboundId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: sdiLive,
   }),
   defineEvent({
     type: 'invoice.courtesy_copy_missing',
     context: 'invoicing',
     description: 'SDI could not deliver the invoice and its copy could not be e-mailed: a person sends it.',
-    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), reason: z.string().max(500) }),
+    payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), reason: z.string().max(500), partyId: livePartyId() /* B-SA-004 */ }),
     live: sdiLive,
   }),
   defineEvent({

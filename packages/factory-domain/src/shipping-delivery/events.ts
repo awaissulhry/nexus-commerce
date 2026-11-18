@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-SA-004 */ livePartyId } from '../events/define'
 
 /**
  * The events of delivery and return labels (B-W2b-398; LOG-061, LOG-063, LOG-065, LOG-112; apps/factory-api
@@ -25,28 +25,28 @@ export const events = [
     type: 'shipment.customer_notice_sent',
     context: 'shipping-delivery',
     description: 'The shipping notice went to the customer in their language (tracking numbers and the cartons\' contents): by itself when the goods left with the site\'s switch on, or sent again by a person.',
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), mails: z.number().int().min(0), automatic: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), mails: z.number().int().min(0), automatic: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { ...shipmentLive, fields: ['shipmentId', 'number', 'automatic'] },
   }),
   defineEvent({
     type: 'shipment.tracking_problem_raised',
     context: 'shipping-delivery',
     description: 'A tracking problem was raised on a shipment on its way (delayed, an address problem, a failed delivery, or no carrier news for days), with the task a person works it in.',
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), exceptionId: z.uuid(), kind: z.enum(['DELAYED', 'ADDRESS_PROBLEM', 'FAILED_DELIVERY', 'NO_SCAN']), taskId: z.uuid().nullable() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), exceptionId: z.uuid(), kind: z.enum(['DELAYED', 'ADDRESS_PROBLEM', 'FAILED_DELIVERY', 'NO_SCAN']), taskId: z.uuid().nullable(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { ...shipmentLive, fields: ['shipmentId', 'number', 'exceptionId', 'kind'] },
   }),
   defineEvent({
     type: 'shipment.tracking_problem_resolved',
     context: 'shipping-delivery',
     description: 'A tracking problem of a shipment was resolved by a person, or by itself when the goods arrived.',
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), exceptionId: z.uuid(), kind: z.enum(['DELAYED', 'ADDRESS_PROBLEM', 'FAILED_DELIVERY', 'NO_SCAN']), automatic: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), exceptionId: z.uuid(), kind: z.enum(['DELAYED', 'ADDRESS_PROBLEM', 'FAILED_DELIVERY', 'NO_SCAN']), automatic: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { ...shipmentLive, fields: ['shipmentId', 'number', 'exceptionId', 'kind'] },
   }),
   defineEvent({
     type: 'shipment.pod_recorded',
     context: 'shipping-delivery',
     description: "A delivered shipment's proof of delivery (who signed, when, the signature or photo) came from the carrier or was recorded by a person.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), via: z.enum(['CARRIER', 'OFFICE']), image: z.boolean() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), via: z.enum(['CARRIER', 'OFFICE']), image: z.boolean(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { ...shipmentLive, fields: ['shipmentId', 'number', 'via'] },
   }),
   defineEvent({

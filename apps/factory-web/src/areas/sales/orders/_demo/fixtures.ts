@@ -270,7 +270,7 @@ const actionsFor = (status: OrderStatus, settled: boolean): Order['actions'] => 
   if (status !== 'CLOSED' && status !== 'CANCELLED') actions.push({ action: 'changePromise', allowed: true, needsReason: true, held: null })
   if (status === 'IN_PRODUCTION') actions.push({ action: 'markReady', allowed: true, needsReason: true, held: null })
   if (status === 'CONFIRMED' || status === 'IN_PRODUCTION' || status === 'READY') actions.push({ action: 'cancel', allowed: true, needsReason: true, held: null })
-  if (status === 'SHIPPED') actions.push({ action: 'close', allowed: true, needsReason: !settled, held: settled ? null : 'Not settled.' })
+  if (status === 'SHIPPED' || status === 'DELIVERED') actions.push({ action: 'close', allowed: true, needsReason: !settled, held: settled ? null : 'Not settled.' }) // F-SA-201: as the API
   return actions
 }
 
@@ -349,7 +349,7 @@ export function order(status: OrderStatus = 'CONFIRMED', over: Partial<Order> & 
       { id: PEOPLE.sales, name: 'Sara Vendite' },
       { id: PEOPLE.finance, name: 'Fiona Conti' },
     ],
-    settlement: { settled, missing: settled ? [] : status === 'SHIPPED' ? [{ code: 'BALANCE_DUE', message: '' }, { code: 'AT_SDI', message: '' }] : [{ code: 'NOT_SHIPPED', message: '' }, { code: 'NO_INVOICE', message: '' }], source: 'invoicing' },
+    settlement: { settled, missing: settled ? [] : status === 'SHIPPED' || status === 'DELIVERED' ? [{ code: 'BALANCE_DUE', message: '' }, { code: 'AT_SDI', message: '' }] : [{ code: 'NOT_SHIPPED', message: '' }, { code: 'NO_INVOICE', message: '' }], source: 'invoicing' },
     actions: actionsFor(status, settled),
     paymentTermsId: uid('6565', 1),
     reapprovalNeededAt: null,

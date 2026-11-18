@@ -3,6 +3,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { CommandTx } from '../../core/command'
 import { customersOf, partyOfCustomers } from '../../modules/quality/wall'
+import { EVERY_PARTY_MARKER } from '../../modules/quality/wall' // B-SA-002
 import { mayOnThread, resolveRecord, wallPartyOf, type WallScope } from '../threads/records'
 
 /**
@@ -185,3 +186,17 @@ export function fileRecordParty(found: FileRecordScope): string | null {
   if (found.kind === 'customer') return found.partyId
   return null
 }
+
+// ── B-SA-002 (Sales page plan P17') ────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The party `file.available` names for the office's live wall (events/live.ts): the customer of the file's record exactly as the
+ * office's file reads judge it (fileRecordScope: its own, a child record's parent's, a production record's work order's). None
+ * (null) for the every-party marker (several customers, or customer work of none), a record not found, or a record of no
+ * customer — then only people who reach every customer receive it (fails closed). Read in the emitting command, never a
+ * caller's value.
+ */
+export async function fileLivePartyId(client: Reader, tenantId: string, record: { readonly recordType: string; readonly recordId: string }): Promise<string | null> {
+  const party = fileRecordParty(await fileRecordScope(client, tenantId, record))
+  return party === EVERY_PARTY_MARKER ? null : party
+}
+// ── end B-SA-002 ──

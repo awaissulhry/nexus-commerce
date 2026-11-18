@@ -115,7 +115,7 @@ async function recordMarks(
       await tools.tx.parcel.update({ where: { id: entry.parcelId }, data: { marksPrintedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
     }
     tools.audit({ action: spec.name, recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { cartons: marked.map((entry) => ({ parcelId: entry.parcelId, code: entry.marks.code })), jobs: jobs.map((job) => job.jobId) } })
-    tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: current.status, change: 'parcels' } })
+    tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: current.status, change: 'parcels', partyId: shipment.partyId /* B-SA-004 */ } })
     return { jobs }
   })
   return result
