@@ -98,6 +98,12 @@ const lineView = output({
   /** The artwork files the line shows (its own and its quote line's) that the reader may open. */
   artworkCount: z.number().int(),
   // ── end B-SA-035 ──
+  // ── B-SA-035b: the artwork files themselves (files.read; the same files artworkCount counts), newest first — the Lines tab opens
+  // them in the thread's ONE viewer; and a made-to-measure line's rider, only with sales.measurements.view over the customer (null
+  // otherwise, and on every other line): the rider's name, the garment type, the profile's revision — never a measurement.
+  artwork: z.array(output({ fileId: id(), name: z.string(), contentType: z.string(), sizeBytes: z.number().int() })),
+  rider: output({ profileId: id(), name: z.string(), garmentType: z.string(), revision: z.number().int() }).nullable(),
+  // ── end B-SA-035b ──
 })
 
 const depositView = output({

@@ -27,6 +27,63 @@ export function portalFrameMode(viewport: number): PortalFrameMode {
 /** The body : conversation columns (the gap is the grid's): 3 : 2, so ~40 % at every width. */
 export const PORTAL_DOCK_COLUMNS = 'minmax(0, 3fr) minmax(0, 2fr)'
 
+// ---- F-SA-264 (sales page plan N6, R6, P11, P20): the portal frame gets the office's width menu (a third · 40 % · half) and Hide /
+// Show (⌘J), remembered on this device per person (a private window keeps nothing). Factory code only: PartnerThread is untouched.
+export type PortalDockWidth = 'third' | 'forty' | 'half'
+export const PORTAL_DOCK_WIDTHS: readonly PortalDockWidth[] = ['third', 'forty', 'half']
+export const DEFAULT_PORTAL_DOCK_WIDTH: PortalDockWidth = 'forty'
+
+/** The body : conversation columns of each width (the gap is the grid's), as the office's dock. */
+export const PORTAL_DOCK_COLUMNS_OF: Readonly<Record<PortalDockWidth, string>> = {
+  third: 'minmax(0, 2fr) minmax(0, 1fr)',
+  forty: 'minmax(0, 3fr) minmax(0, 2fr)',
+  half: 'minmax(0, 1fr) minmax(0, 1fr)',
+}
+
+export const isPortalDockWidth = (value: unknown): value is PortalDockWidth => typeof value === 'string' && (PORTAL_DOCK_WIDTHS as readonly string[]).includes(value)
+
+/** Where the width and "hidden" are kept on this device: per signed-in person (one portal person, every record page). */
+export const portalWidthKey = (personId: string) => `fw-portal.thread.width.${personId}`
+export const portalHiddenKey = (personId: string) => `fw-portal.thread.hidden.${personId}`
+
+/** What the person left on this device: the width (40 % when none) and whether the conversation was hidden. Closed storage: the defaults. */
+export function readPortalDock(storage: Pick<Storage, 'getItem'> | null, personId: string): { readonly width: PortalDockWidth; readonly hidden: boolean } {
+  try {
+    const width = storage?.getItem(portalWidthKey(personId))
+    return { width: isPortalDockWidth(width) ? width : DEFAULT_PORTAL_DOCK_WIDTH, hidden: storage?.getItem(portalHiddenKey(personId)) === '1' }
+  } catch {
+    return { width: DEFAULT_PORTAL_DOCK_WIDTH, hidden: false }
+  }
+}
+
+/** Keeps a width (40 %, the default, forgets it) or hidden (false forgets it). A closed storage (a private window) forgets quietly. */
+export function writePortalDock(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, personId: string, change: { readonly width?: PortalDockWidth; readonly hidden?: boolean }): void {
+  try {
+    if (change.width !== undefined) {
+      if (change.width === DEFAULT_PORTAL_DOCK_WIDTH) storage?.removeItem(portalWidthKey(personId))
+      else storage?.setItem(portalWidthKey(personId), change.width)
+    }
+    if (change.hidden !== undefined) {
+      if (change.hidden) storage?.setItem(portalHiddenKey(personId), '1')
+      else storage?.removeItem(portalHiddenKey(personId))
+    }
+  } catch {
+    // Only a convenience of this device.
+  }
+}
+
+/** ⌘J (Ctrl J on other systems): hide or show the docked conversation, open or close the full-width one. Never with Alt or Shift. */
+export function isPortalThreadKey(event: { readonly key: string; readonly metaKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly shiftKey: boolean }): boolean {
+  return (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j'
+}
+
+/** "Show the conversation", or "Show the conversation (2 new)" with the person's own new messages (99+ above 99). */
+export function showButtonWords(count: number): { readonly key: 'record.frame.show' | 'record.frame.showNew' | 'record.frame.showMany'; readonly count?: number } {
+  if (count <= 0) return { key: 'record.frame.show' }
+  return count > 99 ? { key: 'record.frame.showMany', count: 99 } : { key: 'record.frame.showNew', count }
+}
+// ---- end F-SA-264
+
 /** The conversation's share of the portal's main area (for the design numbers: 40 % of ~1140 px is ~450 px with the gap). */
 export function portalThreadPixels(main: number, gap = 16): number {
   return Math.round(((main - gap) * 2) / 5)

@@ -310,7 +310,7 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
         thread={thread ?? null}
         printThread={printThread}
         fields={fields /* B-TH-280 */}
-        wide={isWideTab(tab)}
+        defaultWidth={isWideTab(tab) ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={`${model.prefix}/products/styles`}>{t('record.back')}</Link>,
           title: (

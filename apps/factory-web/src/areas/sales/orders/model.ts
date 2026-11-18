@@ -22,6 +22,7 @@ import {
   type TileKey,
 } from './api'
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
+import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 
 /**
  * The sales order screens' pure rules (SCR-038 list and board, SCR-039 the order studio; B-W1-25 part 2): what a person
@@ -499,8 +500,19 @@ export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilitie
 /** The tabs a person sees: every tab (each part inside says what its right holds back, never an empty tab with zeros). */
 export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
 
-/** A tab whose body is a wide grid (size grids, the work orders, the shipments): the docked thread takes one third under 1600 px. */
-export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'production' || tab === 'shipments' || tab === 'files'
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): each tab its own dock width when the person chose none — Overview and
+// Money 40 %; the grid tabs (Lines, Production, Shipments, Files) a third under 1600 px and 40 % from 1600; Changes half (one column
+// of the story beside the thread). A width the person picks is kept for that tab (RecordFrame `dockTab`).
+export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.freeze({
+  overview: 'forty',
+  lines: 'grid',
+  production: 'grid',
+  changes: 'half',
+  money: 'forty',
+  shipments: 'grid',
+  files: 'grid',
+})
+// ---- end F-SA-263
 
 /** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
 export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>): number | null {

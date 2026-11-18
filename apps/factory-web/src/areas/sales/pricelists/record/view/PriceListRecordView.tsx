@@ -156,7 +156,7 @@ function PriceListRecord({ model, actions, thread, printThread }: PriceListRecor
       threadLabel={t('record.dockLabel')}
       thread={thread ?? null}
       printThread={printThread}
-      wide={isWideTab(model.tab)}
+      defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
       band={{ back: <Link href={listHref}>{t('record.back')}</Link>, title, status: <StatePill state={list.state} />, meta, primary, more, moreLabel: t('record.more') }}
     >
       <div className="fw-pl">

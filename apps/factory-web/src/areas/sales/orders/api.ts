@@ -442,6 +442,10 @@ export const orderLineSchema = z.object({
   picture: z.object({ fileId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }).nullable().optional(),
   artworkCount: z.number().optional(),
   // ── end B-SA-035 / F-SA-232
+  // ── B-SA-035b / F-SA-231b: the artwork files themselves (files.read; Lines opens them in the thread's ONE viewer), and a made-to-measure
+  // line's rider, only with sales.measurements.view (null otherwise): name, garment type, revision — never a measurement.
+  artwork: z.array(z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number() })).optional(),
+  rider: z.object({ profileId: z.string(), name: z.string(), garmentType: z.string(), revision: z.number() }).nullable().optional(),
 })
 export type OrderLine = z.infer<typeof orderLineSchema>
 

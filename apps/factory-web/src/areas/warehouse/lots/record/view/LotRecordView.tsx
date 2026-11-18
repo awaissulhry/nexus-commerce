@@ -171,7 +171,7 @@ function LotRecordBody({ model, actions, thread, printThread, fields }: { model:
       thread={thread ?? null}
       printThread={printThread}
       fields={fields /* B-TH-280 */}
-      wide={model.tab === 'moves'}
+      defaultWidth={model.tab === 'moves' ? 'grid' : undefined /* F-SA-263 */}
       band={{
         back,
         title: (

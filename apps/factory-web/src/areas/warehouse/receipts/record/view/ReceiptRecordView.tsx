@@ -154,7 +154,7 @@ function ReadyReceipt({ receipt, model, actions, thread, printThread, depth }: {
       threadLabel={t('rc.record.dockLabel')}
       thread={thread ?? null}
       printThread={printThread}
-      wide={isWideReceiptTab(model.tab)}
+      defaultWidth={isWideReceiptTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
       band={{
         back: <Link href={`${model.prefix}/warehouse/receipts`}>{t('rc.back')}</Link>,
         title: (

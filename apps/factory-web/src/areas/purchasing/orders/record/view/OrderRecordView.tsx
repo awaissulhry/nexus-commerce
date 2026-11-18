@@ -225,7 +225,7 @@ function ReadyOrder({ order, model, actions, thread, printThread, fields, invoic
         thread={thread ?? null}
         printThread={printThread}
         fields={fields /* B-TH-280 */}
-        wide={isWideTab(model.tab)}
+        defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={`${model.prefix}/purchasing/orders`}>{t('po.record.back')}</Link>,
           title: (

@@ -23,6 +23,10 @@ import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { linePictureKey, type LinePictureFile } from '../../product/images/small-pictures'
 import { artworkOf } from '../configurator/artwork'
+// B-SA-035b: the made-to-measure line's rider, only under sales.measurements.view over the customer (never a measurement).
+import type { Prisma } from '@nexus/factory-db'
+import { holds, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 
 /**
  * The order record as the office reads it (A2 SCR-039; the design's Order record): the header with its dates (the
@@ -209,21 +213,64 @@ export interface LinePicture {
   readonly small: { readonly url: string; readonly expiresAt: string } | null
 }
 
+/** B-SA-035b: one artwork file a line shows that the reader may open — what the thread's ONE viewer needs to show it. */
+export interface LineArtwork {
+  readonly fileId: string
+  readonly name: string
+  readonly contentType: string
+  readonly sizeBytes: number
+}
+
 /**
  * The artwork each line shows (its own and that of the quote line it was made from: configurator artworkOf) that the reader may
  * OPEN: AVAILABLE, and files.read over the file's company and the order's customer (the files' own record rule for a line of this
- * order). No reader (not an office read): none counted.
+ * order). No reader (not an office read): none. B-SA-035b: the files themselves (newest first, each once), not only how many — the
+ * Lines tab's artwork chip opens them in the thread's viewer.
  */
-async function artworkCountsOf(db: Reader, order: OrderRow, lines: readonly { readonly id: string; readonly quoteLineId: string | null }[], viewer: Actor | null): Promise<Map<string, number>> {
-  const counts = new Map<string, number>()
-  if (!viewer || lines.length === 0) return counts
+async function artworkFilesOf(db: Reader, order: OrderRow, lines: readonly { readonly id: string; readonly quoteLineId: string | null }[], viewer: Actor | null): Promise<Map<string, LineArtwork[]>> {
+  const out = new Map<string, LineArtwork[]>()
+  if (!viewer || lines.length === 0) return out
   const perLine = await Promise.all(lines.map(async (line) => ({ lineId: line.id, files: await artworkOf(db, { kind: 'ORDER', line: { id: line.id, quoteLineId: line.quoteLineId } }) })))
   const ids = [...new Set(perLine.flatMap((entry) => entry.files.filter((file) => file.status === 'AVAILABLE').map((file) => file.fileId)))]
-  if (ids.length === 0) return counts
+  if (ids.length === 0) return out
   const companies = new Map((await db.storedFile.findMany({ where: { id: { in: ids }, status: 'AVAILABLE' }, select: { id: true, companyId: true } })).map((file) => [file.id, file.companyId]))
   const opens = (fileId: string) => companies.has(fileId) && can(viewer, FILES_READ, { companyId: companies.get(fileId) ?? null, partyId: order.partyId })
-  for (const entry of perLine) counts.set(entry.lineId, new Set(entry.files.map((file) => file.fileId).filter(opens)).size)
-  return counts
+  for (const entry of perLine) {
+    const seen = new Set<string>()
+    const files: LineArtwork[] = []
+    for (const file of entry.files) {
+      if (seen.has(file.fileId) || !opens(file.fileId)) continue
+      seen.add(file.fileId)
+      files.push({ fileId: file.fileId, name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes })
+    }
+    out.set(entry.lineId, files)
+  }
+  return out
+}
+
+/** B-SA-035b: the rider a made-to-measure line is made for, as the profile names itself — never a measurement. */
+export interface LineRider {
+  readonly profileId: string
+  readonly name: string
+  readonly garmentType: string
+  readonly revision: number
+}
+
+/**
+ * The rider of each made-to-measure line's profile, only for a reader holding sales.measurements.view over the order's customer (the
+ * rider data's own right, scoped by its party as the list's rider search is); without it nothing is read and the line says only
+ * "Made to measure". The rider's name, the garment type and the profile's revision: never a measurement, a fit note or a photo.
+ */
+async function ridersOf(db: Reader, lines: readonly { readonly kind: string; readonly measurementProfileId: string | null }[], viewer: Actor | null): Promise<Map<string, LineRider>> {
+  const out = new Map<string, LineRider>()
+  const ids = [...new Set(lines.flatMap((line) => (line.kind === 'MADE_TO_MEASURE' && line.measurementProfileId ? [line.measurementProfileId] : [])))]
+  if (!viewer || ids.length === 0 || !holds(viewer, SALES_MEASUREMENTS_VIEW)) return out
+  const profiles = await db.measurementProfile.findMany({
+    where: { AND: [scopeWhere(viewer, SALES_MEASUREMENTS_VIEW, { party: 'partyId' }) as Prisma.MeasurementProfileWhereInput, { id: { in: ids } }] },
+    select: { id: true, riderName: true, garmentType: true, revision: true },
+  })
+  for (const profile of profiles) out.set(profile.id, { profileId: profile.id, name: profile.riderName, garmentType: profile.garmentType, revision: profile.revision })
+  return out
 }
 
 /**
@@ -243,7 +290,8 @@ export function withLinePictures(view: OrderView, files: ReadonlyMap<string, Lin
 
 export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */) {
   const facts = await readOrderFacts(db, order)
-  const artwork = await artworkCountsOf(db, order, facts.lines, viewer) // B-SA-035
+  const artwork = await artworkFilesOf(db, order, facts.lines, viewer) // B-SA-035 (B-SA-035b: the files, not only how many)
+  const riders = await ridersOf(db, facts.lines, viewer) // B-SA-035b
   const party = await db.party.findUnique({ where: { id: order.partyId }, select: { code: true, legalName: true } })
   const styleIds = [...new Set(facts.lines.map((line) => line.styleId))]
   const styles = new Map((styleIds.length > 0 ? await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, name: true, sizes: true } }) : []).map((row) => [row.id, row]))
@@ -362,7 +410,10 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         progress: strip(totals),
         // B-SA-035: the picture is put in after the read (withLinePictures); the artwork the reader may open, counted.
         picture: null as LinePicture | null,
-        artworkCount: artwork.get(line.id) ?? 0,
+        artworkCount: (artwork.get(line.id) ?? []).length,
+        // B-SA-035b: the artwork files themselves (the chip opens them in the thread's viewer), and a made-to-measure line's rider.
+        artwork: artwork.get(line.id) ?? [],
+        rider: line.kind === 'MADE_TO_MEASURE' && line.measurementProfileId ? (riders.get(line.measurementProfileId) ?? null) : null,
       }
     }),
     progress: strip(facts.progress.totals),

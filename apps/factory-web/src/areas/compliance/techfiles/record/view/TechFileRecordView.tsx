@@ -122,7 +122,7 @@ function RecordPage({ model, actions, thread, printThread }: { model: RecordMode
       threadLabel={t('record.dockLabel', { number: file.number })}
       thread={thread ?? null}
       printThread={printThread}
-      wide={tab === 'risk' || tab === 'production'}
+      defaultWidth={tab === 'risk' || tab === 'production' ? 'grid' : undefined /* F-SA-263 */}
       band={{
         back: <Link href={listAddress(prefix)}>{t('record.back')}</Link>,
         title: (

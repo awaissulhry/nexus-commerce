@@ -421,8 +421,7 @@
     "spare_one": "{count} giorno di margine",
     "spare_other": "{count} giorni di margine",
     "short_one": "{count} giorno di ritardo",
-    "short_other": "{count} giorni di ritardo",
-    "failedTitle": "Impossibile leggere la previsione di fine produzione"
+    "short_other": "{count} giorni di ritardo"
   },
   "finish": {
     "STOCK": "Da magazzino",
