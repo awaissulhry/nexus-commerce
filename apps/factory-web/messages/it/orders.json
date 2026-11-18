@@ -355,17 +355,8 @@
     "costIncomplete": "Incompleto"
   },
   "chain": {
-    "title": "Dal preventivo alle fatture",
-    "quote": "Preventivo",
     "quoteValue": "{number} v{revision}",
     "noQuote": "Inserito dall'ufficio",
-    "order": "Ordine",
-    "deposit": "Acconto",
-    "workOrders": "Ordini di lavoro",
-    "shipments": "Spedizioni",
-    "invoices": "Fatture",
-    "count_one": "{count}",
-    "count_other": "{count}",
     "fromRequest": "Creato dalla richiesta {number} (senza preventivo)"
   },
   "gate": {
@@ -1375,6 +1366,57 @@
       "units": "Su misura: un ordine di lavoro per unità — la fase di ogni unità è in Produzione › Ordini di lavoro.",
       "openLines": "Apri in Righe",
       "noun": "riga"
+    },
+    "people": {
+      "title": "Persone",
+      "backup": "Sostituto",
+      "answers": "Risponde al cliente",
+      "madeBy": "Creato da",
+      "madeByOn": "{name} · {date}",
+      "where": "Dove si produce",
+      "notPlanned": "Non ancora pianificato",
+      "held": "Chi ci lavora è visibile a chi segue la produzione."
+    },
+    "dates": {
+      "title": "Prossime date",
+      "all": "Tutte le date ›",
+      "none": "Nessuna data ancora: le tappe le fissa la pianificazione"
+    },
+    "requests": {
+      "title": "Richieste e modifiche",
+      "changes": "Modifiche ›",
+      "onUs_one": "Tocca a noi: {count} richiesta",
+      "onUs_other": "Tocca a noi: {count} richieste",
+      "onCustomer_one": "Tocca al cliente: {count}",
+      "onCustomer_other": "Tocca al cliente: {count}",
+      "nothing": "Niente aspetta noi o il cliente",
+      "latest": "Ultima modifica: revisione {revision} · {date}"
+    },
+    "linked": {
+      "title": "Record collegati",
+      "quote": "Preventivo",
+      "workOrders": "Ordini di lavoro",
+      "shipments": "Spedizioni",
+      "invoices": "Fatture",
+      "deposit": "Acconto",
+      "complaints": "Reclami",
+      "returns": "Resi",
+      "sameQuote": "Stesso preventivo",
+      "sameQuoteValue": "{number}",
+      "invoicesHeld": "serve il permesso fatture",
+      "leftOut_one": "{count} ordine di lavoro non mostrato",
+      "leftOut_other": "{count} ordini di lavoro non mostrati"
+    },
+    "facts": {
+      "title": "Dati dell'ordine",
+      "customerRef": "Ordine del cliente",
+      "language": "Lingua",
+      "lang": {
+        "it": "Italiano",
+        "en": "Inglese"
+      },
+      "made": "Creato · modificato",
+      "madeValue": "{made} · {changed}"
     }
   },
   "mtm": {

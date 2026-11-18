@@ -36,6 +36,12 @@ import {
 } from '../overview/model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
+// ---- F-SA-233: People (the production lane's SupervisorFact in place), Next dates, Requests & changes, Linked records, Order facts ----
+import { SupervisorFact } from '../../../../_shared/production-supervisor/view/SupervisorFact'
+import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/notes/model'
+import { NAMESPACE as DEPTH } from '../../depth/model'
+import { linkedRecordsOf, nextDatesOf, placeWords, requestCountsOf } from '../overview/model'
+// ---- end F-SA-233
 
 /** The columns' words: the shared pieces catalogue's (production `parts.pieces.stages.*`, Shipped added there). */
 const COLUMN_STAGE: Readonly<Record<LineColumn, string>> = Object.freeze({ ordered: 'ORDERED', cut: 'CUT', sewn: 'SEWN', checked: 'INSPECTED', packed: 'PACKED', shipped: 'SHIPPED' })
@@ -54,6 +60,14 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
     <div className="fw-so-overview">
       <WhereItIs order={order} model={model} actions={actions} />
       <ProgressByLine order={order} model={model} actions={actions} />
+      {/* F-SA-233: the facts beside each other (a card grid that follows the body's width, never dead space). */}
+      <div className="fw-so-overview-cards">
+        <PeopleCard order={order} model={model} actions={actions} />
+        <NextDatesCard order={order} model={model} />
+        <RequestsCard order={order} model={model} />
+        <LinkedCard order={order} model={model} />
+        <FactsCard order={order} model={model} />
+      </div>
     </div>
   )
 }
@@ -260,3 +274,194 @@ export function BandUrgency({ model }: { model: OrderRecordModel }) {
   const read = readOf(model.production)
   return read?.headline?.urgency.customer?.code === 'URGENT' ? <Tag tone="warning">{t('board.customerUrgent')}</Tag> : null
 }
+
+// ---- F-SA-233 (10-order-page §2.1 O3–O7) --------------------------------------------------------------------------------------
+
+/**
+ * O3 People (P3): the supervisor (SupervisorFact: Change… with production.brand.manage, Ask with threads.post), the customer's backup,
+ * who answers the customer (the order thread's owner: there is no other sales owner), who made the order and when, where it is made —
+ * places only (site · line · team, or an outside workshop). No operator, no team member, no per-person output (Statuto art. 4). The
+ * people part needs workorders.view (its names stay inside this record); without it: held in words, never "Not set".
+ */
+function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const notes = useT(NOTES_NS)
+  const locale = useLocale()
+  const state = model.production ?? null
+  const read = readOf(state)
+  const people = read?.people ?? null
+  const withheld = !!read && read.withheld.includes('people')
+  const madeBy = order.createdById ? (order.people.find((person) => person.id === order.createdById)?.name ?? null) : null
+  const askWait = model.people ? noteHeld(model.people.mayNote, 1) : null
+  const supervisor = people?.supervisor ?? null
+  const items = [
+    ...(people
+      ? [
+          { label: t('overview.people.backup'), value: people.backup?.name ?? '—' },
+          { label: t('overview.people.answers'), value: people.answersCustomer?.name ?? '—' },
+        ]
+      : []),
+    { label: t('overview.people.madeBy'), value: madeBy ? t('overview.people.madeByOn', { name: madeBy, date: formatDate(order.createdAt, { locale }) }) : formatDate(order.createdAt, { locale }) },
+    ...(people ? [{ label: t('overview.people.where'), value: people.places.length > 0 ? people.places.map(placeWords).join(' · ') : t('overview.people.notPlanned') }] : []),
+  ]
+  return (
+    <Card padded>
+      <h2 className="fw-so-h2">{t('overview.people.title')}</h2>
+      {!state || state.status === 'loading' ? (
+        <Skeleton height={44} />
+      ) : (
+        <div className="fw-so-stack">
+          {people && (
+            <SupervisorFact
+              fact={supervisor ? { kind: 'person', name: supervisor.name, active: supervisor.active, from: supervisor.from, me: supervisor.me, muted: false } : { kind: 'notSet' }}
+              can={!!model.people?.mayAssign}
+              onChange={() => actions?.people?.onAssign?.()}
+              ask={model.people ? { label: notes('open.askFact'), held: askWait ? notes(askWait.key, askWait.params) : null, onAsk: () => actions?.people?.onAsk?.() } : undefined}
+            />
+          )}
+          {withheld && <p className="fw-so-hint">{t('overview.people.held')}</p>}
+          <KeyValue dense labelCase="sentence" items={items} />
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** O4 Next dates (P16): the next three to come, late first in amber; "All dates ›" opens Production › Dates & milestones. */
+function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel }) {
+  const t = useT('orders')
+  const d = useT(DEPTH)
+  const locale = useLocale()
+  const state = model.production ?? null
+  const read = readOf(state)
+  const rows = nextDatesOf(read?.dates ?? null, order.promiseDate)
+  const day = (value: string) => formatDate(dayInstant(value), { locale })
+  return (
+    <Card padded>
+      <div className="fw-so-card-head">
+        <h2 className="fw-so-h2">{t('overview.dates.title')}</h2>
+        <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/orders/${order.id}?tab=production#dates`}>
+          {t('overview.dates.all')}
+        </Link>
+      </div>
+      {!state || state.status === 'loading' ? (
+        <Skeleton height={44} />
+      ) : rows.length === 0 ? (
+        <p className="fw-so-hint">{t('overview.dates.none')}</p>
+      ) : (
+        <ul className="fw-so-datelist">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <span>{row.what.kind === 'gate' ? (row.what.label ?? d(`gate.${row.what.gateKind ?? 'OTHER'}`)) : row.what.kind === 'milestone' ? d(`milestone.kind.${row.what.milestone}`) : t('overview.fact.exFactory')}</span>
+              <span className="fw-so-cell-sub">
+                {row.target ? d('milestone.target', { date: day(row.target) }) : '—'}
+                {row.late !== null && row.late > 0 && (
+                  <>
+                    {' '}
+                    <Tag tone="warning">{d('milestone.lateBy', { count: row.late })}</Tag>
+                  </>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+/** O5 Requests & changes (counts only; Answer… opens the review window in S4): what waits on us, on the customer, the latest change. */
+function RequestsCard({ order, model }: { order: Order; model: OrderRecordModel }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const read = readOf(model.production)
+  const counts = requestCountsOf(read, order)
+  const nothing = counts.onUs === 0 && counts.onCustomer === 0
+  return (
+    <Card padded>
+      <div className="fw-so-card-head">
+        <h2 className="fw-so-h2">{t('overview.requests.title')}</h2>
+        <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/orders/${order.id}?tab=changes`}>
+          {t('overview.requests.changes')}
+        </Link>
+      </div>
+      <ul className="fw-so-datelist">
+        {counts.onUs > 0 && <li>{t('overview.requests.onUs', { count: counts.onUs })}</li>}
+        {counts.onCustomer > 0 && <li>{t('overview.requests.onCustomer', { count: counts.onCustomer })}</li>}
+        {nothing && <li className="fw-so-hint">{t('overview.requests.nothing')}</li>}
+        {counts.latest && <li className="fw-so-hint">{t('overview.requests.latest', { revision: counts.latest.revision, date: counts.latest.at ? formatDate(counts.latest.at, { locale }) : '—' })}</li>}
+      </ul>
+    </Card>
+  )
+}
+
+/** O6 Linked records: count buttons, each a real link; a list without its right is held in words with no number; left-out work orders counted. */
+function LinkedCard({ order, model }: { order: Order; model: OrderRecordModel }) {
+  const t = useT('orders')
+  const read = readOf(model.production)
+  const links = model.links && model.links.state === 'ready' ? model.links.links : null
+  const { records, workOrdersLeftOut } = linkedRecordsOf({
+    order,
+    prefix: model.prefix,
+    can: model.can,
+    work: read?.work,
+    complaints: links?.complaints ? links.complaints.length : null,
+    returns: links?.returns ? links.returns.length : null,
+    sameQuote: model.depth?.depth.value?.sameQuote ?? [],
+    madeFrom: model.madeFromReading ? undefined : (model.madeFrom ?? null),
+  })
+  return (
+    <Card padded>
+      <h2 className="fw-so-h2">{t('overview.linked.title')}</h2>
+      <ul className="fw-so-linked" aria-label={t('overview.linked.title')}>
+        {records.map((entry, index) => {
+          const label = t(`overview.linked.${entry.key}`)
+          const value = entry.held ? t(entry.held.key) : entry.words ? t(entry.words.key, entry.words.params) : String(entry.count ?? '—')
+          return (
+            <li key={`${entry.key}-${index}`}>
+              {entry.href ? (
+                <Link className="fw-so-countbtn" href={entry.href}>
+                  <span>{label}</span> <strong>{value}</strong>
+                </Link>
+              ) : (
+                <span className="fw-so-countbtn is-plain">
+                  <span>{label}</span> <strong>{value}</strong>
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {workOrdersLeftOut > 0 && <p className="fw-so-hint">{t('overview.linked.leftOut', { count: workOrdersLeftOut })}</p>}
+    </Card>
+  )
+}
+
+/** O7 Order facts (loaded, never shown before): ordered on, requested, the customer PO, the season, the language, the tax mode, made · changed. */
+function FactsCard({ order, model }: { order: Order; model: OrderRecordModel }) {
+  const t = useT('orders')
+  const d = useT(DEPTH)
+  const locale = useLocale()
+  const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
+  const season = model.depth?.depth.value?.season ?? null
+  const language = t(`overview.facts.lang.${order.language === 'en' ? 'en' : 'it'}`)
+  return (
+    <Card padded>
+      <h2 className="fw-so-h2">{t('overview.facts.title')}</h2>
+      <KeyValue
+        dense
+        labelCase="sentence"
+        items={[
+          { label: t('dates.ordered'), value: day(order.orderDate) },
+          { label: t('dates.requested'), value: day(order.requestedDate) },
+          { label: t('overview.facts.customerRef'), value: order.customerRef ?? '—' },
+          ...(season ? [{ label: d('season.label'), value: season.code }] : []),
+          { label: t('overview.facts.language'), value: language },
+          { label: t('newOrder.taxMode'), value: t(`newOrder.taxModes.${order.taxMode}`) },
+          { label: t('overview.facts.made'), value: t('overview.facts.madeValue', { made: formatDate(order.createdAt, { locale }), changed: formatDate(order.updatedAt, { locale }) }) },
+        ]}
+      />
+    </Card>
+  )
+}
+// ---- end F-SA-233

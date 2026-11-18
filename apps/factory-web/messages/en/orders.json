@@ -355,17 +355,8 @@
     "costIncomplete": "Incomplete"
   },
   "chain": {
-    "title": "From the quote to the invoices",
-    "quote": "Quote",
     "quoteValue": "{number} v{revision}",
     "noQuote": "Typed by the office",
-    "order": "Order",
-    "deposit": "Deposit",
-    "workOrders": "Work orders",
-    "shipments": "Shipments",
-    "invoices": "Invoices",
-    "count_one": "{count}",
-    "count_other": "{count}",
     "fromRequest": "Made from request {number} (no quote)"
   },
   "gate": {
@@ -1375,6 +1366,57 @@
       "units": "Made to measure: one work order per unit — each unit's stage is on Production › Work orders.",
       "openLines": "Open in Lines",
       "noun": "line"
+    },
+    "people": {
+      "title": "People",
+      "backup": "Backup",
+      "answers": "Answers the customer",
+      "madeBy": "Made by",
+      "madeByOn": "{name} · {date}",
+      "where": "Where it is made",
+      "notPlanned": "Not planned yet",
+      "held": "Who works on it is shown to people who follow production."
+    },
+    "dates": {
+      "title": "Next dates",
+      "all": "All dates ›",
+      "none": "No dates set yet — Planning sets the gates"
+    },
+    "requests": {
+      "title": "Requests & changes",
+      "changes": "Changes ›",
+      "onUs_one": "Waiting on us: {count} request",
+      "onUs_other": "Waiting on us: {count} requests",
+      "onCustomer_one": "Waiting on the customer: {count}",
+      "onCustomer_other": "Waiting on the customer: {count}",
+      "nothing": "Nothing waits on us or on the customer",
+      "latest": "Latest change: revision {revision} · {date}"
+    },
+    "linked": {
+      "title": "Linked records",
+      "quote": "Quote",
+      "workOrders": "Work orders",
+      "shipments": "Shipments",
+      "invoices": "Invoices",
+      "deposit": "Deposit",
+      "complaints": "Complaints",
+      "returns": "Returns",
+      "sameQuote": "Same quote",
+      "sameQuoteValue": "{number}",
+      "invoicesHeld": "needs the invoices right",
+      "leftOut_one": "{count} work order not shown",
+      "leftOut_other": "{count} work orders not shown"
+    },
+    "facts": {
+      "title": "Order facts",
+      "customerRef": "Customer PO",
+      "language": "Language",
+      "lang": {
+        "it": "Italian",
+        "en": "English"
+      },
+      "made": "Made · changed",
+      "madeValue": "{made} · {changed}"
     }
   },
   "mtm": {

@@ -10,8 +10,6 @@ import { DateField } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { recordAddress } from '../../../../../lib/records/record-links'
-import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money, percent, unitPrice } from '../../../quotes/model'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
@@ -243,67 +241,8 @@ export function SummaryRail({ order, model }: { order: Order; model: OrderRecord
         <h2 className="fw-so-h2">{t('summary.title')}</h2>
         <KeyValue dense labelCase="sentence" items={items} />
       </Card>
-      <RecordChain order={order} model={model} />
+      {/* F-SA-233: the record chain left Lines: Overview › Linked records (each a real link, counted by right). */}
     </div>
-  )
-}
-
-/**
- * The record chain (design RecordChain, composed: the DS has none yet): Quote → Order → Deposit → Work orders →
- * Shipments → Invoices, each step with its state in words and a real link; an unknown step says "—".
- */
-export function RecordChain({ order, model }: { order: Order; model: OrderRecordModel }) {
-  const t = useT('orders')
-  const record = `${model.prefix}/sales/orders/${order.id}`
-  const open = (type: string, id: string, label: string) => `${model.prefix}${recordAddress({ type, id, label, companyId: order.companyId }, OFFICE_PAGES)}`
-  const deposit = depositGate(order)
-  const steps: Array<{ key: string; label: string; value: string; href: string | null }> = [
-    {
-      key: 'quote',
-      label: t('chain.quote'),
-      // B-TH-228: an order made straight from a request names the request (no quote between); "—" while that is read.
-      value: order.chain.quote ? t('chain.quoteValue', { number: order.chain.quote.number, revision: order.chain.quote.revision }) : model.madeFrom ? t('chain.fromRequest', { number: model.madeFrom.number }) : model.madeFromReading ? '—' : t('chain.noQuote'),
-      href: order.chain.quote && model.can.viewQuotes ? `${model.prefix}/sales/quotes/${order.chain.quote.id}` : !order.chain.quote && model.madeFrom ? `${model.prefix}/sales/incoming/${encodeURIComponent(model.madeFrom.id)}` : null,
-    },
-    { key: 'order', label: t('chain.order'), value: t(`status.${order.status}`), href: null },
-    { key: 'deposit', label: t('chain.deposit'), value: t(`gate.state.${deposit.state}`), href: `${record}?tab=money` /* F-SA-230 */ },
-    {
-      key: 'workOrders',
-      label: t('chain.workOrders'),
-      value: order.chain.workOrders.length === 0 ? '—' : order.chain.workOrders.length === 1 ? order.chain.workOrders[0]!.number : t('chain.count', { count: order.chain.workOrders.length }),
-      href: order.chain.workOrders.length === 0 ? null : order.chain.workOrders.length === 1 ? open('WorkOrder', order.chain.workOrders[0]!.id, order.chain.workOrders[0]!.number) : `${record}?tab=production`,
-    },
-    {
-      key: 'shipments',
-      label: t('chain.shipments'),
-      value: order.chain.shipments.length === 0 ? '—' : t('chain.count', { count: order.chain.shipments.length }),
-      href: order.chain.shipments.length === 0 ? null : `${record}?tab=shipments`,
-    },
-    {
-      key: 'invoices',
-      label: t('chain.invoices'),
-      value: order.chain.invoices.length === 0 ? '—' : t('chain.count', { count: order.chain.invoices.length }),
-      href: order.chain.invoices.length === 0 ? null : `${record}?tab=money#invoices` /* F-SA-230 */,
-    },
-  ]
-  return (
-    <Card padded>
-      <h2 className="fw-so-h2">{t('chain.title')}</h2>
-      <ol className="fw-so-chain" aria-label={t('chain.title')}>
-        {steps.map((step) => (
-          <li key={step.key} className="fw-so-chain-step">
-            <span className="fw-so-chain-label">{step.label}</span>
-            {step.href ? (
-              <Link className="fw-so-link" href={step.href}>
-                {step.value}
-              </Link>
-            ) : (
-              <span>{step.value}</span>
-            )}
-          </li>
-        ))}
-      </ol>
-    </Card>
   )
 }
 

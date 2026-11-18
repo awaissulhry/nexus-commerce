@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { ComponentType } from 'react'
 import { LOCALES } from '../../../../../lib/i18n/locales'
@@ -7,7 +8,7 @@ import { LINE_BLK, LINE_RED, order } from '../../_demo/fixtures'
 import { groupMadeToMeasure } from '../../mtm-groups'
 import { designScreen } from '../fixtures'
 import { CONFIRMED_READ, HEADLINE, LINES, PRODUCTION_READ } from './fixtures'
-import { bandHealthOf, exFactoryOf, headlineOf, healthInputOf, inWorkOf, lineRowsOf, lineSizesOf, lineStageOf, mergeRead, nothingCutYet, preparingNote, stageStripOf, totalOf, waitingInputOf, walkOf } from './model'
+import { bandHealthOf, exFactoryOf, headlineOf, healthInputOf, inWorkOf, lineRowsOf, lineSizesOf, lineStageOf, linkedRecordsOf, mergeRead, nextDatesOf, nothingCutYet, placeWords, preparingNote, requestCountsOf, stageStripOf, totalOf, waitingInputOf, walkOf } from './model'
 
 /**
  * F-SA-232 (sales page plan N2; 10-order-page §2.1 O1, O2; review OW-6, OW-7, C-3) — Overview's rules and its cases: the headline
@@ -154,5 +155,57 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
       const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
       expect(p('parts.pieces.stages.SHIPPED')).not.toBe('parts.pieces.stages.SHIPPED')
     }
+  })
+})
+
+// ---- F-SA-233: People, Next dates, Requests & changes, Linked records, Order facts ------------------------------------------------
+describe('Overview’s facts (F-SA-233)', () => {
+  const milestone = (id: string, kind: string, target: string | null, late: number | null, state = 'TO_COME') => ({ id, kind, gateId: null, gateKind: kind === 'GATE' ? 'PP_SAMPLE' : null, label: null, target, actual: null, state, late, owner: null })
+
+  it('people: places only — a site · line · team, or an outside workshop; never an operator', () => {
+    expect(placeWords({ site: { code: 'S1', name: 'Main site' }, line: { code: 'L2', name: 'Line 2' }, team: null, workshop: null })).toBe('Main site · Line 2')
+    expect(placeWords({ site: null, line: null, team: null, workshop: { name: 'Workshop Beta Leather' } })).toBe('Workshop Beta Leather')
+  })
+
+  it('next dates: three to come, late first (most late first), then by target; the ex-factory day fills a free place', () => {
+    const dates = { ...PRODUCTION_READ.dates!, milestones: [milestone('a', 'START', '2026-11-22', null), milestone('b', 'GATE', '2026-11-15', 3), milestone('c', 'GATE', '2026-11-10', 1), milestone('d', 'START', '2026-11-01', null, 'DONE')] }
+    expect(nextDatesOf(dates, '2026-12-15').map((row) => row.id)).toEqual(['b', 'c', 'a'])
+    expect(nextDatesOf({ ...dates, milestones: [milestone('a', 'START', '2026-11-22', null)] }, '2026-12-15').map((row) => row.id)).toEqual(['a', 'ex-factory'])
+    expect(nextDatesOf(null, null)).toEqual([])
+  })
+
+  it('requests & changes in counts: open on us, countered or a new yes on the customer, the latest amendment', () => {
+    const read = { ...PRODUCTION_READ, changes: { openRequests: [{ id: 'r1', kind: 'CHANGE', status: 'OPEN', since: '2026-11-18T06:00:00Z', batchId: null }, { id: 'r2', kind: 'RUSH', status: 'COUNTERED', since: '2026-11-17T06:00:00Z', batchId: null }] } }
+    expect(requestCountsOf(read, { reapprovalNeededAt: '2026-11-16T10:00:00Z', amendments: { count: 2, latestRevision: 2, latestAt: '2026-11-12T16:48:00Z' } })).toEqual({ onUs: 1, onUsSince: '2026-11-18T06:00:00Z', onCustomer: 2, latest: { revision: 2, at: '2026-11-12T16:48:00Z' } })
+    expect(requestCountsOf(null, { reapprovalNeededAt: null, amendments: { count: 0, latestRevision: null, latestAt: null } })).toEqual({ onUs: 0, onUsSince: null, onCustomer: 0, latest: null })
+  })
+
+  it('linked records: counts of what the reader sees, each a real link; invoices held in words without the right (no number); left-out work orders counted', () => {
+    const value = order('SHIPPED')
+    const work = { workOrders: [], mtm: [{ style: null, colourway: null, units: 3, workOrders: 3, byStatus: [], own: { cells: 3, pieces: 3, cut: 3, sewn: 0, checked: 0 } }], workOrdersLeftOut: 1, notInProduction: { lines: 0, pieces: 0 } }
+    const full = linkedRecordsOf({ order: value, prefix: '/w/demo', can: { viewQuotes: true, viewInvoices: true }, work, complaints: 2, returns: 0, sameQuote: [{ id: 'o2', number: 'SO-2026-0151' }] })
+    const byKey = (key: string) => full.records.find((entry) => entry.key === key)!
+    expect(byKey('workOrders').count).toBe(3)
+    expect(full.workOrdersLeftOut).toBe(1)
+    expect(byKey('invoices')).toMatchObject({ count: value.chain.invoices.length, held: null })
+    expect(byKey('invoices').href ?? '').toMatch(/tab=money#invoices$|^$/)
+    expect(byKey('complaints')).toMatchObject({ count: 2, href: `/w/demo/sales/orders/${value.id}?tab=shipments` })
+    expect(byKey('returns')).toMatchObject({ count: 0, href: null })
+    expect(byKey('sameQuote')).toMatchObject({ href: '/w/demo/sales/orders/o2' })
+    const held = linkedRecordsOf({ order: value, prefix: '/w/demo', can: { viewQuotes: false, viewInvoices: false }, work: null, complaints: null, returns: null, sameQuote: [] })
+    expect(held.records.find((entry) => entry.key === 'invoices')).toEqual({ key: 'invoices', count: null, words: null, href: null, held: { key: 'overview.linked.invoicesHeld' } })
+    expect(held.records.some((entry) => entry.key === 'complaints' || entry.key === 'returns')).toBe(false)
+    expect(held.records.find((entry) => entry.key === 'quote')?.href ?? null).toBeNull()
+  })
+
+  it('the cards draw in both languages; the custom fields and the record chain moved to Overview', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw('overview', locale))
+      for (const words of locale === 'en' ? ['People', 'Next dates', 'Requests & changes', 'Linked records', 'Order facts', 'Nothing waits on us or on the customer'] : ['Persone', 'Prossime date', 'Richieste e modifiche', 'Record collegati', "Dati dell'ordine"]) expect(text, words).toContain(words)
+    }
+    const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("fields={value && tab === 'overview' ?")
+    const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(lines).not.toContain('function RecordChain')
   })
 })

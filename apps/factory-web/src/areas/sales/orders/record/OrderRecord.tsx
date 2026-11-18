@@ -517,8 +517,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
         ) : null
       }
       printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
-      // B-TH-280: the order's custom fields at the end of its first tab (Lines), as the old panels drew them above theirs.
-      fields={value && tab === 'lines' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
+      // B-TH-280: the order's custom fields at the end of its first tab; F-SA-233: Overview (they moved from Lines).
+      fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
       actions={{
         onPortal: () => {
           const current = order.status === 'ready' ? order.value : null
