@@ -632,7 +632,7 @@ describe('B-PR-45 escalation (cron production.issueEscalation)', { timeout: SLOW
 })
 
 describe('B-PR-45 answered: our first shared reply in one order’s thread answers the batch (T11 fallback)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('a shared message in SEED-SO-B001’s thread answers every issue of the batch and closes every task; B2 reads "Answered in your order N" (B's own number of SEED-SO-B001); the other batch waits; escalation stops', async () => {
+  it('a shared message in SEED-SO-B001’s thread answers every issue of the batch and closes every task; B2 reads "Answered in your order N" (B’s own number of SEED-SO-B001); the other batch waits; escalation stops', async () => {
     const raisedAt = new Date(batchIssues[0]!.raisedAt)
     await shareOn(w.b.salesOrderId, new Date(raisedAt.getTime() + 60_000))
     expect(await answerAll()).toBeGreaterThanOrEqual(2)
