@@ -111,3 +111,18 @@ export function siteOf(sites: ReadonlyArray<{ id: string; code?: string | null }
   if (asked && sites.some((site) => site.id === asked)) return asked
   return [...sites].sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''))[0]?.id ?? null
 }
+
+// ---- F-SA-215 (sales page plan N8, pick P13; 12-lists-board §3.6): the cards' photos ---------------------------------------------
+
+/**
+ * A card's picture is its order's: the card names no picture of its own (GET /planning/promises is unchanged), so the ONE picture
+ * part asks the batch read by the order's id (POST /sales/orders/pictures: the style, the file and its small address) — the asks of
+ * one board go out together, at most 200 ids a call, and the file-id cache shares each photo with the Sales board and the sheet.
+ */
+export const pictureOf = (card: Pick<WeekCard, 'orderId' | 'number'>): { readonly source: 'order'; readonly recordId: string; readonly number: string } => ({ source: 'order', recordId: card.orderId, number: card.number })
+
+/** The board's orders, each once, in reading order (an order with pieces in several weeks has one photo, read once). */
+export function weekOrderIds(columns: readonly WeekColumn[]): string[] {
+  return [...new Set(columns.flatMap((column) => column.cards.map((card) => card.orderId)))]
+}
+// ---- end F-SA-215

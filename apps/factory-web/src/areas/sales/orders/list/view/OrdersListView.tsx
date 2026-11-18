@@ -361,7 +361,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
       {model.layout === 'week' && model.week ? (
         // B-W2b-323: By promise week (the search narrows it; the rows view does not apply: every open line).
-        <WeekBoard model={model.week} prefix={model.prefix} search={searchField} onSite={actions?.onWeekSite} onRetry={actions?.onWeekRetry} />
+        <WeekBoard model={model.week} prefix={model.prefix} search={searchField} onSite={actions?.onWeekSite} onRetry={actions?.onWeekRetry} pictures={{ read: actions?.readPictures, demo: model.demoPictures } /* F-SA-215 */} />
       ) : model.layout === 'board' ? (
         <OrdersBoard model={model} actions={actions} search={searchField} rowsSelect={rowsSelect} onHelp={() => setHelp(true)} />
       ) : (
