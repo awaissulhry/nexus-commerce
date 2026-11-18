@@ -295,7 +295,7 @@ function UrgencyDialog({ card, actions }: { card: CustomerCardModel; actions?: W
         </span>
       }
     >
-      {/* F-PR-16: no <form> — Enter in the reason field sends nothing; the send button and ⌘↵ send. */}
+      {/* F-PR-16: no form element — Enter in the reason field sends nothing; the send button and ⌘↵ send. */}
       <div
         className="fw-pr-dialog"
         onKeyDown={(event) => {

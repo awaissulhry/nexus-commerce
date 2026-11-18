@@ -140,7 +140,7 @@ export function HoldDialog({ numbers, workOrderIds, daily, actions }: { numbers:
         </Footer>
       }
     >
-      {/* F-PR-16: no <form> — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
+      {/* F-PR-16: no form element — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
       <div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>
         <Problem daily={daily} />
         <p>{kind === 'PRODUCTION' ? t('hold.bodyProduction') : t('hold.body')}</p>
@@ -220,7 +220,7 @@ function LiftHoldDialog({ holdId, daily, actions }: { holdId: string; daily: Dai
         </Footer>
       }
     >
-      {/* F-PR-16: no <form> — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
+      {/* F-PR-16: no form element — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
       <div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>
         <Problem daily={daily} />
         {!hold ? (

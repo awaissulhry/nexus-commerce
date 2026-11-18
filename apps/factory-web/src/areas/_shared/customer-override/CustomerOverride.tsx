@@ -471,7 +471,7 @@ export function DecideDialog({
         </>
       }
     >
-      {/* F-PR-16: no <form> — Enter in a one-line field (the typed name) sends nothing; the send button and ⌘↵ send. */}
+      {/* F-PR-16: no form element — Enter in a one-line field (the typed name) sends nothing; the send button and ⌘↵ send. */}
       <div className="fw-cov-form" onKeyDown={sendKeys(heldText, onSend)}>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem.key, { customer, ...dialog.problem.params })} />}
         <p className="fw-cov-text">{t('decide.body', { customer })}</p>
@@ -551,7 +551,7 @@ export function ReverseDialog({
         </>
       }
     >
-      {/* F-PR-16: no <form> — Enter in a one-line field (the typed name) sends nothing; the send button and ⌘↵ send. */}
+      {/* F-PR-16: no form element — Enter in a one-line field (the typed name) sends nothing; the send button and ⌘↵ send. */}
       <div className="fw-cov-form" onKeyDown={sendKeys(heldText, onSend)}>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem.key, { customer, ...dialog.problem.params })} />}
         {answer && (
