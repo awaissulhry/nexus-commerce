@@ -320,6 +320,14 @@ describe('delivered (LOG-065, LOG-067)', () => {
     expect(read.body.order.status).toBe('DELIVERED')
     expect(read.body.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', status: 'DELIVERED', deliveredVia: 'CARRIER', pod: { signedBy: 'FAKE RECIPIENT', image: true }, openProblems: 0, mayOpen: true })
     expect(read.body.steps[0].dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    // ---- B-SA-0xxb / F-SA-266b: the proof's file itself for the thread's ONE viewer — only for a reader with files.read on the
+    // shipment (the viewer above has none: no id at all); the desk reads its id, name and type.
+    expect(read.body.shipments[0].pod.file).toBeNull()
+    const withFiles = await desk.get(`/sales/orders/${SO2}/deliveries`)
+    expect(withFiles.status, JSON.stringify(withFiles.body)).toBe(200)
+    const [stored] = await admin<{ id: string }>(`SELECT id::text AS id FROM "StoredFile" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND "originalName" LIKE 'proof-of-delivery-%'`, [SH1])
+    expect(withFiles.body.shipments[0].pod.file).toMatchObject({ id: stored!.id, name: expect.stringMatching(/^proof-of-delivery-/), contentType: 'application/pdf', sizeBytes: expect.any(Number) })
+    // ---- end B-SA-0xxb
     // Nothing more to follow.
     expect((await followOrder(system(), SO2, { what: 'again' })).moved).toEqual([])
   }, SLOW_TEST_TIMEOUT_MS)

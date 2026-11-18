@@ -21,7 +21,8 @@ export const deliveriesSchema = z.object({
       shippedAt: z.string().nullable(),
       deliveredAt: z.string().nullable(),
       deliveredVia: z.enum(DELIVERED_VIAS).nullable(),
-      pod: z.object({ signedBy: z.string().nullable(), signedAt: z.string().nullable(), image: z.boolean() }).nullable(),
+      // B-SA-0xxb / F-SA-266b: the proof's own file (files.read on the shipment): it opens in the thread's ONE viewer.
+      pod: z.object({ signedBy: z.string().nullable(), signedAt: z.string().nullable(), image: z.boolean(), file: z.object({ id: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number() }).nullable().optional() }).nullable(),
       openProblems: z.number(),
       mayOpen: z.boolean(),
     }),

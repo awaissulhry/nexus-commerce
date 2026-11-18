@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOfficeApi } from '../../../../../../lib/session/context'
 import { storeUrl } from '../../../../../../record-panels/store'
 import { useLiveBus } from '../../../../../../shell/live/use-live'
+import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame' // B-SA-0xxb: the thread's ONE viewer
 import { podDownload, readDeliveries } from './api'
 import { initialDeliveries, type DeliveriesActions, type DeliveriesModel } from './model'
+import { proofFileOf } from './model' // B-SA-0xxb
 import { DeliveriesView } from './view/DeliveriesView'
 
 /** The live events after which the card reads again (a shipment of this order arrived, its proof came, the order moved). */
@@ -18,6 +20,7 @@ const LIVE = new Set(['shipment.status_changed', 'shipment.pod_recorded', 'shipm
  */
 export function Deliveries({ orderId, prefix }: { orderId: string; prefix: string }) {
   const api = useOfficeApi()
+  const frame = useRecordFrame() // B-SA-0xxb
   const [model, setModel] = useState<DeliveriesModel>(() => initialDeliveries(prefix))
 
   const load = useCallback(
@@ -57,8 +60,21 @@ export function Deliveries({ orderId, prefix }: { orderId: string; prefix: strin
     onReconnect: () => void load(true),
   })
 
+  const openFiles = frame?.openFiles
+  const read = model.read
   const actions = useMemo<DeliveriesActions>(
     () => ({
+      // ---- B-SA-0xxb / F-SA-266b: the proof in the thread's ONE viewer (its own file; the viewer asks its address by its id).
+      ...(openFiles
+        ? {
+            onView: (shipmentId: string) => {
+              const file = read?.shipments.find((row) => row.id === shipmentId)
+              const proof = file ? proofFileOf(file) : null
+              if (proof) openFiles({ files: [proof], fileId: proof.id, returnTo: document.activeElement as HTMLElement | null })
+            },
+          }
+        : {}),
+      // ---- end B-SA-0xxb
       onRetry: () => void load(),
       onDismiss: () => setModel((state) => ({ ...state, problem: null })),
       onDownload: (shipmentId) => {
@@ -78,7 +94,7 @@ export function Deliveries({ orderId, prefix }: { orderId: string; prefix: strin
           })
       },
     }),
-    [api, load],
+    [api, load, openFiles, read],
   )
 
   return <DeliveriesView model={model} actions={actions} />
