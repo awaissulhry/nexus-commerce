@@ -22,6 +22,9 @@ import { OfficeScopeProvider, type OfficeScopeValue } from '../scope/scope-conte
 import { scopeOf } from '../scope/scope-model'
 import { lastPageOf, readLastPages, writeLastPages, type LastPages } from './phone-bar'
 import { useBell } from './use-bell'
+// F-SA-210 (sales plan N1): the sub-sidebar's counts (Incoming's "N waiting on us").
+import { INCOMING_WAITING, useNavCounts, withNavCountWords } from './use-nav-counts'
+import { useT } from '../../lib/i18n/provider'
 import { navWithMfaHint } from './mfa-hint'
 import { testModeRights } from './test-mode'
 import { useShellNotices } from './use-test-mode'
@@ -61,7 +64,13 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
   }, [locale])
 
   // B-W2b-F58: while the person's roles wait for two-factor, one row in words opens Me › Authenticator (mfa-hint.ts).
-  const nav = useMemo(() => navWithMfaHint(officeNavFor(permissionCheck(session.permissions)), session.mfa), [session.permissions, session.mfa])
+  // F-SA-210: the counted rows name their count in words for a screen reader (the design system draws the badge from `counts`).
+  const counts = useNavCounts(company, session.permissions)
+  const t = useT('shell')
+  const nav = useMemo(
+    () => withNavCountWords(navWithMfaHint(officeNavFor(permissionCheck(session.permissions)), session.mfa), counts, (badge, count) => (badge === INCOMING_WAITING ? t('nav.sales.incomingWaiting', { count }) : t('nav.sales.incoming'))),
+    [session.permissions, session.mfa, counts, t],
+  )
   // B-W2a-32: the palette's Records and Exact number groups (GET /search as this company).
   const recordSearch = useRecordSearch({ company, companies: session.companies })
   // B-W2a-40: the bell — unread notifications, one light read, then live (only for a person who reaches Home).
@@ -122,6 +131,7 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
         localMailbox,
         paletteRecords: recordSearch.records,
         bell,
+        counts, // F-SA-210
       }}
       // F-PR-02: a move between two Production pages keeps their one customer filter (`?party=`).
       onNavigate={(href) => router.push(carryParty(href, path, search))}

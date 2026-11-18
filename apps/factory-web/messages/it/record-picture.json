@@ -1,0 +1,22 @@
+{
+  "open": "Mostra in grande l'immagine di {number}",
+  "noneOf": "{number} non ha ancora un'immagine",
+  "reading": "Lettura dell'immagine di {number}",
+  "alt": "{style} immagine principale",
+  "more": "+{count}",
+  "viewerOf": "L'immagine di {number}",
+  "close": "Chiudi",
+  "openRecord": "Apri {number}",
+  "openStyle": "Apri il modello",
+  "none": "Ancora nessuna immagine",
+  "small": "Un'anteprima piccola. L'immagine intera è sul modello.",
+  "moreStyles_one": "+{count} altro modello: apri le righe",
+  "moreStyles_other": "+{count} altri modelli: apri le righe",
+  "files": {
+    "photos_one": "{count} foto",
+    "photos_other": "{count} foto",
+    "documents_one": "{count} documento",
+    "documents_other": "{count} documenti",
+    "door": "Apri i file"
+  }
+}

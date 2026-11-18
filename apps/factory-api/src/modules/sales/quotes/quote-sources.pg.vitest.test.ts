@@ -142,17 +142,22 @@ describe('TH-6 part B: "Made from" carries the request’s own state, so a reque
 
 // ---- TH-6 part B (B-TH-257 follow-up; O-SAL-QUO-LIST.grid-F01): the list row's picture, as the Orders sheet's ------------------------
 describe('TH-6 part B: a quote row names its first line’s style and its picture (the file only with files.read)', () => {
-  it('quotes.view alone: the style (code, name) and the count of styles, no file; the picture route answers 404', async () => {
+  // B-SA-013: the one-row picture route went; the page's pictures are POST /sales/quotes/pictures (B-SA-011, its own wall cases in
+  // modules/sales/orders/pictures.pg).
+  const pictures = (session: string, quoteIds: string[]) => app.inject({ method: 'POST', url: '/sales/quotes/pictures', payload: { quoteIds }, headers: { 'x-test-session': session } })
+  it('quotes.view alone: the style (code, name) and the count of styles, no file — in the row and in the batch read', async () => {
     const listed = await row(S.accepted!)
     expect(listed.styleCount).toBeGreaterThan(0)
     expect(listed.picture).toMatchObject({ styleId: expect.any(String), styleCode: expect.any(String), styleName: expect.any(String), fileId: null, contentType: null, small: false })
-    const response = await app.inject({ method: 'GET', url: `/sales/quotes/${S.accepted}/picture`, headers: { 'x-test-session': 'sales' } })
-    expect(response.statusCode).toBe(404)
+    const response = await pictures('sales', [S.accepted!])
+    expect(response.statusCode, response.body).toBe(200)
+    expect((response.json() as Json).pictures).toEqual([expect.objectContaining({ id: S.accepted, styleId: listed.picture.styleId, fileId: null, small: null })])
   })
 
-  it('a quote of a customer out of reach: no row, and its picture is 404 (never another customer’s style)', async () => {
-    const response = await app.inject({ method: 'GET', url: `/sales/quotes/${S.accepted}/picture`, headers: { 'x-test-session': 'otherCustomer' } })
-    expect(response.statusCode).toBe(404)
+  it('a quote of a customer out of reach: no row, and the batch read leaves it out (never another customer’s style)', async () => {
+    const response = await pictures('otherCustomer', [S.accepted!])
+    expect(response.statusCode, response.body).toBe(200)
+    expect((response.json() as Json).pictures).toEqual([])
     const list = await app.inject({ method: 'GET', url: '/sales/quotes?limit=200', headers: { 'x-test-session': 'otherCustomer' } })
     expect(list.statusCode).toBe(200)
     expect((list.json() as Json).quotes.some((quote: Json) => quote.id === S.accepted)).toBe(false)

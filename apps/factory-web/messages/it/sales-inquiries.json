@@ -704,19 +704,6 @@
     "company": "Mostra solo: {name}",
     "kind": "Mostra solo: {kind}"
   },
-  "picture": {
-    "open": "Immagine di {style} su {number}: aprila in grande",
-    "noneOf": "{number} non indica un modello: nessuna immagine",
-    "alt": "{style}",
-    "viewerOf": "Da {number}",
-    "small": "Un'anteprima piccola: l'originale si apre dal modello.",
-    "none": "Ancora nessuna immagine di questo modello",
-    "openStyle": "Apri modello",
-    "close": "Chiudi",
-    "more": "+{count}",
-    "moreStyles_one": "{count} altro modello in questa richiesta: aprila",
-    "moreStyles_other": "{count} altri modelli in questa richiesta: aprila"
-  },
   "peek": {
     "title": "{number} · {customer}",
     "received": "Ricevuta",

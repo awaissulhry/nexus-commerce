@@ -7,7 +7,7 @@ import { exportColumnsOf } from '../../../../list-frame/tools/model'
 import { selectedExportRequest } from '../../../../list-frame/w2b/bulk'
 import { forRole, LIST_ROWS, canOf } from '../_demo/fixtures'
 import type { OrderRow } from '../api'
-import { brandFromAddress, companyFromAddress, listAddress, rowsQuery, viewCount } from '../model'
+import { brandFromAddress, companyFromAddress, extraFromAddress /* F-SA-216 */, listAddress, rowsQuery, viewCount } from '../model'
 import { BOARD } from '../_demo/fixtures'
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE, orderDoor, quoteDoor, shippedDoor } from './sheet/model'
 
@@ -144,3 +144,31 @@ describe('the honest count and what Export ▾ says the file holds (screen = fil
     expect(exportColumnsOf(columns as never).map((column) => column.key)).not.toContain('requested')
   })
 })
+
+// ---- F-SA-216 (sales page plan P15, P25): one meaning per word -------------------------------------------------------------------
+describe('one meaning per word: the list rule is "Close to promise", the office\'s top priority "Top"', () => {
+  const depth = (locale: (typeof LOCALES)[number]) => createTranslator(locale, messagesFor(locale, ['sales-orders-depth'])['sales-orders-depth']!)
+  it('the ORDER_LATE_RISK rule reads "Close to promise" in its column, chip, filter, cell and total ("At risk / Late" is order health)', () => {
+    const en = tFor('en')
+    const it = tFor('it')
+    expect(en('col.atRisk')).toBe('Close to promise')
+    expect(en('chips.atRisk')).toBe('Close to promise')
+    expect(en('atRisk.filter')).toBe('Show only the orders close to their promise')
+    expect(en('atRisk.days', { count: 2 })).toBe('Close to promise · 2 days left')
+    expect(en('totals.atRisk', { n: 4 })).toBe('Close to promise 4')
+    expect(it('col.atRisk')).toBe('Vicino alla data promessa')
+    expect(it('atRisk.days', { count: 1 })).toBe('Vicino alla data promessa · manca 1 giorno')
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['col.atRisk', 'chips.atRisk', 'atRisk.filter', 'totals.atRisk']) expect(t(key, { n: 1 }), `${locale} ${key}`).not.toMatch(/At risk|A rischio/i)
+    }
+  })
+  it('the office\'s top priority level reads "Top" / "Massima"; its value stays URGENT (old links and saved views keep working)', () => {
+    expect(depth('en')('priority.level.URGENT')).toBe('Top')
+    expect(depth('it')('priority.level.URGENT')).toBe('Massima')
+    for (const locale of LOCALES) for (const key of ['priority.level.URGENT', 'priority.titleOne', 'priority.reason', 'priority.problem.reason']) expect(depth(locale)(key), `${locale} ${key}`).not.toMatch(/urgen/i)
+    // The address term of the rule is unchanged: an old link with atRisk=true still narrows the sheet.
+    expect(extraFromAddress(new URLSearchParams('atRisk=true'), 'open')).toEqual({ atRisk: true })
+  })
+})
+// ---- end F-SA-216

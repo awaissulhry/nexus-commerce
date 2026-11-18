@@ -6,6 +6,7 @@ import { permissionCheck } from '../../lib/session/session'
 import { OWNER_PERMISSIONS, SALES_PERMISSIONS } from '../design-data'
 import { firstOfficePage, isWindowPage, OFFICE_NAV, OFFICE_PAGES, officeNavFor, PROFILE_PAGE, WINDOW_PAGES } from '../nav/office-nav'
 import { rolePermissions } from '../design-data'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // F-SA-210
 
 /**
  * No dead landing: an office entry (`/w/<company>`, an area's own address, the brand link, a new session) opens the
@@ -40,6 +41,24 @@ describe('the first page a person may open (shell/office/office-entry.ts)', () =
     expect(firstOfficePage(officeNavFor(permissionCheck(['audit.read'])), { built })).toBe('/admin/audit')
   })
 })
+
+// ── F-SA-210 (sales plan N1, pick P1; 12-lists-board §1.2): Sales opens on Orders, for every role that may read orders ──
+describe('Sales opens on Orders (F-SA-210): the Sales address lands on the first Sales row each role template may open', () => {
+  const salesEntry = (role: string) => firstOfficePage(officeNavFor(permissionCheck(templateOf(role)!.permissions)), { areaId: 'sales' })
+  it.each(['owner', 'sales', 'production_manager', 'read_only', 'finance', 'warehouse', 'planner'])('%s → Sales › Orders', (role) => {
+    expect(salesEntry(role)).toBe('/sales/orders')
+  })
+  it.each(['buyer', 'quality_inspector'])('%s (no orders.view) → Sales › Customers, their first allowed row', (role) => {
+    expect(salesEntry(role)).toBe('/sales/customers')
+  })
+  it('the administrator lands on its own first allowed Sales row (or its first page when it has no Sales row)', () => {
+    const nav = officeNavFor(permissionCheck(templateOf('admin')!.permissions))
+    const sales = nav.areas.find((area) => area.id === 'sales')
+    const first = sales?.sections?.flatMap((section) => section.items).find((item) => OFFICE_PAGES.has(item.href) && !isWindowPage(item.href))?.href
+    expect(firstOfficePage(nav, { areaId: 'sales' })).toBe(first ?? firstOfficePage(nav))
+  })
+})
+// ── end F-SA-210 ──
 
 const OFFICE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../app/(office)/w/[company]')
 const pageFiles = (dir: string): string[] =>

@@ -6,7 +6,7 @@ import { copyOrderAsQuoteContract } from '../quotes/contract'
 import { copyOrderAsQuote } from '../quotes/duplicate'
 import { applyAmendment, listAmendments, previewAmendment } from './amend'
 import { closeLines, reopenLines } from './close-lines'
-import { boardContract, closeContract, customersContract, getOrderContract, listOrdersContract, makeOrderContract, orderPictureContract, promiseContract, readyContract, summaryContract } from './contract'
+import { boardContract, closeContract, customersContract, getOrderContract, listOrdersContract, makeOrderContract, promiseContract, readyContract, summaryContract } from './contract'
 import {
   applyAmendmentContract,
   cancelCheckContract,
@@ -33,12 +33,13 @@ import { getSchedule, requestStep, waiveDeposit } from './schedule'
 import { deliveriesContract, getDeliveries } from './delivered'
 // B-TH-019: the Customer switcher's numbers.
 import { orderCustomers } from './customers'
-// B-TH-017 / B-TH-063: the Picture cell's small preview.
-import { orderPicture } from './picture'
 // B-TH-058: the overall view's honest totals.
 import { orderSummary } from './summary'
 // B-TH-077: what points at the order (its complaints and returns, planning's open re-promises, the gates' refusals).
 import { orderLinks, recordLinksContract } from './record-links'
+// B-SA-011: the small pictures of a page of orders in one read.
+import { orderPicturesReadContract } from './contract'
+import { recordPictures } from '../../product/images/small-pictures'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -63,6 +64,9 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-TH-058: the overall view's totals per customer and for the whole view, each with the filter of its rows (before /:orderId).
   app.get('/sales/orders/summary', { schema: summaryContract }, async (request) => orderSummary(request, request.query))
+
+  // B-SA-011: the small pictures of a page of orders (the ids the reader may not see are left out; before /:orderId).
+  app.post('/sales/orders/pictures', { schema: orderPicturesReadContract }, async (request) => recordPictures(request, 'order', request.body.orderIds))
 
   app.get('/sales/orders/:orderId', { schema: getOrderContract }, async (request) => getOrder(request, request.params.orderId))
 
@@ -121,8 +125,7 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   // B-W2b-398 (LOG-067)
   app.get('/sales/orders/:orderId/deliveries', { schema: deliveriesContract }, async (request) => getDeliveries(request, request.params.orderId))
 
-  // B-TH-017 / B-TH-063: the Picture cell's small preview.
-  app.get('/sales/orders/:orderId/picture', { schema: orderPictureContract }, async (request) => orderPicture(request, request.params.orderId))
+  // B-SA-013: the Picture cell's one-row read went; the page's pictures are POST /sales/orders/pictures (B-SA-011).
 
   // B-TH-077: what points at the order, for its record (W27: only its own customer's).
   app.get('/sales/orders/:orderId/links', { schema: recordLinksContract }, async (request) => orderLinks(request, request.params.orderId))

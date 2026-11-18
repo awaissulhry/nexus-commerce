@@ -20,6 +20,7 @@ import { completeContext, testAuthenticator, type SessionContext } from '../../.
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { inquiries as exportSource } from '../inquiries/export-source'
+import { waitingCount } from './incoming' // B-SA-010
 
 /**
  * B-TH-039 (threads plan G2, L2-G07; O-SAL-INQ-LIST.list / .tiles / .band, O-HOME-TODAY.incoming, O-HOME-APV.list; wall W27/W30,
@@ -53,6 +54,8 @@ const SESSIONS: Record<string, SessionContext> = {
   // Wall T30: a person limited to one customer lists none of the other's rows of any kind.
   onlyP1: office(SALES, [P1]),
   onlyP3: office(SALES, [P3]),
+  // B-SA-010: reads Home only (no kind of Incoming).
+  homeOnly: office(['home.view'] as Permission[]),
 }
 
 let h: Harness
@@ -255,3 +258,56 @@ describe('Sales › Incoming over every door (B-TH-039)', () => {
     expect(JSON.stringify(rows)).not.toContain(P3)
   })
 })
+
+// ---- B-SA-010 (sales page plan N1, pick P1; 12-lists-board §1.3): the office shell's "N waiting on us" --------------------------
+describe('GET /sales/incoming/waiting-count: the rows whose next move is ours (B-SA-010)', () => {
+  const count = async (session: string): Promise<Json> => get(session, '/sales/incoming/waiting-count')
+  /** The rows of the landing view (tile OPEN) that wait on us: the badge counts exactly these. */
+  const ours = (rows: readonly Json[]): Json[] => rows.filter((row) => row.waiting.for === 'US')
+
+  it('counts requests NEW or ASSIGNED, catalogue orders SENT and change or cancel requests OPEN — the landing view\'s "waiting on us" rows', async () => {
+    const open = (await list('sales')).rows as Json[]
+    const answer = await count('sales')
+    expect(answer.count).toBe(ours(open).length)
+    expect(Date.parse(answer.asOf)).not.toBeNaN()
+    // The four states, each of them counted (the seeds hold one of each).
+    expect(new Set(ours(open).map((row) => `${row.kind}:${row.state}`))).toEqual(new Set(['REQUEST:NEW', 'REQUEST:ASSIGNED', 'CATALOGUE_ORDER:SENT', 'CHANGE_REQUEST:OPEN']))
+    expect(numbers(ours(open))).toEqual(expect.arrayContaining(['SEED-INQ-0001', 'SEED-INQ-0002', 'SEED-RQ-0001', 'SEED-SO-0002']))
+    // A request waiting on the customer, an answered or withdrawn row: never counted.
+    expect(numbers(ours(open))).not.toContain('SEED-INQ-0003')
+    expect(numbers(ours(open))).not.toContain('SEED-RQ-0002')
+  })
+
+  it('an OPEN pause or rush is no Incoming row (agreement T3: answered in Home › Approvals): not counted', async () => {
+    const before = (await count('sales')).count as number
+    // A HOLD asked on the order of the open change request (its customer, its company), as the portal would write it.
+    await h.db.admin.query(
+      `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, reason)
+       SELECT gen_random_uuid(), "tenantId", "companyId", "partyId", "orderId", 'HOLD', 'Please pause it for a week.' FROM "OrderChangeRequest" WHERE "tenantId" = $1 AND status = 'OPEN' AND kind = 'CHANGE' LIMIT 1`,
+      [T],
+    )
+    expect((await h.db.admin.query(`SELECT count(*)::int AS n FROM "OrderChangeRequest" WHERE "tenantId" = $1 AND status = 'OPEN' AND kind = 'HOLD'`, [T])).rows[0].n).toBe(1)
+    expect((await count('sales')).count).toBe(before)
+    expect((await count('sales')).count).toBe(ours((await list('sales')).rows).length)
+  })
+
+  it('each kind under its own right and wall: requests only without orders.view; a person limited to a customer counts only its rows', async () => {
+    const open = (await list('sales')).rows as Json[]
+    expect((await count('requestsOnly')).count).toBe(ours(open).filter((row) => row.kind === 'REQUEST').length)
+    // Limited to P3: P1's catalogue order and change request (and its requests) are never counted.
+    const p3 = await count('onlyP3')
+    expect(p3.count).toBe(ours(open).filter((row) => row.party === null || row.party.id === P3).length)
+    expect(p3.count).toBe(ours((await list('onlyP3')).rows).length)
+    expect(p3.count).toBeLessThan((await count('sales')).count)
+    expect(JSON.stringify(p3)).not.toContain(P1)
+    const p1 = await count('onlyP1')
+    expect(p1.count).toBe(ours(open).filter((row) => row.party === null || row.party.id === P1).length)
+  })
+
+  it('null when the reader lists no kind (the shell shows no badge, never a guessed 0); the route asks sales.inquiries.view', async () => {
+    const none = await waitingCount(callerFor(h.database, completeContext(SESSIONS.homeOnly!, 'sa010')))
+    expect(none.count).toBeNull()
+    expect((await call('homeOnly', '/sales/incoming/waiting-count')).statusCode).toBe(403)
+  })
+})
+// ---- end B-SA-010

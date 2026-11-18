@@ -6,7 +6,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { findCustomers, getParty } from '../../quotes/api'
-import { getBoard, getOrderPicture, listOrderCustomers, listOrders, nextOrderNumber, type OrderBoard, type OrderCustomer } from '../api'
+import { getBoard, listOrderCustomers, listOrders, nextOrderNumber, type OrderBoard, type OrderCustomer } from '../api'
 import type { OrderRow } from '../api' // B-TH-245
 import { useCoalesced, useLive } from '../hooks'
 import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
@@ -22,7 +22,7 @@ import { useOrdersImport } from '../import/use-orders-import'
 import { NAMESPACE as DEPTH } from '../depth/model'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import { brandName, NAMESPACE as SHEET } from './sheet/model'
-import type { PictureLoader } from './sheet/parts'
+import { pictureReader } from '../../../../lib/record-picture/api' // F-SA-212
 // ---- B-TH-244 (TH-4: the overall view grouped by customer, honest totals, the later columns, Invoice shipped goods) ----
 import { fromDdtsCandidates, getOrderSummary, type OrderSummary } from '../api'
 import { boardNarrowOf, extraFromAddress, groupFromAddress, noExtra, withoutExtra, type ExtraTerms } from '../model'
@@ -34,7 +34,6 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
-import { browserAddress } from '../../../../lib/api/browser-address'
 
 /**
  * `/w/<company>/sales/orders` (SCR-038): reads the orders of the saved rows view and the search from the address (the
@@ -306,10 +305,8 @@ function OrdersContainer() {
   // ── B-TH-225: the label's and the company's names for their chips; the pictures' small previews; a row opens its order ──
   const brandNamed = brand ? { value: brand, name: brandName([...(list.items ?? []), ...lanes.flatMap((lane) => lane.items ?? [])], brand).name } : null
   const companyNamed = company ? { id: company, name: session.companies.find((entry) => entry.id === company)?.name ?? company } : null
-  const loadPicture = useCallback<PictureLoader>(async (orderId) => {
-    const picture = await getOrderPicture(api, orderId)
-    return picture.small ? { url: browserAddress(picture.small.url) /* end check: the local store's path through /api */, expiresAt: picture.small.expiresAt } : null
-  }, [api])
+  // F-SA-212: the one picture part reads a page's pictures in ONE call (lib/record-picture; #1649's browserAddress kept there).
+  const readPictures = useMemo(() => pictureReader(api), [api])
   // ── end B-TH-225 ──
 
   // Live: an order event (a new order, a move, a deposit paid…) → "N updates · Show"; the tiles follow at once. The
@@ -382,9 +379,11 @@ function OrdersContainer() {
   // ---- B-TH-230: the reader's own new messages per order on the page (threads.read; one POST /threads/unread of ≤ 200 rows) ----
   const readsThreads = session.permissions.includes('threads.read')
   const [unreadTick, setUnreadTick] = useState(0)
-  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads && layout === 'list')
+  // F-SA-213: the board's lanes too (each reads its own cards' counts).
+  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads && (layout === 'list' || layout === 'board'))
   const unreadRows = useMemo(() => (layout === 'list' ? (shownItems ?? []).map((row) => ({ recordType: 'SalesOrder', id: row.id })) : []), [layout, shownItems])
   const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  const readUnread = useMemo(() => readUnreadWith(api), [api]) // F-SA-213: the board's lanes
   // ---- end B-TH-230
 
   const model: OrdersListModel = {
@@ -398,6 +397,7 @@ function OrdersContainer() {
     collapsed: collapsed ?? [],
     invoiceDrafts,
     unread: readsThreads ? unread : null, // B-TH-230
+    boardUnread: readsThreads && layout === 'board' ? { read: readUnread, refresh: unreadTick } : null, // F-SA-213
     customer, // B-TH-201
     // ---- B-TH-225 / B-TH-226 ----
     brand: brandNamed,
@@ -451,7 +451,7 @@ function OrdersContainer() {
         onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */ }),
         onSort: (next) => go({ sort: next }), // B-TH-057
         onClearCf: () => go({ cf: null }), // B-TH-057
-        loadPicture,
+        readPictures, // F-SA-212
         onOpenRow: (id, newTab) => {
           const href = `${prefix}/sales/orders/${id}`
           if (newTab) window.open(href, '_blank', 'noopener')

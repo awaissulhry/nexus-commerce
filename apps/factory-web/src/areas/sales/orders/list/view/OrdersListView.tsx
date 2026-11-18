@@ -31,7 +31,10 @@ import { NAMESPACE as DEPTH } from '../../depth/model'
 import '../../orders.css'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
-import { CustomerSwitcher, DoorCell, FunnelButton, PeekCard, PeekLink, PictureThumb, PictureViewer, SheetChips, useSmallPicture, type SheetChip } from '../sheet/parts'
+import { CustomerSwitcher, DoorCell, FunnelButton, PeekCard, PeekLink, SheetChips, type SheetChip } from '../sheet/parts'
+// F-SA-212: the ONE picture part (the cell, the phone card's aside and the picture large).
+import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
+import { PictureViewer } from '../../../../../lib/record-picture/view/PictureViewer'
 // B-TH-230: the New messages column (LastMessageCell).
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue } from '../../../../../lib/last-message-cell/model'
@@ -99,7 +102,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       // B-TH-225 (grid-F28, F29): o opens the focused cell's door; ⌘ / Ctrl + Enter opens it (or the row's order) in a new tab.
       const cell = target?.closest('.ag-cell')
       if (cell && !help && !model.newOrder && !target?.closest('input, textarea, select')) {
-        const door = cell.querySelector<HTMLElement>('a[data-door], button.fw-sheet-funnel, button.fw-sheet-thumb')
+        const door = cell.querySelector<HTMLElement>('a[data-door], button.fw-sheet-funnel, button[data-picture]') // F-SA-212: the picture part
         if (event.key === 'o' && !event.metaKey && !event.ctrlKey && !event.altKey && door) {
           event.preventDefault()
           door.click()
@@ -176,6 +179,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   )
   // ── end B-TH-057 ──
 
+  // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
+  const cardFields = useMemo(() => cardFieldsOf((row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />), [])
   const columns = useMemo<ColDef<OrderRow>[]>(
     () => sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
@@ -356,7 +361,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
       {model.layout === 'week' && model.week ? (
         // B-W2b-323: By promise week (the search narrows it; the rows view does not apply: every open line).
-        <WeekBoard model={model.week} prefix={model.prefix} search={searchField} onSite={actions?.onWeekSite} onRetry={actions?.onWeekRetry} />
+        <WeekBoard model={model.week} prefix={model.prefix} search={searchField} onSite={actions?.onWeekSite} onRetry={actions?.onWeekRetry} pictures={{ read: actions?.readPictures, demo: model.demoPictures } /* F-SA-215 */} />
       ) : model.layout === 'board' ? (
         <OrdersBoard model={model} actions={actions} search={searchField} rowsSelect={rowsSelect} onHelp={() => setHelp(true)} />
       ) : (
@@ -392,7 +397,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           title={customerName ? s('export.title', { customer: customerName }) : undefined /* B-TH-225: the export job names the customer */}
           exportAbout={about}
           onRowClick={(row, event) => actions?.onOpenRow?.(row.id, event.metaKey || event.ctrlKey)}
-          cards={{ fields: CARD_FIELDS, hrefOf: (row) => orderHref(model.prefix, row) }}
+          cards={{ fields: cardFields, hrefOf: (row) => orderHref(model.prefix, row) }}
           selection={{
             selected,
             onChange: setSelected,
@@ -422,7 +427,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       )}
       {model.rows !== 'open' && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
 
-      {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} t={s} onClose={() => setViewer(null)} /> /* B-TH-225 */}
+      {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
       {/* B-W2b-323: Set priority, Import orders. */}
@@ -473,10 +478,11 @@ function useWide(forced: boolean | undefined): boolean {
 }
 
 /** The phone card (grid-F22): the picture, the number, the customer, the brand, the status and the promise; the row's ⋯. */
-const CARD_FIELDS = Object.freeze({
+// F-SA-212: the picture is drawn by the one picture part at its phone size (`picture`: the card's own draw).
+const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
   number: { role: 'title' as const },
   customer: { role: 'subtitle' as const },
-  picture: { role: 'aside' as const },
+  picture: { role: 'aside' as const, draw: picture },
   brand: { role: 'field' as const },
   status: { role: 'field' as const },
   promised: { role: 'field' as const },
@@ -496,15 +502,31 @@ interface ColumnsInput {
   onViewer: (id: string) => void
 }
 
-/** The Picture cell: its small preview read lazily (only the rows AG draws), cached per row until the address expires. */
+/**
+ * The Picture cell (F-SA-212): the ONE picture part at its cell size — the rows AG draws ask their pictures, ONE batch read per
+ * page (lib/record-picture), cached by file id until the address expires.
+ */
 function PictureCell({ row, input }: { row: OrderRow; input: ColumnsInput }) {
-  const src = useSmallPicture(row, input.latest.current.actions?.loadPicture, input.model.demoPictures?.[row.id])
-  return <PictureThumb row={row} src={src} t={input.s} onOpen={() => input.onViewer(row.id)} />
+  return <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="cell" read={input.latest.current.actions?.readPictures} demo={input.model.demoPictures?.[row.id]} onOpen={() => input.onViewer(row.id)} />
 }
 
-function PictureViewerFor({ row, model, actions, t, onClose }: { row: OrderRow; model: OrdersListModel; actions?: OrdersListActions; t: Translate; onClose: () => void }) {
-  const src = useSmallPicture(row, actions?.loadPicture, model.demoPictures?.[row.id])
-  return <PictureViewer row={row} src={src} prefix={model.prefix} t={t} onClose={onClose} />
+/** The picture large (F-SA-212: the one viewer): Open style, the order, and its lines for its other styles. */
+function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; model: OrdersListModel; actions?: OrdersListActions; onClose: () => void }) {
+  return (
+    <PictureViewer
+      source="order"
+      recordId={row.id}
+      number={row.number}
+      picture={row.picture}
+      styleCount={row.styleCount}
+      read={actions?.readPictures}
+      demo={model.demoPictures?.[row.id]}
+      prefix={model.prefix}
+      recordHref={orderHref(model.prefix, row)}
+      linesHref={`${model.prefix}/sales/orders/${encodeURIComponent(row.id)}?tab=lines`}
+      onClose={onClose}
+    />
+  )
 }
 
 /**

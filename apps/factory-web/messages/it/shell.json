@@ -43,6 +43,8 @@
       "main": "Principali",
       "customers": "Clienti",
       "incoming": "In arrivo",
+      "incomingWaiting_one": "In arrivo, {count} ferma da noi",
+      "incomingWaiting_other": "In arrivo, {count} ferme da noi",
       "quotes": "Preventivi",
       "orders": "Ordini",
       "specialOrders": "Ordini speciali",

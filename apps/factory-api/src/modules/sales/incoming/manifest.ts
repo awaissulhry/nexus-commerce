@@ -8,4 +8,6 @@ import { defineManifest } from '../../../core/manifest'
  */
 export const manifest = defineManifest({
   'GET /sales/incoming': { audiences: ['office'], permission: 'sales.inquiries.view', scope: 'record' },
+  // B-SA-010: the shell's badge — the same kinds and walls as the list, counted (a person limited to some customers counts theirs).
+  'GET /sales/incoming/waiting-count': { audiences: ['office'], permission: 'sales.inquiries.view', scope: 'record' },
 })

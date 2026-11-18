@@ -171,5 +171,17 @@ describe('the orders file writes the sheet’s columns and reads its Brand term 
     expect(salesOrders.words!.it['invoiced.PART']).toBe('In parte')
     expect(salesOrders.words!.en['brand.own']).toBe('Own collection')
   })
+
+  // F-SA-216 (sales page plan P15, P25): one meaning per word — the list rule ORDER_LATE_RISK is "Close to promise" ("At risk /
+  // Late" is order health); the office's top priority level is "Top" ("Urgent" is the factory rush).
+  it('writes the list rule as "Close to promise" and the office\'s top level as "Top", in both languages', () => {
+    const row = { atRisk: { daysLeft: 3, daysBeforePromise: 5 }, priority: { level: 'URGENT' } } as never
+    const say = (locale: 'it' | 'en') => (code: string) => salesOrders.words![locale][code] ?? code
+    expect(salesOrders.columns.atRisk!.value(row, say('en'))).toBe('Close to promise (3 days left)')
+    expect(salesOrders.columns.atRisk!.value(row, say('it'))).toBe('Vicino alla data promessa (mancano 3 giorni)')
+    expect(salesOrders.columns.priority!.value(row, say('en'))).toBe('Top')
+    expect(salesOrders.columns.priority!.value(row, say('it'))).toBe('Massima')
+    for (const locale of ['it', 'en'] as const) expect(JSON.stringify(salesOrders.words![locale]), locale).not.toMatch(/At risk|A rischio/)
+  })
 })
 // ── end B-TH-018 ──
