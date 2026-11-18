@@ -7,6 +7,7 @@ import type { AllocationWorkshops, KitTiming, OutsideAnswer, WorkOrderWorkshops 
 import type { Subcontractors } from '../capacity/depth/api'
 import type { BacklogRun, ChangesPage, DaySheetPaper, MaterialAnswer, WhatIf } from './depth/api'
 import type { DepthProblemRow, LogKind } from './depth/model'
+import type { ReadPictures } from '../../../lib/record-picture/cache' // F-SA-283
 
 /**
  * The ONE view model of the planning board (SCR-122) and what it may ask for. The view fetches nothing: the page
@@ -143,4 +144,7 @@ export interface BoardActions {
   onShowDepthProblem?: (row: DepthProblemRow) => void
   onExportDownload?: () => void
   onExportAgain?: () => void
+  // ---- F-SA-283 ----
+  /** The one picture part's batch read of the work orders' style pictures (B-SA-074); none: the placeholder (no workorders.view). */
+  readPictures?: ReadPictures | null
 }

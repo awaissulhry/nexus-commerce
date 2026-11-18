@@ -128,11 +128,13 @@
     "blockedBanner": "Blocked since {date}: no new quotes, orders or shipments.",
     "activate": "Activate",
     "tab": {
+      "work": "Work",
+      "quotes": "Quotes & incoming",
       "overview": "Overview",
-      "addresses": "Addresses & contacts",
+      "money": "Money",
+      "people": "People & addresses",
       "terms": "Terms & requirements",
-      "orders": "Quotes & orders",
-      "portal": "Portal access"
+      "portal": "Portal settings"
     },
     "side": {
       "contacts": "Main contacts",
@@ -149,8 +151,20 @@
     "identity": {
       "none": "No tax identity yet: it cannot be invoiced until it has one."
     },
-    "openSheet": "Open this customer’s sheet",
-    "requirementsLabel": "Requirements in force"
+    "openSheet": "Open in Sales › Orders",
+    "requirementsLabel": "Requirements in force",
+    "band": {
+      "newOrder": "New order",
+      "addTask": "Add task for {customer}…",
+      "importOrders": "Import orders for {customer}…",
+      "workOrders": "Work orders of {customer} ›"
+    },
+    "anchor": {
+      "label": "Parts of Terms & requirements",
+      "commercial": "Commercial terms",
+      "hold": "Hold and PO number",
+      "identity": "Tax identity and VIES"
+    }
   },
   "suppliers": {
     "contactRoleHint": {
@@ -454,7 +468,8 @@
     "nothingToBlock": "Nothing selected can be blocked (only active ones)",
     "nothingToArchive": "Nothing selected can be archived (blocked ones are unblocked first)",
     "noEmail": "Needs an email first",
-    "projects": "Starting a project needs the right {right}."
+    "projects": "Starting a project needs the right {right}.",
+    "right": "Needs the right {right}."
   },
   "new": {
     "taxFirst": "Tax identity",
@@ -541,7 +556,9 @@
       "roles": "Roles",
       "language": "Language",
       "status": "Status"
-    }
+    },
+    "hasPortal": "Has portal access",
+    "invite": "Invite to the portal…"
   },
   "identity": {
     "title": "Tax identity",
@@ -743,9 +760,7 @@
   },
   "overview": {
     "identity": "Identity",
-    "now": "Now",
-    "nothingOpen": "Nothing open with this customer.",
-    "seeAll": "See all {count}"
+    "alsoOpen": "Also open"
   },
   "numbers": {
     "openQuotes": "Open quotes",
@@ -755,7 +770,11 @@
     "units_other": "{count} units to ship",
     "thisYear": "Ordered in {year}",
     "ordersHint": "Orders not cancelled",
-    "reading": "Reading…"
+    "reading": "Reading…",
+    "inProduction": "In production",
+    "inProductionHint": "Being made now",
+    "late": "Late",
+    "lateHint": "The promise passed, not shipped yet"
   },
   "side": {
     "label": "Status and next step",
@@ -773,10 +792,7 @@
     "all": "All",
     "quote": "Quote",
     "order": "Order",
-    "validUntil": "Valid until {date}",
-    "promise": "Promised {date}",
     "noQuotesRight": "Quotes are not shown: your role does not see quotes.",
-    "noOrdersRight": "Orders are not shown: your role does not see orders.",
     "failed": "Couldn't load quotes and orders",
     "empty": "Nothing here.",
     "emptyOpen": "No open quotes or orders.",
@@ -788,9 +804,10 @@
       "date": "Date",
       "value": "Value",
       "promise": "Promise",
-      "validUntil": "Valid until",
-      "when": "When"
-    }
+      "validUntil": "Valid until"
+    },
+    "titleQuotes": "Quotes",
+    "titleOrders": "Orders"
   },
   "pos": {
     "failed": "Couldn't load purchase orders",

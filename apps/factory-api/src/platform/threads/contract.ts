@@ -226,9 +226,12 @@ export const postReplyContract = defineContract({
     /** Files of this record already shared with its party (AVAILABLE, readable by the writer). */
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
     /** The batch of one action that replies on several records (the same id on each call). */
+    // B-SA-073: every reply of one batch is on a record of ONE customer, at most 50 records (409 in words otherwise).
     batchId: id().optional(),
     // B-TH-050: the shared message it answers, or the portal reply of ours it corrects (a mail is corrected by mail).
     ...messageLinkInput,
+    /** B-SA-073: the writer's tick "This text names no other customer" (a reply whose text names one is held without it, 409). */
+    namesNoOtherCustomer: z.boolean().optional(),
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })

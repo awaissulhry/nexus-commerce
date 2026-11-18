@@ -33,15 +33,21 @@ export type { PortalAccessActions, PortalAccessModel } from '../model'
  *  - Requests waiting for them (B-W2b-167): what we asked of them and still waits; ask for something; cancel.
  * Fetches nothing (areas/sales/customers/portal/PortalAccess.tsx reads and writes).
  */
-export function PortalAccessView({ model, actions }: { model: PortalAccessModel; actions?: PortalAccessActions }) {
+// ---- F-SA-274 (sales page plan R5, P10): the parts a page draws — a customer's Portal settings (settings, preview, limits, requests)
+// and People & addresses (people) each mount their own; default every part (a supplier's Portal access, as before).
+export const PORTAL_PARTS = ['settings', 'preview', 'limits', 'people', 'requests'] as const
+export type PortalPart = (typeof PORTAL_PARTS)[number]
+
+export function PortalAccessView({ model, actions, parts = PORTAL_PARTS, contactEmails }: { model: PortalAccessModel; actions?: PortalAccessActions; parts?: readonly PortalPart[]; contactEmails?: ReadonlySet<string> | undefined }) {
   return (
     <PortalAccessMessages>
-      <PortalAccessTab model={model} actions={actions} />
+      <PortalAccessTab model={model} actions={actions} parts={parts} contactEmails={contactEmails} />
     </PortalAccessMessages>
   )
 }
 
-function PortalAccessTab({ model, actions }: { model: PortalAccessModel; actions?: PortalAccessActions }) {
+function PortalAccessTab({ model, actions, parts, contactEmails }: { model: PortalAccessModel; actions?: PortalAccessActions | undefined; parts: readonly PortalPart[]; contactEmails?: ReadonlySet<string> | undefined }) {
+  const has = (part: PortalPart) => parts.includes(part) // F-SA-274
   const t = usePortalT()
   if (!model.can.view) return <EmptyState title={t('noAccess.title')} description={heldWords(t, 'right.view') ?? undefined} />
   if (model.problem && !model.access)
@@ -73,18 +79,20 @@ function PortalAccessTab({ model, actions }: { model: PortalAccessModel; actions
     <PortalDialogs model={model} actions={actions}>
       <div className="fw-pa">
         <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        <LiveLine model={model} />
-        {model.access.termsInForce === false && <Banner tone="warning" title={t('terms.missing')} />}
-        <div className="fw-pa-grid">
-          <SettingsCard model={model} actions={actions} />
-          <PreviewCard model={model} actions={actions} />
-        </div>
+        {(has('settings') || has('people')) && <LiveLine model={model} />}
+        {has('settings') && model.access.termsInForce === false && <Banner tone="warning" title={t('terms.missing')} />}
+        {(has('settings') || has('preview')) && (
+          <div className="fw-pa-grid">
+            {has('settings') && <SettingsCard model={model} actions={actions} />}
+            {has('preview') && <PreviewCard model={model} actions={actions} />}
+          </div>
+        )}
         {/* F-PR-07: the production limits of a customer (absent for a supplier, a workshop or an adviser). */}
-        {model.limits && (
+        {has('limits') && model.limits && (
           <LimitsCard model={model.limits} partyName={model.access.party.name} portalOn={model.access.settings.portalOn} people={model.access.people} can={{ preview: model.can.preview }} previewing={model.previewing} actions={actions?.limits} />
         )}
-        <PeopleCard model={model} actions={actions} />
-        <RequestsCard model={model} actions={actions} />
+        {has('people') && <PeopleCard model={model} actions={actions} contactEmails={contactEmails} />}
+        {has('requests') && <RequestsCard model={model} actions={actions} />}
       </div>
       <PortalStepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
     </PortalDialogs>

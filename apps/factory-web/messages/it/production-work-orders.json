@@ -432,5 +432,13 @@
       "line": "Una riga, senza a capo.",
       "long": "Al massimo {count} caratteri."
     }
+  },
+  "changes": {
+    "notice_one": "Una modifica dell'ordine di lavoro aspetta: {cells} per l'ordine {order}.",
+    "notice_other": "{count} modifiche dell'ordine di lavoro aspettano; la prima: {cells} per l'ordine {order}.",
+    "open": "Apri",
+    "applied": "La modifica dell'ordine di lavoro è applicata: {number} ora fa quello che vuole l'ordine.",
+    "declined": "La modifica dell'ordine di lavoro è lasciata così.",
+    "appliedReprint": "La modifica dell'ordine di lavoro è applicata: ristampa il foglio di lavorazione, le quantità sono cambiate."
   }
 }

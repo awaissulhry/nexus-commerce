@@ -12,6 +12,8 @@ export const manifest = defineManifest({
   'GET /production/work-orders/open-lines': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   // B-W2a-46: the readiness word of many work orders (the list's column), each checked on its company and site.
   'GET /production/work-orders/readiness': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  // B-SA-074: the small pictures of a page of work orders (walled as the list in one query; each file with files.read).
+  'POST /production/work-orders/pictures': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId/release-check': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId/spec/compare': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },

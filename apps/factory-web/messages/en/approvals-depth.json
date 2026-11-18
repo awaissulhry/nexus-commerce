@@ -123,7 +123,9 @@
     "holdNotLifted": "Not lifted on {orders}: open the work order to lift it.",
     "holdNothing": "Nothing of this pause is held any more.",
     "rushCleared": "Rush cleared on {orders}.",
-    "rushNotCleared": "Rush not cleared on {orders}: open the work order to clear it."
+    "rushNotCleared": "Rush not cleared on {orders}: open the work order to clear it.",
+    "changeApplied": "Applied: {request}.",
+    "changeDeclined": "Left as is: {request}."
   },
   "table": {
     "waiting": "Requests waiting for me",
@@ -266,7 +268,8 @@
       "pickSome": "Tick the requests to approve first.",
       "oneKind": "Approve several only for requests of one kind.",
       "reading": "Reading the request…",
-      "answerAlone": "A customer’s request is answered in its window: open it."
+      "answerAlone": "A customer’s request is answered in its window: open it.",
+      "changeAlone": "A work order change is decided in its window: open it."
     }
   },
   "refusal": {

@@ -312,7 +312,8 @@
       "COUNTER_AGREED": "Il cliente ha detto sì alla nostra controproposta: accetta la richiesta per eseguirla.",
       "COUNTER_REFUSED": "Il cliente ha detto no alla nostra controproposta: la richiesta è ritirata.",
       "COUNTER_LAPSED": "La nostra controproposta è scaduta: rifiuta la richiesta con delle parole.",
-      "COLOUR_IN_WORK": "Un ordine di lavoro fa ora la riga nel suo colore: rispondi a mano al cambio di colore (annulla e rifai).",
+      "COLOUR_CUT": "Già tagliati in questo colore: un pezzo tagliato non cambia colore. Proponi altro o rifiuta.",
+      "EXTRA_OUTCOME": "Ci sono già pezzi tagliati oltre la nuova quantità: scegli prima cosa fare dei pezzi in più (tieni e addebita al cliente, tieni come rimanenza, o scarta).",
       "ADDRESS_GONE": "L’indirizzo di consegna richiesto non è più in uso: rifiuta, o chiedi al cliente un altro indirizzo.",
       "SHIPMENT_PREPARED": "Si sta preparando una spedizione per l’indirizzo dell’ordine: cambialo prima lì, o rifiuta.",
       "NOT_KEPT": "La scheda di produzione del cliente non c’è ancora: riprova tra poco.",
@@ -330,6 +331,126 @@
       "rate_limited": "Troppi tentativi: aspetta un momento.",
       "signed_out": "La sessione è terminata: accedi di nuovo.",
       "internal": "Qualcosa è andato storto. Riprova."
+    }
+  },
+  "workOrderChange": {
+    "titleUnknown": "Modifica dell'ordine di lavoro",
+    "subtitle": "Ordine {order} · proposta da {who}, {at}",
+    "someone": "il sistema",
+    "notFound": "Questa modifica dell'ordine di lavoro non c'è più.",
+    "why": "Perché: {reason}",
+    "readAgain": "Rileggi",
+    "lastError": "L'ultimo tentativo è stato rifiutato: {words}",
+    "decided": "Decisa: {status} da {who}, {at}",
+    "decisionNote": "Perché: {words}",
+    "cells": {
+      "label": "Le taglie che cambia",
+      "col": {
+        "cell": "Riga · taglia",
+        "change": "Prima → dopo",
+        "now": "Ne fa ora",
+        "cut": "Già tagliati e in fasci"
+      },
+      "line": "Riga {line}",
+      "fromTo": "{from} → {to}",
+      "changed": "Cambiata nel frattempo: {now}",
+      "notCounted": "Non contato qui",
+      "cutBundled": "{cut} tagliati · {bundled} in fasci",
+      "noRight": "Quanto fa ora l'ordine di lavoro e quanto è tagliato richiedono il permesso di vedere gli ordini di lavoro: la modifica viene ricontrollata quando si applica.",
+      "notRead": "Ora non è stato possibile leggere l'ordine di lavoro: la modifica viene ricontrollata quando si applica."
+    },
+    "extra": {
+      "title": "Pezzi in più",
+      "outcome": "Cosa succede: {outcome}",
+      "none": "Non è stato scelto un esito: decide la produzione cosa farne."
+    },
+    "lays": {
+      "title": "Il piazzamento che tocca",
+      "draft": "Una bozza non ha ancora un piazzamento.",
+      "noRight": "Per i piazzamenti serve il permesso di vedere il taglio: li controlla Applica.",
+      "reading": "Lettura dei piazzamenti…",
+      "notRead": "Ora non è stato possibile leggere i piazzamenti: li controlla Applica.",
+      "none": "Nessun piazzamento aperto tiene queste taglie.",
+      "open": "Apri {number}",
+      "openWorkOrder": "Apri il taglio dell'ordine di lavoro",
+      "stand": {
+        "FOLLOWS": "pianificato: segue l'ordine di lavoro verso il basso",
+        "FIXED": "fissato: ripianificalo prima se ne tiene più della nuova quantità",
+        "CUTTING": "in taglio: riduci l'ordine di lavoro quando è tagliato",
+        "CUT": "tagliato"
+      }
+    },
+    "does": {
+      "title": "Cosa fa Applica",
+      "LOWER_RELEASED": "Riduce l'ordine di lavoro rilasciato all'ordine, mai sotto quanto è già tagliato; un piazzamento di pelle pianificato lo segue. Poi ristampa il foglio di lavorazione.",
+      "SET_DRAFT_CELLS": "Imposta le taglie della bozza alle nuove quantità.",
+      "CANCEL_WORK_ORDER": "Annulla l'ordine di lavoro: all'ordine non serve più nulla di esso. I pezzi già tagliati restano come sono.",
+      "NEW_DRAFT": "Fa un nuovo ordine di lavoro in bozza con queste taglie.",
+      "unknown": "Si controlla sull'ordine di lavoro com'è ora.",
+      "proposal": "Una proposta non è un'approvazione: può applicarla chi gestisce questo ordine di lavoro, anche chi l'ha proposta."
+    },
+    "openWorkOrder": "Apri {number}",
+    "openOrder": "Apri l'ordine {order}",
+    "leave": "Lascia così…",
+    "leaveTitle": "Lascia così · {number}",
+    "leaveWhy": "Perché resta così",
+    "leaveHint": "Fino a {max} caratteri. L'Ancora da fare dell'ordine li mostra.",
+    "leaveSend": "Lascia così",
+    "back": "Indietro",
+    "apply": {
+      "LOWER_TO_ORDER": "Riduci all'ordine",
+      "MAKE_MORE": "Fanne di più per l'ordine",
+      "NEW_DRAFT": "Fai il nuovo ordine di lavoro",
+      "CANCEL_WORK_ORDER": "Annulla l'ordine di lavoro"
+    },
+    "held": {
+      "reading": "Lettura della modifica…",
+      "decided": "Questa modifica dell'ordine di lavoro è già decisa.",
+      "DECIDED": "Questa modifica dell'ordine di lavoro è già decisa.",
+      "noRight": "La decide solo chi gestisce questo ordine di lavoro.",
+      "WORK_ORDER_DONE": "{number} non è più aperto: lascia la modifica così, con una parola.",
+      "ON_HOLD": "{number} è in pausa: togli prima la pausa, poi applica la modifica.",
+      "NOT_A_DRAFT": "{number} è rilasciato: non ne fa di più. Lascia questa così e proponi un nuovo ordine di lavoro.",
+      "CHANGED_SINCE": "{number} è cambiato nel frattempo: proponi di nuovo",
+      "REPLAN_LAY": "Ripianifica prima il piazzamento",
+      "CUTTING_UNDER_WAY": "Il suo piazzamento è in taglio: riduci l'ordine di lavoro quando è tagliato.",
+      "UNIT_CUT": "Il capo di {number} è già tagliato: scartalo con la sua approvazione, o tienilo.",
+      "offline": "Non in linea: decidi quando torni in linea.",
+      "busy": "In corso…",
+      "words": "Di' perché resta così.",
+      "long": "Al massimo {max} caratteri."
+    },
+    "refusal": {
+      "CHANGED_SINCE": "{number} è cambiato nel frattempo: proponi di nuovo",
+      "DECIDED": "Questa modifica dell'ordine di lavoro è già decisa.",
+      "WORK_ORDER_DONE": "{number} non è più aperto: lascia la modifica così, con una parola.",
+      "ON_HOLD": "{number} è in pausa: togli prima la pausa, poi applica la modifica.",
+      "NOT_A_DRAFT": "{number} è rilasciato: non ne fa di più. Lascia questa così e proponi un nuovo ordine di lavoro.",
+      "UNIT_CUT": "Il capo di {number} è già tagliato: scartalo con la sua approvazione, o tienilo.",
+      "NOT_THIS_ORDER": "Una modifica dell'ordine di lavoro nomina un ordine di lavoro del suo stesso ordine.",
+      "REQUEST_NOT_ACCEPTED": "Una modifica dell'ordine di lavoro esegue una richiesta accettata: rispondi prima alla richiesta.",
+      "EXTRA_OUTCOME": "Scegli prima cosa fare dei pezzi in più.",
+      "NOT_RELEASED": "{number} non è più rilasciato né in lavorazione: le sue taglie non cambiano più.",
+      "DRAFT": "{number} è una bozza: le sue taglie si impostano, non si riducono.",
+      "UNIT": "{number} fa un capo su misura: si annulla, non si riduce.",
+      "REPAIR": "{number} ripara un capo: la sua taglia non cambia.",
+      "NO_ORDER_LINE": "Una taglia della modifica non fa nessuna riga d'ordine: non si riduce a un ordine.",
+      "ONLY_LOWERS": "Riduci all'ordine riduce soltanto: per farne di più, proponi di farne di più.",
+      "REPLAN_LAY": "Ripianifica prima il piazzamento",
+      "CUTTING_UNDER_WAY": "Il suo piazzamento è in taglio: riduci l'ordine di lavoro quando è tagliato.",
+      "CELL_IN_USE": "Una taglia non può sparire: etichette, matricole o registrazioni del reparto la nominano. Riducila a 1, o toglile prima.",
+      "LAST_CELL": "Ogni taglia di {number} sparirebbe: annulla invece l'ordine di lavoro.",
+      "other": "È stata rifiutata così com'è: rileggila.",
+      "moved": "È cambiata da quando l'hai letta: è stata riletta.",
+      "gone": "Questa modifica dell'ordine di lavoro non c'è più."
+    },
+    "problem": {
+      "forbidden": "Non puoi decidere questa modifica dell'ordine di lavoro.",
+      "invalid": "È stata rifiutata così com'è: controlla quello che hai scritto.",
+      "unavailable": "Il server non ha risposto. Riprova tra poco.",
+      "rate_limited": "Troppi tentativi: aspetta un momento.",
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "internal": "Qualcosa non ha funzionato: riprova."
     }
   }
 }

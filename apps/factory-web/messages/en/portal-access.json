@@ -242,7 +242,8 @@
     "emptyHint": {
       "customers": "Invite the first person: they get an e-mail and sign in with a code.",
       "suppliers": "Links still work without an account. Invite a contact to give them the portal."
-    }
+    },
+    "isContact": "Contact"
   },
   "row": {
     "change": "Change access…",
@@ -319,7 +320,6 @@
     "deactivate_other": "{count} people deactivated",
     "production": "The production limits of {name} are saved.",
     "supervisor": "The supervisor of {name} is saved.",
-    "productionAndSupervisor": "The production limits and the supervisor of {name} are saved.",
     "freeze": "The freeze rule of {name} is saved.",
     "freezeReset": "{name} follows the company’s freeze points for this field again.",
     "previewProduction": "My production of {name} opened in a new tab, read-only, for an hour."
@@ -481,7 +481,6 @@
     },
     "previewOpen": "Open My production as {name}",
     "portalOff": "Their portal is off: these limits apply once it is on. A supervisor works without a portal: saving one opens nothing for them.",
-    "limitsSavedNotSupervisor": "The limits are saved; the supervisor was not changed.",
     "sees": {
       "title": "What {name} sees",
       "always": "Every level shows the stage, the expected date and its moves, health, who acts next, holds and requests. Also:",

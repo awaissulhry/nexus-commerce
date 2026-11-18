@@ -12,6 +12,8 @@ export const manifest = defineManifest({
   'GET /tasks/assignees': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks/bulk': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
+  // B-SA-071: one task on each of many records (1–100), one batch; each record checked as POST /tasks checks it.
+  'POST /tasks/batch': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'PUT /tasks/:id': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks/:id/assign': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks/:id/status': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },

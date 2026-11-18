@@ -54,7 +54,8 @@ export type NotificationState = (typeof NOTIFICATION_STATES)[number]
  * `actorId`), {record} the record's label, {title} a task's title, {kind} a Today row's kind in words, {status} a
  * decision, {figure} the amount the reader may see (only when params hold one); B-W2b-385: {count}, {entered}, {left} the
  * rows of a followed saved view (numbers in params). F-PR-05b: {customer} the customer's name (params `customer`; told only to a
- * person who reads that customer's record) — B-PR-32's notices of a customer's acts name it the same way.
+ * person who reads that customer's record) — B-PR-32's notices of a customer's acts name it the same way. B-SA-051: {what} what
+ * changed on a sales order (params `what`), {number} the order's number on a work order's face (params `number`).
  */
 export const MESSAGE_TEMPLATES = {
   'notifications.mentioned': { en: '{actor} mentioned you on {record}', it: '{actor} ti ha menzionato su {record}' },
@@ -119,6 +120,16 @@ export const MESSAGE_TEMPLATES = {
   'notifications.following.view': { en: '{record}, a saved view you follow, changed: {entered} came in, {left} left ({count} now)', it: '{record}, una vista salvata che segui, è cambiata: {entered} entrati, {left} usciti (ora {count})' },
   'notifications.following.viewCount': { en: '{record}, a saved view you follow, changed ({count} now)', it: '{record}, una vista salvata che segui, è cambiata (ora {count})' },
   'notifications.following.changed': { en: '{record}, which you follow, changed', it: '{record}, che segui, è cambiato' },
+  // ---- B-SA-051 (Sales page plan R9 "ONE bell mechanism", P8; 14-change-flow §5.2): a change of a sales order, to everyone on the
+  // order (its followers — the supervisor among them — and, through its floor note, each open work order's) but the person who
+  // made it: ONE item per reader and change (orderChangeBatch). {record} the order's number (on a work order's face, the work
+  // order's); {what} what changed, the change note's first line (changeWhatOf); {count} the steps still to do; {number} the
+  // order's number on a work order's face.
+  'notifications.following.change': { en: '{record} changed: {what}.', it: '{record} cambiato: {what}.' },
+  'notifications.following.changeStep': { en: '{record} changed: {what}. 1 step still to do.', it: '{record} cambiato: {what}. Ancora 1 passo da fare.' },
+  'notifications.following.changeSteps': { en: '{record} changed: {what}. {count} steps still to do.', it: '{record} cambiato: {what}. Ancora {count} passi da fare.' },
+  'notifications.following.orderChange': { en: '{record}: its order {number} changed — {what}.', it: '{record}: il suo ordine {number} è cambiato — {what}.' },
+  // ---- end B-SA-051
   // B-W2b-385 (NT1:01-03): a request to buy put on a purchase order ({title}: the order's number) or refused by the buyer, to who
   // asked; an inquiry given to a person; a product-safety report to the people who assess them (with an accident: said).
   'notifications.purchasing.requestOrdered': { en: 'Your request to buy {record} was put on purchase order {title}', it: 'La tua richiesta di acquisto {record} è stata messa nell’ordine di acquisto {title}' },
@@ -270,6 +281,9 @@ export function sentenceOf(
     left: typeof params.left === 'number' ? String(params.left) : '',
     // F-PR-05b: the customer of an issue's task (told only to a person who reads that customer's record).
     customer: typeof params.customer === 'string' ? params.customer : '',
+    // B-SA-051: what changed on a sales order, and the order's number on a work order's face.
+    what: typeof params.what === 'string' ? params.what : '',
+    number: typeof params.number === 'string' ? params.number : '',
   }
   return template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '')
 }
@@ -309,6 +323,26 @@ export const batchGroupKey = (batchId: string, category: string): string => `bat
 /** The number of different records among a group's rows (a batch group spans several; a record group one). */
 export const recordsInGroup = (rows: readonly { readonly recordType: string; readonly recordId: string }[]): number => new Set(rows.map((row) => `${row.recordType}:${row.recordId}`)).size
 // ---- end B-TH-045
+
+// ---- B-SA-051 (Sales page plan R9 "ONE bell mechanism per change"; review C-7): one change of one sales order is ONE bell item per
+// reader. Its batch is the command that made it and the order — the system line on the order's thread (B-SA-052, idempotent per
+// correlation and order), the floor notes on its open work orders (B-SA-053) and the order's own status or promise move
+// (view-follow's FOLLOWING rule) all fold into it, whichever event the fan-out reads first. A worker handler's command keeps its
+// event's correlation (outbox/dispatch), so the handler that writes the system line names the same batch as the request.
+
+/** The batch of one change of one order: the correlation (request) that made it and the order's id. */
+export const orderChangeBatch = (correlationId: string, orderId: string): string => `order-change:${correlationId}:${orderId}`
+
+/** The most characters of what changed a bell sentence quotes. */
+export const CHANGE_WHAT_MAX = 120
+
+/** What changed, in a bell sentence: the change note's first line, trimmed, without its closing stop, cut at CHANGE_WHAT_MAX. */
+export function changeWhatOf(bodyText: string): string {
+  const first = bodyText.split('\n').map((line) => line.trim()).find((line) => line !== '') ?? ''
+  const bare = first.replace(/[\s.:;,]+$/u, '')
+  return bare.length <= CHANGE_WHAT_MAX ? bare : `${bare.slice(0, CHANGE_WHAT_MAX - 1).trimEnd()}…`
+}
+// ---- end B-SA-051
 
 // ---- snooze (H: "until a time or new activity") ---------------------------------------------------------------------------
 
