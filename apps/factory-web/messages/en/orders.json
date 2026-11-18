@@ -453,11 +453,9 @@
     "col": {
       "number": "Work order",
       "style": "Style",
-      "pieces": "Pieces",
       "status": "State",
       "progress": "Progress",
       "due": "Due",
-      "site": "Site",
       "released": "Released",
       "own": "Made for this order",
       "materials": "Materials"

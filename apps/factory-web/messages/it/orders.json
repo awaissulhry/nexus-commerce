@@ -453,11 +453,9 @@
     "col": {
       "number": "Ordine di lavoro",
       "style": "Modello",
-      "pieces": "Capi",
       "status": "Stato",
       "progress": "Avanzamento",
       "due": "Scadenza",
-      "site": "Sede",
       "released": "Rilasciato",
       "own": "Per questo ordine",
       "materials": "Materiali"

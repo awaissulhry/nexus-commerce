@@ -490,10 +490,6 @@ export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly Reco
 /** A tab whose body is a wide grid (size grids, the work orders, the shipments): the docked thread takes one third under 1600 px. */
 export const isWideTab = (tab: RecordTab): boolean => tab === 'lines' || tab === 'production' || tab === 'shipments' || tab === 'files'
 
-/** The band's health chip from the order read alone (the production read's health comes with Overview): Late · N d, never On track. */
-export const lateDaysOf = (order: Pick<Order, 'daysLate' | 'status'>): number | null => (order.daysLate !== null && order.daysLate > 0 && !CLOSE_FROM_STATES.includes(order.status) ? order.daysLate : null)
-const CLOSE_FROM_STATES: readonly OrderStatus[] = ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED']
-
 /** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
 export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>): number | null {
   if (tab === 'lines') return order.lines.length

@@ -62,7 +62,8 @@ import {
 import { confirmHeld, draftKey, headerFromAddress, manualBody, newOrderAddress, newOrderHeld, parseDraft, previewByKey } from './new/new-model'
 import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
-import { isMadeToMeasure, lateDaysOf, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
+import { isMadeToMeasure, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
+import { bandHealthOf, healthInputOf } from './record/overview/model' // F-SA-232: the band's chip
 import { HISTORY_CHIPS, historyFor, historyOf, waitingOnCustomerOf, waitingOnUsOf } from './record/changes/model' // F-SA-236
 import { designScreen as listScreen } from './list/fixtures'
 // B-TH-201
@@ -807,10 +808,12 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
   })
 
   it('the health chip only for a late order still to ship (never On track), from the order read until the production read comes', () => {
-    expect(lateDaysOf({ daysLate: 3, status: 'IN_PRODUCTION' })).toBe(3)
-    expect(lateDaysOf({ daysLate: 0, status: 'IN_PRODUCTION' })).toBeNull()
-    expect(lateDaysOf({ daysLate: null, status: 'CONFIRMED' })).toBeNull()
-    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(lateDaysOf({ daysLate: 4, status }), status).toBeNull()
+    const band = (daysLate: number | null, status: Parameters<typeof healthInputOf>[0]['status']) => healthInputOf({ daysLate, status, promiseDate: '2026-11-10' }, null)
+    expect(band(3, 'IN_PRODUCTION')).toMatchObject({ computed: 'LATE', daysLate: 3 })
+    expect(bandHealthOf(band(3, 'IN_PRODUCTION'))).toBe(true)
+    expect(bandHealthOf(band(0, 'IN_PRODUCTION'))).toBe(false)
+    expect(bandHealthOf(band(null, 'CONFIRMED'))).toBe(false)
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(bandHealthOf(band(4, status)), status).toBe(false)
     for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['production']).production!)('parts.health.lateBy', { count: 3 })).toMatch(/3/)
   })
 
