@@ -30,7 +30,7 @@ import { useLocale, useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
 import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
-import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
+import { clickedColumn, FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
 import { ListToolsBar, type ExportAbout, type ListBuiltInViews, type WithheldColumn } from './tools/ListToolsBar'
 import { useListTools } from './tools/useListTools'
 import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
@@ -427,7 +427,11 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     if (!event.data || !click || !rowClickRef.current || isGroupMarker(event.data)) return
     if (target?.closest('a, button, input, select, textarea, label, [role="button"], [role="checkbox"], .ag-selection-checkbox, [contenteditable="true"]')) return
     // B-TH-245 (one rule: door = link, editable cell = its editor, the rest of the row = the record): a click on a cell that edits stays.
-    const cellCol = target?.closest('.ag-cell')?.getAttribute('col-id')
+    // End check: the double click that opens a cell's editor reaches here after the editor replaced the clicked element — a cell
+    // editing keeps the click, and a clicked element no longer on the page is read as the grid's focused cell.
+    const api = apiRef.current && !apiRef.current.isDestroyed() ? apiRef.current : null
+    if (api && api.getEditingCells().length > 0) return
+    const cellCol = clickedColumn(target, api?.getFocusedCell()?.column.getColId() ?? null)
     if (cellCol && inlineRef.current?.editableFor(event.data, cellCol)) return
     rowClickRef.current(event.data, click)
   }, [])

@@ -260,8 +260,10 @@ export class Flow {
       const record = (body?: unknown) =>
         this.captures.push({ stage: this.stage, kind, context: name, method, path, status, requestId: response.headers()['x-request-id'] ?? null, idempotencyKey: response.request().headers()['idempotency-key'] ?? null, ...(body === undefined ? {} : { body }) })
       // Floor and link answers are kept whole: the end checks look for cost, margin and price fields in them. Of the office
-      // answers only the sign-in's (its first step, the password, writes nothing and asks for the code).
-      if ((kind !== 'office' || url.pathname === '/api/auth/office/sign-in') && type.includes('application/json')) {
+      // answers only the sign-in's (its first step, the password, writes nothing and asks for the code), and — end check
+      // (fix-browser-1) — a bulk or cell edit's and a mail fill's (their answer says whether anything was written).
+      const officeKept = url.pathname === '/api/auth/office/sign-in' || url.pathname === '/api/views/bulk/apply' || /^\/api\/templates\/mail\/events\/[^/]+\/fill$/.test(url.pathname)
+      if ((kind !== 'office' || officeKept) && type.includes('application/json')) {
         response.json().then(record, () => record())
       } else record()
     })

@@ -33,6 +33,25 @@ const NOT_WRITES: readonly { readonly path: RegExp; readonly when?: (capture: Ca
   { path: /^\/compliance\/certificates\/gate$/, why: 'a question to the certificate gate (the lapse check on a chosen day): it answers, it writes nothing' },
   { path: /^\/duplicates\/(parties|materials)\/check$/, why: 'a question to the duplicate check while a record is typed (the records it looks like): it answers, it writes nothing' },
   { path: /^\/threads\/unread$/, why: "the new-message counts of a page of records (B-TH-027: a read in a POST, its records in the body): it answers, it writes nothing" },
+  // ---- End check (fix-browser-1): the threads stages' questions, which run in the full flow for the first time
+  { path: /^\/threads\/[A-Za-z]+\/[0-9a-f-]+\/emails\/check$/, why: 'the send check of a mail from a record (platform/email-out/mis-send/check.ts): read only, nothing written, nothing sent' },
+  { path: /^\/fields\/rows\/[A-Z_]+$/, why: 'the custom values of a page of rows (B-TH-245: a read in a POST, its row ids in the body)' },
+  {
+    path: /^\/templates\/mail\/events\/[a-z_.]+\/fill$/,
+    // Only the office's tick on a drafted language not read yet is recorded (templates.useUnreadText): its answer says read: false.
+    when: (capture) => (capture.body as Record<string, unknown> | undefined)?.read !== false,
+    why: "a mail's starting words for a record, filled for the composer: nothing is sent or stored",
+  },
+  {
+    path: /^\/views\/bulk\/apply$/,
+    // A row refused (e.g. stale: another change came first, TH-4's cell edit) runs no command; a row saved is audited and counted.
+    when: (capture) => {
+      const results = ((capture.body as Record<string, unknown> | undefined)?.results ?? []) as { ok: boolean }[]
+      return results.length > 0 && results.every((row) => !row.ok)
+    },
+    why: 'a bulk or cell edit whose every row was refused (platform/views/bulk/bulk.ts): no command ran, nothing written',
+  },
+  // ---- end fix-browser-1
   {
     path: /^\/floor\/device\/state$/,
     // A report whose answer was not read (the page moved on) is bookkeeping too unless it said the app was updated.

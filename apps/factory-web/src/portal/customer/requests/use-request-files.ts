@@ -27,20 +27,34 @@ export interface RequestFiles {
   send: (id: string, door: FileDoor) => Promise<void>
 }
 
+/**
+ * End check (B-TH-282): the files as last changed, in step AT ONCE. The list was kept by a setState updater, which React may run
+ * only at the next render — so `send`, reading it right after the last file's "sent", saw the old list and its ONE message left
+ * the last file out (on the request, never in the conversation). Every change goes through `update`; the screen's state follows.
+ */
+export function heldList(onChange: (value: HeldFile[]) => void): { readonly current: HeldFile[]; update: (next: (current: HeldFile[]) => HeldFile[]) => void } {
+  let value: HeldFile[] = []
+  return {
+    get current() {
+      return value
+    },
+    update(next) {
+      value = next(value)
+      onChange(value)
+    },
+  }
+}
+
 export function useRequestFiles(api: ApiClient, words: { network: string; store: string; refused: string }): RequestFiles {
   const [held, setHeld] = useState<HeldFile[]>([])
   const [leftOut, setLeftOut] = useState(0)
   const files = useRef(new Map<string, File>())
-  const latest = useRef<HeldFile[]>([])
+  const list = useRef<ReturnType<typeof heldList> | null>(null)
+  if (list.current === null) list.current = heldList(setHeld)
+  const latest = list.current
   const carried = useRef(new Set<string>())
   const busy = useRef(false)
-  const update = useCallback((next: (current: HeldFile[]) => HeldFile[]) => {
-    setHeld((current) => {
-      const value = next(current)
-      latest.current = value
-      return value
-    })
-  }, [])
+  const update = latest.update
   const patch = useCallback((key: string, change: Partial<HeldFile>) => update((current) => current.map((file) => (file.key === key ? { ...file, ...change } : file))), [update])
 
   const add = useCallback(
