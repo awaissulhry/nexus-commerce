@@ -1,0 +1,467 @@
+# The Factory end check on free GitHub runners (build-speed plan, idea 1): the same stages as the lead's Mac end check
+# (setup, typecheck, guards, unit tests, migrate, factory-db PostgreSQL, API PostgreSQL, every golden suite, the browser
+# golden flow), spread over parallel jobs instead of one heavy slot at a time.
+#
+# Started by hand only (workflow_dispatch; the lead's build/tools/lead/ci_end_check.sh). Never on push or pull request,
+# never a required check, never a deploy. No secrets: the workflow reads none, and every database and Redis is a
+# container of its own job, on loopback, thrown away with the runner. The logs of a public repository are public, so
+# every test runs on made-up data only (the seeds' Brand Alpha / Brand Beta).
+#
+#   setup      npm ci (Commerce's node_modules cache entry: same lockfile, same key), shared + events built, the
+#              factory-db Prisma client generated; the built pieces cached for this run's jobs (.github/actions/factory-setup)
+#   typecheck  one job per workspace: factory-db, factory-domain, factory-api, factory-web
+#   guards     run-guards, check-i18n, check-event-contract
+#   units      factory-db (without its *.pg files: pg-db runs them), factory-domain, factory-api (without *.pg, with Redis),
+#              factory-web
+#   pg-db      a fresh database migrated, seeded twice and the migrations replayed (= the Mac's migrate stage), then the
+#              factory-db PostgreSQL suite
+#   pg-api     the API PostgreSQL suite in 16 shards (vitest --shard: files sorted by a hash of their path), 2 workers
+#              each, each shard on its own PostgreSQL 17 (tmpfs, durability off) and Redis. The test kit builds one
+#              migrated template per server (factory_tpl_<hash>) and copies it for every file, as on the Mac. The
+#              golden-flow files are left out here: they run as the golden jobs.
+#   golden     one job per golden suite (scripts/factory/golden-flow.mjs <suite>)
+#   browser    scripts/factory/browser-golden-flow.mjs: the stack, `next dev`, Playwright (chromium), the boot test
+#   summary    one table of every part (scripts/factory/ci-report.mjs); it FAILS when a part failed, never reported,
+#              or ran fewer tests than its floor in .github/factory-test-floor.json ("every suite skipped" cannot pass)
+#
+# Not here: the review walks (the lead's review_walk.cjs on the Mac) and packages/db-kit's own tests (not in the Mac
+# end check either).
+
+name: Factory end check
+
+on:
+  workflow_dispatch:
+    inputs:
+      parts:
+        description: 'Which parts: all · fast (typecheck, guards, unit tests) · pg (migrate, factory-db and API PostgreSQL) · golden (every golden suite) · browser (the browser golden flow)'
+        type: choice
+        options: [all, fast, pg, golden, browser]
+        default: all
+      ref:
+        description: 'The code to check: a branch, tag or commit (one that has .github/actions/factory-setup and scripts/factory/ci-report.mjs)'
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+# One run at a time; a second one waits for the first (it is never cancelled).
+concurrency:
+  group: factory-end-check
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # Named explicitly, so every step runs with -eo pipefail.
+    shell: bash
+
+env:
+  # The zone of the Mac the end check ran on, and of the business (a test that names a Rome day stays a Rome day).
+  TZ: Europe/Rome
+  FACTORY_QUEUE_PREFIX: ci
+  NEXT_TELEMETRY_DISABLED: '1'
+  CHECKPOINT_DISABLE: '1'
+  PRISMA_HIDE_UPDATE_MESSAGE: '1'
+
+jobs:
+  setup:
+    name: Setup — install, shared + events, Prisma client
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: The commit under test
+        run: git log --oneline -1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Commerce's key and paths (.github/actions/setup): one lockfile, one node_modules, one cache entry for both.
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json', 'patches/**') }}
+      - name: npm ci (cache miss)
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
+      - name: Save node_modules
+        if: steps.modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
+      - name: Build shared + events; generate the factory-db Prisma client
+        run: |
+          npm run build -w @nexus/shared
+          npm run build -w @nexus/events
+          npm run generate -w @nexus/factory-db
+      - name: Save the built pieces for this run's jobs
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            packages/shared/dist
+            packages/events/dist
+            packages/factory-db/src/generated
+          key: factory-built-${{ github.run_id }}
+
+  typecheck:
+    name: Typecheck — ${{ matrix.workspace }}
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'fast'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [factory-db, factory-domain, factory-api, factory-web]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+      - name: npm run typecheck -w @nexus/${{ matrix.workspace }}
+        env:
+          # As the Mac end check; factory-api's script caps its own heap (typecheck.mjs, 7 GB).
+          NODE_OPTIONS: --max-old-space-size=12288
+          WORKSPACE: ${{ matrix.workspace }}
+        run: |
+          set +e
+          npm run typecheck -w "@nexus/$WORKSPACE" 2>&1 | tee "$RUNNER_TEMP/typecheck.log"
+          rc=${PIPESTATUS[0]}; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part "typecheck-${{ matrix.workspace }}" --kind exit --input "$RUNNER_TEMP/typecheck.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-typecheck-${{ matrix.workspace }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  guards:
+    name: Guards — run-guards, check-i18n, check-event-contract
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'fast'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+      - name: Factory guards
+        run: |
+          set +e
+          node scripts/factory/run-guards.mjs 2>&1 | tee "$RUNNER_TEMP/guards.log"; a=${PIPESTATUS[0]}
+          node scripts/factory/check-i18n.mjs 2>&1 | tee -a "$RUNNER_TEMP/guards.log"; b=${PIPESTATUS[0]}
+          node scripts/factory/check-event-contract.mjs 2>&1 | tee -a "$RUNNER_TEMP/guards.log"; c=${PIPESTATUS[0]}
+          rc=$(( a || b || c )); echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part guards --kind guards --input "$RUNNER_TEMP/guards.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-guards
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  units:
+    name: Unit tests — ${{ matrix.part }}
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'fast'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: unit-db
+            dir: packages/factory-db
+            args: --exclude '**/*.pg.vitest.test.ts'
+            redis: 'false'
+          - part: unit-domain
+            dir: packages/factory-domain
+            args: ''
+            redis: 'false'
+          # The *.redis.vitest.test.ts files (crons, live screens) need the local stack's Redis.
+          - part: unit-api
+            dir: apps/factory-api
+            args: --exclude '**/*.pg.vitest.test.ts'
+            redis: 'true'
+            database-url: postgresql://factory_app@127.0.0.1:5442/factory_test_ci
+          - part: unit-web
+            dir: apps/factory-web
+            args: ''
+            redis: 'false'
+            heap: '8192'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+        with:
+          redis: ${{ matrix.redis }}
+      - name: vitest run (${{ matrix.dir }})
+        working-directory: ${{ matrix.dir }}
+        env:
+          # factory-api's test-database guard only reads it (loopback, factory_test…); no unit test connects to it.
+          DATABASE_URL_FOR_GUARD: ${{ matrix.database-url }}
+          HEAP: ${{ matrix.heap }}
+        run: |
+          [ -n "$DATABASE_URL_FOR_GUARD" ] && export FACTORY_DATABASE_URL="$DATABASE_URL_FOR_GUARD"
+          [ -n "$HEAP" ] && export NODE_OPTIONS="--max-old-space-size=$HEAP"
+          set +e
+          npx vitest run ${{ matrix.args }} --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/report.json"
+          rc=$?; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part "${{ matrix.part }}" --kind vitest --input "$RUNNER_TEMP/report.json" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-${{ matrix.part }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  pg-db:
+    name: factory-db PostgreSQL — migrate, seed twice, replay; the pg-db suite
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'pg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+        with:
+          postgres: 'true'
+      - name: Migrate a fresh database as the owner, seed it twice as factory_app, replay the migrations
+        id: migrate
+        run: |
+          set +e
+          (
+            set -e
+            docker exec factory-pg psql -h 127.0.0.1 -U postgres -qc 'CREATE DATABASE factory_test_ci_fresh'
+            FACTORY_MIGRATION_DATABASE_URL=postgresql://postgres@127.0.0.1:5442/factory_test_ci_fresh npm run migrate -w @nexus/factory-db
+            for i in 1 2; do
+              echo "--- seed $i"
+              FACTORY_DATABASE_URL=postgresql://factory_app@127.0.0.1:5442/factory_test_ci_fresh npm run seed -w @nexus/factory-db
+            done
+            node scripts/factory/check-migrations-replay.mjs
+          ) 2>&1 | tee "$RUNNER_TEMP/migrate.log"
+          rc=${PIPESTATUS[0]}; echo "$rc" > "$RUNNER_TEMP/migrate.exit"; exit "$rc"
+      - name: factory-db PostgreSQL suite (2 workers)
+        # Runs after a failed migrate too: the full list of what fails is the point.
+        if: (success() || failure()) && steps.migrate.outcome != 'skipped'
+        working-directory: packages/factory-db
+        env:
+          FACTORY_PG_TEST_RUN: cidb
+          FACTORY_DATABASE_URL: postgresql://factory_app@127.0.0.1:5442/factory_test_ci
+        run: |
+          set +e
+          npx vitest run .pg.vitest.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/pg-db.json"
+          rc=$?; echo "$rc" > "$RUNNER_TEMP/pg-db.exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: |
+          node scripts/factory/ci-report.mjs record --part migrate --kind exit --input "$RUNNER_TEMP/migrate.log" --exit-file "$RUNNER_TEMP/migrate.exit" --out "$RUNNER_TEMP/results"
+          node scripts/factory/ci-report.mjs record --part pg-db --kind vitest --input "$RUNNER_TEMP/pg-db.json" --exit-file "$RUNNER_TEMP/pg-db.exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-pg-db
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  pg-api:
+    name: API PostgreSQL (${{ matrix.shard }}/${{ strategy.job-total }}, 2 workers)
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'pg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # The shard count is this list's length: the step and the record take it from strategy.job-total, and the
+      # summary checks that shards 1..m each reported once.
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+        with:
+          postgres: 'true'
+          redis: 'true'
+      - name: API PostgreSQL suite, shard ${{ matrix.shard }} of ${{ strategy.job-total }} (golden-flow files left out)
+        working-directory: apps/factory-api
+        env:
+          FACTORY_PG_TEST_RUN: ci${{ matrix.shard }}
+          FACTORY_DATABASE_URL: postgresql://factory_app@127.0.0.1:5442/factory_test_ci
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set +e
+          npx vitest run .pg.vitest.test.ts --exclude 'src/golden-flow/**' --shard=${{ matrix.shard }}/${{ strategy.job-total }} --maxWorkers=2 \
+            --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/report.json"
+          rc=$?; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part pg-api --shard "${{ matrix.shard }}/${{ strategy.job-total }}" --kind vitest --input "$RUNNER_TEMP/report.json" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-pg-api-${{ matrix.shard }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  golden:
+    name: Golden ${{ matrix.suite }}
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'golden'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # Every suite of scripts/factory/golden-flow.mjs (the Mac end check's golden + golden-prod stages). A suite added
+      # there is added here and in .github/factory-test-floor.json (the summary fails on a result without a floor).
+      matrix:
+        suite: [w1, daily, followups, people, quality, portal, product, sales-depth, money-depth, threads, sales-page, production]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+        with:
+          postgres: 'true'
+          redis: 'true'
+      - name: node scripts/factory/golden-flow.mjs ${{ matrix.suite }}
+        env:
+          SUITE: ${{ matrix.suite }}
+          # The vitest test-database guard only; the flow makes its own throwaway database.
+          FACTORY_DATABASE_URL: postgresql://factory_app@127.0.0.1:5442/factory_test_ci_golden
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          set +e
+          node scripts/factory/golden-flow.mjs "$SUITE" 2>&1 | tee "$RUNNER_TEMP/golden.log"
+          rc=${PIPESTATUS[0]}; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part "golden-${{ matrix.suite }}" --kind golden --input "$RUNNER_TEMP/golden.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-golden-${{ matrix.suite }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+
+  browser:
+    name: Browser golden flow (Playwright on next dev)
+    needs: setup
+    if: inputs.parts == 'all' || inputs.parts == 'browser'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/factory-setup
+        with:
+          postgres: 'true'
+          redis: 'true'
+      # Commerce's smoke job's key: the browser build follows the installed Playwright version, so both share it.
+      - name: Playwright version (browser cache key)
+        id: playwright
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Playwright browser
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: npx playwright install --with-deps chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.browsers.outputs.cache-hit == 'true'
+      - name: node scripts/factory/browser-golden-flow.mjs
+        # Its own ports (8276, 8277, 3276), queue prefix and the local stack's Redis: the defaults, nothing else runs here.
+        run: |
+          set +e
+          node scripts/factory/browser-golden-flow.mjs --shots "$RUNNER_TEMP/bgf" 2>&1 | tee "$RUNNER_TEMP/browser.log"
+          rc=${PIPESTATUS[0]}; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+      - name: Record
+        if: always()
+        run: node scripts/factory/ci-report.mjs record --part browser --kind browser --input "$RUNNER_TEMP/browser.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-result-browser
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
+      # Screenshots, traces and the stack's and web's logs of a failed run (made-up data only).
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: factory-browser-golden-flow
+          path: ${{ runner.temp }}/bgf/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 7
+
+  summary:
+    name: Summary — every part passed and ran at least its floor
+    needs: [setup, typecheck, guards, units, pg-db, pg-api, golden, browser]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            .github
+            scripts/factory
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        # No result at all (setup failed): the summary below says so for every part.
+        continue-on-error: true
+        with:
+          pattern: factory-result-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/results
+      - name: One table; fail when a part failed, never reported, or ran fewer tests than its floor
+        env:
+          PARTS: ${{ inputs.parts }}
+          SETUP: ${{ needs.setup.result }}
+        run: |
+          echo "setup: $SETUP · parts: $PARTS"
+          node scripts/factory/ci-report.mjs summary --check endCheck --groups "$PARTS" --results "$RUNNER_TEMP/results"
