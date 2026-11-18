@@ -168,7 +168,7 @@ async function fresh(person: Portal): Promise<Notice[]> {
 const shortOf = (notice: Notice) => ({ messageKey: notice.messageKey, recordId: notice.recordId })
 
 beforeAll(async () => {
-  world = await urgencyWorld('pr31_production_notices', NS)
+  world = await urgencyWorld('pr31_prod_notices', NS) // fix-pr-9: a test database label has at most 20 characters
   // Both customers' production asks open (the limits card's list); their urgency is on already (the world's).
   await admin(`UPDATE "PortalSettings" SET "productionAskKinds" = '{HOLD,RESUME,SPLIT_SHIPMENT,SAMPLE_ROUND}', version = version + 1 WHERE "partyId" = ANY($1::uuid[])`, [[world.ids.a, world.ids.b]])
   for (const name of ['a1', 'a2', 'a3', 'a4'] as const) orders[name] = (await world.addOrder(world.ids.a, name.toUpperCase(), '2026-10-01')).orderId
