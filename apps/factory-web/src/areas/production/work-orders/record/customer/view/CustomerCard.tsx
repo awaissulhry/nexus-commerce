@@ -109,11 +109,10 @@ function PartLine<T>({ part, label, onRetry }: { part: CardPart<T>; label: strin
     return (
       <span className="fw-pr-inline">
         <span className="fw-pr-hint">{t('customerCard.failed', { part: label, why: t(part.problem) })}</span>
-        {onRetry && (
-          <Button size="sm" variant="quiet" onClick={onRetry}>
-            {t('common.retry')}
-          </Button>
-        )}
+        {/* fix-pr-6: a part that failed always offers Try again (as the card's other buttons, drawn whether or not the page wired it). */}
+        <Button size="sm" variant="quiet" onClick={() => onRetry?.()}>
+          {t('common.retry')}
+        </Button>
       </span>
     )
   return (

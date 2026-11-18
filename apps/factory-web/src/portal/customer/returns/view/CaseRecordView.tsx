@@ -328,7 +328,7 @@ function ReturnStatus({ model, record, actions }: { model: CaseRecordViewModel; 
 
 // ── Complaint › Request ─────────────────────────────────────────────────────────────────────────────────────────────
 function ComplaintRequest({ model, record, actions }: { model: CaseRecordViewModel; record: ComplaintRecord; actions?: CaseRecordActions }) {
-  const { t, at } = useReturnWords()
+  const { t, locale, at } = useReturnWords()
   const ds = useDsWords()
   const request = record.request
   const takes = ['NEW', 'TRIAGED', 'INVESTIGATING'].includes(record.status)
@@ -353,7 +353,8 @@ function ComplaintRequest({ model, record, actions }: { model: CaseRecordViewMod
                 value: request.order ? (
                   // B-TH-275 (plan §0.5): their own PO, never the office's SO- number; with none, the order in words.
                   <a href={`${model.prefix}/open/SalesOrder/${encodeURIComponent(request.order.id)}`}>
-                    {request.order.yourRef ? <RefPair theirs={request.order.yourRef} ours={null} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} /> : t('request.orderOpen')}
+                    {/* fix-portal-numbers-1: with no PO, the customer's own number ("Your order 7") before the plain words. */}
+                    {request.order.yourRef ? <RefPair theirs={request.order.yourRef} ours={null} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} /> : (request.order.yourNumber?.words[locale] ?? t('request.orderOpen'))}
                   </a>
                 ) : (
                   '—'

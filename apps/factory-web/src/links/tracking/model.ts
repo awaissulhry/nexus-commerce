@@ -86,7 +86,7 @@ export const initialTracking = (search: SearchModel | null): TrackingViewModel =
 
 // ---- the tracking part --------------------------------------------------------------------------------------------
 
-/** The page's title: the customer's own order reference first, then ours, then the shipment. */
+/** The page's title: the customer's own order reference first, then its own order number ("#12", fix-portal-numbers-1), then the shipment. */
 export const orderLabel = (page: TrackingPage): string => page.order.customerRef ?? page.order.number ?? page.shipment.number
 
 /** The DS tracker: every step reached is done, the furthest reached is "now" (B-W2b-191's rule). */

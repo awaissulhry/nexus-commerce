@@ -1,4 +1,5 @@
 import { definePartnerView, equalsTyped, holdsTyped, idsOf } from '../view'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 
 /**
  * A customer's invoices, deposit invoices and credit notes (modules/invoicing; the index's ../../indexers/invoice.ts),
@@ -14,14 +15,16 @@ export default definePartnerView({
   async read(client, ids) {
     const rows = await client.invoice.findMany({
       where: { id: { in: [...ids] }, number: { not: null } },
-      select: { id: true, companyId: true, number: true, docType: true, status: true, issueDate: true, salesOrder: { select: { number: true, customerRef: true } } },
+      select: { id: true, companyId: true, number: true, docType: true, status: true, issueDate: true, salesOrder: { select: { number: true, customerRef: true, customerSeq: true /* fix-portal-numbers-1 */ } } },
     })
     return rows.map((row) => ({
       id: row.id,
       companyId: row.companyId,
       theirRef: row.salesOrder?.customerRef ?? null,
       ourRef: row.number,
-      subtitle: row.salesOrder?.number ?? null,
+      // fix-portal-numbers-1 (B-TH-303, plan §0.5): the invoice keeps its legal number; under it the order by the customer's OWN
+      // number ("#12") — the office's SO-… is only matched, never shown.
+      subtitle: row.salesOrder ? customerRefOf('ORDER', row.salesOrder.customerSeq) : null,
       status: row.status,
       date: row.issueDate,
       words: [row.salesOrder?.number],

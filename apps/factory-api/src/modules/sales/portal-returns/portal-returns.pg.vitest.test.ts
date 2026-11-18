@@ -274,6 +274,10 @@ describe('complaints from the portal and their status (SAL-424), the 8D shared (
     expect(sent.status, JSON.stringify(sent.body)).toBe(201)
     complaint = sent.body.complaint
     expect(complaint).toMatchObject({ status: 'NEW', state: 'RECEIVED', request: { via: 'PORTAL', item: { size: '50' } }, investigation: null })
+    // fix-portal-numbers-1 (B-TH-303): the order it is about by the customer's own number, never the office's SEED-SO-0002.
+    expect(complaint.request.order).toMatchObject({ id: expect.any(String), yourNumber: { seq: expect.any(Number) } })
+    expect(complaint.request.order).not.toHaveProperty('number')
+    expect(JSON.stringify(complaint)).not.toContain('SEED-SO-0002')
     expect(await one('SELECT channel::text, status::text, "createdById" FROM "Complaint" WHERE id = $1', [complaint.id])).toEqual({ channel: 'PORTAL', status: 'NEW', createdById: userIds.buyer })
     expect((await events('complaint.received')).some((payload) => payload.complaintId === complaint.id && payload.channel === 'PORTAL')).toBe(true)
     // REFUSED: an item of another customer's order (400 at the field).

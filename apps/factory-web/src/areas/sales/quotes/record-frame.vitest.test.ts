@@ -161,7 +161,9 @@ describe('the Quotes list: New messages, "from INQ-…", an accepted row’s ord
     expect(listView).toContain('<QuotePictureCell row={data} load={latest.current.actions?.loadPicture}')
     expect(listView).toContain('<QuotePictureViewer row={row}')
     expect(page).toContain('const picture = await readQuotePicture(api, quoteId)')
-    expect(page).toContain('return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null')
+    // fix-pr-6: #1649 opens the small preview through /api (browserAddress), so the local store's picture shows.
+    expect(page).toContain('return picture.small ? { url: browserAddress(picture.small.url)')
+    expect(page).toContain('expiresAt: picture.small.expiresAt } : null')
     const cell = readFileSync(new URL('./list/view/QuotePicture.tsx', import.meta.url), 'utf8')
     expect(cell).toContain('useRequestPicture({ id: row.id, picture: row.picture ?? null }, load, demo)')
   })
