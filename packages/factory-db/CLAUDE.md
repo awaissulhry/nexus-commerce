@@ -607,7 +607,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (`ChangeRequest_order_ask`); `Message.aboutKind/aboutId` a part of the thread's own order (`Message_about_check`);
    WorkOrderChange's moves and wall; and R1's "Lower to the order": it redefines production's `factory_work_order_size_guard`
    (from …_followups_product_w2b4_guards) and `factory_work_order_material_guard` (W1's) so a RELEASED or IN_PROGRESS cell and
-   its planned materials go down or go, never below `factory_work_order_cell_floor` — what is cut, bundled or on a cut order)):
+   its planned materials go down or go, never below `factory_work_order_cell_floor` — what is cut, bundled or on a cut order)),
+   `…_order_apply_design_asks_guards` (sales page plan schema wave 2/2, B-SA-005b, guard only, no schema folder of its own: it
+   redefines …_production_wave5_guards' `factory_portal_settings_guard` so a customer's ask-kinds switch may also open the design
+   change DESIGN — factory-domain production-brand/kinds `LIMITS_ASK_KINDS`, the API's list)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

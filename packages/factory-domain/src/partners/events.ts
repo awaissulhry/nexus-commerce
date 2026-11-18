@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { CAPABILITIES, PARTNER_KINDS } from '../auth/partners/kinds'
 import { defineEvent } from '../events/define'
-import { PRODUCTION_ASK_KINDS } from '../production-brand/kinds'
+import { LIMITS_ASK_KINDS } from '../production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '../production-brand/levels'
 
 /**
@@ -50,7 +50,7 @@ export const events = [
       productionLevel: z.enum(PRODUCTION_SHARE_LEVELS).optional(),
       productionUrgencyOn: z.boolean().optional(),
       productionUrgentMax: z.number().int().min(0).max(20).optional(),
-      productionAskKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)).optional(),
+      productionAskKinds: z.array(z.enum(LIMITS_ASK_KINDS)).optional(), // B-SA-005b: + DESIGN
     }),
     live: live(['partyId', 'fields', 'portalOn']),
   }),

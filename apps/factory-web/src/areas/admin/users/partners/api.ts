@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { CAPABILITIES, PARTNER_KINDS } from '@nexus/factory-domain/auth/partners/kinds'
-import { PRODUCTION_ASK_KINDS, PRODUCTION_REQUEST_KINDS, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds' // F-PR-07
+import { LIMITS_ASK_KINDS, PRODUCTION_REQUEST_KINDS, type LimitsAskKind } from '@nexus/factory-domain/production-brand/kinds' // F-PR-07; B-SA-005b: + DESIGN
 import { PRODUCTION_SHARE_LEVELS, type ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels' // F-PR-07
 import type { ApiClient } from '../../../../lib/api/client'
 
@@ -188,7 +188,7 @@ export const productionLimitsSchema = z.object({
     /** What the customer sees of its orders in production (each level adds to the one before). */
     level: z.enum(PRODUCTION_SHARE_LEVELS),
     urgency: z.object({ on: z.boolean(), max: z.number(), now: z.number(), dormant: limitWords.nullable(), overQuota: limitWords.nullable() }),
-    askKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)),
+    askKinds: z.array(z.enum(LIMITS_ASK_KINDS)), // B-SA-005b: the production asks and the design change DESIGN
     openAsks: z.array(z.enum(PRODUCTION_REQUEST_KINDS)),
     approver: namedPerson.nullable(),
     overrideFourEyes: z.boolean(),
@@ -212,7 +212,7 @@ export interface ProductionLimitsBody {
   productionLevel?: ProductionShareLevel
   productionUrgencyOn?: boolean
   productionUrgentMax?: number
-  productionAskKinds?: ProductionAskKind[]
+  productionAskKinds?: LimitsAskKind[] // B-SA-005b: + DESIGN
   /** An active portal person of this customer; null: anyone with the approve right. */
   productionApproverId?: string | null
   overrideFourEyes?: boolean
