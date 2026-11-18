@@ -25,7 +25,8 @@ describe('SCR-194 Track an order — the link page (B-W2b-170)', () => {
 
   it('heads with the customer\'s own reference first; draws the furthest step reached as now', () => {
     expect(orderLabel(page('in-transit'))).toBe('4500-1234')
-    expect(orderLabel({ ...page('in-transit'), order: { customerRef: null, number: 'SO-26-0042' } })).toBe('SO-26-0042')
+    // fix-portal-numbers-1 (B-TH-303): without their PO, the customer's own order number (the API's "#42"), never the office's SO-….
+    expect(orderLabel({ ...page('in-transit'), order: { customerRef: null, number: '#42' } })).toBe('#42')
     const steps = trackerSteps(page('in-transit'), (code) => code, (iso) => iso.slice(0, 10))
     expect(steps.map((step) => [step.id, step.state, step.current ?? false])).toEqual([
       ['PACKED', 'done', false],

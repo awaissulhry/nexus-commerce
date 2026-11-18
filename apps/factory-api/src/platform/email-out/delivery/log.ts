@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { EMAIL_MANAGE } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { DomainError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, holds, scopeWhere, type Actor, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
+import { can, EVERY_PARTY_WORDS, holds, scopeWhere, type Actor, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { EMAIL_DELIVERY_UNBLOCK, EMAIL_DELIVERY_VIEW } from '@nexus/factory-domain/email-delivery/permissions'
 import { events as deliveryEvents } from '@nexus/factory-domain/email-delivery/events'
@@ -56,6 +56,22 @@ function contextOf(caller: CommandCaller): RequestContext {
   return caller.factoryContext
 }
 const actorOfCaller = (caller: CommandCaller): Actor => actorOf(contextOf(caller))
+
+// ── fix-pr-7 (B-PR-10: the brand wall) ─────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The mail log and the blocked addresses are every customer's mail (production plan §2: "a view that mixes brands needs access
+ * to every brand"; the Owner rule 2026-11-16): a row names its record (a customer's order, its portal people's sign-in mails)
+ * and its addresses. A person reads them, and unblocks, only through the grants that reach every customer: a company it reaches
+ * only for some customers shows nothing here, and a person with no such grant of email.delivery.view is refused in words that
+ * name none of them (EVERY_PARTY_WORDS, as the warehouse and the planning views).
+ */
+function everyCustomerActor(caller: CommandCaller): Actor {
+  const actor = actorOfCaller(caller)
+  const wide: Actor = { ...actor, grants: actor.grants.filter((grant) => grant.parties === 'all') }
+  if (holds(actor, EMAIL_DELIVERY_VIEW) && !holds(wide, EMAIL_DELIVERY_VIEW)) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
+  return wide
+}
+// ── end fix-pr-7 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const OUTBOUND = {
   id: true,
@@ -135,7 +151,7 @@ async function linksOf(client: Client, rows: readonly OutboundRow[]): Promise<Ma
 
 /** GET /email/delivery. */
 export async function listDelivery(caller: CommandCaller, query: DeliveryQuery, now: Date = new Date()): Promise<{ mails: DeliveryView[]; nextBefore: string | null; counts: Record<DeliveryState, number>; blocked: number }> {
-  const actor = actorOfCaller(caller)
+  const actor = everyCustomerActor(caller) // fix-pr-7
   if (query.companyId && !can(actor, EMAIL_DELIVERY_VIEW, { companyId: query.companyId })) throw new ForbiddenError()
   const scope = scopeWhere(actor, EMAIL_DELIVERY_VIEW, SCOPE) as Prisma.EmailOutboundWhereInput
   const limit = query.limit ?? 50
@@ -270,7 +286,7 @@ export async function listBlocked(
   caller: CommandCaller,
   query: { state?: 'BLOCKED' | 'UNBLOCKED' | undefined; reason?: SuppressionReason | undefined; before?: string | undefined; limit?: number | undefined },
 ): Promise<{ addresses: BlockedView[]; nextBefore: string | null; canUnblock: boolean }> {
-  const actor = actorOfCaller(caller)
+  const actor = everyCustomerActor(caller) // fix-pr-7
   mayReadBlocked(actor)
   const limit = query.limit ?? 50
   return caller.withClient(async (client) => {
@@ -294,7 +310,7 @@ const [unblocked] = deliveryEvents
 
 /** email.unblockAddress: the row stays, its address moved aside; audited with the reason; email.address_unblocked. */
 export async function unblockAddress(caller: CommandCaller, suppressionId: string, input: { version: number; reason: string }, idempotencyKey?: string): Promise<BlockedView> {
-  const actor = actorOfCaller(caller)
+  const actor = everyCustomerActor(caller) // fix-pr-7
   mayReadBlocked(actor)
   const row = await caller.withClient(async (client) => {
     const found = isUuid(suppressionId) ? await client.suppression.findUnique({ where: { id: suppressionId }, select: SUPPRESSION }) : null

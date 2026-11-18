@@ -31,6 +31,7 @@ import {
 import { reasonWords } from '../../../platform/reasons/service'
 import { w2aDispositionOf } from '../returns/store'
 import { answerByFor } from './create'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 import {
   capasOf,
   COMPLAINT_RECORD,
@@ -287,7 +288,8 @@ export async function complaintRecord(db: Reader, place: Place, row: CaseComplai
   const tasks = await openTasksOn(db, place.partyId, [complaintRef(row)])
   const files = await sharedFilesOf(db, place.partyId, [complaintRef(row)])
   const style = row.styleId ? await db.style.findUnique({ where: { id: row.styleId }, select: { code: true, name: true } }) : null
-  const order = row.salesOrderId ? await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { id: true, number: true, customerRef: true } }) : null
+  // fix-portal-numbers-1 (B-TH-303): the customer's own order number (customerSeq), never the office's series.
+  const order = row.salesOrderId ? await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { id: true, customerSeq: true, customerRef: true } }) : null
   const shipment = row.shipmentId ? await db.shipment.findUnique({ where: { id: row.shipmentId }, select: { id: true, number: true } }) : null
   const fallback = status === 'NEW' ? await answerByFor(db, place.companyId, options.now) : null
   const answerBy = dayOrNull(row.answerDueOn) ?? fallback
@@ -320,7 +322,7 @@ export async function complaintRecord(db: Reader, place: Place, row: CaseComplai
       via: row.channel,
       description: row.description,
       item: { style: style ? { code: style.code, name: style.name } : null, size: row.size, serial: row.serial, batchNumber: row.batchNumber },
-      order: order ? { id: order.id, number: order.number, yourRef: order.customerRef } : null,
+      order: order ? { id: order.id, yourNumber: customerNumberOf('ORDER', order.customerSeq) /* fix-portal-numbers-1 */, yourRef: order.customerRef } : null,
       shipment: shipment ? { id: shipment.id, number: shipment.number } : null,
       photos: files.filter((file) => file.kind === 'PHOTO').map((file) => fileView(file, 'PHOTO')),
     },

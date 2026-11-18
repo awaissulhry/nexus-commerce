@@ -393,7 +393,9 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
   it('C01 the buyer reads P1’s orders and asks on one in its thread; production progress is refused while the switch is off, shown once the sales office switches it on, and gone again at once when it is off', async () => {
     const so2 = id('production:sales-order:SO-0002')
     const list = await as(R.buyer, 'GET', '/portal/sales-orders?chip=ALL')
-    expect((list.items as Json[]).map((item) => item.number)).toEqual(expect.arrayContaining(['SEED-SO-0001', 'SEED-SO-0002']))
+    // fix-portal-numbers-1 (B-TH-303): the list answers the customer's own numbers, never the office's series.
+    expect((list.items as Json[]).map((item) => item.id)).toEqual(expect.arrayContaining([id('sales:SO1'), so2]))
+    expect((list.items as Json[]).filter((item) => item.kind === 'ORDER').every((item) => item.number === null && item.yourNumber?.seq > 0)).toBe(true)
     const record = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}`)
     expect(record).toMatchObject({ order: { number: 'SEED-SO-0002' }, productionLevel: 'STATUS' }) // B-PR-40: the level, the old switch dropped
     G.so2Line = record.lines[0]
@@ -544,7 +546,7 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     await ok(P.warehouse, 'POST', `/shipping/shipments/${id('shipping:shipment:SH-0001')}/documents/attach`, {})
     await settle()
     const row = ((await receivedOf()).received as Json[]).find((entry) => entry.shipment.number === 'SEED-SH-0001')!
-    expect(row).toMatchObject({ order: { number: 'SEED-SO-0002' }, state: 'COMPLETE', declaration: { kind: 'DECLARATION_OF_CONFORMITY' }, certificate: { validOnShippingDate: true } })
+    expect(row).toMatchObject({ order: { id: id('production:sales-order:SO-0002'), yourNumber: { seq: expect.any(Number) } } /* fix-portal-numbers-1 */, state: 'COMPLETE', declaration: { kind: 'DECLARATION_OF_CONFORMITY' }, certificate: { validOnShippingDate: true } })
     const library = await as(R.buyer, 'GET', '/portal/customer-documents')
     const doc = (library.items as Json[]).find((item) => item.kind === 'DECLARATION_OF_CONFORMITY')!
     G.docFile = doc.files[0].fileId
@@ -928,7 +930,8 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     expect(made.links).toEqual([expect.objectContaining({ email: 'buyer.p1@example.com', delivery: 'SENT' })])
     const token = tokenOf('shipping.tracking_link', 'buyer.p1@example.com')
     const page = await viaLink(token, 'GET', '/link/tracking')
-    expect(page).toMatchObject({ shipment: { number: 'SEED-SH-0001', status: 'SHIPPED' }, order: { customerRef: 'SEED-PO-78', number: 'SEED-SO-0002' }, link: { via: expect.any(String) } })
+    // fix-portal-numbers-1 (B-TH-303): the page names the order by the customer's own number ("#N"), never the office's SEED-SO-0002.
+    expect(page).toMatchObject({ shipment: { number: 'SEED-SH-0001', status: 'SHIPPED' }, order: { customerRef: 'SEED-PO-78', number: expect.stringMatching(/^#\d+$/) }, link: { via: expect.any(String) } })
     expect(JSON.stringify(page)).not.toMatch(/"(price|unitPrice|amount|total|netValue|freightCharge|freightCost|value)"/)
     const found = await anyone('POST', '/tracking/search', { tenant: w.tenant.slug, company: 'SCA', reference: ' seed-po-78 ', postcode: '000 00' })
     expect(found.shipments).toEqual([expect.objectContaining({ number: 'SEED-SH-0001', token: expect.any(String) })])

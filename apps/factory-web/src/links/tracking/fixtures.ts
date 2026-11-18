@@ -26,7 +26,7 @@ const page = (over: Partial<TrackingPage> = {}): TrackingPage => ({
     returnedAt: null,
     expectedDeliveryAt: '2026-11-13T11:00:00.000Z',
   },
-  order: { customerRef: '4500-1234', number: 'SO-26-0042' },
+  order: { customerRef: '4500-1234', number: '#42' /* fix-portal-numbers-1: the customer's own number, never SO-… */ },
   pill: 'IN_TRANSIT',
   problem: null,
   steps: [

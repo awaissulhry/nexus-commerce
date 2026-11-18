@@ -1,5 +1,6 @@
 import type { PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
 import { COMPLAINT_STATE_WORDS, MILESTONE_WORDS, OUTCOME_WANTED_WORDS, RETURN_STATE_WORDS, type ComplaintCaseState, type ReturnCaseState } from '@nexus/factory-domain/sales/portal-returns/rules'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 import { formatDateTime } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
@@ -333,7 +334,7 @@ export function complaintRecord(status: 'NEW' | 'INVESTIGATING' | 'ANSWERED' | '
       via: 'PORTAL',
       description: 'La cucitura della spalla sinistra si è aperta dopo due uscite in moto. Succede su tre giacche dello stesso lotto.',
       item: { style: { code: 'JKT-DEMO-01', name: 'Giacca Demo Touring' }, size: '54', serial: 'SN-DEMO-000777', batchNumber: 'LOT-DEMO-26-04' },
-      order: { id: id(90), number: 'SO-2026-0141', yourRef: 'BA-PO-771' },
+      order: { id: id(90), yourNumber: customerNumberOf('ORDER', 11), yourRef: 'BA-PO-771' }, // fix-portal-numbers-1 (B-TH-303)
       shipment: { id: id(92), number: 'SH-2026-0233' },
       photos: [photo(4, 'spalla-sinistra.jpg', 24 * 12)],
     },

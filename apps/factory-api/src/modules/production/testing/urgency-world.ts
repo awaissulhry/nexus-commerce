@@ -49,8 +49,11 @@ export interface UrgencyWorld {
   admin<R = Record<string, any>>(sql: string, values?: unknown[]): Promise<R[]>
   /** Statements with the database's rules off, in one transaction (what the app would never make, as the harness does). */
   replica(statements: readonly { readonly sql: string; readonly values?: unknown[] }[]): Promise<void>
-  /** A CONFIRMED order of a brand (one goods line of the harness's own jacket, 4 pieces) with its production state, Regular. */
-  addOrder(partyId: string, label: string, orderDate: string): Promise<{ readonly orderId: string; readonly number: string; readonly lineId: string }>
+  /**
+   * A CONFIRMED order of a brand (one goods line of the harness's own jacket, 4 pieces) with its production state, Regular; promised
+   * for 2026-12-20 unless `promiseDate` says another day, or null: never promised (fix-pr-7, B-PR-36: a computed health of NO_DATE).
+   */
+  addOrder(partyId: string, label: string, orderDate: string, options?: { readonly promiseDate?: string | null }): Promise<{ readonly orderId: string; readonly number: string; readonly lineId: string }>
   /** A portal person of a brand with these portal roles, signed in by code (company A's portal). */
   portalPerson(email: string, partyId: string, roleKeys: readonly string[]): Promise<{ readonly id: string; readonly browser: Browser }>
   /** An office person signed in with two-factor (its secret for the step-up), with a system role over every company, or only over some customers. */
@@ -155,14 +158,15 @@ export async function urgencyWorld(label: string, namespace: string): Promise<Ur
   }
 
   const colourway = (await admin<{ colourwayId: string }>('SELECT "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [w.b.salesOrderLineId]))[0]!.colourwayId
-  const addOrder: UrgencyWorld['addOrder'] = async (partyId, orderLabel, orderDate) => {
+  const addOrder: UrgencyWorld['addOrder'] = async (partyId, orderLabel, orderDate, options) => {
+    const promised = options?.promiseDate === null ? null : new Date(`${options?.promiseDate ?? '2026-12-20'}T00:00:00.000Z`) // fix-pr-7
     const orderId = newId()
     const lineId = newId()
     const number = `T-URG-${orderLabel}-${orderId.slice(-4)}`
     await h.database.withScope({ audience: 'office', tenantId: T, actorId }, (client) =>
       client.$transaction(async (tx) => {
         await tx.salesOrder.create({
-          data: { id: orderId, companyId: w.companyId, partyId, number, customerRef: `T-URG-PO-${orderLabel}`, status: 'CONFIRMED', orderDate: new Date(`${orderDate}T00:00:00.000Z`), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up store' }, promiseDate: new Date('2026-12-20T00:00:00.000Z') },
+          data: { id: orderId, companyId: w.companyId, partyId, number, customerRef: `T-URG-PO-${orderLabel}`, status: 'CONFIRMED', orderDate: new Date(`${orderDate}T00:00:00.000Z`), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up store' }, promiseDate: promised },
           select: { id: true },
         })
         await tx.salesOrderLine.create({ data: { id: lineId, companyId: w.companyId, orderId, partyId, seq: 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: colourway, quantity: 4, unitPrice: '100.000000', netAmount: 40_000, vatRatePct: '22.00', vatAmount: 8_800 }, select: { id: true } })

@@ -86,11 +86,13 @@ interface FixtureTask {
   inline: boolean
 }
 
+// fix-portal-numbers-1 (B-TH-303, plan §0.5): a customer reads its own numbers ("#101", as GET /portal/tasks, the threads, the bell
+// and the search answer them), never the office's QT-/SO- series; fiscal numbers (invoices, DDTs) stay.
 const CUSTOMER_TASKS: readonly FixtureTask[] = [
   { id: 't1', kind: 'APPROVE', record: 'Campione di vestibilità FIT-0007', due: 'OVERDUE', dueIn: -30, askedBy: 'Marco Prova', inline: false },
-  { id: 't2', kind: 'ACCEPT_QUOTE', record: 'QT-2026-0042', due: 'TODAY', dueIn: 5, askedBy: 'Marco Prova', inline: false },
-  { id: 't3', kind: 'UPLOAD_DOCUMENT', record: 'SO-2026-0101', due: 'SOON', dueIn: 30, askedBy: 'Giulia Finta', inline: true },
-  { id: 't4', kind: 'ANSWER_MESSAGE', record: 'SO-2026-0098', due: 'LATER', dueIn: 24 * 6, askedBy: null, inline: false },
+  { id: 't2', kind: 'ACCEPT_QUOTE', record: '#42', due: 'TODAY', dueIn: 5, askedBy: 'Marco Prova', inline: false },
+  { id: 't3', kind: 'UPLOAD_DOCUMENT', record: '#101', due: 'SOON', dueIn: 30, askedBy: 'Giulia Finta', inline: true },
+  { id: 't4', kind: 'ANSWER_MESSAGE', record: '#98', due: 'LATER', dueIn: 24 * 6, askedBy: null, inline: false },
 ]
 const SUPPLIER_TASKS: readonly FixtureTask[] = [
   { id: 's1', kind: 'CONFIRM_PO', record: 'PO-2026-0311', due: 'TODAY', dueIn: 4, askedBy: null, inline: false },
@@ -127,7 +129,7 @@ const MESSAGES = (locale: Locale): PartnerMessage[] => [
     side: 'company',
     channel: 'email',
     author: { name: 'Marco Prova', mine: false },
-    body: locale === 'it' ? 'Buongiorno, la consegna di SO-2026-0101 slitta di due giorni per la tintura. Vi confermiamo la nuova data entro domani.' : 'Good morning, delivery of SO-2026-0101 moves by two days because of the dyeing. We confirm the new date by tomorrow.',
+    body: locale === 'it' ? 'Buongiorno, la consegna del vostro ordine BA-PO-7781 slitta di due giorni per la tintura. Vi confermiamo la nuova data entro domani.' : 'Good morning, delivery of your order BA-PO-7781 moves by two days because of the dyeing. We confirm the new date by tomorrow.',
     attachments: [{ id: 'f1', name: 'piano-consegne.pdf', size: '84 KB', href: '#f1' }],
     at: at(-26),
     atText: formatDateTime(at(-26), { locale }),
@@ -148,7 +150,7 @@ function thread(locale: Locale, over: Partial<ThreadViewModel> = {}): ThreadView
   return {
     state: 'ready',
     title: t('thread.title'),
-    record: { theirs: 'BA-PO-7781', ours: 'SO-2026-0101' },
+    record: { theirs: 'BA-PO-7781', ours: '#101' },
     companyName: 'Pelletteria Esempio',
     messages: MESSAGES(locale),
     composer: { value: '', busy: false, heldReason: null, hint: t('thread.hint'), limit: 20_000 },
@@ -277,8 +279,8 @@ const notificationsPopup = (locale: Locale, state: 'ready' | 'loading' | 'error'
     unread: 2,
     rows: [
       { id: 'n1', sentence: locale === 'it' ? 'Ti chiediamo di approvare il campione FIT-0007' : 'We ask you to approve sample FIT-0007', record: 'FIT-0007', when: formatTime(at(-1), { locale }), read: false, href: `${PREFIX}/open/Quote/x#task:t1`, more: 0 },
-      { id: 'n2', sentence: locale === 'it' ? 'La data promessa di SO-2026-0101 è cambiata' : 'The promised date of SO-2026-0101 changed', record: 'SO-2026-0101', when: formatTime(at(-2), { locale }), read: false, href: `${PREFIX}/open/SalesOrder/x`, more: 1 },
-      { id: 'n3', sentence: locale === 'it' ? 'SO-2026-0098 è stato spedito' : 'SO-2026-0098 was shipped', record: 'SO-2026-0098', when: formatDateTime(at(-30), { locale }), read: true, href: `${PREFIX}/open/SalesOrder/y`, more: 0 },
+      { id: 'n2', sentence: locale === 'it' ? 'La data promessa di #101 è cambiata' : 'The promised date of #101 changed', record: '#101', when: formatTime(at(-2), { locale }), read: false, href: `${PREFIX}/open/SalesOrder/x`, more: 1 },
+      { id: 'n3', sentence: locale === 'it' ? '#98 è stato spedito' : '#98 was shipped', record: '#98', when: formatDateTime(at(-30), { locale }), read: true, href: `${PREFIX}/open/SalesOrder/y`, more: 0 },
     ],
   },
 })
@@ -302,11 +304,11 @@ const searchPopup = (locale: Locale, state: 'ready' | 'error' | 'tooShort' = 're
                 label: t('search.group.orders'),
                 count: 2,
                 results: [
-                  { key: 'o1', href: `${PREFIX}/open/SalesOrder/a`, theirs: 'BA-PO-7781', ours: 'SO-2026-0101', subtitle: null, when: formatDate(at(-120), { locale }) },
-                  { key: 'o2', href: `${PREFIX}/open/SalesOrder/b`, theirs: 'BA-PO-7702', ours: 'SO-2026-0098', subtitle: null, when: formatDate(at(-400), { locale }) },
+                  { key: 'o1', href: `${PREFIX}/open/SalesOrder/a`, theirs: 'BA-PO-7781', ours: '#101', subtitle: null, when: formatDate(at(-120), { locale }) },
+                  { key: 'o2', href: `${PREFIX}/open/SalesOrder/b`, theirs: 'BA-PO-7702', ours: '#98', subtitle: null, when: formatDate(at(-400), { locale }) },
                 ],
               },
-              { group: 'documents', label: t('search.group.documents'), count: 1, results: [{ key: 'd1', href: `${PREFIX}/open/Ddt/c`, theirs: 'BA-PO-7702', ours: 'DDT-2026-0450', subtitle: 'SO-2026-0098', when: formatDate(at(-300), { locale }) }] },
+              { group: 'documents', label: t('search.group.documents'), count: 1, results: [{ key: 'd1', href: `${PREFIX}/open/Ddt/c`, theirs: 'BA-PO-7702', ours: 'DDT-2026-0450', subtitle: 'SH-2026-0233', when: formatDate(at(-300), { locale }) }] },
             ]
           : [],
     },

@@ -261,6 +261,16 @@ describe('F-PR-05b — the card on screen', () => {
     expect(text).toContain('1 more order was not changed.')
   })
 
+  // ---- F-PR-16 (the browser walk): Enter sends only from the send button
+  it('Enter in the reason field sends nothing: the dialog’s field sits in no form (Lock… and ⌘↵ send)', () => {
+    // The DS Modal draws only in a browser: the card's own source is read (the walk checked the screen).
+    const source = readFileSync(join(__dirname, 'view', 'CustomerCard.tsx'), 'utf8')
+    expect(source).not.toContain('<form')
+    expect(source).toContain('className="fw-pr-dialog"')
+    expect(source).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
+  })
+  // ---- end F-PR-16
+
   it('a part that failed says so with Try again; one being read is a skeleton', () => {
     const text = textOf(draw('customer-card-failed'))
     expect(text).toContain('could not be read')
