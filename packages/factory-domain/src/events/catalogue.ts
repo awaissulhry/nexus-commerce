@@ -332,6 +332,8 @@ import { events as insightsDigest } from '../insights-digest/events'
 import { events as alertRoutes } from '../alert-routes/events'
 // B-PR-16: a customer's production (stage, health, urgency, supervisor, holds) and the issues that need an answer.
 import { events as productionBrand } from '../production-brand/events'
+// B-SA-041: a change of a work order an accepted change of its sales order proposed (proposed, applied, declined, stale).
+import { events as orderApply } from '../order-apply/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -727,6 +729,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...projects,
   // B-PR-16
   ...productionBrand,
+  // B-SA-041
+  ...orderApply,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

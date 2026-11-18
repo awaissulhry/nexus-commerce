@@ -32,6 +32,8 @@ export const manifest = defineManifest({
   'POST /production/work-orders/:workOrderId/split': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
   'GET /production/work-orders/travellers': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId/traveller': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  // B-SA-040 (sales page plan, R1): a RELEASED or IN_PROGRESS work order's cells down to the order, never below what is cut.
+  'POST /production/work-orders/:workOrderId/lower-to-order': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
   // F-PR-02: the customers a production page may be narrowed to; the handler checks the page's own permission (`view`).
   'GET /production/customers': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
 })

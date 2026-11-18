@@ -10,6 +10,9 @@ import { officeContextOf } from './access'
 import { officeOrder, recordAfter } from './moves'
 import { lockOrder, readOrderFacts, type OrderFacts, type OrderRow } from './store'
 import type { OrderView } from './views'
+// B-SA-042: a close proposes the gap to the work orders.
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+import { proposeGapsInCommand } from '../../production/work-order-changes/propose'
 
 /**
  * Close remaining lines and reopen them (B-W2a-30; SAL-210; the design's band overflow "Close remaining lines": "Lines
@@ -55,6 +58,8 @@ export interface LinesBody {
 /** B-W2b-16: a close names why with a code of the CANCEL reason list too (the words stay beside it). */
 export interface CloseLinesBody extends LinesBody {
   readonly reasonCode?: string | undefined
+  /** B-SA-042 (R1): what happens to pieces already cut beyond what the closed lines still want (none: left to production). */
+  readonly extraOutcome?: ExtraOutcome | null | undefined
 }
 
 /** The close's code: an active code of the CANCEL list, its note when the code asks for detail (400 in words). */
@@ -86,6 +91,8 @@ export async function closeLinesInCommand(
   context: { readonly tenantId: string; readonly actorId: string },
   order: OrderRow,
   body: CloseLinesBody,
+  /** B-SA-042: `later` — the caller proposes the gap to the work orders once at its end (Accept of a customer's cancel). */
+  options: { readonly workOrders?: 'now' | 'later' } = {},
 ): Promise<{ closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[] }> {
   const { tx, now } = tools
   const reason = reasonOf(body.reason)
@@ -134,6 +141,9 @@ export async function closeLinesInCommand(
     reason,
   })
   tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds, partyId: order.partyId /* B-SA-001 */ } })
+  // B-SA-042 (P6', R1): what work orders still make of the closed lines is proposed to them (lowered to what shipped, never below
+  // cut); the pieces cut beyond get the outcome named, else stay production's to decide (stillInWorkOrders, as before).
+  if (options.workOrders !== 'later') await proposeGapsInCommand(tools, { order: { ...order, status }, requestId: null, amendmentId: null, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: false, lineIds: closedIds })
   return {
     closed: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })),
     reducesDone,

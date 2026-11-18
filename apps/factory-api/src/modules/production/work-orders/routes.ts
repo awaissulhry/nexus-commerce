@@ -18,6 +18,9 @@ import { inlineDisposition, travellerPdf, travellersPdf } from './traveller'
 import { closeContract, closeWorkOrder } from './close'
 // F-PR-02: the customer filter's options.
 import { productionCustomers, productionCustomersContract } from './customers'
+// B-SA-040: "Lower to the order".
+import { lowerContract } from './contract'
+import { lowerToOrder } from './lower'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -81,6 +84,9 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
     const { pdf, fileName } = await travellerPdf(request, request.params.workOrderId, request.query.language)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
   })
+
+  // B-SA-040 (sales page plan, R1): a RELEASED or IN_PROGRESS work order's cells down to max(already cut, the figure asked).
+  app.post('/production/work-orders/:workOrderId/lower-to-order', { schema: lowerContract }, async (request) => lowerToOrder(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
 
   // F-PR-02 (06-tree A.0): the customers in the reader's scope for one production page (its permission, the brand wall).
   app.get('/production/customers', { schema: productionCustomersContract }, async (request) => productionCustomers(request, request.query))

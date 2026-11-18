@@ -18,7 +18,9 @@ import { urgencyWorld, type UrgencyWorld } from '../../production/testing/urgenc
  *   accept   Sales (orders.manage): a NEW line of the style in the colourway with the sizes asked, at the old line's price, the old
  *            line closed short (a line a request names is never removed), the request ACCEPTED with the amendment; the same pieces
  *            at the same price ask no re-acceptance
- *   by hand  once a work order makes the line: refused in words (cancel-and-remake), nothing written
+ *   in work  B-SA-042 (P6', R1): while nothing of the line is cut, accepted as above and the old line's cells are proposed lowered
+ *            in the same command (a WorkOrderChange); once something of it is cut, held in words ("Already cut in …"), nothing
+ *            written — a cut piece never changes colour
  *   wall     a Sales person limited to B does not reach A's request (404); B's order lines do not move
  *
  * Every name, address and number is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/change-requests`.
@@ -33,7 +35,9 @@ let sales: Office
 let salesB: Office
 let buyerA: Portal
 const RED = newId()
-const orders = {} as Record<'free' | 'inWork' | 'refused' | 'b', { orderId: string; number: string; lineId: string }>
+const orders = {} as Record<'free' | 'inWork' | 'refused' | 'cut' | 'b', { orderId: string; number: string; lineId: string }>
+// B-SA-042: the work orders of the "in work" and "cut" orders.
+const made = {} as Record<'inWork' | 'cut', Json>
 
 const admin = <R = Json>(sql: string, values: unknown[] = []) => world.admin<R>(sql, values)
 const key = () => ({ headers: { 'idempotency-key': `pr27a-colour-${newId()}` } })
@@ -67,11 +71,20 @@ beforeAll(async () => {
       values: [newId(), world.ids.tenantId, world.w.styleId, RED, size, `T-OWN-JKT-02-RED-${size}-${RED.slice(-4)}`],
     })),
   ])
-  for (const name of ['free', 'inWork', 'refused'] as const) orders[name] = await world.addOrder(world.ids.a, `COL-${name.toUpperCase()}`, '2026-10-01')
+  for (const name of ['free', 'inWork', 'refused', 'cut'] as const) orders[name] = await world.addOrder(world.ids.a, `COL-${name.toUpperCase()}`, '2026-10-01')
   orders.b = await world.addOrder(world.ids.b, 'COL-B', '2026-10-01')
-  // A work order already makes the "in work" order's line.
-  const made = await world.officeApp.inject({ method: 'POST', url: '/production/work-orders', headers: { 'x-test-session': 'office.all' }, payload: { siteId: world.w.siteId, lines: [{ salesOrderLineId: orders.inWork.lineId, sizes: [{ size: '50', quantity: 2 }] }] } })
-  expect(made.statusCode, made.body).toBe(201)
+  // A work order already makes the "in work" and the "cut" orders' lines (a DRAFT each).
+  for (const name of ['inWork', 'cut'] as const) {
+    const answer = await world.officeApp.inject({ method: 'POST', url: '/production/work-orders', headers: { 'x-test-session': 'office.all' }, payload: { siteId: world.w.siteId, lines: [{ salesOrderLineId: orders[name].lineId, sizes: [{ size: '50', quantity: 2 }] }] } })
+    expect(answer.statusCode, answer.body).toBe(201)
+    made[name] = answer.json().workOrder as Json
+  }
+  // The "cut" one is in progress with one garment of its cell bundled (written whole, the database's rules off).
+  const cutCell = (made.cut.cells as Json[])[0]!
+  await world.replica([
+    { sql: `UPDATE "WorkOrder" SET status = 'IN_PROGRESS', "releasedAt" = now(), "startedAt" = now() WHERE id = $1::uuid`, values: [made.cut.id] },
+    { sql: `INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, 1)`, values: [newId(), world.ids.tenantId, world.w.siteId, made.cut.id, cutCell.id, `T-SA042-BN-${newId().slice(-6)}`] },
+  ])
   sales = await world.officePerson('sonia.sales@pr27a-colour-office.example.com', 'sales')
   salesB = await world.officePerson('saul.sales@pr27a-colour-office.example.com', 'sales', [world.ids.b])
   buyerA = await world.portalPerson('ada.buyer@pr27a-colour-brand-alpha.example.com', world.ids.a, ['customer-buyer'])
@@ -141,17 +154,35 @@ describe('B-PR-27a: a line in another colourway, asked from the portal and accep
     expect(mine).toMatchObject({ status: 'ACCEPTED', answer: 'Made-up: done, in red.' })
   })
 
-  it('once a work order makes the line, a colour change is answered by hand (cancel-and-remake): refused in words, nothing written', async () => {
+  it('B-SA-042: while nothing of it is cut, a line a work order makes changes colour; the old line\'s cells are proposed lowered in the same command', async () => {
     const asked = await send(buyerA, 'POST', `/portal/sales-orders/${orders.inWork.orderId}/change-requests`, { kind: 'CHANGE', colourways: [{ lineId: orders.inWork.lineId, colourwayId: RED }] })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
     ids.inWork = asked.body.request.id as string
     const record = await ok(sales, `/sales/change-requests/${ids.inWork}`)
-    expect(record.preview.problems).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'request/COLOUR_IN_WORK' })]))
-    const refused = await send(sales, 'POST', `/sales/change-requests/${ids.inWork}/accept`, { version: 1 })
+    expect(record.preview).toMatchObject({ ok: true, workOrders: { extra: [], needsOutcome: false } })
+    const accepted = await send(sales, 'POST', `/sales/change-requests/${ids.inWork}/accept`, { version: 1 })
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
+    expect(accepted.body.workOrders).toMatchObject({ proposed: [{ kind: 'LOWER_TO_ORDER', workOrderId: made.inWork.id }], extra: [], extraOutcome: null })
+    const lines = await linesOf(orders.inWork.orderId)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatchObject({ id: orders.inWork.lineId, closedShortQuantity: expect.any(Number) })
+    // One command: the change waits for who manages the work order, the old line's cell to 0 (the draft is cancelled on apply).
+    expect(await admin('SELECT status::text AS status, kind::text AS kind, "requestId"::text AS "requestId", cells FROM "WorkOrderChange" WHERE "salesOrderId" = $1', [orders.inWork.orderId])).toEqual([
+      { status: 'PROPOSED', kind: 'LOWER_TO_ORDER', requestId: ids.inWork, cells: [{ salesOrderLineId: orders.inWork.lineId, size: '50', from: 2, to: 0, workOrderSizeId: (made.inWork.cells as Json[])[0]!.id }] },
+    ])
+  })
+
+  it('B-SA-042: once something of the line is cut, a colour change is held in words (a cut piece never changes colour), nothing written', async () => {
+    const asked = await send(buyerA, 'POST', `/portal/sales-orders/${orders.cut.orderId}/change-requests`, { kind: 'CHANGE', colourways: [{ lineId: orders.cut.lineId, colourwayId: RED }] })
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const requestId = asked.body.request.id as string
+    const record = await ok(sales, `/sales/change-requests/${requestId}`)
+    expect(record.preview.problems).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'request/COLOUR_CUT', message: expect.stringMatching(/^Already cut in .+: 1 pieces\. Suggest something else or refuse\.$/) })]))
+    const refused = await send(sales, 'POST', `/sales/change-requests/${requestId}/accept`, { version: 1 })
     expect(refused.status).toBe(409)
-    expect(refused.body.error.issues[0].path).toBe('request/COLOUR_IN_WORK')
-    expect(refused.body.error.message).toMatch(/cancel-and-remake/)
-    expect(await linesOf(orders.inWork.orderId)).toHaveLength(1)
-    expect(await requestRow(ids.inWork)).toMatchObject({ status: 'OPEN', version: 1, amendmentId: null })
+    expect(refused.body.error.issues[0].path).toBe('request/COLOUR_CUT')
+    expect(await linesOf(orders.cut.orderId)).toHaveLength(1)
+    expect(await requestRow(requestId)).toMatchObject({ status: 'OPEN', version: 1, amendmentId: null })
+    expect(await admin('SELECT id FROM "WorkOrderChange" WHERE "salesOrderId" = $1', [orders.cut.orderId])).toEqual([])
   })
 })

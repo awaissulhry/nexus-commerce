@@ -20,7 +20,7 @@ import { PRIVACY_MANAGE, PRIVACY_VIEW } from '../privacy/permissions'
 import { PRODUCT_BOM_RELEASE } from '../product/bom/permissions'
 import { DECLARATIONS_MANAGE } from '../product/compliance/permissions'
 import { PRODUCTION_SCAN_CORRECT } from '../production/scans/permissions'
-import { WORKORDERS_RELEASE, WORKORDERS_VIEW } from '../production/work-orders/permissions'
+import { WORKORDERS_MANAGE, WORKORDERS_RELEASE, WORKORDERS_VIEW } from '../production/work-orders/permissions'
 import { PURCHASING_SEND, PURCHASING_VIEW } from '../purchasing/permissions'
 import { QUALITY_LOTS_REJECT, QUALITY_LOTS_RELEASE, QUALITY_LOTS_VIEW } from '../quality/lab/permissions'
 import { QUALITY_NCR_APPROVE, QUALITY_NCR_VIEW } from '../quality/ncr/permissions'
@@ -120,6 +120,9 @@ export const ATTENTION_KINDS = [
   // one of its messages that came back (its time came, or the record changed), until they finish it or put it off; read only
   // when Today is asked for the person's own rows (`include=TASKS`).
   'REMINDER',
+  // B-SA-044 (sales page plan R1, P5; review F-8, C-11): a work-order change an accepted change of a sales order proposed, waiting
+  // for who may apply it (workorders.manage over the work order's site and customer); applied or left as is on the work order.
+  'WORK_ORDER_CHANGE',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -411,6 +414,18 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [PRODUCT_CHANGES_APPROVE],
     decide: 'OPEN',
     live: ['change_order.changed'],
+  }),
+  // B-SA-044 (R1, P5; review C-11): a PROPOSED work-order change (modules/insights/sources/work-order-changes.ts), for the people who
+  // may apply it (workorders.manage over its work order: site and customer; a new DRAFT's, the order's company and customer). A
+  // proposal is not an approval (rule 42): its proposer may apply it himself; it opens the work order (its band notice).
+  WORK_ORDER_CHANGE: rule({
+    kind: 'WORK_ORDER_CHANGE',
+    category: 'APPROVAL',
+    label: 'Work order changes to apply',
+    view: WORKORDERS_VIEW,
+    act: [WORKORDERS_MANAGE],
+    decide: 'OPEN',
+    live: ['work_order_change.proposed', 'work_order_change.applied', 'work_order_change.declined', 'work_order_change.stale'],
   }),
   // B-W2b-307: an SMV change proposed by someone else, waiting for a second person (never its proposer).
   SMV_CHANGE: rule({

@@ -204,6 +204,12 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'DELIVERY_ADDRESS.WAITING': '{customer} added a delivery address for our check: {address}.',
   'DELIVERY_ADDRESS.blocks': 'No order or shipment goes there until you approve it; accepting a request of the customer that names it approves it too.',
   // B-W2b-307: change orders, SMV changes, inspection plan versions and the approval engine's requests.
+  // B-SA-044: a work-order change waiting for who may apply it ({cells}: "M 40 → 36, L 20 → 24"; {extra}: "2 M").
+  'WORK_ORDER_CHANGE.LOWER': 'Work order {number}: lower it to order {order} ({cells}).',
+  'WORK_ORDER_CHANGE.LOWER_EXTRA': 'Work order {number}: lower it to order {order} ({cells}); already cut beyond it: {extra}.',
+  'WORK_ORDER_CHANGE.MAKE_MORE': 'Work order {number}: make more for order {order} ({cells}).',
+  'WORK_ORDER_CHANGE.MAKE_MORE_NEW': 'Order {order}: make a new work order ({cells}).',
+  'WORK_ORDER_CHANGE.blocks': 'The order was changed: its work order keeps the old figures until you apply the change or leave it as is.',
   'CHANGE_ORDER.SUBMITTED': 'Change order {number} for {style} waits for your approval: {title}.',
   'CHANGE_ORDER.blocks': 'Its new revision is not released until every required approver says yes.',
   'SMV_CHANGE.PROPOSED': 'Operation {code}: an SMV change to {minutes} minutes from {effectiveDate} waits for your approval.',
@@ -251,6 +257,8 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review': "You check the certificates, test reports and declarations suppliers send.",
   'why.DELIVERY_ADDRESS.orders_manage': "You take this customer's orders.",
   'why.CHANGE_ORDER.product_changes_approve': 'You were asked to approve this change order, and someone else wrote it.',
+  // B-SA-044
+  'why.WORK_ORDER_CHANGE.workorders_manage': 'You manage this work order at its site, for its customer.',
   'why.SMV_CHANGE.product_smv_approve': "You approve this company's SMV changes, and someone else proposed it.",
   'why.PLAN_VERSION.quality_plans_approve': "You approve this company's inspection plans, and someone else wrote this version.",
   'why.APPROVAL_TASK.approvals_decide': 'Its approval rule names you or your role here, and someone else asked for it.',
@@ -504,6 +512,20 @@ export function customerRequestWords(facts: {
 /** B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check (`address`: street and city). */
 export function deliveryAddressWords(facts: { readonly customer: string; readonly address: string }): RowWords {
   return { sentence: phrase('DELIVERY_ADDRESS.WAITING', { customer: facts.customer, address: facts.address }), blocks: phrase('DELIVERY_ADDRESS.blocks') }
+}
+
+/** B-SA-044: a work-order change that waits for who may apply it (`number` null: a new work order is to be made). */
+export function workOrderChangeWords(facts: { readonly kind: 'LOWER_TO_ORDER' | 'MAKE_MORE'; readonly number: string | null; readonly order: string; readonly cells: string; readonly extra: string | null }): RowWords {
+  const base = { order: facts.order, cells: facts.cells }
+  const sentence =
+    facts.kind === 'MAKE_MORE'
+      ? facts.number === null
+        ? phrase('WORK_ORDER_CHANGE.MAKE_MORE_NEW', base)
+        : phrase('WORK_ORDER_CHANGE.MAKE_MORE', { ...base, number: facts.number })
+      : facts.extra
+        ? phrase('WORK_ORDER_CHANGE.LOWER_EXTRA', { ...base, number: facts.number ?? '', extra: facts.extra })
+        : phrase('WORK_ORDER_CHANGE.LOWER', { ...base, number: facts.number ?? '' })
+  return { sentence, blocks: phrase('WORK_ORDER_CHANGE.blocks') }
 }
 
 /** B-W2b-307 (AW2:01): a change order that waits for the viewer's approval. */

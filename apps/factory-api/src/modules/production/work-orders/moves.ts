@@ -58,31 +58,7 @@ export async function moveWorkOrder(
 ): Promise<{ workOrder: WorkOrderView }> {
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_MANAGE)
   const spec = { name: COMMAND[to], idempotencyKey, input: { workOrderId, to, ...body }, version: body.version }
-  const work = async (tools: CommandTools): Promise<{ workOrder: WorkOrderView }> => {
-    const { tx, now } = tools
-    const current = (await readWorkOrder(tx, workOrder.id))!
-    assertTransition(workOrderMachine, current.status, to, { reason: body.reason ?? null })
-    const change = moveChange(to, now, body.reason)
-    await tx.workOrder.update({ where: { id: current.id }, data: change, select: { id: true } })
-    const after = Object.fromEntries(Object.entries(change).map(([key, value]) => [key, value instanceof Date ? toUtcIso(value) : value]))
-    tools.audit({
-      recordType: 'WorkOrder',
-      recordId: current.id,
-      companyId: current.companyId,
-      siteId: current.siteId,
-      before: { status: current.status },
-      after,
-      ...(to === 'CANCELLED' ? { reason: (body.reason ?? '').trim() } : {}),
-    })
-    tools.emit({
-      type: 'workorder.status_changed',
-      subject: current.id,
-      companyId: current.companyId,
-      siteId: current.siteId,
-      payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, from: current.status, to },
-    })
-    return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
-  }
+  const work = (tools: CommandTools): Promise<{ workOrder: WorkOrderView }> => moveInCommand(tools, workOrder.id, to, body.reason) // B-SA-041
   if (!ENDS_ISSUING.includes(to)) return onWorkOrder(caller, workOrder, spec, work)
   const { tenantId } = officeContextOf(caller)
   const { result } = await command(caller, { name: spec.name, idempotencyKey, input: spec.input }, async (tools) => {
@@ -92,6 +68,38 @@ export async function moveWorkOrder(
   })
   return result
 }
+
+// ── B-SA-041 (sales page plan): a move's own work inside a command that already holds the work order (its row locked; for
+// COMPLETED, CLOSED and CANCELLED its issue lock taken first: lockWorkOrderIssues, then bumpVersion) — moveWorkOrder's own
+// command, and a WorkOrderChange applied on a made-to-measure unit (modules/production/work-order-changes: its unit cancelled).
+/** The machine's check, the status with its time, the audit row and workorder.status_changed. */
+export async function moveInCommand(tools: CommandTools, workOrderId: string, to: ManualMove, reason: string | undefined): Promise<{ workOrder: WorkOrderView }> {
+  const { tx, now } = tools
+  const current = await readWorkOrder(tx, workOrderId)
+  if (!current) throw new NotFoundError('Work order not found.')
+  assertTransition(workOrderMachine, current.status, to, { reason: reason ?? null })
+  const change = moveChange(to, now, reason)
+  await tx.workOrder.update({ where: { id: current.id }, data: change, select: { id: true } })
+  const after = Object.fromEntries(Object.entries(change).map(([key, value]) => [key, value instanceof Date ? toUtcIso(value) : value]))
+  tools.audit({
+    recordType: 'WorkOrder',
+    recordId: current.id,
+    companyId: current.companyId,
+    siteId: current.siteId,
+    before: { status: current.status },
+    after,
+    ...(to === 'CANCELLED' ? { reason: (reason ?? '').trim() } : {}),
+  })
+  tools.emit({
+    type: 'workorder.status_changed',
+    subject: current.id,
+    companyId: current.companyId,
+    siteId: current.siteId,
+    payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, from: current.status, to },
+  })
+  return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
+}
+// ── end B-SA-041 ──
 
 /**
  * The first work on a released work order starts it (B-W1-39: the first issue; B-W1-40 and B-W1-42 can call it for the

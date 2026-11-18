@@ -18,8 +18,10 @@ import type { LinePick } from '../configurator/rules'
  *   what      the order's lines as they should be: a line's sizes and unit price, its description and note; a new line
  *             (a style in one colourway); a line left out is removed. Its customer reference and requested date. A
  *             made-to-measure line and a line closed short stay as they are (reopen it first)
- *   limits    a size never drops under the pieces work orders already make of it (lower the work order first), and a
- *             line removed has none in work orders
+ *   limits    a line removed has none in work orders (close it short instead). B-SA-042 (sales page plan P6', R1; a business-rule
+ *             change named for the Owner): a size MAY drop under what work orders make — the gap becomes a WorkOrderChange
+ *             proposed in the same command (factory-domain order-apply), the work order never goes below what is cut, and
+ *             pieces cut beyond the new figure are extra pieces with a named outcome; a made-to-measure unit is cancel only
  *   money     the lines priced again on the order's basis and VAT; the customer must accept again when the net total
  *             changed (SalesOrder.reapprovalNeededAt; the re-acceptance link is W2b, SAL-190)
  */
@@ -205,7 +207,7 @@ export interface AmendableLine {
   readonly kind: SalesLineKind
   readonly closedShort: boolean
   readonly sizes: readonly { readonly size: string; readonly quantity: number }[]
-  /** Pieces in work orders, per size (a made-to-measure unit: size ''). */
+  /** Pieces in work orders, per size (a made-to-measure unit: size ''): a line with any is not removed. */
   readonly inWorkOrders: ReadonlyMap<string, number>
 }
 
@@ -226,7 +228,7 @@ export function amendStateProblem(status: SalesOrderStatus): string | null {
 
 /**
  * The problems of an amendment's lines, in words, by path (body/lines/<i>/…): a reason; at least one line; existing
- * lines named once; no size under what its work orders make, no line removed while work orders make it; a
+ * lines named once; no line removed while work orders make it (B-SA-042: a size under them is allowed); a
  * made-to-measure line or a line closed short unchanged; a new line names its style and colourway; whole pieces.
  * Style, colourway and sizes offered are the API's checks (they read the catalogue).
  */
@@ -265,13 +267,7 @@ export function amendmentProblems(check: AmendmentCheck): Issue[] {
     const otherChange = line.unitPrice !== undefined || (line.sizes ?? []).some((size) => size.unitPrice !== undefined)
     if (existing.kind === 'MADE_TO_MEASURE' && (sizesChange || otherChange)) issues.push({ path: `${at}/sizes`, message: 'A made-to-measure unit does not change through an amendment.' })
     if (existing.closedShort && (sizesChange || otherChange)) issues.push({ path: `${at}/sizes`, message: 'This line is closed short: reopen it first.' })
-    if (line.sizes !== undefined && existing.kind === 'SIZE_GRID') {
-      const wanted = new Map(line.sizes.map((size) => [size.size, size.quantity]))
-      for (const [size, made] of existing.inWorkOrders) {
-        const after = wanted.get(size) ?? 0
-        if (made > after) issues.push({ path: `${at}/sizes`, message: `Size ${size}: work orders already make ${made} piece(s); lower the work order first (${after} asked).` })
-      }
-    }
+    // B-SA-042 (P6', R1): a size may go under what work orders make — the gap is proposed to them (a WorkOrderChange), never refused here.
     if (existing.kind === 'SIZE_GRID' && line.sizes !== undefined && line.sizes.every((size) => size.quantity === 0)) issues.push({ path: `${at}/sizes`, message: 'A line keeps at least one piece: leave the line out to remove it.' })
   })
   for (const line of check.current) {

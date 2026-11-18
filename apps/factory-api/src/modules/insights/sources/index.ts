@@ -29,6 +29,8 @@ import { inquiryWaiting } from './inquiries'
 import { shipmentsAtRisk } from './shipments-at-risk'
 // B-W2b-388: my reminders that came back.
 import { reminders } from './reminders'
+// B-SA-044: work-order changes waiting for who may apply them.
+import { workOrderChanges } from './work-order-changes'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -73,4 +75,6 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   SHIPMENT_AT_RISK: shipmentsAtRisk,
   // B-W2b-388 (COL-041): my reminders that came back (Today asks for them with include=TASKS).
   REMINDER: reminders,
+  // B-SA-044 (R1, P5): PROPOSED work-order changes for who may apply them (workorders.manage over the work order), in the Approvals tile.
+  WORK_ORDER_CHANGE: workOrderChanges,
 })

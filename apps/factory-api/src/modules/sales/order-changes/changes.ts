@@ -36,6 +36,8 @@ import { readOrder, readOrderFacts, type OrderRow, type Reader } from '../orders
 import { frozenChangesOf } from './freeze'
 import { AMENDMENT_CHANGE_COLUMNS, changeFactsFor, changeFactsOf, pendingChangeYes } from './yes'
 import { frozenProblems } from '@nexus/factory-domain/sales/order-changes/freeze'
+// B-SA-041: a put-back makes the change's waiting work-order changes stale.
+import { staleChangesInCommand } from '../../production/work-order-changes/decide'
 
 /**
  * Priced change requests after the start, their extra deposit, the new yes and the put-back (B-W2b-309; SAL-219, SAL-221,
@@ -66,7 +68,7 @@ import { frozenProblems } from '@nexus/factory-domain/sales/order-changes/freeze
 export interface PricedBody extends AmendBody, PricedInput {}
 
 const pricedOf = (body: PricedBody): PricedInput => ({ labels: body.labels, fee: body.fee, deposit: body.deposit })
-const amendOf = (body: PricedBody): AmendBody => ({ version: body.version, reason: body.reason, customerRef: body.customerRef, requestedDate: body.requestedDate, lines: body.lines })
+const amendOf = (body: PricedBody): AmendBody => ({ version: body.version, reason: body.reason, customerRef: body.customerRef, requestedDate: body.requestedDate, lines: body.lines, /* B-SA-042 */ extraOutcome: body.extraOutcome })
 
 const partView = (part: PricedPart) => ({ label: part.label, orderLineId: part.orderLineId ?? null, amount: asMoney('price', part.amount) })
 
@@ -245,6 +247,8 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
     if (target.yes.state === 'WAITING' && target.yes.taskId) {
       await withdrawPending(tools, { kind: 'SALES_ORDER_CHANGE', recordId: order.id, byId: context.actorId, words: reason })
     }
+    // B-SA-041: the work-order changes the change proposed and nobody applied yet are no longer needed (STALE): it is put back.
+    await staleChangesInCommand(tools, { amendmentId })
     const { amendmentId: putBackId } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true })
     // Its extra deposit, while nothing is paid on it.
     let depositCancelled = false

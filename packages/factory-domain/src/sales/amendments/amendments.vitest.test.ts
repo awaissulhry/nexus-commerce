@@ -63,7 +63,7 @@ describe('what an amendment may do (SAL-209)', () => {
     expect(amendStateProblem('PARTLY_SHIPPED')).toMatch(/its lines no longer change/)
   })
 
-  it('a reason; never under what work orders make; no removal of a line in work orders or closed short', () => {
+  it('a reason; under what work orders make is allowed (B-SA-042); no removal of a line in work orders or closed short', () => {
     const problems = amendmentProblems({
       status: 'CONFIRMED',
       reason: ' ',
@@ -75,8 +75,9 @@ describe('what an amendment may do (SAL-209)', () => {
         { id: 'L9' },
       ],
     })
-    expect(problems.map((issue) => issue.path)).toEqual(['body/reason', 'body/lines/0/sizes', 'body/lines/1/sizes', 'body/lines/2/colourwayId', 'body/lines/3/id'])
-    expect(problems[1]!.message).toBe('Size 52: work orders already make 4 piece(s); lower the work order first (3 asked).')
+    // B-SA-042 (P6', R1): line 0 lowers size 52 under what work orders make (4, 3 asked): allowed now, the gap goes to the work order.
+    expect(problems.map((issue) => issue.path)).toEqual(['body/reason', 'body/lines/1/sizes', 'body/lines/2/colourwayId', 'body/lines/3/id'])
+    expect(problems.some((issue) => issue.message.includes('work orders already make'))).toBe(false)
     const removal = amendmentProblems({ status: 'CONFIRMED', reason: 'Customer asked.', current, lines: [{ id: 'L2' }] })
     expect(removal.map((issue) => issue.message)).toEqual([
       'Line 10 is in work orders (4 piece(s)): it cannot be removed; lower or cancel the work order first.',
@@ -88,5 +89,11 @@ describe('what an amendment may do (SAL-209)', () => {
   it('numbers amendments one after another', () => {
     expect(nextRevision([])).toBe(1)
     expect(nextRevision([1, 3, 2])).toBe(4)
+  })
+
+  it('B-SA-042: a made-to-measure unit is cancel only — an amendment never changes it, under work orders or not', () => {
+    const unit: AmendableLine = { id: 'U1', seq: 40, kind: 'MADE_TO_MEASURE', closedShort: false, sizes: [{ size: '52', quantity: 1 }], inWorkOrders: new Map([['', 1]]) }
+    const problems = amendmentProblems({ status: 'IN_PRODUCTION', reason: 'Fewer', current: [unit], lines: [{ id: 'U1', sizes: [{ size: '52', quantity: 0 }] }] })
+    expect(problems.map((issue) => issue.message)).toEqual(['A made-to-measure unit does not change through an amendment.'])
   })
 })

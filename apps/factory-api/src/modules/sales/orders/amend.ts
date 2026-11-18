@@ -26,6 +26,10 @@ import { afterAmendment, amendmentExtras, beforeAmendmentWrites, type ChangeOpti
 import { previewFrozenProblems } from '../order-changes/freeze'
 // B-W2b-374 (XF3:02): a new line's options.
 import { entryOptionsAudit, planEntryOptions, writeEntryOptions, type EntryOptions } from './lines/options-entry'
+// B-SA-042 (P6', R1): an amendment under what work orders make proposes the gap to them in its command; extra pieces need an outcome.
+import { CHANGE_WORDS, chargeFeeOf, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces, type PricedSize } from '@nexus/factory-domain/order-apply/rules'
+import { Dec } from '@nexus/factory-domain/tax/decimal'
+import { gapOf, proposeGapsInCommand, raisesOf, workCellsOf, type GapLine } from '../../production/work-order-changes/propose'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -57,12 +61,43 @@ export interface AmendBody {
   readonly customerRef?: string | null | undefined
   readonly requestedDate?: BusinessDate | null | undefined
   readonly lines: readonly AmendLineInput[]
+  /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures (CHARGE · LEFTOVER · SCRAP); required when there are some. */
+  readonly extraOutcome?: ExtraOutcome | null | undefined
 }
 
 const priceOf = (value: { toString(): string } | null): string | null => (value === null ? null : priceText(value.toString()))
 
 /** A new line's id in a plan (before it is written): the applied snapshot names the id it got. */
 const placeholderId = (index: number): string => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+
+// ── B-SA-042: the gap an amendment leaves on the order's work orders, read from its plan (before anything is written) ──
+/** The lines after the amendment as the gap reads them (a line closed short does not change through an amendment). */
+function gapLinesAfter(after: OrderSnapshot, stored: readonly LineRecord[]): GapLine[] {
+  return after.lines.flatMap((line) => {
+    if (line.closedShortQuantity !== null || (line.kind !== 'SIZE_GRID' && line.kind !== 'MADE_TO_MEASURE')) return []
+    const own = stored.find((entry) => entry.id === line.id)
+    const unit = line.kind === 'MADE_TO_MEASURE'
+    const sizes = new Map<string, number>(unit ? (own?.baseSize ? [[own.baseSize, 1]] : []) : line.sizes.map((size) => [size.size, size.quantity]))
+    return [{ id: line.id, styleId: line.styleId, siteId: own?.siteId ?? null, madeToMeasure: unit, sizes }]
+  })
+}
+
+/** The sizes of the snapshot's lines (before the amendment), by line. */
+const sizesOf = (snapshot: OrderSnapshot): Map<string, Map<string, number>> => new Map(snapshot.lines.map((line) => [line.id, new Map(line.sizes.map((size) => [size.size, size.quantity]))]))
+
+/** Each size's unit price after the amendment (its own, else the line's): what CHARGE asks for an extra piece. */
+const pricesOf = (after: OrderSnapshot): PricedSize[] => after.lines.flatMap((line) => line.sizes.map((size) => ({ lineId: line.id, size: size.size, unitPrice: size.unitPrice ?? line.unitPrice })))
+
+/** The extra pieces an amendment's plan would leave (cut beyond the new figures), with the order's work orders as they are. */
+export async function plannedExtra(db: Reader, tenantId: string, plan: Pick<AmendmentPlan, 'before' | 'after'>, stored: readonly LineRecord[]): Promise<ExtraPieces[]> {
+  const lines = gapLinesAfter(plan.after, stored)
+  const cells = await workCellsOf(db, tenantId, lines.map((line) => line.id))
+  return extraOfPlanned(gapOf(lines, cells, raisesOf(sizesOf(plan.before), lines, [])))
+}
+
+/** A fee in major units plus another (either may be absent), 2 places. */
+const addFee = (a: string | null | undefined, b: string): string => (a ? new Dec(a).plus(b).toFixed(2) : b)
+// ── end B-SA-042 ──
 
 function headerOf(order: OrderRow, money: { netAmount: number; vatAmount: number; grossAmount: number }, change: { customerRef?: string | null; requestedDate?: string | null } = {}): SnapshotHeader {
   return {
@@ -306,12 +341,15 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
     const revision = nextRevision((await client.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
     if (isIssueList(plan)) {
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
-      return { ok: false, revision, version: order.version, problems: plan, diff: null }
+      return { ok: false, revision, version: order.version, problems: plan, diff: null, workOrders: null }
     }
     // B-W2b-309 (SAL-218): what the company's freeze rules hold at the stage production reached, said before Apply.
     const frozen = await previewFrozenProblems(client, order, plan.diff, false)
-    if (frozen.length > 0) return { ok: false, revision, version: order.version, problems: frozen, diff: diffView(plan.diff) }
-    return { ok: true, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff) }
+    // B-SA-042 (R1, Round 4): the extra pieces it would leave, shown before Apply; Apply stays held until their outcome is chosen.
+    const extra = await plannedExtra(client, officeContextOf(caller).tenantId, plan, facts.lines)
+    const workOrders = { extra: extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), needsOutcome: extra.length > 0 && !body.extraOutcome, words: extra.length > 0 ? CHANGE_WORDS.chooseExtra(extra.reduce((sum, entry) => sum + entry.count, 0)) : null }
+    if (frozen.length > 0) return { ok: false, revision, version: order.version, problems: frozen, diff: diffView(plan.diff), workOrders }
+    return { ok: !workOrders.needsOutcome, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff), workOrders }
   })
 }
 
@@ -334,7 +372,20 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
  * own command amends, and B-W2b-183's accepted change request (modules/sales/change-requests) in the same command that
  * answers the request. The caller checked orders.manage over `order`.
  */
-export async function amendInCommand(tools: CommandTools, tenantId: string, order: OrderRow, body: AmendBody, options: { readonly reacceptance?: boolean; /* B-W2b-309 */ readonly priced?: PricedInput; readonly putBack?: boolean } = {} /* B-W2b-303: a split asks no re-acceptance */): Promise<{ amendmentId: string }> {
+export async function amendInCommand(
+  tools: CommandTools,
+  tenantId: string,
+  order: OrderRow,
+  body: AmendBody,
+  options: {
+    readonly reacceptance?: boolean
+    /* B-W2b-309 */ readonly priced?: PricedInput
+    readonly putBack?: boolean
+    /** B-SA-042: the customer's request it carries out; `later`: the caller proposes the gap once at its end (Accept). */
+    readonly requestId?: string | null
+    readonly workOrders?: 'now' | 'later'
+  } = {} /* B-W2b-303: a split asks no re-acceptance */,
+): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>> }> {
   const { tx, now } = tools
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
@@ -349,8 +400,15 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
     throw invalid(plan)
   }
+  // B-SA-042 (R1): pieces already cut beyond the new figures are extra pieces; "keep and charge the customer" makes the amendment
+  // a priced change (its fee: each extra piece at its size's price). The outcome is checked when the gap is proposed.
+  let priced = options.priced ?? null
+  if (body.extraOutcome === 'CHARGE' && options.reacceptance !== false && options.putBack !== true) {
+    const fee = chargeFeeOf(await plannedExtra(tx, tenantId, plan, facts.lines), pricesOf(plan.after))
+    if (fee) priced = { ...(priced ?? {}), fee: addFee(priced?.fee, fee) }
+  }
   // B-W2b-309: one change at a time, the freeze rules, the customer's materials of removed lines (before any write).
-  const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced: options.priced ?? null, putBack: options.putBack === true }
+  const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced, putBack: options.putBack === true }
   const before309 = await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
@@ -413,7 +471,7 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
   const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
   // B-W2b-303: a split moves lines to new orders of the same customer and quote: the customer accepts nothing again.
   // B-W2b-309: a priced change always asks the customer (its price is new); a put-back restores what was accepted.
-  const reacceptanceNeeded = options.reacceptance === false || options.putBack === true ? false : plan.diff.reacceptanceNeeded || options.priced !== undefined
+  const reacceptanceNeeded = options.reacceptance === false || options.putBack === true ? false : plan.diff.reacceptanceNeeded || priced !== null /* B-SA-042: CHARGE too */
   await tx.salesOrder.update({
     where: { id: order.id },
     data: {
@@ -486,7 +544,12 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
   tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds, partyId: order.partyId } })
   // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
   await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })
-  return { amendmentId }
+  // B-SA-042: the gap to the order's work orders, proposed in this command (Accept proposes once at its own end).
+  const before = sizesOf(plan.before)
+  if (options.workOrders !== 'later') {
+    await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason: body.reason!.trim(), extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before })
+  }
+  return { amendmentId, changedLineIds, before }
 }
 
 // ---- the Changes tab ------------------------------------------------------------------------------------------------------

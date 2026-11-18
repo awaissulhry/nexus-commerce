@@ -28,6 +28,7 @@ import { SWATCH_KINDS } from '@nexus/factory-domain/sales/sample-decisions/rules
 import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules' // B-PR-23
 import { APPROVAL_KINDS } from '@nexus/factory-domain/approvals-out/kinds' // B-PR-24
 import { DOCUMENT_TEMPLATE_KINDS } from '@nexus/factory-domain/templates/documents'
+import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS, WORK_ORDER_CHANGE_STATUSES } from '@nexus/factory-domain/order-apply/rules' // B-SA-041
 import {
   ApprovalKind, // B-PR-24
   ApprovalTaskKind,
@@ -77,6 +78,10 @@ import {
   WorkCentreKind,
   WorkOrderHoldKind,
   WorkOrderHoldStatus,
+  // B-SA-041
+  WorkOrderChangeExtraOutcome,
+  WorkOrderChangeKind,
+  WorkOrderChangeStatus,
 } from './generated/prisma/enums'
 
 /**
@@ -177,4 +182,8 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   mirror('ApprovalTaskKind', ApprovalTaskKind, 'approvals/rules APPROVAL_TASK_KINDS', APPROVAL_TASK_KINDS, true),
   // B-PR-24: ApprovalKind (+ FABRIC, TRIM, REPROMISE, COUNTER_OFFER), one rule per kind in approvals-out/kinds KIND_RULES.
   mirror('ApprovalKind', ApprovalKind, 'approvals-out/kinds APPROVAL_KINDS', APPROVAL_KINDS, true),
+  // B-SA-041 (sales page plan; schema wave "sales page 1/1", sa-1 D7): a work-order change's kind, life and extra pieces' outcome.
+  mirror('WorkOrderChangeKind', WorkOrderChangeKind, 'order-apply/rules WORK_ORDER_CHANGE_KINDS', WORK_ORDER_CHANGE_KINDS, true),
+  mirror('WorkOrderChangeStatus', WorkOrderChangeStatus, 'order-apply/rules WORK_ORDER_CHANGE_STATUSES', WORK_ORDER_CHANGE_STATUSES, true),
+  mirror('WorkOrderChangeExtraOutcome', WorkOrderChangeExtraOutcome, 'order-apply/rules EXTRA_OUTCOMES', EXTRA_OUTCOMES, true),
 ])

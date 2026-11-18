@@ -595,3 +595,47 @@ export const travellersContract = defineContract({
   }),
   response: {},
 })
+
+// ── B-SA-040 (sales page plan, lead pick R1): "Lower to the order" ──
+const words = output({ it: z.string(), en: z.string() })
+
+/** A RELEASED or IN_PROGRESS work order's cells down to what the order needs now, never below what is cut (./lower). */
+export const lowerContract = defineContract({
+  params: workOrderParams,
+  body: input({
+    version,
+    /** Why (kept on the audit rows); default "Lowered to the order". */
+    reason: z.string().trim().max(500).nullish(),
+    /** Each cell of this work order once, with the figure its order needs now (0: none). */
+    cells: z.array(input({ workOrderSizeId: id(), quantity: pieces() })).min(1).max(MAX_CELLS),
+  }),
+  response: {
+    200: output({
+      workOrder: workOrderSchema,
+      lowered: output({
+        cells: z.array(
+          output({
+            workOrderSizeId: id(),
+            salesOrderLineId: id(),
+            size: z.string(),
+            asked: z.number().int(),
+            from: z.number().int(),
+            to: z.number().int(),
+            /** What is already cut (the database's floor): the cell never goes below it. */
+            alreadyCut: z.number().int(),
+            /** The cell went (0 asked, nothing cut). */
+            removed: z.boolean(),
+            words,
+          }),
+        ),
+        /** The lines of LEATHER cut orders still PLANNED that followed the cell down (to 0: removed). */
+        cutOrders: z.array(output({ cutOrderId: id(), number: z.string(), lineId: id(), from: z.number().int(), to: z.number().int() })),
+        materials: output({ lowered: z.number().int(), removed: z.number().int() }),
+        reservations: output({ lowered: z.number().int(), released: z.number().int(), issued: z.number().int() }),
+        /** The traveller is made on request and stored nowhere: one printed before this change is out of date. */
+        reprint: output({ traveller: z.boolean(), words: words.nullable() }),
+      }),
+    }),
+  },
+})
+// ── end B-SA-040 ──

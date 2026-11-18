@@ -3,6 +3,8 @@ import { businessDate, defineContract, id, input, instant, output, unitPrice } f
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { LINE_CHANGES } from '@nexus/factory-domain/sales/amendments/amendments'
+// B-SA-042: what happens to extra pieces already cut.
+import { EXTRA_OUTCOMES } from '@nexus/factory-domain/order-apply/rules'
 import { IMPACT_CODES } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
@@ -150,7 +152,18 @@ const amendFields = {
   requestedDate: businessDate().nullish(),
   /** Every line the order keeps (a line left out is removed). */
   lines: z.array(amendLine).min(1).max(MAX_QUOTE_LINES),
+  /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
+  extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
 }
+
+// B-SA-042 (R1, Round 4): the extra pieces an amendment would leave (cut beyond the new figures), shown before Apply.
+const words = output({ it: z.string(), en: z.string() })
+export const extraPiecesView = output({
+  extra: z.array(output({ workOrderSizeId: id(), salesOrderLineId: id(), size: z.string(), count: z.number().int(), words })),
+  /** Apply stays held until their outcome is chosen. */
+  needsOutcome: z.boolean(),
+  words: words.nullable(),
+})
 
 export const diffView = output({
   lines: z.array(
@@ -197,7 +210,7 @@ const amendmentView = output({
 export const previewAmendmentContract = defineContract({
   params: orderParams,
   body: input({ version: version.optional(), ...amendFields }),
-  response: { 200: output({ ok: z.boolean(), revision: z.number().int(), version: z.number().int(), problems: z.array(issue), diff: diffView.nullable() }) },
+  response: { 200: output({ ok: z.boolean(), revision: z.number().int(), version: z.number().int(), problems: z.array(issue), diff: diffView.nullable(), /* B-SA-042 */ workOrders: extraPiecesView.nullable() }) },
 })
 
 export const applyAmendmentContract = defineContract({
@@ -223,7 +236,7 @@ const linesBody = input({
 export const closeLinesContract = defineContract({
   params: orderParams,
   // B-W2b-16: the close's reason code, an active code of the CANCEL reason list (B-W2a-18) beside the words.
-  body: linesBody.extend({ reasonCode: z.string().trim().min(1).max(40).regex(/^[A-Z][A-Z0-9_]*$/).optional() }),
+  body: linesBody.extend({ reasonCode: z.string().trim().min(1).max(40).regex(/^[A-Z][A-Z0-9_]*$/).optional(), /* B-SA-042 (R1): what happens to pieces already cut beyond what they still want */ extraOutcome: z.enum(EXTRA_OUTCOMES).nullish() }),
   response: {
     200: output({
       order: orderView,
@@ -255,6 +268,8 @@ export const cancelContract = defineContract({
     reason,
     /** The order's number, typed to confirm (the design's Cancel order dialog); when sent it must match. */
     confirmNumber: z.string().trim().max(50).optional(),
+    /** B-SA-042 (R1): what happens to pieces already cut of it (none: left to production, named on the order). */
+    extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
   }),
   response: {
     200: output({

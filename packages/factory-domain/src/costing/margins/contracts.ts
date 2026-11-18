@@ -145,6 +145,16 @@ export const orderMarginView = orderMarginRowView.extend({
   leather: output({ quoted: money.cost(z.number().int().nullable()), actual: money.cost(z.number().int()) }),
   /** No freight cost is recorded on an order yet: the margin leaves it out. */
   freight: output({ cost: money.cost(z.number().int().nullable()), words: z.string() }),
+  /**
+   * B-SA-043 (sales page plan R1; review P6-4): the pieces cut beyond what the order now wants (a change lowered it after cutting):
+   * how many per line and size, and their share of the actual cost (by garments) — named here, never hidden in the margin.
+   */
+  extraPieces: output({
+    count: z.number().int(),
+    cost: money.cost(z.number().int().nullable()),
+    lines: z.array(output({ lineId: id(), seq: z.number().int(), size: z.string(), count: z.number().int() })),
+    words: z.string().nullable(),
+  }),
   lines: z.array(
     output({
       id: id(),
