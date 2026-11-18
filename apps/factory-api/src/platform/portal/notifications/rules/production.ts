@@ -20,6 +20,10 @@ import { PORTAL_SALES_ORDERS_VIEW } from '@nexus/factory-domain/sales/portal-ord
 import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
 import { orderNamed } from './records'
+// B-SA-054: the workshop told of an order change (its floor note's event).
+import { events as productionEvents } from '@nexus/factory-domain/production/events'
+import { PORTAL_JOBS_VIEW } from '@nexus/factory-domain/purchasing/portal-jobs/permissions'
+import { WORKSHOP_CHANGES } from '@nexus/factory-domain/sales/orders/change-notes'
 import type { PartnerDraft, PartnerRule, PartnerRuleContext } from './types'
 
 /**
@@ -114,6 +118,49 @@ function oncePerCompany(orders: readonly OwnOrder[], key: PartnerMessageKey): Pa
   for (const order of orders) byCompany.set(order.companyId, [...(byCompany.get(order.companyId) ?? []), order])
   return [...byCompany.values()].map((own) => draftOf(own[0]!, key, { more: own.length - 1 }))
 }
+
+// ---- B-SA-054 (sales page plan R8; 14-change-flow §5; sa-8's D5): outside workshops are told of an order change ---------------
+/** Subcontract orders whose pieces are out at the workshop (modules/sales/orders/still-to-do AT_WORKSHOP: the same set). */
+const AT_WORKSHOP = ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] as const
+
+/**
+ * `production.floor_note_posted` whose changes touch quantities (sizes, lines closed, a work-order change applied: modules/sales/
+ * orders/change-notes.ts WORKSHOP_CHANGES) → "Order changed — check quantities: <its subcontract order's number>" to the workshop of
+ * each OPEN subcontract order of that work order (a Notification of recordType 'SubcontractOrder', the one that closes Still to do's
+ * TELL_WORKSHOP row). THE WALL: the work order's floor note by its own row (the system's, for the floor, on that work order's
+ * thread); each subcontract order by its own row, of that work order; the notice goes to ITS workshop only, names only its own
+ * number — never the customer, the sales order, another workshop's work or a price; its readers are the workshop's people who see
+ * their jobs (portal.home.view and portal.jobs.view over its company and party). A workshop with no open subcontract order on the
+ * work order gets nothing.
+ */
+const WORKSHOP_RULES: readonly PartnerRule[] = [
+  {
+    name: 'portalProduction.workshopOrderChanged',
+    events: ['production.floor_note_posted'],
+    async drafts(context, raw) {
+      const event = productionEvents.find((entry) => entry.type === 'production.floor_note_posted')!.payload.parse(raw) as { workOrderId: string; messageId: string; changes: string[] }
+      if (!event.changes.some((change) => (WORKSHOP_CHANGES as readonly string[]).includes(change))) return []
+      const note = await context.tx.message.findUnique({ where: { id: event.messageId }, select: { authorKind: true, forFloor: true, thread: { select: { recordType: true, recordId: true } } } })
+      if (!note || note.authorKind !== 'SYSTEM' || !note.forFloor || note.thread.recordType !== 'WorkOrder' || note.thread.recordId !== event.workOrderId) return []
+      const orders = await context.tx.subcontractOrder.findMany({ where: { workOrderId: event.workOrderId, status: { in: [...AT_WORKSHOP] } }, select: { id: true, number: true, companyId: true, partyId: true, workOrderId: true }, orderBy: { number: 'asc' } })
+      return orders
+        .filter((order) => order.workOrderId === event.workOrderId)
+        .map((order): PartnerDraft => {
+          const place = { companyId: order.companyId, partyId: order.partyId }
+          return {
+            partyId: order.partyId,
+            companyId: order.companyId,
+            record: { type: 'SubcontractOrder', id: order.id, label: order.number },
+            messageKey: 'portal.job.order_changed',
+            params: {},
+            anchor: null,
+            forReader: (reader) => can(reader.actor, PORTAL_HOME_VIEW, place) && can(reader.actor, PORTAL_JOBS_VIEW, place),
+          }
+        })
+    },
+  },
+]
+// ---- end B-SA-054
 
 const GATE_AND_QUALITY_RULES: readonly PartnerRule[] = [
   {
@@ -248,4 +295,6 @@ export const PRODUCTION_RULES: readonly PartnerRule[] = Object.freeze([
   },
   // B-PR-31 (F-PR-15's ask)
   ...GATE_AND_QUALITY_RULES,
+  // B-SA-054
+  ...WORKSHOP_RULES,
 ])
