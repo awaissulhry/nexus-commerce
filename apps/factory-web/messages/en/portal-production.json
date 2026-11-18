@@ -72,7 +72,8 @@
     "open": "Open the order",
     "markUrgent": "Mark urgent",
     "markRegular": "Mark regular",
-    "noName": "your order"
+    "noName": "your order",
+    "report": "Report a problem"
   },
   "group": {
     "URGENT": "Urgent",
@@ -136,5 +137,76 @@
     "loadTheirs": "Use the new list",
     "keepMine": "Keep my order",
     "failed": "Could not save the order. Try again in a moment."
+  },
+  "problem": {
+    "title": "Report a problem",
+    "aboutOne": "About {name}",
+    "aboutMany": "About {count} of your orders",
+    "ordersLabel": "The orders this report is about",
+    "what": "What is wrong?",
+    "whatHint": "Write it as you would write to us: each order's conversation gets this message.",
+    "pointer": {
+      "label": "It is about (optional)",
+      "hint": "A file we shared on this order, or a message of its conversation.",
+      "none": "Nothing in particular",
+      "files": "Files we shared",
+      "messages": "Messages",
+      "fileOption": "{name} · {date}",
+      "mineOption": "Your message of {when}: {excerpt}",
+      "oursOption": "Our message of {when}: {excerpt}",
+      "loading": "Reading the order's files and messages…",
+      "failed": "The order's files and messages could not be read.",
+      "empty": "No file or message on this order to point to yet.",
+      "pickOne": "Pick one order to point to a file or a message."
+    },
+    "about": {
+      "file": "About the file: {name}",
+      "message": "About the message of {when}: “{excerpt}”"
+    },
+    "answerOne": "We answer in this order's messages.",
+    "answerMany": "We answer in the orders' messages.",
+    "send": "Send",
+    "sending": "Sending…",
+    "retry": "Try again",
+    "tryAgain": "Try again",
+    "cancel": "Cancel",
+    "close": "Close",
+    "kept": "Your text is kept: nothing was lost.",
+    "unsaved": "A problem you have not sent",
+    "held": {
+      "preview": "A preview reads only: nothing is sent from it.",
+      "mayWrite": "Your role does not write to us: ask a colleague who may.",
+      "none": "Pick at least one of your orders.",
+      "tooMany": "You picked {count}. At most {max} at a time.",
+      "sending": "Sending…",
+      "offline": "No connection: try again when you are back online.",
+      "empty": "Write what is wrong first.",
+      "long": "At most {max} characters."
+    },
+    "failed": {
+      "unavailable": "The message was not sent: we could not be reached.",
+      "notFound": "We could not find the orders you picked.",
+      "forbidden": "Your role may not write to us on these orders.",
+      "refused": "We could not take this message on these orders: write in each order's conversation.",
+      "invalid": "The message was not sent: check the text and try again."
+    },
+    "result": {
+      "sent_one": "Sent on {count} order",
+      "sent_other": "Sent on {count} orders",
+      "where": "Each order's conversation has your message: we answer there.",
+      "label": "Each order",
+      "notSent": "Not sent",
+      "notSentWhy": "Not sent: {words}",
+      "notFound_one": "{count} of the orders you picked could not be found.",
+      "notFound_other": "{count} of the orders you picked could not be found."
+    },
+    "chip": {
+      "waiting": "Problem reported · Waiting on us since {date}",
+      "waitingNoDate": "Problem reported · Waiting on us",
+      "answered": "Answered {date}",
+      "answeredNoDate": "Answered",
+      "answeredIn": "Answered in your order {seq}",
+      "answeredInRef": "Answered in {ref}"
+    }
   }
 }

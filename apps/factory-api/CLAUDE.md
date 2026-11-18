@@ -487,7 +487,9 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   problem it reported answered (or "in the conversation of your order N"); `rules/change-requests.ts` every ask kind's answer and
   our counter-offer (`order_change_request.countered`). Decisions pure in factory-domain `production-brand/notices.ts`; words
   `portal.production.*`, topic PRODUCTION (daily by default). Readers: portal.home.view + salesOrders.view + production.view.
-  PG test `portal/notifications/production-notices.pg.vitest.test.ts`.
+  PG test `portal/notifications/production-notices.pg.vitest.test.ts`. + (F-PR-15's ask) `order_gate.changed` → a real gate passed /
+  started before ("missed") at + Gates & dates; `quality.inspection_decided` → a final inspection passed / not passed of work made
+  for it ALONE at + Quality & photos (one per act, "and N more"); PG test `production-gate-quality-notices.pg.vitest.test.ts`.
 
 ## Supplier orders in the portal (`src/modules/purchasing/portal-orders/`, B-W2b-174; SCM-094, SCM-086; Owner answers C2, P2)
 - Partner routes (in purchasing's routes.ts/manifest.ts; `portal.purchaseOrders.view`, scope party, no grain): `GET

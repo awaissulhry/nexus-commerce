@@ -42,6 +42,7 @@ import {
   type OpenItemsRead,
   type OrdersRead,
 } from './api'
+import { firstWaiting } from './model' // F-PR-15
 import {
   answerProblem,
   answerRefusal,
@@ -124,7 +125,8 @@ function HomeContainer() {
   // members-only list); without the right — or when the read fails — no project row at all, never an error that says more.
   const seesProjects = seesMessages && can(PROJECTS_PERMISSION)
   const seesPrices = frame.access?.role?.seesPrices ?? false
-  const built = useMemo(() => ({ orders: pageBuilt('orders.list'), documents: pageBuilt('documents'), returns: pageBuilt('returns') }), [])
+  // F-PR-15: + My production (the In production tile opens it for a person who sees production).
+  const built = useMemo(() => ({ orders: pageBuilt('orders.list'), documents: pageBuilt('documents'), returns: pageBuilt('returns'), production: pageBuilt('production') }), [])
   const preview = frame.me.preview
 
   const [home, setHome] = useState<Async<HomeRead>>(LOADING)
@@ -481,6 +483,13 @@ function HomeContainer() {
   // B-TH-223: New order is the page's main button (not in a preview: nothing is sent from one).
   const tileDefs = tilesFor(built, can)
   const queue = approvalIds(tasks.model.groups)
+  // ---- F-PR-15 (06-tree B.4 P-HOME-waiting): the first five of What waits for you and "All 9 waiting" → Waiting for you, once that
+  // page is built and the person may open it (F-PR-14); until then the list stays whole (never a door to nowhere, nothing hidden).
+  const waitingPage = pageBuilt('home.waiting') && can('portal.approvals.view')
+  const firstFive = waitingPage && tasks.model.state === 'ready' ? firstWaiting(tasks.model.groups) : null
+  const tasksShown = firstFive ? { ...tasks.model, groups: firstFive.groups } : tasks.model
+  const tasksMore = firstFive?.more ? { href: `${prefix}/waiting`, label: t('waiting.all', { count: firstFive.open }) } : null
+  // ---- end F-PR-15
 
   return (
     <CustomerHomeView
@@ -585,7 +594,8 @@ function HomeContainer() {
       }}
       tasks={
         <TasksView
-          model={tasks.model}
+          model={tasksShown /* F-PR-15 */}
+          more={tasksMore /* F-PR-15 */}
           onDone={tasks.onDone}
           onUndo={tasks.onUndo}
           onRetry={tasks.onRetry}

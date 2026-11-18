@@ -887,5 +887,19 @@
       "failedHeld": "Read what it means first: Try again above.",
       "blockedHeld": "Part of what you ask cannot change any more: go back and change your request."
     }
+  },
+  "orderFiles": {
+    "title": "Order files ({count})",
+    "label": "The newest files we shared on this order and its lines",
+    "all": "All in Documents ({count})",
+    "open": "Open",
+    "openOf": "Open {name}",
+    "download": "Download",
+    "downloadOf": "Download {name}",
+    "failed": "The order's files could not be read."
+  },
+  "reported": {
+    "label": "Problems you reported on this order",
+    "report": "Report a problem"
   }
 }

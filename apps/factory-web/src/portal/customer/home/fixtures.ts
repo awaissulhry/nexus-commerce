@@ -13,6 +13,7 @@ import { homeBandOf } from './band'
 import { previewRowOf, versionLines } from '../documents/preview/model'
 import type { DocumentPreviewModel } from '../documents/preview/view/DocumentPreview'
 import { documentRows, nextOrderRows, NS, orderCounts, tilesFor, tilesOf, type BuiltPages } from './model'
+import { firstWaiting } from './model' // F-PR-15
 // B-TH-238: the Messages card, and Brand Beta's Home (brand B reads its own requests and conversations only).
 import { messagesCardOf } from './model'
 import { BRAND_BETA } from '../../../lib/testing/two-brands'
@@ -141,6 +142,10 @@ const HOME: HomeRead = {
     { key: 'returns.open', area: 'returns', words: { it: 'Resi e reclami aperti', en: 'Open returns and claims' }, value: 1 },
     { key: 'returns.complaints_open', area: 'returns', words: { it: 'Reclami aperti', en: 'Open complaints' }, value: null },
     { key: 'documents.new', area: 'documents', words: { it: 'Nuovi documenti', en: 'New documents' }, value: 3 },
+    // F-PR-15: B-PR-20's Home source `production` (the same rules as My production's chips).
+    { key: 'production.waiting_on_you', area: 'production', words: { it: 'Aspetta voi', en: 'Waiting on you' }, value: 2 },
+    { key: 'production.at_risk', area: 'production', words: { it: 'A rischio', en: 'At risk' }, value: 1 },
+    { key: 'production.on_hold', area: 'production', words: { it: 'In sospeso', en: 'On hold' }, value: 0 },
   ],
   live: { events: ['partner_task.opened', 'partner_notification.created'] },
 }
@@ -449,6 +454,8 @@ interface CaseInput {
   home?: Partial<CustomerHomeViewModel>
   tasks?: TasksViewModel
   statement?: boolean
+  /** F-PR-15: Waiting for you is built: What waits for you shows its first five and "All N waiting". */
+  waitingPage?: boolean
 }
 
 function homeModel(locale: Locale, can: (permission: string) => boolean, built: BuiltPages, over: Partial<CustomerHomeViewModel> = {}): CustomerHomeViewModel {
@@ -478,10 +485,14 @@ function homeCase(build: (locale: Locale) => CaseInput = () => ({})): HomeCaseBu
     const input = build(locale)
     const can = input.can ?? BUYER
     const built = input.built ?? TODAY_BUILT
+    // F-PR-15: the first five and the way to all of them, as the live page cuts them.
+    const tasks = input.tasks ?? tasksOf(locale)
+    const five = input.waitingPage ? firstWaiting(tasks.groups) : null
     return {
       shell: shell(locale, { band: homeBandOf({ t, asOf: formatTime(HOME.asOf, { locale }), statement: input.statement ? '/api/portal/payments/statement/pdf?language=it' : null, emailSettings: !(input.shell?.preview ?? false), ordersKey: built.orders }), ...input.shell }, can),
       home: homeModel(locale, can, built, input.home),
-      tasks: input.tasks ?? tasksOf(locale),
+      tasks: five ? { ...tasks, groups: five.groups } : tasks,
+      more: five?.more ? { href: `${PREFIX}/waiting`, label: t('waiting.all', { count: five.open }) } : null,
       verbs: { APPROVE: t('verb.APPROVE'), RECONFIRM_ORDER: t('verb.RECONFIRM_ORDER') },
     }
   }
@@ -513,6 +524,14 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
     // ---- end B-TH-287
     { id: 'th-223-no-right', label: 'Start for a colleague who may not order', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'No dead button: who in their company can give the right, and Ask a question.' },
     { id: 'linked', label: 'As it will be: every tile a link', model: homeCase(() => ({ built: ALL_BUILT })), note: 'Once Orders, Documents and Returns are built, each tile opens its list with the matching chip, and "See all 7 open orders" / "See all documents" appear.' },
+    // ---- F-PR-15 (06-tree B.4 P-HOME-waiting)
+    {
+      id: 'f-pr-15-production',
+      label: 'In production opens My production; the first five of What waits for you',
+      model: homeCase((locale) => ({ built: { ...ALL_BUILT, production: true }, waitingPage: true, tasks: tasksOf(locale, [...TASKS, PAY, { ...PAY, id: id(6), recordId: id(61), record: 'FT-2026-0102', due: 'later', dueIn: 30 }]) })),
+      note: 'The In production tile opens My production and says what waits there ("2 waiting on you · 1 at risk"); What waits for you shows its first five, then "All 6 waiting" opens Waiting for you.',
+    },
+    // ---- end F-PR-15
     { id: 'finance', label: 'Finance: invoices and the statement', model: homeCase((locale) => ({ can: FINANCE, statement: true, tasks: tasksOf(locale, [PAY, ...TASKS.slice(2)]) })), note: 'The Invoices tile with its count, the open amount and the overdue count (price grain); ⋯ Download statement of account opens the PDF in a new tab; Pay on the invoice’s row opens its record.' },
     // ---- B-TH-238 (P-HOME.messages): Brand Beta's Messages card — what needs it first, then new messages, its account's conversation
     { id: 'th-238-messages', label: 'Messages (Brand Beta): we need something from you first, then new messages, the account', model: betaHomeCase(), note: 'Request 7 waits for its answer (2 new) → Answer opens the request; an order with 1 new message; a quote whose last message is theirs; the account’s conversation last. Only Beta’s own numbers (#12, Your request 7) and PO.' },

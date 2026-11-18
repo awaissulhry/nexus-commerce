@@ -43,9 +43,14 @@ export interface TasksViewProps {
    * record then stays a real link to the request (⌘-click opens it in a new tab). Null: the row's own verb.
    */
   verbFor?: (row: TaskRowState) => { label: string; onRun: () => void; heldReason?: string | null; busy?: boolean } | null
+  /**
+   * F-PR-15 (06-tree B.4 P-HOME-waiting): a Home that shows only the first rows passes the way to every one of them ("All 9 waiting"
+   * → Waiting for you); null or absent: the list is whole.
+   */
+  more?: { readonly href: string; readonly label: string } | null
 }
 
-export function TasksView({ model, onDone, onUndo, onRetry, headingLevel = 2, verbFor }: TasksViewProps) {
+export function TasksView({ model, onDone, onUndo, onRetry, headingLevel = 2, verbFor, more = null }: TasksViewProps) {
   const t = useT('portal')
   const ds = useDsWords()
   const H = `h${headingLevel}` as 'h2'
@@ -104,6 +109,14 @@ export function TasksView({ model, onDone, onUndo, onRetry, headingLevel = 2, ve
     <section className="fw-ptasks" aria-label={t('tasks.title')}>
       <H className="fw-ptasks-title">{t('tasks.title')}</H>
       <ActionList groups={groups} headingLevel={headingLevel === 2 ? 3 : 4} empty={t('tasks.empty')} labels={ds.actionList} countdownLabels={ds.countdown} now={model.now} />
+      {/* F-PR-15 */}
+      {more ? (
+        <div>
+          <Button asChild size="sm" variant="quiet">
+            <a href={more.href}>{more.label}</a>
+          </Button>
+        </div>
+      ) : null}
     </section>
   )
 }
