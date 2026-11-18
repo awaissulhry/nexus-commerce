@@ -14,6 +14,11 @@ import { amountProblem, floorPriceFound } from '../helpers/amount'
  * …/replies), offered when the record's customer may read it there. B-TH-236: Reply / Correct name the message they answer or
  * correct ("Replying to Alma, 14 Nov ×"); a correction goes the way the message went; the amount field (price readers, an office
  * note only) and the floor's price check hold Send with the reason. B-TH-287: drafts on the server (N6) — composer/server-draft.ts.
+ *
+ * F-SA-282a (sales page plan R7; B-SA-073): a message in the portal whose text names another customer of ours comes back from the API
+ * (409 NAMES_OTHER_CUSTOMER, never naming whom): the box says why in words and offers the tick "This text names no other customer";
+ * Send waits until the text changes or the tick is set, then goes again with the tick. Both go with a change of the text (the API
+ * checks the new text again) and when the box leaves the portal; neither is kept with a draft.
  */
 
 export const COMPOSER_MODES = ['note', 'reply', 'portal'] as const
@@ -86,6 +91,10 @@ export interface ComposerDraft {
   // (INQ-…, SO-…); these are the pairs it named (POST …/fill `numbers`), swapped for the customer's own ("#7") when the note becomes a
   // text to the customer.
   numbers?: readonly NumberSwap[]
+  // ---- F-SA-282a (B-SA-073): the API held this text in the portal — it names another customer of ours (`namesOther`) — and the
+  // writer's tick "This text names no other customer" (`namesNoOtherCustomer`), sent with the next try.
+  namesOther?: boolean
+  namesNoOtherCustomer?: boolean
 }
 
 /** th-backend-g step 1: one record number as the office writes it and as its customer reads it (null: none of its own yet). */
@@ -145,7 +154,8 @@ export const replyAudienceOf = (mode: ComposerMode): 'CUSTOMER' | 'OFFICE' => (t
 export function withSavedReply(draft: ComposerDraft, filled: { body: string; audience?: 'CUSTOMER' | 'OFFICE' | undefined; numbers?: readonly { office: string; customer: string | null }[] | undefined }): ComposerDraft {
   const body = draft.body.trim() ? `${draft.body}\n\n${filled.body}` : filled.body
   const named = filled.audience === 'OFFICE' ? (filled.numbers ?? []).filter((pair) => pair.office !== pair.customer) : []
-  return { ...draft, body, ...(named.length > 0 ? { numbers: [...(draft.numbers ?? []), ...named.map(({ office, customer }) => ({ office, customer }))] } : {}) }
+  // F-SA-282a: new words — the API checks them again, so the hold and the tick go.
+  return { ...withoutNamesOther(draft), body, ...(named.length > 0 ? { numbers: [...(draft.numbers ?? []), ...named.map(({ office, customer }) => ({ office, customer }))] } : {}) }
 }
 // ---- end th-backend-g step 1
 
@@ -192,7 +202,8 @@ export function switchMode(draft: ComposerDraft, to: ComposerMode, people: reado
   const keptLink = draft.link && !correction ? { link: draft.link } : {}
   const linkNotes: SwitchNote[] = correction ? [{ key: 'switch.correction' }] : []
   if (to === 'note') {
-    const { link: _link, ...rest } = draft
+    // F-SA-282a: an office note is never checked for another customer's name: the portal's hold and its tick go.
+    const { link: _link, ...rest } = withoutNamesOther(draft)
     void _link
     return { draft: { ...rest, mode: to, ...keptLink }, notes: linkNotes }
   }
@@ -235,8 +246,36 @@ export function heldReason(
     if (found) return { key: 'held.floorPrice', params: { found } }
   }
   // ---- end B-TH-236
+  // ---- F-SA-282a (B-SA-073): the API held the text — it names another customer of ours — until it changes or the writer ticks it.
+  if (namesOtherAsked(draft) && draft.namesNoOtherCustomer !== true) return { key: 'held.namesOther' }
   return null
 }
+
+// ---- F-SA-282a (sales page plan R7; B-SA-073; the production notes' R-47 rule) --------------------------------------------------
+/** The box offers the tick "This text names no other customer": the API held this text in the portal (409 NAMES_OTHER_CUSTOMER). */
+export const namesOtherAsked = (draft: Pick<ComposerDraft, 'mode' | 'namesOther'>): boolean => draft.mode === 'portal' && draft.namesOther === true
+
+/** The draft without the API's hold and the writer's tick (new words, another audience). */
+export function withoutNamesOther(draft: ComposerDraft): ComposerDraft {
+  if (draft.namesOther === undefined && draft.namesNoOtherCustomer === undefined) return draft
+  const { namesOther: _held, namesNoOtherCustomer: _ticked, ...rest } = draft
+  void _held
+  void _ticked
+  return rest
+}
+
+/** The text back in the box after the API held it: in the portal, held, the tick not set. */
+export const heldForNamesOther = (draft: ComposerDraft): ComposerDraft => ({ ...withoutNamesOther(draft), mode: 'portal', namesOther: true, namesNoOtherCustomer: false })
+
+/** A change of the draft in the box: a change of the words lets the hold and the tick go (the API checks the new words again). */
+export function draftAfter(draft: ComposerDraft, next: Partial<ComposerDraft>): ComposerDraft {
+  const changed = { ...draft, ...next }
+  return next.body !== undefined && next.body !== draft.body ? withoutNamesOther(changed) : changed
+}
+
+/** What the next try in the portal sends: the tick, only when the box asked for it and it is set. */
+export const namesNoOtherCustomerOf = (draft: ComposerDraft): boolean => namesOtherAsked(draft) && draft.namesNoOtherCustomer === true
+// ---- end F-SA-282a
 
 /** Send names who gets it. B-TH-237: "Post to Brand Alpha" in the portal. */
 export const sendKey = (mode: ComposerMode): string => (mode === 'note' ? 'send.note' : mode === 'portal' ? 'send.portal' : 'send.reply')

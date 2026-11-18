@@ -13,6 +13,7 @@ import {
 } from '@nexus/factory-domain/email/rules'
 import { MAX_ATTACHMENTS, MAX_BODY_LENGTH, RECORD_TYPE } from '@nexus/factory-domain/threads/rules'
 import { threadView } from '../threads/contract'
+import { aboutInput } from '../threads/contract' // B-SA-061
 
 /**
  * Email out's contracts (plan A1 §3.7; features PLT-139, PLT-230, COL-024). A record mail is sent from the record's
@@ -83,6 +84,8 @@ export const sendEmailContract = defineContract({
     replyToMessageId: id().optional(),
     correctsMessageId: id().optional(),
     // ---- end B-TH-050
+    /** B-SA-061: the part of its order the mail is about (a sales order's mail only; never a work order: office only). */
+    about: aboutInput.optional(),
   }),
   response: { 201: output({ thread: threadView, messageId: id(), email: emailView }) },
 })
