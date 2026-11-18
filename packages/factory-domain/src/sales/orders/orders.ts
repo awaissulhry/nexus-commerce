@@ -537,7 +537,8 @@ export function orderActions(status: SalesOrderStatus, facts: SalesOrderFacts): 
     const check = canTransition(salesOrderMachine, status, 'CANCELLED', { ...facts, reason: 'asked' })
     actions.push({ action: 'cancel', allowed: check.ok, needsReason: true, held: check.ok ? null : `Cancelling needs ${check.missing.join(' and ')}.` })
   }
-  if (status === 'SHIPPED') {
+  // F-SA-201: a delivered order closes as a shipped one does (DELIVERED → CLOSED; the close command's guard).
+  if (status === 'SHIPPED' || status === 'DELIVERED') {
     const settled = facts.settlement?.settled === true
     actions.push({
       action: 'close',

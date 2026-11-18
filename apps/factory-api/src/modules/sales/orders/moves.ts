@@ -234,7 +234,8 @@ export async function cancelOrderInCommand(
 // ---- close -----------------------------------------------------------------------------------------------------------------
 
 /**
- * SHIPPED → CLOSED by a person (PLAN §4.7: the close command whose guard asks the settlement port). Settled (every line
+ * SHIPPED or DELIVERED → CLOSED by a person (PLAN §4.7: the close command whose guard asks the settlement port; F-SA-201: the
+ * machine's DELIVERED → CLOSED, so a delivered order closes as a shipped one does). Settled (every line
  * shipped, invoiced and paid): orders.manage or orders.close, no reason needed. Not settled: a reason (409 with what is
  * missing otherwise) AND orders.close (403 otherwise); the reason and what was missing stay on the audit row.
  */
