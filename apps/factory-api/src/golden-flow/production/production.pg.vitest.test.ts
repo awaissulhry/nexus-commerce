@@ -652,7 +652,8 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     // fix-pr-5 (lead decision): the order's folder is its own PO, never our SO-… number.
     const po = (await one<{ ref: string }>('SELECT "customerRef" AS ref FROM "SalesOrder" WHERE id = $1', [A.p1.orderId])).ref
     expect(ofProduction).toContain(`${po}/${CARE_NOTES}`)
-    for (const name of [...ofBuyer, ...ofProduction]) expect(name).not.toContain(A.p1.number)
+    // The folders (the document's own file name is the document's: a generated confirmation may carry its number).
+    for (const name of [...ofBuyer, ...ofProduction]) expect(name.split('/')[0]).not.toContain(A.p1.number)
     // The Buyer sees prices: the same files and the order's confirmation; the Production person never a confirmation.
     for (const name of ofProduction) expect(ofBuyer).toContain(name)
     const extra = ofBuyer.filter((name) => !ofProduction.includes(name))

@@ -314,7 +314,8 @@ describe('B-PR-46b Download files of N (POST /portal/production/files/zip)', { t
     expect(zip.names).toEqual(['index.csv', `${O.b1.ref}/Made-up care notes ZB1.pdf`])
     expect(zip.files.get(`${O.b1.ref}/Made-up care notes ZB1.pdf`)!.toString('utf8')).toContain('%PDF-1.4')
     expect(zip.index).toContain(`${O.b1.ref}/Made-up care notes ZB1.pdf`)
-    for (const ours of [O.b1.number, O.b2.number]) expect(`${zip.index} ${zip.names.join(' ')} ${zip.disposition}`).not.toContain(ours)
+    expect(zip.index).toContain(`,${O.b1.ref},`)
+    for (const ours of [O.b1.number, O.b2.number]) expect(`${zip.names.join(' ')} ${zip.disposition}`).not.toContain(ours)
     for (const text of [O.a1.number, 'ZA1', 'old copy', 'order confirmation ZB2', F.aDoc]) expect(zip.index).not.toContain(text)
     expect(zip.disposition).toContain('files_2_orders_')
     // Logged: the file zipped as a download of the library (mode zip), the zip once on the customer.
@@ -331,7 +332,9 @@ describe('B-PR-46b Download files of N (POST /portal/production/files/zip)', { t
     const zip = await zipOf(buyerB, [O.b2.orderId])
     expect(zip.names).toEqual(['index.csv', `${O.b2.ref}/Made-up order confirmation ZB2.pdf`])
     expect(zip.disposition).toContain(`${O.b2.ref}_files.zip`)
-    expect(`${zip.index} ${zip.disposition}`).not.toContain(O.b2.number)
+    // fix-pr-5: the zip and the index's order column name it by its PO (the document's own title, from the library, is the library's).
+    expect(zip.index).toContain(`,${O.b2.ref},`)
+    expect(zip.disposition).not.toContain(O.b2.number)
     expect(zip.index).not.toContain('old copy')
     const kindsFor = async (person: Portal) => ((await ok(person, 'GET', `/portal/customer-documents?orderId=${O.b2.orderId}`)).items as Json[]).filter((entry) => entry.id === F.bConfirmation).map((entry) => entry.kind)
     expect(await kindsFor(buyerB)).toEqual(['ORDER_CONFIRMATION'])
