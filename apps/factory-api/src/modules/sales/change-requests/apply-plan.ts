@@ -1,3 +1,4 @@
+import type { FactoryClient } from '@nexus/factory-db' // S7 end check
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
@@ -286,7 +287,8 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
 }
 
 /** "On the floor now" (workorders.view over the order's customer): the asked cells' own figures, the bundles in work. */
-async function floorOf(db: Reader, context: OfficeContext, order: OrderRow, cells: readonly AskedCell[], now: Date) {
+// S7 end check: a read client (applyPlan's withClient), as the office progress read (portal-orders progress) takes.
+async function floorOf(db: FactoryClient, context: OfficeContext, order: OrderRow, cells: readonly AskedCell[], now: Date) {
   const lines = await readLines(db, order.id)
   const asked = askedRowsOf(cells, lines)
   const progress = await officeProgressFor(db, context.tenantId, order.id, lines, now)

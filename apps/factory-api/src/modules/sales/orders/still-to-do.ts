@@ -142,7 +142,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     }
     // SCRAP: a scrap of one of the extra pieces' cells after the change stands, its approval decided (or none was needed).
     const cellIds = [...new Set(extra.map((piece) => piece.workOrderSizeId))]
-    const scans = change.workOrderId && cellIds.length > 0 ? await db.operationScan.findMany({ where: { workOrderId: change.workOrderId, scrapQuantity: { gt: 0 }, createdAt: { gte: change.createdAt }, bundle: { is: { workOrderSizeId: { in: cellIds } } } }, select: { id: true } }) : []
+    const scans = change.workOrderId && cellIds.length > 0 ? await db.operationScan.findMany({ where: { workOrderId: change.workOrderId, scrapQuantity: { gt: 0 }, serverTime: { gte: change.createdAt } /* S7 end check: a scan has no createdAt; serverTime orders scans */, bundle: { is: { workOrderSizeId: { in: cellIds } } } }, select: { id: true } }) : []
     const waiting = scans.length > 0 ? await db.scrapApproval.count({ where: { scanId: { in: scans.map((scan) => scan.id) }, status: 'WAITING' } }) : 0
     if (scans.length === 0 || waiting > 0) {
       rows.push({

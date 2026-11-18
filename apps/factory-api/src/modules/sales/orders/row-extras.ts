@@ -98,7 +98,8 @@ export interface OrderRowExtras {
 export interface RowMadeToMeasure {
   readonly units: number
   readonly waitingReview: number
-  readonly riders: { readonly names: readonly string[]; readonly count: number } | null
+  /** S7 end check: a plain array, as `brands` and `waits` — the list contract's row takes it as it is. */
+  readonly riders: { readonly names: string[]; readonly count: number } | null
 }
 
 /** B-SA-020: how many riders' names a row names (the rest are counted: "+N"). */
