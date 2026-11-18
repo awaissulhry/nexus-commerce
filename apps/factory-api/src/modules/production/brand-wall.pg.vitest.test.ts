@@ -49,7 +49,6 @@ import { createWallSweep, UUID, type Finding, type Json, type Method } from './t
  * seed file in name order (as `npm run seed`), the production two-brand harness (A's and B's draft work orders through the real
  * route, a mixed one made before the rule). Every name and number is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/production/brand-wall`.
- */
  * B-PR-36: the sweep's engine (requests from the routes' own schemas, the comparison, the scan) lives in ./testing/wall-sweep.ts,
  * unchanged, so the production golden flow re-runs the same sweep on its own world at the end.
  */
