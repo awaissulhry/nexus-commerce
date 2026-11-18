@@ -8,6 +8,7 @@ import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui
 import { Button, FilterChip, Input, Pill, RadioCard, Select, Spinner, Tag, TokenChip } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
+import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -50,16 +51,10 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const lists = useT('lists')
   const l = useT(LAST_MESSAGE_NS) // B-TH-257
   const locale = useLocale()
-  const [query, setQuery] = useState(model.filters.q)
-  useEffect(() => setQuery(model.filters.q), [model.filters.q])
-  const typed = useRef(false)
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
-  useEffect(() => {
-    if (!typed.current) return
-    const timer = setTimeout(() => latest.current.actions?.onFilters?.({ ...latest.current.model.filters, q: query }), 300)
-    return () => clearTimeout(timer)
-  }, [query])
+  // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
+  const search = useListSearch(model.filters.q, (q) => latest.current.actions?.onFilters?.({ ...latest.current.model.filters, q }))
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const [dialog, setDialog] = useState<'cancel' | 'help' | null>(null)
   const [viewer, setViewer] = useState<string | null>(null) // TH-6 part B: the row whose picture is open large
@@ -325,11 +320,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             leadingIcon={<Search size={13} aria-hidden />}
             aria-label={t('list.search')}
             placeholder={t('list.search')}
-            value={query}
-            onChange={(event) => {
-              typed.current = true
-              setQuery(event.target.value)
-            }}
+            {...search.field /* F-SA-223 */}
           />
         }
         tools={

@@ -9,6 +9,7 @@ import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
+import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import type { Locale } from '../../../../../lib/i18n/locales'
@@ -78,16 +79,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
-  const [query, setQuery] = useState(model.q)
-  useEffect(() => setQuery(model.q), [model.q])
-  const typed = useRef(false)
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
-  useEffect(() => {
-    if (!typed.current) return
-    const timer = setTimeout(() => latest.current.actions?.onSearch?.(query), 300)
-    return () => clearTimeout(timer)
-  }, [query])
+  // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
+  const search = useListSearch(model.q, (q) => latest.current.actions?.onSearch?.(q))
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const [help, setHelp] = useState(!!model.helpOpen)
   const items = model.list.items
@@ -150,11 +145,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       leadingIcon={<Search size={13} aria-hidden />}
       aria-label={t('list.search')}
       placeholder={t('list.search')}
-      value={query}
-      onChange={(event) => {
-        typed.current = true
-        setQuery(event.target.value)
-      }}
+      {...search.field /* F-SA-223 */}
     />
   )
   const rowsSelect = (
@@ -190,7 +181,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
   const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
   const clearFilters = () => {
-    setQuery('')
+    search.reset('') // F-SA-223
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
   }
   // ── B-TH-225 / B-TH-226: every narrowing is a chip (grid-F25); the switcher names the customer ──

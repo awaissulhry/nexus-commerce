@@ -8,6 +8,7 @@ import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui
 import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
+import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { PARTY_KINDS, PARTY_TAX_MODES, type PartyKind, type PartyRow, type TaxMode } from '../api'
 import {
@@ -97,6 +98,8 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
   const can = model.can
   const manageHeld = can.manage ? null : t('held.manage')
   const lists = useListWords()
+  // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the list).
+  const search = useListSearch(model.query, (q) => actions?.onQuery?.(q))
 
   // c: New (the frame's keys are / j k x ↵ ?; its handler skips fields, menus and dialogs the same way).
   useEffect(() => {
@@ -413,8 +416,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
             leadingIcon={<Search size={14} aria-hidden />}
             aria-label={t(`${side}.search`)}
             placeholder={t(`${side}.search`)}
-            value={model.query}
-            onChange={(event) => actions?.onQuery?.(event.target.value)}
+            {...search.field /* F-SA-223 */}
           />
         }
         tools={tools}

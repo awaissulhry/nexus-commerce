@@ -136,11 +136,10 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     )
   }, [api, can.view, config])
 
-  // The search waits for a pause in typing (250 ms); a view or filter change reads at once.
+  // F-SA-223: the search field waits for a pause in typing itself (list-frame/search: 300 ms, Enter at once): every change reads at once.
   useEffect(() => {
-    const timer = setTimeout(() => void load(), query ? 250 : 0)
-    return () => clearTimeout(timer)
-  }, [load, query])
+    void load()
+  }, [load])
   useEffect(() => {
     void loadTiles()
   }, [loadTiles])

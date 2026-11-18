@@ -7,6 +7,7 @@ import { EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/compo
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
+import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
 import type { ListKey } from '../../../../list-frame/model'
 import type { LiveState } from '../../../../shell/live/use-live'
 import { formatTime } from '../../../../lib/i18n/format'
@@ -240,11 +241,11 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const { t, say, locale, day, when } = useWords()
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
-  const [search, setSearch] = useState(model.address.q)
+  // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
+  const search = useListSearch(model.address.q, (q) => actions?.onAddress?.({ q }))
   const [noticesOpen, setNoticesOpen] = useState(model.noticesOpen ?? false)
   const [viewer, setViewer] = useState<string | null>(model.viewer ?? null)
   const wide = useWide(model.wide)
-  useEffect(() => setSearch(model.address.q), [model.address.q])
   // B-TH-233: rows of every kind; a row's key (`<kind>:<id>`) is its id in the grid and in the selection.
   const rows = model.list?.rows ?? null
   const rowsKey = rows?.map((row) => row.key).join(',') ?? ''
@@ -864,12 +865,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                 className="fw-inq-search"
                 aria-label={t('list.search')}
                 placeholder={t('list.search')}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') actions?.onAddress?.({ q: search })
-                }}
-                onBlur={() => search !== model.address.q && actions?.onAddress?.({ q: search })}
+                {...search.field /* F-SA-223 */}
               />
             }
             tools={tools}
