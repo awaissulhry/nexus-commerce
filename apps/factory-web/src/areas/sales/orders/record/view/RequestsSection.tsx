@@ -8,6 +8,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { money } from '../../../quotes/model'
 import { useProductionWords } from '../../../../../lib/production/words'
 import { RequestCard } from '../../../../../lib/production/view/RequestCard'
+// F-SA-266: each request's Discuss (its reference: the customer reads its own words) and its anchor ("Show on the page")
+import { DiscussDoor } from './Discuss'
+import { rowAnchor } from '../dock/discuss'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { answerHeld, cardInputOf, said, stillStateOf, waitsForMe } from '../../../../home/approvals/requests/model'
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
@@ -74,20 +77,25 @@ function Requests({ order, model, actions }: { order: Order; model: OrderRecordM
         ) : (
           <div className="fw-so-stack">
             {onUs.map((request) => (
+              <div key={request.id} id={rowAnchor('OrderChangeRequest', request.id) /* F-SA-266 */} tabIndex={-1}>
               <RequestCard
-                key={request.id}
                 face="office"
                 request={cardInputOf(request, null, { say: a, locale, day: w.day, money: (minor, currency) => money(minor, currency, locale) })}
                 action={
-                  request.status === 'COUNTERED' ? (
-                    <span className="fw-so-hint">{t('changes.onUs.countered')}</span>
-                  ) : (
-                    // F-SA-243: Answer… opens the ONE review window on this page (Esc returns here); held with the reason when
-                    // another team answers the kind ("Production answers a pause").
-                    <AnswerDoor request={request} model={model} />
-                  )
+                  <span className="fw-so-inline">
+                    {request.status === 'COUNTERED' ? (
+                      <span className="fw-so-hint">{t('changes.onUs.countered')}</span>
+                    ) : (
+                      // F-SA-243: Answer… opens the ONE review window on this page (Esc returns here); held with the reason when
+                      // another team answers the kind ("Production answers a pause").
+                      <AnswerDoor request={request} model={model} />
+                    )}
+                    {/* F-SA-266: discuss this request (its reference; the customer reads its own words). */}
+                    <DiscussDoor order={order} part={t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) })} target={{ kind: 'OrderChangeRequest', id: request.id }} />
+                  </span>
                 }
               />
+              </div>
             ))}
           </div>
         )}

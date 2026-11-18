@@ -23,6 +23,10 @@ const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIV
  * quality released and what left; then every shipment of the order (its state, when it left, when it arrived), each a
  * real link to its record (Warehouse › Shipments). Create shipment opens Warehouse's New shipment with this order chosen.
  */
+// F-SA-266: each shipment's Discuss (its reference: the customer reads its own shipment number) and its anchor ("Show on the page").
+import { DiscussDoor } from './Discuss'
+import { rowAnchor } from '../dock/discuss'
+
 // B-W2b-398: `delivered` is the card "Delivered (from carrier)" (its container reads it; the design cases need no session).
 // F-SA-230 (10-order-page §2.6): Shipments = Left to ship · Shipments · Deliveries · Complaints & returns (B-TH-256's list, each by its
 // own right); the invoices and payments it held before are on Money (a door at its foot).
@@ -76,9 +80,12 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
             rows={order.chain.shipments.map((row) => ({
               id: row.id,
               cells: [
-                <Link key="n" className="fw-so-link" href={shipmentHref(row)}>
-                  {row.number}
-                </Link>,
+                <span key="n" className="fw-so-inline" id={rowAnchor('Shipment', row.id) /* F-SA-266 */} tabIndex={-1}>
+                  <Link className="fw-so-link" href={shipmentHref(row)}>
+                    {row.number}
+                  </Link>
+                  <DiscussDoor order={order} part={t('discuss.shipment', { number: row.number })} target={{ kind: 'Shipment', id: row.id }} />
+                </span>,
                 <Pill key="s" tone={SHIPMENT_TONE[row.status as keyof typeof SHIPMENT_TONE] ?? 'neutral'}>{t(`shipStatus.${row.status}`)}</Pill>,
                 row.shippedAt ? formatDate(row.shippedAt, { locale }) : '—',
                 row.deliveredAt ? formatDate(row.deliveredAt, { locale }) : '—',

@@ -25,6 +25,9 @@ import { NAMESPACE as DEPTH } from '../../depth/model'
 // ---- F-SA-231b: the artwork chip opens the artwork in the thread's ONE viewer (the frame's openFiles)
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { artworkOfGroup } from '../production'
+// F-SA-266: each colour line's Discuss door and its anchor ("Show on the page")
+import { DiscussDoor } from './Discuss'
+import { rowAnchor } from '../dock/discuss'
 
 /**
  * F-SA-231 (sales page plan N2, picks P2, R9; 10-order-page §2.2) — Lines, the commercial truth: a totals strip (lines · units · net ·
@@ -80,7 +83,7 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
         const rows = group.lines.map((line) => ({
           id: line.id,
           cells: [
-            <span key="c" className="fw-so-lineopen is-static">
+            <span key="c" className="fw-so-lineopen is-static" id={rowAnchor('SalesOrderLine', line.id) /* F-SA-266 */} tabIndex={-1}>
               <LinePicture order={order} line={line} size="line" />
               <span className="fw-so-cell">
                 <span className="fw-so-inline">
@@ -90,6 +93,8 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
                   {line.kind === 'MADE_TO_MEASURE' && line.rider && <span className="fw-so-cell-sub">{t('lines.rider', { rider: line.rider.name, garment: line.rider.garmentType, revision: line.rider.revision })}</span>}
                   {model.lineOptions?.(line) /* B-W2b-340: the line's options */}
                   {model.lineCost?.(line) /* B-W2b-380: cost changed since priced */}
+                  {/* F-SA-266: discuss this line (the customer reads "your order · line 2 · …": no price, no work-order number). */}
+                  <DiscussDoor order={order} part={t('discuss.line', { seq: line.seq, name: `${line.style?.code ?? '—'} ${line.colourway?.name ?? ''}`.trim() })} target={{ kind: 'SalesOrderLine', id: line.id }} />
                 </span>
                 {line.closedShort && (
                   <span className="fw-so-closed">

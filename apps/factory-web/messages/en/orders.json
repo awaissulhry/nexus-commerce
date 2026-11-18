@@ -1544,5 +1544,18 @@
     "decision_one": "Change of {time}: {count} step needs a decision",
     "decision_other": "Change of {time}: {count} steps need a decision",
     "open": "Open"
+  },
+  "discuss": {
+    "yourOrder": "your order",
+    "firstLine": "About: {thing}",
+    "line": "line {seq} · {name}",
+    "shipment": "shipment {number}",
+    "invoice": "invoice {number}",
+    "deposit": "deposit",
+    "request": "request: {kind}",
+    "hold": "hold on {number}",
+    "quality": "quality on {number}",
+    "revision": "revision {revision}",
+    "step": "payment step {seq}"
   }
 }

@@ -90,6 +90,7 @@ import { listOrderRequests, type BrandRequest } from '../../../home/approvals/re
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
+import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
 import type { Work } from './overview/api' // F-SA-262
 // F-SA-243: the order page is a door of the ONE review window (Home › Approvals' own), its "Decide for <customer>" too.
 import { useRequestReviewDoor } from '../../../home/approvals/requests/use-request-review-door'
@@ -561,6 +562,38 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
   // ---- end F-SA-237
 
+  // ---- F-SA-266: "Show on the page" — the message's part: its tab (a replace: no history entry), then its row in view with the focus
+  // (the row is drawn after the tab's read: looked for a few frames).
+  const [focusRow, setFocusRow] = useState<{ anchor: string; at: number } | null>(null)
+  const showOnPage = useCallback(
+    (about: { kind: string; id: string }) => {
+      const place = aboutPlace(about)
+      if (!place) return
+      const next = new URLSearchParams(window.location.search)
+      next.set('tab', place.tab)
+      router.replace(`${pathname}?${next.toString()}#${place.anchor}`, { scroll: false })
+      setFocusRow({ anchor: place.anchor, at: Date.now() })
+    },
+    [router, pathname],
+  )
+  useEffect(() => {
+    if (!focusRow) return
+    let frames = 0
+    let handle = 0
+    const find = () => {
+      const row = document.getElementById(focusRow.anchor)
+      if (row) {
+        row.scrollIntoView({ block: 'center' })
+        row.focus({ preventScroll: true })
+        return
+      }
+      if (frames++ < 60) handle = requestAnimationFrame(find)
+    }
+    handle = requestAnimationFrame(find)
+    return () => cancelAnimationFrame(handle)
+  }, [focusRow])
+  // ---- end F-SA-266
+
   // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
   runPartsRef.current = (parts) => {
     const open = dialogRef.current
@@ -680,6 +713,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               workOrders={dockWorkOrders(readWork, value)}
               prefix={prefix}
               printHref={printHref(pathname, params?.toString() ?? '')}
+              showOnPage={showOnPage /* F-SA-266 */}
             />
           ) : (
             <OfficeRecordThread
