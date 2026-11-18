@@ -65,7 +65,7 @@ import { useOrderFiles } from './order-files/use-order-files'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
 // ---- F-PR-05a: the band's health (each order's, B-PR-35) with Raise to At risk, the Overview's gates, Preview as <customer> ----
-import { useBrandHealth } from './health/use-health'
+import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: moved to lib (one card)
 import { useOrderGates } from './gates/use-gates'
 import { customerFactOf, previewRecord } from './overview/model'
 import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
@@ -82,6 +82,10 @@ import { useCutParts } from '../cutting/use-cut-parts'
 // ---- end F-PR-06
 // F-PR-05b: the Customer card (read while Overview shows; urgency writes behind the page's step-up).
 import { useCustomerCard } from './customer/use-customer-card'
+// F-SA-245: the work order's waiting work-order changes (its band notice) and their ONE decide window (Home › Approvals' too).
+import { doorAddress } from '../../../home/approvals/requests/model'
+import { useWorkOrderChangeReview, useWorkOrderChanges } from '../../../home/approvals/work-order-changes/use-work-order-change'
+import { bandNoticeOf } from '../../../home/approvals/work-order-changes/model'
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -465,6 +469,32 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   // (Set to regular… / Lock / Unlock: production.brand.override, a fresh code through the page's one step-up), problems and limits.
   const customerCard = useCustomerCard(api, value, session.permissions, tab === 'overview', guard, (words) => setNotice({ tone: 'success', words }))
   // ---- end F-PR-05b
+  // ---- F-SA-245: the changes an accepted change of its orders proposed for this work order (workorders.view; the API's wall), as ONE
+  // band notice, and the decide window on this page (`?open=<change id>`, the page's other words kept: Esc returns to the same tab).
+  // Apply or Leave as is: the record says so, reads the work order and its changes again, and the window closes.
+  const workOrderChanges = useWorkOrderChanges(api, value, session.permissions)
+  const changeHref = useCallback((id: string | null) => `${pathname}${doorAddress(params?.toString() ?? '', id)}`, [pathname, params])
+  const openChange = useCallback((id: string | null) => router.replace(changeHref(id), { scroll: false }), [router, changeHref])
+  const changeReview = useWorkOrderChangeReview({
+    api,
+    openId: params?.get('open') || null,
+    offline: live === 'offline',
+    permissions: session.permissions,
+    onDecided: (decided) => {
+      const applied = decided.notice.key === 'notice.changeApplied'
+      const reprint = applied && (decided.notice.lines?.length ?? 0) > 0
+      setNotice({ tone: 'success', words: { key: `${DAILY_NAMESPACE}:changes.${applied ? (reprint ? 'appliedReprint' : 'applied') : 'declined'}`, params: { number: value?.number ?? '' } } })
+      openChange(null)
+      void load()
+      workOrderChanges.reread()
+    },
+    onReload: () => {
+      void load()
+      workOrderChanges.reread()
+    },
+  })
+  const changeBand = bandNoticeOf(workOrderChanges.changes)
+  // ---- end F-SA-245
 
   const model: WorkOrderRecordModel = {
     prefix,
@@ -519,6 +549,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     shareReports: session.permissions.includes('quality.documents.share'),
     // F-PR-05b
     customerCard: customerCard.model,
+    // F-SA-245
+    changes: { waiting: workOrderChanges.changes, firstHref: changeBand ? changeHref(changeBand.first.id) : null, review: changeReview.model, busy: changeReview.busy },
   }
 
   return (
@@ -679,6 +711,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         note: { ...note.actions, onOpen: openNote },
         // F-PR-05b
         customerCard: customerCard.actions,
+        // F-SA-245: the decide window (Apply, Leave as is…, Read again) and its door (open another change, or close).
+        changes: { ...changeReview.actions, onOpen: openChange },
         // ---- F-PR-06: the recuts' Mark cut; the bundles waiting at an operation are on Cutting & bundles (was ?tab=bundles) ----
         cut: cutParts.actions,
         onWaitingAt: (seq) => {

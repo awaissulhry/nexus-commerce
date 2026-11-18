@@ -567,6 +567,41 @@ export type DocumentsRead = z.infer<typeof documentsSchema>
 export const fetchDocuments = (api: ApiClient, orderId: string, signal?: AbortSignal): Promise<DocumentsRead> =>
   api.get('/portal/customer-documents', { query: { orderId, versions: 'all', limit: 200 }, schema: documentsSchema, signal })
 
+// ---- F-SA-238 (sales page plan N9, P14, R6): the order's shared files grouped like the office's Files tab (B-SA-037's portal read) ----
+const portalWords = z.object({ it: z.string(), en: z.string() })
+export const orderFilesSchema = z.object({
+  asOf: z.string(),
+  order: z.object({ id: z.string(), customerRef: z.string().nullable(), yourNumber: z.object({ seq: z.number(), words: portalWords }).nullable() }),
+  groups: z.array(
+    z.object({
+      key: z.string(),
+      words: portalWords,
+      files: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          kind: z.string(),
+          category: z.string().nullable(),
+          documentKind: z.string().nullable(),
+          documentWords: portalWords.nullable(),
+          contentType: z.string(),
+          sizeBytes: z.number(),
+          versionNo: z.number(),
+          at: z.string(),
+          from: z.object({ type: z.string(), id: z.string(), label: z.string().nullable() }),
+          line: z.object({ id: z.string(), seq: z.number() }).nullable(),
+        }),
+      ),
+    }),
+  ),
+  total: z.number(),
+})
+export type PortalOrderFiles = z.infer<typeof orderFilesSchema>
+
+/** GET /portal/sales-orders/:orderId/files — the customer's own shared files of the order (another customer's: "not found"). */
+export const fetchOrderFiles = (api: ApiClient, orderId: string, signal?: AbortSignal): Promise<PortalOrderFiles> => api.get(`/portal/sales-orders/${encodeURIComponent(orderId)}/files`, { schema: orderFilesSchema, signal })
+// ---- end F-SA-238
+
 export const downloadSchema = z.object({
   download: z.object({ mode: z.enum(['inline', 'download']), method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }),
 })

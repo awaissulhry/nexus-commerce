@@ -1,8 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-// B-TH-228: the request the order was made from (the source read).
-import { getTechPack } from '../depth/api'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
@@ -46,9 +44,11 @@ import {
   type SdiStatus,
   type Settlement,
 } from '../api'
-import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../hooks'
+import { isStepUpCancelled, useLive, useStepUp } from '../hooks'
 import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
-import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
+import { abilitiesOf, landingOf, readProblem, romeToday, writeProblem } from '../model'
+// F-SA-239: the page live part by part (the read's own watch list, one coalesce table, stale tabs, typed work kept).
+import { changedBy, EMPTY_QUEUE, enqueue, nextDue, opened, ORDER_PARTS, partsOf, take, watchedIds, type LiveQueue, type OrderPagePart } from './live'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
 // B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
@@ -76,6 +76,19 @@ import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordT
 import { printHref } from '../../../../shell/print/print-model'
 // B-TH-256: what points at the order (complaints, returns, planning's re-promises, the gates' refusals).
 import { useOrderLinks } from './links/use-order-links'
+// ---- F-SA-230: the ⋯ menu's People — the production lane's dialogs, reused in place (Assign supervisor…, Ask the supervisor…) ----
+import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+import { SUPERVISOR_NS } from '../../../_shared/production-supervisor/model'
+import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
+import { NOTES_NS } from '../../../production/_shared/notes/model'
+// ---- end F-SA-230
+import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
+import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
+import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: the one HealthCard (moved to lib)
+// F-SA-236: this order's customer requests and the approvals we asked it (Changes).
+import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
+import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
+import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -92,7 +105,7 @@ import { useOrderLinks } from './links/use-order-links'
 const NO_LINES: readonly never[] = []
 
 /** The catalogues the order's page loads (W1 browser repair: its tests draw the record with these, as the page does). */
-export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */] as const
+export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */] as const
 
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
@@ -115,8 +128,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const params = useSearchParams()
   const prefix = pathname.replace(/\/sales\/orders\/[^/]+\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
-  // B-TH-214: the five tabs; an old address lands on the tab it merged into (Margin only with the margin grain).
-  const tab = tabOf(params?.get('tab'), can)
+  // F-SA-230: the tabs re-cut; an old address lands on its new tab and section (`?tab=margin` → Money #margin with the margin grain).
+  const landing = landingOf(params?.get('tab'), can)
+  const tab = landing.tab
+  useEffect(() => {
+    if (!landing.moved) return
+    const next = new URLSearchParams(params?.toString() ?? '')
+    next.set('tab', landing.tab)
+    router.replace(`${pathname}?${next.toString()}${landing.anchor ? `#${landing.anchor}` : ''}`, { scroll: false })
+  }, [landing.moved, landing.tab, landing.anchor]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [order, setOrder] = useState<Loaded<Order>>({ status: 'loading' })
   const current = useRef<Order | null>(null)
@@ -130,10 +150,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<OrderRecordModel['notice']>(null)
   const [dialogProblem, setDialogProblem] = useState<OrderRecordModel['dialogProblem']>(null)
-  const [changed, setChanged] = useState<{ at: string } | null>(null)
+  const [changed, setChanged] = useState<{ at: string; parts?: readonly string[]; by?: string | null } | null>(null)
   const [sentLink, setSentLink] = useState<DepositLinkAnswer | null>(null)
   const [recorded, setRecorded] = useState<DepositReceived | null>(null)
-  const [sizeLayer, setSizeLayer] = useState<SizeLayer>('ordered')
   const [amend, setAmend] = useState<AmendState | null>(null)
   const amendRef = useRef<AmendState | null>(null)
   amendRef.current = amend
@@ -184,24 +203,32 @@ function RecordContainer({ orderId }: { orderId: string }) {
       getSchedule(api, value.id)
         .then((answer) => setSchedule(part(answer)))
         .catch((error: unknown) => setSchedule({ value: null, problem: readProblem(error) }))
-      if (value.amendments.count === 0) setAmendments(part({ orderId: value.id, number: value.number, reapprovalNeededAt: value.reapprovalNeededAt, amendments: [] }))
-      else {
-        setAmendments((known) => known ?? PART_LOADING)
-        listAmendments(api, value.id)
-          .then((answer) => {
-            setAmendments(part(answer))
-            // A line the order no longer holds is named by its style (codes): read the styles it does not hold.
-            const own = new Set(value.lines.map((line) => line.styleId))
-            const missing = [...new Set(answer.amendments.flatMap((entry) => entry.diff.lines.map((line) => line.styleId)))].filter((styleId) => !own.has(styleId))
-            for (const styleId of missing)
-              getStyle(api, styleId)
-                .then((style) => setChangeStyles((known) => ({ ...known, [styleId]: style })))
-                .catch(() => setChangeStyles((known) => ({ ...known, [styleId]: null })))
-          })
-          .catch((error: unknown) => setAmendments({ value: null, problem: readProblem(error) }))
-      }
+      // F-SA-236: the amendments (with their frozen snapshots) are read when "Before → after" opens, no longer on every read: Changes'
+      // history comes from the ONE `…/changes` read (the depth's).
+      setAmendments(null)
     },
     [api, can.viewWorkOrders, can.viewInvoices, can.viewQuotes],
+  )
+
+  // F-SA-236: the amendments' snapshots for "Before → after" (read when the dialog opens; a line the order no longer holds is named
+  // by its style: those styles are read too).
+  const readAmendments = useCallback(
+    (value: Order) => {
+      if (value.amendments.count === 0) return setAmendments(part({ orderId: value.id, number: value.number, reapprovalNeededAt: value.reapprovalNeededAt, amendments: [] }))
+      setAmendments((known) => known ?? PART_LOADING)
+      listAmendments(api, value.id)
+        .then((answer) => {
+          setAmendments(part(answer))
+          const own = new Set(value.lines.map((line) => line.styleId))
+          const missing = [...new Set(answer.amendments.flatMap((entry) => entry.diff.lines.map((line) => line.styleId)))].filter((styleId) => !own.has(styleId))
+          for (const styleId of missing)
+            getStyle(api, styleId)
+              .then((style) => setChangeStyles((known) => ({ ...known, [styleId]: style })))
+              .catch(() => setChangeStyles((known) => ({ ...known, [styleId]: null })))
+        })
+        .catch((error: unknown) => setAmendments({ value: null, problem: readProblem(error) }))
+    },
+    [api],
   )
 
   const setValue = useCallback((next: Order) => {
@@ -226,21 +253,47 @@ function RecordContainer({ orderId }: { orderId: string }) {
     void load()
   }, [load])
 
-  // Live: an event that names this order or a record of its chain; a dialog with typed work open → "changed · Reload".
-  const reread = useCoalesced(() => void load(), 700)
-  const known = order.status === 'ready' ? knownIds(order.value) : null
-  const knownRef = useRef(known)
-  knownRef.current = known
-  // B-TH-214: the tab's live state shows in the shell's band (beside the record's band); here only the re-reads.
-  useLive(
+  // ---- F-SA-239: live, part by part — an event re-reads only the parts the order read's own watch list names for it (and only when it
+  // names one of the order's records), through ONE coalesce table (parts 700 ms; piece counts 3 s trailing, ≤ 1 read / 10 s); Money,
+  // Shipments and Files only while they show (else stale, read when opened); under typed work the order waits for Reload.
+  // B-TH-214: the tab's live state shows in the shell's band; F-SA-232: the stream's state for Overview's freshness line.
+  const queueRef = useRef<LiveQueue>(EMPTY_QUEUE)
+  const [queueTick, setQueueTick] = useState(0)
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const runPartsRef = useRef<(parts: readonly OrderPagePart[]) => void>(() => undefined)
+  const reconnectRef = useRef<() => void>(() => void load())
+  const liveState = useLive(
     (change) => {
-      if (!knownRef.current || !liveTouches(change, knownRef.current)) return
-      const open = dialogRef.current
-      if (amendRef.current || (open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')) setChanged({ at: new Date().toISOString() })
-      else reread()
+      const value = current.current
+      if (!value) return
+      const parts = partsOf(change, value.live, watchedIds(value, value.live))
+      if (parts.length === 0) return
+      queueRef.current = enqueue(queueRef.current, change.type, parts, Date.now(), tabRef.current)
+      setQueueTick((count) => count + 1)
     },
-    () => void load(),
+    () => reconnectRef.current(),
   )
+  // One timer for the next due moment; what is due is read, nothing waiting is dropped.
+  useEffect(() => {
+    const due = nextDue(queueRef.current)
+    if (due === null) return
+    const timer = setTimeout(() => {
+      const { read, queue } = take(queueRef.current, Date.now())
+      queueRef.current = queue
+      if (read.length > 0) runPartsRef.current(read)
+      setQueueTick((count) => count + 1)
+    }, Math.max(0, due - Date.now()))
+    return () => clearTimeout(timer)
+  }, [queueTick])
+  // A tab that opens reads its stale parts.
+  useEffect(() => {
+    const { read, queue } = opened(queueRef.current, tab)
+    if (read.length === 0) return
+    queueRef.current = queue
+    runPartsRef.current(read)
+  }, [tab])
+  // ---- end F-SA-239
 
   /** One write; the order it answers (when it answers one) replaces the page's, then the parts are read again. */
   const write = useCallback(
@@ -368,7 +421,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // B-W2b-16: the owner's waive asks a fresh code (the record's step-up).
     stepUp: { ensureFresh, guard },
   })
-  const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
+  // F-SA-230: Margin is Money's last section (#margin), read while Money shows, with the margin grain.
+  const margin = useOrderMargin(api, orderId, tab === 'money' && can.margin, session.permissions, order.status === 'ready' ? order.value.version : null)
   // B-W2b-380 (XF6:02): the lines' cost sheets (once per revision) while the Lines tab shows them, with the cost grain.
   const costChanges = useCostChanged({ api, companyId: order.status === 'ready' ? order.value.companyId : null, lines: order.status === 'ready' ? order.value.lines : NO_LINES, enabled: order.status === 'ready' && can.cost && tab === 'lines' })
   // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
@@ -402,20 +456,113 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- B-TH-228: the request an order was made from straight (no quote between) — the band's "Made from INQ-… — Open". The source
   // read answers nothing to a person who may not read that request (office only: the portal never reads it).
   // undefined: still reading (the band says nothing yet — never "Typed by the office" before it knows); null: none.
-  const [madeFrom, setMadeFrom] = useState<{ id: string; number: string } | null | undefined>(undefined)
+  // F-SA-230: the tech pack is read ONCE (the depth's read, also Production's Specs in force); a failed read claims nothing.
   const readsRequests = session.permissions.includes('sales.inquiries.view')
-  const straightId = order.status === 'ready' && order.value.chain.quote === null ? order.value.id : null
-  useEffect(() => {
-    if (!straightId || !readsRequests) return setMadeFrom(null)
-    setMadeFrom(undefined)
-    const abort = new AbortController()
-    getTechPack(api, straightId, abort.signal)
-      .then((answer) => setMadeFrom(answer.inquiry ? { id: answer.inquiry.id, number: answer.inquiry.number } : null))
-      // A failed read claims nothing (never "Typed by the office" for an order that may have come from a request).
-      .catch(() => !abort.signal.aborted && setMadeFrom(undefined))
-    return () => abort.abort()
-  }, [api, straightId, readsRequests])
+  const straight = order.status === 'ready' && order.value.chain.quote === null
+  const pack = depth.model.techPack
+  const madeFrom: { id: string; number: string } | null | undefined = !straight || !readsRequests || !pack ? null : pack.value ? (pack.value.inquiry ? { id: pack.value.inquiry.id, number: pack.value.inquiry.number } : null) : undefined
   // ---- end B-TH-228
+  // ---- F-SA-230: the band's ⋯ People — Assign supervisor… (production.brand.manage) and Ask the supervisor… (threads.post: an office
+  // note on THIS order, its supervisor asked), the production lane's own dialogs. A Send reads the order again.
+  const assign = useAssignSupervisor(api, () => void load())
+  const mayNote = session.permissions.includes('threads.post')
+  const note = useNoteDialog(api, { can: mayNote, onDone: () => void load() })
+  const people = {
+    mayAssign: session.permissions.includes('production.brand.manage'),
+    mayNote,
+    assign: assign.model,
+    note: note.model,
+  }
+  // ---- end F-SA-230
+  // ---- F-SA-232: the production read (every part on arrival: the band's health and Overview need it), the line sizes' window ----
+  const production = useOrderProduction(api, order.status === 'ready' ? order.value.id : null)
+  const [overviewLine, setOverviewLine] = useState<string | null>(null)
+  // ---- end F-SA-232
+  // ---- F-SA-234: the materials' readiness of the work orders the production read names (Production › Work orders, while it shows) ----
+  const [readiness, setReadiness] = useState<Part<ReadinessRow[]> | null>(null)
+  const readWork = production.state?.status === 'ready' ? production.state.read.work : null
+  const workIds = (readWork?.workOrders ?? []).map((row) => row.id).join(',')
+  useEffect(() => {
+    if (tab !== 'production' || workIds === '') return setReadiness(null)
+    const abort = new AbortController()
+    setReadiness((known) => known ?? PART_LOADING)
+    getReadiness(api, workIds.split(','), abort.signal)
+      .then((rows) => !abort.signal.aborted && setReadiness(part(rows)))
+      .catch((error: unknown) => !abort.signal.aborted && setReadiness({ value: null, problem: readProblem(error) }))
+    return () => abort.abort()
+  }, [api, tab, workIds])
+  // ---- end F-SA-234
+  // ---- F-SA-235: the order's health (raise to At risk / clear: production.brand.manage), read while Production shows (workorders.view) ----
+  const healthOwner = useMemo(
+    () => (order.status === 'ready' && tab === 'production' && can.viewWorkOrders ? { orders: [{ id: order.value.id, number: order.value.number }], version: order.value.version } : null),
+    [order, tab, can.viewWorkOrders],
+  )
+  const health = useBrandHealth(api, healthOwner, session.permissions, (words) => setNotice({ tone: 'success', words: { key: words.key === 'health.clearedNotice' ? 'notice.healthCleared' : 'notice.healthRaised' } }))
+  // ---- end F-SA-235
+  // ---- F-SA-236: the order's customer requests (every state; the API's wall) and the approvals we asked it (partners.approvals.view),
+  // read while Changes shows, again after each change of the order.
+  const [requests, setRequests] = useState<Part<BrandRequest[]> | null>(null)
+  const [askedOfCustomer, setAskedOfCustomer] = useState<Part<OfficeRequest[]> | null>(null)
+  const mayAsked = session.permissions.includes('partners.approvals.view')
+  const readyId = order.status === 'ready' ? order.value.id : null
+  const readyVersion = order.status === 'ready' ? order.value.version : null
+  const readRequests = useCallback(() => {
+    if (!readyId) return
+    setRequests((known) => known ?? PART_LOADING)
+    listOrderRequests(api, readyId)
+      .then((rows) => setRequests(part(rows)))
+      .catch((error: unknown) => setRequests({ value: null, problem: readProblem(error) }))
+    if (!mayAsked) return
+    readRecordRequests(api, { type: 'SalesOrder', id: readyId })
+      .then((answer) => setAskedOfCustomer(part(answer.requests)))
+      .catch((error: unknown) => setAskedOfCustomer({ value: null, problem: readProblem(error) }))
+  }, [api, readyId, mayAsked])
+  useEffect(() => {
+    if (tab === 'changes') readRequests()
+  }, [tab, readRequests, readyVersion])
+  // ---- end F-SA-236
+  // ---- F-SA-237: the order's files, read while Files shows (the thread's window reads the same route); shared by files.manage ----
+  const orderFiles = useOrderFiles(api, {
+    orderId: readyId,
+    enabled: tab === 'files',
+    partyId: order.status === 'ready' ? order.value.partyId : null,
+    canShare: session.permissions.includes('files.manage'),
+    onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
+  })
+  // ---- end F-SA-237
+
+  // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
+  runPartsRef.current = (parts) => {
+    const open = dialogRef.current
+    const typed = !!amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')
+    const orderParts = parts.filter((part) => ORDER_PARTS.includes(part))
+    if (orderParts.length > 0) {
+      // Under typed work the order is not read under it: "Changed by <name> at hh:mm · Reload" (the draft is kept).
+      if (typed) {
+        setChanged({ at: new Date().toISOString(), parts: orderParts })
+        // Who changed it: the order read's own last change, read beside the typed work (never applied under it).
+        getOrder(api, orderId)
+          .then((fresh) => {
+            const by = changedBy(fresh.lastChange, orderParts, locale === 'en' ? 'en' : 'it')
+            setChanged((known) => (known ? { ...known, by: by.name, at: by.at ?? known.at } : known))
+          })
+          .catch(() => undefined)
+      } else void load()
+    }
+    const productionParts = parts.filter((part): part is 'headline' | 'lines' | 'work' | 'dates' | 'quality' | 'people' => ['headline', 'lines', 'work', 'dates', 'quality', 'people'].includes(part))
+    if (productionParts.length > 0) production.again(productionParts.includes('lines') || productionParts.includes('work') ? [...new Set([...productionParts, 'headline' as const])] : productionParts)
+    if (parts.includes('work') && can.viewWorkOrders && current.current && !orderParts.length)
+      listOrderWorkOrders(api, current.current.id)
+        .then((rows) => setWorkOrders(part(rows)))
+        .catch(() => undefined)
+    if (parts.includes('changes') && tabRef.current === 'changes') readRequests()
+    if (parts.includes('files') && tabRef.current === 'files') orderFiles.reload()
+  }
+  reconnectRef.current = () => {
+    void load()
+    production.again()
+  }
+  // ---- end F-SA-239
 
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
@@ -434,6 +581,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFrom: madeFrom ?? null, // B-TH-228
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
+    people, // F-SA-230
+    production: production.state, // F-SA-232
+    readiness, // F-SA-234
+    health: healthOwner ? health.model : null, // F-SA-235
+    requests, // F-SA-236
+    files: tab === 'files' ? orderFiles.model : null, // F-SA-237
+    askedOfCustomer,
+    overviewLine,
+    liveState,
     changed,
     notice,
     busy,
@@ -442,7 +598,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     sentLink,
     recorded,
     stepUp,
-    sizeLayer,
     amend,
     schedule,
     amendments,
@@ -491,8 +646,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
         ) : null
       }
       printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
-      // B-TH-280: the order's custom fields at the end of its first tab (Lines), as the old panels drew them above theirs.
-      fields={value && tab === 'lines' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
+      // B-TH-280: the order's custom fields at the end of its first tab; F-SA-233: Overview (they moved from Lines).
+      fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
       actions={{
         onPortal: () => {
           const current = order.status === 'ready' ? order.value : null
@@ -508,6 +663,26 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
         links: links.actions, // B-TH-256
+        // ---- F-SA-232 ----
+        onRetryProduction: () => production.again(),
+        health: health.actions, // F-SA-235
+        files: orderFiles.actions, // F-SA-237
+        onOpenLine: setOverviewLine,
+        // ---- F-SA-230: the ⋯ People (the production lane's dialogs) ----
+        people: {
+          onAssign: () => {
+            const value = current.current
+            if (!value || !people.mayAssign) return
+            assign.open([{ orderId: value.id, number: value.number, customerRef: value.customerRef, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? '—', companyId: value.companyId }])
+          },
+          onAsk: () => {
+            const value = current.current
+            if (!value || !mayNote) return
+            note.open({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: value.id, label: value.number, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? null, companyId: value.companyId }], withoutOrder: 0 }, 'band', 'salesOrders')
+          },
+          assign: assign.actions,
+          note: note.actions,
+        },
         // ---- B-W2b-323 ----
         depth: depth.actions,
         onPricedOffer: () => {
@@ -526,6 +701,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
               .catch((error: unknown) => setCancelCheck({ value: null, problem: readProblem(error) }))
             return
           }
+          if (which === 'amendments' && value) return readAmendments(value)
+          if (which === 'requests') return readRequests()
           if (value) loadParts(value)
         },
         onReload: () => void load(),
@@ -537,6 +714,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
           setRecorded(null)
           setClosedLines(null)
           setCopied(null)
+          // F-SA-236: Before → after reads the amendments' snapshots as it opens.
+          if (next?.kind === 'compare' && current.current && !amendments?.value) readAmendments(current.current)
           if (next?.kind === 'cancel') {
             setCancelCheck(PART_LOADING)
             getCancelCheck(api, orderId)
@@ -583,7 +762,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
             'notice.sdiSent',
           )
         },
-        onSizeLayer: setSizeLayer,
         // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------
         onAmendStart: startAmend,
         onAmendDiscard: () => {

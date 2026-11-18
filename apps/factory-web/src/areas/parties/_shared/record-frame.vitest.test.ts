@@ -23,16 +23,17 @@ const dockOf = (html: string) => textOf(html.slice(html.indexOf('class="fw-rcf-d
 const bandOf = (html: string) => html.slice(html.indexOf('fw-rcf-hdr'), html.search(/class="fw-rcf[ "]/))
 
 describe('the tabs and the old addresses', () => {
-  it('customer 8 → 5 and supplier 10 → 7, in that order', () => {
-    expect(SIDES.customers.tabs).toEqual(['overview', 'addresses', 'terms', 'orders', 'portal'])
+  // F-SA-271 (R5): the customer's seven tabs; the supplier's unchanged.
+  it('customer 5 → 7 (F-SA-271) and supplier 10 → 7, in that order', () => {
+    expect(SIDES.customers.tabs).toEqual(['work', 'quotes', 'overview', 'money', 'people', 'terms', 'portal'])
     expect(SIDES.suppliers.tabs).toEqual(['overview', 'items', 'documents', 'orders', 'quality', 'bank', 'portal'])
     const words = CATALOGUE.en.parties!
-    expect(SIDES.customers.tabs.map((tab) => words[`customers.tab.${tab}`])).toEqual(['Overview', 'Addresses & contacts', 'Terms & requirements', 'Quotes & orders', 'Portal access'])
+    expect(SIDES.customers.tabs.map((tab) => words[`customers.tab.${tab}`])).toEqual(['Work', 'Quotes & incoming', 'Overview', 'Money', 'People & addresses', 'Terms & requirements', 'Portal settings'])
     expect(SIDES.suppliers.tabs.map((tab) => words[`suppliers.tab.${tab}`])).toEqual(['Overview & contacts', 'Items & prices', 'Documents & questionnaire', 'Orders', 'Quality & rating', 'Bank details', 'Portal access'])
   })
 
   it('every old ?tab= keeps working (R-8); a customer’s Documents shows the thread (its Files view holds the files)', () => {
-    expect(MERGED_TABS.customers).toEqual({ tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' })
+    expect(MERGED_TABS.customers).toEqual({ orders: 'work', addresses: 'people', tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' }) // F-SA-271
     expect(MERGED_TABS.suppliers).toEqual({ contacts: 'overview', questionnaire: 'documents', activity: 'overview' })
     for (const [side, merged] of Object.entries(MERGED_TABS) as [keyof typeof MERGED_TABS, Record<string, string>][]) {
       for (const [old, now] of Object.entries(merged)) expect(partyTabOf(side, old), `${side} ${old}`).toBe(now)
@@ -83,12 +84,13 @@ describe('the customer on RecordFrame', () => {
     expect(textOf(customer('w2b-324-tax'))).toContain('Terms & requirements')
   })
 
-  it('Quotes & orders: "Open this customer’s sheet" opens Sales › Orders with this customer and every row (SHEET-G12)', () => {
+  // F-SA-271: the link reads "Open in Sales › Orders" (on Work and in ⋯).
+  it('Work: "Open in Sales › Orders" opens Sales › Orders with this customer and every row (SHEET-G12)', () => {
     const id = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!.id
     const html = customer('quotes-orders')
-    expect(textOf(html)).toContain('Open this customer’s sheet')
+    expect(textOf(html)).toContain('Open in Sales › Orders')
     expect(html).toContain(`/sales/orders?party=${id}&amp;rows=all`)
-    expect(textOf(customer('quotes-orders', 'it'))).toContain('Apri il foglio di questo cliente')
+    expect(textOf(customer('quotes-orders', 'it'))).toContain('Apri in Vendite › Ordini')
   })
 
   it('one notice: the most serious shows, the rest wait behind "N more notices" (never above the thread)', () => {

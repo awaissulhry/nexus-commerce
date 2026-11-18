@@ -1,6 +1,7 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { effectiveSupervisor, workOrderSupervisor, type EffectiveSupervisor, type SupervisorSource } from '@nexus/factory-domain/production-brand/supervisor'
+import { supervisorMarkOf, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor' // B-SA-070
 import type { CommandTx } from '../../../core/command'
 
 /**
@@ -118,6 +119,29 @@ export async function workOrderSupervisorsOf(db: Reader, rows: readonly WorkOrde
     ]),
   )
 }
+
+// ── B-SA-070 (sales page plan N5, pick P10; 13-backend B2): moved here from work-orders/work-orders.ts, so the work order list
+// and Sales › Orders read the one mark ──
+/** The supervisor mark of each row for this viewer (null: a work order of no customer shows none). */
+export async function supervisorMarksOf(client: Reader, rows: readonly WorkOrderOrders[], viewerId: string): Promise<Map<string, SupervisorMark | null>> {
+  const found = await workOrderSupervisorsOf(client, rows)
+  return new Map(
+    rows.map((row): [string, SupervisorMark | null] => {
+      const supervisor = found.get(row.id) ?? null
+      return [row.id, supervisor === null ? null : supervisorMarkOf(supervisor, viewerId)]
+    }),
+  )
+}
+
+/**
+ * The supervisor mark of each sales order for this viewer (Me / Someone else / Not set: never a name on a list): its own, else its
+ * customer's default — the same two reads as the work orders' marks (an order is a "work order" of one order here).
+ */
+export async function orderSupervisorMarksOf(client: Reader, orders: readonly { readonly id: string; readonly partyId: string }[], viewerId: string): Promise<Map<string, SupervisorMark>> {
+  const marks = await supervisorMarksOf(client, orders.map((order) => ({ id: order.id, partyId: order.partyId, orderIds: [order.id] })), viewerId)
+  return new Map(orders.map((order) => [order.id, marks.get(order.id) ?? 'NOT_SET']))
+}
+// ── end B-SA-070 ──
 
 /** The supervisor inside ONE work order the reader opened: the name (worker privacy: never on a list), and the reader's own muted follow. */
 export interface RecordSupervisor {

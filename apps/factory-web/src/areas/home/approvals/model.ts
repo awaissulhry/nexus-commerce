@@ -9,6 +9,8 @@ import type { RequestFacts } from './words/request-words'
 // F-PR-08: a customer's request, its review window and the follow-up after an accept.
 import type { Words } from './requests/api'
 import type { FollowUp, RequestActions, RequestReviewModel } from './requests/model'
+// F-SA-245: a work-order change's decide window.
+import type { ChangeReviewActions, ChangeReviewModel } from './work-order-changes/model'
 
 /**
  * Home › Approvals (SCR-030; design home.approvals, W1: quote approvals only): the queue of requests that wait for MY
@@ -132,7 +134,8 @@ export interface InboxViewModel {
   /** quotes (W1), the engine's requests (approvals.view, approvals.decide), Today's approvals (home.view), the rules page. */
   // F-PR-08: `requests` — the customer requests (orders.view or workorders.view; the API walls them by customer).
   // `lift` / `rush`: the follow-ups after an accept — lift a customer's pause (workorders.hold), clear a rush (workorders.manage).
-  can: { quotes: QuoteAbilities; tasks: boolean; decide: boolean; today: boolean; rules: boolean; requests?: boolean; lift?: boolean; rush?: boolean }
+  // F-SA-245: `changes` — a work-order change may be opened by its id (orders.view or workorders.view; the API walls each).
+  can: { quotes: QuoteAbilities; tasks: boolean; decide: boolean; today: boolean; rules: boolean; requests?: boolean; lift?: boolean; rush?: boolean; changes?: boolean }
   controls: InboxControls
   /** The view's rows from every source (the view filters them); null while the first read runs. */
   rows: { items: readonly InboxRow[] | null; problem: string | null }
@@ -158,6 +161,8 @@ export interface InboxViewModel {
   requestReview?: RequestReviewModel | null
   /** F-PR-08: "Lift the hold" — why, before the customer's pause is lifted. */
   followUpDialog?: { readonly followUp: FollowUp; readonly busy: boolean; readonly problem: string | null } | null
+  /** F-SA-245: a work-order change (`?open=<change id>`) in its decide window. */
+  changeReview?: ChangeReviewModel | null
   /** Design cases: the rows ticked, the row that has the focus. */
   selected?: readonly string[]
   focusRow?: number
@@ -190,4 +195,6 @@ export interface InboxActions {
   request?: RequestActions
   onFollowUp?: (followUp: FollowUp) => void
   onLiftConfirm?: (reason: string) => void
+  /** F-SA-245: a work-order change's decide window (Apply, Leave as is…, Read again). */
+  change?: ChangeReviewActions
 }

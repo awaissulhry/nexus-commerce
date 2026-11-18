@@ -233,7 +233,6 @@ export function depthModel(role: Role, over: Partial<OrderDepthModel> = {}): Ord
     confirmation: { value: CONFIRMATION_SENT, problem: null },
     confirmationPdf: { value: demoPdfUrl(), problem: null },
     techPack: can.inquiries ? { value: TECH_PACK, problem: null } : null,
-    milestones: can.planning ? { value: MILESTONES, problem: null } : null,
     forecasts: can.promise ? { value: FORECASTS, problem: null } : null,
     seasons: null,
     depositKinds: DEPOSIT_KINDS_OFF,

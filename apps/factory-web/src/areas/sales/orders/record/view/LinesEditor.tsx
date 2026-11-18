@@ -11,7 +11,7 @@ import type { StyleDetail } from '../../../quotes/api'
 import { money, unitPrice } from '../../../quotes/model'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
-import { badPrice, changeOf, draftGrid, draftGroups, namesOf, piecesOf, underWorkOrders, type DraftLine } from '../../daily-model'
+import { badPrice, changeOf, draftGrid, draftGroups, namesOf, piecesOf, underCut, underWorkOrders, type DraftLine } from '../../daily-model'
 import type { ComposerState, EditorActions } from '../record-model'
 
 /** What the lines editor draws: an amendment of an order's lines, or the lines of a typed New order. */
@@ -27,6 +27,8 @@ export interface LinesEditorModel {
   priceBasis: 'NET' | 'GROSS'
   /** Pieces work orders already make, by line and size. */
   minimums: Record<string, Record<string, number>>
+  /** F-SA-231: the pieces already cut per line and size (the production read's own cells); a size never goes under them. */
+  floors?: Record<string, Record<string, number>>
   /** A typed order: each line's net and its resolved unit price, from the preview (by line key). */
   nets?: Record<string, number | undefined>
   listPrices?: Record<string, string | undefined>
@@ -40,7 +42,8 @@ export interface LinesEditorModel {
 /**
  * The lines editor (design `order.lines.cards` in amend mode, and the typed New order's Lines): "Add a style" (type a
  * style, pick its colours, Add: their rows open in its grid), then one card per style — the DS SizeGridEditor (keyboard,
- * paste, a cell a colour does not offer is blocked; a cell under what work orders already make says so) and each colour
+ * paste, a cell a colour does not offer is blocked; F-SA-231: a cell under what is already cut is an error, one under what work
+ * orders make says the work order follows as a change) and each colour
  * line's pieces and unit price (price grain; empty = unchanged, or the customer's list price on a new line), with what
  * happens to it (added, changed, removed). A line closed short is shown, never edited (reopen it first).
  */
@@ -188,9 +191,13 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
   const grid = draftGrid(lines, style, model.order)
   const first = namesOf(lines[0]!, model.order, style)
   const name = style?.name ?? model.order?.lines.find((line) => line.styleId === styleId)?.style?.name ?? ''
-  const under = underWorkOrders(lines, model.minimums)
+  // F-SA-231 (lead note after B-SA-042): under what is CUT is an error (Review waits); under what work orders make is said in words —
+  // the work order follows as a work-order change ("Still to do") — and Review stays open.
+  const cut = underCut(lines, model.floors ?? {})
+  const under = underWorkOrders(lines, model.minimums, model.floors ?? {})
   const issues: SizeGridIssue[] = [
-    ...under.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'error' as const, message: t('editor.underWorkOrders', { size: cell.size, made: cell.made }) })),
+    ...cut.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'error' as const, message: t('editor.underCut', { size: cell.size, cut: cell.cut }) })),
+    ...under.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'warning' as const, message: t('editor.underWorkOrders', { size: cell.size, made: cell.made }) })),
     // B-W2b-323: the locked cells of this style's lines (a warning: the value stands; a change goes as a priced change).
     ...(model.frozen ?? []).filter((issue) => lines.some((line) => line.key === issue.colour)),
   ]

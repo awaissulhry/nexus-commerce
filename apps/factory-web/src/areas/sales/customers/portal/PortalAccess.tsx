@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation' // F-SA-274
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { recordAddress } from '../../../../lib/records/record-links'
@@ -28,7 +29,7 @@ import { openPreview } from '../../../admin/users/partners/preview'
 import { limitsApply, productionPreviewAddress } from './limits/model' // F-PR-07
 import { useLimits } from './limits/use-limits' // F-PR-07
 import type { PortalDialog, PortalNotice, PortalSide, RequestRow } from './model'
-import { PortalAccessView } from './view/PortalAccessView'
+import { PORTAL_PARTS, PortalAccessView, type PortalPart } from './view/PortalAccessView' // F-SA-274: + the parts
 
 const SENTENCE: Readonly<Record<RowAction, string>> = {
   resend: 'stepUp.sentence.invite',
@@ -49,7 +50,12 @@ const SENTENCE: Readonly<Record<RowAction, string>> = {
  * F-PR-07: for a customer, the production limits card (`limits/use-limits.ts`): its own reads (the card, who may supervise, the
  * freeze points), Apply after a fresh code, the freeze dialog; "Open My production as …" previews `/p/<code>/production`.
  */
-export function PortalAccess({ side, party }: { side: PortalSide; party: { id: string; name: string; companyId: string | null } }) {
+/**
+ * F-SA-274: `parts` — what this mount draws (a customer's Portal settings and People & addresses each mount their own; default every
+ * part); `contactEmails` tag people who are also contacts; `onPeople` hands the page the people's e-mails (its contacts' "Has portal
+ * access"); an address `?invite=<e-mail>&inviteName=` opens the invitation filled in, once.
+ */
+export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { side: PortalSide; party: { id: string; name: string; companyId: string | null }; parts?: readonly PortalPart[]; contactEmails?: ReadonlySet<string>; onPeople?: (emails: ReadonlySet<string>) => void }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const can = useMemo(() => partnerCan(session.permissions), [session.permissions])
@@ -78,8 +84,7 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
     companyId: party.companyId ?? session.company?.id ?? null,
     companyName: party.companyId === null || party.companyId === session.company?.id ? (session.company?.name ?? null) : null,
     enabled: can.view && access !== null && limitsApply(side, access.kinds),
-    supervise: session.permissions.includes('production.brand.manage'),
-    guard,
+    guard, // F-SA-272: the supervisor moved to the customer's Overview
     onNotice: setNotice,
   })
 
@@ -196,8 +201,24 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
 
   const today = dayOf(now)
 
+  // ---- F-SA-274: the people's e-mails for the page (its contacts' tags), and an invitation asked by the address, once it can open.
+  const peopleEmails = useMemo(() => new Set((access?.people ?? []).filter((person) => person.status !== 'DEACTIVATED').map((person) => person.email.trim().toLowerCase())), [access])
+  useEffect(() => onPeople?.(peopleEmails), [onPeople, peopleEmails])
+  const search = useSearchParams()
+  const invited = useRef(false)
+  useEffect(() => {
+    const email = search?.get('invite')?.trim()
+    if (invited.current || !email || !access || !(parts ?? PORTAL_PARTS).includes('people')) return
+    invited.current = true
+    setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })
+    // Once the people are read.
+  }, [access])
+  // ---- end F-SA-274
+
   return (
     <PortalAccessView
+      parts={parts}
+      contactEmails={contactEmails}
       model={{
         side,
         prefix,

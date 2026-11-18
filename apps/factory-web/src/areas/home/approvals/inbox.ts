@@ -3,6 +3,8 @@ import type { TodayItem } from '../today/model'
 import type { TaskRow } from './api'
 // F-PR-08: a customer's requests, a source of their own (one row per request, one per batch).
 import { leadOf, namesGroup, REQUEST_INBOX_KIND, type RequestGroup } from './requests/model'
+// F-SA-245: a work-order change waiting (B-SA-044's Today row) opens its decide window here.
+import { changeIdOfRow } from './work-order-changes/model'
 
 /**
  * Home › Approvals in depth (B-W2b-307; PLT-085; design home.approvals): ONE inbox for every request that needs a yes, in
@@ -80,12 +82,14 @@ export const requestRow = (group: RequestGroup): InboxRow => {
 }
 
 /** What a listed row the address names opens as (a request of a batch's group opens alone), or null when no row names it. */
-export function listedTarget(rows: readonly InboxRow[], openId: string): 'quote' | 'task' | 'request' | 'batch' | null {
+// F-SA-245: `change` — a work-order change's row (Today's WORK_ORDER_CHANGE, its change id in the row's key).
+export function listedTarget(rows: readonly InboxRow[], openId: string): 'quote' | 'task' | 'request' | 'batch' | 'change' | null {
   for (const row of rows) {
     if (row.quote?.id === openId) return 'quote'
     if (row.task?.id === openId) return 'task'
     const named = row.request ? namesGroup(row.request, openId) : null
     if (named) return named
+    if (changeIdOfRow(row) === openId) return 'change'
   }
   return null
 }
@@ -93,7 +97,8 @@ export function listedTarget(rows: readonly InboxRow[], openId: string): 'quote'
 
 /** The id the address opens (`?open=`): a request's or a quote approval's id; Today's rows open their own page. */
 // F-PR-08: a customer's request its id, a batch's group the batch's id.
-export const openIdOf = (row: InboxRow): string | null => row.task?.id ?? row.quote?.id ?? row.request?.openId ?? null
+// F-SA-245: a work-order change's Today row its change's id (decided in its window here; the Record column still opens the work order).
+export const openIdOf = (row: InboxRow): string | null => row.task?.id ?? row.quote?.id ?? row.request?.openId ?? changeIdOfRow(row) ?? null
 
 /**
  * The rows of a view, oldest first for the queue (waiting, overdue), newest first for my requests and the decided.
@@ -139,7 +144,8 @@ export function kindsOf(rows: readonly InboxRow[]): { readonly kind: string; rea
  * offline, busy.
  */
 export function heldOf(row: InboxRow, state: { readonly offline: boolean; readonly busy: boolean }): string | null {
-  if (row.source === 'attention') return 'inbox.held.ownPage'
+  // F-SA-245: a work-order change is decided in its own window here (never ticked for Approve N).
+  if (row.source === 'attention') return changeIdOfRow(row) ? 'inbox.held.changeAlone' : 'inbox.held.ownPage'
   // F-PR-08: a customer's request is answered in its window, each answer held there with its own reason (requests/model answerHeld).
   if (row.task) {
     const task = row.task

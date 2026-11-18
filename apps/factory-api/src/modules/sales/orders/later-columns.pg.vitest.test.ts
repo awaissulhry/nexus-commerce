@@ -49,7 +49,8 @@ const NS = 'orders-th059'
 const T = seedUuid(NS, 'tenant')
 const companyA = seedUuid(NS, 'company:A')
 
-const PEOPLE = { owner: newId(), planner: newId(), limited: newId() } as const
+// B-SA-070: + noWork, a Sales reader without workorders.view (the session alone: no assignment needed for a read).
+const PEOPLE = { owner: newId(), planner: newId(), limited: newId(), noWork: newId() } as const
 type Person = keyof typeof PEOPLE
 const SESSIONS: Partial<Record<Person, SessionContext>> = {}
 function grantOf(role: string, parties: 'all' | string[]): Grant {
@@ -358,3 +359,98 @@ describe('W27: the later columns stay inside the reader’s customers', { timeou
     expect(await rows('limited', `atRisk=true&partyId=${partyA}`)).toEqual([])
   })
 })
+
+// ── B-SA-070 (sales page plan N5, picks R5, P10; 13-backend B2): the production columns of a row, `ids=`, and the wall ──
+describe('B-SA-070 the production columns (production=true)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const today = () => businessDate(new Date())
+  beforeAll(async () => {
+    const sales = grantOf('sales', 'all')
+    SESSIONS.noWork = { audience: 'office', tenantId: T, actorId: PEOPLE.noWork, companyId: companyA, grants: [{ ...sales, permissions: sales.permissions.filter((permission) => permission !== 'workorders.view') }] }
+    // SEED-SO-0002's stored production state: Sewing since today, computed On track raised to At risk (a raise standing 7 days),
+    // waiting on us since now, the owner its own supervisor. T059-B-01: Preparing, no raise, waiting on the customer.
+    await admin(
+      `INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", health, "healthAt",
+         "healthSet", "healthReasonCode", "healthSetAt", "healthSetById", "healthSetUntil", "waitingOn", "waitingSince", "supervisorId", "supervisorAssignedAt")
+       SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'SEWING', now(), 'ON_TRACK', now(),
+         'AT_RISK', 'MATERIAL_LATE', now(), $3, ($4::date + 7), 'US', now(), $3, now() FROM "SalesOrder" o WHERE o.id = $2
+       ON CONFLICT ("tenantId", key) DO UPDATE SET stage = 'SEWING', "stageAt" = now(), health = 'ON_TRACK', "healthAt" = now(), "healthSet" = 'AT_RISK',
+         "healthReasonCode" = 'MATERIAL_LATE', "healthSetAt" = now(), "healthSetById" = $3, "healthSetUntil" = ($4::date + 7), "waitingOn" = 'US',
+         "waitingSince" = now(), "supervisorId" = $3, "supervisorAssignedAt" = now()`,
+      [newId(), order2, PEOPLE.owner, today()],
+    )
+    await admin(
+      `INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", health, "healthAt", "waitingOn", "waitingSince")
+       SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'PREPARING', now(), 'AT_RISK', now(), 'BRAND', now() FROM "SalesOrder" o WHERE o.id = $2
+       ON CONFLICT ("tenantId", key) DO UPDATE SET stage = 'PREPARING', health = 'AT_RISK', "waitingOn" = 'BRAND', "waitingSince" = now(), "supervisorId" = NULL, "supervisorAssignedAt" = NULL`,
+      [newId(), orderB],
+    )
+    // One open customer request on T059-B-01 (a RUSH ask: waiting on us).
+    await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o.id = $2`, [newId(), orderB])
+  })
+
+  it("the keeper's stored stage, the shown health (a standing raise counts), who it waits on, the mark and the open requests", async () => {
+    const row = await rowOf('owner', 'SEED-SO-0002', 'production=true')
+    expect(row.production).toMatchObject({ stage: 'SEWING', stageSince: today(), health: 'AT_RISK', waitingOn: 'US', held: false, supervisorMark: 'ME', openRequests: 0, openIssues: 0, withheld: [] })
+    expect(row.production.since).toEqual(expect.any(String))
+    // The planner (workorders.view) reads the same order as "Someone else"; never a name on a list.
+    const planner = await rowOf('planner', 'SEED-SO-0002', 'production=true')
+    expect(planner.production.supervisorMark).toBe('SOMEONE_ELSE')
+    expect(JSON.stringify(planner)).not.toContain('Made-up owner')
+    const b = await rowOf('owner', 'T059-B-01', 'production=true')
+    expect(b.production).toMatchObject({ stage: 'PREPARING', health: 'AT_RISK', waitingOn: 'BRAND', supervisorMark: 'NOT_SET', openRequests: 1 })
+    // An order with no stored state yet: nulls, never a made-up stage.
+    const first = await rowOf('owner', 'SEED-SO-0001', 'production=true')
+    if ((await admin('SELECT 1 FROM "BrandOrderProduction" WHERE "salesOrderId" = $1', [order1])).length === 0) expect(first.production).toMatchObject({ stage: null, stageSince: null, health: null, waitingOn: null, since: null })
+    // Not asked: no production part at all.
+    expect(await rowOf('owner', 'SEED-SO-0002')).not.toHaveProperty('production')
+  })
+
+  it('the supervisor mark and the open issues only with workorders.view: else null, named in withheld', async () => {
+    const row = await rowOf('noWork', 'SEED-SO-0002', 'production=true')
+    expect(row.production).toMatchObject({ stage: 'SEWING', health: 'AT_RISK', supervisorMark: null, openIssues: null, withheld: ['supervisorMark', 'openIssues'] })
+  })
+
+  it('held: a live work order that makes a line of the order is on hold', async () => {
+    const held = await admin<{ id: string; status: string }>(
+      `SELECT DISTINCT wo.id, wo.status FROM "WorkOrder" wo JOIN "WorkOrderSize" c ON c."workOrderId" = wo.id JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId"
+        WHERE l."orderId" = $1 AND wo.status = 'ON_HOLD' AND wo.kind <> 'REPAIR'`,
+      [order2],
+    )
+    expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production.held).toBe(held.length > 0)
+  })
+
+  it('ids= re-reads only the rows named (at most 50); a malformed or longer list is refused in words', async () => {
+    const only = await rows('owner', `rows=all&production=true&ids=${order1},${order2}`)
+    expect(only.map((row) => row.number).sort()).toEqual(['SEED-SO-0001', 'SEED-SO-0002'])
+    const many = Array.from({ length: 51 }, () => newId()).join(',')
+    const refused = await call('owner', 'GET', `/sales/orders?ids=${many}`)
+    expect(refused.status).toBe(400)
+    expect((await call('owner', 'GET', '/sales/orders?ids=not-an-order-id-but-long-enough-to-pass-36')).status).toBe(400)
+  })
+
+  it('the file writes the production columns (the supervisor only with workorders.view)', async () => {
+    const columns = [
+      { key: 'number', label: 'Number' },
+      { key: 'whereItIs', label: 'Where it is' },
+      { key: 'waitingOn', label: 'Waiting on' },
+      { key: 'supervisor', label: 'Supervisor' },
+    ]
+    const file = await filed('owner', 'rows=all', columns)
+    const second = file.rows.find((row) => row.Number === 'SEED-SO-0002')!
+    expect(second['Where it is']).toBe('Sewing · At risk')
+    expect(second['Waiting on']).toBe('Waiting on us')
+    expect(second.Supervisor).toBe('Me')
+    expect((await filed('noWork', 'rows=all', columns)).omitted).toEqual(['supervisor'])
+  })
+
+  it("wall: a person limited to customer B naming A gets zero rows and zero counts, also with A's ids", async () => {
+    expect(await rows('limited', `rows=all&partyId=${partyA}&production=true`)).toEqual([])
+    expect(await rows('limited', `rows=all&production=true&ids=${order1},${order2}`)).toEqual([])
+    const board = await ok('limited', 'GET', `/sales/orders/board?partyId=${partyA}&waiting=us`)
+    expect((board.byStatus as Json[]).reduce((sum, entry) => sum + (entry.count as number), 0)).toBe(0)
+    const mine = await rows('limited', 'rows=all&production=true')
+    expect(mine.map((row) => row.partyId)).toEqual(mine.map(() => partyB))
+    expect(JSON.stringify(mine)).not.toContain(order2)
+  })
+})
+// ── end B-SA-070 ──

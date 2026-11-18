@@ -258,3 +258,73 @@ describe('B-TH-044: reply in the portal without e-mail', { timeout: SLOW_TEST_TI
     expect(stray.statusCode).toBe(400)
   })
 })
+
+// ── B-SA-073 (sales page plan R7, rule 7 / T11; review BW-6): Reply to N checked on the SERVER — one customer, at most 50 records —
+// and the mis-send text check on every reply ──
+describe('B-SA-073: Reply to N on the server, and the mis-send text check on a reply', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let orderB: string
+  let nameB: string
+  beforeAll(async () => {
+    // One order of customer B (SEED-C2, with its portal person): a made-up copy of A's first order.
+    const salt = 'sa073-b'
+    const v4 = (expression: string) => `(substr(md5(${expression}::text || '${salt}'), 1, 8) || '-' || substr(md5(${expression}::text || '${salt}'), 9, 4) || '-4' || substr(md5(${expression}::text || '${salt}'), 14, 3) || '-8' || substr(md5(${expression}::text || '${salt}'), 18, 3) || '-' || substr(md5(${expression}::text || '${salt}'), 21, 12))::uuid`
+    await admin(`
+      CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE id = '${orders[0]!.id}';
+      CREATE TEMP TABLE l AS SELECT * FROM "SalesOrderLine" WHERE "orderId" = (SELECT id FROM o);
+      CREATE TEMP TABLE s AS SELECT * FROM "SalesOrderLineSize" WHERE "lineId" IN (SELECT id FROM l);
+      UPDATE s SET id = ${v4('id')}, "lineId" = ${v4('"lineId"')}, "partyId" = '${partyB}';
+      UPDATE l SET id = ${v4('id')}, "orderId" = ${v4('"orderId"')}, "partyId" = '${partyB}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
+      UPDATE o SET id = ${v4('id')}, "partyId" = '${partyB}', number = 'SA073-B-01', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL;
+      INSERT INTO "SalesOrder" SELECT * FROM o;
+      INSERT INTO "SalesOrderLine" SELECT * FROM l;
+      INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
+      DROP TABLE o, l, s;`)
+    orderB = (await admin<{ id: string }>('SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = \'SA073-B-01\'', [T]))[0]!.id
+    const party = (await admin<{ legalName: string; tradeName: string | null }>('SELECT "legalName", "tradeName" FROM "Party" WHERE id = $1', [partyB]))[0]!
+    nameB = party.tradeName?.trim() || party.legalName
+  })
+
+  it("a batch naming A's and B's orders is refused at the first B reply, in words; B's thread gets nothing", async () => {
+    const batchId = newId()
+    await reply('writer', 'SalesOrder', orders[1]!.id, { body: 'Made-up: the buttons are in.', batchId })
+    const before = await messagesOfParty(partyB)
+    const refused = await reply('writer', 'SalesOrder', orderB, { body: 'Made-up: the buttons are in.', batchId }, 409)
+    expect(refusalOf(refused)).toMatchObject({ path: 'refusal/BATCH_TWO_CUSTOMERS', message: REPLY_REFUSAL_WORDS.BATCH_TWO_CUSTOMERS.en })
+    expect(JSON.stringify(refused)).not.toContain(nameB)
+    expect(await messagesOfParty(partyB)).toBe(before)
+    // The same record again in its own batch is no new record; another of A's orders joins it.
+    await reply('writer', 'SalesOrder', orders[1]!.id, { body: 'Made-up: and the zips.', batchId })
+    await reply('writer', 'SalesOrder', orders[2]!.id, { body: 'Made-up: the buttons are in.', batchId })
+    expect((await admin('SELECT 1 FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = \'ReplyBatch\' AND "recordId" = $2', [T, batchId])).length).toBe(3)
+  })
+
+  it('a 51st record of one batch is refused in words; a record already in the batch still takes a reply', async () => {
+    const batchId = newId()
+    // Fifty of A's records already in the batch (made-up rows of the batch's own audit), the first of them A's order 1.
+    for (let index = 0; index < 50; index++) {
+      const recordId = index === 0 ? orders[1]!.id : newId()
+      await admin(
+        `INSERT INTO "AuditLog" (id, "tenantId", "companyId", at, audience, "actorId", action, "recordType", "recordId", after, "requestId")
+         VALUES ($1, $2, $3, now(), 'OFFICE', $4, 'threads.replyBatch', 'ReplyBatch', $5, $6::jsonb, $7)`,
+        [newId(), T, companyA, OFFICE.writer, batchId, JSON.stringify({ partyId: partyA, recordType: 'SalesOrder', recordId }), `sa073-${index}`],
+      )
+    }
+    const full = await reply('writer', 'SalesOrder', orders[2]!.id, { body: 'Made-up: one too many.', batchId }, 409)
+    expect(refusalOf(full)).toMatchObject({ path: 'refusal/BATCH_FULL', message: REPLY_REFUSAL_WORDS.BATCH_FULL.en })
+    await reply('writer', 'SalesOrder', orders[1]!.id, { body: 'Made-up: still in the batch.', batchId })
+  })
+
+  it('a reply whose text names another customer is held by the mis-send check until the writer ticks that it names none', async () => {
+    const order = orders[2]!
+    const held = await reply('writer', 'SalesOrder', order.id, { body: `Made-up: as we did for ${nameB}.` }, 409)
+    expect(refusalOf(held)).toMatchObject({ path: 'refusal/NAMES_OTHER_CUSTOMER', message: REPLY_REFUSAL_WORDS.NAMES_OTHER_CUSTOMER.en })
+    // The refusal never names whom the text named.
+    expect(JSON.stringify(held).replace(`Made-up: as we did for ${nameB}.`, '')).not.toContain(nameB)
+    const sent = await reply('writer', 'SalesOrder', order.id, { body: `Made-up: as we did for ${nameB}.`, namesNoOtherCustomer: true })
+    expect(sent.message).toMatchObject({ channel: 'PORTAL' })
+    // The customer's own name is never "another customer".
+    const nameA = (await admin<{ legalName: string; tradeName: string | null }>('SELECT "legalName", "tradeName" FROM "Party" WHERE id = $1', [partyA]))[0]!
+    await reply('writer', 'SalesOrder', order.id, { body: `Made-up: thanks, ${nameA.tradeName?.trim() || nameA.legalName}.` })
+  })
+})
+// ── end B-SA-073 ──

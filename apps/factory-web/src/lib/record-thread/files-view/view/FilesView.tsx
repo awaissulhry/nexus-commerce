@@ -19,6 +19,8 @@ import { uploadAskHeld } from '../model'
 // B-TH-231: "Use on another record…" and the copy's source line.
 import { carriable, sourceLine } from '../../files/use-on'
 import { typeKey } from '../../../../areas/search/model'
+// F-SA-237: a sales order's files from its one walled read — the SAME body on the order's Files tab and in this window.
+import { orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesModel } from '../model'
 import '../files-view.css'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
@@ -44,6 +46,8 @@ export interface FilesViewModel {
   busy?: boolean
   now: number
   timeZone?: string
+  /** F-SA-237: a SalesOrder — its files from the order files read (the body below draws them instead of the record's own list). */
+  order?: OrderFilesModel | null
 }
 
 export type BulkAction = 'download' | 'share' | 'officeOnly' | 'remove'
@@ -65,6 +69,11 @@ export interface FilesViewActions {
   onDismissRefused?: () => void
   /** B-TH-231: "Use on another record…" for these files (one row's, or the chosen ones). */
   onUseOn?: (fileIds: readonly string[]) => void
+  /** F-SA-237 (a sales order): open a file through the order's own route; show its message in the conversation; the bulk bar. */
+  onOrderOpen?: (fileId: string, mode: 'preview' | 'download') => void
+  onOrderMessage?: (messageId: string) => void
+  onOrderSelect?: (fileIds: readonly string[]) => void
+  onOrderBulk?: (action: 'download' | 'share', fileIds: readonly string[]) => void
 }
 
 // ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
@@ -154,7 +163,7 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
         onClose={() => actions?.onClose?.()}
         size="detail"
         title={title}
-        subtitle={model.files ? t('subtitle', { count: order.length }) : undefined}
+        subtitle={model.order ? (model.order.read ? t('subtitle', { count: model.order.read.total }) : undefined) /* F-SA-237 */ : model.files ? t('subtitle', { count: order.length }) : undefined}
         footer={
           <>
             {/* Owner rule 2026-10-29: the keys live in ONE information icon in the footer, never above the list. */}
@@ -198,7 +207,9 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
                   <Lock size={14} aria-hidden /> {model.uploadHeld ?? t('upload.noRight')}
                 </p>
               )}
-              {model.files === null ? (
+              {model.order ? (
+                <OrderFilesView model={model.order} party={model.party} actions={actions} />
+              ) : model.files === null ? (
                 <div className="fw-rtv-loading" role="status" aria-label={t('loading')}>
                   {[0, 1, 2].map((row) => (
                     <Skeleton key={row} height={44} />
@@ -434,3 +445,151 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
     </Modal>
   )
 }
+
+// ── F-SA-237 (sales page plan N9, picks P14, R7) ──────────────────────────────────────────────────────────────────────────────
+
+/** The order files body on its own (the order's Files tab mounts it; this window mounts it for a SalesOrder). */
+export function OrderFilesBody({ model, party, actions }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions }) {
+  return (
+    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists']}>
+      <OrderFilesView model={model} party={party} actions={actions} />
+    </WithMessages>
+  )
+}
+
+/**
+ * A sales order's files by where they come from (Order & thread · Lines & artwork · Requests · Production · Quality · Shipments &
+ * invoices · Returns & complaints — the read's own groups and words): name, kind, size, day, where it sits ("from WO-0311", "in the
+ * conversation"), who can see it (Shared with the customer / Office only), "also on …" as the read names it, Open (the order's own
+ * route), Open in the conversation; real multi-select with a counted bar (Download N · Share N own); "N files you cannot open",
+ * counted, never named. Keys: ↑ / ↓ between files, x chooses, Enter opens.
+ */
+function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined }) {
+  const t = useT(FILES_VIEW_NS)
+  const fileWords = useT('record-thread-files')
+  const locale = useLocale()
+  const listRef = useRef<HTMLDivElement>(null)
+  if (model.problem) return <Banner tone="danger" title={t('problem.read')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('problem.retry')}</Button>} />
+  if (!model.read) {
+    return (
+      <div className="fw-rtv-loading" role="status" aria-label={t('loading')}>
+        {[0, 1, 2].map((row) => (
+          <Skeleton key={row} height={44} />
+        ))}
+      </div>
+    )
+  }
+  const read = model.read
+  const customer = model.face === 'customer' // F-SA-238: the portal's face of the same body
+  const groups = orderGroupsShown(read)
+  const files = orderFilesOf(read)
+  const leftOut = customer ? 0 : orderLeftOut(read)
+  const chosen = files.filter((file) => model.selected.includes(file.id))
+  const reach = orderBulkReach(chosen, read.order.id, model.canShare)
+  const allChosen = files.length > 0 && chosen.length === files.length
+  const choose = (fileId: string, on: boolean) => actions?.onOrderSelect?.(on ? [...new Set([...model.selected, fileId])] : model.selected.filter((one) => one !== fileId))
+  const keys = (event: KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement
+    if (target.closest('input, select, textarea')) return
+    const rows = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-row]') ?? [])]
+    const at = rows.indexOf(target.closest('button[data-row]') as HTMLButtonElement)
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (rows.length === 0) return
+      event.preventDefault()
+      rows[Math.max(0, Math.min(rows.length - 1, at + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+    } else if (event.key.toLowerCase() === 'x' && at >= 0) {
+      event.preventDefault()
+      const fileId = rows[at]!.dataset.row!
+      choose(fileId, !model.selected.includes(fileId))
+    }
+  }
+  if (files.length === 0 && leftOut === 0) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
+  return (
+    <div className="fw-rtv-order">
+      {leftOut > 0 && <p className="fw-rtv-held">{t('order.leftOut', { count: leftOut })}</p>}
+      {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
+      {files.length > 0 && !customer && (
+        <div className="fw-rtv-tools">
+          <Checkbox label={allChosen ? t('select.none', { count: files.length }) : t('select.all', { count: files.length })} checked={allChosen} onChange={(event) => actions?.onOrderSelect?.(event.target.checked ? files.map((file) => file.id) : [])} />
+        </div>
+      )}
+      {chosen.length > 0 && !customer && (
+        <BulkActionBar count={chosen.length} noun={t('bulk.noun')} onClear={() => actions?.onOrderSelect?.([])}>
+          <Button size="sm" onClick={() => actions?.onOrderBulk?.('download', reach.download)}>
+            <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
+          </Button>
+          {party && (
+            <Button size="sm" heldReason={!model.canShare ? t('bulk.noShareRight') : reach.share.length === 0 ? t('order.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('share', reach.share)}>
+              <Share2 size={14} aria-hidden /> {t('order.shareOwn', { party: party.name, count: reach.share.length })}
+            </Button>
+          )}
+        </BulkActionBar>
+      )}
+      <div ref={listRef} className="fw-rtv-groups" onKeyDown={keys}>
+        {groups.map((group) => (
+          <section key={group.key} className="fw-rtv-group" aria-label={locale === 'it' ? group.words.it : group.words.en}>
+            <h3 className="fw-rtv-group-title">
+              {locale === 'it' ? group.words.it : group.words.en} <span className="fw-rtv-muted">{group.files.length}</span>
+            </h3>
+            <ul className="fw-rtv-rows">
+              {group.files.map((file) => (
+                <OrderRow key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={{ t, fileWords, locale }} />
+              ))}
+            </ul>
+            {!customer && group.leftOut + group.measurementsLeftOut > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut })}</p>}
+          </section>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OrderRow({ file, orderId, customer, chosen, onChoose, actions, words }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' } }) {
+  const { t, fileWords, locale } = words
+  const source = sourceOf(file, orderId)
+  const kind = (['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO', 'ATTACHMENT'] as readonly string[]).includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT'
+  return (
+    <li className={`fw-rtv-row${chosen ? ' is-chosen' : ''}`}>
+      {!customer && (
+        <span className="fw-rtv-check">
+          <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
+        </span>
+      )}
+      <span className="fw-rtv-pic" aria-hidden>
+        {KIND_ICON[kind]}
+      </span>
+      <span className="fw-rtv-main">
+        <button type="button" className="fw-rtv-name" data-row={file.id} onClick={() => actions?.onOrderOpen?.(file.id, 'preview')}>
+          {file.bodyData && <Lock size={13} aria-hidden />} {file.name}
+        </button>
+        <span className="fw-rtv-meta">
+          {file.documentWords ? (locale === 'it' ? file.documentWords.it : file.documentWords.en) : fileWords(`kind.${kind}`)} · {sizeWords(file.sizeBytes, locale)} · {formatDate(file.at, { locale })}
+          {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
+        </span>
+        <span className="fw-rtv-marks">
+          {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
+          {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
+          {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
+          {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
+          {file.alsoOn.map((other) => (
+            <Tag key={`${other.type}:${other.id}`} tone="neutral">
+              {t('order.alsoOn', { record: other.label })}
+            </Tag>
+          ))}
+          {file.alsoOnOther > 0 && <Tag tone="neutral">{t('order.alsoOnOther', { count: file.alsoOnOther })}</Tag>}
+        </span>
+        <span className="fw-rtv-row-actions">
+          <Button size="sm" variant="quiet" onClick={() => actions?.onOrderOpen?.(file.id, 'preview')}>
+            {t('version.open')}
+          </Button>
+          {file.inThread && actions?.onOrderMessage && (
+            <Button size="sm" variant="quiet" onClick={() => actions.onOrderMessage?.(file.inThread!.messageId)}>
+              {t('order.inThread')}
+            </Button>
+          )}
+        </span>
+      </span>
+    </li>
+  )
+}
+// ── end F-SA-237

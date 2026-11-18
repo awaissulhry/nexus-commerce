@@ -97,11 +97,13 @@ export function InviteDialog({ model, actions }: { model: PortalAccessModel; act
   const locale = useLocale()
   const access = model.access!
   const open = model.dialog?.kind === 'invite'
-  const [draft, setDraft] = useState<PartnerInviteDraft>(model.inviteDraft ?? blankInvite(access, locale))
+  // F-SA-274: a contact's e-mail and name, when the invitation starts from People & addresses.
+  const from = model.dialog?.kind === 'invite' ? { ...(model.dialog.email ? { email: model.dialog.email } : {}), ...(model.dialog.name ? { name: model.dialog.name } : {}) } : {}
+  const [draft, setDraft] = useState<PartnerInviteDraft>(model.inviteDraft ?? { ...blankInvite(access, locale), ...from })
   const [tried, setTried] = useState(model.inviteDraft !== undefined)
   useEffect(() => {
     if (open) {
-      setDraft(model.inviteDraft ?? blankInvite(access, locale))
+      setDraft(model.inviteDraft ?? { ...blankInvite(access, locale), ...from })
       setTried(model.inviteDraft !== undefined)
     }
     // A new dialog starts blank; the read behind it does not reset what is typed.

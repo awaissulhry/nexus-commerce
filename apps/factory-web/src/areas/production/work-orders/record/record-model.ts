@@ -17,7 +17,7 @@ import type { VarianceModel } from '../labour/variance/model'
 // B-TH-265: the work order on RecordFrame — "Order files (n)" and the orders' threads beside the work order's own notes.
 import type { OrderFilesActions, OrderFilesModel, OrderThreadChoice } from './order-files/model'
 // F-PR-05a: the band facts' health (each order's, B-PR-35) with Raise to At risk, and the Overview's Gates & readiness.
-import type { HealthActions, HealthModel } from './health/model'
+import type { HealthActions, HealthModel } from '../../../../lib/production/health/model' // F-SA-235: moved to lib (one card)
 import type { GatesPart } from './gates/use-gates'
 // F-PR-21: the supervisor fact's Change… opens THE assign dialog (areas/_shared/production-supervisor).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
@@ -27,6 +27,9 @@ import type { NoteDialogActions, NoteDialogModel } from '../../_shared/notes/mod
 import type { CutPartsActions, CutPartsModel } from '../cutting/use-cut-parts'
 // F-PR-05b: the Customer card on Overview (its requests, approvals, urgency with Set to regular / Lock / Unlock, problems, limits).
 import type { CustomerCardActions, CustomerCardModel } from './customer/model'
+// F-SA-245: the work-order changes waiting on this work order (its band notice) and their ONE decide window.
+import type { WorkOrderChange } from '../../../home/approvals/work-order-changes/api'
+import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/approvals/work-order-changes/model'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -135,6 +138,11 @@ export interface WorkOrderRecordModel {
   // ---- end F-PR-06
   /** F-PR-05b: the Customer card on Overview (absent or null: not drawn — a work order of no customer order). */
   customerCard?: CustomerCardModel | null
+  /**
+   * F-SA-245: the work-order changes waiting on it (null: not read, or without workorders.view — no notice), the address that opens
+   * the oldest in the decide window (its band notice's Open), and that window while the address opens one (`?open=<change id>`).
+   */
+  changes?: { readonly waiting: readonly WorkOrderChange[] | null; readonly firstHref: string | null; readonly review: ChangeReviewModel | null; readonly busy: boolean }
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
   draft?: { reason?: string; override?: boolean; dueDate?: string; priority?: string; editing?: boolean; grid?: Record<string, Record<string, number>> }
 }
@@ -191,4 +199,6 @@ export interface WorkOrderRecordActions {
   // ---- end F-PR-06
   /** F-PR-05b: the Customer card (Set to regular / Lock / Unlock, Try again). */
   customerCard?: CustomerCardActions
+  /** F-SA-245: the decide window's actions, and its door (open another waiting change, or close: null). */
+  changes?: ChangeReviewActions & { readonly onOpen?: (id: string | null) => void }
 }

@@ -11,7 +11,8 @@ import { issueBellOf } from '../../../modules/production/issues/bell'
  * Something given to a person (the assignee notice, W1 leftover "attention.assigned waits for notifications"):
  *   attention.assigned   ASSIGNMENT to the person a row of Today was assigned to (not when they took it themselves)
  *   task.assigned        ASSIGNMENT to the person a task was given to (not when they gave it to themselves); F-PR-05b: an issue's task
- *                        in its own words (a customer's reported problem, an issue going up a step)
+ *                        in its own words (a customer's reported problem, an issue going up a step); B-SA-071: the tasks of one batch
+ *                        (POST /tasks/batch) fold into one item
  * Each re-checks that the person still reaches Home (home.view: the bell).
  */
 
@@ -49,7 +50,7 @@ export const ASSIGNMENT_RULES: readonly FanOutRule[] = Object.freeze([
     name: 'tasks.assigned',
     events: ['task.assigned'],
     async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
-      const payload = payloadOf(taskEvents, 'task.assigned').parse(raw) as unknown as { taskId: string; assigneeId: string | null; assignedById: string | null }
+      const payload = payloadOf(taskEvents, 'task.assigned').parse(raw) as unknown as { taskId: string; assigneeId: string | null; assignedById: string | null; /* B-SA-071 */ batchId?: string }
       if (payload.assigneeId === null) return []
       const reader = await context.reader(payload.assigneeId)
       if (!reader || !holds(reader.actor, HOME_VIEW)) return []
@@ -70,6 +71,8 @@ export const ASSIGNMENT_RULES: readonly FanOutRule[] = Object.freeze([
           messageKey: bell ? bell.messageKey : 'notifications.assigned.task',
           params: bell ? { ...bell.params, title: task.title, taskId: task.id } : { actorId: payload.assignedById, title: task.title, taskId: task.id },
           actorId: bell ? null : payload.assignedById,
+          // B-SA-071: the tasks of one "Add task to N" are one bell item for their assignee.
+          ...(payload.batchId ? { batchId: payload.batchId } : {}),
         },
       ]
     },

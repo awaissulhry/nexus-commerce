@@ -9,6 +9,7 @@ import { readProblem } from '../../../finance/receivables/model'
 import type { AgeingRow } from '../../../finance/receivables/api'
 import { failed, loaded, loading, type Loaded } from '../../../parties/_shared/model'
 import { getCustomerAgeing, getOverdueCustomers, listCustomerComplaints, listCustomerReturns, type CustomerComplaint, type CustomerReturn } from './api'
+import { listOpenOrderMoney, type OpenOrderMoney } from './api' // F-SA-273
 import type { OverdueListModel } from './columns'
 import { customerMoneyCanOf, overdueByParty } from './model'
 import type { CustomerMoneyModel } from './overview'
@@ -44,6 +45,7 @@ export function useCustomerMoney(partyId: string, prefix: string): CustomerMoney
   const [ageing, setAgeing] = useState<Loaded<AgeingRow>>(loading())
   const [returns, setReturns] = useState<Loaded<CustomerReturn>>(loading())
   const [complaints, setComplaints] = useState<Loaded<CustomerComplaint>>(loading())
+  const [orders, setOrders] = useState<Loaded<OpenOrderMoney>>(loading()) // F-SA-273: the Money tab's deposits and balances
   useEffect(() => {
     const abort = new AbortController()
     const live = () => !abort.signal.aborted
@@ -59,11 +61,16 @@ export function useCustomerMoney(partyId: string, prefix: string): CustomerMoney
       listCustomerComplaints(api, partyId, abort.signal)
         .then((value) => live() && setComplaints(loaded(value)))
         .catch((error: unknown) => live() && setComplaints(failed(readProblem(error))))
+    // F-SA-273: the open orders' deposits and balances (orders.view; amounts with the price grain).
+    if (can.orders)
+      listOpenOrderMoney(api, partyId, abort.signal)
+        .then((value) => live() && setOrders(loaded(value.orders, value.more)))
+        .catch((error: unknown) => live() && setOrders(failed(readProblem(error))))
     return () => abort.abort()
-  }, [api, partyId, companyId, can.receivables, can.returns, can.complaints])
+  }, [api, partyId, companyId, can.receivables, can.returns, can.complaints, can.orders])
   const returnsList = listAddress('/sales/returns', { partyId }, BUILT)
   return useMemo(
-    () => ({ can, prefix, partyId, year: romeToday().slice(0, 4), ageing, returns, complaints, returnsHref: returnsList ? `${prefix}${returnsList}` : null }),
-    [can, prefix, partyId, ageing, returns, complaints, returnsList],
+    () => ({ can, prefix, partyId, year: romeToday().slice(0, 4), ageing, returns, complaints, orders /* F-SA-273 */, returnsHref: returnsList ? `${prefix}${returnsList}` : null }),
+    [can, prefix, partyId, ageing, returns, complaints, orders, returnsList],
   )
 }

@@ -21,7 +21,7 @@ import { SHIFT_NAMESPACE } from '../../every-shift/model'
 import { FrozenSpecLine, SizeRunFrozen } from '../../spec/view/SpecParts'
 // ---- F-PR-05a: Gates & readiness, ONE progress table, Health with Raise to At risk ----
 import { GatesCard } from '../gates/view/GatesCard'
-import { HealthCard } from '../health/view/HealthCard'
+import { HealthCard } from '../../../../../lib/production/health/view/HealthCard' // F-SA-235: moved to lib (one card)
 import { ProgressTable } from '../overview/view/ProgressTable'
 // ---- end F-PR-05a
 // F-PR-05b: the Customer card (one block per customer of the work order).

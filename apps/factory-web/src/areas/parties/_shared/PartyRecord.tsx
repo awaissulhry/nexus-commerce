@@ -48,6 +48,8 @@ import {
   partyName,
   partyTabOf,
   threadOnArrival,
+  anchorOnArrival, // F-SA-271
+  recordTabs, // F-SA-271
   partyPatch,
   problemKey,
   refusedFields,
@@ -59,10 +61,11 @@ import {
   type Loaded,
   type Notice,
   type PartyDraft,
+  type PartyRecordModel,
   type RecordDialog,
   type Side,
 } from './model'
-import { PartyRecordView, type OverviewSlot, type SupplierDepth } from './view/PartyRecordView'
+import { PartyRecordView, type OverviewSlot, type PartyRecordActions, type SupplierDepth } from './view/PartyRecordView'
 
 /**
  * The record container of both sides (`/w/<company>/sales/customers/<id>` SCR-033, `/w/<company>/purchasing/
@@ -84,15 +87,37 @@ export type QuestionnaireSlot = (party: Party) => ReactNode
 /** B-W2b-334: a supplier's W2b parts (areas/purchasing/suppliers/depth), drawn with the party read, and how to read it again. */
 export type DepthSlot = (party: Party, reload: () => void) => SupplierDepth
 
-export function PartyRecord({ side, partyId, terms, items, overview, portal, questionnaire, depth }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot; depth?: DepthSlot }) {
+export function PartyRecord({ side, partyId, items, portal, questionnaire, depth }: { side: Side; partyId: string; items?: ItemsSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot; depth?: DepthSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
+      <PartyRecordContainer side={side} partyId={partyId} items={items} portal={portal} questionnaire={questionnaire} depth={depth} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId, terms, items, overview, portal, questionnaire, depth }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot; depth?: DepthSlot }) {
+/** F-SA-270: the supplier's record (the customer's draws its own view: areas/sales/customers/record/CustomerRecord.tsx). */
+function PartyRecordContainer({ side, partyId, items, portal, questionnaire, depth }: { side: Side; partyId: string; items?: ItemsSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot; depth?: DepthSlot }) {
+  const record = usePartyRecord(side, partyId, { items, portal, questionnaire, depth })
+  return <PartyRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} items={record.items} portal={record.portal} questionnaire={record.questionnaire} depth={record.depth} />
+}
+
+/** F-SA-270: what a side gives the record — each drawn with the party read (and how to read it again). */
+export interface PartySlots {
+  readonly terms?: TermsSlot | undefined
+  readonly items?: ItemsSlot | undefined
+  readonly overview?: OverviewSlot | undefined
+  readonly portal?: PortalSlot | undefined
+  readonly questionnaire?: QuestionnaireSlot | undefined
+  readonly depth?: DepthSlot | undefined
+}
+
+/**
+ * F-SA-270 (sales page plan N5; 11-customer-page §1): the record's reads, writes, live stream and docked thread — the body of the
+ * container both sides had, moved here as it was (same code): the supplier's record draws PartyRecordView with it, the customer's
+ * CustomerRecordView. Returns the view's props.
+ */
+export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = {}) {
+  const { terms, items, overview, portal, questionnaire, depth } = slots
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -116,12 +141,18 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
     // B-TH-260: the band's Projects (n) (threads.read reads projects) and Start a project (projects.manage).
     projects: held.has('threads.read'),
     projectsManage: held.has('projects.manage'),
+    // F-SA-271: the customer's tabs and band (Quotes & incoming, Money, New order, Add task, Work orders of <customer>).
+    inquiries: held.has('sales.inquiries.view'),
+    money: held.has('money.price') || held.has('receivables.view') || held.has('sales.credit.view'),
+    ordersManage: held.has('orders.manage'),
+    tasks: held.has('tasks.manage'),
+    workorders: held.has('workorders.view'),
   }
   const prefix = companyPrefix(session.company?.code ?? '')
   const pathname = usePathname()
   // B-TH-260 (R-8): an old `?tab=` lands on its tab today (a customer's Documents: the overview with the thread shown).
   const asked = params?.get('tab') ?? null
-  const tab = partyTabOf(side, asked)
+  const tab = partyTabOf(side, asked, recordTabs(config, can)) // F-SA-271: no tab asked: the first the reader sees
   const [party, setParty] = useState<Party | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -343,105 +374,107 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
   const fields = party && tab === 'overview' ? <RecordCustomFields record={{ type: config.recordType, id: party.id }} title={name} /> : null
   // ---- end B-TH-280
 
-  return (
-    <PartyRecordView
-      model={{
-        side,
-        prefix,
-        tab,
-        party,
-        problem,
-        can,
-        asOf,
-        live,
-        changedAt,
-        busy,
-        notice,
-        dialog,
-        dialogProblem,
-        refused,
-        // B-TH-260
-        personId: session.user.id,
-        projects,
-        threadOnArrival: threadOnArrival(side, asked),
-        history,
-        quotes,
-        orders,
-        purchaseOrders,
-        viesRunning,
-        saving,
-        deals,
-      }}
-      thread={thread}
-      printThread={printThread}
-      fields={fields /* B-TH-280 */}
-      terms={party && terms ? terms(party, () => void load()) : null}
-      items={party && items ? items(party, () => void load()) : null}
-      portal={party && portal && tab === 'portal' ? portal(party) : null}
-      questionnaire={party && questionnaire && tab === 'documents' ? questionnaire(party) : null /* B-TH-260: Documents & questionnaire */}
-      depth={party && depth ? depth(party, () => void load()) : undefined}
-      overview={overview}
-      actions={{
-        onRetry: () => {
-          setProblem(null)
-          setParty(null)
-          void load()
-          void loadBeside()
-        },
-        onReload: () => {
-          dirty.current = false
-          closeDialog()
-          void load()
-        },
-        onDialog: (next) => (next ? setDialog(next) : closeDialog()),
-        onDismissNotice: () => setNotice(null),
-        onSaveParty,
-        onDirty: (value) => {
-          dirty.current = value
-        },
-        onActivate: () => void move('activate'),
-        onBlock: (reason) => void move('block', reason),
-        onUnblock: () => void move('unblock'),
-        onArchive: () => void move('archive'),
-        onReactivate: () => void move('reactivate'),
-        onCheckVies: () => void onCheckVies(),
-        onSaveAddress,
-        onAddressStatus: (addressId, status) => {
-          const address = party?.addresses.find((item) => item.id === addressId)
-          if (party && address) void write(() => updateAddress(api, party.id, addressId, { version: address.version, status }), status === 'ARCHIVED' ? 'done.addressArchived' : 'done.addressRestored')
-        },
-        onDefault: (which, addressId) => {
-          if (!party) return
-          const current = party.addresses.find((address) => (which === 'billTo' ? address.isDefaultBillTo : address.isDefaultShipTo))
-          setSaving(`${which}:${addressId ?? current?.id ?? ''}`)
-          void write(
-            () => setDefaultAddresses(api, party.id, { version: party.version, ...(which === 'billTo' ? { billToAddressId: addressId } : { shipToAddressId: addressId }) }),
-            'done.defaultSaved',
-            true,
-          ).finally(() => setSaving(null))
-        },
-        onSaveContact,
-        onContactStatus: (contactId, status) => {
-          const contact = party?.contacts.find((item) => item.id === contactId)
-          if (party && contact) void write(() => updateContact(api, party.id, contactId, { version: contact.version, status }), status === 'ARCHIVED' ? 'done.contactArchived' : 'done.contactRestored')
-        },
-        onReceivesOrders: (contactId, on) => {
-          const contact = party?.contacts.find((item) => item.id === contactId)
-          if (!party || !contact) return
-          setSaving(`orders:${contactId}`)
-          const roles = on ? [...new Set([...contact.roles, 'ORDERS' as const])] : contact.roles.filter((role) => role !== 'ORDERS')
-          void write(() => updateContact(api, party.id, contactId, { version: contact.version, roles }), on ? 'done.receivesPos' : 'done.noLongerPos', true).finally(() => setSaving(null))
-        },
-        onSaveIdentity,
-        onDeals: setDeals,
-        onCopyCode: () => {
-          if (!party) return
-          void navigator.clipboard?.writeText(party.code).then(
-            () => setNotice({ key: 'record.copied', tone: 'success', params: { code: party.code } }),
-            () => setNotice({ key: 'record.copyFailed', tone: 'warning', params: { code: party.code } }),
-          )
-        },
-      }}
-    />
-  )
+  return {
+    model: {
+      side,
+      prefix,
+      tab,
+      party,
+      problem,
+      can,
+      asOf,
+      live,
+      changedAt,
+      busy,
+      notice,
+      dialog,
+      dialogProblem,
+      refused,
+      // B-TH-260
+      personId: session.user.id,
+      projects,
+      threadOnArrival: threadOnArrival(side, asked),
+      anchorOnArrival: anchorOnArrival(side, asked), // F-SA-271
+      history,
+      quotes,
+      orders,
+      purchaseOrders,
+      viesRunning,
+      saving,
+      deals,
+    } satisfies PartyRecordModel,
+    thread,
+    printThread,
+    fields /* B-TH-280 */,
+    terms: party && terms ? terms(party, () => void load()) : null,
+    items: party && items ? items(party, () => void load()) : null,
+    portal: party && portal && tab === 'portal' ? portal(party) : null,
+    questionnaire: party && questionnaire && tab === 'documents' ? questionnaire(party) : null /* B-TH-260: Documents & questionnaire */,
+    depth: party && depth ? depth(party, () => void load()) : undefined,
+    overview,
+    // F-SA-270: the party read, and how to read it again (the customer view's own reads beside it).
+    party,
+    reload: () => void load(),
+    actions: {
+      onRetry: () => {
+        setProblem(null)
+        setParty(null)
+        void load()
+        void loadBeside()
+      },
+      onReload: () => {
+        dirty.current = false
+        closeDialog()
+        void load()
+      },
+      onDialog: (next) => (next ? setDialog(next) : closeDialog()),
+      onDismissNotice: () => setNotice(null),
+      onSaveParty,
+      onDirty: (value) => {
+        dirty.current = value
+      },
+      onActivate: () => void move('activate'),
+      onBlock: (reason) => void move('block', reason),
+      onUnblock: () => void move('unblock'),
+      onArchive: () => void move('archive'),
+      onReactivate: () => void move('reactivate'),
+      onCheckVies: () => void onCheckVies(),
+      onSaveAddress,
+      onAddressStatus: (addressId, status) => {
+        const address = party?.addresses.find((item) => item.id === addressId)
+        if (party && address) void write(() => updateAddress(api, party.id, addressId, { version: address.version, status }), status === 'ARCHIVED' ? 'done.addressArchived' : 'done.addressRestored')
+      },
+      onDefault: (which, addressId) => {
+        if (!party) return
+        const current = party.addresses.find((address) => (which === 'billTo' ? address.isDefaultBillTo : address.isDefaultShipTo))
+        setSaving(`${which}:${addressId ?? current?.id ?? ''}`)
+        void write(
+          () => setDefaultAddresses(api, party.id, { version: party.version, ...(which === 'billTo' ? { billToAddressId: addressId } : { shipToAddressId: addressId }) }),
+          'done.defaultSaved',
+          true,
+        ).finally(() => setSaving(null))
+      },
+      onSaveContact,
+      onContactStatus: (contactId, status) => {
+        const contact = party?.contacts.find((item) => item.id === contactId)
+        if (party && contact) void write(() => updateContact(api, party.id, contactId, { version: contact.version, status }), status === 'ARCHIVED' ? 'done.contactArchived' : 'done.contactRestored')
+      },
+      onReceivesOrders: (contactId, on) => {
+        const contact = party?.contacts.find((item) => item.id === contactId)
+        if (!party || !contact) return
+        setSaving(`orders:${contactId}`)
+        const roles = on ? [...new Set([...contact.roles, 'ORDERS' as const])] : contact.roles.filter((role) => role !== 'ORDERS')
+        void write(() => updateContact(api, party.id, contactId, { version: contact.version, roles }), on ? 'done.receivesPos' : 'done.noLongerPos', true).finally(() => setSaving(null))
+      },
+      onSaveIdentity,
+      onDeals: setDeals,
+      onCopyCode: () => {
+        if (!party) return
+        void navigator.clipboard?.writeText(party.code).then(
+          () => setNotice({ key: 'record.copied', tone: 'success', params: { code: party.code } }),
+          () => setNotice({ key: 'record.copyFailed', tone: 'warning', params: { code: party.code } }),
+        )
+      },
+    } satisfies PartyRecordActions,
+  }
 }

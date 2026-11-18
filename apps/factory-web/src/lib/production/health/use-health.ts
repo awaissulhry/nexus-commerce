@@ -1,18 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client'
-import type { WorkOrder } from '../../../_shared/api'
-import { readProblem, type Phrase } from '../../../_shared/model'
+import { newIdempotencyKey, type ApiClient } from '../../api/client'
+import type { Phrase } from '../model'
 import { clearBrandHealth, getBrandHealth, raiseBrandHealth } from './api'
-import { healthOrdersOf, raiseProblem, type HealthActions, type HealthModel, type HealthPart } from './model'
+import { healthOrdersOf, healthReadProblem as readProblem, raiseProblem, type HealthActions, type HealthModel, type HealthOwner, type HealthPart } from './model'
 
 /**
  * F-PR-05a — the work order's health (the container's part; the view draws the band chips and the Overview's Health card): reads each
  * of its own orders' health once the work order is read and again after each change of it (its version), raises to At risk and
  * clears with the production state's version as read (a stale one is refused in words and read again), one write at a time.
  */
-export function useBrandHealth(api: ApiClient, workOrder: WorkOrder | null, permissions: readonly string[], onNotice: (words: Phrase) => void): { model: HealthModel; actions: HealthActions } {
+// F-SA-235: `workOrder` is any owner of orders with a version — a work order (its orders) or a sales order ({ orders: [itself] }).
+export function useBrandHealth(api: ApiClient, workOrder: (HealthOwner & { readonly version: number }) | null, permissions: readonly string[], onNotice: (words: Phrase) => void): { model: HealthModel; actions: HealthActions } {
   const can = permissions.includes('production.brand.manage')
   const orders = useMemo(() => (workOrder ? healthOrdersOf(workOrder) : []), [workOrder])
   const ordersKey = orders.map((order) => order.orderId).join(',')

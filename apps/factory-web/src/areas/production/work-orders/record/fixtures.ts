@@ -25,8 +25,8 @@ import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- F-PR-05a: the band facts (customer, orders and POs, % done, health, waiting on), Report finished first, the Overview's gates,
 // ONE progress table and Health with Raise to At risk (made-up customer, orders, gates and a raise) ----
 import type { Milestones } from '../../../planning/milestones/api'
-import type { BrandHealthView } from './health/api'
-import type { HealthModel } from './health/model'
+import type { BrandHealthView } from '../../../../lib/production/health/api' // F-SA-235: moved to lib (one card)
+import type { HealthModel } from '../../../../lib/production/health/model'
 // ---- end F-PR-05a
 // ---- F-PR-05b: the Customer card and the one "Put on hold" dialog with the plain production hold (made-up) ----
 import { CUSTOMER_PAUSE, LIFTED_HOLD, PLAIN_HOLD, plainHeldWorkOrder, plainHolds } from '../daily/demo/fixtures'

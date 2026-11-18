@@ -123,9 +123,10 @@ describe('the calls', () => {
 
 describe('the record tabs in the design\'s order', () => {
   // B-TH-214 / B-TH-301 merged the order's tabs 9 → 5 (Documents into Confirmation & changes; Activity docks as the thread).
+  // F-SA-230 re-cut them: Margin is Money's last section (#margin), Shipments holds no money.
   // B-TH-265 merged the work order's 9 → 7: Documents' doors went to the band's ⋯, Activity docks as the thread; Labour & cost is last.
-  it('the order: … Shipments & invoices, Confirmation & changes, Margin; the work order: … Operations, Quality, Labour & cost', () => {
-    expect(ORDER_TABS.slice(-3)).toEqual(['shipments', 'changes', 'margin'])
+  it('the order: … Money (its Margin section), Shipments, Files; the work order: … Operations, Quality, Labour & cost', () => {
+    expect(ORDER_TABS.slice(-3)).toEqual(['money', 'shipments', 'files'])
     expect(WORK_ORDER_TABS.slice(-3)).toEqual(['operations', 'quality', 'labour'])
   })
 })

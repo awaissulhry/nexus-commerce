@@ -109,10 +109,11 @@ export function useCustomerDepth(partyId: string) {
   const loadPrivacy = useCallback(() => readOne(() => readPrivacy(api, partyId), setPrivacy), [api, partyId, readOne])
 
   const loadTab = useCallback(() => {
-    if (tab === 'overview') void loadGlance()
+    // F-SA-271: the glance also on Money (the credit) and People & addresses (riders and profiles).
+    if (tab === 'overview' || tab === 'money') void loadGlance()
     // B-TH-260: Terms & requirements reads the hold, the PO-number terms and the requirements in force together.
     else if (tab === 'terms') void Promise.all([loadHolds(), loadTerms(), loadRequirements()])
-    else if (tab === 'addresses') void loadPrivacy()
+    else if (tab === 'people') void Promise.all([loadPrivacy(), loadGlance()]) // F-SA-271: Addresses & contacts → People & addresses
   }, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, tab])
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,6 +11,8 @@ import type { ThreadFile } from '../files/model'
 import { designScreen } from './fixtures'
 import { bulkReach, filesGroups, keepLines, rangeOf, START_AUDIENCE } from './model'
 import { uploadAskHeld } from './model' // B-TH-283
+import { isOwnFile, orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesRead } from './model' // F-SA-237
+import { OrderFilesBody } from './view/FilesView' // F-SA-237
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the Files view's rows are read.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -180,3 +183,74 @@ describe('B-TH-283: measurement sheets are body data in the Files view', () => {
   })
 })
 // ---- end B-TH-283
+
+// ---- F-SA-237: a SALES ORDER's files from its one walled read — the same body on the order's Files tab and in this window ----------
+describe('F-SA-237 — the order files body: groups by source, who can see each file, also on, counted left-outs', () => {
+  const ORDER = { id: 'so-alpha', number: 'SO-2026-0142' }
+  const orderFile = (id: string, over: Partial<OrderFile> = {}): OrderFile => ({
+    id,
+    name: `${id}.pdf`,
+    kind: 'DOCUMENT',
+    category: null,
+    contentType: 'application/pdf',
+    sizeBytes: 2048,
+    versionNo: 1,
+    at: '2026-11-12T10:00:00Z',
+    from: { type: 'SalesOrder', id: ORDER.id, label: ORDER.number },
+    line: null,
+    audience: 'OFFICE_ONLY',
+    bodyData: false,
+    alsoOn: [],
+    alsoOnOther: 0,
+    inThread: null,
+    ...over,
+  })
+  const READ: OrderFilesRead = {
+    order: ORDER,
+    groups: [
+      { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [orderFile('sheet', { audience: 'CUSTOMER_CAN_SEE', inThread: { messageId: 'm1' } }), orderFile('notes')], leftOut: 0, measurementsLeftOut: 0 },
+      { key: 'LINES', words: { en: 'Lines & artwork', it: 'Righe e grafiche' }, files: [orderFile('logo', { from: { type: 'SalesOrderLine', id: 'l1', label: 'SO-2026-0142 · line 10' }, alsoOn: [{ type: 'SalesOrder', id: 'so-0151', label: 'SO-2026-0151' }], alsoOnOther: 1 })], leftOut: 0, measurementsLeftOut: 1 },
+      { key: 'PRODUCTION', words: { en: 'Production', it: 'Produzione' }, files: [orderFile('photo', { kind: 'PHOTO', from: { type: 'WorkOrder', id: 'w1', label: 'WO-2026-0311' } })], leftOut: 2, measurementsLeftOut: 0 },
+      { key: 'RETURNS', words: { en: 'Returns & complaints', it: 'Resi e reclami' }, files: [], leftOut: 0, measurementsLeftOut: 0 },
+    ],
+    total: 4,
+    truncated: false,
+  }
+
+  it('groups by source in the read’s order (an empty group says nothing); files the reader may not open are counted, never named', () => {
+    expect(orderGroupsShown(READ).map((group) => group.key)).toEqual(['ORDER', 'LINES', 'PRODUCTION'])
+    expect(orderLeftOut(READ)).toBe(3)
+    expect(orderFilesOf(READ).map((entry) => entry.id)).toEqual(['sheet', 'notes', 'logo', 'photo'])
+  })
+
+  it('where a file sits, and the bulk bar: Download every chosen file; Share only the order’s own office-only files, with the right', () => {
+    expect(sourceOf(orderFile('a', { inThread: { messageId: 'm' } }), ORDER.id)).toEqual({ key: 'order.source.thread' })
+    expect(sourceOf(orderFile('a'), ORDER.id)).toEqual({ key: 'order.source.order' })
+    expect(sourceOf(orderFile('a', { from: { type: 'WorkOrder', id: 'w1', label: 'WO-2026-0311' } }), ORDER.id)).toEqual({ key: 'order.source.from', params: { record: 'WO-2026-0311' } })
+    const chosen = orderFilesOf(READ)
+    expect(orderBulkReach(chosen, ORDER.id, true)).toEqual({ download: ['sheet', 'notes', 'logo', 'photo'], share: ['notes'] })
+    expect(orderBulkReach(chosen, ORDER.id, false).share).toEqual([])
+    expect(isOwnFile(orderFile('x', { from: { type: 'SalesOrderLine', id: 'l1', label: 'line' } }), ORDER.id)).toBe(false)
+  })
+
+  it('the body in both languages: the audience on every file, the source chip, also on as the read names it, Open in the conversation', () => {
+    for (const locale of LOCALES) {
+      const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model: { read: READ, problem: null, selected: [], canShare: true }, party: { name: 'Brand Alpha' }, actions: { onOrderMessage: () => undefined } })))
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      for (const words of [t('order.audience.CUSTOMER_CAN_SEE'), t('order.audience.OFFICE_ONLY'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), t('order.inThread'), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
+      expect(html.match(/\border\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
+      expect(html).not.toContain('Returns')
+    }
+  })
+
+  it('the SalesOrder switch: the window draws the order body when given the order read; every other record keeps its own list', () => {
+    const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('{model.order ? (')
+    expect(view).toContain('<OrderFilesView model={model.order} party={model.party} actions={actions} />')
+    const thread = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(thread).toContain("order: key.type === 'SalesOrder' ? orderFiles.model : null,")
+    const tab = readFileSync(new URL('../../../areas/sales/orders/record/view/FilesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('<OrderFilesBody model={files}')
+  })
+})
+// ---- end F-SA-237

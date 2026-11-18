@@ -12,11 +12,12 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money, percent } from '../../../quotes/model'
 import type { ChainInvoice, DepositRequest, Milestone, Order } from '../../api'
 import { isOverdue, MILESTONE_TONE } from '../../daily-model'
-import { dayInstant, depositInvoicesOf, depositSteps, linkHeld, paymentHeld, SDI_TONE, sdiSendHeld, stillToPay, type DepositStepState, type Tone } from '../../model'
+import { dayInstant, depositGate, depositInvoicesOf, depositSteps, linkHeld, paymentHeld, SDI_TONE, sdiSendHeld, stillToPay, type DepositStepState, type Tone } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
 import { waiveHeld } from '../schedule/model'
 import { OpenStepDialog, StepVerbs, WaiveDialog } from '../schedule/view/StepVerbs'
+import { MarginTab } from '../margin/view/MarginTab' // F-SA-230: Margin is Money's last section
 
 const REQUEST_TONE: Record<DepositRequest['status'], Tone> = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' }
 const INVOICE_TONE: Record<string, Tone> = { DRAFT: 'neutral', ISSUED: 'info', SENT: 'info', DELIVERED: 'success', NOT_DELIVERABLE: 'warning', REJECTED: 'danger', ERROR: 'danger' }
@@ -30,34 +31,15 @@ const INVOICE_TONE: Record<string, Tone> = { DRAFT: 'neutral', ISSUED: 'info', S
  */
 export function MoneyTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
-  const locale = useLocale()
-  const settlement = model.settlement?.value ?? null
-  const currency = order.currency
   const requests = order.chain.depositRequests
 
+  // F-SA-230 (10-order-page §2.5): the Money tab — Totals (the rail's money figures, by grain, and the payment terms) · Deposit ·
+  // Payment schedule · Invoices & credit notes (#invoices) · Margin (#margin, only with the margin grain).
   return (
     <div className="fw-so-stack">
-      {model.can.viewInvoices && model.can.price && (
-        <>
-          {model.settlement && !settlement ? (
-            <PartState problem={model.settlement.problem} label={t('money.balanceTitle')} onRetry={() => actions?.onRetryPart?.('settlement')} />
-          ) : (
-            <MetricStrip
-              metrics={[
-                { label: t('money.gross'), value: money(order.grossAmount, currency, locale) },
-                { label: t('money.invoiced'), value: money(settlement?.invoicedAmount, currency, locale) },
-                { label: t('money.paid'), value: money(settlement?.paidAmount, currency, locale) },
-                { label: t('money.depositPaid'), value: money(requests.filter((request) => request.stepKind !== 'BEFORE_SHIPPING').reduce((sum, request) => sum + (request.paidAmount ?? 0), 0), currency, locale) },
-                { label: t('money.balance'), value: money(settlement?.balanceDueAmount, currency, locale) },
-              ]}
-            />
-          )}
-        </>
-      )}
-
+      <MoneyTotals order={order} model={model} actions={actions} />
       <div className="fw-so-cards fw-so-cards--wide">
-        <div className="fw-so-stack">
-          <ScheduleCard order={order} model={model} actions={actions} />
+        <section className="fw-so-stack" aria-label={t('money.section.deposit')}>
           {requests.length === 0 ? (
             <Card padded>
               <EmptyState title={t('deposit.none.title')} description={t(order.depositRequired ? 'deposit.none.missing' : 'deposit.none.body')} />
@@ -65,11 +47,83 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
           ) : (
             requests.map((request) => <DepositCard key={request.id} request={request} order={order} model={model} actions={actions} />)
           )}
-        </div>
-        <InvoicesCard order={order} model={model} actions={actions} />
+        </section>
+        <ScheduleCard order={order} model={model} actions={actions} />
       </div>
+      <section id="invoices" className="fw-so-anchor" aria-label={t('money.invoicesTitle')}>
+        <InvoicesCard order={order} model={model} actions={actions} />
+      </section>
+      {model.can.margin && (
+        <section id="margin" className="fw-so-anchor" aria-label={t('money.section.margin')}>
+          <MarginTab margin={model.margin} prefix={model.prefix} orderId={order.id} onRetry={actions?.onRetryMargin} />
+        </section>
+      )}
       {model.scheduleSteps?.waiving && <WaiveDialog waiving={model.scheduleSteps.waiving} model={model.scheduleSteps} actions={actions?.scheduleSteps} />}
     </div>
+  )
+}
+
+/**
+ * F-SA-230: Money's totals — what the Lines rail held: gross · invoiced · paid on invoices · deposits received · balance due (price
+ * grain; invoiced / paid / balance with invoices.view), the deposit in words, the payment terms (loaded, never shown before), the
+ * estimated margin (margin grain) and the cost (cost grain). Without the price grain: words only, never an amount.
+ */
+function MoneyTotals({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const currency = order.currency
+  const settlement = model.settlement?.value ?? null
+  const requests = order.chain.depositRequests
+  const gate = depositGate(order)
+  const request = gate.request
+  const left = request ? stillToPay(request) : null
+  const depositWords =
+    gate.state === 'NOT_NEEDED'
+      ? t('summary.depositNotNeeded')
+      : !request
+        ? t('summary.depositMissing')
+        : request.status === 'PAID'
+          ? model.can.price
+            ? t('summary.depositPaid', { amount: money(request.amount, currency, locale) })
+            : t('deposit.PAID')
+          : request.status === 'WAIVED'
+            ? t('summary.depositWaived')
+            : model.can.price
+              ? t('summary.depositOpen', { amount: money(left ?? request.amount, currency, locale), date: formatDate(dayInstant(request.dueDate), { locale }) })
+              : t('deposit.OPEN')
+  const facts = [
+    { label: t('summary.deposit'), value: depositWords },
+    { label: t('newOrder.terms'), value: order.paymentTerms ?? '—' },
+    ...(model.can.margin ? [{ label: t('summary.margin'), value: order.marginPct === null || order.marginPct === undefined ? t('summary.marginUnknown') : t('summary.marginValue', { pct: percent(order.marginPct, locale) }) }] : []),
+    ...(model.can.cost ? [{ label: t('summary.cost'), value: order.costAmount === null || order.costAmount === undefined ? t('summary.costIncomplete') : money(order.costAmount, currency, locale) }] : []),
+  ]
+  const depositsPaid = requests.filter((entry) => entry.stepKind !== 'BEFORE_SHIPPING').reduce((sum, entry) => sum + (entry.paidAmount ?? 0), 0)
+  return (
+    <Card padded>
+      <h2 className="fw-so-h2">{t('money.section.totals')}</h2>
+      {model.can.price ? (
+        model.can.viewInvoices && model.settlement && !settlement ? (
+          <PartState problem={model.settlement.problem} label={t('money.balanceTitle')} onRetry={() => actions?.onRetryPart?.('settlement')} />
+        ) : (
+          <MetricStrip
+            metrics={[
+              { label: t('money.gross'), value: money(order.grossAmount, currency, locale) },
+              ...(model.can.viewInvoices && settlement
+                ? [
+                    { label: t('money.invoiced'), value: money(settlement.invoicedAmount, currency, locale) },
+                    { label: t('money.paid'), value: money(settlement.paidAmount, currency, locale) },
+                  ]
+                : []),
+              { label: t('money.depositPaid'), value: money(depositsPaid, currency, locale) },
+              ...(model.can.viewInvoices && settlement ? [{ label: t('money.balance'), value: money(settlement.balanceDueAmount, currency, locale) }] : []),
+            ]}
+          />
+        )
+      ) : (
+        <p className="fw-so-hint">{t('summary.noPrice')}</p>
+      )}
+      <KeyValue dense labelCase="sentence" columns={2} items={facts} />
+    </Card>
   )
 }
 

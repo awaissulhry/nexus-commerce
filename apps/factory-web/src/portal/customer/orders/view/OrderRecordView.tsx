@@ -22,6 +22,7 @@ import { orderNameOf } from '../model'
 // ---- end B-TH-275
 import { CancelDialog, ChangeDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
+import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-238
 import { LinesTab } from './LinesTab'
 import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
@@ -76,6 +77,8 @@ export interface OrderRecordViewModel {
   pay: Readonly<Record<string, { held: string | null }>>
   shipments: Part<ShipmentsRead>
   documents: { state: 'loading' | 'error' | 'ready' | 'noAccess'; read: DocumentsRead | null }
+  /** F-SA-238: the order's shared files grouped like the office's Files tab (the same body, its customer face); absent: not read. */
+  files?: (OrderFilesModel & { readonly notFound: boolean }) | null
   /** A preview / download cannot start (offline, a preview): why, or null. */
   fileHeld: string | null
   /** The line whose sizes are open (the address's `line=`). */
@@ -137,6 +140,9 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onCopyTrackingLink?: (shipmentId: string) => void
   onPreview?: (file: { fileId: string; title: string }) => void
   onDownload?: (file: { fileId: string; name: string }) => void
+  /** F-SA-238: open a file of the grouped list (a library document as today; any other shared file through the files route). */
+  onOpenOrderFile?: (file: { fileId: string; name: string; contentType: string; library: boolean }) => void
+  onRetryFiles?: () => void
   onDismissNotice?: () => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
