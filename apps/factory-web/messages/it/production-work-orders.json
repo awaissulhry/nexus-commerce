@@ -90,7 +90,7 @@
       "reason": "Scegli prima un motivo.",
       "note": "Questo motivo richiede una nota di almeno 3 caratteri.",
       "noteLong": "La nota supera i 500 caratteri.",
-      "noteLongProduction": "La nota interna supera i {count} caratteri.",
+      "noteLongProduction": "La nota d'ufficio supera i {count} caratteri.",
       "customerWordsLine": "Il testo per il cliente è una sola riga, senza a capo.",
       "customerWordsLong": "Il testo per il cliente supera i {count} caratteri."
     },
@@ -104,7 +104,7 @@
       "QUALITY": "Blocco qualità: lo sblocca la qualità",
       "PRODUCTION": "Blocco di produzione: lo togliamo noi"
     },
-    "officeNote": "Nota interna",
+    "officeNote": "Nota d'ufficio",
     "officeNoteHint": "Solo per noi: mai mostrata al reparto né al cliente.",
     "customerWords": "Cosa legge il cliente",
     "customerWordsHint": "Una riga. Se vuoto, il cliente legge il motivo: {reason}.",
