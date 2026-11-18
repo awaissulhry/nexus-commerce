@@ -104,7 +104,7 @@ async function draftOf(salesOrderLineId: string, size: string): Promise<string> 
 }
 
 beforeAll(async () => {
-  db = await migratedDatabase('pr3b_production_holds')
+  db = await migratedDatabase('pr3b_prod_holds') // fix-pr-3: a label of at most 20 letters (migratedDatabase)
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   for (const seed of [seedCore, seedAuth, seedRoles, seedFiles]) await seed({ db: database, namespace: ns })
   await seedProduction({ db: database, namespace: ns })
