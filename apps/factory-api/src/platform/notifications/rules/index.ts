@@ -49,6 +49,8 @@ import { REQUEST_RULES } from './requests'
 import { PROJECT_RULES } from './projects'
 // B-PR-42b: the production supervisor told once per change and customer (ASSIGNMENT; the backup when newly named).
 import { PRODUCTION_SUPERVISOR_RULES } from './production-supervisor'
+// B-PR-32: the factory told of every customer action on its production (to the order's supervisor and the customer's backup).
+import { BRAND_PRODUCTION_RULES } from './brand-production'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -103,4 +105,7 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-TH-068: thread.follower_added (ASSIGNMENT to the office person added), project.person_removed (SYSTEM to the colleague taken out).
   ...PROJECT_RULES,
   // B-PR-42b: brand_production.supervisor_changed (ASSIGNMENT to the supervisor now, once per change and customer; the new backup).
-  ...PRODUCTION_SUPERVISOR_RULES])
+  ...PRODUCTION_SUPERVISOR_RULES,
+  // B-PR-32: a customer's urgency marks, asks (one per batch), withdrawals, answered counter-offers and production approvals
+  // (FOLLOWING / APPROVAL to the order's supervisor and the customer's backup, else production.brand.manage over the order).
+  ...BRAND_PRODUCTION_RULES])

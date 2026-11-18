@@ -63,6 +63,23 @@ export const DECIDED_MESSAGE_KEYS: ReadonlySet<string> = new Set([
   // B-W2b-385 (NT1:01): a request to buy drafted into a purchase order, or refused by the buyer.
   'notifications.purchasing.requestOrdered',
   'notifications.purchasing.requestRefused',
+  // ---- B-PR-32: a customer's decisions told to the factory (factory-domain production-brand/office-notices OFFICE_DECIDED_KEYS: a
+  // request withdrawn, our counter-offer refused, a production approval answered, a new date refused).
+  'notifications.production.customerWithdrew',
+  'notifications.production.customerWithdrewMany',
+  'notifications.production.customerCounterRefused',
+  'notifications.production.customerApprovedSample',
+  'notifications.production.customerApprovedSampleChanges',
+  'notifications.production.customerRefusedSample',
+  'notifications.production.customerApprovedFabric',
+  'notifications.production.customerApprovedFabricChanges',
+  'notifications.production.customerRefusedFabric',
+  'notifications.production.customerApprovedTrim',
+  'notifications.production.customerApprovedTrimChanges',
+  'notifications.production.customerRefusedTrim',
+  'notifications.production.customerRefusedTop',
+  'notifications.production.customerRefusedNewDate',
+  // ---- end B-PR-32
 ])
 
 /** The ASSIGNMENT sentences of a mail given to a person (a team inbox's mail, B-W2b-394): their message keys start so. */
