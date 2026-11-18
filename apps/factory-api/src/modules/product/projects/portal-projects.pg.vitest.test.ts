@@ -90,8 +90,22 @@ function neutral404(answer: { status: number; body: Json }, ...names: string[]):
   expect(text).not.toMatch(/another (customer|brand|company)|altro cliente|not (a )?member|were not added/i)
 }
 
+/**
+ * fix-pg-2: refused exactly as an id that does not exist is (the request id aside). A right the person lacks (portal.comment to write,
+ * threads.read to open a conversation) is refused at the route, in the same words for every record: it says nothing of this one.
+ */
+async function asUnknown(send: (id: string) => Promise<{ status: number; body: Json }>, id: string, ...names: string[]): Promise<void> {
+  const words = (answer: { status: number; body: Json }) => ({ status: answer.status, error: { ...answer.body.error, requestId: null } })
+  const known = await send(id)
+  expect(known.status, JSON.stringify(known.body)).toBeGreaterThanOrEqual(403)
+  expect(words(known)).toEqual(words(await send(newId())))
+  const text = JSON.stringify(known.body)
+  for (const name of names) expect(text).not.toContain(name)
+  expect(text).not.toMatch(/another (customer|brand|company)|altro cliente|not (a )?member|were not added/i)
+}
+
 beforeAll(async () => {
-  h = await startHarness('portal_projects_th069')
+  h = await startHarness('portal_projects_069')
   h.clock.set(new Date())
   freshGuard(h)
   world = await partnerWorld(h, NS)
@@ -101,6 +115,12 @@ beforeAll(async () => {
   brandB = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-C2B'`, [world.tenantId])).id
   const buyerB = await one<{ id: string; email: string; displayName: string }>(`SELECT id, email, "displayName" FROM "User" WHERE "tenantId" = $1 AND "partyId" = $2 AND email LIKE 'buyer.second-brand.%' LIMIT 1`, [world.tenantId, brandB])
   await inTenant(h, world, (client) => client.portalSettings.updateMany({ where: { partyId: brandB }, data: { portalOn: true } }))
+  // fix-pg-2: brand B's buyer may write in its portal (partner-comment, as brand A's buyer), so a post on A's project is refused by
+  // the record (404, as unknown), never by a missing right.
+  await inTenant(h, world, async (client) => {
+    const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key: 'partner-comment' } }, select: { id: true } })
+    await client.roleAssignment.create({ data: { id: newId(), userId: buyerB.id, roleId: role.id, allCompanies: true, partyIds: [brandB], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+  })
   // The office: an owner (every permission, projects.manage and partners.shares.manage among them), two-factor set up.
   const tenant: TestTenant = { id: world.tenantId, slug: world.namespace, companies: [{ id: world.companyA, code: world.companyCode }] }
   const user = await addUser(h, tenant, { email: `olga.owner.${NS}@seed-a.example.com`, role: 'owner' })
@@ -200,14 +220,16 @@ describe('B-TH-069: a member of brand A opens, writes in, finds and lists its pr
 describe('T38 / T09: nobody but the project’s members opens or finds it', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('brand A’s viewer, never added: 404 in neutral words, no search hit, nothing listed', async () => {
     neutral404(await thread(viewer, seeded.active), 'SEED-PRJ-001', 'Seed touring jacket family')
-    neutral404(await post(viewer, seeded.active, { body: 'Made-up.' }))
+    // fix-pg-2: the viewer may not write anywhere (no portal.comment): refused as for any record.
+    await asUnknown((id) => post(viewer, id, { body: 'Made-up.' }), seeded.active, 'SEED-PRJ-001')
     expect(hits(await search(viewer, 'SEED-PRJ-001')).filter((result) => result.recordType === 'Project')).toEqual([])
     expect((await viewer.get('/portal/projects')).body.projects).toEqual([])
   })
 
   it('a role without portal.projects.view is refused the projects list', async () => {
     expect((await commentOnly.get('/portal/projects')).status).toBe(403)
-    neutral404(await thread(commentOnly, seeded.active))
+    // fix-pg-2: nor opens a conversation (no threads.read): refused as for any record.
+    await asUnknown((id) => thread(commentOnly, id), seeded.active, 'SEED-PRJ-001')
   })
 
   it('T09: brand B gets 404 on brand A’s projects and finds none of them', async () => {

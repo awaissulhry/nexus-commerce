@@ -61,7 +61,8 @@ async function shippedCopy(key: string, partyId: string): Promise<{ orderId: str
   const shipmentId = newId()
   const ddtId = newId()
   const source = money.shipping.quality.production.salesOrderId
-  await copy('SalesOrder', source, { id: orderId, number: `TEST-SO-${key}`, partyId, quoteVersionId: null })
+  // fix-pg-2 (B-TH-104): the copy takes no customer number of its own (the source's would be the same customer's twice).
+  await copy('SalesOrder', source, { id: orderId, number: `TEST-SO-${key}`, partyId, quoteVersionId: null, customerSeq: null })
   const lines = new Map<string, string>()
   for (const line of await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1', [source])) {
     const lineId = newId()

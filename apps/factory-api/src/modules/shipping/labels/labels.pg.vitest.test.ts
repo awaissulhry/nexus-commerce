@@ -499,7 +499,8 @@ describe('the shipments list (SCR-066): the ship-today queue, the search, and wh
     const row = page.shipments.find((entry: Json) => entry.id === sh2())
     expect(page.shipments.every((entry: Json) => entry.status === 'DRAFT' || entry.status === 'PACKED')).toBe(true)
     expect(row).toMatchObject({ status: 'PACKED', parcels: 2, labelled: 2, grossWeightKg: '4.0500', trackingNumbers: [S.track1, S.track2], ddt: { id: expect.any(String), number: expect.any(String) } })
-    expect(row.shipTo).toEqual({ city: expect.any(String), country: expect.any(String) })
+    // fix-pg-2 (B-W2b-GF2, G463): and the postal code, which tells the EU special fiscal territories apart.
+    expect(row.shipTo).toEqual({ city: expect.any(String), country: expect.any(String), postalCode: expect.any(String) })
     expect((await ok('warehouse', 'GET', '/shipping/shipments?open=false')).shipments.some((entry: Json) => entry.id === sh2())).toBe(false)
   })
 

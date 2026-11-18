@@ -104,6 +104,17 @@ async function identityOf(tools: Pick<CommandTools, 'tx'>, companyId: string) {
   }
 }
 
+/**
+ * fix-pg-2: a send that finds nothing to write (the first receipt is there; the address is suppressed) ends its command with this:
+ * the transaction is rolled back with nothing in it, as command() audits every write and refuses a command that writes nothing.
+ */
+class NothingToSend extends Error {
+  override name = 'NothingToSend'
+  constructor(readonly outcome: { readonly first: string } | 'SUPPRESSED') {
+    super('The receipt has nothing to write.')
+  }
+}
+
 /** Sends the receipt of one request to the one person given (see the module comment). Never throws for a mail that cannot go. */
 export async function sendRequestReceipt(system: CommandCaller, runtime: EmailRuntime, input: { readonly inquiryId: string; readonly to: ReceiptRecipient; readonly clock?: Clock | undefined }): Promise<ReceiptOutcome> {
   const receipt = await receiptOf(system, input.inquiryId, input.to)
@@ -119,8 +130,8 @@ export async function sendRequestReceipt(system: CommandCaller, runtime: EmailRu
         const { tx, now } = tools
         // Once per request: a second send (a retry, the worker after the portal) finds the first.
         const first = await tx.emailOutbound.findFirst({ where: { recordType: 'Inquiry', recordId: input.inquiryId, templateKey: RECEIPT_TEMPLATE }, select: { id: true } })
-        if (first) return { id: first.id, replyDomain: null, again: true }
-        if ((await suppressedAmong(tx, [address])).size > 0) return 'SUPPRESSED' as const
+        if (first) throw new NothingToSend({ first: first.id }) // fix-pg-2
+        if ((await suppressedAmong(tx, [address])).size > 0) throw new NothingToSend('SUPPRESSED') // fix-pg-2
         const identity = await identityOf(tools, receipt.companyId)
         const from = fromLine(identity, null)
         await tx.emailOutbound.create({
@@ -146,16 +157,19 @@ export async function sendRequestReceipt(system: CommandCaller, runtime: EmailRu
         })
         // The audit row names the request and the language: never the address or the words.
         tools.audit({ recordType: 'EmailOutbound', recordId: outboundId, companyId: identity.companyId, after: { templateKey: RECEIPT_TEMPLATE, inquiryId: input.inquiryId, identityId: identity.id, language: receipt.language, status: 'QUEUED' } })
-        return { id: outboundId, replyDomain: identity.replyDomain, again: false }
+        return { id: outboundId, replyDomain: identity.replyDomain }
       },
       { ...COMMAND_SETTINGS, ...(input.clock ? { clock: input.clock } : {}) },
     )
-    if (result === 'SUPPRESSED') made = 'SUPPRESSED'
-    else if (result.again) return { sent: true, outboundId: result.id, language: receipt.language }
-    else made = { id: result.id, replyDomain: result.replyDomain }
+    made = { id: result.id, replyDomain: result.replyDomain }
   } catch (error) {
+    // fix-pg-2: nothing written — the first receipt answers a second send; a suppressed address is not mailed.
+    if (error instanceof NothingToSend) {
+      if (error.outcome === 'SUPPRESSED') made = 'SUPPRESSED'
+      else return { sent: true, outboundId: error.outcome.first, language: receipt.language }
+    }
     // No ready sending address for the company: the request stands, the receipt is not sent (said by the caller).
-    if (error instanceof DomainError) made = 'NO_SENDER'
+    else if (error instanceof DomainError) made = 'NO_SENDER'
     else throw error
   }
   if (made === 'SUPPRESSED' || made === 'NO_SENDER') return { sent: false, reason: made }

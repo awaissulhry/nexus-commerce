@@ -264,6 +264,8 @@ describe('send: the PDF, the confirm link and the mail (SCM-054, SCM-055)', () =
   let token: string
 
   it('the send check says what stops it: the letterhead, the delivery address, a blocked supplier', async () => {
+    // fix-pg-2 (B-W2b-F59, #1520): the seed gives company A its legal data now; taken away here, the letterhead holds the send.
+    await admin(`UPDATE "Company" SET "vatNumber" = NULL, "fiscalCode" = NULL, "reaOffice" = NULL, "reaNumber" = NULL WHERE id = $1`, [companyA])
     const check = await as('GET', `${orderUrl(order.id)}/send-check`)
     expect(check).toMatchObject({ ready: false, recipient: { name: 'Seed Order Desk', email: ORDERS_P2 }, documentNumber: order.number, language: 'it', subject: `Ordine di acquisto ${order.number}` })
     expect(check.checks.filter((entry: Json) => entry.severity === 'BLOCKS').map((entry: Json) => entry.code)).toEqual(['COMPANY_LEGAL'])

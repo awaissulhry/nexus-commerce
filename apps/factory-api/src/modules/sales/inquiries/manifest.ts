@@ -1,4 +1,4 @@
-import { defineManifest } from '../../../core/manifest'
+import { defineManifest, SIGNED_IN } from '../../../core/manifest'
 
 /**
  * Inquiries and requests for quotation (B-W2b-295; SAL-032, SAL-033, SAL-305; design sales.inquiries SCR-105). Office only: each
@@ -46,7 +46,10 @@ export const manifest = defineManifest({
   // ---- B-TH-094 (N17): production's answer — typed by whoever records promise dates (planning.promise.manage: the planner, the
   // production manager) over the request's company and customer, and who reads the request (sales.inquiries.view, checked in the
   // handler: else 404); planning's suggestion with planning.promise.view at the site. Office only (never a portal or link route).
-  'PUT /sales/inquiries/:inquiryId/production-answer': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
+  // fix-pg-2: both checks are the handler's (as the freeze rules' "either"), so each refusal is the right one: no sales.inquiries.view
+  // over the request → 404 (the planner, a person limited to another customer); no planning.promise.manage over it → 403 in words
+  // ("planning or the production manager types it", sales). The route's own permission would answer sales "You may not do this."
+  'PUT /sales/inquiries/:inquiryId/production-answer': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
   'GET /sales/inquiries/:inquiryId/production-answer/suggestion': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
   // ---- end B-TH-094
   // ---- B-TH-071 (PROJ-G20): Start a project — who reads the request (sales.inquiries.view, checked in the handler) and keeps

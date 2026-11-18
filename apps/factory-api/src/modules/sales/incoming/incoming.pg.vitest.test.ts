@@ -144,7 +144,9 @@ describe('Sales › Incoming over every door (B-TH-039)', () => {
     const at = open.rows.map((row: Json) => row.receivedAt)
     expect([...at].sort()).toEqual(at)
     // Every tile's count is the rows that tile lists (one page of 200 holds them all here).
-    for (const tile of Object.keys(open.counts)) {
+    // fix-pg-2 (B-TH-047): CUSTOMER_REPLIES is the "Customer replies" saved row (GET /threads/waiting?side=CUSTOMER lists it; its
+    // count is checked in platform/threads/waiting-list.pg), not a tile of this list.
+    for (const tile of Object.keys(open.counts).filter((key) => key !== 'CUSTOMER_REPLIES')) {
       const rows = (await list('sales', `tile=${tile}`)).rows
       expect(open.counts[tile], tile).toBe(rows.length)
     }

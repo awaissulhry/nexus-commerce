@@ -11,9 +11,9 @@ import { callerFor } from '../../../core/command'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
-import { freshGuard, mailedCode, portalBrowser } from '../../../platform/auth/portal/testing/portal'
+import { freshGuard, mailedCode, portalBrowser, portalWorld } from '../../../platform/auth/portal/testing/portal'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
-import { startHarness, type Answer, type Browser, type Harness } from '../../../platform/auth/sessions/testing/harness'
+import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { declineInquiry, readInquiry } from '../inquiries/inquiries'
 
 /**
@@ -46,7 +46,7 @@ const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]
 const one = async <R = Json>(sql: string, values: unknown[] = []): Promise<R> => (await admin<R>(sql, values))[0]!
 let serial = 0
 const call = (who: keyof typeof people, method: 'GET' | 'POST', url: string, body?: unknown): Promise<Answer> =>
-  browsers[who].send(method as 'POST', url, method === 'GET' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `th095-${++serial}` } })
+  browsers[who].send(method as 'POST', url, method === 'GET' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `th095-withdraw-${++serial}` } })
 async function ok(who: keyof typeof people, method: 'GET' | 'POST', url: string, body?: unknown, status = 200): Promise<Json> {
   const answer = await call(who, method, url, body)
   expect(answer.status, `${who} ${method} ${url}: ${JSON.stringify(answer.body)}`).toBe(status)
@@ -102,6 +102,9 @@ beforeAll(async () => {
     await client.user.create({ data: { id: ADA, email: 'ada.sales.th095@example.com', displayName: 'Made-up Ada', locale: 'en', status: 'ACTIVE' }, select: { id: true } })
     await client.roleAssignment.create({ data: { id: newId(), userId: ADA, roleId: salesRole.id, allCompanies: true, validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
   })
+  // fix-pg-2: the company's portal terms published (a portal opens only then: TERMS_NOT_PUBLISHED), as portalWorld does.
+  const tenant: TestTenant = { id: T, slug: NS, companies: [{ id: companyA, code: 'SCA' }] }
+  await portalWorld(h, tenant)
   freshGuard(h)
   ids.buyer = await partnerPerson(people.buyer, P1, ['customer-buyer', 'partner-comment'])
   ids.viewer = await partnerPerson(people.viewer, P1, ['customer-viewer'])

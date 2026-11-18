@@ -8,6 +8,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/auth'
 import { seed as seedRoles } from '../../../../../../packages/factory-db/seed/roles'
 import { seed as seedSalesIntake } from '../../../../../../packages/factory-db/seed/sales-intake'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -93,6 +94,8 @@ const sorted = (ids: readonly string[]) => [...ids].sort()
 beforeAll(async () => {
   h = await startHarness('th5_projects_list')
   await seedCore({ db: h.database, namespace: NS })
+  // fix-pg-2: the roles seed assigns roles to the auth seed's people (it runs after seed/auth.ts).
+  await seedAuth({ db: h.database, namespace: NS })
   await seedRoles({ db: h.database, namespace: NS })
   await seedSalesIntake({ db: h.database, namespace: NS })
   for (const [person, userId] of Object.entries(PEOPLE) as [Person, string][]) {

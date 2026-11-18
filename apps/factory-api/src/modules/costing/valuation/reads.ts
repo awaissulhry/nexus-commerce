@@ -11,7 +11,9 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { Uom } from '@nexus/factory-domain/product/units/units'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
-import { siteFor } from '../../inventory/ledger/access'
+import { actorOf } from '../../../core/context' // fix-pg-2 (B-PR-10)
+import { officeContextOf, siteFor } from '../../inventory/ledger/access'
+import { assertEveryParty } from '../../production/work-orders/scope' // fix-pg-2 (B-PR-10)
 import { unique } from '../actual/store'
 import { endOfDay, keyBalances, methodsOf, visibleSites } from './valuation'
 
@@ -37,6 +39,9 @@ const LAYER_COLUMNS = {
 /** GET /costing/valuation/layers: one stock key's moves up to the date, each with what the ledger valued it at. */
 export async function valuationLayers(caller: CommandCaller, query: LayersQuery) {
   const site = await siteFor(caller, query.siteId, INVENTORY_STOCK_VIEW, 'query/siteId')
+  // fix-pg-2 (B-PR-10, the warehouse decision): a stock key's moves name the work orders they went to, every customer's (an issue's
+  // reference is its work order's number): every customer only, as the report and the ledger.
+  assertEveryParty(actorOf(officeContextOf(caller)), INVENTORY_STOCK_VIEW, { companyId: site.companyId, siteId: site.id })
   const at = query.asOf ? endOfDay(query.asOf) : null
   return caller.withClient(async (db) => {
     const item = isUuid(query.itemId) ? await db.item.findUnique({ where: { id: query.itemId }, select: { id: true, code: true, name: true, kind: true, baseUom: true, tracking: true } }) : null
