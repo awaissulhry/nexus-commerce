@@ -6,12 +6,19 @@ import { DEFAULT_TIME_ZONE } from '../../../../lib/i18n/format'
 import type { Locale } from '../../../../lib/i18n/locales'
 import { saveBytes } from '../../orders/hooks'
 import { downloadProduction, markUrgency, saveUrgentOrder, undoUrgency, type ProductionList, type UndoAnswer, type UrgencyAnswer } from '../api'
-import type { Notice } from '../model'
+import { rowName, type Notice } from '../model'
 import type { ProblemOrder } from '../problem/model'
 import type { BulkReviewActions, BulkReviewModel } from '../view/BulkReview'
 import { downloadFilesZip, withdrawAskBatch, type WithdrawAnswer } from './api'
+// ---- F-PR-23b: Approve N and Ask N
+import type { AskManyReviewActions, AskManyReviewModel } from '../view/AskManyReview'
+import type { BulkApproveActions, BulkApproveDialogModel } from '../../waiting/view/BulkApproveDialog'
+import { useApproveMany } from './useApproveMany'
+import { useAskMany } from './useAskMany'
+// ---- end F-PR-23b
 import {
   allIdsOf,
+  askKindOfAction,
   bulkBarOf,
   doneLineOf,
   keepPicked,
@@ -61,6 +68,14 @@ export interface BulkSetup {
   readonly onNotice: (notice: Notice) => void
   /** Opens THE Report a problem dialog (F-PR-24) with these orders named. */
   readonly onReport: (orders: ProblemOrder[]) => void
+  // ---- F-PR-23b
+  /** The portal's address prefix (`/p/<party>`). */
+  readonly prefix: string
+  /** The order page's words (`portal-orders`): an ask's verdicts and impact, as F-PR-13 says them. */
+  readonly tOrders: Translate
+  readonly day: (iso: string) => string
+  readonly money: (minor: number, currency: string) => string
+  // ---- end F-PR-23b
 }
 
 interface ReviewState {
@@ -104,10 +119,19 @@ export interface BulkActions {
   readonly onSelectAll: () => void
   readonly onAction: (id: BulkActionId) => void
   readonly review: BulkReviewActions
+  readonly approve: BulkApproveActions // F-PR-23b
+  readonly ask: AskManyReviewActions // F-PR-23b
 }
 
-export function useBulk(setup: BulkSetup): { readonly selected: readonly string[]; readonly bar: BulkBar | null; readonly review: BulkReviewModel | null; readonly actions: BulkActions } {
-  const { api, read, locale, t, facts, onChanged, onNotice, onReport } = setup
+export function useBulk(setup: BulkSetup): {
+  readonly selected: readonly string[]
+  readonly bar: BulkBar | null
+  readonly review: BulkReviewModel | null
+  readonly approve: BulkApproveDialogModel | null
+  readonly ask: AskManyReviewModel | null
+  readonly actions: BulkActions
+} {
+  const { api, read, locale, t, facts, onChanged, onNotice, onReport, prefix, tOrders, day, money } = setup
   const rows = useMemo(() => read?.items ?? [], [read])
   const [selected, setSelected] = useState<string[]>([])
   const [state, setState] = useState<ReviewState | null>(null)
@@ -126,8 +150,21 @@ export function useBulk(setup: BulkSetup): { readonly selected: readonly string[
   }, [rows])
 
   const picked = useMemo(() => pickedRowsOf(rows, selected), [rows, selected])
-  const busy = state?.phase === 'saving' || filing || exporting
-  const allFacts: BulkFacts = { ...facts, busy }
+
+  // ---- F-PR-23b: Approve N (the approvals waiting on the picked orders) and Ask N (one request per order, one batch)
+  const names = useMemo(() => new Map(rows.map((row) => [row.id, rowName(row, locale, t)])), [rows, locale, t])
+  const approve = useApproveMany({ api, locale, t, prefix, facts: { preview: facts.preview, offline: facts.offline, mayAnswer: facts.mayAnswer ?? false }, nameOf: (id) => names.get(id) ?? null, onChanged, onDone: () => setSelected([]) })
+  const ask = useAskMany({ api, locale, t, tOrders, day, money, facts: { preview: facts.preview, offline: facts.offline }, onChanged, onDone: () => setSelected([]) })
+  // Ask ▾ offers the kinds the customer's limits open: read once, on the first pick.
+  const firstPicked = picked[0]?.id ?? null
+  const readKinds = ask.readKinds
+  useEffect(() => {
+    if (facts.mayAsk && firstPicked) readKinds(firstPicked)
+  }, [facts.mayAsk, firstPicked, readKinds])
+  // ---- end F-PR-23b
+
+  const busy = state?.phase === 'saving' || filing || exporting || approve.busy || ask.busy
+  const allFacts: BulkFacts = { ...facts, busy, askKinds: facts.mayAsk ? (ask.kinds === undefined ? null : ask.kinds) : undefined }
 
   // ── the review: computed from the list as it is while it waits for Send; as sent afterwards ─────────────────────────────
   const live = useMemo((): Review | null => {
@@ -253,7 +290,7 @@ export function useBulk(setup: BulkSetup): { readonly selected: readonly string[
 
   const onAction = (id: BulkActionId) => {
     const bar = bulkBarOf(picked, rows.length, allFacts, t)
-    const action = [...bar.actions, ...bar.more].find((entry) => entry.id === id)
+    const action = [...bar.actions, ...(bar.ask ?? []), ...bar.more].find((entry) => entry.id === id)
     if (!action || action.held) return
     switch (id) {
       case 'URGENT':
@@ -270,8 +307,17 @@ export function useBulk(setup: BulkSetup): { readonly selected: readonly string[
       case 'EXPORT':
         void exportPicked()
         return
+      // F-PR-23b
       case 'APPROVE':
+        approve.open(picked.map((row) => row.id))
         return
+      case 'ASK_HOLD':
+      case 'ASK_CANCEL':
+      case 'ASK_RESUME': {
+        const kind = askKindOfAction(id)
+        if (kind) ask.open(kind, picked)
+        return
+      }
     }
   }
 
@@ -299,7 +345,11 @@ export function useBulk(setup: BulkSetup): { readonly selected: readonly string[
     selected,
     bar: picked.length > 0 ? bulkBarOf(picked, rows.length, allFacts, t) : null,
     review,
+    approve: approve.model,
+    ask: ask.model,
     actions: {
+      approve: approve.actions,
+      ask: ask.actions,
       onSelect,
       onSelectAll: () => setSelected(allIdsOf(rows)),
       onAction,

@@ -255,6 +255,8 @@ export interface ChangeDraft {
   step: 'edit' | 'review'
   /** The line the pop-up was opened from (a line's ⋯). */
   focusLine: string | null
+  /** F-PR-23b (B-PR-27a): line → the other colourway of its style asked (absent / empty: the line keeps its own). */
+  colourways?: Readonly<Record<string, string>>
 }
 
 export const EMPTY_CHANGE: ChangeDraft = { cells: {}, requestedDate: '', shipToAddressId: '', note: '', step: 'edit', focusLine: null }
@@ -287,20 +289,45 @@ export function emptiedLines(rules: Pick<ChangeRules, 'lines'>, draft: Pick<Chan
   return rules.lines.filter((line) => draft.cells[line.lineId] && Object.values(wantedSizes(line, draft)).every((pieces) => pieces === 0)).map((line) => line.seq)
 }
 
+// ---- F-PR-23b (B-PR-27a #1626): a line in another colourway of its style (the API takes it; Sales accepts it as a new line) ----
+/** The colourways asked, only of the order's own lines and only one its style offers (the wall: nothing else is named). */
+export function colourwaysAsked(rules: Pick<ChangeRules, 'lines'>, draft: Pick<ChangeDraft, 'colourways'>): { lineId: string; colourwayId: string }[] {
+  const asked = draft.colourways ?? {}
+  return rules.lines.flatMap((line) => {
+    const id = asked[line.lineId]
+    return id && (line.colourways ?? []).some((colourway) => colourway.id === id) ? [{ lineId: line.lineId, colourwayId: id }] : []
+  })
+}
+
+/** The sizes a picked colourway is not made in that the line would still hold pieces of ("set it to 0 or pick another"). */
+export function colourSizeProblems(rules: Pick<ChangeRules, 'lines'>, draft: Pick<ChangeDraft, 'cells' | 'colourways'>): { seq: number; size: string }[] {
+  return colourwaysAsked(rules, draft).flatMap((asked) => {
+    const line = rules.lines.find((entry) => entry.lineId === asked.lineId)
+    const colourway = line?.colourways?.find((entry) => entry.id === asked.colourwayId)
+    if (!line || !colourway) return []
+    return Object.entries(wantedSizes(line, draft))
+      .filter(([size, pieces]) => pieces > 0 && !colourway.sizes.includes(size))
+      .map(([size]) => ({ seq: line.seq, size }))
+  })
+}
+// ---- end F-PR-23b
+
 /** What "Send request" sends (only what changed). */
 export function changeBodyOf(rules: ChangeRules, draft: ChangeDraft): ChangeBody {
   const note = draft.note.trim()
+  const colourways = colourwaysAsked(rules, draft) // F-PR-23b
   return {
     kind: 'CHANGE',
     cells: changedCells(rules, draft).map((cell) => ({ lineId: cell.lineId, size: cell.size, quantity: cell.after })),
     ...(draft.requestedDate && draft.requestedDate !== (rules.order.requestedDate ?? '') ? { requestedDate: draft.requestedDate } : {}),
     ...(draft.shipToAddressId ? { shipToAddressId: draft.shipToAddressId } : {}),
     ...(note ? { note } : {}),
+    ...(colourways.length > 0 ? { colourways } : {}),
   }
 }
 
-/** Something to ask: a size, the date or the address. */
-export const changeAsksSomething = (body: ChangeBody): boolean => body.cells.length > 0 || body.requestedDate !== undefined || body.shipToAddressId !== undefined
+/** Something to ask: a size, the date, the address or (F-PR-23b) a colourway. */
+export const changeAsksSomething = (body: ChangeBody): boolean => body.cells.length > 0 || body.requestedDate !== undefined || body.shipToAddressId !== undefined || (body.colourways?.length ?? 0) > 0
 
 export interface AskFacts {
   /** The person may ask (portal.salesOrders.ask), and this is not an office preview. */
@@ -319,6 +346,7 @@ export function changeHeld(rules: ChangeRules | null, draft: ChangeDraft, facts:
   if (facts.offline) return 'held.offline'
   if (facts.busy) return 'held.busy'
   if (emptiedLines(rules, draft).length > 0) return 'change.problem.emptied'
+  if (colourSizeProblems(rules, draft).length > 0) return 'change.problem.colourSizes' // F-PR-23b
   if (draft.note.length > MAX_NOTE) return 'change.problem.long'
   if (!changeAsksSomething(changeBodyOf(rules, draft))) return 'change.problem.nothing'
   return null

@@ -26,3 +26,49 @@
     align-items: start;
   }
 }
+
+/* ---- F-PR-23b: Approve N from My production (view/BulkApproveDialog.tsx) — the list, a photo or PDF open in place, the typed name */
+.fw-pwait-bulk,
+.fw-pwait-bulk-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pwait-bulk-file {
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-pwait-bulk-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pwait-bulk-img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pwait-bulk-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pwait-bulk-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pwait-bulk-title {
+  font-weight: var(--nds-font-weight-semibold);
+}
+/* ---- end F-PR-23b */

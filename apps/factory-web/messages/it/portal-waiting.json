@@ -70,5 +70,36 @@
     "invalid": "La vostra risposta non è completa: apritela di nuovo.",
     "unavailable": "Non siamo riusciti a raggiungere il server: la vostra risposta non è stata inviata. Riprovate.",
     "internal": "Qualcosa è andato storto: la vostra risposta non è stata inviata. Riprovate."
+  },
+  "bulk": {
+    "title_one": "Approvate per {count} ordine",
+    "title_other": "Approvate per {count} ordini",
+    "doneTitle": "Le vostre approvazioni",
+    "loading": "Lettura di ciò che aspetta la vostra risposta…",
+    "failed": "Non è stato possibile leggere ciò che aspetta la vostra risposta.",
+    "none": "Su questi ordini non c'è nulla che aspetta la vostra risposta.",
+    "hint": "Spuntate ogni approvazione che date; aprite prima la sua foto o il suo PDF.",
+    "listLabel": "Approvazioni in attesa sugli ordini che avete scelto",
+    "dueBy": "Entro {date}",
+    "orders": "Ordini",
+    "files": "Foto e PDF",
+    "openFile": "Apri {name}",
+    "fileLoading": "Apertura di {name}…",
+    "fileFailed": "Non è stato possibile aprire {name}.",
+    "fileClose": "Chiudi il file",
+    "more": "Su questi ordini aspettano più approvazioni di quante ne mostra questo elenco.",
+    "moreLink": "Vedetele in Cosa vi aspetta",
+    "sign": {
+      "title": "Firmate le vostre approvazioni",
+      "summary_one": "Approvate {count} voce con un solo nome.",
+      "summary_other": "Approvate {count} voci con un solo nome.",
+      "name": "Il vostro nome e cognome",
+      "nameHint": "Il vostro nome firma ogni approvazione che avete spuntato.",
+      "nameEmpty": "Scrivete il vostro nome per firmare.",
+      "go_one": "Approvate {count}",
+      "go_other": "Approvate {count}"
+    },
+    "sending": "Invio…",
+    "close": "Chiudi"
   }
 }

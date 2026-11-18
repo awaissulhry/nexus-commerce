@@ -27,6 +27,11 @@ import type { BulkBar } from '../bulk/model'
 import { BulkBarButtons, type BulkBarActions } from './BulkBar'
 import { BulkReview, type BulkReviewActions, type BulkReviewModel } from './BulkReview'
 // ---- end F-PR-23a
+// ---- F-PR-23b: Approve N, Ask N, and "Ask us" on a row (the order's Ask dialog at Urgent)
+import { askUsHrefOf } from '../bulk/ask-model'
+import { BulkApproveDialog, type BulkApproveActions, type BulkApproveDialogModel } from '../../waiting/view/BulkApproveDialog'
+import { AskManyReview, type AskManyReviewActions, type AskManyReviewModel } from './AskManyReview'
+// ---- end F-PR-23b
 
 /**
  * F-PR-11 — Portal › Production › My production (production plan §5; 06-tree B.1; 09-design (d); 17-web-r2 §1.4): every order
@@ -84,6 +89,14 @@ export interface ProductionListModel {
   /** The review before Send of a bulk mark or move, open. */
   review?: BulkReviewModel | null
   // ---- end F-PR-23a
+  // ---- F-PR-23b
+  /** The person may ask us (portal.salesOrders.ask): a row whose Mark urgent waits on the limit or Cutting offers "Ask us". */
+  mayAsk?: boolean
+  /** Approve N, open. */
+  approve?: BulkApproveDialogModel | null
+  /** Ask N, open. */
+  ask?: AskManyReviewModel | null
+  // ---- end F-PR-23b
 }
 
 export interface ProductionListActions {
@@ -109,6 +122,9 @@ export interface ProductionListActions {
   review?: BulkReviewActions
   /** Undo of what a single Mark urgent asked of us ("Urgent – asked"). */
   onUndoAsks?: (batchId: string) => void
+  // F-PR-23b
+  approve?: BulkApproveActions
+  ask?: AskManyReviewActions
 }
 
 export function ProductionListView({ model, actions }: { model: ProductionListModel; actions?: ProductionListActions }) {
@@ -232,11 +248,14 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
       if (!data) return null
       const current = latest.current
       const mark = markActionOf(data, facts(data), locale, t)
+      // F-PR-23b: over the limit or from Cutting, "Ask us" opens the order's own Ask dialog at Urgent (its need-by date there).
+      const askUs = askUsHrefOf(current.model.prefix, data, { urgencyOn: current.model.read?.urgencyOn ?? false, mayAsk: current.model.mayAsk ?? false, use: current.model.read?.urgentUse ?? null })
       const items: MenuItemDef[] = [
         { id: 'open', label: t('row.open'), href: rowHref(current.model.prefix, data) },
         ...(mark
           ? [{ id: 'mark', label: t(mark.urgency === 'URGENT' ? 'row.markUrgent' : 'row.markRegular'), disabled: mark.held !== null, description: mark.held ?? undefined, onSelect: () => current.actions?.onMark?.(data, mark.urgency) }]
           : []),
+        ...(askUs ? [{ id: 'askUs', label: t('row.askUs'), href: askUs }] : []),
         // F-PR-24: one message in the order's thread; we answer there.
         ...(current.model.report ? [{ id: 'problem', label: t('row.report'), disabled: current.model.report.held !== null, description: current.model.report.held ?? undefined, onSelect: () => current.actions?.onReport?.(data) }] : []),
       ]
@@ -412,6 +431,9 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
       />
       {/* F-PR-23a */}
       {model.review ? <BulkReview model={model.review} actions={actions?.review} /> : null}
+      {/* F-PR-23b */}
+      {model.approve ? <BulkApproveDialog model={model.approve} actions={actions?.approve} /> : null}
+      {model.ask ? <AskManyReview model={model.ask} actions={actions?.ask} /> : null}
       {model.dialog ? <UrgentOrderDialog model={model.dialog} rows={read?.items ?? []} actions={actions?.dialog} /> : null}
       {/* F-PR-24 */}
       {model.problem ? <ReportProblemDialog model={model.problem} actions={actions?.problem} /> : null}

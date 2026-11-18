@@ -72,6 +72,7 @@
     "open": "Apri l'ordine",
     "markUrgent": "Segna urgente",
     "markRegular": "Segna normale",
+    "askUs": "Chiedeteci di renderlo urgente",
     "noName": "il vostro ordine",
     "report": "Segnala un problema"
   },
@@ -240,7 +241,8 @@
       "tooMany": "Ne avete scelti {count}. Al massimo {max} alla volta.",
       "allUrgent": "Gli ordini che avete scelto sono già urgenti.",
       "allRegular": "Gli ordini che avete scelto sono già normali.",
-      "markFirst": "Segnateli prima come urgenti: Sposta in cima cambia solo l'ordine dei vostri ordini urgenti."
+      "markFirst": "Segnateli prima come urgenti: Sposta in cima cambia solo l'ordine dei vostri ordini urgenti.",
+      "nothingWaits": "Sugli ordini che avete scelto non c'è nulla che aspetta la vostra risposta."
     },
     "review": {
       "titleUrgent_one": "Segnate {count} ordine come urgente",
@@ -316,6 +318,101 @@
       "withdrawn_one": "{count} richiesta fatta a noi è ritirata.",
       "withdrawn_other": "{count} richieste fatte a noi sono ritirate.",
       "withdrawnLeft": "{count} ritirate; {left} lasciate come sono: vi avevamo già risposto."
+    },
+    "approve": {
+      "action_one": "Approvate {count}",
+      "action_other": "Approvate {count}",
+      "actionNone": "Approvate",
+      "heldRole": "Il vostro ruolo legge le approvazioni; per rispondere serve il ruolo Acquisti o Produzione.",
+      "heldNone": "Spuntate prima almeno un'approvazione.",
+      "heldOther": "Apritela per rispondere: si risponde nella sua pagina.",
+      "notFound": "Non è tra ciò che aspetta la vostra risposta.",
+      "unavailable": "Non inviato: non siamo raggiungibili. Approvate di nuovo: nulla riceve due risposte.",
+      "invalid": "La vostra approvazione non è completa: scrivete il vostro nome e riprovate.",
+      "readNotFound": "Non troviamo gli ordini che avete scelto.",
+      "readFailed": "Non è stato possibile leggere ciò che aspetta su questi ordini. Riprovate.",
+      "code": {
+        "OWN_ANSWER": "Apritela per rispondere: si risponde nella sua pagina.",
+        "NOT_YOURS": "A questa risponde un'altra persona.",
+        "HELD": "Prima aspetta altro: apritela per vedere cosa.",
+        "CHANGED": "È cambiata da quando avete aperto l'elenco: rileggetela.",
+        "NOT_DONE": "Non approvata."
+      },
+      "doneOk_one": "{count} approvata",
+      "doneOk_other": "{count} approvate",
+      "doneNot_one": "{count} non approvata",
+      "doneNot_other": "{count} non approvate",
+      "doneNone": "Non è stato approvato nulla."
+    },
+    "ask": {
+      "menu": "Chiedete",
+      "menuLabel_one": "Chiedete a noi per l'ordine che avete scelto",
+      "menuLabel_other": "Chiedete a noi per i {count} ordini che avete scelto",
+      "HOLD": "Chiedete una pausa",
+      "CANCEL": "Chiedete l'annullamento",
+      "RESUME": "Chiedete la ripresa",
+      "hint": {
+        "HOLD": "Fermiamo il lavoro quando accettiamo; la vostra data può spostarsi.",
+        "CANCEL": "L'intero ordine; valgono i termini delle vostre condizioni.",
+        "RESUME": "Per una pausa che avete chiesto: riprendiamo il lavoro."
+      },
+      "reading": "Lettura di ciò che i vostri ordini permettono…",
+      "title": {
+        "HOLD_one": "Chiedeteci di mettere in pausa {count} ordine",
+        "HOLD_other": "Chiedeteci di mettere in pausa {count} ordini",
+        "CANCEL_one": "Chiedeteci di annullare {count} ordine",
+        "CANCEL_other": "Chiedeteci di annullare {count} ordini",
+        "RESUME_one": "Chiedeteci di riprendere {count} ordine",
+        "RESUME_other": "Chiedeteci di riprendere {count} ordini"
+      },
+      "lead": {
+        "HOLD": "Una richiesta per ordine, inviate insieme: vi rispondiamo per ciascuna. Una pausa può spostare la vostra data.",
+        "CANCEL": "Una richiesta per ordine, per l'intero ordine, inviate insieme: vi rispondiamo per ciascuna. Se si applica un prezzo, ve lo diciamo.",
+        "RESUME": "Una richiesta per ordine, inviate insieme: vi rispondiamo per ciascuna e vi confermiamo la data."
+      },
+      "summary": "Ogni ordine che avete scelto è elencato qui sotto con ciò che gli succederà. Non chiediamo nulla finché non inviate.",
+      "whatColumn": "Richiesta",
+      "what": {
+        "HOLD": "Pausa",
+        "CANCEL": "Annullamento",
+        "RESUME": "Ripresa"
+      },
+      "asked": {
+        "HOLD": "Chiesto: pausa",
+        "CANCEL": "Chiesto: annullamento",
+        "RESUME": "Chiesto: ripresa"
+      },
+      "now": {
+        "paused": "In pausa su vostra richiesta",
+        "none": "In produzione"
+      },
+      "readingRow": "Lettura…",
+      "unread": "Non è stato possibile leggere questo ordine ora: lo controlliamo quando inviate.",
+      "impactReading": "Lettura di cosa comporta…",
+      "impactFailed": "Non è stato possibile leggere cosa comporta: lo controlliamo quando inviate.",
+      "openRequest": "Su questo ordine aspetta già una richiesta di modifica o di annullamento.",
+      "held": {
+        "reading": "Prima leggiamo ciò che ogni ordine permette e cosa comporta.",
+        "nothing": "Ora per nessuno di questi ordini si può chiedere questo: vedete ciascuno."
+      },
+      "form": {
+        "why": "Dite in poche parole perché volete una pausa.",
+        "reason": "Scegliete un motivo.",
+        "note": "Dite il perché in poche parole.",
+        "long": "Al massimo {max} caratteri."
+      },
+      "field": {
+        "why": "Perché una pausa?",
+        "reason": "Motivo",
+        "reasonPick": "Scegliete un motivo",
+        "note": "Le vostre parole (facoltativo)",
+        "noteNeeded": "Le vostre parole",
+        "hint": "La richiesta di ogni ordine riporta queste parole."
+      },
+      "save_one": "Chiedete per {count}",
+      "save_other": "Chiedete per {count}",
+      "forbidden": "Il vostro ruolo non può chiederci nulla: chiedete a un collega con il ruolo Acquisti o Produzione.",
+      "invalid": "La richiesta non è completa: controllate i campi e inviate di nuovo."
     }
   }
 }

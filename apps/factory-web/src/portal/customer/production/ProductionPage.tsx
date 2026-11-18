@@ -23,6 +23,10 @@ import { withdrawAskBatch } from './bulk/api'
 import { useBulk } from './bulk/useBulk'
 import { undoLineOf, undoProblemOf } from './bulk/model'
 // ---- end F-PR-23a
+// ---- F-PR-23b: Approve N (its dialog's words) and Ask N (the order page's words for verdicts and impact)
+import { useT } from '../../../lib/i18n/provider'
+import { WAITING_NS } from '../waiting/view/BulkApproveDialog'
+// ---- end F-PR-23b
 
 /**
  * F-PR-11 — `/p/<party>/production` for a customer: My production (production plan §5; 06-tree B.1; 17-web-r2 §1.4). Reads GET
@@ -35,7 +39,7 @@ import { undoLineOf, undoProblemOf } from './bulk/model'
  */
 export function CustomerProductionPage() {
   return (
-    <WithMessages namespaces={[NS, ORDERS_NS, 'ds-words', 'lists']}>
+    <WithMessages namespaces={[NS, ORDERS_NS, WAITING_NS, 'ds-words', 'lists', 'shell']}>
       <Suspense fallback={null}>
         <ProductionRoute />
       </Suspense>
@@ -59,12 +63,14 @@ function ProductionContainer() {
   const router = useRouter()
   const pathname = usePathname() ?? ''
   const search = useSearchParams()
-  const { t, locale, time } = useProductionPageWords()
+  const { t, locale, time, day, money } = useProductionPageWords()
+  const tOrders = useT(ORDERS_NS) // F-PR-23b
   const offline = useOffline()
   const chip = chipOf(search?.get('chip'))
   const q = search?.get('q') ?? ''
   const preview = frame.me.preview
   const mayMark = frame.me.permissions.includes('portal.production.urgency')
+  const mayAsk = frame.me.permissions.includes('portal.salesOrders.ask') // F-PR-23a/b
 
   const [read, setRead] = useState<ProductionList | null>(null)
   const [state, setState] = useState<'loading' | 'error' | 'ready' | 'forbidden'>('loading')
@@ -146,15 +152,23 @@ function ProductionContainer() {
     facts: {
       urgencyOn: read?.urgencyOn === true,
       mayMark,
-      mayAsk: frame.me.permissions.includes('portal.salesOrders.ask'),
+      mayAsk,
       mayReport,
       mayFiles: frame.me.permissions.includes('portal.customerDocuments.view'),
       preview,
       offline,
+      // F-PR-23b
+      mayApprove: frame.me.permissions.includes('portal.approvals.view'),
+      mayAnswer: frame.me.permissions.includes('portal.approve'),
     },
     onChanged: () => void load(),
     onNotice: setNotice,
     onReport: (orders) => problemDialog.open(orders),
+    // F-PR-23b
+    prefix: frame.prefix,
+    tOrders,
+    day,
+    money: (minor, currency) => money(minor, currency),
   })
   /** Undo of what a single mark asked of us ("Urgent – asked"): the batch's waiting request withdrawn. */
   const undoAsks = async (batchId: string) => {
@@ -296,6 +310,10 @@ function ProductionContainer() {
         selected: bulk.selected,
         bulk: bulk.bar,
         review: bulk.review,
+        // F-PR-23b
+        mayAsk,
+        approve: bulk.approve,
+        ask: bulk.ask,
       }}
       actions={{
         onChip: (next) => go(next === 'ALL' ? null : next, q),
@@ -320,6 +338,9 @@ function ProductionContainer() {
         bulk: { onSelectAll: bulk.actions.onSelectAll, onAction: bulk.actions.onAction },
         review: bulk.actions.review,
         onUndoAsks: (batchId) => void undoAsks(batchId),
+        // F-PR-23b
+        approve: bulk.actions.approve,
+        ask: bulk.actions.ask,
         dialog: {
           onChange: (items) => setDialog((current) => (current && !current.busy ? { ...current, items, problem: current.problem?.conflict ? current.problem : null } : current)),
           onTop: (id) => setDialog((current) => (current && !current.busy ? { ...current, items: toTop(current.items, id) } : current)),

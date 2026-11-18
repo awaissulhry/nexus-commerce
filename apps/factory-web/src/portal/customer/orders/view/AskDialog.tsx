@@ -162,7 +162,8 @@ function AskWhat({ model, actions, words }: { model: AskDialogModel; actions?: A
           )
         })}
       </div>
-      {model.choices.some((choice) => choice.kind === 'CHANGE') ? <p className="fw-pord-sub">{t('ask.colourNote')}</p> : null}
+      {/* F-PR-23b (B-PR-27a): a colour is asked in the change, per line, where the style has another colourway; else write to us. */}
+      {model.choices.some((choice) => choice.kind === 'CHANGE') ? <p className="fw-pord-sub">{t(model.rules?.lines.some((line) => (line.colourways?.length ?? 0) > 0) ? 'ask.colourPick' : 'ask.colourNote')}</p> : null}
     </div>
   )
 }

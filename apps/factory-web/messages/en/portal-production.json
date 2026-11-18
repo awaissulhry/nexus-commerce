@@ -72,6 +72,7 @@
     "open": "Open the order",
     "markUrgent": "Mark urgent",
     "markRegular": "Mark regular",
+    "askUs": "Ask us to make it urgent",
     "noName": "your order",
     "report": "Report a problem"
   },
@@ -240,7 +241,8 @@
       "tooMany": "You picked {count}. At most {max} at a time.",
       "allUrgent": "The orders you picked are urgent already.",
       "allRegular": "The orders you picked are regular already.",
-      "markFirst": "Mark urgent first: Move to top changes the order of your urgent orders only."
+      "markFirst": "Mark urgent first: Move to top changes the order of your urgent orders only.",
+      "nothingWaits": "Nothing waits for your answer on the orders you picked."
     },
     "review": {
       "titleUrgent_one": "Mark {count} order urgent",
@@ -316,6 +318,101 @@
       "withdrawn_one": "{count} request asked of us is withdrawn.",
       "withdrawn_other": "{count} requests asked of us are withdrawn.",
       "withdrawnLeft": "{count} withdrawn; {left} left as they are: we had answered them already."
+    },
+    "approve": {
+      "action_one": "Approve {count}",
+      "action_other": "Approve {count}",
+      "actionNone": "Approve",
+      "heldRole": "Your role reads approvals; answering them needs the Buyer or Production role.",
+      "heldNone": "Tick at least one approval first.",
+      "heldOther": "Open it to answer: it is answered on its own page.",
+      "notFound": "Not found among what waits for your answer.",
+      "unavailable": "Not sent: we could not be reached. Approve again: nothing is answered twice.",
+      "invalid": "Your approval is not complete: type your name and try again.",
+      "readNotFound": "We could not find the orders you picked.",
+      "readFailed": "We could not read what waits on these orders. Try again.",
+      "code": {
+        "OWN_ANSWER": "Open it to answer: it is answered on its own page.",
+        "NOT_YOURS": "Another person answers this one.",
+        "HELD": "It waits on something else first: open it to see what.",
+        "CHANGED": "It changed since you opened the list: read it again.",
+        "NOT_DONE": "Not approved."
+      },
+      "doneOk_one": "{count} approved",
+      "doneOk_other": "{count} approved",
+      "doneNot_one": "{count} not approved",
+      "doneNot_other": "{count} not approved",
+      "doneNone": "Nothing was approved."
+    },
+    "ask": {
+      "menu": "Ask",
+      "menuLabel_one": "Ask us for the order you picked",
+      "menuLabel_other": "Ask us for the {count} orders you picked",
+      "HOLD": "Ask to pause",
+      "CANCEL": "Ask to cancel",
+      "RESUME": "Ask to resume",
+      "hint": {
+        "HOLD": "We stop the work when we accept; your date may move.",
+        "CANCEL": "The whole order; the cut-offs of your terms apply.",
+        "RESUME": "For a pause you asked: we take the work up again."
+      },
+      "reading": "Reading what your orders allow…",
+      "title": {
+        "HOLD_one": "Ask us to pause {count} order",
+        "HOLD_other": "Ask us to pause {count} orders",
+        "CANCEL_one": "Ask us to cancel {count} order",
+        "CANCEL_other": "Ask us to cancel {count} orders",
+        "RESUME_one": "Ask us to resume {count} order",
+        "RESUME_other": "Ask us to resume {count} orders"
+      },
+      "lead": {
+        "HOLD": "One request per order, all sent together: we answer each one. A pause may move your date.",
+        "CANCEL": "One request per order, for the whole order, all sent together: we answer each one. Where a price applies, we tell you.",
+        "RESUME": "One request per order, all sent together: we answer each one and confirm your date."
+      },
+      "summary": "Each order you picked is named below with what will happen to it. Nothing is asked until you send.",
+      "whatColumn": "Request",
+      "what": {
+        "HOLD": "Pause",
+        "CANCEL": "Cancel",
+        "RESUME": "Resume"
+      },
+      "asked": {
+        "HOLD": "Asked: pause",
+        "CANCEL": "Asked: cancel",
+        "RESUME": "Asked: resume"
+      },
+      "now": {
+        "paused": "Paused at your request",
+        "none": "In production"
+      },
+      "readingRow": "Reading…",
+      "unread": "We could not read this order now: we check it when you send.",
+      "impactReading": "Reading what it means…",
+      "impactFailed": "We could not read what it means: we check it when you send.",
+      "openRequest": "A change or cancel request waits on this order already.",
+      "held": {
+        "reading": "Reading what each order allows and what it means first.",
+        "nothing": "None of these orders can be asked this now: see each one."
+      },
+      "form": {
+        "why": "Say why you want to pause, in a few words.",
+        "reason": "Pick a reason.",
+        "note": "Say why in a few words.",
+        "long": "At most {max} characters."
+      },
+      "field": {
+        "why": "Why pause?",
+        "reason": "Reason",
+        "reasonPick": "Pick a reason",
+        "note": "Your words (optional)",
+        "noteNeeded": "Your words",
+        "hint": "Each order's request carries these words."
+      },
+      "save_one": "Ask for {count}",
+      "save_other": "Ask for {count}",
+      "forbidden": "Your role may not ask us: ask a colleague with the Buyer or Production role.",
+      "invalid": "The request is not complete: check the fields and send again."
     }
   }
 }

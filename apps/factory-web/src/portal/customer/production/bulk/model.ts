@@ -6,7 +6,8 @@ import type { ProductionRow, UndoAnswer, UrgencyAnswer, UrgencyOutcome, UrgentUs
 import { URGENCY_OUTCOMES } from '../api'
 import { rowName, urgencyCell, urgencyText, urgentRowsOf, type Tone } from '../model'
 import type { ProblemOrder } from '../problem/model'
-import type { WithdrawAnswer } from './api'
+import type { BulkAskKind, WithdrawAnswer } from './api'
+import type { ChangeRules } from '../../orders/api' // F-PR-23b
 
 /**
  * F-PR-23a — the bulk bar on My production (production plan §1 "Bulk", §3 "Customer urgency", §5 Portal › Production; 17-web-r2
@@ -45,7 +46,7 @@ export const keepPicked = (selected: readonly string[], rows: readonly Productio
 export const allIdsOf = (rows: readonly ProductionRow[]): string[] => rows.map((row) => row.id)
 
 // ── the bar ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-export const BULK_ACTIONS = ['URGENT', 'REGULAR', 'TOP', 'APPROVE', 'REPORT', 'FILES', 'EXPORT'] as const
+export const BULK_ACTIONS = ['URGENT', 'REGULAR', 'TOP', 'APPROVE', 'ASK_HOLD', 'ASK_CANCEL', 'ASK_RESUME', 'REPORT', 'FILES', 'EXPORT'] as const
 export type BulkActionId = (typeof BULK_ACTIONS)[number]
 
 export interface BulkFacts {
@@ -63,6 +64,14 @@ export interface BulkFacts {
   readonly offline: boolean
   /** A bulk action is being sent or a file made. */
   readonly busy: boolean
+  // ---- F-PR-23b
+  /** portal.approvals.view: Approve (absent: not drawn). */
+  readonly mayApprove?: boolean
+  /** portal.approve: the role answers approvals (else Approve is held with why). */
+  readonly mayAnswer?: boolean
+  /** The kinds the customer's limits open for Ask ▾ (null: being read; absent: no Ask ▾). Drawn only with `mayAsk`. */
+  readonly askKinds?: readonly BulkAskKind[] | null
+  // ---- end F-PR-23b
 }
 
 export interface BulkAction {
@@ -83,6 +92,8 @@ export interface BulkBar {
   readonly actions: readonly BulkAction[]
   /** More ▾: Report a problem, Download files, Export. */
   readonly more: readonly BulkAction[]
+  /** F-PR-23b: Ask ▾ — pause, cancel, resume (the kinds the customer's limits open); null: not drawn. */
+  readonly ask?: readonly BulkAction[] | null
 }
 
 /** Why every bulk action waits (preview, offline, sending, over 50), else null. */
@@ -108,12 +119,19 @@ export function bulkBarOf(picked: readonly ProductionRow[], total: number, facts
     actions.push({ id: 'REGULAR', label: t('bulk.markRegular'), hint: null, held: common ?? (urgent === 0 ? t('bulk.held.allRegular') : null) })
     actions.push({ id: 'TOP', label: t('bulk.toTop'), hint: null, held: common ?? (urgent === 0 ? t('bulk.held.markFirst') : null) })
   }
+  // ---- F-PR-23b: Approve (the approvals waiting on the picked orders) and Ask ▾
+  if (facts.mayApprove) {
+    const waiting = picked.filter((row) => row.waiting.code === 'YOU').length
+    actions.push({ id: 'APPROVE', label: waiting > 0 ? t('bulk.approve.action', { count: waiting }) : t('bulk.approve.actionNone'), hint: null, held: common ?? (waiting === 0 ? t('bulk.held.nothingWaits') : !facts.mayAnswer ? t('bulk.approve.heldRole') : null) })
+  }
+  const ask = facts.mayAsk && facts.askKinds !== undefined ? askItemsOf(count, facts.askKinds, facts, t) : null
+  // ---- end F-PR-23b
   const more: BulkAction[] = []
   if (facts.mayReport) more.push({ id: 'REPORT', label: t('bulk.report'), hint: t('bulk.reportHint'), held: common })
   if (facts.mayFiles) more.push({ id: 'FILES', label: t('bulk.files'), hint: t('bulk.filesHint'), held: common })
   // Export is a read: only the cap holds it (and a file being made).
   more.push({ id: 'EXPORT', label: t('bulk.export'), hint: t('bulk.exportHint'), held: facts.busy ? t('bulk.held.busy') : count > BULK_MAX ? t('bulk.held.tooMany', { count, max: BULK_MAX }) : null })
-  return { count, selectAll: count < total ? t('bulk.selectAll', { count: total }) : null, actions, more }
+  return { count, selectAll: count < total ? t('bulk.selectAll', { count: total }) : null, actions, more, ask }
 }
 
 /**
@@ -121,13 +139,36 @@ export function bulkBarOf(picked: readonly ProductionRow[], total: number, facts
  * others join More ▾ first. On a desktop the bar is as it is.
  */
 export function phoneBarOf(bar: BulkBar): BulkBar {
-  return { ...bar, actions: bar.actions.slice(0, 2), more: [...bar.actions.slice(2), ...bar.more] }
+  return { ...bar, actions: bar.actions.slice(0, 2), more: [...bar.actions.slice(2), ...(bar.ask ?? []), ...bar.more], ask: null }
 }
+
+// ---- F-PR-23b: Ask ▾ (Ask N) ----------------------------------------------------------------------------------------------------
+/** Ask ▾ in the bar's order: pause, cancel, resume. */
+export const ASK_MENU: readonly BulkAskKind[] = ['HOLD', 'CANCEL', 'RESUME']
+
+/** The bar's id of each kind. */
+export const ASK_ACTION = { HOLD: 'ASK_HOLD', CANCEL: 'ASK_CANCEL', RESUME: 'ASK_RESUME' } as const satisfies Readonly<Record<BulkAskKind, string>>
+export type AskActionId = (typeof ASK_ACTION)[BulkAskKind]
+export const askKindOfAction = (id: string): BulkAskKind | null => ASK_MENU.find((kind) => ASK_ACTION[kind] === id) ?? null
+
+/** The kinds the customer's limits open, read from one of its orders' rules (the limits are the customer's, not the order's). */
+export function askKindsOf(rules: Pick<ChangeRules, 'asks'> | null): BulkAskKind[] {
+  const open = new Set<string>((rules?.asks ?? []).filter((ask) => ask.open).map((ask) => ask.kind))
+  return ASK_MENU.filter((kind) => kind === 'CANCEL' || open.has(kind))
+}
+
+/** Ask ▾'s items: the kinds open (a closed kind is not drawn); held while the limits are read, and by the bar's own reasons. */
+export function askItemsOf(count: number, kinds: readonly BulkAskKind[] | null, facts: Pick<BulkFacts, 'preview' | 'offline' | 'busy'>, t: Translate): BulkAction[] {
+  const common = commonHeld(count, facts, t)
+  if (kinds === null) return ASK_MENU.map((kind) => ({ id: ASK_ACTION[kind], label: t(`bulk.ask.${kind}`), hint: null, held: common ?? t('bulk.ask.reading') }))
+  return ASK_MENU.filter((kind) => kinds.includes(kind)).map((kind) => ({ id: ASK_ACTION[kind], label: t(`bulk.ask.${kind}`), hint: t(`bulk.ask.hint.${kind}`), held: common }))
+}
+
+// ---- end F-PR-23b
 
 // ── the review before Send (Mark urgent · Mark regular · Move to top) ────────────────────────────────────────────────────
 export const REVIEW_KINDS = ['URGENT', 'REGULAR', 'TOP'] as const
 export type ReviewKind = (typeof REVIEW_KINDS)[number]
-export const isReviewKind = (value: string): value is ReviewKind => (REVIEW_KINDS as readonly string[]).includes(value)
 
 /** What becomes of one picked order: at once, asked of us (over its limit / from Cutting), nothing to change, or it cannot now. */
 export type ReviewWill = 'NOW' | 'ASK_QUOTA' | 'ASK_CUT' | 'SAME' | 'CANNOT'

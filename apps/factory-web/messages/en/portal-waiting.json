@@ -70,5 +70,36 @@
     "invalid": "Your answer is not complete: open it again.",
     "unavailable": "We could not reach the server: your answer was not sent. Try again.",
     "internal": "Something went wrong: your answer was not sent. Try again."
+  },
+  "bulk": {
+    "title_one": "Approve for {count} order",
+    "title_other": "Approve for {count} orders",
+    "doneTitle": "Your approvals",
+    "loading": "Reading what waits for your answer…",
+    "failed": "We could not read what waits for your answer.",
+    "none": "Nothing waits for your answer on these orders.",
+    "hint": "Tick each approval you give; open its photo or PDF first.",
+    "listLabel": "Approvals waiting on the orders you picked",
+    "dueBy": "By {date}",
+    "orders": "Orders",
+    "files": "Photos and PDFs",
+    "openFile": "Open {name}",
+    "fileLoading": "Opening {name}…",
+    "fileFailed": "{name} could not be opened.",
+    "fileClose": "Close the file",
+    "more": "More approvals wait on these orders than this list shows.",
+    "moreLink": "See them in Waiting for you",
+    "sign": {
+      "title": "Sign your approvals",
+      "summary_one": "You approve {count} item with one name.",
+      "summary_other": "You approve {count} items with one name.",
+      "name": "Your first and last name",
+      "nameHint": "Your name signs every approval you ticked.",
+      "nameEmpty": "Type your name to sign.",
+      "go_one": "Approve {count}",
+      "go_other": "Approve {count}"
+    },
+    "sending": "Sending…",
+    "close": "Close"
   }
 }

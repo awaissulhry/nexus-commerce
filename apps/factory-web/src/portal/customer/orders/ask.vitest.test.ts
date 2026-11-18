@@ -171,7 +171,8 @@ function drawWhat(over: Partial<AskDialogModel> = {}, locale: 'en' | 'it' = 'en'
 describe('the dialog’s words and the wall (PW-P06)', () => {
   it('step 1 names each kind in plain words; a colour change goes to the order’s conversation', () => {
     const text = textOf(drawWhat())
-    for (const words of ['Change sizes, quantities, the date or the delivery address', 'Cancel the order or some lines', 'Make it urgent (Urgent – asked)', 'Pause the work', 'Ship what is ready first', 'Another sample', 'The order is paused already', 'A colour change: write to us']) expect(text).toContain(words)
+    // F-PR-23b: the change asks a colour too (B-PR-27a); without another colourway of the style it is still written to us.
+    for (const words of ['Change sizes, quantities, a colour, the date or the delivery address', 'Cancel the order or some lines', 'Make it urgent (Urgent – asked)', 'Pause the work', 'Ship what is ready first', 'Another sample', 'The order is paused already', 'A colour change: write to us']) expect(text).toContain(words)
     expect(text).not.toContain('Resume the work')
   })
 
