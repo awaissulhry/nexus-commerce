@@ -8,6 +8,10 @@ import { PICTURE_ROUTES } from './api'
 import { failedRecently, keepSmall, recordOf, resetPictureCache, smallOf, staleOf, drawn, want, type ReadPictures } from './cache'
 import { BATCH_MAX, BATCH_WAIT_MS, batchesOf, faceOf, fallbackOf, moreOf, PICTURE_FIT, PICTURE_PX, RETRY_AFTER_MS, rowPictureOf, styleWords, untilOf, wantsSmall, type PictureAnswer } from './model'
 import { RECORD_PICTURE_NS } from './view/RecordPicture'
+// F-SA-283: the part drawn on the server (as the design index draws it).
+import { createElement } from 'react'
+import { render } from '../record-thread/parts/testing'
+import { RecordPicture } from './view/RecordPicture'
 
 /**
  * F-SA-211 (sales page plan N8, picks P13, P18, R9; 12-lists-board §2) — the ONE picture part: its sizes and fit, the cache keyed
@@ -174,6 +178,8 @@ describe('the reads and the words', () => {
       order: { path: '/sales/orders/pictures', key: 'orderIds' },
       quote: { path: '/sales/quotes/pictures', key: 'quoteIds' },
       request: { path: '/sales/inquiries/pictures', key: 'inquiryIds' },
+      // F-SA-283 (B-SA-074): Production › Work orders and the planning board.
+      workorder: { path: '/production/work-orders/pictures', key: 'workOrderIds' },
     })
   })
   it('the local store\'s address through /api (#1649), a store\'s absolute address as it is', () => {
@@ -194,3 +200,19 @@ describe('the reads and the words', () => {
     expect(en('moreStyles', { count: 2 })).toBe('+2 more styles: open its lines')
   })
 })
+
+// ── F-SA-283: the part on a page that reads no batch (a design case; a reader without the batch route's right) ─────────────────────
+describe('F-SA-283 — a row that names no picture and has no read: the placeholder, never the wait', () => {
+  it('draws the neutral placeholder at once ("WO-0012 has no picture yet"), no busy shirt, no button', () => {
+    const html = render(createElement(RecordPicture, { source: 'workorder', recordId: 'wo-1', number: 'WO-0012', size: 'board' }))
+    expect(html).toContain('aria-label="WO-0012 has no picture yet"')
+    expect(html).not.toContain('aria-busy')
+    expect(html).not.toContain('<button')
+    // With a read the row's picture is named by the batch: the wait first (the read runs after the first draw).
+    const reading = render(createElement(RecordPicture, { source: 'workorder', recordId: 'wo-2', number: 'WO-0013', size: 'board', read: async () => [] }))
+    expect(reading).toContain('aria-label="Reading the picture of WO-0013"')
+    const italian = render(createElement(RecordPicture, { source: 'workorder', recordId: 'wo-1', number: 'WO-0012', size: 'board' }), 'it')
+    expect(italian).toContain("WO-0012 non ha ancora un&#x27;immagine")
+  })
+})
+// ── end F-SA-283

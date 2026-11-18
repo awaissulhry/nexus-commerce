@@ -1,4 +1,5 @@
 {
+  "column": "Immagine",
   "open": "Mostra in grande l'immagine di {number}",
   "noneOf": "{number} non ha ancora un'immagine",
   "reading": "Lettura dell'immagine di {number}",
