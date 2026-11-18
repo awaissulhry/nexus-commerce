@@ -737,7 +737,8 @@ describe('live: every order event names its order’s customer (B-SA-001)', () =
 describe('live: the order read names its own watch list and its last change per part (B-SA-034)', () => {
   const order = () => seeded.a.quality.production.salesOrderId
   const workOrder = () => seeded.a.quality.production.workOrderId
-  const later = (minutes: number) => `now() + interval '${minutes} minutes'`
+  // Later than anything the seeds or the commands above wrote (the seeds' future follows the calendar by a few days).
+  const later = (days: number) => `now() + interval '${days} days'`
   let customerName = ''
   let officePerson = { id: '', name: '' }
 
@@ -752,10 +753,10 @@ describe('live: the order read names its own watch list and its last change per 
     await admin(
       `BEGIN;
        SET LOCAL session_replication_role = replica;
-       ${row('PARTNER', newId(), 'SalesOrder', order(), later(60), P1)}
-       ${row('PARTNER', newId(), 'SalesOrder', order(), later(90), P3)}
-       ${row('FLOOR', newId(), 'WorkOrder', workOrder(), later(60), null)}
-       ${row('OFFICE', officePerson.id, 'Shipment', seeded.a.shipmentId, later(60), null)}
+       ${row('PARTNER', newId(), 'SalesOrder', order(), later(30), P1)}
+       ${row('PARTNER', newId(), 'SalesOrder', order(), later(31), P3)}
+       ${row('FLOOR', newId(), 'WorkOrder', workOrder(), later(30), null)}
+       ${row('OFFICE', officePerson.id, 'Shipment', seeded.a.shipmentId, later(30), null)}
        COMMIT;`,
     )
   })
