@@ -172,6 +172,19 @@ describe('the page (screen side of PW-P05)', () => {
     expect(failed).not.toContain('Nothing waits for you.')
   })
 
+  // ---- F-PR-16 (the browser walk): no short line on an empty page at 1920
+  it('nothing waits and a failed read fill the page: the DS empty state, a danger banner with Try again', () => {
+    const empty = draw({ groups: [] })
+    expect(empty).toContain('class="nds-empty"')
+    expect(textOf(empty)).toContain('Nothing waits for you.')
+    const failed = render(createElement(WaitingView, { model: { state: 'error', groups: [], done: {}, notice: null, dialog: null, now: NOW }, actions: { onRetry: () => undefined } }), 'en')
+    expect(failed).toContain('class="nds-banner danger"')
+    expect(failed).toContain('role="alert"')
+    expect(textOf(failed)).toContain('Try again')
+    expect(failed).not.toContain('nds-empty')
+  })
+  // ---- end F-PR-16
+
   it('Brand Beta’s page holds nothing of Brand Alpha, in both languages', () => {
     for (const locale of ['en', 'it'] as const) expect(scanText(draw({}, locale), BRAND_ALPHA), locale).toEqual([])
   })

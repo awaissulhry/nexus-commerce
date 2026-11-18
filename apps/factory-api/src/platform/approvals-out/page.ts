@@ -1,10 +1,12 @@
 import { isAnswered, KIND_RULES, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
+import { COUNTER_OFFER_RECORD } from '@nexus/factory-domain/approvals-out/kinds' // F-PR-16
 import { answerHeld, decidedForPartyPageWords, decidedForPartyWords, decidedWords, reversedWords, withReversalWords } from '@nexus/factory-domain/approvals-out/rules'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../core/command'
 import { sameWords, type ApprovalContent } from './adapter'
 import { adapterOf } from './records'
 import { filesOf, refOf, type PartnerRow } from './store'
+import { partnerRefsOf } from '../portal/tasks/partner-label' // F-PR-16
 
 /**
  * What a partner reads of one request (B-W2b-184; design links.approve: what we ask, the kind's own panel — revised order
@@ -30,7 +32,19 @@ export async function partnerPage(system: CommandCaller, row: PartnerRow, locale
     const company = await client.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
     const files = await filesOf(client, row.id)
     const recordHeld = status === 'OPEN' && adapter?.answerHeld ? await adapter.answerHeld(client, ref, locale) : null
-    return { label: record?.label ?? sameWords(''), content, company, files, recordHeld }
+    // ---- F-PR-16 (B-TH-303's rule, the same as the party's tasks: platform/portal/tasks/partner-label.ts): the party reads its own
+    // order and quote numbers ("#12 · revision 2"), never the office's shared series — in the record's words, the facts, the revised
+    // order and why it is held. Only this request's party's rows are read. The office's reads (office.ts) keep the office's numbers.
+    const refs = await partnerRefsOf(client, row.partyId, [{ type: row.recordType, id: row.recordId }], row.recordType === COUNTER_OFFER_RECORD ? [row.recordId] : [])
+    const label = record?.label ?? sameWords('')
+    return {
+      label: { it: refs.own(label.it), en: refs.own(label.en) },
+      content: { facts: content.facts.map((fact) => ({ ...fact, value: refs.own(fact.value) })), revisedOrder: content.revisedOrder ? { ...content.revisedOrder, orderNumber: refs.own(content.revisedOrder.orderNumber) } : null },
+      company,
+      files,
+      recordHeld: recordHeld === null ? null : refs.own(recordHeld),
+    }
+    // ---- end F-PR-16
   })
   const held = answerHeld({ status, dueAt: row.dueAt, answeredAt: row.answeredAt, withdrawnAt: row.withdrawnAt }, now, locale) ?? facts.recordHeld
   const order = facts.content.revisedOrder
