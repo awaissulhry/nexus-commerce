@@ -52,6 +52,11 @@ import {
   partyPatch,
   partyDraftOf,
   recordTabs,
+  // F-SA-271: the customer's tabs, its old addresses and the part an address opens at.
+  anchorOnArrival,
+  MERGED_TABS,
+  MERGED_TERMS,
+  partyTabOf,
   reasonProblem,
   recordHref, // F-SA-225
   sdiState,
@@ -117,9 +122,11 @@ describe('one party record, two sides (SCR-032, SCR-056)', () => {
   it('a record shows the tabs whose reads the person may make', () => {
     const can = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
     // B-TH-260: Terms & requirements (Tax & terms + Requirements); Documents and Activity went to the docked thread.
-    expect(recordTabs(SIDES.customers, can)).toEqual(['overview', 'addresses', 'terms', 'orders'])
-    expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'addresses', 'terms'])
-    expect(recordTabs(SIDES.customers, { ...can, depth: true, partners: true })).toEqual(['overview', 'addresses', 'terms', 'orders', 'portal'])
+    // F-SA-271 (R5): Work with orders.view, Quotes & incoming with quotes or incoming, Money with any of its rights, Portal settings with partners.view.
+    expect(recordTabs(SIDES.customers, can)).toEqual(['work', 'quotes', 'overview', 'people', 'terms'])
+    expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'people', 'terms'])
+    expect(recordTabs(SIDES.customers, { ...can, quotes: false, inquiries: true })).toEqual(['work', 'quotes', 'overview', 'people', 'terms'])
+    expect(recordTabs(SIDES.customers, { ...can, depth: true, partners: true, money: true })).toEqual(['work', 'quotes', 'overview', 'money', 'people', 'terms', 'portal'])
     // B-W2a-69: Items & prices stays in view without purchasing.view: the tab says what is missing. B-TH-260: Contacts is part of
     // Overview & contacts; Documents & questionnaire with the depth slot or the questionnaire.
     expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'items'])
@@ -447,3 +454,55 @@ describe('Customers and Purchasing › Suppliers (one list): a row opens its rec
   })
 })
 // ---- end F-SA-225
+
+// ---- F-SA-271 (sales page plan N5, picks R5, P10; 11-customer-page §2): the customer's seven tabs, the landing tab, old addresses, the band
+describe('F-SA-271: the customer’s seven tabs and band', () => {
+  const can = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
+  it('no tab asked: the first tab the reader sees (Work for Sales; Overview without orders.view); a supplier still lands on its Overview', () => {
+    expect(partyTabOf('customers', null, recordTabs(SIDES.customers, can))).toBe('work')
+    expect(partyTabOf('customers', undefined, recordTabs(SIDES.customers, { ...can, orders: false, quotes: false }))).toBe('overview')
+    expect(partyTabOf('customers', 'nope', recordTabs(SIDES.customers, can))).toBe('work')
+    expect(partyTabOf('suppliers', null, recordTabs(SIDES.suppliers, can))).toBe('overview')
+  })
+
+  it('every old ?tab= keeps working: orders → Work (All orders), addresses → People & addresses, requirements → Terms at its part', () => {
+    expect(partyTabOf('customers', 'orders')).toBe('work')
+    expect(MERGED_TERMS.customers.orders).toEqual({ rows: 'all' })
+    expect(partyTabOf('customers', 'addresses')).toBe('people')
+    expect(partyTabOf('customers', 'tax')).toBe('terms')
+    expect(partyTabOf('customers', 'requirements')).toBe('terms')
+    expect(anchorOnArrival('customers', 'requirements')).toBe('party-requirements')
+    expect(anchorOnArrival('customers', 'terms')).toBeNull()
+    expect(partyTabOf('customers', 'portal')).toBe('portal')
+    for (const old of ['documents', 'activity']) expect(partyTabOf('customers', old)).toBe('overview')
+    // The supplier's tabs and old ids are untouched.
+    expect(SIDES.suppliers.tabs).toEqual(['overview', 'items', 'documents', 'orders', 'quality', 'bank', 'portal'])
+    expect(MERGED_TABS.suppliers).toEqual({ contacts: 'overview', questionnaire: 'documents', activity: 'overview' })
+    expect(MERGED_TERMS.suppliers).toEqual({})
+  })
+
+  it('the band: New order for an active customer with orders.manage (the sheet with this customer chosen), held with why without it', () => {
+    const id = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!.id
+    const html = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'band-doors')!.model, 'en')
+    expect(html).toContain(`/sales/orders?party=${id}&amp;new=1`)
+    expect(html).toContain('New order')
+    const held = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'band-held')!.model, 'en')
+    expect(held).not.toContain(`/sales/orders?party=${id}&amp;new=1`)
+    expect(held).toContain('New order')
+    // A prospect keeps Activate; a blocked customer has no primary.
+    const prospect = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'blocked')!.model, 'en')
+    expect(prospect).not.toContain('&amp;new=1')
+  })
+
+  it('its words exist in it and en with the same placeholders', () => {
+    for (const key of ['customers.band.newOrder', 'customers.band.addTask', 'customers.band.importOrders', 'customers.band.workOrders', 'held.right', 'deals.titleQuotes', 'deals.titleOrders']) {
+      const en = CATALOGUE.en.parties![key]
+      const it = CATALOGUE.it.parties![key]
+      expect(en, key).toBeTruthy()
+      expect(it, key).toBeTruthy()
+      expect((it!.match(/\{\w+\}/g) ?? []).sort(), key).toEqual((en!.match(/\{\w+\}/g) ?? []).sort())
+    }
+    expect(CATALOGUE.it.parties!['customers.tab.money']).toBe('Importi')
+  })
+})
+// ---- end F-SA-271

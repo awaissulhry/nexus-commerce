@@ -1,9 +1,9 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Table2 } from 'lucide-react'
-import { Card, KeyValue, MetricStrip, RecordLayout, SummaryTable, Tabs, type TabItem } from '@nexus/ui/components'
+import { Card, KeyValue, MetricStrip, RecordLayout, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, SegmentedControl } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -14,6 +14,7 @@ import { PartyRecordGate, usePartyBand, type OverviewSlot, type PartyRecordActio
 import { AddressesCard, CardHead, ContactsCard, IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, SidePanel, ViesCard, type TabProps } from '../../../../parties/_shared/view/cards'
 import { dash, PartiesMessages, ReadState, RoleTags } from '../../../../parties/_shared/view/parts'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { rightRef } from '../../../../../lib/i18n/rights' // F-SA-271
 import { CUSTOMER_MONEY_NAMESPACE } from '../../money/model'
 import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overview'
 
@@ -36,6 +37,8 @@ export function CustomerRecordView({
   portal,
   money: moneyModel,
   depth,
+  onAddTask,
+  taskDialog,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -50,11 +53,14 @@ export function CustomerRecordView({
   money?: CustomerMoneyModel | null
   /** B-W2b-324: the customer in depth (the shared record's `depth` slot), drawn from made-up models in the design. */
   depth?: SupplierDepth
+  /** F-SA-271: the band's ⋯ "Add task for <customer>…" (the record's New task dialog, drawn by the container). */
+  onAddTask?: () => void
+  taskDialog?: ReactNode
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -70,6 +76,8 @@ interface CustomerProps {
   portal?: ReactNode
   money: CustomerMoneyModel | null
   depth?: SupplierDepth | undefined
+  onAddTask?: (() => void) | undefined
+  taskDialog?: ReactNode
 }
 
 function Customer(props: CustomerProps) {
@@ -81,25 +89,68 @@ function Customer(props: CustomerProps) {
   )
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+/** F-SA-271: the band's ⋯ lines of the customer (after Start a project), each held with why. */
+function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeof useT>, onAddTask?: () => void): MenuItemDef[] {
+  const can = model.can
+  const name = partyName(party)
+  const id = encodeURIComponent(party.id)
+  return [
+    { id: 'task', label: t('customers.band.addTask', { customer: name }), onSelect: () => onAddTask?.(), disabled: !can.tasks || !onAddTask, description: can.tasks ? undefined : t('held.right', { right: rightRef('tasks.manage') }) },
+    ...(can.orders
+      ? [
+          { id: 'import', label: t('customers.band.importOrders', { customer: name }), href: can.ordersManage ? `${model.prefix}/sales/orders?party=${id}&rows=all&import=1` : undefined, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) },
+          { id: 'orders', label: t('customers.openSheet'), href: `${model.prefix}/sales/orders?party=${id}&rows=all` },
+        ]
+      : []),
+    ...(can.workorders ? [{ id: 'workorders', label: t('customers.band.workOrders', { customer: name }), href: `${model.prefix}/production/work-orders?party=${id}` }] : []),
+  ]
+}
+
+/** F-SA-271: an old address that asked for a part of a tab (Requirements) opens at it, once. */
+function ScrollOnArrival({ id }: { id: string }) {
+  useEffect(() => {
+    document.getElementById(id)?.scrollIntoView({ block: 'start' })
+    // Once, on arrival.
+  }, [])
+  return null
+}
+
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
   const can = model.can
   const editable = writable(party, can)
   const tabs = recordTabs(config, can)
-  const tab: RecordTab = tabs.includes(model.tab) ? model.tab : 'overview'
+  // F-SA-271: no tab asked (or one the reader may not see): the first tab the reader sees.
+  const tab: RecordTab = tabs.includes(model.tab) ? model.tab : (tabs[0] ?? 'overview')
   const recordPath = sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)
   const activeAddresses = party.addresses.filter((address) => address.status === 'ACTIVE')
   const activeContacts = party.contacts.filter((contact) => contact.status === 'ACTIVE')
-  const ordersCount = model.quotes.items && model.orders.items && !model.quotes.more && !model.orders.more ? model.quotes.items.length + model.orders.items.length : null
+  // Until the Work and Quotes & incoming lists are drawn (F-SA-276, F-SA-277), each keeps today's rows of its kind.
+  const ordersCount = model.orders.items && !model.orders.more ? model.orders.items.length : null
+  const quotesCount = model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
   const tabItems: TabItem[] = tabs.map((id) => ({
     id,
-    href: `${recordPath}${id === 'overview' ? '' : `?tab=${id}`}`,
+    href: `${recordPath}?tab=${id}`,
     label: t(`${side}.tab.${id}`),
-    count: id === 'addresses' ? activeAddresses.length + activeContacts.length : id === 'orders' ? ordersCount : undefined,
+    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? ordersCount : id === 'quotes' ? quotesCount : undefined,
   }))
-  const { band, viesHeld } = usePartyBand(model, party, actions)
+  // F-SA-271: the primary — Activate a prospect, New order for an active customer (orders.manage), none when blocked or archived;
+  // Check VIES goes into ⋯ (and stays in Terms › VIES).
+  const primary =
+    party.status === 'ACTIVE' ? (
+      can.ordersManage ? (
+        <Button size="sm" variant="primary" asChild>
+          <Link href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&new=1`}>{t('customers.band.newOrder')}</Link>
+        </Button>
+      ) : (
+        <Button size="sm" variant="primary" heldReason={t('held.right', { right: rightRef('orders.manage') })}>
+          {t('customers.band.newOrder')}
+        </Button>
+      )
+    ) : party.status === 'PROSPECT' ? undefined : null
+  const { band, viesHeld } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask) })
   const { current } = identitiesOf(party)
 
   return (
@@ -115,11 +166,26 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
       >
         <div className="fw-pty">
           {model.threadOnArrival && <ShowThreadOnArrival />}
+          {model.anchorOnArrival && <ScrollOnArrival id={model.anchorOnArrival} />}
           <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabItems} active={tab} size="sm" overflow="scroll" />
           <PartyNotices model={model} party={party} actions={actions} />
 
+          {tab === 'work' && (
+            // F-SA-271: the customer's orders (the Orders sheet locked to the customer comes with F-SA-276).
+            <div className="fw-pty-stack">
+              <p className="fw-pty-actions">
+                <Link className="fw-pty-link" href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&rows=all`}>
+                  <Table2 size={14} aria-hidden /> {t('customers.openSheet')}
+                </Link>
+              </p>
+              <DealsTab model={model} actions={actions} only="order" />
+            </div>
+          )}
+          {/* F-SA-271: the customer's quotes (the two lists of Quotes & incoming come with F-SA-277). */}
+          {tab === 'quotes' && <DealsTab model={model} actions={actions} only="quote" />}
           {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} />}
-          {tab === 'addresses' && (
+          {tab === 'money' && <div className="fw-pty-stack">{[...(overview?.numbers ?? []), ...(depth?.numbers ?? [])].length > 0 && <MetricStrip metrics={[...(overview?.numbers ?? []), ...(depth?.numbers ?? [])]} />}</div>}
+          {tab === 'people' && (
             <div className="fw-pty-stack">
               <AddressesCard model={model} party={party} actions={actions} editable={editable} />
               <ContactsCard model={model} party={party} actions={actions} editable={editable} />
@@ -144,24 +210,12 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
               )}
             </div>
           )}
-          {tab === 'orders' && (
-            <div className="fw-pty-stack">
-              {/* B-TH-260 (SHEET-G12): one full sheet per customer — Sales › Orders with this customer and every row. */}
-              {can.orders && (
-                <p className="fw-pty-actions">
-                  <Link className="fw-pty-link" href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&rows=all`}>
-                    <Table2 size={14} aria-hidden /> {t('customers.openSheet')}
-                  </Link>
-                </p>
-              )}
-              <DealsTab model={model} actions={actions} />
-            </div>
-          )}
-          {/* B-W2b-180: Portal access (areas/sales/customers/portal; a refused invite keeps its real reason). */}
+          {/* B-W2b-180: Portal settings (areas/sales/customers/portal; a refused invite keeps its real reason). */}
           {tab === 'portal' && portal}
         </div>
       </RecordFrame>
       <PartyDialogs model={model} party={party} actions={actions} />
+      {taskDialog}
     </>
   )
 }
@@ -281,7 +335,7 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
               />
             )}
             {(openQuotes.length > 5 || openOrders.length > 5) && (
-              <Link className="fw-pty-name" href={`${sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)}?tab=orders`}>
+              <Link className="fw-pty-name" href={`${sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)}?tab=work` /* F-SA-271 */}>
                 {t('overview.seeAll', { count: openQuotes.length + openOrders.length })}
               </Link>
             )}
@@ -309,19 +363,21 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
 
 // ---- Quotes & orders (moved from PartyRecordView.tsx, F-SA-270) --------------------------------------------------------
 
-function DealsTab({ model, actions }: { model: PartyRecordModel; actions?: PartyRecordActions }) {
+// F-SA-271: `only` — the rows of one kind (Work: the orders; Quotes & incoming: the quotes), until their own lists come.
+function DealsTab({ model, actions, only }: { model: PartyRecordModel; actions?: PartyRecordActions | undefined; only: 'quote' | 'order' }) {
   const t = useT('parties')
   const locale = useLocale()
   const filter = model.deals ?? 'open'
-  const problem = model.quotes.problem ?? model.orders.problem
-  const reading = (model.can.quotes && model.quotes.items === null && !model.quotes.problem) || (model.can.orders && model.orders.items === null && !model.orders.problem)
-  const rows = dealRows(model.quotes.items ?? [], model.orders.items ?? [], filter)
+  const quotes = only === 'quote'
+  const problem = quotes ? model.quotes.problem : model.orders.problem
+  const reading = quotes ? model.can.quotes && model.quotes.items === null && !model.quotes.problem : model.can.orders && model.orders.items === null && !model.orders.problem
+  const rows = dealRows(quotes ? (model.quotes.items ?? []) : [], quotes ? [] : (model.orders.items ?? []), filter)
   const price = model.can.price
   return (
     <Card padded>
       <div className="fw-pty-card-body">
         <CardHead
-          title={t('customers.tab.orders')}
+          title={t(quotes ? 'deals.titleQuotes' : 'deals.titleOrders')}
           action={
             <SegmentedControl
               ariaLabel={t('deals.filter')}
@@ -332,8 +388,7 @@ function DealsTab({ model, actions }: { model: PartyRecordModel; actions?: Party
             />
           }
         />
-        {!model.can.quotes && <p className="fw-pty-hint">{t('deals.noQuotesRight')}</p>}
-        {!model.can.orders && <p className="fw-pty-hint">{t('deals.noOrdersRight')}</p>}
+        {quotes && !model.can.quotes && <p className="fw-pty-hint">{t('deals.noQuotesRight')}</p>}
         {problem ? (
           <ReadState problem={problem} loading={false} onRetry={actions?.onRetry} failedTitle={t('deals.failed')} />
         ) : reading ? (
@@ -342,7 +397,7 @@ function DealsTab({ model, actions }: { model: PartyRecordModel; actions?: Party
           <p className="fw-pty-hint">{t(filter === 'open' ? 'deals.emptyOpen' : 'deals.empty')}</p>
         ) : (
           <SummaryTable
-            label={t('customers.tab.orders')}
+            label={t(quotes ? 'deals.titleQuotes' : 'deals.titleOrders')}
             stackOnPhone
             columns={[
               t('deals.col.type'),
@@ -370,7 +425,7 @@ function DealsTab({ model, actions }: { model: PartyRecordModel; actions?: Party
             }))}
           />
         )}
-        {(model.quotes.more || model.orders.more) && <p className="fw-pty-hint">{t('deals.more')}</p>}
+        {(quotes ? model.quotes.more : model.orders.more) && <p className="fw-pty-hint">{t('deals.more')}</p>}
       </div>
     </Card>
   )

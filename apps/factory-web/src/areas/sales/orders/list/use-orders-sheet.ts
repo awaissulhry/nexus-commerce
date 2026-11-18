@@ -519,6 +519,30 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
 
+  // ---- F-SA-271: the customer page's doors, once on arrival — `new=1&party=<id>` opens New order with that customer chosen (the
+  // customer's band primary), `import=1` the import with that customer's remembered columns (its ⋯ "Import orders for <customer>…").
+  const pickNew = (partyId: string | null) => {
+    if (!partyId) {
+      setNewOrder((current) => (current ? { ...current, party: null, partyProblem: null, contactId: '' } : current))
+      return
+    }
+    getParty(api, partyId)
+      .then((party) => {
+        const orders = party.contacts.find((contact) => contact.status === 'ACTIVE' && contact.roles.includes('ORDERS'))
+        setNewOrder((current) => (current ? { ...current, party, partyProblem: null, contactId: orders?.id ?? '' } : current))
+      })
+      .catch((error: unknown) => setNewOrder((current) => (current ? { ...current, partyProblem: readProblem(error) } : current)))
+  }
+  const arrived = useRef(false)
+  useEffect(() => {
+    if (arrived.current) return
+    arrived.current = true
+    if (params?.get('new') === '1' && party) pickNew(party)
+    if (params?.get('import') === '1') importer.open()
+    // Once, on arrival.
+  }, [])
+  // ---- end F-SA-271
+
   // ---- B-TH-230: the reader's own new messages per order on the page (threads.read; one POST /threads/unread of ≤ 200 rows) ----
   const readsThreads = session.permissions.includes('threads.read')
   const [unreadTick, setUnreadTick] = useState(0)
@@ -619,18 +643,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions)) : null),
     onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current)),
     onNewSearch: (query) => newOrder && searchCustomers(query, newOrder.companyId),
-    onNewPick: (partyId) => {
-      if (!partyId) {
-        setNewOrder((current) => (current ? { ...current, party: null, partyProblem: null, contactId: '' } : current))
-        return
-      }
-      getParty(api, partyId)
-        .then((party) => {
-          const orders = party.contacts.find((contact) => contact.status === 'ACTIVE' && contact.roles.includes('ORDERS'))
-          setNewOrder((current) => (current ? { ...current, party, partyProblem: null, contactId: orders?.id ?? '' } : current))
-        })
-        .catch((error: unknown) => setNewOrder((current) => (current ? { ...current, partyProblem: readProblem(error) } : current)))
-    },
+    onNewPick: pickNew, // F-SA-271: one pick (also the customer page's New order door)
     onNewField: (field, value) => setNewOrder((current) => (current ? { ...current, [field]: value } : current)),
     // ---- B-W2b-323 ----
     depth: listDepth.actions,

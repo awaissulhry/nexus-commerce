@@ -128,11 +128,13 @@
     "blockedBanner": "Blocked since {date}: no new quotes, orders or shipments.",
     "activate": "Activate",
     "tab": {
+      "work": "Work",
+      "quotes": "Quotes & incoming",
       "overview": "Overview",
-      "addresses": "Addresses & contacts",
+      "money": "Money",
+      "people": "People & addresses",
       "terms": "Terms & requirements",
-      "orders": "Quotes & orders",
-      "portal": "Portal access"
+      "portal": "Portal settings"
     },
     "side": {
       "contacts": "Main contacts",
@@ -149,8 +151,14 @@
     "identity": {
       "none": "No tax identity yet: it cannot be invoiced until it has one."
     },
-    "openSheet": "Open this customer’s sheet",
-    "requirementsLabel": "Requirements in force"
+    "openSheet": "Open in Sales › Orders",
+    "requirementsLabel": "Requirements in force",
+    "band": {
+      "newOrder": "New order",
+      "addTask": "Add task for {customer}…",
+      "importOrders": "Import orders for {customer}…",
+      "workOrders": "Work orders of {customer} ›"
+    }
   },
   "suppliers": {
     "contactRoleHint": {
@@ -454,7 +462,8 @@
     "nothingToBlock": "Nothing selected can be blocked (only active ones)",
     "nothingToArchive": "Nothing selected can be archived (blocked ones are unblocked first)",
     "noEmail": "Needs an email first",
-    "projects": "Starting a project needs the right {right}."
+    "projects": "Starting a project needs the right {right}.",
+    "right": "Needs the right {right}."
   },
   "new": {
     "taxFirst": "Tax identity",
@@ -776,7 +785,6 @@
     "validUntil": "Valid until {date}",
     "promise": "Promised {date}",
     "noQuotesRight": "Quotes are not shown: your role does not see quotes.",
-    "noOrdersRight": "Orders are not shown: your role does not see orders.",
     "failed": "Couldn't load quotes and orders",
     "empty": "Nothing here.",
     "emptyOpen": "No open quotes or orders.",
@@ -790,7 +798,9 @@
       "promise": "Promise",
       "validUntil": "Valid until",
       "when": "When"
-    }
+    },
+    "titleQuotes": "Quotes",
+    "titleOrders": "Orders"
   },
   "pos": {
     "failed": "Couldn't load purchase orders",

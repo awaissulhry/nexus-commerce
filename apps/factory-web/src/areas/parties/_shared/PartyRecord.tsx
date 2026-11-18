@@ -48,6 +48,8 @@ import {
   partyName,
   partyTabOf,
   threadOnArrival,
+  anchorOnArrival, // F-SA-271
+  recordTabs, // F-SA-271
   partyPatch,
   problemKey,
   refusedFields,
@@ -139,12 +141,18 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
     // B-TH-260: the band's Projects (n) (threads.read reads projects) and Start a project (projects.manage).
     projects: held.has('threads.read'),
     projectsManage: held.has('projects.manage'),
+    // F-SA-271: the customer's tabs and band (Quotes & incoming, Money, New order, Add task, Work orders of <customer>).
+    inquiries: held.has('sales.inquiries.view'),
+    money: held.has('money.price') || held.has('receivables.view') || held.has('sales.credit.view'),
+    ordersManage: held.has('orders.manage'),
+    tasks: held.has('tasks.manage'),
+    workorders: held.has('workorders.view'),
   }
   const prefix = companyPrefix(session.company?.code ?? '')
   const pathname = usePathname()
   // B-TH-260 (R-8): an old `?tab=` lands on its tab today (a customer's Documents: the overview with the thread shown).
   const asked = params?.get('tab') ?? null
-  const tab = partyTabOf(side, asked)
+  const tab = partyTabOf(side, asked, recordTabs(config, can)) // F-SA-271: no tab asked: the first the reader sees
   const [party, setParty] = useState<Party | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -386,6 +394,7 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
       personId: session.user.id,
       projects,
       threadOnArrival: threadOnArrival(side, asked),
+      anchorOnArrival: anchorOnArrival(side, asked), // F-SA-271
       history,
       quotes,
       orders,

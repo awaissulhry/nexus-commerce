@@ -128,11 +128,13 @@
     "blockedBanner": "Bloccato dal {date}: niente nuovi preventivi, ordini o spedizioni.",
     "activate": "Attiva",
     "tab": {
+      "work": "Lavori",
+      "quotes": "Preventivi e in arrivo",
       "overview": "Panoramica",
-      "addresses": "Indirizzi e contatti",
+      "money": "Importi",
+      "people": "Persone e indirizzi",
       "terms": "Condizioni e requisiti",
-      "orders": "Preventivi e ordini",
-      "portal": "Accesso al portale"
+      "portal": "Impostazioni del portale"
     },
     "side": {
       "contacts": "Contatti principali",
@@ -149,8 +151,14 @@
     "identity": {
       "none": "Ancora nessuna identità fiscale: non si può fatturare finché non c’è."
     },
-    "openSheet": "Apri il foglio di questo cliente",
-    "requirementsLabel": "Requisiti in vigore"
+    "openSheet": "Apri in Vendite › Ordini",
+    "requirementsLabel": "Requisiti in vigore",
+    "band": {
+      "newOrder": "Nuovo ordine",
+      "addTask": "Aggiungi attività per {customer}…",
+      "importOrders": "Importa ordini per {customer}…",
+      "workOrders": "Ordini di lavoro di {customer} ›"
+    }
   },
   "suppliers": {
     "contactRoleHint": {
@@ -454,7 +462,8 @@
     "nothingToBlock": "Nulla di selezionato si può bloccare (solo gli attivi)",
     "nothingToArchive": "Nulla di selezionato si può archiviare (i bloccati vanno prima sbloccati)",
     "noEmail": "Serve prima un’email",
-    "projects": "Per avviare un progetto serve il permesso {right}."
+    "projects": "Per avviare un progetto serve il permesso {right}.",
+    "right": "Serve il permesso {right}."
   },
   "new": {
     "taxFirst": "Identità fiscale",
@@ -776,7 +785,6 @@
     "validUntil": "Valido fino al {date}",
     "promise": "Promesso il {date}",
     "noQuotesRight": "I preventivi non sono mostrati: il tuo ruolo non vede i preventivi.",
-    "noOrdersRight": "Gli ordini non sono mostrati: il tuo ruolo non vede gli ordini.",
     "failed": "Caricamento di preventivi e ordini non riuscito",
     "empty": "Niente qui.",
     "emptyOpen": "Nessun preventivo o ordine aperto.",
@@ -790,7 +798,9 @@
       "promise": "Promessa",
       "validUntil": "Valido fino al",
       "when": "Quando"
-    }
+    },
+    "titleQuotes": "Preventivi",
+    "titleOrders": "Ordini"
   },
   "pos": {
     "failed": "Caricamento degli ordini d’acquisto non riuscito",

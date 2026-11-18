@@ -56,7 +56,10 @@ export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 // RecordFrame. Customer 8 → 5: Overview, Addresses & contacts, Terms & requirements ('terms': Tax & terms + B-W2b-324's
 // Requirements, every rule that applies to the customer's orders), Quotes & orders, Portal access — Documents (a second record-panels
 // copy) goes to the docked thread's Files view, Activity to the thread itself (R-ACT).
-export type CustomerTab = 'overview' | 'addresses' | 'terms' | 'orders' | 'portal'
+// F-SA-271 (sales page plan N5, picks R5, P10; 11-customer-page §2.3): the customer 5 → 7, no tabs inside a tab — Work ('work': the
+// Orders sheet locked to the customer, F-SA-276), Quotes & incoming ('quotes': two lists stacked, F-SA-277), Overview, Money
+// ('money'), People & addresses ('people'), Terms & requirements, Portal settings ('portal').
+export type CustomerTab = 'work' | 'quotes' | 'overview' | 'money' | 'people' | 'terms' | 'portal'
 // Supplier 10 → 7: Overview & contacts ('overview': the form, Now, the contacts and what each receives), Items & prices (B-W2a-69),
 // Documents & questionnaire ('documents': B-W2b-334's documents and qualifications + B-W2b-172's questionnaire, one onboarding
 // place; its second record-panels Files copy goes to the thread), Orders, Quality & rating, Bank details, Portal access.
@@ -90,7 +93,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'ACTIVE',
     views: ['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all'], // B-W2b-324: riders
     tiles: ['active', 'prospects', 'vies', 'invoice', 'blocked'],
-    tabs: ['overview', 'addresses', 'terms', 'orders', 'portal'], // B-W2b-180: portal; B-TH-260: Terms & requirements; Documents and Activity go to the thread
+    tabs: ['work', 'quotes', 'overview', 'money', 'people', 'terms', 'portal'], // B-W2b-180: portal; B-TH-260: Terms & requirements; F-SA-271: the seven of R5
     recordType: 'Party',
   },
   suppliers: {
@@ -110,17 +113,32 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
 // Documents → the overview with the thread shown (its files are the thread's Files view), Activity → the overview (RecordFrame
 // opens the thread); a supplier's Contacts → Overview & contacts, Questionnaire → Documents & questionnaire, Activity → the overview.
 export const MERGED_TABS: Readonly<Record<Side, Readonly<Record<string, RecordTab>>>> = Object.freeze({
-  customers: Object.freeze({ tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' }),
+  // F-SA-271: + Quotes & orders → Work (All orders), Addresses & contacts → People & addresses.
+  customers: Object.freeze({ orders: 'work', addresses: 'people', tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' }),
   suppliers: Object.freeze({ contacts: 'overview', questionnaire: 'documents', activity: 'overview' }),
 })
 
-/** The tab an address asks for on a side: one of its tabs, an old one mapped (R-8), else the overview (own keys only). */
-export function partyTabOf(side: Side, asked: string | null | undefined): RecordTab {
+/**
+ * The tab an address asks for on a side: one of its tabs, an old one mapped (R-8), else the overview (own keys only). F-SA-271:
+ * else the first tab the reader sees (`visible`, the record's recordTabs: Work for Sales, the production manager, the owner, the
+ * planner; Overview otherwise).
+ */
+export function partyTabOf(side: Side, asked: string | null | undefined, visible?: readonly RecordTab[]): RecordTab {
   const tabs = SIDES[side].tabs as readonly string[]
   if (asked && tabs.includes(asked)) return asked as RecordTab
   const merged = MERGED_TABS[side]
-  return asked && Object.hasOwn(merged, asked) ? merged[asked]! : 'overview'
+  return asked && Object.hasOwn(merged, asked) ? merged[asked]! : (visible?.[0] ?? 'overview')
 }
+
+// ---- F-SA-271: what an old address brings beside its tab — Quotes & orders opens Work on All orders (`rows=all`, read by the Work
+// tab's sheet), Requirements opens Terms & requirements at its Requirements part.
+export const MERGED_TERMS: Readonly<Record<Side, Readonly<Record<string, Readonly<Record<string, string>>>>>> = Object.freeze({
+  customers: Object.freeze({ orders: Object.freeze({ rows: 'all' }) }),
+  suppliers: Object.freeze({}),
+})
+/** The part of its tab an old address opens at (the element id), or null. */
+export const anchorOnArrival = (side: Side, asked: string | null | undefined): string | null => (side === 'customers' && asked === 'requirements' ? 'party-requirements' : null)
+// ---- end F-SA-271
 
 /** An old address whose tab went to the thread (a customer's Documents: its files are the thread's Files view): show the thread. */
 export const threadOnArrival = (side: Side, asked: string | null | undefined): boolean => side === 'customers' && asked === 'documents'
@@ -869,6 +887,14 @@ export interface RecordCan {
   projects?: boolean
   projectsManage?: boolean
   // ---- end B-TH-260
+  // ---- F-SA-271: the customer's tabs and band — Quotes & incoming (sales.inquiries.view beside quotes.view), Money (money.price,
+  // receivables.view or sales.credit.view), New order (orders.manage), Add task (tasks.manage), Work orders of <customer> (workorders.view).
+  inquiries?: boolean
+  money?: boolean
+  ordersManage?: boolean
+  tasks?: boolean
+  workorders?: boolean
+  // ---- end F-SA-271
 }
 
 export type RecordDialog =
@@ -900,6 +926,8 @@ export interface PartyRecordModel {
   personId?: string | null
   projects?: { open: number; all: number } | null
   threadOnArrival?: boolean
+  /** F-SA-271: the part of the tab an old address opens at (an element id: Requirements on Terms & requirements), else none. */
+  anchorOnArrival?: string | null
   // ---- end B-TH-260
   /** Every VIES check of the party (the history), newest first. */
   history: Loaded<ViesCheck>
@@ -924,7 +952,11 @@ export interface PartyRecordModel {
 /** The tabs a person sees on a record of this side (Quotes & orders and Orders need their module's read right). */
 export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
   return config.tabs.filter((tab) => {
-    if (tab === 'orders') return config.side === 'customers' ? can.quotes || can.orders : can.purchaseOrders
+    if (tab === 'orders') return can.purchaseOrders
+    // F-SA-271: the customer's Work (the Orders sheet), Quotes & incoming (either list) and Money (any of its cards' rights).
+    if (tab === 'work') return can.orders
+    if (tab === 'quotes') return can.quotes || can.inquiries === true
+    if (tab === 'money') return can.money === true
     // B-W2b-334 + B-TH-260: a supplier's Documents & questionnaire (Purchasing's depth slot and/or the questionnaire), Quality & rating.
     if (config.side === 'suppliers' && tab === 'documents') return can.depth === true || can.questionnaire === true
     if (config.side === 'suppliers' && tab === 'quality') return can.depth === true

@@ -1,6 +1,13 @@
 'use client'
 
+import { useCallback, useState } from 'react'
 import { usePathname } from 'next/navigation'
+// F-SA-271: the band's ⋯ "Add task for <customer>…" — the record's ONE New task dialog (the Party record's task).
+import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
+import type { PanelRead } from '../../../../record-panels/model'
+import { createTask, listAssignees, taskReadProblem } from '../../../../record-panels/tasks/api'
+import { createBody, type Assignable, type TaskDraft } from '../../../../record-panels/tasks/model'
+import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { usePartyRecord } from '../../../parties/_shared/PartyRecord'
 import { useCustomerMoney } from '../money/hooks'
@@ -50,5 +57,40 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     portal: (party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} />,
     depth: (party, reload) => customerDepthSlot(party, reload, prefix),
   })
-  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} />
+  const task = useCustomerTask(partyId, record.party?.code ?? null)
+  return <CustomerRecordView model={record.model} actions={record.actions} thread={record.thread} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} />
+}
+
+/** F-SA-271: a task on the customer itself (the Party record), as every record's "+ Add task" makes one (POST /tasks). */
+function useCustomerTask(partyId: string, label: string | null) {
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const record = { type: 'Party', id: partyId } as const
+  const [state, setState] = useState<{ people: PanelRead<readonly Assignable[]>; busy: boolean } | null>(null)
+  const readPeople = useCallback(async () => {
+    setState((now) => (now ? { ...now, people: { status: 'loading' } } : now))
+    try {
+      const people = await listAssignees(api, { type: 'Party', id: partyId })
+      setState((now) => (now ? { ...now, people: { status: 'ready', data: people } } : now))
+    } catch (error) {
+      setState((now) => (now ? { ...now, people: { status: 'error', problem: taskReadProblem(error) } } : now))
+    }
+  }, [api, partyId])
+  const open = () => {
+    setState({ people: { status: 'loading' }, busy: false })
+    void readPeople()
+  }
+  const onCreate = async (draft: TaskDraft): Promise<boolean> => {
+    setState((now) => (now ? { ...now, busy: true } : now))
+    try {
+      await createTask(api, createBody(draft, record))
+      setState(null)
+      return true
+    } catch {
+      setState((now) => (now ? { ...now, busy: false } : now))
+      return false
+    }
+  }
+  const dialog = state ? <TaskNewDialog recordLabel={label} people={state.people} me={session.user.id} busy={state.busy} onRetryPeople={() => void readPeople()} onCreate={onCreate} onClose={() => setState(null)} /> : null
+  return { open, dialog }
 }

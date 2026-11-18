@@ -204,7 +204,7 @@ export function NextSteps({ model, party, actions, editable, viesHeld }: TabProp
     if ((action === 'address' || action === 'contact') && side === 'customers') {
       return (
         <Button size="sm" asChild>
-          <Link href={tabHref('addresses')}>{t(`step.action.${action}`)}</Link>
+          <Link href={tabHref('people') /* F-SA-271: People & addresses */}>{t(`step.action.${action}`)}</Link>
         </Button>
       )
     }

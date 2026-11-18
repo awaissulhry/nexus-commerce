@@ -51,11 +51,11 @@ function TileText({ part, field }: { part: 'credit' | 'promises'; field: 'label'
 
 /**
  * The slot of the shared party record (areas/parties/_shared PartyRecord `depth`, B-W2b-334's) for a customer: each part a
- * connector to the state above. `prefix`: `/w/<company>` (the Promises tile opens the record's Quotes & orders).
+ * connector to the state above. `prefix`: `/w/<company>` (the Promises tile opens the record's Work, F-SA-271).
  */
 export function customerDepthSlot(party: Party, reload: () => void, prefix: string): SupplierDepth {
   const tile = (part: 'credit' | 'promises') => ({ label: <TileText part={part} field="label" />, value: <TileText part={part} field="value" />, hint: <TileText part={part} field="hint" /> })
-  const numbers: Metric[] = [tile('credit'), { ...tile('promises'), href: `${prefix}/sales/customers/${encodeURIComponent(party.id)}?tab=orders` }]
+  const numbers: Metric[] = [tile('credit'), { ...tile('promises'), href: `${prefix}/sales/customers/${encodeURIComponent(party.id)}?tab=work` /* F-SA-271: Work */ }]
   return {
     numbers,
     now: <NowPart party={party} />,
