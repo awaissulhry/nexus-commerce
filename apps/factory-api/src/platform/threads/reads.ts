@@ -13,6 +13,10 @@ import { contextOf, type RecordRef } from './threads' // B-PR-08a part 2: scopeO
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { THREAD_PLACES, threadPlaceOf } from './records'
 import { officeRecord } from './threads'
+// B-CP-071 residual (customer page lead addition 5): a portal person counts only the records its portal opens.
+import type { FastifyRequest } from 'fastify'
+import { kindsOfSession, partnerCallerOf, partnerReaderOf } from '../search/partner/session'
+import { partnerViewOf, viewFits } from '../search/partner/views'
 
 /**
  * B-TH-027 (threads plan TH-2, G10; design T1-F04 "2 new", T4-F04 "New since your last visit", PL3-F08, the lists' "New
@@ -124,6 +128,28 @@ export async function moveMark(tools: Pick<CommandTools, 'tx' | 'now' | 'audit'>
 
 const THREAD_SCOPE = { id: true, companyId: true, siteId: true, partyId: true, recordType: true, recordId: true } as const satisfies Prisma.ThreadSelect
 
+// ---- B-CP-071 residual (customer page lead addition 5; PA1's known residual): a portal person's unread read counts only the records
+// its portal opens — the record's partner view, the person's kinds, the view's own rule for the reader (a draft opens only to the
+// party's people who keep drafts). Its party's row-level security lets every colleague read the thread row; without this a Viewer
+// read a 0/N count for a draft it cannot open. Such a record is left out exactly like an unknown id: no count, no hint (and, asked,
+// readable false). The partner callers of this read are portal requests (POST /threads/unread, GET /portal/threads).
+type ThreadScope = Prisma.ThreadGetPayload<{ select: typeof THREAD_SCOPE }>
+async function openedByPartner(caller: CommandCaller, client: FactoryClient, threads: readonly ThreadScope[]): Promise<ThreadScope[]> {
+  if (threads.length === 0) return []
+  const request = caller as unknown as FastifyRequest
+  const partner = partnerCallerOf(request)
+  const kinds = await kindsOfSession(client, partner)
+  const reader = partnerReaderOf(request, partner)
+  const opened = new Set<string>()
+  for (const type of new Set(threads.map((thread) => thread.recordType))) {
+    const view = partnerViewOf(type)
+    if (!view || !viewFits(view, kinds)) continue
+    for (const record of await view.read(client, threads.filter((thread) => thread.recordType === type).map((thread) => thread.recordId), reader)) opened.add(`${type}:${record.id}`)
+  }
+  return threads.filter((thread) => opened.has(`${thread.recordType}:${thread.recordId}`))
+}
+// ---- end B-CP-071 residual
+
 /** The record's thread if the person may read it (office: threads.read and its gate; portal: its party's, shareable), else 404 / none. */
 async function readableThread(client: Reader, context: RequestContext, record: RecordRef) {
   if (context.audience !== 'office' && !mayShare(record.type)) return null
@@ -234,8 +260,10 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
     // threads of these types are left out first).
     const seen = threads.filter((thread) => who.office || mayShare(thread.recordType))
     const scopeOf = await wallScopesOf(client, seen)
-    const readable = seen.filter((thread) => mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOf(thread)))
+    const mayRead = seen.filter((thread) => mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOf(thread)))
     // ---- end B-PR-08a
+    // B-CP-071 residual (lead addition 5): a portal person, only the records its portal opens (else as an unknown id).
+    const readable = who.office ? mayRead : await openedByPartner(caller, client, mayRead)
     // ---- B-OP-061: asked, whether each record's thread is readable (a thread read above, else the office's own check of it).
     const readableOf = new Map<string, boolean>()
     if (options.readable) {

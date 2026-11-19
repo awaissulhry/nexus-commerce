@@ -198,8 +198,36 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     // A's viewer keeps no drafts: the draft and its thread are not there for them (neutral 404), nor in their Messages.
     const viewer = await signIn(h, world, world.people.viewer)
     expect((await thread(viewer, draft)).status).toBe(404)
-    expect((await post(viewer, draft, 'Made-up: not my draft.')).status).toBe(404)
+    // Step 0 (end-check red of PA1): a Viewer holds no portal.comment, so the post route itself refuses (403) — the same answer for
+    // an id that does not exist, so it tells nothing of the draft. A viewer who may comment still keeps no drafts: 404, as if absent.
+    expect((await post(viewer, draft, 'Made-up: not my draft.')).status).toBe(403)
+    expect((await post(viewer, newId(), 'Made-up: no such record.')).status).toBe(403)
+    const commenter: Person = { id: newId(), email: `vera.viewer.${NS}@studio-alpha.example`, name: 'Vera Viewer' }
+    await inTenant(h, world, async (client) => {
+      await client.user.create({ data: { id: commenter.id, email: commenter.email, displayName: commenter.name, status: 'ACTIVE', audience: 'PARTNER', partyId: world.p1, partnerKind: 'CUSTOMER', locale: 'en' }, select: { id: true } })
+      for (const key of ['customer-viewer', 'partner-comment']) {
+        const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key } }, select: { id: true } })
+        await client.roleAssignment.create({ data: { id: newId(), userId: commenter.id, roleId: role.id, allCompanies: true, partyIds: [world.p1], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      }
+    })
+    const viewerWhoComments = await signIn(h, world, commenter)
+    expect((await thread(viewerWhoComments, draft)).status).toBe(404)
+    expect((await post(viewerWhoComments, draft, 'Made-up: not my draft.')).status).toBe(404)
     expect(JSON.stringify((await viewer.get('/portal/threads')).body)).not.toContain(draft)
+    // Lead addition 5 (PA1 residual): the unread read leaves a record the reader cannot open out exactly like an unknown id — the
+    // draft's thread holds the buyer's message and our answer (both shared), yet A's viewer reads no count and no hint of it.
+    const unknown = newId()
+    const counted = await viewer.post('/threads/unread', { records: [{ recordType: 'PortalOrderRequest', recordId: draft }, { recordType: 'PortalOrderRequest', recordId: unknown }], readable: true })
+    expect(counted.status, JSON.stringify(counted.body)).toBe(200)
+    expect(counted.body.counts).toEqual([
+      { recordType: 'PortalOrderRequest', recordId: draft, newCount: 0, lastAt: null, readable: false },
+      { recordType: 'PortalOrderRequest', recordId: unknown, newCount: 0, lastAt: null, readable: false },
+    ])
+    const plain = await viewer.post('/threads/unread', { records: [{ recordType: 'PortalOrderRequest', recordId: draft }] })
+    expect(plain.body.counts).toEqual([{ recordType: 'PortalOrderRequest', recordId: draft, newCount: 0, lastAt: null }])
+    // The buyer, who keeps the party's drafts, does count it (our answer is new to them).
+    const theirs = await buyerA.post('/threads/unread', { records: [{ recordType: 'PortalOrderRequest', recordId: draft }], readable: true })
+    expect(theirs.body.counts).toEqual([expect.objectContaining({ recordId: draft, readable: true })])
     // The summary row: the office and the buyer read "Draft"; another customer never.
     expect((await readRecordSummary(office(), { type: 'PortalOrderRequest', id: draft })).summary.state?.code).toBe('DRAFT')
     expect((await buyerA.get(`/records/PortalOrderRequest/${draft}/summary`)).body.summary).toMatchObject({ state: { code: 'DRAFT' }, theirRef: 'PO-SEED-7004' })
@@ -301,7 +329,7 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     expect(gone.status, JSON.stringify(gone.body)).toBe(200)
     const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'portal_order_request.draft_changed' AND subject = $2 ORDER BY "occurredAt", id`, [world.tenantId, id])
     expect(events.map((row) => row.payload)).toEqual([{ requestId: id, partyId: world.p1 }, { requestId: id, partyId: world.p1 }, { requestId: id, partyId: world.p1 }])
-    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', fields: ['requestId'] })
+    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', floor: null, fields: ['requestId'] })
   })
 })
 // ---- end B-CP-071

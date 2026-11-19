@@ -56,7 +56,7 @@ describe('permissions and templates (B-W2b-190)', () => {
     const types = EVENT_DEFINITIONS.map((definition) => definition.type as string)
     for (const type of ['portal_order_request.sent', 'portal_order_request.accepted', 'portal_order_request.refused', 'portal_order_request.withdrawn', /* B-CP-071 */ 'portal_order_request.draft_changed']) expect(types).toContain(type)
     // B-CP-071 (review C2): a draft's change reaches screens by its id only; its party routes the message, never a field.
-    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', fields: ['requestId'] })
+    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', floor: null, fields: ['requestId'] })
     expect(ATTENTION_KINDS).toContain('PORTAL_ORDER_REQUEST')
     expect(KIND_RULES.PORTAL_ORDER_REQUEST).toMatchObject({ category: 'APPROVAL', view: 'orders.view', act: ['orders.manage'], decide: 'OPEN' })
   })
