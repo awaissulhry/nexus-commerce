@@ -44,7 +44,8 @@ export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
   const contents = await contentsView(db, shipment.id)
   // B-W2a-48: the freight charged (money.price) and the intra-EU transport evidence's state; office reads only.
   const freight = await freightView(db, shipment)
-  const evidence = await db.shipment.findUnique({ where: { id: shipment.id }, select: { transportEvidence: true, transportEvidenceAt: true, transportMode: true } })
+  // B-OP-032 (order page N5): where it was made (the office reads it; the floor never runs this read) and its paper DDT.
+  const evidence = await db.shipment.findUnique({ where: { id: shipment.id }, select: { transportEvidence: true, transportEvidenceAt: true, transportMode: true, origin: true, externalDdtNumber: true, externalDdtDate: true } })
   return {
     ...headerView(shipment),
     party: party ?? { code: '', legalName: '' },
@@ -55,6 +56,10 @@ export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
     transportEvidence: { status: evidence?.transportEvidence ?? 'NOT_NEEDED', completedAt: evidence?.transportEvidenceAt ? toUtcIso(evidence.transportEvidenceAt) : null },
     // B-W2b-19 (Intrastat): the mode of transport the office recorded (null: not recorded).
     transportMode: evidence?.transportMode ?? null,
+    // B-OP-032 (N5): NEXUS, or ELSEWHERE (recorded as made outside Nexus) with the paper DDT it left with (null: none, or an
+    // immediate invoice travelled instead).
+    origin: evidence?.origin ?? 'NEXUS',
+    externalDdt: evidence?.externalDdtNumber && evidence.externalDdtDate ? { number: evidence.externalDdtNumber, date: evidence.externalDdtDate.toISOString().slice(0, 10) } : null,
   }
 }
 
@@ -641,3 +646,8 @@ export async function cancelShipment(caller: CommandCaller, shipmentId: string, 
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })
 }
+
+// ---- B-OP-032 (order page N5): "Record a shipment made elsewhere" (../elsewhere) plans its lines as a shipment made here does --
+export { addGarments, cellLabel, cellsFor, changed as packingChanged, garmentsByCell, otherOrdersOf, shipToOf }
+export type { ShippableCell }
+// ---- end B-OP-032
