@@ -203,6 +203,21 @@ export function scopeWhere(actor: Actor, permission: Permission, columns: ScopeC
   return grantsWhere(actor, grantsFor(actor, permission), columns)
 }
 
+// ── fx-7 (end check: the unit reads it all) ─────────────────────────────────────────────────────────────────────────────
+/**
+ * The rows ANY of these filters reaches, as one Prisma `where` (two permissions that each reach some rows, e.g. orders.view or
+ * workorders.view). `{}` when one of them reaches every row, and never `{ OR: [{}, …] }`: Prisma drops an empty object inside
+ * OR (`OR: [{}]` matches no row, `OR: [{}, X]` only X), so an every-customer reader would lose rows. NO_ROWS parts are left
+ * out; none left: NO_ROWS.
+ */
+export function anyOf(clauses: readonly WhereClause[]): WhereClause {
+  const parts = clauses.filter((clause) => clause !== NO_ROWS)
+  if (parts.length === 0) return NO_ROWS
+  if (parts.some((clause) => Object.keys(clause).length === 0)) return {}
+  return parts.length === 1 ? parts[0]! : { OR: [...parts] }
+}
+// ── end fx-7 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 // ── B-W2b-F49 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * The rows ANY of the actor's grants reaches, whatever permission it holds: the companies and sites a person works in,

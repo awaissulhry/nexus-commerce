@@ -2,7 +2,7 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids' // B-SA-033
-import { can, NO_ROWS, scopeWhere, type Actor, type ScopeColumns, type WhereClause } from '@nexus/factory-domain/core/permissions'
+import { anyOf /* fx-7 */, can, NO_ROWS, scopeWhere, type Actor, type ScopeColumns, type WhereClause } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
   ESCALATION_STEP_WORDS,
@@ -70,7 +70,8 @@ export function issueReadWhere(actor: Actor): Prisma.ProductionIssueWhereInput |
   if (!isNone(production)) parts.push(production)
   if (!isNone(sales)) parts.push({ AND: [{ recordType: 'SalesOrder' }, sales] })
   if (parts.length === 0) return null
-  return (parts.length === 1 ? parts[0]! : { OR: parts }) as unknown as Prisma.ProductionIssueWhereInput
+  // fx-7: anyOf, never { OR: [{}, …] } — Prisma drops the {} of an every-customer reader, who then lost the work orders' issues.
+  return anyOf(parts) as unknown as Prisma.ProductionIssueWhereInput
 }
 
 /** Whether the reader reaches a customer at all through either permission (the Customer card's filter). */

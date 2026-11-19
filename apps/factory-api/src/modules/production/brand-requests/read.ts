@@ -2,7 +2,7 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, NO_ROWS, scopeWhere, type Actor, type ScopeColumns, type WhereClause } from '@nexus/factory-domain/core/permissions'
+import { anyOf /* fx-7 */, can, NO_ROWS, scopeWhere, type Actor, type ScopeColumns, type WhereClause } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { cancelFeeFor } from '@nexus/factory-domain/sales/change-requests/fee'
@@ -58,7 +58,8 @@ const isNone = (where: WhereClause): boolean => where === NO_ROWS
 export function brandRequestWhere(actor: Actor): Prisma.OrderChangeRequestWhereInput | null {
   const parts = [scopeWhere(actor, ORDERS_VIEW, REQUEST_SCOPE), scopeWhere(actor, WORKORDERS_VIEW, REQUEST_SCOPE)].filter((where) => !isNone(where))
   if (parts.length === 0) return null
-  return (parts.length === 1 ? parts[0]! : { OR: parts }) as unknown as Prisma.OrderChangeRequestWhereInput
+  // fx-7: anyOf, never { OR: [{}, {}] } — Prisma drops both {} of an every-customer reader holding both rights: no request at all.
+  return anyOf(parts) as unknown as Prisma.OrderChangeRequestWhereInput
 }
 
 /** Whether the reader reaches this request (its company and customer) through either permission. */
