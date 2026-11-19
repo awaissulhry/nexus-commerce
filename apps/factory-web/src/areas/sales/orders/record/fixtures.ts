@@ -183,6 +183,9 @@ const CANCEL_REASONS = [
 const WAIVE_STEPS = { can: { manageOrders: true, manageInvoices: true, waive: true }, opening: null, busy: false, problem: null }
 const BALANCE = SCHEDULE.steps[1]!
 const late = order('IN_PRODUCTION', { promiseDate: '2026-10-24', daysLate: 5 })
+// F-SA-232: the band's health is the production read's: an order 5 days past its promise reads Late there too (the shared demo
+// read says At risk, for an order still before its promise).
+const LATE_READ = { ...WORK_READ, headline: { ...WORK_READ.headline!, health: { code: 'LATE' as const, words: { en: 'Late', it: 'In ritardo' }, computed: 'LATE' as const, raise: null } } }
 
 const RECORDED = {
   payment: { id: '0190f0e2-1717-7000-8000-000000000001', amount: 228384, receivedOn: TODAY, externalRef: 'CRO-0000-ESEMPIO-88' },
@@ -389,7 +392,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ) }) },
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
-    { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(WORK_READ) }) },
+    { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(LATE_READ) }) },
     { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
     { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
     { id: 'ready-dialog', label: 'Sales · Mark ready (quality release not used for this order)', model: base('sales', production, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
@@ -411,7 +414,9 @@ export const designScreen = defineDesignScreen<RecordCase>({
       note: 'The band sits in the shell’s band row; the thread is docked at 40 % (519 px at 1440, 711 px at 1920), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). Below 1280 px the band’s Thread button opens it full width.',
     },
     { id: 'thread-lines', label: 'Sales · Lines with the thread: one third under 1600 px', model: base('sales', production), note: 'The size grids need the room: on Lines the thread takes one third below 1600 px unless the person chose a width in its width menu.' },
-    { id: 'notices', label: 'Sales · One notice, the rest behind “N more notices”', model: base('sales', late, { tab: 'production', changed: { at: at(29, 10, 42) } }), note: 'The order is late and changed meanwhile: the most serious notice shows, the other waits behind "1 more notice".' },
+    // F-SA-230: no "Late N days" banner any more (Late is the band's health chip): the two notices are the customer's yes asked
+    // again and the change meanwhile.
+    { id: 'notices', label: 'Sales · One notice, the rest behind “N more notices”', model: base('sales', amended(late), { tab: 'production', changed: { at: at(29, 10, 42) } }), note: 'The order waits for the customer\'s yes again and changed meanwhile: the most serious notice shows, the other waits behind "1 more notice".' },
     // ---- B-TH-256: what points at the order (picture 29's 'Shipments & invoices with complaints and returns', ORD-G04, the gate block) ----
     { id: 'th-256-links', label: 'TH-6 · Sales · Shipments: the order’s complaints and returns (each opens its record)', model: base('sales', production, { tab: 'shipments', links: linksModel({ ...LINKS_FULL, rePromises: [], gates: [] }) }), note: 'Only this order’s own complaints and returns (wall W27), each by its own right; a real link to each record.' },
     { id: 'th-256-links-none', label: 'TH-6 · Sales · Shipments: no complaints or returns', model: base('sales', production, { tab: 'shipments', links: linksModel(LINKS_NONE) }) },
