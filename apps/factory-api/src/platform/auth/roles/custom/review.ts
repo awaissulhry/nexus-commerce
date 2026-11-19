@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify'
 import { isGrain, type Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { CUSTOM_ROLE_REFUSALS, customContentRefusals, reviewOf } from '@nexus/factory-domain/auth/roles/custom'
 import { ROLE_REFUSAL_ISSUES } from '@nexus/factory-domain/auth/roles/refusals'
-import { ADMIN_PERMISSION, normalizeContent, roleProblems } from '@nexus/factory-domain/auth/roles/roles'
+import { ADMIN_PERMISSION, normalizeContent, priceGiverProblems, roleProblems } from '@nexus/factory-domain/auth/roles/roles'
 import { NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { TWO_FACTOR_REFUSALS, twoFactorRefusal } from '@nexus/factory-domain/ops/two-factor'
@@ -10,6 +10,7 @@ import { requireContext, type OfficeContext } from '../../../../core/context'
 import type { OfficeAuth } from '../../sessions/office-auth'
 import { activeAdmins, heldRoles, liveAssignment } from '../access'
 import { asksFreshCode } from '../roles'
+import { holdsOwnerRole } from '../assignments'
 import type { ReviewRoleBody } from './contract'
 
 /**
@@ -42,6 +43,8 @@ export async function reviewRoleChange(auth: OfficeAuth, request: FastifyRequest
     refusals.push(...problems.map((issue) => ({ path: `body/${issue.path}`, message: issue.message })))
     const after = normalizeContent({ ...asked, grains: asked.grains.filter(isGrain) })
     refusals.push(...customContentRefusals(before, after, context.grants))
+    // B-CP-011 (Owner O3): adding the price grain gives prices to the role's holders: only the Owner (as PATCH says).
+    if (!before.grains.includes('price')) refusals.push(...priceGiverProblems(after.grains, await holdsOwnerRole(client, context.actorId, now), 'body/grains/price'))
     if (before.permissions.includes(ADMIN_PERMISSION) && !after.permissions.includes(ADMIN_PERMISSION)) {
       const others = await activeAdmins(client, now, { roleId })
       if ((await activeAdmins(client, now)).size > 0 && others.size === 0) refusals.push({ path: 'roles/lastAdmin', message: CUSTOM_ROLE_REFUSALS.lastAdmin })

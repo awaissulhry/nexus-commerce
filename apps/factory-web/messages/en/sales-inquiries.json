@@ -211,7 +211,7 @@
     "declined_one": "{count} request declined ({reason})",
     "declined_other": "{count} requests declined ({reason})",
     "reachOthers": "{open} open requests · {others} of other kinds left out (each answered on its own)",
-    "noneRequests": "Assign and Decline act on requests: a catalogue order is answered in its pane, a change request in Home › Approvals"
+    "noneRequests": "Assign and Decline act on requests: a portal order is answered in its pane, a change request in Home › Approvals"
   },
   "held": {
     "right": "Needs the sales permission ({right})",
@@ -720,7 +720,7 @@
   },
   "export": {
     "heading": "Export · {view}",
-    "note": "Every row of this view, page by page to the end: requests, catalogue orders and change requests you may open. Prospects’ names make it personal data.",
+    "note": "Every row of this view, page by page to the end: requests, portal orders and change requests you may open. Prospects’ names make it personal data.",
     "notePrice": "Every row of this view, page by page to the end; the target price is left out (it needs the price right). Prospects’ names make it personal data."
   },
   "pane": {
@@ -906,16 +906,16 @@
   },
   "kind": {
     "REQUEST": "Request",
-    "CATALOGUE_ORDER": "Catalogue order",
+    "CATALOGUE_ORDER": "Portal order",
     "CHANGE_REQUEST": "Change request",
     "plural": {
       "REQUEST": "Requests",
-      "CATALOGUE_ORDER": "Catalogue orders",
+      "CATALOGUE_ORDER": "Portal orders",
       "CHANGE_REQUEST": "Change requests"
     },
     "hint": {
       "REQUEST": "A request by portal, mail, phone, a fair or a visit",
-      "CATALOGUE_ORDER": "Styles the customer picked in its portal catalogue: accept it as an order or a quote, or refuse it",
+      "CATALOGUE_ORDER": "What the customer asks in its portal (styles of its catalogue, in its own words, made to measure): accept it as an order or a quote, or refuse it",
       "CHANGE_REQUEST": "The customer asks to change or cancel a confirmed order: answered in Home › Approvals"
     }
   },
@@ -969,23 +969,23 @@
     "ApprovalRequest": "Approval"
   },
   "catalogue": {
-    "reading": "Reading the catalogue order…",
-    "failed": "Couldn't load the catalogue order",
-    "noRight": "Catalogue orders need the orders right",
+    "reading": "Reading the portal order…",
+    "failed": "Couldn't load the portal order",
+    "noRight": "Portal orders need the orders right",
     "noRightBody": "Ask an administrator for the right to see orders of this customer.",
-    "notFound": "Catalogue order not found",
+    "notFound": "Portal order not found",
     "notFoundBody": "It is not there, or not yours to open.",
-    "title": "Catalogue order {number}",
+    "title": "Portal order {number}",
     "acceptOrder": "Accept as order",
     "acceptQuote": "Accept as quote",
     "refuse": "Refuse",
-    "handled": "Someone else changed this catalogue order at {time}",
+    "handled": "Someone else changed this portal order at {time}",
     "held": {
       "DRAFT": "The customer is still writing it",
       "ACCEPTED": "Already accepted",
       "REFUSED": "Already refused",
       "WITHDRAWN": "Withdrawn by the customer",
-      "right": "Only sales can accept or refuse a catalogue order ({right})"
+      "right": "Only sales can accept or refuse a portal order ({right})"
     },
     "accept": {
       "badPrice": "Line {n}: the price is not a price (e.g. 38.50)"

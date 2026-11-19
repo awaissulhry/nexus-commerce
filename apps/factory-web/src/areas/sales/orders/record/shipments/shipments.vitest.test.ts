@@ -166,6 +166,11 @@ describe('F-OP-135: the typed link is the row’s Track › (https only)', () =>
     expect(trackingProblem(dialog('T-1', 'https://track.example.com/T-1'))).toBeNull()
     expect(trackingProblem(dialog('T-1'))).toBeNull()
     expect(trackingProblem(dialog('', 'https://track.example.com/T-1'))?.key).toBe('transport.form.linkNeedsNumber')
+    // op-fx4 (B-OP-034): the number emptied while the shipment has one is Clear it — the link left in the box goes with it, never held.
+    expect(trackingProblem(dialog('', 'https://track.example.com/T-1'), 'T-1')).toBeNull()
+    expect(trackingProblem(dialog('', 'http://not-https.example.com/T-1'), 'T-1')).toBeNull()
+    expect(trackingProblem(dialog('', 'https://track.example.com/T-1'), null)?.key).toBe('transport.form.linkNeedsNumber')
+    expect(trackingProblem(dialog('T-2', 'http://track.example.com/T-2'), 'T-1')?.key).toBe('transport.form.trackingLink')
     for (const bad of ['http://track.example.com/T-1', 'https://someone:secret@track.example.com/T-1', 'javascript:alert(1)', `https://track.example.com/${'x'.repeat(500)}`]) expect(trackingProblem(dialog('T-1', bad))?.key, bad).toBe('transport.form.trackingLink')
     expect(trackingBody(dialog(' T-1 ', ' https://track.example.com/T-1 '), 4)).toEqual({ version: 4, trackingNumber: 'T-1', trackingUrl: 'https://track.example.com/T-1' })
     expect(trackingBody(dialog('T-1', ''), 4)).toEqual({ version: 4, trackingNumber: 'T-1', trackingUrl: null })

@@ -28,8 +28,9 @@ import { admin, call, ok, person, putBytes, QUIET, sha256, startWorld, stepped, 
  *
  *   S   the sales office makes P1 into Brand Alpha (customer A: the seed's orders SEED-SO-0001 and SEED-SO-0002, A's private-label
  *       jacket) and P3 into Brand Beta (customer B); the production manager makes Beta's private-label jacket BX-200 with a main
- *       picture whose small preview the worker's files.stripPictures job makes (B-TH-063), and an own-collection vest; sales types
- *       two orders of Beta's; finance invoices one in part (TD01 of 1 of 4 pieces) and the other in full.
+ *       picture whose small preview the worker's files.stripPictures job makes (B-TH-063), and an own-collection vest; the Owner
+ *       types two orders of Beta's with their prices (B-CP-011: Sales may not send a price, 403); finance invoices one in part
+ *       (TD01 of 1 of 4 pieces) and the other in full.
  *   T17 the factory's sheet holds both customers' orders: Picture (the small preview, ≤ 320 px, behind the batch picture read),
  *       Brand (the label on the garment: Beta's name, our own collection, A's own label), Invoiced None / Part / All; the
  *       Customer switcher's counts equal the list's and the board's; Brand narrows the sheet.
@@ -205,9 +206,10 @@ describe('B-TH-102 golden flow TH-1a: the orders sheet of two customers, the swi
     await settle()
   })
 
-  it('S03 sales types Beta’s two orders: the jacket and the vest (two labels), and the jacket alone; finance invoices the first in part and the second in full', async () => {
+  it('S03 the Owner types Beta’s two orders (with their prices): the jacket and the vest (two labels), and the jacket alone; finance invoices the first in part and the second in full', async () => {
     const colour = (style: Json) => style.colourways[0].id as string
-    const first = await ok(P.sales, 'POST', '/sales/orders/manual', {
+    // B-CP-011 (the money wall): an order typed with its prices is the Owner's (Sales sees no price and may not send one: 403).
+    const firstBody = {
       companyId: companyA(),
       partyId: P3(),
       customerRef: BRAND_BETA.customerRef,
@@ -217,8 +219,10 @@ describe('B-TH-102 golden flow TH-1a: the orders sheet of two customers, the swi
         { styleId: G.betaStyle.id, colourwayId: colour(G.betaStyle), unitPrice: '80', sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 3 }] },
         { styleId: G.ownStyle.id, colourwayId: colour(G.ownStyle), unitPrice: '30', sizes: [{ size: '52', quantity: 2 }] },
       ],
-    }, 201)
-    const second = await ok(P.sales, 'POST', '/sales/orders/manual', {
+    }
+    await ok(P.sales, 'POST', '/sales/orders/manual', firstBody, 403)
+    const first = await ok(P.owner, 'POST', '/sales/orders/manual', firstBody, 201)
+    const second = await ok(P.owner, 'POST', '/sales/orders/manual', {
       companyId: companyA(),
       partyId: P3(),
       promiseDate: addDays(today(), 50),

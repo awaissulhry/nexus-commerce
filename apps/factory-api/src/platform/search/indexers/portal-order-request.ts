@@ -32,8 +32,9 @@ export default defineIndexer({
       siteId: null,
       partyId: row.partyId,
       number: row.number,
-      title: partyName(row.party) ?? row.number ?? 'Catalogue order',
-      subtitle: 'Catalogue order',
+      // B-CP-077 (customer page plan 12 §7): the record's word is "Portal order" (it may hold described and made-to-measure lines).
+      title: partyName(row.party) ?? row.number ?? 'Portal order',
+      subtitle: 'Portal order',
       status: row.status,
       words: [row.customerRef, row.party.code, row.party.legalName],
     }))

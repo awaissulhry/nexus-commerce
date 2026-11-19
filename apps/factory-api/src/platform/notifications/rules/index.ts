@@ -53,6 +53,8 @@ import { PRODUCTION_SUPERVISOR_RULES } from './production-supervisor'
 import { BRAND_PRODUCTION_RULES } from './brand-production'
 // B-SA-041: a work-order change proposed (to who may apply it), applied or left as is (to its proposer).
 import { WORK_ORDER_CHANGE_RULES } from '../../../modules/production/work-order-changes/notices'
+// B-CP-021: the customer changed its own price in its portal (one alert to the order's maker and the Owner, price holders only).
+import { BRAND_PRICE_NOTICE_RULES } from '../../../modules/sales/brand-prices/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -113,4 +115,7 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   ...BRAND_PRODUCTION_RULES,
   // B-SA-041: work_order_change.proposed (ASSIGNMENT to the work order's supervisor and followers with workorders.manage),
   // work_order_change.applied / declined (SYSTEM to the proposer).
-  ...WORK_ORDER_CHANGE_RULES])
+  ...WORK_ORDER_CHANGE_RULES,
+  // B-CP-021: sales_order.brand_price_changed_by_customer (ALERT to the order's maker and the Owner, each only with the price grain
+  // over the order at fan-out; no amount in the words, never a thread line).
+  ...BRAND_PRICE_NOTICE_RULES])

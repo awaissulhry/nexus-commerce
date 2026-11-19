@@ -30,6 +30,10 @@ import { correctionWay } from '../../../lib/record-thread/card/model'
 import { floorLocked, type ComposerMode, type DraftLink } from '../../../lib/record-thread/composer/model'
 // F-SA-282a (B-SA-073): the API held a portal text that names another customer: the box holds it with the tick, then it goes again.
 import { heldForNamesOther, namesNoOtherCustomerOf } from '../../../lib/record-thread/composer/model'
+// F-CP-147 (B-CP-020): words that look like a price are held once with a warning; "Send anyway" sends them with pricesInWordsOk.
+import { heldForNamesPrice, pricesInWordsOkOf } from '../../../lib/record-thread/composer/model'
+import { namesPriceRefused } from '../../../lib/record-thread/send-check/model'
+import { refusalCode } from './state'
 import { aboutRefOf, bodyWithAbout } from '../../../lib/record-thread/composer/model' // F-SA-265 (Discuss)
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
 // B-TH-229: the person's own read mark (B-TH-027).
@@ -575,7 +579,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     () =>
       files
         .filter((file) => !file.supersededAt)
-        .map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, available: file.status === 'AVAILABLE', shared: partyId !== null && file.partyId === partyId && (file.visibility.includes('PARTNER') || file.visibility.includes('LINK')) })),
+        .map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, available: file.status === 'AVAILABLE', shared: partyId !== null && file.partyId === partyId && (file.visibility.includes('PARTNER') || file.visibility.includes('LINK')), ...(file.locked ? { locked: file.locked } : {}) /* F-CP-144: never offered to attach */ })),
     [files, partyId],
   )
   const context: ComposerContext = {
@@ -723,10 +727,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
   // ---- end B-TH-289
 
-  const sendNote = async (item: { key: string; idempotencyKey: string; body: string; mentions: string[]; attachments: string[]; forFloor: boolean; card: CardMessage; amount?: { value: number; currency: string } | null; links?: MessageLinks; snapshot?: Work }) => {
+  const sendNote = async (item: { key: string; idempotencyKey: string; body: string; mentions: string[]; attachments: string[]; forFloor: boolean; card: CardMessage; amount?: { value: number; currency: string } | null; links?: MessageLinks; snapshot?: Work; /* F-CP-147 */ pricesInWordsOk?: boolean }) => {
     setSending(true)
     try {
-      const messageId = await postNoteKeyed(api, key, { body: item.body, mentions: item.mentions, attachments: item.attachments, forFloor: item.forFloor, amount: item.amount ?? null, ...item.links }, item.idempotencyKey)
+      const messageId = await postNoteKeyed(api, key, { body: item.body, mentions: item.mentions, attachments: item.attachments, forFloor: item.forFloor, amount: item.amount ?? null, ...item.links, ...(item.pricesInWordsOk ? { pricesInWordsOk: true } : {}) /* F-CP-147 */ }, item.idempotencyKey)
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, messageId } : entry)) }))
       setNotice({ ns: 'record-thread', key: item.forFloor ? 'notice.noteAddedFloor' : 'notice.noteAdded', tone: 'success' })
       void loadThread()
@@ -739,6 +743,14 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         setNotice({ ns: 'record-thread', key: 'notice.floorPrice', params: { found: floorPriceFound(item.body, true) ?? item.body.slice(0, 40) }, tone: 'danger' })
         return
       }
+      // ---- F-CP-147 (B-CP-020): the words look like a price — the text and files come back into the box, warned (no amount repeated);
+      // Send is "Send anyway" for the same words.
+      if (namesPriceRefused(refusalCode(error)) && item.snapshot) {
+        const snapshot = item.snapshot
+        setWork((now) => ({ ...now, draft: heldForNamesPrice(snapshot.draft), files: snapshot.files, outbox: now.outbox.filter((entry) => entry.key !== item.key) }))
+        return
+      }
+      // ---- end F-CP-147
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, state: 'failed', reason: sendReason(error) } : entry)) }))
     } finally {
       setSending(false)
@@ -746,15 +758,22 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
 
   // ---- B-TH-237 (B-TH-044): a message the customer reads in its portal, no e-mail -------------------------------------------------
-  const sendPortal = async (item: { key: string; idempotencyKey: string; body: string; attachments: string[]; links?: MessageLinks; snapshot: Work; /* F-SA-282a */ namesNoOtherCustomer?: boolean }) => {
+  const sendPortal = async (item: { key: string; idempotencyKey: string; body: string; attachments: string[]; links?: MessageLinks; snapshot: Work; /* F-SA-282a */ namesNoOtherCustomer?: boolean; /* F-CP-147 */ pricesInWordsOk?: boolean }) => {
     setSending(true)
     try {
-      const messageId = await postPortalReplyKeyed(api, key, { body: item.body, attachments: item.attachments, ...item.links, ...(item.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {}) }, item.idempotencyKey)
+      const messageId = await postPortalReplyKeyed(api, key, { body: item.body, attachments: item.attachments, ...item.links, ...(item.namesNoOtherCustomer ? { namesNoOtherCustomer: true } : {}), ...(item.pricesInWordsOk ? { pricesInWordsOk: true } : {}) /* F-CP-147 */ }, item.idempotencyKey)
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, messageId } : entry)) }))
       setNotice({ ns: 'record-thread', key: 'notice.portalPosted', tone: 'success' })
       if (item.snapshot.followUp && item.snapshot.draft.mode === 'portal') void setFollowUp(messageId) // B-TH-289
       void loadThread()
     } catch (error) {
+      // ---- F-CP-147 (B-CP-020): the words look like a price — back into the box, warned, the audience kept ("Send anyway").
+      if (namesPriceRefused(refusalCode(error))) {
+        const snapshot = item.snapshot
+        setWork((now) => ({ ...now, draft: heldForNamesPrice(snapshot.draft), files: snapshot.files, outbox: now.outbox.filter((entry) => entry.key !== item.key) }))
+        return
+      }
+      // ---- end F-CP-147
       const refusal = portalRefusal(error)
       if (refusal) {
         // The person must change it: the text and files come back into the box, with why. Nobody reads the portal here: the choice goes.
@@ -793,7 +812,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // ---- B-TH-237: in the portal — ours, on the PORTAL channel, no mail.
     if (now.draft.mode === 'portal') {
       const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [] }
-      const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now, /* F-SA-282a */ namesNoOtherCustomer: namesNoOtherCustomerOf(now.draft) }
+      const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now, /* F-SA-282a */ namesNoOtherCustomer: namesNoOtherCustomerOf(now.draft), /* F-CP-147 */ pricesInWordsOk: pricesInWordsOkOf(now.draft) }
       retries.current.set(outboxKey, () => sendPortal(item))
       setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], followUp: false /* B-TH-289 */, outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
       forgetDraft()
@@ -806,7 +825,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // F-SA-265: a part the conversation cannot keep goes as the note's first line.
     const noteBody = bodyWithAbout(now.draft)
     const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: noteBody, forFloor, mentions: [], files: [], ...(amount ? { amount } : {}) }
-    const item = { key: outboxKey, idempotencyKey, body: noteBody, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor, card, amount, links, snapshot: now }
+    const item = { key: outboxKey, idempotencyKey, body: noteBody, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor, card, amount, links, snapshot: now, /* F-CP-147 */ pricesInWordsOk: pricesInWordsOkOf(now.draft) }
     retries.current.set(outboxKey, () => sendNote(item))
     setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
     forgetDraft()

@@ -57,6 +57,8 @@ const SESSIONS: Record<string, SessionContext> = {
   'office-other': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['documents.view', 'files.read'], [otherCompany])] },
   'files-only': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['files.read'])] },
   'office-b': { audience: 'office', tenantId: tenantB, actorId: user, grants: [grant(['documents.view', 'files.read'])] },
+  // B-CP-015 (money wall): a priced document (an invoice copy, a quote) opens only for a person who sees prices.
+  'office-price': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['documents.view', 'files.read', 'money.price'])] },
 }
 
 const admin = async <T = Record<string, any>>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
@@ -231,26 +233,52 @@ describe('storeDocumentPdf (GAP-008)', () => {
   it('says on an invoice copy that it is a courtesy copy (the legal invoice is the FatturaPA XML), in Italian and English', async () => {
     const italian = await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Invoice', recordId: newId(), document: invoiceCopy('it') })
     expect(italian.file).toMatchObject({ kind: 'FISCAL_ARCHIVE', originalName: 'Fattura - copia di cortesia 2026-0101.pdf' })
-    const it = pdfText(await downloaded(italian.file.id))
+    // B-CP-015: an invoice copy is born priced: the office person without the price grain gets "File not found." like a wrong id;
+    // a price holder downloads it.
+    expect(italian.file).toMatchObject({ priced: true })
+    expect((await call('office', 'GET', `/files/${italian.file.id}/download`)).statusCode).toBe(404)
+    const it = pdfText(await downloaded(italian.file.id, 'office-price'))
     expect(it).toContain('Fattura - copia di cortesia')
     expect(it).toContain('Copia di cortesia, priva di valore fiscale.')
     expect(it).toContain("L'originale è la fattura elettronica trasmessa tramite il Sistema di Interscambio")
     expect(it).toContain('Totale documento')
 
     const english = await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Invoice', recordId: newId(), document: invoiceCopy('en') })
-    const en = pdfText(await downloaded(english.file.id))
+    const en = pdfText(await downloaded(english.file.id, 'office-price'))
     expect(en).toContain('Invoice - courtesy copy')
     expect(en).toContain('Courtesy copy with no fiscal value.')
     expect(en).toContain('Paid-up share capital €10,000.00')
   })
 
-  it('keeps a quote as a DOCUMENT without retention, shareable with a floor site like any file', async () => {
+  // B-CP-015 (money wall, Owner O1–O3): a quote shows prices, so it is born priced and never shared with a floor (the guard of
+  // putGeneratedFile; no module asks it: the DDT and the packing list go to the floor, the pack drops the floor when priced). The
+  // floor share is shown with the packing list, a document without prices.
+  it('keeps a quote as a DOCUMENT without retention, priced and never for a floor; a document without prices is shareable with a floor site like any file', async () => {
     const site = newId()
     await admin(`INSERT INTO "Site" (id, "tenantId", "companyId", code, name, kind) VALUES ($1, $2, $3, 'PF-1', 'Plant', 'PLANT')`, [site, tenantA, company])
     const quote = { ...invoiceCopy('it'), type: 'QUOTE' as const, number: 'Q-2026-0007', invoice: null, validUntil: '2026-11-30' }
-    const { file } = await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Quote', recordId: newId(), document: quote, visibility: ['FLOOR'], floorSiteId: site })
-    expect(file).toMatchObject({ kind: 'DOCUMENT', retainUntil: null, visibility: ['OFFICE', 'FLOOR'], floorSiteId: site })
-    expect(pdfText(await downloaded(file.id))).toContain('Valida fino al')
+    const { file } = await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Quote', recordId: newId(), document: quote })
+    expect(file).toMatchObject({ kind: 'DOCUMENT', retainUntil: null, visibility: ['OFFICE'], priced: true })
+    expect(pdfText(await downloaded(file.id, 'office-price'))).toContain('Valida fino al')
+    // Asked for a floor, the priced quote is refused in words before anything is stored.
+    const floorQuote = newId()
+    const refusal = await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Quote', recordId: floorQuote, document: quote, visibility: ['FLOOR'], floorSiteId: site }).catch((error: unknown) => error)
+    expect(refusal).toBeInstanceOf(ValidationError)
+    expect((refusal as ValidationError).issues?.map((issue) => issue.path)).toEqual(['body/priced'])
+    expect(await admin('SELECT id FROM "StoredFile" WHERE "recordId" = $1', [floorQuote])).toEqual([])
+    const packingList: DocumentRequest['document'] = {
+      type: 'PACKING_LIST',
+      language: 'it',
+      number: 'SH-2026-00007',
+      date: '2026-10-28',
+      currency: 'EUR',
+      party: PARTY,
+      lines: [{ code: 'JKT-01', description: 'Giacca in pelle, nero, taglia 50', quantity: '2', uom: 'PCS', parcel: '1' }],
+      packing: { packages: 1, grossWeightKg: '3.5', shipTo: { name: 'Magazzino Esempio', line1: 'Via Esempio 9', postalCode: '40128', city: 'Bologna', province: 'BO', country: 'IT' } },
+    }
+    const shared = await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Shipment', recordId: newId(), document: packingList, visibility: ['FLOOR'], floorSiteId: site })
+    expect(shared.file).toMatchObject({ kind: 'DOCUMENT', retainUntil: null, visibility: ['OFFICE', 'FLOOR'], floorSiteId: site, priced: false })
+    expect(pdfText(await downloaded(shared.file.id))).toContain('Distinta colli')
   })
 
   it('works for the worker (the tenant\'s system context), and gives the same answer to a repeated idempotency key', async () => {

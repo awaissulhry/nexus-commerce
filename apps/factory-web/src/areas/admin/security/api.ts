@@ -122,6 +122,37 @@ const attention = z.object({
 export type Attention = z.infer<typeof attention>
 export type AttentionItem = Attention['items'][number]
 
+// ---- F-CP-145 (customer page plan O3, the money wall; design 11-money §4.4; the API's B-CP-013): "Who sees prices" ----------------
+// GET /admin/security/price-holders (users.view + the price grain, every customer; else 403): every office person whose live role sees
+// prices (with its money grains, its reach, since when, until when, and whether the person set up two-factor) and every outside
+// accountant whose portal access sees prices (with the firm and the end of access). Names, states and dates only: never a price.
+export const PRICE_HOLDER_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED'] as const
+const priceHolderRole = z.object({
+  assignmentId: z.string(),
+  roleId: z.string(),
+  key: z.string(),
+  name: z.string(),
+  system: z.boolean(),
+  /** Every money grain of the role (the price among them); an unknown one is drawn as nothing. */
+  grains: z.array(z.string()),
+  requireMfa: z.boolean(),
+  allCustomers: z.boolean(),
+  customers: z.number(),
+  allCompanies: z.boolean(),
+  companies: z.number(),
+  since: z.string(),
+  until: z.string().nullable(),
+})
+const priceHolder = z.object({ userId: z.string(), name: z.string(), status: z.enum(PRICE_HOLDER_STATUSES), twoFactor: z.boolean(), roles: z.array(priceHolderRole) })
+const priceGuest = z.object({ userId: z.string(), name: z.string(), status: z.enum(PRICE_HOLDER_STATUSES), firm: z.object({ id: z.string(), name: z.string() }).nullable(), roleKey: z.string(), until: z.string().nullable() })
+const priceHolders = z.object({ asOf: z.string(), people: z.array(priceHolder), guests: z.array(priceGuest) })
+export type PriceHolders = z.infer<typeof priceHolders>
+export type PriceHolder = PriceHolders['people'][number]
+export type PriceHolderRole = PriceHolder['roles'][number]
+export type PriceGuest = PriceHolders['guests'][number]
+export const readPriceHolders = (api: ApiClient) => api.get('/admin/security/price-holders', { schema: priceHolders })
+// ---- end F-CP-145
+
 export const securityFacts = (api: ApiClient) => api.get('/admin/security', { schema: page })
 export const twoFactorRoles = (api: ApiClient) => api.get('/admin/security/two-factor', { schema: twoFactorList })
 export const previewTwoFactor = (api: ApiClient, changes: readonly TwoFactorChange[]) => api.post('/admin/security/two-factor/preview', { body: { changes }, schema: preview })

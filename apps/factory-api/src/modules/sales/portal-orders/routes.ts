@@ -11,6 +11,10 @@ import { orderSheet, orderSheetFile } from './sheet'
 import { attachmentDisposition } from '../../../platform/files/rules'
 // B-SA-037: the order's files shared with the customer.
 import { portalOrderFiles, portalOrderFilesContract } from './files'
+// B-CP-019: the customer's own price check and its line prices.
+import { idempotencyKeyFrom } from '../../../core/command'
+import { portalPriceCheckContract, portalSaveBrandPricesContract } from '../brand-prices/contract'
+import { readPortalPriceCheck, savePortalBrandPrices } from '../brand-prices/portal'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075 status in customer words, SAL-076 production progress per customer
@@ -38,4 +42,9 @@ export default defineRoutes('portal-sales-orders', manifest, async (app) => {
 
   // B-SA-037 (Sales page plan N9, P14): the order's Documents tab, grouped as the office's Files tab.
   app.get('/portal/sales-orders/:orderId/files', { schema: portalOrderFilesContract }, async (request) => portalOrderFiles(app, request, request.params.orderId, appClock(app).now()))
+
+  // ---- B-CP-019 (customer page plan C3, D2, D3): the customer's price check, and its own line prices (one command).
+  app.get('/portal/sales-orders/:orderId/price-check', { schema: portalPriceCheckContract }, async (request) => readPortalPriceCheck(app, request, request.params.orderId))
+  app.put('/portal/sales-orders/:orderId/brand-prices', { schema: portalSaveBrandPricesContract }, async (request) => savePortalBrandPrices(app, request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+  // ---- end B-CP-019
 })

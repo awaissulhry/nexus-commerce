@@ -26,7 +26,8 @@ import { clientAddressOf } from '../../../core/client-address'
  * Invitations by email (feature PLT-015), ported from Commerce's invitation routes (apps/api/src/routes/auth.routes.ts):
  *
  *   invite    an administrator (users.invite, with a step-up) names an address, a display name and the person's
- *             first roles with their scopes (naming any also needs roles.assign). The user row is made INVITED at once
+ *             first roles with their scopes (naming any also needs roles.assign; B-CP-011: a role that sees prices only
+ *             from the Owner, 403 `roles/<i>/roleId/onlyOwnerGivesPrices`, roles/assignments.ts). The user row is made INVITED at once
  *             (or an earlier invited or deactivated one is reused, so history keeps one person) with those role
  *             assignments (an earlier invitation's are ended: the newest invitation says what the person gets);
  *             earlier open invitations of the person stop; the link (72 hours) goes to the mail seam after the commit.

@@ -9,6 +9,7 @@ import { INTL_LOCALE } from '../../../i18n/locales'
 import { useLocale, useT } from '../../../i18n/provider'
 import { sizeWords } from '../../card/model'
 import { kindKey, officeInReply, pickerGroups, type DraftFile, type RecordFile, type TrayMode } from '../model'
+import { pickerPricedLocked } from '../model' // F-CP-144
 import '../attachments.css'
 
 /**
@@ -162,6 +163,8 @@ export function FromRecordPicker({ open, files, mode, partyName, record, onClose
   const [query, setQuery] = useState('')
   const [chosen, setChosen] = useState<readonly string[]>([])
   const groups = useMemo(() => pickerGroups(files, query), [files, query])
+  const pricedWords = useT('record-files') // F-CP-144
+  const pricedLocked = pickerPricedLocked(files) // F-CP-144
   const toggle = (id: string) => setChosen((list) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]))
   const close = () => {
     setChosen([])
@@ -208,8 +211,10 @@ export function FromRecordPicker({ open, files, mode, partyName, record, onClose
       <div className="fw-rt-picker">
         <p className="fw-rt-attach-muted">{mode !== 'note' ? t('picker.bodyReply', { party: partyName }) : t('picker.bodyNote', { record })}</p>
         {files.length > 12 && <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('picker.search')} aria-label={t('picker.search')} />}
+        {/* F-CP-144: the priced documents this reader may not open — counted, never offered. */}
+        {pricedLocked > 0 && <p className="fw-rt-attach-muted">{pricedWords('priced.lockedCount', { count: pricedLocked })}</p>}
         {groups.shared.length + groups.office.length === 0 ? (
-          <p className="fw-rt-attach-muted">{t(files.length === 0 ? 'picker.none' : 'picker.noMatch')}</p>
+          <p className="fw-rt-attach-muted">{t(files.length === 0 || files.every((file) => file.locked) /* F-CP-144 */ ? 'picker.none' : 'picker.noMatch')}</p>
         ) : (
           <>
             {groups.shared.length > 0 && (

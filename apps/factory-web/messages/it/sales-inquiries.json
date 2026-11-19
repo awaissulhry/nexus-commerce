@@ -211,7 +211,7 @@
     "declined_one": "{count} richiesta rifiutata ({reason})",
     "declined_other": "{count} richieste rifiutate ({reason})",
     "reachOthers": "{open} richieste aperte · {others} di altri tipi lasciate fuori (ognuna si risponde a sé)",
-    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal catalogo si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni"
+    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal portale si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni"
   },
   "held": {
     "right": "Serve il permesso delle vendite ({right})",
@@ -720,7 +720,7 @@
   },
   "export": {
     "heading": "Esporta · {view}",
-    "note": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine: richieste, ordini dal catalogo e richieste di modifica che puoi aprire. I nomi dei potenziali clienti ne fanno dati personali.",
+    "note": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine: richieste, ordini dal portale e richieste di modifica che puoi aprire. I nomi dei potenziali clienti ne fanno dati personali.",
     "notePrice": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine; il prezzo obiettivo resta fuori (serve il permesso sui prezzi). I nomi dei potenziali clienti ne fanno dati personali."
   },
   "pane": {
@@ -906,16 +906,16 @@
   },
   "kind": {
     "REQUEST": "Richiesta",
-    "CATALOGUE_ORDER": "Ordine dal catalogo",
+    "CATALOGUE_ORDER": "Ordine dal portale",
     "CHANGE_REQUEST": "Richiesta di modifica",
     "plural": {
       "REQUEST": "Richieste",
-      "CATALOGUE_ORDER": "Ordini dal catalogo",
+      "CATALOGUE_ORDER": "Ordini dal portale",
       "CHANGE_REQUEST": "Richieste di modifica"
     },
     "hint": {
       "REQUEST": "Una richiesta da portale, e-mail, telefono, fiera o visita",
-      "CATALOGUE_ORDER": "Modelli scelti dal cliente nel catalogo del suo portale: accettalo come ordine o come offerta, oppure rifiutalo",
+      "CATALOGUE_ORDER": "Quello che il cliente chiede nel suo portale (modelli del suo catalogo, a parole sue, su misura): accettalo come ordine o come offerta, oppure rifiutalo",
       "CHANGE_REQUEST": "Il cliente chiede di modificare o annullare un ordine confermato: si risponde in Home › Approvazioni"
     }
   },
@@ -969,23 +969,23 @@
     "ApprovalRequest": "Approvazione"
   },
   "catalogue": {
-    "reading": "Lettura dell'ordine dal catalogo…",
-    "failed": "Impossibile caricare l'ordine dal catalogo",
-    "noRight": "Gli ordini dal catalogo richiedono il permesso sugli ordini",
+    "reading": "Lettura dell'ordine dal portale…",
+    "failed": "Impossibile caricare l'ordine dal portale",
+    "noRight": "Gli ordini dal portale richiedono il permesso sugli ordini",
     "noRightBody": "Chiedi a un amministratore il permesso di vedere gli ordini di questo cliente.",
-    "notFound": "Ordine dal catalogo non trovato",
+    "notFound": "Ordine dal portale non trovato",
     "notFoundBody": "Non c’è, oppure non puoi aprirlo.",
-    "title": "Ordine dal catalogo {number}",
+    "title": "Ordine dal portale {number}",
     "acceptOrder": "Accetta come ordine",
     "acceptQuote": "Accetta come offerta",
     "refuse": "Rifiuta",
-    "handled": "Qualcun altro ha cambiato quest'ordine dal catalogo alle {time}",
+    "handled": "Qualcun altro ha cambiato quest'ordine dal portale alle {time}",
     "held": {
       "DRAFT": "Il cliente lo sta ancora scrivendo",
       "ACCEPTED": "Già accettato",
       "REFUSED": "Già rifiutato",
       "WITHDRAWN": "Ritirato dal cliente",
-      "right": "Solo le vendite possono accettare o rifiutare un ordine dal catalogo ({right})"
+      "right": "Solo le vendite possono accettare o rifiutare un ordine dal portale ({right})"
     },
     "accept": {
       "badPrice": "Riga {n}: il prezzo non è un prezzo (es. 38,50)"

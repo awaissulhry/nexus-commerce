@@ -218,7 +218,12 @@
     "NO_SIZES": "The line asks no size.",
     "PRICE_CHANGED": "Price now {now} (was {was}).",
     "PRICE_NEW": "Price now {now}: take today's prices.",
-    "PRICE_ANY": "The price changed: take today's prices."
+    "PRICE_ANY": "The price changed: take today's prices.",
+    "NO_TOTAL": "Say how many pieces in all (the sizes may follow).",
+    "SIZES_NOT_TOTAL": "The sizes do not add up to the total pieces.",
+    "NO_PEOPLE": "Name the people, or attach their measurement sheet.",
+    "MTM_CLOSED": "Made to measure is not open for you yet: ask us in the messages.",
+    "GARMENT_TYPE_GONE": "This made-to-measure garment type is no longer offered: choose another garment type."
   },
   "notice": {
     "PRICE_CHANGED": "Price now {now} (was {was})",

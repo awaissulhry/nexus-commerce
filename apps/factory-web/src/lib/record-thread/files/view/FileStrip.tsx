@@ -14,6 +14,7 @@ import { Button } from '@nexus/ui/primitives'
 import { useLocale } from '../../../i18n/provider'
 import { formatDate } from '../../../i18n/format'
 import { pinText, type PinLine } from '../model'
+import { namedSeries, previewOf, pricedLockedOf } from '../model' // F-CP-144: the PRICED lock, counted, never a tile
 import '../files.css'
 
 export const FILES_NS = 'record-thread-files'
@@ -94,7 +95,11 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
       </div>
     ) : null
   }
-  const chip = filesChip(series)
+  // F-CP-144: a priced document this reader may not open is no tile and not in the count of files they see (no name, no preview):
+  // one counted line under the strip (and on the chip when it is all there is).
+  const tiles = namedSeries(series)
+  const pricedLocked = pricedLockedOf(series)
+  const chip = filesChip(tiles)
 
   const walk = (event: KeyboardEvent<HTMLUListElement>) => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return
@@ -111,11 +116,11 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
       <div className="fw-rtf-line">
         {pins}
         <button type="button" className="fw-rtf-chip" aria-expanded={model.open} aria-controls={stripId} onClick={() => actions?.onToggle?.(!model.open)}>
-          <span>{t('chip.label', { count: chip.count })}</span>
+          <span>{chip.count === 0 && pricedLocked > 0 ? pricedWords('priced.lockedCount', { count: pricedLocked }) /* F-CP-144 */ : t('chip.label', { count: chip.count })}</span>
           <span className="fw-rtf-minis" aria-hidden>
             {chip.newest.map((file) => (
               <span key={file.id} className="fw-rtf-mini">
-                {file.previewUrl && file.status === 'AVAILABLE' ? <img src={file.previewUrl} alt="" /> : file.status === 'QUARANTINED' ? <Lock size={12} /> : KIND_ICON[file.kind](12)}
+                {previewOf(file) /* F-CP-144 */ ? <img src={previewOf(file)!} alt="" /> : file.status === 'QUARANTINED' || file.locked ? <Lock size={12} /> : KIND_ICON[file.kind](12)}
               </span>
             ))}
           </span>
@@ -125,7 +130,7 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
       {model.open && (
         <div id={stripId} className="fw-rtf-strip">
           <ul ref={listRef} className="fw-rtf-tiles" aria-label={t('strip.label', { count: chip.count })} onKeyDown={walk}>
-            {series.map((one, index) => {
+            {tiles.map((one, index) => {
               const file = one.latest
               const version = versionMark(one)
               const { marks, more } = audienceMarks(file, model.party)
@@ -152,13 +157,18 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
               )
             })}
             <li>
-              <button type="button" className="fw-rtf-all" tabIndex={focus >= series.length ? 0 : -1} data-tile onFocus={() => setFocus(series.length)} onClick={() => actions?.onAllFiles?.()}>
+              <button type="button" className="fw-rtf-all" tabIndex={focus >= tiles.length ? 0 : -1} data-tile onFocus={() => setFocus(tiles.length)} onClick={() => actions?.onAllFiles?.()}>
                 <FolderOpen size={18} aria-hidden />
                 <span>{t('strip.all')}</span>
               </button>
             </li>
           </ul>
           {series.some((one) => one.latest.status === 'QUARANTINED') && <p className="fw-rtf-note">{t('strip.heldNote')}</p>}
+          {pricedLocked > 0 && (
+            <p className="fw-rtf-note">
+              <Lock size={12} aria-hidden /> {pricedWords('priced.lockedCount', { count: pricedLocked }) /* F-CP-144 */}
+            </p>
+          )}
         </div>
       )}
     </div>

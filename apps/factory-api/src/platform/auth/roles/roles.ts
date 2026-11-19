@@ -27,7 +27,7 @@ import { weigh } from '../../admin/security/two-factor'
 import { requireStepUp } from '../office/account'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { activeAdmins, heldRoles, liveAssignment } from './access'
-import { assertKeepsAnAdmin, assertWithinAssignerScope, assignmentAudit, assignmentViewOf, ASSIGNMENT_SELECT, createAssignment, findAssignment, listAssignments } from './assignments'
+import { assertKeepsAnAdmin, assertOwnerGivesPrices, assertWithinAssignerScope, assignmentAudit, assignmentViewOf, ASSIGNMENT_SELECT, createAssignment, findAssignment, listAssignments } from './assignments'
 import type { AssignBody, CreateRoleBody, EditRoleBody, EndAssignmentBody } from './contract'
 import { syncRolesInCommand } from './sync'
 import { isOutdated, systemRoleChanges } from './system-roles'
@@ -45,7 +45,10 @@ import { assertEveryCustomer } from '../every-customer'
  *     not ended, and roles.assign is not taken away from the role that makes the last one;
  *   - B-W2b-404 (PLT-031): a custom role never holds more than the person who makes it (an edit adds only what the
  *     editor holds), never the owner's every() (the owner role is not copied), and is archived, never deleted
- *     (roles/custom: archive, restore, the review of a change).
+ *     (roles/custom: archive, restore, the review of a change);
+ *   - B-CP-011 (the money wall, Owner O3): a role that sees prices is made (a custom role with the price grain), widened
+ *     (an edit adding it: its holders would see prices) and given (assignments.ts) only by the Owner: 403
+ *     `body/grains/price/onlyOwnerGivesPrices` or `roleId/onlyOwnerGivesPrices`; every such role asks for two-factor.
  */
 
 const officeContextOf = (request: FastifyRequest): OfficeContext => requireContext(request) as OfficeContext
@@ -181,6 +184,8 @@ export async function createRole(auth: OfficeAuth, request: FastifyRequest, body
   const key = customKey(body.key)
   try {
     const { result } = await auth.command(context, { name: 'roles.create', input: body }, async ({ tx, now, audit }) => {
+      // B-CP-011: a role that sees prices is made only by the Owner.
+      await assertOwnerGivesPrices(tx, content.grains, context.actorId, now, 'body/grains/price')
       await tx.role.create({
         data: { id, key, name: content.name, description: body.description ?? null, basedOn: source?.key ?? null, requireMfa: content.requireMfa, requireMfaSince: content.requireMfa ? now : null, permissions: content.permissions, grains: content.grains, createdAt: now, createdById: context.actorId },
       })
@@ -196,7 +201,7 @@ export async function createRole(auth: OfficeAuth, request: FastifyRequest, body
 
 /**
  * B-W2b-24 (B-W2a-36 note): PATCH /auth/roles applies the two-factor rules of Security & health to a requireMfa change —
- * a role that sees costs or margins after the edit keeps asking (its content), and the change never leaves the tenant
+ * a role that sees prices, costs or margins after the edit keeps asking (its content; prices since B-CP-011), and the change never leaves the tenant
  * with no administrator able to work (the lock-out rule, weighed on the committed state as the Security command does).
  * Holding the role is refused before (nobody edits a role they hold). 409 with `body/requireMfa/<code>` (the codes of
  * factory-domain ops/two-factor: the web says its own words).
@@ -253,6 +258,8 @@ export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId
       const description = body.description === undefined ? before.description : body.description
       const beforeContent = { permissions: before.permissions as Permission[], grains: before.grains.filter(isGrain), requireMfa: before.requireMfa }
       assertWithinMaker(beforeContent, after, context)
+      // B-CP-011: adding the price grain gives prices to every holder: only the Owner (removing it stays free).
+      if (!beforeContent.grains.includes('price')) await assertOwnerGivesPrices(tx, after.grains, context.actorId, now, 'body/grains/price')
       if (asksFreshCode(beforeContent, after)) requireStepUp(auth, request)
       if (before.permissions.includes(ADMIN_PERMISSION) && !after.permissions.includes(ADMIN_PERMISSION)) {
         const others = await activeAdmins(tx, now, { roleId })

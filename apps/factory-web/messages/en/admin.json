@@ -1166,6 +1166,10 @@
         "name": "Read-only",
         "description": "Sees every screen its scope reaches and changes nothing; sees no money."
       },
+      "designer": {
+        "name": "Factory designer",
+        "description": "Works on logos, artwork and samples with customers; sees no money."
+      },
       "operator": {
         "name": "Operator",
         "description": "Works at a station on an enrolled floor device; sees only their own pay (the piece rates published to them)."

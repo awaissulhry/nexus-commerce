@@ -8,7 +8,8 @@ import { BRAND_ALPHA } from '../../../../lib/testing/two-brands' // B-TH-232
 import { ALWAYS_RULES, holdersOf } from '../model' // B-TH-232
 import type { RoleTemplate } from '../new-role/api'
 import { copyName, createProblem, newRoleErrors, offeredTemplates, slugOf, templateHeld } from '../new-role/model'
-import { bodyOf, draftDiff, draftOf, editHeld, grainToggled, refusalWords, reviewRows, saveProblem, toggled, type RoleReview } from './model'
+import { asksTwoFactor, bodyOf, draftDiff, draftOf, editHeld, grainToggled, refusalWords, reviewRows, saveProblem, toggled, type RoleReview } from './model'
+import type { Grain } from '../../shared/api' // B-CP-011
 // ---- B-TH-269: the role on RecordFrame (tabs 4 → 3, the docked thread) ----
 import { readFileSync } from 'node:fs'
 import type { ComponentType } from 'react'
@@ -53,6 +54,14 @@ describe('change role', () => {
     expect(bodyOf({ requireMfa: false }, draft).requireMfa).toBe(true)
     expect(bodyOf({ requireMfa: true }, draft).requireMfa).toBeUndefined()
     expect(draft.grains).toEqual(['price', 'cost', 'margin'])
+  })
+
+  it('B-CP-011 (Owner O6): a role that sees prices only asks for two-factor too', () => {
+    const pricesOnly = { permissions: ['invoices.view'], grains: ['price'] as Grain[] }
+    expect(asksTwoFactor(['price'])).toBe(true)
+    expect(asksTwoFactor(['wages', 'pay'])).toBe(false)
+    expect(bodyOf({ requireMfa: false }, pricesOnly).requireMfa).toBe(true)
+    expect(bodyOf({ requireMfa: false }, { permissions: ['invoices.view'], grains: [] }).requireMfa).toBeUndefined()
   })
 
   it('who may change it', () => {

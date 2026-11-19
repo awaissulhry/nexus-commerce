@@ -334,6 +334,8 @@ import { events as alertRoutes } from '../alert-routes/events'
 import { events as productionBrand } from '../production-brand/events'
 // B-SA-041: a change of a work order an accepted change of its sales order proposed (proposed, applied, declined, stale).
 import { events as orderApply } from '../order-apply/events'
+// B-CP-017: the customer's own prices of an order changed (sales_order.brand_price_changed).
+import { events as brandPrices } from '../brand-prices/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -731,6 +733,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productionBrand,
   // B-SA-041
   ...orderApply,
+  // B-CP-017
+  ...brandPrices,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

@@ -21,6 +21,8 @@ import { indexNewTenants } from '../../platform/search/indexing'
 import { admin, announce, ok, pdf, person, putBytes, QUIET, startWorld, stepped, type Person, type World } from '../testing/world'
 import { everyHandler, searchIndexers, settler } from '../daily/testing/day'
 import { addressesOf, asBrand, BRAND_ALPHA, BRAND_BETA, findMarkers, mailText, markersOf, setUpBrand, viaBrandLink, type BrandInWorld, type Marker, type Seen } from './testing/two-brands'
+// B-CP-080: Brand Alpha's own team and the scan of its draft order.
+import { addBrandPerson, BRAND_ALPHA_TEAM, teamMarkers } from './testing/two-brands'
 
 /**
  * B-TH-002 — THE BRAND-WALL HARNESS (threads plan TH-0, §0; Owner rule 2026-11-16: "One brand must not be able to see anything
@@ -32,6 +34,11 @@ import { addressesOf, asBrand, BRAND_ALPHA, BRAND_BETA, findMarkers, mailText, m
  *       address, portal opened, each brand's admin signed in (./testing/two-brands.ts). Brand Alpha writes in its order's thread,
  *       gets its tech pack on the portal and by mail, sends a reorder request; Brand Beta gets a quote, accepts it by link into
  *       an order, writes in its thread, and the office shares its order with Beta's contact by link (brand B's link session).
+ *   B04 (B-CP-080, customer page plan C5–C7) Brand Alpha's draft order: its Designer starts it (a described line, a made-to-measure
+ *       line whose riders are in a measurement sheet, a logo) and asks its factory designer once; the office reads it read-only
+ *       before Send; its Buyer adds Your price and sends it; the office maps it by the line map (a quote: made to measure comes
+ *       first as a quote; the logo carried, the sheet kept on the request); a second draft becomes an order and the customer's
+ *       prices land on it by the map (no price key sent).
  *   T02 every GET route whose manifest audiences include `partner` or `link` — found BY AUDIENCE in the app's route registry,
  *       never by path prefix, so every later route is in the sweep by itself — called as Brand Beta with Brand Alpha's ids
  *       (partner routes with Beta's portal session, link routes with Beta's link session): each answers "not found" (or another
@@ -108,6 +115,8 @@ async function alphaIds(): Promise<Record<string, string[]>> {
     requestId: [
       ...(await ids(`SELECT id::text AS id FROM "ApprovalRequest" WHERE "partyId" = $1 ORDER BY id LIMIT 4`)),
       ...(await ids(`SELECT id::text AS id FROM "PortalOrderRequest" WHERE "partyId" = $1 ORDER BY id LIMIT 4`)),
+      // B-CP-080: Brand Alpha's draft orders of B04 (a quote's, an order's) are swept too.
+      ...[G.alphaDraft?.id, G.alphaOrderDraft?.id].filter((entry): entry is string => typeof entry === 'string'),
     ],
     fileId: await ids(
       `SELECT id::text AS id FROM "StoredFile" WHERE "partyId" = $1 OR ("recordType" = 'SalesOrder' AND "recordId" = ANY($2::uuid[])) ORDER BY "partyId" NULLS LAST, id LIMIT 10`,
@@ -286,7 +295,10 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     await ok(P.manager, 'POST', `/product/styles/${style.id}/revisions`, { changeNote: 'First revision of the Brand Beta city jacket' }, 201)
     // A draft quote of Beta's (its own reference); the office keeps it to cost.
     let { quote } = await ok(P.sales, 'POST', '/sales/quotes', { companyId: companyA(), partyId: P3(), customerRef: BRAND_BETA.customerRef, promiseDate: addDays(today(), 60) }, 201)
-    ;({ quote } = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: style.id, colourwayId: style.colourways[0].id, sizes: [{ size: '52', quantity: 4 }], unitPrice: '80' }, 201))
+    // B-CP-011 (the money wall): the line's typed price is the Owner's; Sales may not send it (403).
+    const priced = (version: number) => ({ version, styleId: style.id, colourwayId: style.colourways[0].id, sizes: [{ size: '52', quantity: 4 }], unitPrice: '80' })
+    await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, priced(quote.version), 403)
+    ;({ quote } = await ok(P.owner, 'POST', `/sales/quotes/${quote.id}/lines`, priced(quote.version), 201))
     G.betaQuote = quote
     // Beta's size chart on its quote, shared with Beta's portal and links; the quote shared with Beta's contact by link (a
     // tenant-wide style is shared on its quote or order).
@@ -313,6 +325,133 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     expect(JSON.stringify(await ok(P.sales, 'GET', `/sales/quotes?partyId=${P3()}`))).toContain(BRAND_BETA.customerRef)
     expect(JSON.stringify(await ok(P.sales, 'GET', '/sales/orders'))).toContain('SEED-SO-0001')
   })
+
+  // ---- B-CP-080 (customer page plan C5–C7, D3, D10–D12; review E3; walls W-CP-1, W-CP-5, W-CP-7, M-CP-1, M-CP-2): the draft order --
+  it('B04 Brand Alpha’s draft order: its Designer starts it (a described line, a made-to-measure line whose people are in a sheet, a logo) and asks its factory designer once; the office reads it read-only; the Buyer adds Your price and sends it; the office maps it (a quote: made to measure comes first as a quote); a second draft becomes an order and the customer’s prices carry over by the line map', async () => {
+    const draftWords = 'Alpha team jackets AX-300 with the yellow piping on the collar'
+    // The factory designer of Brand Alpha: an office person who reads and writes Alpha's threads, named on "Who looks after".
+    G.factoryDesigner = await person(w, 'gioDesigner', 'sales')
+    const slot = (await ok(P.sales, 'GET', `/partners/${P1()}/factory-designer`)).factoryDesigner
+    const named = (await ok(P.sales, 'PUT', `/partners/${P1()}/factory-designer`, { designerId: G.factoryDesigner.id, backupId: null, version: slot.version })).factoryDesigner
+    expect(named.designer).toMatchObject({ id: G.factoryDesigner.id, state: 'OK' })
+    G.factoryDesignerName = named.designer.name
+    // Brand Alpha's own team: its Designer (drafts without prices) and its Buyer (sends them), invited and signed in by code.
+    const designer = await addBrandPerson(w, P.sales, alpha, BRAND_ALPHA_TEAM.designer, { roleKey: 'customer-designer', capabilities: ['comment', 'upload'] }, companyA())
+    const buyer = await addBrandPerson(w, P.sales, alpha, BRAND_ALPHA_TEAM.buyer, { roleKey: 'customer-buyer', capabilities: ['comment', 'upload'] }, companyA())
+    // W-CP-5: the one name each brand may ask — Alpha's designer for Alpha, none for Beta (never Alpha's).
+    expect(await asBrand(designer, seen, 'GET', '/portal/factory-designer')).toEqual({ name: G.factoryDesignerName })
+    expect(await asBrand(beta, seen, 'GET', '/portal/factory-designer')).toEqual({ name: null })
+
+    // The Designer starts the draft: a described line, a made-to-measure line, the riders' measurement sheet on it, a logo.
+    let draft = (await asBrand(designer, seen, 'POST', '/portal/order-requests', { customerRef: 'ALPHA-PO-0043' }, 201)).request
+    const url = `/portal/order-requests/${draft.id}`
+    draft = (await asBrand(designer, seen, 'POST', `${url}/custom-lines`, { version: draft.version, line: { kind: 'DESCRIBED', description: draftWords, quantity: 4 } })).request
+    draft = (await asBrand(designer, seen, 'POST', `${url}/custom-lines`, { version: draft.version, line: { kind: 'MADE_TO_MEASURE', garmentType: 'JACKET', description: 'Alpha race suits AX-310' } })).request
+    const [described, tailored] = draft.customLines as Json[]
+    const draftFile = async (who: BrandInWorld, part: 'LOGO' | 'SHEET', name: string, lineId?: string): Promise<string> => {
+      const body = pdf(name)
+      const announced = await asBrand(who, seen, 'POST', `${url}/files`, { part, ...announce(name, body), ...(lineId ? { lineId } : {}) }, 201)
+      await putBytes(w, announced, body)
+      expect((await asBrand(who, seen, 'POST', `${url}/files/${announced.file.id}/complete`)).file.status).toBe('AVAILABLE')
+      return announced.file.id as string
+    }
+    G.alphaSheet = await draftFile(designer, 'SHEET', 'Brand Alpha rider measures AX-310.pdf', tailored!.id)
+    G.alphaLogo = await draftFile(designer, 'LOGO', 'Brand Alpha logo AX-300.pdf')
+    draft = (await asBrand(designer, seen, 'GET', url)).request
+    expect(draft.customLines.find((line: Json) => line.id === tailored!.id)).toMatchObject({ people: [], peopleInSheet: true, problems: [] })
+    expect(draft.files).toMatchObject({ logos: [expect.objectContaining({ id: G.alphaLogo })], sheets: [expect.objectContaining({ id: G.alphaSheet, lineId: tailored!.id })] })
+    // M-CP-2: the Designer reads no price and sends none; it never sends the draft (its Buyer does).
+    expect(JSON.stringify(draft)).not.toMatch(/"(brandUnitPrice|unitPriceShown|priceNow|amount|net)":/)
+    await asBrand(designer, seen, 'PUT', `${url}/custom-lines/${described!.id}`, { version: draft.version, brandUnitPrice: '95' }, 403)
+    await asBrand(designer, seen, 'POST', `${url}/send`, { version: draft.version }, 403)
+    // The Designer asks its factory designer once, in the draft's own thread (an office-only note that mentions the designer).
+    const asked = await asBrand(designer, seen, 'POST', `/portal/threads/PortalOrderRequest/${draft.id}/messages`, { body: 'Can our factory designer check the yellow piping of AX-300?', askFactoryDesigner: true }, 201)
+    expect(asked.designerAsk).toMatchObject({ asked: true, name: G.factoryDesignerName })
+    expect((await admin<{ n: number }>(w, `SELECT count(*)::int AS n FROM "MessageMention" WHERE "recordType" = 'PortalOrderRequest' AND "recordId" = $1 AND "userId" = $2`, [draft.id, G.factoryDesigner.id]))[0]!.n).toBe(1)
+    await settle()
+
+    // D10: the office reads the draft read-only before Send (Sales holds no price: no value, part 6 not counted); it decides nothing.
+    const drafts = (await ok(P.sales, 'GET', `/sales/order-requests?status=DRAFT&partyId=${P1()}`)).requests as Json[]
+    const row = drafts.find((entry) => entry.id === draft.id)!
+    expect(row.draft).toMatchObject({ startedBy: BRAND_ALPHA_TEAM.designer.name, title: draftWords, readiness: { of: 6 }, files: { logos: [expect.objectContaining({ id: G.alphaLogo })] } })
+    expect(row.draft).not.toHaveProperty('draftValueAmount')
+    const record = await ok(P.sales, 'GET', `/sales/order-requests/${draft.id}`)
+    expect(record.request).toMatchObject({ status: 'DRAFT', acceptMap: { lineIds: [described!.id, tailored!.id] } })
+    expect((await ok(P.sales, 'POST', `/sales/order-requests/${draft.id}/accept`, { version: record.request.version, as: 'QUOTE' }, 409)).error.message).toBe("This is still the customer's draft: it is decided once they send it.")
+    // W-CP-1: Brand Beta finds none of it.
+    await asBrand(beta, seen, 'GET', url, undefined, 404)
+
+    // The Buyer adds Your price to the described line and sends the draft (the sheet stands for the riders: "People: in the attached sheet").
+    draft = (await asBrand(buyer, seen, 'PUT', `${url}/custom-lines/${described!.id}`, { version: draft.version, brandUnitPrice: '95' })).request
+    expect(draft.customLines.find((line: Json) => line.id === described!.id).brandUnitPrice).toBe('95.00')
+    const sent = (await asBrand(buyer, seen, 'POST', `${url}/send`, { version: draft.version })).request
+    expect(sent).toMatchObject({ status: 'SENT', number: expect.stringMatching(/^RQ-\d{4}$/) })
+    G.alphaDraft = sent
+    await settle()
+
+    // The office maps it: a made-to-measure line is a quote first (no order while made-to-measure has not started).
+    const style = (await admin<{ id: string }>(w, `SELECT id::text AS id FROM "Style" WHERE "tenantId" = $1 AND code = 'SEED-JKT-02'`, [w.tenant.id]))[0]!.id
+    const colour = async (code: string) => (await admin<{ id: string }>(w, `SELECT id::text AS id FROM "Colourway" WHERE "styleId" = $1 AND code = $2`, [style, code]))[0]!.id
+    const [black, red] = [await colour('BLK'), await colour('RED')]
+    const office = await ok(P.sales, 'GET', `/sales/order-requests/${sent.id}`)
+    expect(office.request.acceptMap.orderHeld).toMatch(/made to measure: accept the request as a quote/)
+    const map = [
+      { lineId: described!.id, into: [{ styleId: style, colourwayId: black, sizes: [{ size: '50', quantity: 2 }] }, { styleId: style, colourwayId: red, sizes: [{ size: '52', quantity: 2 }] }] },
+      { lineId: tailored!.id, into: [{ styleId: style, colourwayId: black, sizes: [{ size: '52', quantity: 1 }] }] },
+    ]
+    await ok(P.sales, 'POST', `/sales/order-requests/${sent.id}/accept`, { version: office.request.version, as: 'ORDER', map }, 409)
+    const quoted = await ok(P.sales, 'POST', `/sales/order-requests/${sent.id}/accept`, { version: office.request.version, as: 'QUOTE', map })
+    expect(quoted.made).toMatchObject({ as: 'QUOTE', salesOrderId: null })
+    expect(quoted.made.lines.map((entry: Json) => [entry.requestLineId, entry.into.length])).toEqual([[described!.id, 2], [tailored!.id, 1]])
+    // The logo is carried onto the quote (shared with Alpha only); the riders' sheet stays on the request (body data).
+    const copies = await admin<{ recordType: string; recordId: string; partyId: string | null; sourceFileId: string }>(w, `SELECT "recordType", "recordId"::text AS "recordId", "partyId"::text AS "partyId", "sourceFileId"::text AS "sourceFileId" FROM "StoredFile" WHERE "sourceFileId" = ANY($1::uuid[])`, [[G.alphaLogo, G.alphaSheet]])
+    expect(copies).toEqual([{ recordType: 'Quote', recordId: quoted.made.quoteId, partyId: P1(), sourceFileId: G.alphaLogo }])
+    G.alphaQuote = quoted.made.quoteId
+    await settle()
+
+    // A second draft of the Buyer's (a catalogue line and a described one, both with Your price) becomes an ORDER by the map; the
+    // customer's prices land on the order in the same command — a Sales worker without prices accepts it, no price key sent.
+    let second = (await asBrand(buyer, seen, 'POST', '/portal/order-requests', { customerRef: 'ALPHA-PO-0044' }, 201)).request
+    const secondUrl = `/portal/order-requests/${second.id}`
+    second = (await asBrand(buyer, seen, 'POST', `${secondUrl}/lines`, { version: second.version, lines: [{ styleId: style, colourwayId: black, sizes: [{ size: '50', quantity: 2 }], brandUnitPrice: '400' }] })).request
+    second = (await asBrand(buyer, seen, 'POST', `${secondUrl}/custom-lines`, { version: second.version, line: { kind: 'DESCRIBED', description: 'Alpha rain covers AX-320 in black and red', quantity: 3, brandUnitPrice: '390' } })).request
+    const rainCovers = second.customLines[0].id as string
+    second = (await asBrand(buyer, seen, 'POST', `${secondUrl}/send`, { version: second.version })).request
+    const secondOffice = await ok(P.sales, 'GET', `/sales/order-requests/${second.id}`)
+    const ordered = await ok(P.sales, 'POST', `/sales/order-requests/${second.id}/accept`, {
+      version: secondOffice.request.version,
+      as: 'ORDER',
+      map: [{ lineId: rainCovers, into: [{ styleId: style, colourwayId: black, sizes: [{ size: '54', quantity: 1 }] }, { styleId: style, colourwayId: red, sizes: [{ size: '50', quantity: 2 }] }] }],
+    })
+    expect(ordered.made).toMatchObject({ as: 'ORDER', quoteId: null })
+    expect(ordered.made).not.toHaveProperty('brandPrices')
+    const orderId = ordered.made.salesOrderId as string
+    // By the map, never by place: the catalogue line's unit price; every line priced, so one total for the whole order
+    // (400.00 × 2 + 390.00 × 3); PORTAL, nobody of ours typed them.
+    const rows = await admin<{ line: string | null; unitPrice: string | null; netAmount: number | null; source: string; enteredById: string | null }>(
+      w,
+      `SELECT "salesOrderLineId"::text AS line, "unitPrice"::text AS "unitPrice", "netAmount", source::text AS source, "enteredById"::text AS "enteredById" FROM "OrderBrandPrice" WHERE "salesOrderId" = $1 ORDER BY "netAmount" NULLS FIRST`,
+      [orderId],
+    )
+    expect(rows).toEqual([
+      { line: ordered.made.lines[0].into[0].lineId, unitPrice: '400.000000', netAmount: null, source: 'PORTAL', enteredById: null },
+      { line: null, unitPrice: null, netAmount: 197_000, source: 'PORTAL', enteredById: null },
+    ])
+    // The Owner (prices) reads the check on the order: the customer's total beside ours.
+    const check = await ok(P.owner, 'GET', `/sales/orders/${orderId}/price-check`)
+    expect(check.total).toMatchObject({ brandPrice: 197_000 })
+    G.alphaOrderDraft = second
+    G.alphaDraftWords = [draftWords, 'Alpha race suits AX-310', 'Alpha rain covers AX-320 in black and red', 'Brand Alpha rider measures AX-310.pdf', 'Brand Alpha logo AX-300.pdf', 'ALPHA-PO-0043', 'ALPHA-PO-0044']
+    // W-CP-7: Alpha's own new reads, scanned for Beta at T00 — its drafts and files, its team, a project's people to add, its designer.
+    await asBrand(buyer, seen, 'GET', `/portal/order-requests/${G.alphaDraft.id}`)
+    await asBrand(alpha, seen, 'GET', '/portal/order-requests')
+    await asBrand(alpha, seen, 'GET', '/portal/colleagues')
+    const [project] = await admin<{ id: string }>(w, `SELECT id::text AS id FROM "Project" WHERE "partyId" = $1 ORDER BY id LIMIT 1`, [P1()])
+    if (project) await asBrand(alpha, seen, 'GET', `/portal/projects/${project.id}/people/choices`, undefined, null)
+    await asBrand(alpha, seen, 'GET', '/portal/factory-designer')
+    await settle()
+  })
+  // ---- end B-CP-080
 
   it('T02 every GET of the partner or link audience, found by audience in the route registry, called as Brand Beta with Brand Alpha’s ids: refused or empty of Brand Alpha', async () => {
     const ids = await alphaIds()
@@ -462,6 +601,11 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
 
   it('T00 the name scan: no answer, mail or link page Brand Beta got holds a name, code, number, file name, address or id of Brand Alpha — nor the other way round', async () => {
     const alphaMarkers: Marker[] = await markersOf(w, BRAND_ALPHA, P1())
+    // ---- B-CP-080 (W-CP-7): + Brand Alpha's team, its draft orders' words, files and references, and its factory designer's name
+    // (Brand Beta has none named: never Alpha's).
+    alphaMarkers.push(...teamMarkers(BRAND_ALPHA_TEAM), ...((G.alphaDraftWords ?? []) as string[]).map((text) => ({ label: 'draft order', text })))
+    if (G.factoryDesignerName) alphaMarkers.push({ label: 'factory designer name', text: G.factoryDesignerName as string })
+    // ---- end B-CP-080
     const betaMarkers: Marker[] = await markersOf(w, BRAND_BETA, P3())
     expect(alphaMarkers.length).toBeGreaterThan(20)
     expect(betaMarkers.length).toBeGreaterThan(10)

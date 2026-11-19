@@ -44,7 +44,9 @@ function grantsOf(role: string, without: readonly string[] = []): Grant[] {
   const permissions = [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)].filter((permission) => !without.includes(permission))
   return [{ permissions, companies: 'all', sites: 'all', parties: 'all' }]
 }
-const PEOPLE = { sales: newId(), noPrice: newId(), admin: newId() } as const
+// B-CP-011 (the money wall): the price list's PDF is the Owner's (was Sales'); the Sales template holds no price grain now,
+// so it is the reader refused for prices (was noPrice: sales without money.price).
+const PEOPLE = { owner: newId(), sales: newId(), admin: newId() } as const
 const SESSIONS: Record<string, SessionContext> = {}
 
 let h: Harness
@@ -81,7 +83,7 @@ beforeAll(async () => {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
     await module.seed({ db: h.database, namespace: NS })
   }
-  const roles: Record<keyof typeof PEOPLE, Grant[]> = { sales: grantsOf('sales'), noPrice: grantsOf('sales', ['money.price']), admin: grantsOf('admin') }
+  const roles: Record<keyof typeof PEOPLE, Grant[]> = { owner: grantsOf('owner'), sales: grantsOf('sales'), admin: grantsOf('admin') }
   for (const [person, grants] of Object.entries(roles)) {
     const id = PEOPLE[person as keyof typeof PEOPLE]
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [id, T, `w2b380-${person}-${run}@example.com`, `Made-up ${person}`])
@@ -115,9 +117,9 @@ afterAll(async () => {
 
 describe('the price list PDF kept for mail (XF6:01)', () => {
   it('none kept at first; keeping stores a PRICE_LIST document whose file is a file of the version', async () => {
-    expect((await ok('sales', 'GET', pdfUrl())).pdf).toMatchObject({ versionId: draftId, upToDate: null, needsCompany: false, pdfs: [] })
-    const kept = await ok('sales', 'POST', pdfUrl(), { language: 'en' })
-    expect(kept).toMatchObject({ made: true, version: 1, pdf: { upToDate: true, pdfs: [{ version: 1, language: 'en', companyId: COMPANY_A, createdBy: 'Made-up sales' }] } })
+    expect((await ok('owner', 'GET', pdfUrl())).pdf).toMatchObject({ versionId: draftId, upToDate: null, needsCompany: false, pdfs: [] })
+    const kept = await ok('owner', 'POST', pdfUrl(), { language: 'en' })
+    expect(kept).toMatchObject({ made: true, version: 1, pdf: { upToDate: true, pdfs: [{ version: 1, language: 'en', companyId: COMPANY_A, createdBy: 'Made-up owner' }] } })
     expect(kept.pdf.pdfs[0].number).toMatch(/^SEED-PL-P1 v2 · 1$/)
     const document = await one<Json>(`SELECT kind::text AS kind, "recordType", "recordId", "companyId", "siteId", "fileId" FROM "GeneratedDocument" WHERE id = $1`, [kept.pdf.pdfs[0].id])
     expect(document).toEqual({ kind: 'PRICE_LIST', recordType: 'PriceListVersion', recordId: draftId, companyId: COMPANY_A, siteId: null, fileId: kept.fileId })
@@ -128,19 +130,19 @@ describe('the price list PDF kept for mail (XF6:01)', () => {
   })
 
   it('the same contents give the newest back; a changed draft is no longer up to date and keeps version 2', async () => {
-    const again = await ok('sales', 'POST', pdfUrl(), { language: 'en' })
+    const again = await ok('owner', 'POST', pdfUrl(), { language: 'en' })
     expect(again).toMatchObject({ made: false, version: 1 })
     // Another language is another PDF.
-    expect(await ok('sales', 'POST', pdfUrl(), { language: 'it' })).toMatchObject({ made: true, version: 2 })
+    expect(await ok('owner', 'POST', pdfUrl(), { language: 'it' })).toMatchObject({ made: true, version: 2 })
     const draft = await one<{ version: number }>(`SELECT version FROM "PriceListVersion" WHERE id = $1`, [draftId])
-    await ok('sales', 'PUT', `/sales/price-lists/${listId}/versions/${draftId}/size-surcharges`, { version: draft.version, surcharges: [{ styleId: null, size: '58', amount: '25', pct: null }] })
-    expect((await ok('sales', 'GET', pdfUrl())).pdf).toMatchObject({ upToDate: false, pdfs: [{ version: 2 }, { version: 1 }] })
-    expect(await ok('sales', 'POST', pdfUrl(), { language: 'it' })).toMatchObject({ made: true, version: 3, pdf: { upToDate: true } })
+    await ok('owner', 'PUT', `/sales/price-lists/${listId}/versions/${draftId}/size-surcharges`, { version: draft.version, surcharges: [{ styleId: null, size: '58', amount: '25', pct: null }] })
+    expect((await ok('owner', 'GET', pdfUrl())).pdf).toMatchObject({ upToDate: false, pdfs: [{ version: 2 }, { version: 1 }] })
+    expect(await ok('owner', 'POST', pdfUrl(), { language: 'it' })).toMatchObject({ made: true, version: 3, pdf: { upToDate: true } })
     expect(await admin(`SELECT version FROM "GeneratedDocument" WHERE "recordId" = $1 AND kind = 'PRICE_LIST' ORDER BY version`, [draftId])).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }])
   })
 
   it("the mail to a customer attaches a copy of that same file, on the customer's thread (the FAKE mail account)", async () => {
-    const sent = await ok('sales', 'POST', `${pdfUrl()}/send`, { partyId: p1, to: ['buyer.list@example.com'], language: 'it' }, 201)
+    const sent = await ok('owner', 'POST', `${pdfUrl()}/send`, { partyId: p1, to: ['buyer.list@example.com'], language: 'it' }, 201)
     expect(sent).toMatchObject({ version: 3, made: false })
     const kept = await one<{ fileId: string }>(`SELECT "fileId" FROM "GeneratedDocument" WHERE "recordId" = $1 AND kind = 'PRICE_LIST' AND version = 3`, [draftId])
     expect(sent.fileId).toBe(kept.fileId)
@@ -154,12 +156,15 @@ describe('the price list PDF kept for mail (XF6:01)', () => {
   })
 
   it('refused in words: no price grain, no right to change it, no address, an incomplete letterhead', async () => {
-    expect((await no('noPrice', 'GET', pdfUrl(), undefined, 403)).message).toBe("A price list's PDF holds its prices: your role does not see prices.")
+    // B-CP-011: the Sales role is the one without the price grain now: no PDF, read, kept or sent.
+    expect((await no('sales', 'GET', pdfUrl(), undefined, 403)).message).toBe("A price list's PDF holds its prices: your role does not see prices.")
+    await no('sales', 'POST', pdfUrl(), { language: 'en' }, 403)
+    await no('sales', 'POST', `${pdfUrl()}/send`, { partyId: p1, to: ['buyer.list@example.com'], language: 'it' }, 403)
     await no('admin', 'POST', pdfUrl(), {}, 403)
-    await no('sales', 'POST', `${pdfUrl()}/send`, { partyId: p1, to: ['non-un-indirizzo'] }, 400)
-    expect((await no('sales', 'POST', `${pdfUrl()}/send`, { partyId: COMPANY_A, to: ['buyer.list@example.com'] }, 400)).message).toBe('Not a customer of yours.')
+    await no('owner', 'POST', `${pdfUrl()}/send`, { partyId: p1, to: ['non-un-indirizzo'] }, 400)
+    expect((await no('owner', 'POST', `${pdfUrl()}/send`, { partyId: COMPANY_A, to: ['buyer.list@example.com'] }, 400)).message).toBe('Not a customer of yours.')
     await admin(`UPDATE "Company" SET "reaNumber" = NULL WHERE id = $1`, [COMPANY_A])
-    const refused = await no('sales', 'POST', pdfUrl(), { language: 'en' }, 409)
+    const refused = await no('owner', 'POST', pdfUrl(), { language: 'en' }, 409)
     expect(refused.message).toMatch(/REA|register/i)
     await admin(`UPDATE "Company" SET "reaNumber" = '0000001' WHERE id = $1`, [COMPANY_A])
   })

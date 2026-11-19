@@ -101,6 +101,18 @@ const AGREED = brandRequest(4, {
   standing: words('The customer said yes to our counter-offer: accept to carry it out', 'Il cliente ha detto sì alla nostra controproposta: accetta per eseguirla'),
   may: { accept: true, refuse: false, counter: false, counterWithPrice: false },
 })
+// ── F-CP-160 (the money wall, B-CP-026): the customer said yes to a counter-offer that carries a fee (`priced`, never the amount
+// for a reader without the price grain): accepting it carries the price out, so a price holder accepts it.
+const { fee: _noFee, ...AGREED_COUNTER } = AGREED.counter!
+const PRICED_AGREED = brandRequest(41, {
+  ...AGREED,
+  id: id(41),
+  orderId: id(141),
+  orderNumber: 'SO-DEMO-0141',
+  counter: { ...AGREED_COUNTER, approvalRequestId: id(741), priced: true, offer: words('Our counter-offer · 15 Dec · a price applies', 'La nostra controproposta · 15 dic · si applica un costo') },
+})
+const NO_PRICE_GRAINS = { ...depthModel().grains, price: false, cost: false, margin: false }
+// ── end F-CP-160 ──
 /** A cancel batch of 6 orders (one customer, one kind): five wait, one was withdrawn meanwhile. */
 const BATCH_ROWS: BrandRequest[] = [11, 12, 13, 14, 15, 16].map((n, index) =>
   brandRequest(n, {
@@ -164,7 +176,8 @@ const batch = (overrides: Partial<BatchReview> = {}): BatchReview => ({
   ...overrides,
 })
 const open = (id: string) => ({ view: 'waiting' as const, kind: null, q: '', changed: false, open: id })
-const LINES = batchLinesOf(BATCH_ROWS, 'accept')
+// F-CP-160: the design reader holds the price grain (finance).
+const LINES = batchLinesOf(BATCH_ROWS, 'accept', true)
 
 // ---- F-SA-241 / F-SA-242: the apply plan of a change (Brand Alpha asks M 40 → 36, L 20 → 24 while 38 M are cut) ----
 const CHANGE = brandRequest(5, {
@@ -243,6 +256,10 @@ export const REQUEST_CASES: readonly { id: string; label: string; model: InboxVi
   { id: 'f-pr-08-rush-words', label: 'F-PR-08 · the words the customer reads, with their preview', model: inbox({ controls: open(RUSH.id), requestReview: one(RUSH, { words: 'We cannot make 10 December; 15 December is possible.' }) }) },
   { id: 'f-pr-08-cancel', label: 'F-PR-08 · a cancel (Sales answers it): what is fixed and its fee for a price reader', model: inbox({ controls: open(CANCEL.id), requestReview: one(CANCEL) }), note: 'Line 2 · the whole line 40 → 0; already cut: a price applies; the fee € 360.00 only with the price grain.' },
   { id: 'f-pr-08-agreed', label: 'F-PR-08 · the customer said yes to our counter-offer: Accept carries it out', model: inbox({ controls: open(AGREED.id), requestReview: one(AGREED) }), note: 'Refuse and Suggest something else are held with the reason; their words and the name they signed show.' },
+  // ── F-CP-160 (the money wall) ──
+  { id: 'cp160-priced-agreed-sales', label: 'As Sales worker · the customer agreed a counter-offer with a fee: Accept held in words', model: inbox({ grains: NO_PRICE_GRAINS, controls: open(PRICED_AGREED.id), requestReview: one(PRICED_AGREED) }), note: '"It changes a price you cannot see: someone who sees prices does it." — said once in the window and on Accept; no amount anywhere.' },
+  { id: 'cp160-priced-agreed-owner', label: 'As the Owner · the same priced counter-offer: Accept carries it out', model: inbox({ controls: open(PRICED_AGREED.id), requestReview: one(PRICED_AGREED) }) },
+  { id: 'cp160-agreed-date-sales', label: 'As Sales worker · a counter-offer of a date only: Accept as before', model: inbox({ grains: NO_PRICE_GRAINS, controls: open(AGREED.id), requestReview: one(AGREED) }) },
   { id: 'f-pr-08-team', label: 'F-PR-08 · a reader whose team does not answer this kind (held with words)', model: inbox({ controls: open(CANCEL.id), requestReview: one({ ...CANCEL, may: { accept: false, refuse: false, counter: false, counterWithPrice: false } }) }), note: 'Sales answers changes, cancels and ship what is ready: every answer is held and says so.' },
   { id: 'f-pr-08-counter', label: 'F-PR-08 · Suggest something else: a date, a fee, our words', model: inbox({ controls: open(RUSH.id), requestReview: one(RUSH, { dialog: { kind: 'counter', busy: false, problem: null } }) }) },
   { id: 'f-pr-08-refused', label: 'F-PR-08 · an answer refused by the API, in our words', model: inbox({ controls: open(HOLD.id), requestReview: one(HOLD, { problem: 'customerRequest.refusal.NO_WORK' }) }) },

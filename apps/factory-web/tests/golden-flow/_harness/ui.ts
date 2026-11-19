@@ -105,18 +105,26 @@ export function byApi(what: string): void {
  * fx-12 (the customer page that reloaded itself, 2026-11-19): what a page asks over `ms` after `action` (its arrival) — the main
  * frame's navigations, the documents it loads and the Next router's own requests (`rsc: 1`: navigations, prefetches, refreshes,
  * connectivity checks). A page at rest asks a handful; a loop asks hundreds.
+ * op-fx4 (F-OP-218): `writes` = the navigations to another address than the one before (the page's own history writes). Next 16's
+ * app router echoes each `history.replaceState` / `pushState` of a page with one of its own to the SAME address (its HistoryUpdater
+ * stores the router's tree in the entry's state, node_modules/next/dist/client/components/app-router.js): one pick of the dock's
+ * scope is one write and two navigations.
  */
-export async function routerActivity(page: Page, ms: number, action: () => Promise<unknown>): Promise<{ navigations: number; documents: number; router: number; mostOneAddress: number; lines: string[] }> {
+export async function routerActivity(page: Page, ms: number, action: () => Promise<unknown>): Promise<{ navigations: number; writes: number; documents: number; router: number; mostOneAddress: number; lines: string[] }> {
   // fx-13: `mostOneAddress` = the most times ONE address (method + path + query) was asked by the router. A loop asks the same
   // address again and again; a production build (`next start`) prefetches each visible link once, so the total alone is no sign.
-  const seen = { navigations: 0, documents: 0, router: 0, mostOneAddress: 0, lines: [] as string[] }
+  const seen = { navigations: 0, writes: 0, documents: 0, router: 0, mostOneAddress: 0, lines: [] as string[] }
   const perAddress = new Map<string, number>()
   const started = Date.now()
+  let address = page.mainFrame().url()
   const note = (what: string) => seen.lines.length < 40 && seen.lines.push(`${((Date.now() - started) / 1000).toFixed(2)} ${what}`)
   const onNavigated = (frame: import('@playwright/test').Frame) => {
     if (frame !== page.mainFrame()) return
     seen.navigations += 1
-    note(`navigated ${new URL(frame.url()).search}`)
+    const now = frame.url()
+    if (now !== address) seen.writes += 1
+    note(`navigated ${new URL(now).search}${now === address ? ' (same address)' : ''}`)
+    address = now
   }
   const onRequest = (request: import('@playwright/test').Request) => {
     if (request.resourceType() === 'document') {

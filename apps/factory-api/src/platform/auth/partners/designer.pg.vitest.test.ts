@@ -78,7 +78,7 @@ async function portalSignIn(email: string): Promise<Browser> {
 const setStatus = (userId: string, status: 'ACTIVE' | 'SUSPENDED') => h.db.admin.query('UPDATE "User" SET status = $2::"UserStatus" WHERE id = $1', [userId, status])
 
 beforeAll(async () => {
-  h = await startHarness('partners_designer_cp078')
+  h = await startHarness('partners_cp078')
   h.clock.set(new Date())
   usePortalOptions({ answerFloorMs: 0 })
   tenant = await addTenant(h, SLUG, 1)

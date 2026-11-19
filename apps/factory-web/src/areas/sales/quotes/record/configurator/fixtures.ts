@@ -8,6 +8,9 @@ import { ConfiguratorView, type ConfiguratorModel } from './view/ConfiguratorVie
  * "Options" section and the order line's "Options" dialog), made-up data only: a touring jacket DEMO-JKT-05 in black for a
  * made-up brand, with a liner (+60.00), perforation (front +5 %, full +40.00 — full excludes the liner), a name on the chest
  * (+15.00, a typed text) and the armour (one, standard by default; without it the jacket is outside its certificate, -25.00).
+ *
+ * F-CP-160 (the money wall, B-CP-026): as a Sales worker (no price grain) a save whose options move what the line adds is the
+ * price holder's: the API refuses it in words, the picks stay, and Save waits in the same words for that choice.
  */
 
 const w = (it: string, en: string) => ({ it, en })
@@ -154,6 +157,9 @@ const model = (extra: Partial<ConfiguratorModel> = {}): ConfiguratorModel => ({
 })
 
 const blockedDraft: DraftPick[] = [...draftOf(DEMO_LINE.chosen).filter((pick) => pick.groupId !== G.perf), { valueId: V.full, groupId: G.perf, text: '', byDefault: false, colourId: null, itemId: null, itemColourId: null }]
+// F-CP-160: a Sales worker's grains and check (every money key dropped by the API).
+const NO_PRICE = { price: false, cost: false, margin: false }
+const NO_PRICE_PREVIEW: CheckAnswer = { ok: true, blocks: [], warnings: [], outsideCertificate: false, certificateNotes: [], chosen: [], pricing: { repriced: true, held: null, manualKept: false }, problem: null }
 const orderLine: LineConfigurator = { ...DEMO_LINE, document: { ...DEMO_LINE.document, kind: 'ORDER', number: 'SO-2026-0031', status: 'CONFIRMED', revision: null }, artwork: [{ ...DEMO_LINE.artwork[0]!, from: 'QUOTE_LINE' }] }
 
 export const designScreen = defineDesignScreen<ConfiguratorModel>({
@@ -185,6 +191,9 @@ export const designScreen = defineDesignScreen<ConfiguratorModel>({
     { id: 'quote-done', label: 'Quote line · saved and priced again', model: model({ notice: { tone: 'success', words: { key: 'save.doneRepriced' } } }) },
     { id: 'quote-sent', label: 'Quote line · a sent version: read only, with the reason', model: model({ line: { ...DEMO_LINE, may: { configure: false, artwork: false, held: w('Il preventivo non è una bozza: le opzioni cambiano solo in bozza (fai una nuova versione).', 'The quote is not a draft: options change only while it is a draft (make a new version).') } }, saveHeld: { words: w('Il preventivo non è una bozza.', 'The quote is not a draft.') } }) },
     { id: 'quote-no-price', label: 'Quote line · a role without prices', model: model({ grains: { price: false, cost: false, margin: false } }) },
+    // ── F-CP-160 (the money wall) ──
+    { id: 'quote-sales-blind', label: 'As Sales worker · quote line: options that move the price — Save held in words', model: model({ grains: NO_PRICE, draft: withoutLiner, changed: true, preview: { status: 'ready', value: NO_PRICE_PREVIEW }, saveHeld: { key: 'moneyWall.blindPrice' }, notice: { tone: 'warning', words: { key: 'moneyWall.blindPrice' } } }), note: '"It changes a price you cannot see: someone who sees prices does it." No surcharge, price or margin shown; the picks stay; another choice tries again.' },
+    { id: 'order-sales-blind', label: 'As Sales worker · order line: options that move what it adds — Save held in words', model: model({ mode: 'ORDER', line: orderLine, style: orderLine, grains: NO_PRICE, draft: draftOf(orderLine.chosen).filter((pick) => pick.valueId !== V.liner), changed: true, preview: { status: 'ready', value: NO_PRICE_PREVIEW }, saveHeld: { key: 'moneyWall.blindPrice' }, notice: { tone: 'warning', words: { key: 'moneyWall.blindPrice' } } }), note: 'Keeping the accepted price would give the surcharge away: a price holder saves it.' },
     { id: 'artwork-uploading', label: 'Artwork · a file being sent, one refused', model: model({ artwork: { uploading: ['back-print.png'], problem: { key: 'artwork.problem.type' } } }) },
     { id: 'order-change', label: 'Order line · options that add more than accepted: keep the price or amend', model: model({ mode: 'ORDER', line: orderLine, style: orderLine, draft: draftOf(orderLine.chosen).filter((pick) => pick.valueId !== V.liner), changed: true, saveHeld: { key: 'save.held.keepPrice' }, preview: { status: 'ready', value: preview({}, { repriced: false, change: '-60', unitPrice: '470', before: '470' }) } }) },
     { id: 'order-frozen', label: 'Order line · work orders made: options frozen', model: model({ mode: 'ORDER', line: { ...orderLine, may: { configure: false, artwork: true, held: w("Gli ordini di lavoro di questa riga sono già fatti con le sue opzioni: cambiale con una modifica dell'ordine e rifai gli ordini di lavoro.", 'Work orders already make this line with its options: change them through an order change and make the work orders again.') } }, style: orderLine }) },

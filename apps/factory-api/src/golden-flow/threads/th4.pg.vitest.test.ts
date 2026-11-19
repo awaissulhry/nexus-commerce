@@ -83,9 +83,9 @@ const ordersOf = async (partyId: string) => new Set((await admin<{ id: string }>
 const exportJobs = async () => (await admin<{ n: number }>(w, 'SELECT count(*)::int AS n FROM "ExportJob" WHERE "tenantId" = $1', [w.tenant.id]))[0]!.n
 const query = (filter: Record<string, string>) => new URLSearchParams(filter).toString()
 
-/** Every row a door's filter opens (one page of the list holds them all). */
-async function opened(filter: Record<string, string>): Promise<Json[]> {
-  const answer = await ok(P.sales, 'GET', `/sales/orders?limit=200&${query(filter)}`)
+/** Every row a door's filter opens (one page of the list holds them all), as `who` reads it (the sales office by default). */
+async function opened(filter: Record<string, string>, who: Person = P.sales): Promise<Json[]> {
+  const answer = await ok(who, 'GET', `/sales/orders?limit=200&${query(filter)}`)
   expect(answer.nextCursor, `one page holds every row of ${query(filter)}`).toBeNull()
   return answer.orders as Json[]
 }
@@ -98,7 +98,8 @@ async function expectDoorsExact(figures: Json, label: string): Promise<void> {
       expect(door.count, `${label} ${name}: a door without a filter counts nothing`).toBe(0)
       return
     }
-    expect(measure(await opened(door.filter)), `${label} ${name}`).toBe(door.count)
+    // B-CP-011 (the money wall): the doors of the totals are read by the Owner (their net is money).
+    expect(measure(await opened(door.filter, P.owner)), `${label} ${name}`).toBe(door.count)
   }
   await check('orders', figures.orders, (rows) => rows.length)
   await check('pieces.ordered', figures.pieces.ordered, (rows) => sum(rows, 'units'))
@@ -109,7 +110,7 @@ async function expectDoorsExact(figures: Json, label: string): Promise<void> {
   for (const state of ['NONE', 'PART', 'ALL']) await check(`invoiced.${state}`, figures.invoiced[state], (rows) => rows.length)
   for (const entry of (figures.net ?? []) as Json[]) {
     if (entry.filter === null) continue
-    const rows = await opened(entry.filter)
+    const rows = await opened(entry.filter, P.owner)
     expect(new Set(rows.map((row) => row.currency)), `${label} net ${entry.currency}: its rows are of its currency`).toEqual(new Set(rows.length > 0 ? [entry.currency] : []))
     expect(sum(rows, 'netAmount'), `${label} net ${entry.currency}`).toBe(entry.amount)
   }
@@ -219,14 +220,17 @@ describe('B-TH-064 golden flow TH-4: the customer sheet — a column for one cus
     expect(ordered.order).toMatchObject({ status: 'CONFIRMED' })
     G.orderA = ordered.order
     const style = await newStyle('TH4-BETA-01', 'Made-up Beta team jacket', P3())
-    const theirs = await ok(P.sales, 'POST', '/sales/orders/manual', {
+    // B-CP-011 (the money wall): A's order above takes the customer's price list (Sales); B's typed price is the Owner's (Sales: 403).
+    const theirsBody = {
       companyId: companyA(),
       partyId: P3(),
       customerRef: BRAND_BETA.customerRef,
       promiseDate: addDays(today(), 50),
       depositPct: null,
       lines: [{ styleId: style.id, colourwayId: style.colourways[0].id, unitPrice: '80', sizes: [{ size: '52', quantity: 4 }] }],
-    }, 201)
+    }
+    await ok(P.sales, 'POST', '/sales/orders/manual', theirsBody, 403)
+    const theirs = await ok(P.owner, 'POST', '/sales/orders/manual', theirsBody, 201)
     G.orderB = theirs.order
     await settle()
   })
@@ -283,7 +287,10 @@ describe('B-TH-064 golden flow TH-4: the customer sheet — a column for one cus
   })
 
   it('OV the overall view grouped by customer: every total of A’s and B’s group opens exactly the rows it counts', async () => {
-    const view = await ok(P.sales, 'GET', '/sales/orders/summary?group=party')
+    // B-CP-011 (the money wall): the totals with their net are read by the Owner; Sales reads the same groups without any net.
+    const salesView = await ok(P.sales, 'GET', '/sales/orders/summary?group=party')
+    for (const group of salesView.groups as Json[]) expect('net' in group.figures).toBe(false)
+    const view = await ok(P.owner, 'GET', '/sales/orders/summary?group=party')
     expect(view.limited).toBe(false)
     const groupOf = (partyId: string) => (view.groups as Json[]).find((group) => group.partyId === partyId)
     expect(groupOf(P1())).toMatchObject({ code: BRAND_ALPHA.code })
@@ -295,7 +302,7 @@ describe('B-TH-064 golden flow TH-4: the customer sheet — a column for one cus
     }
     expect(groupOf(P3())!.figures.pieces.ordered.count).toBe(4)
     // The totals of A's column alone: A's group only, and its door opens A's order.
-    const column = await ok(P.sales, 'GET', `/sales/orders/summary?group=party&${query({ cf: `${COLUMN.alpha.code}:*` })}`)
+    const column = await ok(P.owner, 'GET', `/sales/orders/summary?group=party&${query({ cf: `${COLUMN.alpha.code}:*` })}`)
     expect((column.groups as Json[]).map((group) => group.partyId)).toEqual([P1()])
     expect(column.all.orders.count).toBe(1)
     expect(column.groups[0].figures.orders.filter).toMatchObject({ cf: `${COLUMN.alpha.code}:*`, partyId: P1() })

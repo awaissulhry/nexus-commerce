@@ -229,7 +229,7 @@
     },
     "held": {
       "reading": "The access is still being read.",
-      "noManage": "Only finance gives, changes or ends accountant access.",
+      "noManage": "Only finance changes or ends accountant access.",
       "noFirm": "Add the accounting firm with the Consultant role first.",
       "left": "This access has ended already.",
       "expired": "The invitation expired: give access again.",
@@ -304,5 +304,10 @@
       "count_other": "{count} downloads",
       "empty": "Nothing downloaded yet"
     }
+  },
+  "moneyWall": {
+    "ownerGives": "Only the Owner gives a role that sees prices.",
+    "ownerLater": "Only the Owner moves the end of access later: you can bring it earlier or end it now.",
+    "changeEarlier": "The accountant sees our prices: only the Owner moves the end later. You can bring it earlier."
   }
 }

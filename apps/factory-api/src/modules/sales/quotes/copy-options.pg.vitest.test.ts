@@ -87,6 +87,9 @@ async function refused(session: string, method: Method, url: string, payload: un
   return response.json().error
 }
 const q = (quoteId: string, lineId: string) => `/sales/quotes/${quoteId}/lines/${lineId}`
+// B-CP-011 (the money wall): the seller (Sales) works the lines and their options but sees no price: the prices are read as the Owner.
+const ownerQuoteLines = async (quoteId: string): Promise<Json[]> => (await ok('owner', 'GET', `/sales/quotes/${quoteId}`)).quote.lines
+const ownerOrderLines = async (orderId: string): Promise<Json[]> => (await ok('owner', 'GET', `/sales/orders/${orderId}`)).order.lines
 const codesOf = async (table: 'QuoteLineOption' | 'SalesOrderLineOption', lineId: string) =>
   (await admin<{ code: string }>(`SELECT v.code FROM "${table}" o JOIN "OptionValue" v ON v.id = o."valueId" WHERE o."lineId" = $1 ORDER BY v.code`, [lineId])).map((row) => row.code)
 const rowsOf = async (table: 'QuoteLineOption' | 'SalesOrderLineOption', lineId: string) =>
@@ -143,7 +146,8 @@ describe('what a chosen value of a group takes (XF3:05)', () => {
     const [leather] = await admin<{ id: string; colour: string }>(`SELECT i.id, c.id AS colour FROM "Item" i JOIN "ItemColour" c ON c."itemId" = i.id WHERE i.code = 'SEED-LEA-100' AND c.code = 'RED' AND i."tenantId" = $1`, [tenant])
     const [red] = await admin<{ id: string }>(`SELECT id FROM "Colour" WHERE code = 'SEED-RED' AND "tenantId" = $1`, [tenant])
     let quote = (await ok('seller', 'GET', `/sales/quotes/${quoteId}`)).quote
-    quote = (await ok('seller', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.perfFront, itemId: leather!.id, itemColourId: leather!.colour }, { valueId: options.valueIds.name, text: 'ROSSI' }, { valueId: options.valueIds.linerYes }] })).quote
+    // B-CP-026 (Owner answer A, strict): an options save that may move the line's price is a price holder's (the owner here).
+    quote = (await ok('owner', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.perfFront, itemId: leather!.id, itemColourId: leather!.colour }, { valueId: options.valueIds.name, text: 'ROSSI' }, { valueId: options.valueIds.linerYes }] })).quote
     takes = await ok('keeper', 'GET', `/product/option-groups/${perf}/takes`)
     expect(takes).toMatchObject({ picking: { colours: 0, materials: 1 }, may: { change: true, held: null } })
     // COLOUR while a chosen option picks a material: 409 in words, nothing changed.
@@ -176,15 +180,19 @@ describe('the options travel with every copy (XF3:01)', () => {
     quote = (await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }] }, 201)).quote
     const sourceLine = quote.lines[0].id
     // Liner +60 and front perforation +5 % of the list's 420 (21): priced through the waterfall to 501.
-    quote = (await ok('seller', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] })).quote
-    expect(quote.lines[0].unitPrice).toBe('501')
+    // B-CP-026 (Owner answer A, strict): the options move the price: the seller is held in words; the Owner configures the line.
+    expect((await refused('seller', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] }, 403)).issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    quote = (await ok('owner', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] })).quote
+    // B-CP-011: the seller's read holds no price; the Owner reads 501.
+    expect((await ok('seller', 'GET', `/sales/quotes/${quote.id}`)).quote.lines[0]).not.toHaveProperty('unitPrice')
+    expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('501')
     const source = await rowsOf('QuoteLineOption', sourceLine)
     // Today the front perforation costs more: the copy keeps the 21 it was sold with (its price, 501, holds them).
     await admin(`UPDATE "OptionEffect" SET "pricePct" = 10 WHERE "valueId" = $1 AND kind = 'PRICE'`, [options.valueIds.perfFront])
     try {
       const made = await ok('seller', 'POST', `/sales/quotes/${quote.id}/duplicate`, {}, 201)
       const line = made.quote.lines[0]
-      expect(line.unitPrice).toBe('501')
+      expect((await ownerQuoteLines(made.quote.id))[0].unitPrice).toBe('501') // B-CP-011: read as the Owner
       const copied = await rowsOf('QuoteLineOption', line.id)
       expect(copied.map((row) => [row.code, num(row.surchargeAmount)])).toEqual(source.map((row) => [row.code, num(row.surchargeAmount)]))
       expect(copied.map((row) => [row.code, num(row.surchargeAmount)])).toEqual([['FRONT', 21], ['YES', 60]])
@@ -200,14 +208,17 @@ describe('the options travel with every copy (XF3:01)', () => {
     let quote = (await ok('seller', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     quote = (await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }] }, 201)).quote
     const lineId = quote.lines[0].id
-    quote = (await ok('seller', 'PUT', `${q(quote.id, lineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
-    expect(quote.lines[0].unitPrice).toBe('480')
+    // B-CP-026: the liner moves the price: the Owner configures it (the seller is held in words).
+    quote = (await ok('owner', 'PUT', `${q(quote.id, lineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
+    expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
     // W1's typed price drops the waterfall: the line is at its list again (420), the liner frozen beside it.
-    quote = (await ok('seller', 'PATCH', `${q(quote.id, lineId)}`, { version: quote.version, unitPrice: '420' })).quote
+    // B-CP-011: the typed price is the Owner's (a Sales worker's is refused).
+    await refused('seller', 'PATCH', `${q(quote.id, lineId)}`, { version: quote.version, unitPrice: '420' }, 403)
+    quote = (await ok('owner', 'PATCH', `${q(quote.id, lineId)}`, { version: quote.version, unitPrice: '420' })).quote
     const made = await ok('seller', 'POST', `/sales/quotes/${quote.id}/duplicate`, {}, 201)
-    expect(made.quote.lines[0].unitPrice).toBe('480')
+    expect((await ownerQuoteLines(made.quote.id))[0].unitPrice).toBe('480')
     expect(await codesOf('QuoteLineOption', made.quote.lines[0].id)).toEqual(['YES'])
-    const steps = (await ok('seller', 'GET', `/sales/quotes/${made.quote.id}/pricing`)).lines[0].steps.map((step: Json) => step.kind)
+    const steps = (await ok('owner', 'GET', `/sales/quotes/${made.quote.id}/pricing`)).lines[0].steps.map((step: Json) => step.kind)
     expect(steps).toContain('OPTION')
     // The liner is no longer offered on JKT-01: the copy keeps the line and says its options were left out.
     await admin(`UPDATE "StyleOptionGroup" SET status = 'ARCHIVED' WHERE "styleId" = $1 AND "groupId" = $2`, [jkt01, options.groupIds.liner])
@@ -226,7 +237,7 @@ describe('the options travel with every copy (XF3:01)', () => {
     expect(source.map((row) => row.code)).toEqual(['YES'])
     const made = await ok('seller', 'POST', `/sales/orders/${order.id}/copy-as-quote`, {}, 201)
     const line = made.quote.lines[0]
-    expect(line.unitPrice).toBe('480')
+    expect((await ownerQuoteLines(made.quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
     expect((await rowsOf('QuoteLineOption', line.id)).map((row) => [row.code, num(row.surchargeAmount)])).toEqual([['YES', 60]])
   })
 
@@ -239,7 +250,7 @@ describe('the options travel with every copy (XF3:01)', () => {
     const pasted = await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines/paste`, { version: quote.version, text })
     quote = pasted.quote
     expect(await codesOf('QuoteLineOption', quote.lines[0].id)).toEqual(['YES'])
-    expect(quote.lines[0].unitPrice).toBe('480')
+    expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
     // The same line again: its pieces change, its options stay as they are (said).
     const again = await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines/paste`, { version: quote.version, text: 'Style\tColourway\tOpzioni\t54\nSEED-JKT-01\tBLK\tYES\t1' })
     expect(again.rows[0]).toMatchObject({ action: 'CHANGE', options: 0 })
@@ -257,12 +268,14 @@ describe("a typed order line and an amendment's new line take options (XF3:02)",
   const body = (extra: Json = {}) => ({ companyId: companyA, partyId: P1, lines: [{ styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 1 }], options: [{ valueId: options.valueIds.linerYes }] }], ...extra })
 
   it('New order: the preview prices the options in, Confirm writes them on the line; a refused combination is said by path', async () => {
-    const preview = await ok('seller', 'POST', '/sales/orders/manual/preview', body())
+    // B-CP-011: the preview's prices are the Owner's to read; the seller's preview shows none.
+    const preview = await ok('owner', 'POST', '/sales/orders/manual/preview', body())
     expect(preview.ok, JSON.stringify(preview.problems)).toBe(true)
     expect(preview.order.lines[0]).toMatchObject({ unitPrice: '480', optionsAdd: '60' })
+    expect((await ok('seller', 'POST', '/sales/orders/manual/preview', body())).order.lines[0]).not.toHaveProperty('unitPrice')
     const made = await ok('seller', 'POST', '/sales/orders/manual', body(), 201)
     const line = made.order.lines[0]
-    expect(line.unitPrice).toBe('480')
+    expect((await ownerOrderLines(made.order.id)).find((entry) => entry.id === line.id)!.unitPrice).toBe('480')
     expect((await rowsOf('SalesOrderLineOption', line.id)).map((row) => [row.code, num(row.surchargeAmount)])).toEqual([['YES', 60]])
     const [event] = await admin<Json>(`SELECT payload FROM "OutboxEvent" WHERE type = 'sales_order.options_changed' AND subject = $1`, [made.order.id])
     expect(event!.payload).toMatchObject({ change: 'CHOSEN', lineIds: [line.id] })
@@ -286,8 +299,8 @@ describe("a typed order line and an amendment's new line take options (XF3:02)",
     expect(preview.ok, JSON.stringify(preview.problems)).toBe(true)
     const applied = await ok('seller', 'POST', `/sales/orders/${order.id}/amendments`, { version: order.version, reason: 'Second colour', lines }, 201)
     const added = applied.order.lines.find((line: Json) => line.colourwayId === RED)
-    // RED's list price (430) and the liner (+60).
-    expect(added.unitPrice).toBe('490')
+    // RED's list price (430) and the liner (+60). B-CP-011: read as the Owner.
+    expect((await ownerOrderLines(order.id)).find((entry) => entry.id === added.id)!.unitPrice).toBe('490')
     expect(await codesOf('SalesOrderLineOption', added.id)).toEqual(['YES'])
     const [audit] = await admin<Json>(`SELECT after FROM "AuditLog" WHERE action = 'orders.amend' AND "recordId" = $1 ORDER BY at DESC LIMIT 1`, [order.id])
     expect(audit!.after.options[0]).toMatchObject({ lineId: added.id })

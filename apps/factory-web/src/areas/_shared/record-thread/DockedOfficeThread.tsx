@@ -38,6 +38,9 @@ import { CloseThreadConfirm } from '../../../lib/record-thread/popups/view/Confi
 import { FileViewer, POPUPS_NS } from '../../../lib/record-thread/popups/view/FileViewer'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { downloadLink, requestUpload, completeUpload, setThreadStatus } from '../../../record-panels/api'
+import { setFilePriced } from '../../../record-panels/api' // F-CP-144: Mark as priced
+import { pricedRefusalKey } from '../../../lib/record-thread/files/model' // F-CP-144
+import { refusalCode } from './state' // F-CP-144
 import { useApprovals } from '../../../record-panels/approvals/use-approvals'
 import { takesApprovals } from '../../../record-panels/approvals/model'
 import { AskDialog } from '../../../record-panels/approvals/view/AskDialog'
@@ -466,6 +469,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           floorSiteId: ask.audience === 'FLOOR' ? (host.record.siteId ?? null) : null,
           partyId: ask.audience === 'PARTNER' ? partyId : null,
           ...(ask.sheet ? { measurementSheet: true } : {}), // B-TH-283
+          ...(ask.priced ? { priced: true } : {}), // F-CP-144: "This file shows prices"
         })
         await putToStore(announced.upload, new Blob([bytes], { type: contentType }))
         await completeUpload(api, announced.file.id)
@@ -479,6 +483,24 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     setFilesBusy(false)
     void base.loadFiles()
   }
+
+  // ---- F-CP-144 (B-CP-014): Mark as priced / take the mark off, at the file's version; the list is read again (a reader without prices
+  // who marks it sees it locked from now on); a refusal in words (only a price holder takes it off; changed meanwhile).
+  const markPriced = async (fileId: string, priced: boolean) => {
+    const file = base.files.find((one) => one.id === fileId)
+    if (!file) return
+    setFilesBusy(true)
+    try {
+      await setFilePriced(api, fileId, { priced, version: file.version })
+      base.notify({ ns: 'record-files', key: priced ? 'priced.marked' : 'priced.unmarked', tone: 'success' })
+    } catch (error) {
+      base.notify({ ns: 'record-files', key: pricedRefusalKey(isApiError(error) ? error.kind : null, refusalCode(error)), tone: 'danger' })
+    } finally {
+      setFilesBusy(false)
+      void base.loadFiles()
+    }
+  }
+  // ---- end F-CP-144
 
   const bulk = async (action: BulkAction, ids: readonly string[]) => {
     const chosen = threadFiles.filter((file) => ids.includes(file.id))
@@ -1071,7 +1093,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             party: party && partyId ? { id: partyId, role, name: party.name } : null,
             files: lineFiles,
             problem: can.readFiles ? null : 'forbidden',
-            can: { upload: can.upload, share: can.share, delete: held.has('files.delete') },
+            can: { upload: can.upload, share: can.share, delete: held.has('files.delete'), mark: can.readFiles /* F-CP-144 */ },
             uploadHeld: !can.upload ? tv('upload.noRight') : null,
             selected,
             refused,
@@ -1105,6 +1127,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             onDismissRefused: () => setRefused([]),
             // B-TH-231: one row's file, or the chosen ones.
             onUseOn: (ids) => openUseOn(ids),
+            onPriced: (fileId, priced) => void markPriced(fileId, priced), // F-CP-144
             // ---- F-SA-237: the order's files: its own open route, the bulk bar, its message in this thread ----
             ...(key.type === 'SalesOrder'
               ? {

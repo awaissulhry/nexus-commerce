@@ -229,7 +229,7 @@
     },
     "held": {
       "reading": "Gli accessi sono ancora in lettura.",
-      "noManage": "Solo l'amministrazione dà, cambia o termina l'accesso del commercialista.",
+      "noManage": "Solo l'amministrazione cambia o termina l'accesso del commercialista.",
       "noFirm": "Prima aggiungi lo studio contabile con il ruolo Consulente.",
       "left": "Questo accesso è già terminato.",
       "expired": "L'invito è scaduto: dai di nuovo l'accesso.",
@@ -304,5 +304,10 @@
       "count_other": "{count} download",
       "empty": "Ancora nessun download"
     }
+  },
+  "moneyWall": {
+    "ownerGives": "Solo il titolare dà un ruolo che vede i prezzi.",
+    "ownerLater": "Solo il titolare sposta più avanti la fine dell'accesso: tu puoi anticiparla o terminarlo ora.",
+    "changeEarlier": "Il commercialista vede i nostri prezzi: solo il titolare sposta la fine più avanti. Tu puoi anticiparla."
   }
 }

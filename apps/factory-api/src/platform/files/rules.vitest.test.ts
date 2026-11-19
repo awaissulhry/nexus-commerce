@@ -215,6 +215,8 @@ describe('the permissions (registry and role templates)', () => {
       safety_officer: ['files.read', 'files.upload'],
       company_doctor: ['files.read'],
       read_only: ['files.read'],
+      // B-CP-016: the Factory designer reads and sends the artwork (a priced file stays locked: no price grain).
+      designer: ['files.read', 'files.upload'],
     })
   })
 })

@@ -6,7 +6,7 @@ import { GRAINS } from '../../shared/model'
  * Change role (B-W2b-413 on B-W2b-404's API; PLT-031; design admin.roles "Every permission: custom roles: tick and untick,
  * then Save (EditModeBar → popup save-role)" and pop:save-role "ReviewChangesModal: adds · removes · grains · '4 people get
  * this at their next request'. Raising rights asks for a fresh code"), pure: the draft of a custom role's permissions and
- * money sight, why it cannot be changed, the body sent to review and save (a role that sees costs or margins asks for
+ * money sight, why it cannot be changed, the body sent to review and save (a role that sees prices, costs or margins asks for
  * two-factor: the body says so), the review as rows, and refusals in words (`admin-security-depth` `saveRole.*`).
  */
 
@@ -15,8 +15,11 @@ export interface RoleDraft {
   grains: Grain[]
 }
 
-/** Grains that make a role ask for two-factor (factory-domain roleProblems). */
-const TWO_FACTOR_GRAINS: readonly Grain[] = ['cost', 'margin']
+/** Grains that make a role ask for two-factor (factory-domain TWO_FACTOR_GRAINS; B-CP-011, Owner O6: prices too). */
+const TWO_FACTOR_GRAINS: readonly Grain[] = ['price', 'cost', 'margin']
+
+/** B-CP-011: the draft sees prices, costs or margins, so the role asks for two-factor. */
+export const asksTwoFactor = (grains: readonly Grain[]): boolean => grains.some((grain) => TWO_FACTOR_GRAINS.includes(grain))
 
 export const draftOf = (role: Pick<Role, 'permissions' | 'grains'>): RoleDraft => ({ permissions: [...role.permissions], grains: [...role.grains] })
 
@@ -58,9 +61,9 @@ export function editHeld(role: Pick<Role, 'system'> & { archivedAt?: string | nu
   return null
 }
 
-/** The body of the review and of the save: the draft, and two-factor asked when it now sees costs or margins. */
+/** The body of the review and of the save: the draft, and two-factor asked when it now sees prices, costs or margins. */
 export function bodyOf(role: Pick<Role, 'requireMfa'>, draft: RoleDraft): { permissions: string[]; grains: Grain[]; requireMfa?: boolean } {
-  const asks = !role.requireMfa && draft.grains.some((grain) => TWO_FACTOR_GRAINS.includes(grain))
+  const asks = !role.requireMfa && asksTwoFactor(draft.grains)
   return { permissions: [...draft.permissions].sort(), grains: [...draft.grains], ...(asks ? { requireMfa: true } : {}) }
 }
 

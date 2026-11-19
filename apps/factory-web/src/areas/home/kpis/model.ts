@@ -90,6 +90,8 @@ export const OFFICE_ROLE_KEYS = [
   'safety_officer',
   'company_doctor',
   'read_only',
+  // B-CP-016: the office role "Factory designer".
+  'designer',
 ] as const
 
 /** The owner role in words: a ready-made role by its key (the catalogue), a custom role by its own name. */
