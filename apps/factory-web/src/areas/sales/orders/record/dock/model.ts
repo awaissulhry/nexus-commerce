@@ -43,20 +43,13 @@ export function scopeParamOf(scope: OrderScope): string | null {
 }
 
 /**
- * The page's address with the scope set (a replace: Back keeps it, and the customer page may open a scope). The narrow view keeps a
- * value (`open` for this order's own), so the full-width conversation stays open while the person picks; a line of All of <customer>
- * opens its conversation at its message (`message=`), any other move drops it. Every other term kept.
+ * F-OP-209 (11-dock §4): the value the frame's ONE writer (`setThread`) gets for a scope — its own term, or for this order's own
+ * none (docked) or the narrow view's `open` (below 1280 px the full-width conversation stays open while the person picks). The
+ * address itself is the frame's (`rf/address.ts withThread`: every other term kept; a line of All of <customer> sets `message=`,
+ * any other move drops it).
  */
-export function scopeAddress(pathname: string, search: string, scope: OrderScope, narrow: boolean, messageId: string | null = null): string {
-  const query = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
-  const value = scopeParamOf(scope)
-  if (value) query.set(SCOPE_PARAM, value)
-  else if (narrow) query.set(SCOPE_PARAM, 'open')
-  else query.delete(SCOPE_PARAM)
-  if (messageId) query.set('message', messageId)
-  else query.delete('message')
-  const text = query.toString()
-  return `${pathname}${text ? `?${text}` : ''}`
+export function scopeValueOf(scope: OrderScope, narrow: boolean): string | null {
+  return scopeParamOf(scope) ?? (narrow ? 'open' : null)
 }
 
 /** What the reader may pick: the customer's conversations, the linked projects, the work orders of its wall. */

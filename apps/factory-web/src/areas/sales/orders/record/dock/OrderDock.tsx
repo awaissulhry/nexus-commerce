@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye, FolderKanban, Lock, ShoppingBag } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Select } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
@@ -18,7 +18,8 @@ import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-custo
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 import { messageHrefOf } from '../../../../_shared/record-thread/all-of-customer/model'
 import { useInProject } from '../../../../products/projects/record/linked/use-in-project'
-import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
+import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
+import { scopeValueOf } from './model' // F-OP-209
 
 /**
  * F-SA-262 (sales page plan N4; picks P9, P9', R4, R9; 10-order-page §6.1, §6.2; review C-13) — the order page's dock: ONE
@@ -59,8 +60,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   const api = useOfficeApi()
   const session = useOfficeSession()
   const frame = useRecordFrame()
-  const router = useRouter()
-  const pathname = usePathname()
+  const router = useRouter() // a line of another record opens its page (a push); the scope itself is the frame's (F-OP-209)
   const params = useSearchParams()
   const held = session.permissions
   const narrow = frame?.mode === 'stacked'
@@ -77,11 +77,9 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   if (scope.kind === 'project') last.current.project = scope.id
   if (scope.kind === 'wo') last.current.wo = scope.id
 
-  // A replace: Back keeps the scope; the narrow view stays open while the person picks.
-  const go = (next: OrderScope, messageId: string | null = null) => {
-    const address = scopeAddress(pathname, window.location.search, next, narrow, messageId)
-    if (address !== `${pathname}${window.location.search}`) router.replace(address, { scroll: false })
-  }
+  // F-OP-209: the frame's ONE writer of `thread=` (a history replace, only when the address changes: Back keeps the scope, a pick
+  // asks the server nothing); the narrow view stays open while the person picks. A dock is always inside its frame.
+  const go = (next: OrderScope, messageId: string | null = null) => frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })
 
   // ── F-SA-265: Discuss and Show in thread are about THIS order: the pick goes to its own conversation first (which reads the ask) ──
   const asking = frame?.discussAsk?.record.id === order.id || frame?.showAsk?.record.id === order.id

@@ -9,7 +9,9 @@ import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
 import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-SA-263
 import { designScreen } from './fixtures'
 // F-SA-262: the order dock's scope (the pick of ONE conversation)
-import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'
+import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'
+import { scopeValueOf } from './dock/model' // F-OP-209
+import { withThread } from '../../../_shared/record-frame/address' // F-OP-209
 import { viewOpenOf } from '../../../_shared/record-frame/model'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
@@ -359,13 +361,15 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
     expect(scopeParamOf({ kind: 'wo', id: W })).toBe(`wo:${W}`)
     expect(scopeParamOf({ kind: 'project', id: P })).toBe(`project:${P}`)
   })
+  // F-OP-209: the address is the frame's ONE writer's (rf/address.ts withThread); the dock gives it the scope's value.
   it('a replace keeps every other term; the narrow view stays open (`open` for this order); a line of All of opens at its message', () => {
     const base = '/w/DEMO/sales/orders/o1'
-    expect(scopeAddress(base, '?tab=lines', { kind: 'general' }, false)).toBe(`${base}?tab=lines&thread=general`)
-    expect(scopeAddress(base, '?tab=lines&thread=general', ORDER_SCOPE, false)).toBe(`${base}?tab=lines`)
-    expect(scopeAddress(base, '?tab=lines&thread=general', ORDER_SCOPE, true)).toBe(`${base}?tab=lines&thread=open`)
-    expect(scopeAddress(base, '?tab=lines&thread=all&message=m1', { kind: 'wo', id: W }, false)).toBe(`${base}?tab=lines&thread=wo%3A${W}`)
-    expect(scopeAddress(base, '?thread=all', ORDER_SCOPE, false, 'm7')).toBe(`${base}?message=m7`)
+    const at = (search: string, scope: Parameters<typeof scopeValueOf>[0], narrow: boolean, message: string | null = null) => withThread(`${base}${search}`, scopeValueOf(scope, narrow), { message })
+    expect(at('?tab=lines', { kind: 'general' }, false)).toBe(`${base}?tab=lines&thread=general`)
+    expect(at('?tab=lines&thread=general', ORDER_SCOPE, false)).toBe(`${base}?tab=lines`)
+    expect(at('?tab=lines&thread=general', ORDER_SCOPE, true)).toBe(`${base}?tab=lines&thread=open`)
+    expect(at('?tab=lines&thread=all&message=m1', { kind: 'wo', id: W }, false)).toBe(`${base}?tab=lines&thread=wo%3A${W}`)
+    expect(at('?thread=all', ORDER_SCOPE, false, 'm7')).toBe(`${base}?message=m7`)
   })
   it('the frame keeps the narrow view open while a scope is in the address (Back keeps the scope)', () => {
     expect(viewOpenOf('open')).toBe(true)
@@ -431,8 +435,9 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
     // All of <customer>: read only, "Write in: This order · General".
     expect(dock).toContain('<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />')
     expect(dock).toContain("t('record.dock.writeIn')")
-    // The scope is written by a replace (Back keeps it).
-    expect(dock).toContain('router.replace(address, { scroll: false })')
+    // F-OP-209: the scope is written by the frame's ONE writer (a history replace: Back keeps it; no router.replace).
+    expect(dock).toContain('frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })')
+    expect(dock).not.toContain('router.replace')
     const page = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
     expect(page).toContain('<OrderDock')
   })
