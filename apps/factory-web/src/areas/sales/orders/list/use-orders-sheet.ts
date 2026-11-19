@@ -555,11 +555,12 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   )
   const opened = newOrder !== null
   const openedCompany = newOrder?.companyId ?? ''
+  const openedLocked = !!newOrder?.partyLocked // F-CP-104: a held customer needs no customer search
   useEffect(() => {
     if (!opened) return
-    searchCustomers('', openedCompany)
+    if (!openedLocked) searchCustomers('', openedCompany)
     readNumber(openedCompany)
-  }, [opened, openedCompany, searchCustomers, readNumber])
+  }, [opened, openedCompany, openedLocked, searchCustomers, readNumber])
 
   // B-TH-244: the rows on screen (the grouped view's are its groups' reads).
   const shownItems = grouped ? groupedRows : list.items
