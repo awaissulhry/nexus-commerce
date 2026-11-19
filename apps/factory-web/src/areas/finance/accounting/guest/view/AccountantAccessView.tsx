@@ -12,7 +12,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { DialogFrame } from '../../../_shared/parts'
 import type { Download, Firm } from '../api'
-import { changeHeld, endHeld, inviteHeld, NS, rowHeld, STATUS_TONE, type AccountantRow, type InviteDraft } from '../model'
+import { changeHeld, changeSaveHeld, endHeld, inviteHeld, NS, rowHeld, STATUS_TONE, type AccountantRow, type InviteDraft } from '../model'
 import '../accountant-access.css'
 
 /**
@@ -21,6 +21,9 @@ import '../accountant-access.css'
  * its own guest portal — files only, read-only, until the day finance sets; every download recorded. Here: who has access
  * (the shared list frame: select-all, shift range, x / Space, "End access N"), Give access…, ⋯ Change the end…, End
  * access…, and the newest downloads. Every change asks a fresh authenticator code. No money here.
+ *
+ * F-CP-159 (the money wall): the accountant sees our prices, so "Give access…" and a later end are held in words for a
+ * reader who is not the Owner ("Only the Owner gives a role that sees prices."); an earlier end and End access stay.
  */
 
 export interface AccountantAccessModel {
@@ -31,6 +34,8 @@ export interface AccountantAccessModel {
   showLeft: boolean
   downloads: readonly Download[] | null
   may: boolean
+  /** F-CP-159: the reader is the Owner (gives access and moves its end later). */
+  owner: boolean
   selected: readonly string[]
   /** The act running (a row id or `invite`), or null. */
   busy: string | null
@@ -129,7 +134,7 @@ function AccessSection({ model, actions }: { model: AccountantAccessModel; actio
     [t, locale],
   )
 
-  const hold = inviteHeld(model.state === 'ready' ? { firms: model.firms, may: { manage: model.may } } : null)
+  const hold = inviteHeld(model.state === 'ready' ? { firms: model.firms, may: { manage: model.may } } : null, model.owner)
   const chosen = (model.rows ?? []).filter((row) => model.selected.includes(row.id))
   const endAllHeld = !model.may ? t('office.held.noManage') : chosen.length === 0 ? t('office.held.choose') : chosen.some((row) => endHeld(row, true)) ? t('office.held.someLeft') : model.busy ? t('office.held.busy') : null
   const state: ReactNode =
@@ -212,13 +217,15 @@ function AccessSection({ model, actions }: { model: AccountantAccessModel; actio
       {model.change ? (
         <DialogFrame
           title={t('office.change.title', { name: model.change.row.displayName })}
-          held={model.change.busy ? t('office.held.busy') : !model.change.until ? t('office.invite.problem.until') : model.change.until < model.change.today ? t('office.invite.problem.past') : null}
+          held={heldWords(changeSaveHeld(model.change, model.owner), t)}
           go={() => actions?.onSendChange?.()}
           goLabel={t('office.change.go')}
           onClose={() => actions?.onClose?.()}
           problem={model.change.problem ? { key: `${NS}:${model.change.problem}` } : null}
         >
           <p className="fw-acca-sub">{t('office.change.body')}</p>
+          {/* F-CP-159: a reader who is not the Owner brings the end earlier only; the line says so before the date is picked. */}
+          {!model.owner && model.change.row.accessUntil ? <p className="fw-acca-sub">{t('moneyWall.changeEarlier')}</p> : null}
           <Field label={t('office.invite.until')} required>
             <DateField value={model.change.until} min={model.change.today} locale={locale === 'it' ? 'it-IT' : 'en-GB'} ariaLabel={t('office.invite.until')} placeholder={t('office.invite.datePlaceholder')} clearLabel={t('office.invite.dateClear')} onChange={(value) => actions?.onChangeUntil?.(value ?? '')} />
           </Field>
@@ -253,6 +260,9 @@ function AccessSection({ model, actions }: { model: AccountantAccessModel; actio
     </section>
   )
 }
+
+// F-CP-159: a held key in words (Save the date: busy, no day, a past day, or a later end that only the Owner gives).
+const heldWords = (key: string | null, t: (key: string) => string): string | null => (key ? t(key) : null)
 
 function InviteDialog({ model, actions }: { model: AccountantAccessModel; actions?: AccountantAccessActions }) {
   const t = useT(NS)
