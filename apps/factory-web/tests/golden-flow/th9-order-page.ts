@@ -38,6 +38,7 @@ const APPROVALS = words('approvals')
 const DEPTH = words('warehouse-shipments-depth')
 const POPUPS = words('record-thread-popups')
 const PO = words('portal-orders')
+const SHIP = words('shipments')
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence's words before its first placeholder (the key's raw text). */
@@ -52,9 +53,8 @@ function maybe(ns: (key: string, params?: Record<string, string | number>) => st
 }
 const notHere = (description: string) => test.info().annotations.push({ type: 'not here', description })
 
-/** B-OP-047 deletes MULTI_ORDER_OFF: until then a second order on a shipment is held off in its words. */
+/** B-OP-047 deletes MULTI_ORDER_OFF: until then a second order on a shipment is held off in its words (Warehouse's `shipOrders.later`). */
 const N6_ON = !('MULTI_ORDER_OFF' in shipmentsDomain)
-const MULTI_ORDER_WORDS = 'Several orders in one shipment come with the next update.'
 
 /** The made-up words of this stage. */
 const PO_REF = `${BRAND_ALPHA.customerRef}-TH9`
@@ -102,7 +102,7 @@ async function yesInPlace(flow: Flow, desks: readonly Desk[], orderId: string): 
   throw new Error(`the yes of ${orderId} is held for every desk asked (${desks.map((desk) => desk.person.key).join(', ')})`)
 }
 
-/** The tracking dialog of a Shipments row: the number (and the typed link once the dialog asks one), saved or cleared. */
+/** The tracking dialog of a Shipments row: the number and its typed link (F-OP-135), saved or cleared. */
 async function typeTracking(page: Page, number: string, tracking: string | null, link: string | null): Promise<void> {
   const row = shipmentRow(page, number)
   await seen(row, 60_000)
@@ -110,9 +110,7 @@ async function typeTracking(page: Page, number: string, tracking: string | null,
   const box = dialog(page)
   await seen(box)
   await box.getByRole('textbox', { name: DEPTH('transport.trackingNumber') }).fill(tracking ?? '')
-  const linkLabel = maybe(OD, 'ship.trackLink')
-  if (link !== null && linkLabel) await box.getByRole('textbox', { name: startsWith(linkLabel) }).fill(link)
-  else if (link !== null) notHere('the typed link: the tracking dialog asks none yet (F-OP-135)')
+  if (link !== null) await box.getByRole('textbox', { name: DEPTH('transport.trackingLink') }).fill(link)
   await press(box.getByRole('button', { name: tracking === null ? DEPTH('transport.clearTracking') : DEPTH('transport.saveTracking'), exact: true }))
   await expect(box).toBeHidden({ timeout: 30_000 })
 }
@@ -273,80 +271,81 @@ export default defineStage({
       await typeTracking(page, typed.number, TRACKING[1], TRACK_LINK)
       await seen(shipmentRow(page, typed.number).getByText(TRACKING[1]), 60_000)
       await expect(shipmentRow(page, typed.number).getByText(TRACKING[0])).toHaveCount(0)
+      // The typed link beside the number: Track ›, the carrier's page in a new tab.
+      await expect(shipmentRow(page, typed.number).getByRole('link', { name: startsWith(lead(OD('ship.track'))) }).first()).toHaveAttribute('href', TRACK_LINK)
       await typeTracking(page, typed.number, null, null)
       await expect(shipmentRow(page, typed.number).getByText(TRACKING[1])).toHaveCount(0, { timeout: 60_000 })
       await flow.settle()
     })
 
     await flow.step('5 · a shipment made elsewhere: the dialog on SEED-SO-0002 — its released garments, the paper DDT, no Nexus DDT number, the live rules', async () => {
-      const title = maybe(OD, 'elsewhere.title')
-      if (!title) {
-        notHere('Record a shipment made elsewhere…: not on the order page yet (F-OP-123)')
-        return
-      }
       const warehouse = await flow.desk('warehouse')
       const { page } = warehouse
       await warehouse.go(`/sales/orders/${world.so2.id}?tab=shipments`)
-      const door = page.getByRole('button', { name: startsWith(lead(title)) }).first()
-      const menuItem = page.getByRole('menuitem', { name: startsWith(lead(title)) }).first()
-      if ((await door.count()) > 0) await press(door)
-      else {
-        await page.getByRole('button', { name: OD('record.more'), exact: true }).first().click()
-        await menuItem.click()
-      }
+      await press(page.getByRole('button', { name: OD('elsewhere.title'), exact: true }).first())
       const box = dialog(page)
       await seen(box.getByText(OD('elsewhere.noNexusDdt')), 60_000)
-      await box.getByRole('textbox', { name: startsWith(OD('elsewhere.ddtNumber')) }).fill(PAPER_DDT)
-      await flow.shot(page, 'elsewhere-dialog')
-      // The seeds date their releases in the story's days ahead: the live rule holds Record ("Not before the garments were
-      // released"), said under the fields. A world whose garments were released before today records it (B-OP-071 O4 does).
-      const before = lead(OD('elsewhere.beforeRelease'))
-      const record = box.getByRole('button', { name: startsWith(lead(title).replace(/…$/, '')) }).last()
-      if (await box.getByText(startsWith(before)).first().isVisible().catch(() => false)) {
-        notHere('the record itself: the seeds’ garments are released in the story’s days ahead (B-OP-071 O4 records one)')
-        await page.keyboard.press('Escape')
-      } else {
-        await answerOf(page, 'POST', /^\/shipping\/shipments\/elsewhere$/, () => press(record), /^201$/)
-        await seen(page.getByText(startsWith(lead(OD('ship.madeElsewhere')))).first(), 60_000)
-      }
-    })
-
-    await flow.step('6 · a combined shipment of two orders: before the switch held off in words; after it, SEED-SO-0003 added in place, "Also carries" on both; B’s orders never offered', async () => {
-      const warehouse = await flow.desk('warehouse')
-      const { page } = warehouse
-      await warehouse.go(`/sales/orders/${world.so3.id}?tab=shipments`)
-      const create = page.getByRole('button', { name: startsWith(OD('action.createShipment')) }).first()
-      await seen(create, 60_000)
-      await press(create)
-      const box = dialog(page)
-      await seen(box)
-      const addLabel = maybe(OD, 'ship.addOrders', { customer: BRAND_ALPHA.legalName })
-      if (!addLabel) {
-        notHere('"Add other open orders": the Create shipment dialog offers none yet (F-OP-121)')
+      await seen(box.getByText(OD('elsewhere.lines')).first())
+      // One garment of the black 52 (released, on no shipment), the paper DDT as printed.
+      const more = box.getByRole('button', { name: startsWith(lead(OD('elsewhere.plus'))) }).first()
+      if ((await more.count()) === 0) {
+        await seen(box.getByText(OD('elsewhere.noneReleased')))
+        notHere('the record: nothing of SEED-SO-0002 is released and on no shipment in this world')
         await page.keyboard.press('Escape')
         return
       }
-      await seen(box.getByText(addLabel), 60_000)
+      await more.click()
+      await box.getByRole('textbox', { name: startsWith(OD('elsewhere.ddtNumber')) }).fill(PAPER_DDT)
+      await flow.shot(page, 'elsewhere-dialog')
+      // The seeds date their releases in the story's days ahead: the live rule says so and holds Record ("Not before the garments
+      // were released"). A world whose garments were released before today records it (B-OP-071 O4 does, behind a hold too).
+      const record = box.getByRole('button', { name: startsWith(lead(OD('elsewhere.record_one'))) }).first()
+      const beforeRelease = box.getByText(startsWith(lead(OD('elsewhere.beforeRelease')))).first()
+      await expect(record).toBeVisible()
+      if (await beforeRelease.isVisible().catch(() => false)) {
+        await expect(record, 'held while the garments are released after the day it left').toBeDisabled()
+        notHere('the record itself: the seeds’ garments are released in the story’s days ahead (B-OP-071 O4 records one)')
+        await page.keyboard.press('Escape')
+        return
+      }
+      await answerOf(page, 'POST', /^\/shipping\/shipments\/elsewhere$/, () => press(record), /^201$/)
+      await seen(page.getByText(OD('elsewhere.chip', { ddt: PAPER_DDT })).first(), 60_000)
+      await flow.settle()
+    })
+
+    await flow.step('6 · a combined shipment of two orders: before the switch held off in words; after it, SEED-SO-0002 added in place, "Also carries" on both; B’s orders never offered', async () => {
+      const warehouse = await flow.desk('warehouse')
+      const { page } = warehouse
+      await warehouse.go(`/sales/orders/${world.so3.id}?tab=shipments`)
+      await press(page.getByRole('button', { name: OD('step.createShipment'), exact: true }).first())
+      const box = dialog(page)
+      const others = box.getByRole('group', { name: SHIP('new.together.add', { customer: BRAND_ALPHA.legalName }) })
+      await seen(others, 60_000)
       // Customer B's orders are never offered, before the switch or after it.
       for (const number of world.betaNumbers) await expect(box.getByText(number, { exact: true })).toHaveCount(0)
       await expectNothingOf(page, BRAND_BETA, world.betaNumbers, 'create shipment: the other orders offered')
-      const other = box.getByRole('checkbox', { name: new RegExp(escape(world.so2.number)) }).first()
+      const other = others.getByRole('checkbox', { name: new RegExp(escape(world.so2.number)) }).first()
+      await seen(other)
       if (!N6_ON) {
-        // Held off until B-OP-047: the other order is shown with the words, never ticked.
-        await seen(box.getByText(MULTI_ORDER_WORDS).first(), 60_000)
-        if ((await other.count()) > 0) await expect(other).toBeDisabled()
+        // Held off until B-OP-047: offered with its words, never ticked (aria-disabled: it keeps its focus).
+        await seen(others.getByText(DEPTH('shipOrders.later')).first())
+        await expect(other).toHaveAttribute('aria-disabled', 'true')
         await flow.shot(page, 'shared-held-off')
         await page.keyboard.press('Escape')
         return
       }
       await other.check()
-      const made = await answerOf(page, 'POST', /^\/shipping\/shipments$/, () => press(box.getByRole('button', { name: startsWith(OD('action.createShipment')) }).last()), /^201$/)
+      const next = box.getByRole('button', { name: SHIP('new.next'), exact: true })
+      if (await next.isVisible().catch(() => false)) await press(next)
+      const all = box.getByRole('button', { name: SHIP('new.all'), exact: true })
+      if (await all.isVisible().catch(() => false)) await all.click()
+      const made = await answerOf(page, 'POST', /^\/shipping\/shipments$/, () => press(box.getByRole('button', { name: startsWith(lead(SHIP('new.create_other'))) }).first()), /^201$/)
       const shipment = made.shipment as Json
       await flow.settle()
-      for (const orderId of [world.so3.id, world.so2.id]) {
+      for (const [orderId, otherNumber] of [[world.so3.id, world.so2.number], [world.so2.id, world.so3.number]] as const) {
         await warehouse.go(`/sales/orders/${orderId}?tab=shipments`)
         await seen(shipmentRow(page, shipment.number as string), 60_000)
-        await seen(shipmentRow(page, shipment.number as string).getByText(startsWith(lead(OD('ship.alsoCarries')))))
+        await seen(shipmentRow(page, shipment.number as string).getByText(OD('ship.alsoCarries', { number: otherNumber })))
       }
       await flow.shot(page, 'shared-on-both')
     })

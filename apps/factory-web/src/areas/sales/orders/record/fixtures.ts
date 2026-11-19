@@ -499,8 +499,6 @@ const LESS_RED = 'Il cliente toglie una rossa 52 e una 54.'
 const LESS_BLACK = 'Il cliente toglie una nera 50.'
 
 type ShipmentRow = Order['chain']['shipments'][number]
-/** The order read's fields a later step's view shows (B-OP-023 / B-OP-043 names: orders, origin, externalDdt; the typed link). */
-const readLater = (fields: Record<string, unknown>): {} => fields
 const OTHER_ORDER = { id: '0190f0e2-5151-7000-8000-000000000151', number: 'SO-2026-0151', customerRef: 'PO-ESEMPIO-151' }
 const THIS_ORDER = { id: ORDER_ID, number: 'SO-2026-0088', customerRef: 'PO-ESEMPIO-88' }
 const TYPED_ROW: ShipmentRow = {
@@ -512,12 +510,14 @@ const TYPED_ROW: ShipmentRow = {
   version: 3,
   transportBy: 'CARRIER',
   carrier: { code: 'BRT', name: 'BRT' },
-  tracking: { number: '0123456789', source: 'TYPED', parcels: [], live: false, ...readLater({ url: 'https://vas.brt.example.com/track?n=0123456789' }) },
+  tracking: { number: '0123456789', source: 'TYPED', parcels: [], live: false, url: 'https://vas.brt.example.com/track?n=0123456789' },
   expectedDeliveryAt: null,
   ddt: { number: '151/2026', date: '2026-11-18' },
   mayTypeTracking: { allowed: true, code: null, why: null },
   withheld: [],
-  ...readLater({ orders: [THIS_ORDER], origin: 'NEXUS', externalDdt: null }),
+  orders: [THIS_ORDER],
+  origin: 'NEXUS',
+  externalDdt: null,
 }
 const LABELLED_ROW: ShipmentRow = {
   ...TYPED_ROW,
@@ -528,7 +528,7 @@ const LABELLED_ROW: ShipmentRow = {
   ddt: { number: '152/2026', date: '2026-11-19' },
   mayTypeTracking: { allowed: false, code: 'LABELLED', why: null },
 }
-const SHARED_ROW: ShipmentRow = { ...TYPED_ROW, id: '0190f0e2-8181-7000-8000-000000000053', number: 'SH-2026-0053', tracking: null, ...readLater({ orders: [THIS_ORDER, OTHER_ORDER], origin: 'NEXUS', externalDdt: null }) }
+const SHARED_ROW: ShipmentRow = { ...TYPED_ROW, id: '0190f0e2-8181-7000-8000-000000000053', number: 'SH-2026-0053', tracking: null, orders: [THIS_ORDER, OTHER_ORDER] }
 const ELSEWHERE_ROW: ShipmentRow = {
   ...TYPED_ROW,
   id: '0190f0e2-8181-7000-8000-000000000054',
@@ -537,7 +537,8 @@ const ELSEWHERE_ROW: ShipmentRow = {
   tracking: null,
   ddt: null,
   mayTypeTracking: { allowed: true, code: null, why: null },
-  ...readLater({ orders: [THIS_ORDER], origin: 'ELSEWHERE', externalDdt: { number: '123/2026', date: '2026-11-17' } }),
+  origin: 'ELSEWHERE',
+  externalDdt: { number: '123/2026', date: '2026-11-17' },
 }
 const withShipments = (rows: ShipmentRow[]): Order => ({ ...shipped, chain: { ...shipped.chain, shipments: rows } })
 const F_OP_129: DesignCase<RecordCase>[] = [

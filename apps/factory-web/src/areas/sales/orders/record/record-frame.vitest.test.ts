@@ -725,8 +725,10 @@ describe('F-OP-129 — the order page at the end in the design screen: the strip
   })
 
   it('a shared shipment names the other order it carries; one made elsewhere names its paper DDT (F-OP-122, F-OP-123)', () => {
-    expect(textOf(draw('f-op-129-ship-shared'))).toContain('SO-2026-0151')
-    expect(textOf(draw('f-op-129-ship-elsewhere'))).toContain('123/2026')
+    expect(textOf(draw('f-op-129-ship-shared'))).toContain('Also carries SO-2026-0151')
+    expect(textOf(draw('f-op-129-ship-elsewhere'))).toContain('Made elsewhere · DDT 123/2026')
+    // The typed link beside the number (F-OP-135): Track ›, https only.
+    expect(draw('f-op-129-ship-tracking')).toContain('href="https://vas.brt.example.com/track?n=0123456789"')
   })
 })
 // ---- end F-OP-129
