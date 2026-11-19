@@ -137,6 +137,8 @@ export interface FrameFilesAsk {
   readonly files: readonly FrameFile[]
   readonly fileId: string
   readonly returnTo?: HTMLElement | null
+  /** F-OP-212: the thread whose viewer opens them (absent: the page's own record; the frame fills it in). */
+  readonly record?: FrameRecord | null
 }
 
 /**
@@ -204,8 +206,11 @@ export interface ShowInThreadAsk {
   readonly at: string
 }
 
-/** The frame's doors into the conversation (B-TH-262's approve, F-SA-265's followers). */
-export type FrameDoor = 'approve' | 'followers'
+/**
+ * The frame's doors into the conversation (B-TH-262's approve, F-SA-265's followers; F-OP-212, review N-1: `owner` — the door to
+ * choose who answers the customer, the thread's owner dialog, for the order's Overview "Answers the customer · Change…").
+ */
+export type FrameDoor = 'approve' | 'followers' | 'owner'
 
 /** The history step a change of the record is (the newest step within `withinMs` of it), or null: not in the conversation's history. */
 export function stepNearest(events: readonly { readonly id: string; readonly at: string }[], at: string, withinMs = 10 * 60_000): string | null {
@@ -233,3 +238,70 @@ export interface FrameAnswer {
 }
 // ---- end F-SA-244
 
+// ---- F-OP-212 (order page plan N4; 11-dock §5; review N-1, D5): every frame ask names its record. A page hands the frame its own
+// record (`RecordFrame record={{ type, id }}`: the order, the customer, the work order); the frame fills it into every ask that names
+// none (files, a door, compose); Discuss and Show already name one. A docked thread takes an ask only when it is for its own record,
+// so a file opened from the body while the dock shows All of <customer>, General or a work order's notes never opens in the wrong
+// thread (nor waits there to fire later): the host moves its pick to that record's thread first, keeping the view as it is, and that
+// thread takes it. A page that names no record of its own keeps today's rule (its one thread takes every ask).
+
+/** The record a frame ask is for (the thread it opens in). */
+export interface FrameRecord {
+  readonly type: string
+  readonly id: string
+}
+
+/** A door of the conversation the body opens, and the thread it is for (null: the page names no record — its one thread). */
+export interface FrameDoorAsk {
+  readonly door: FrameDoor
+  readonly record: FrameRecord | null
+}
+
+/**
+ * Answer / Reply in the thread (F-OP-103's "Reply in the thread", F-OP-207's Answer on a line of All of <customer>): the thread of
+ * `record` opens at `messageId` with the box focused — `reply` answers that message (the card's own Reply: the customer reads it),
+ * `note` is an office note.
+ */
+export interface ComposeAsk {
+  /** The thread to write in (absent: the page's own record; the frame fills it in). */
+  readonly record?: FrameRecord | null
+  /** The message the thread opens at (null: the box only). */
+  readonly messageId: string | null
+  readonly mode: 'reply' | 'note'
+}
+
+/** The same record (type and id). */
+export const sameRecord = (a: FrameRecord | null | undefined, b: FrameRecord | null | undefined): boolean => !!a && !!b && a.type === b.type && a.id === b.id
+
+/** An ask's record: the one it names, else the page's own; null where neither is known (a page without a record of its own). */
+export function askRecordOf(asked: FrameRecord | null | undefined, page: FrameRecord | null | undefined): FrameRecord | null {
+  const record = asked ?? page ?? null
+  return record ? { type: record.type, id: record.id } : null
+}
+
+/** Whether the thread of `key` takes an ask for `record`: only its own record's; an ask that names none (no page record): any thread. */
+export function takesAsk(record: FrameRecord | null | undefined, key: FrameRecord): boolean {
+  return !record || sameRecord(record, key)
+}
+
+/** The asks the frame holds for its thread (RecordFrameState's), each null when none waits. */
+export interface FrameAsks {
+  readonly composeAsk?: ComposeAsk | null
+  readonly discussAsk?: DiscussAsk | null
+  readonly showAsk?: ShowInThreadAsk | null
+  readonly filesAsk?: FrameFilesAsk | null
+  readonly door?: FrameDoorAsk | null
+}
+
+/**
+ * The ask waiting for a thread now, with its record (the host moves its pick to that record's thread first; the ask itself is the
+ * key of that move: once per ask). Null: none waits, or the one waiting names no record.
+ */
+export function pendingAskOf(asks: FrameAsks | null | undefined): { readonly ask: object; readonly record: FrameRecord } | null {
+  if (!asks) return null
+  for (const ask of [asks.composeAsk, asks.discussAsk, asks.showAsk, asks.filesAsk, asks.door]) {
+    if (ask?.record) return { ask, record: ask.record }
+  }
+  return null
+}
+// ---- end F-OP-212
