@@ -1,5 +1,9 @@
 import { ORDERING_LIMITS, type RequestStatus } from './rules'
 import type { Problem } from './rules' // B-CP-075: each problem's part of the checklist
+// B-CP-077: the accept's line map (a size run's shape, the order line's text limits).
+import type { Issue } from '../../core/errors'
+import { MAX_TEXT } from '../quotes/quotes'
+import { lineShapeProblems } from './rules'
 
 /**
  * The office's side of a portal order request (B-W2b-190, SAL-074 "portal orders arrive as requests"; design
@@ -128,3 +132,250 @@ export function problemsByPartOf(problems: readonly Pick<Problem, 'code' | 'pers
   return out
 }
 // ---- end B-CP-075
+
+// ---- B-CP-077 (customer page plan C5, 12 §9 B-CP-062; lead notes 1–2; review E3): accept a described or made-to-measure request ----
+/**
+ * A sent request may hold lines in the customer's own words (DESCRIBED, MADE_TO_MEASURE) beside catalogue lines. The office
+ * accepts it once each of those is MAPPED to the style line(s) it is made as (a style and colourway the company sells, its sizes,
+ * maybe a typed price): one line may become several ("20 team jackets, red and blue" → two lines). The accept keeps ONE map,
+ * request line → order (or quote) line(s), by id: catalogue lines 1 → 1 as they are, custom lines 1 → n as mapped — never by
+ * place (seq), since a request line's place is not an order line's.
+ *
+ *   held       a described or made-to-measure line not mapped yet (409, in words, naming its place); a made-to-measure line
+ *              accepted as an ORDER (409: while made-to-measure has not started — GATE-MTM — a made-to-measure request becomes
+ *              a QUOTE first, today's rule; its people stay on the request, read there, linked from the quote)
+ *   sizes      the ones the office names; else, for a line made into ONE style line, the request's own: its size rows, or the
+ *              sizes of its people when every person has one. People measured by a sheet or "sending later" have none yet:
+ *              the office names the sizes (400, in words). People are never mapped to measurement profiles here ("Saved
+ *              measurements" comes later), so nobody confirms measures in this step (the MTM rule "nobody confirms measures
+ *              they took" stays with the measurement review)
+ *   the note   each mapped line names where it came from in its note (the request, the line, the customer's words, how many
+ *              people — never their names: they stay on the request)
+ *
+ * Pure: apps/factory-api's modules/sales/portal-ordering/office.ts reads the facts and makes the order or quote from the plan.
+ */
+
+/** At most this many style lines one described or made-to-measure line is made into. */
+export const ACCEPT_MAP_LIMITS = Object.freeze({ into: 20, note: 1000 })
+
+/** The refusals and warnings of an accept, in the office's words (it names places, never another customer). */
+export const ACCEPT_WORDS = Object.freeze({
+  unmapped: (seqs: readonly number[]) =>
+    `${seqs.length === 1 ? `Line ${seqs[0]} is` : `Lines ${seqs.join(', ')} are`} described or made to measure, not from the catalogue: map ${seqs.length === 1 ? 'it' : 'them'} to a style before making an order or a quote.`,
+  madeToMeasureOrder: (seqs: readonly number[]) =>
+    `${seqs.length === 1 ? `Line ${seqs[0]} is` : `Lines ${seqs.join(', ')} are`} made to measure: accept the request as a quote. While made-to-measure has not started (GATE-MTM), a made-to-measure request becomes a quote first; its people stay on the request.`,
+  notALine: 'Not a line of this request.',
+  fromCatalogue: (seq: number) => `Line ${seq} is from the catalogue: it becomes a line as it is (map only described or made-to-measure lines).`,
+  mappedTwice: (seq: number) => `Line ${seq} is mapped twice: send it once.`,
+  priceOnMap: (seq: number) => `Line ${seq} is described or made to measure: type its price on the style line it is made into.`,
+  noInto: (seq: number) => `Name the style line ${seq} is made into.`,
+  tooMany: (seq: number) => `Line ${seq} is made into at most ${ACCEPT_MAP_LIMITS.into} style lines.`,
+  sizesOfEach: (seq: number) => `Name the sizes of each style line ${seq} is made into.`,
+  sizesOfPeople: (seq: number, without: number, people: number) => `Name the sizes for line ${seq}: ${without} of its ${people} people have no size yet (a measurement sheet, or sending later).`,
+  sizesInSheet: (seq: number) => `Name the sizes for line ${seq}: its people are in the measurement sheet on the request.`,
+  sizesOfTotal: (seq: number, total: number) => `Name the sizes for line ${seq}: it asks ${total} pieces in all, not yet by size.`,
+  pieces: (seq: number, asked: number, made: number, as: AcceptAs) => `Line ${seq} asked ${asked} pieces; the ${as === 'ORDER' ? 'order' : 'quote'} makes ${made}.`,
+})
+
+interface SizeRowLike {
+  readonly size: string
+  readonly quantity: number
+}
+
+/** A line of the request as the accept judges it. */
+export interface AcceptLineFacts {
+  readonly id: string
+  readonly seq: number
+  readonly kind: 'CATALOGUE' | 'DESCRIBED' | 'MADE_TO_MEASURE'
+  /** A catalogue line's style and colourway (a custom line's own style, if it names one, is only a hint). */
+  readonly styleId: string | null
+  readonly colourwayId: string | null
+  readonly sizes: readonly SizeRowLike[]
+  /** A described line's total. */
+  readonly quantity: number | null
+  readonly byPerson: boolean
+  /** By person: each person's size in roster order (null: measured by a sheet, or sending later). */
+  readonly peopleSizes: readonly (string | null)[]
+  readonly note: string | null
+  /** The customer's own words: its description, else the garment type. */
+  readonly ownWords: string | null
+  readonly colourText: string | null
+}
+
+/** One style line a described or made-to-measure line is made into (the office's map). */
+export interface AcceptInto {
+  readonly styleId: string
+  readonly colourwayId: string
+  readonly sizes?: readonly SizeRowLike[] | undefined
+  /** ORDER: a unit price typed by the office (else the customer's list price today). */
+  readonly unitPrice?: string | undefined
+  readonly description?: string | null | undefined
+  readonly note?: string | null | undefined
+}
+
+export interface AcceptMapEntry {
+  readonly lineId: string
+  readonly into: readonly AcceptInto[]
+}
+
+/** A line of the order (or quote) to make, and the request line it is made from. */
+export interface PlannedLine {
+  readonly requestLineId: string
+  readonly requestSeq: number
+  readonly kind: AcceptLineFacts['kind']
+  readonly styleId: string
+  readonly colourwayId: string
+  readonly sizes: readonly SizeRowLike[]
+  readonly unitPrice: string | undefined
+  readonly description: string | null
+  readonly note: string | null
+  /** Where its problems are said: `request/lines/<seq>` (a catalogue line) or `body/map/<i>/into/<j>` (the office's map). */
+  readonly at: string
+}
+
+export type AcceptPlan =
+  | { readonly kind: 'PLAN'; readonly lines: readonly PlannedLine[]; readonly warnings: readonly string[] }
+  | { readonly kind: 'HELD' | 'INVALID'; readonly words: string; readonly issues: readonly Issue[] }
+
+const trimmedOrNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
+
+/** The note of an order (or quote) line made from a described or made-to-measure line: where it came from, never a person's name. */
+export function mappedLineNote(number: string | null, line: AcceptLineFacts): string {
+  const head = `${number ? `Request ${number}` : 'The request'}, line ${line.seq} (${line.kind === 'MADE_TO_MEASURE' ? 'made to measure' : 'described'})`
+  const parts = [line.ownWords ? `${head}: ${line.ownWords}` : head]
+  if (line.colourText) parts.push(`Colours: ${line.colourText}`)
+  if (line.byPerson) parts.push(line.peopleSizes.length > 0 ? `People: ${line.peopleSizes.length} on the request (their names stay there)` : 'People: in the measurement sheet on the request')
+  if (line.note) parts.push(`Customer's note: ${line.note}`)
+  const text = parts.join(' · ')
+  return text.length <= ACCEPT_MAP_LIMITS.note ? text : `${text.slice(0, ACCEPT_MAP_LIMITS.note - 1)}…`
+}
+
+/** The pieces a request line asked (null: not known — people only in a measurement sheet). */
+function askedPieces(line: AcceptLineFacts): number | null {
+  if (line.byPerson) return line.peopleSizes.length > 0 ? line.peopleSizes.length : null
+  if (line.kind === 'DESCRIBED' && line.quantity !== null) return line.quantity
+  const sum = line.sizes.reduce((total, row) => total + row.quantity, 0)
+  return sum > 0 ? sum : null
+}
+
+/** A by-person line's people grouped by size, in the order a size first appears (every person has one). */
+function sizesOfPeople(sizes: readonly (string | null)[]): SizeRowLike[] {
+  const counts = new Map<string, number>()
+  for (const size of sizes) if (size !== null) counts.set(size, (counts.get(size) ?? 0) + 1)
+  return [...counts.entries()].map(([size, quantity]) => ({ size, quantity }))
+}
+
+/**
+ * The accept's plan: refused (INVALID, 400: what the office sent), held (HELD, 409: a line to map first, a made-to-measure line
+ * as an order) or the lines to make, in the request's order, each naming its request line (the map), with what to check (pieces
+ * asked and made differ). `prices`: the office's typed unit prices of catalogue lines (`body.lines`).
+ */
+export function acceptPlanOf(input: { readonly number: string | null; readonly as: AcceptAs; readonly lines: readonly AcceptLineFacts[]; readonly map: readonly AcceptMapEntry[]; readonly prices: readonly { readonly lineId: string; readonly unitPrice?: string | undefined }[] }): AcceptPlan {
+  const issues: Issue[] = []
+  const byId = new Map(input.lines.map((line) => [line.id, line]))
+  const isCustom = (line: AcceptLineFacts): boolean => line.kind !== 'CATALOGUE'
+  const mapped = new Map<string, { readonly entry: AcceptMapEntry; readonly index: number }>()
+  input.map.forEach((entry, index) => {
+    const at = `body/map/${index}`
+    const line = byId.get(entry.lineId)
+    if (!line) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.notALine })
+    if (!isCustom(line)) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.fromCatalogue(line.seq) })
+    if (mapped.has(line.id)) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.mappedTwice(line.seq) })
+    mapped.set(line.id, { entry, index })
+    if (entry.into.length === 0) issues.push({ path: `${at}/into`, message: ACCEPT_WORDS.noInto(line.seq) })
+    if (entry.into.length > ACCEPT_MAP_LIMITS.into) issues.push({ path: `${at}/into`, message: ACCEPT_WORDS.tooMany(line.seq) })
+    entry.into.forEach((into, place) => {
+      if (into.sizes && into.sizes.length > 0) for (const message of lineShapeProblems({ styleId: into.styleId, colourwayId: into.colourwayId, sizes: into.sizes, note: null })) issues.push({ path: `${at}/into/${place}/sizes`, message })
+      if (into.description && into.description.trim().length > MAX_TEXT.description) issues.push({ path: `${at}/into/${place}/description`, message: `At most ${MAX_TEXT.description} characters.` })
+      if (into.note && into.note.trim().length > ACCEPT_MAP_LIMITS.note) issues.push({ path: `${at}/into/${place}/note`, message: `At most ${ACCEPT_MAP_LIMITS.note} characters.` })
+    })
+  })
+  input.prices.forEach((entry, index) => {
+    const line = byId.get(entry.lineId)
+    if (!line) issues.push({ path: `body/lines/${index}/lineId`, message: ACCEPT_WORDS.notALine })
+    else if (isCustom(line)) issues.push({ path: `body/lines/${index}/lineId`, message: ACCEPT_WORDS.priceOnMap(line.seq) })
+  })
+  if (issues.length > 0) return { kind: 'INVALID', words: issues[0]!.message, issues }
+
+  const ordered = [...input.lines].sort((a, b) => a.seq - b.seq)
+  // A made-to-measure line is a quote first (mapping it does not change that); then every custom line needs its map.
+  const madeToMeasure = ordered.filter((line) => line.kind === 'MADE_TO_MEASURE').map((line) => line.seq)
+  if (input.as === 'ORDER' && madeToMeasure.length > 0) {
+    const words = ACCEPT_WORDS.madeToMeasureOrder(madeToMeasure)
+    return { kind: 'HELD', words, issues: madeToMeasure.map((seq) => ({ path: `request/lines/${seq}`, message: words })) }
+  }
+  const unmapped = ordered.filter((line) => isCustom(line) && !mapped.has(line.id)).map((line) => line.seq)
+  if (unmapped.length > 0) {
+    const words = ACCEPT_WORDS.unmapped(unmapped)
+    return { kind: 'HELD', words, issues: unmapped.map((seq) => ({ path: `request/lines/${seq}`, message: words })) }
+  }
+
+  const prices = new Map(input.prices.map((entry) => [entry.lineId, entry.unitPrice]))
+  const planned: PlannedLine[] = []
+  const warnings: string[] = []
+  for (const line of ordered) {
+    if (!isCustom(line)) {
+      planned.push({ requestLineId: line.id, requestSeq: line.seq, kind: line.kind, styleId: line.styleId!, colourwayId: line.colourwayId!, sizes: line.sizes, unitPrice: prices.get(line.id), description: null, note: line.note, at: `request/lines/${line.seq}` })
+      continue
+    }
+    const { entry, index } = mapped.get(line.id)!
+    let made = 0
+    entry.into.forEach((into, place) => {
+      const at = `body/map/${index}/into/${place}`
+      let sizes: readonly SizeRowLike[] | null = into.sizes && into.sizes.length > 0 ? into.sizes.map((row) => ({ size: row.size.trim(), quantity: row.quantity })) : null
+      if (sizes === null) {
+        if (entry.into.length > 1) issues.push({ path: `${at}/sizes`, message: ACCEPT_WORDS.sizesOfEach(line.seq) })
+        else if (line.sizes.length > 0) sizes = line.sizes
+        else if (line.byPerson) {
+          const without = line.peopleSizes.filter((size) => size === null).length
+          if (line.peopleSizes.length > 0 && without === 0) sizes = sizesOfPeople(line.peopleSizes)
+          else issues.push({ path: `${at}/sizes`, message: line.peopleSizes.length === 0 ? ACCEPT_WORDS.sizesInSheet(line.seq) : ACCEPT_WORDS.sizesOfPeople(line.seq, without, line.peopleSizes.length) })
+        } else issues.push({ path: `${at}/sizes`, message: ACCEPT_WORDS.sizesOfTotal(line.seq, line.quantity ?? 0) })
+      }
+      if (sizes === null) return
+      made += sizes.reduce((total, row) => total + row.quantity, 0)
+      planned.push({
+        requestLineId: line.id,
+        requestSeq: line.seq,
+        kind: line.kind,
+        styleId: into.styleId,
+        colourwayId: into.colourwayId,
+        sizes,
+        unitPrice: into.unitPrice,
+        description: trimmedOrNull(into.description),
+        note: trimmedOrNull(into.note) ?? mappedLineNote(input.number, line),
+        at,
+      })
+    })
+    const asked = askedPieces(line)
+    if (asked !== null && made > 0 && asked !== made) warnings.push(ACCEPT_WORDS.pieces(line.seq, asked, made, input.as))
+  }
+  if (issues.length > 0) return { kind: 'INVALID', words: issues[0]!.message, issues }
+  return { kind: 'PLAN', lines: planned, warnings }
+}
+
+/** The accept's map as the answer and the audit keep it: each request line and the order (or quote) lines made from it (ids). */
+export interface AcceptLineMapEntry {
+  readonly requestLineId: string
+  readonly requestSeq: number
+  readonly into: readonly { readonly lineId: string; readonly seq: number }[]
+}
+
+/**
+ * The map from the plan and the lines made, in the plan's order: `made` are the new order (or quote) lines in their own order;
+ * `left` the plan's places a copy left out (a quote leaves out a style no longer sold), so the made lines pair with the rest.
+ */
+export function lineMapOf(plan: readonly Pick<PlannedLine, 'requestLineId' | 'requestSeq'>[], made: readonly { readonly id: string; readonly seq: number }[], left: ReadonlySet<number> = new Set()): AcceptLineMapEntry[] {
+  const out = new Map<string, { requestLineId: string; requestSeq: number; into: { lineId: string; seq: number }[] }>()
+  let next = 0
+  plan.forEach((line, place) => {
+    const entry = out.get(line.requestLineId) ?? { requestLineId: line.requestLineId, requestSeq: line.requestSeq, into: [] }
+    out.set(line.requestLineId, entry)
+    if (left.has(place)) return
+    const row = made[next]
+    next += 1
+    if (row) entry.into.push({ lineId: row.id, seq: row.seq })
+  })
+  return [...out.values()]
+}
+// ---- end B-CP-077

@@ -551,12 +551,12 @@ describe('B-TH-239: Today counts with Incoming’s own read, opens catalogue ord
     for (const wanted of ['th3-239-incoming', 'th3-239-catalogue-open', 'th3-239-incoming-sales', 'th3-239-incoming-unknown', 'th3-239-incoming-offline', 'th3-239-incoming-loading', 'th3-239-incoming-error']) expect(ids).toContain(wanted)
     const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'th3-239-incoming')!.model })))
     expect(html).toContain('New incoming requests')
-    expect(html).toContain('Catalogue orders to decide')
+    expect(html).toContain('Portal orders to decide') // B-CP-077: Incoming's word
     expect(html).toContain('/w/DEMO/sales/incoming?tile=NEW')
     expect(html.indexOf('id="fw-today-needs"')).toBeLessThan(html.indexOf('id="fw-today-incoming"'))
     const sales = renderToString(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'th3-239-incoming-sales')!.model })))
     expect(sales).toContain('Nuove richieste in arrivo')
-    expect(sales).not.toContain('Ordini dal catalogo da decidere')
+    expect(sales).not.toContain('Ordini dal portale da decidere') // B-CP-077
     // Without the section in the model (not a reader of requests) nothing of it is drawn.
     const owner = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'owner')!.model })))
     expect(owner).not.toContain('fw-today-incoming')
