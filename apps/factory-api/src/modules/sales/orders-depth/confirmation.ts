@@ -5,6 +5,10 @@ import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { formatMoney } from '@nexus/factory-domain/documents/format'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
 import type { DocumentLanguage, PostalAddress } from '@nexus/factory-domain/documents/model'
+// B-CP-015 (the money wall, Owner pick O1): the confirmation is born priced; it is made and mailed by someone who sees prices.
+import { pricedDocument } from '@nexus/factory-domain/documents/model'
+import { pricedDocumentHeld, seesPrices } from '@nexus/factory-domain/files/priced'
+import { actorOf } from '../../../core/context'
 // B-W2b-374: the lines' options on the confirmation.
 import { orderLinesPrinted } from '../configurator/printed'
 import { CONFIRMATION_KIND, confirmationDocument, confirmationFingerprint, confirmationMail, confirmationNumber, ppeWords, type CustomerOrder } from '@nexus/factory-domain/sales/orders-depth/confirmation'
@@ -174,6 +178,7 @@ async function prepare(files: FilesRuntime, caller: CommandCaller, order: OrderR
     // The confirmation mail's attachment: shared with the customer's party (prices only).
     visibility: ['OFFICE', 'PARTNER'],
     partyId: order.partyId,
+    priced: pricedDocument(composed.type), // B-CP-015
   })
   return { fingerprint, language, current: null, file, layout: composed.layout }
 }
@@ -230,6 +235,8 @@ export async function getConfirmation(caller: CommandCaller, orderId: string) {
 /** POST /sales/orders/:orderId/confirmation */
 export async function makeConfirmation(files: FilesRuntime, caller: CommandCaller, orderId: string, body: { readonly language?: DocumentLanguage | undefined }, idempotencyKey?: string) {
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  // B-CP-015: it shows prices: made by someone who sees prices (403 in words; nothing is made).
+  if (!seesPrices(actorOf(officeContextOf(caller)))) throw pricedDocumentHeld('make')
   const prepared = await prepare(files, caller, order, body.language)
   const result = prepared.current ? { ...prepared.current, made: false } : (await command(caller, { name: 'orders.confirmation', idempotencyKey, input: { orderId, ...body } }, (tools) => keepInCommand(tools, order, prepared))).result
   return { made: result.made, version: result.version, fileId: result.fileId, confirmation: await readState(caller, order) }
@@ -249,6 +256,8 @@ export interface SendConfirmationBody {
 export async function sendConfirmation(files: FilesRuntime, caller: CommandCaller, orderId: string, body: SendConfirmationBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  // B-CP-015: it shows prices: sent by someone who sees prices (403 in words; nothing is made, mailed or audited as sent).
+  if (!seesPrices(actorOf(context))) throw pricedDocumentHeld('send')
   const prepared = await prepare(files, caller, order, body.language)
   const recipient = await caller.withClient(async (db) => {
     const version = order.quoteVersionId ? await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { quote: { select: { contactId: true } } } }) : null

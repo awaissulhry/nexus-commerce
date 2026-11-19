@@ -3,6 +3,7 @@ import { ValidationError } from '../core/errors'
 import { composeDocument, documentProblems, pageLabel } from './compose'
 import { DDT_PARTY_WORDS_PER_REASON, ddtPartyHeading, DOCUMENT_WORDS } from './i18n'
 import type { CompanyLegal, DdtReason, DocumentInput } from './model'
+import { DOCUMENT_TYPES, PRICED_DOCUMENT_TYPES, pricedDocument } from './model' // B-CP-015
 
 /*
  * Every company, person, tax number and address here is FAKE (as in the FatturaPA fixtures): the Partita IVA uses
@@ -405,5 +406,24 @@ describe('composition', () => {
     expect(composeDocument(ddt({ language: 'en', sample: true })).banner).toBe('SAMPLE - not a valid document')
     expect(documentProblems({ ...ddt(), type: 'RECEIPT' as never })).toEqual([{ path: 'document/type', message: 'Unknown document type.' }])
     expect(documentProblems({ ...ddt(), language: 'de' as never })[0]?.path).toBe('document/language')
+  })
+})
+
+// ---- B-CP-015 (customer page plan, the money wall D6; review B1): every priced document is born priced --------------------------
+describe('pricedDocument: which documents show our selling prices (born priced)', () => {
+  it('the quote, the invoice copy, the order confirmation, the proforma and the commercial invoice; never the DDT, the packing list or a purchase order', () => {
+    expect(DOCUMENT_TYPES.filter(pricedDocument)).toEqual(['QUOTE', 'INVOICE_COPY', 'ORDER_CONFIRMATION', 'PROFORMA', 'COMMERCIAL_INVOICE'])
+    expect(DOCUMENT_TYPES.filter((type) => !pricedDocument(type))).toEqual(['PURCHASE_ORDER', 'DDT', 'PACKING_LIST'])
+  })
+
+  it('every document type decides, once (a new type cannot be left out)', () => {
+    expect(Object.keys(PRICED_DOCUMENT_TYPES).sort()).toEqual([...DOCUMENT_TYPES].sort())
+    for (const type of DOCUMENT_TYPES) expect(typeof PRICED_DOCUMENT_TYPES[type], type).toBe('boolean')
+  })
+
+  it('a composed document carries its type, so the store call can ask the rule', () => {
+    const composed = composeDocument({ ...ddt(), company: COMPANY })
+    expect(composed.type).toBe('DDT')
+    expect(pricedDocument(composed.type)).toBe(false)
   })
 })

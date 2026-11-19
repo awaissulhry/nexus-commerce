@@ -61,7 +61,7 @@ export interface ServerDraftIn {
   readonly audience: 'OFFICE' | 'PARTNER' | null
   readonly body: string
   readonly fields: Readonly<Record<string, unknown>>
-  readonly attachments: readonly { readonly id: string; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly status: string; readonly locked?: 'MEASUREMENTS' | undefined }[]
+  readonly attachments: readonly { readonly id: string; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly status: string; readonly locked?: 'MEASUREMENTS' | 'PRICED' /* B-CP-014 */ | undefined }[]
   readonly savedAt: string
   readonly version: number
 }

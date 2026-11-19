@@ -20,7 +20,9 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
-import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../env'
+// op-fx3: the app's office sign-in carries the app's clock (platform/portal/tasks/clock appClock), which the sales routes read.
+import { createOfficeAuth } from '../../../platform/auth/sessions/office-auth'
 import { fanOut } from '../../../platform/notifications/fan-out'
 import { systemContext } from '../../../platform/outbox/system'
 import { staleChangesInCommand } from './decide'
@@ -159,9 +161,13 @@ beforeAll(async () => {
       [newId(), A.tenant, A.companyA, A.siteA1, itemId, colourId, lotId, hideId, A.binA1, quantity, uom, `wo-changes-test-${code}`],
     )
   }
+  // op-fx3: B-OP-012 accepts a customer's request (POST /sales/change-requests/:id/accept), a route on the app's clock: the app carries
+  // the office sign-in as every test app of such routes does (it answered 503 "Office sign-in is not configured" without it). The
+  // sessions stay the test's own; nothing here signs in or sends mail.
+  const officeAuth = createOfficeAuth({ database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: 'http://localhost:3200', mailer: { deliver: async () => {} } })
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
-    { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
+    { database, officeAuth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 240_000)
 

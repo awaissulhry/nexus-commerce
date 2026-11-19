@@ -44,6 +44,7 @@ import {
 } from '../rules'
 import type { FilesRuntime } from '../service'
 import { walledForOutside } from '../content-wall' // fix-wall-1
+import { pricedFileProblem } from '@nexus/factory-domain/files/priced' // B-CP-014
 import { seriesOf, supersedeEarlierVersions } from './supersede'
 import { fileLivePartyId } from '../record-scope' // B-SA-002
 
@@ -96,6 +97,8 @@ export interface VersionPlan {
   readonly sha256: string
   readonly sharing: Sharing
   readonly storeAccountId: string
+  /** B-CP-014: the series shows prices (any of its versions is priced): the new version is born priced. */
+  readonly priced: boolean
 }
 
 const conflict = (refusal: string | null): void => {
@@ -139,10 +142,14 @@ export async function planNewVersion(
   )
   const contentType = normaliseContentType(input.contentType)
   const originalName = cleanFileName(input.originalName)
+  // B-CP-014: a version of a priced series is priced (and so never shared with a floor).
+  const priced = named.priced || series.some((version) => version.priced)
+  const pricedProblem = pricedFileProblem({ priced, visibility: sharing.visibility })
   const problems: Issue[] = [
     ...problemsOf(named.kind as FileKind, contentType),
     ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),
     ...sharingProblems(sharing),
+    ...(pricedProblem ? [{ path: 'body/visibility', message: pricedProblem }] : []),
   ]
   if (problems.length > 0) throw new ValidationError('The new version is not valid.', problems)
   if (sharing.visibility.length > 1) mayWrite(caller, FILES_MANAGE, sharing)
@@ -159,6 +166,7 @@ export async function planNewVersion(
     sha256: input.sha256,
     sharing,
     storeAccountId: await storeAccountOf(caller, named.companyId),
+    priced, // B-CP-014
   }
 }
 
@@ -199,6 +207,8 @@ export async function insertNewVersion(tools: Pick<CommandTools, 'tx' | 'audit' 
       seriesId: plan.root,
       versionNo,
       ...(plan.category ? { category: plan.category } : {}),
+      // B-CP-014: the new version of a priced series is born priced (checked again under the series' lock).
+      ...(plan.priced || series.some((file) => file.priced) ? { priced: true } : {}),
       createdAt: now,
       updatedAt: now,
       createdById: context.audience === 'office' ? context.actorId : null,
@@ -320,6 +330,8 @@ export async function restoreVersion(runtime: FilesRuntime, caller: CommandCalle
         versionNo,
         sourceFileId: old.id,
         ...(inherited.category ? { category: inherited.category } : {}),
+        // B-CP-014: the restored version of a priced series (or of a priced version) is priced.
+        ...(prepared.priced === true || fresh.some((file) => file.priced) ? { priced: true } : {}),
         createdAt: now,
         updatedAt: now,
         createdById: tools.context.audience === 'office' ? tools.context.actorId : null,

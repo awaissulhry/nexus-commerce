@@ -199,7 +199,12 @@ export async function typeTrackingNumber(caller: CommandCaller, shipmentId: stri
       refuseIf(trackingRefusal(facts))
       // B-OP-034: the link as asked (left out: kept), never without its number.
       const trackingUrl = trackingNumber === null ? null : body.trackingUrl === undefined ? facts.manualTrackingUrl : body.trackingUrl?.trim() || null
-      if (facts.manualTrackingNumber === trackingNumber && facts.manualTrackingUrl === trackingUrl) return { changed: false }
+      // op-fx2 (end check): the same number (and link) again changes nothing and emits nothing, but the command still wrote
+      // (the record's version): its audit row says so, as every unchanged write of the app does.
+      if (facts.manualTrackingNumber === trackingNumber && facts.manualTrackingUrl === trackingUrl) {
+        tools.audit({ action: 'shipping.typeTrackingNumber', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { manualTrackingNumber: trackingNumber, manualTrackingUrl: trackingUrl, unchanged: true } })
+        return { changed: false }
+      }
       await tools.tx.shipment.update({ where: { id: current.id }, data: { manualTrackingNumber: trackingNumber, manualTrackingUrl: trackingUrl }, select: { id: true } })
       tools.audit({
         action: 'shipping.typeTrackingNumber',

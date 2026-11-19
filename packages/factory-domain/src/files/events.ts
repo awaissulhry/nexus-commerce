@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineEvent, /* B-SA-002 */ livePartyId } from '../events/define'
+import { notMoney } from '../money/marked' // B-CP-014: `priced` is a lock flag, not an amount
 
 /**
  * The files platform's events (plan A1 §3.4, §3.6; feature COL-045). apps/factory-api's platform/files emits
@@ -58,4 +59,24 @@ export const events = [
     }),
     live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
   }),
+  // ---- B-CP-014 (customer page plan, the money wall D6): a file was marked as showing prices, or the mark was taken off (POST
+  // /files/:fileId/priced). The mark reaches every version of its series (and, when marked, the copies made of them): `fileIds`.
+  // The record's file panel refreshes (a name becomes the lock, or the lock the name); search reads the messages that carry these
+  // files again (a priced file's name is never in search). No amount, no name of the file.
+  defineEvent({
+    type: 'file.priced_changed',
+    context: 'files',
+    description: 'A file was marked as showing prices (only people who see prices open it), or the mark was taken off.',
+    payload: z.strictObject({
+      fileId: z.uuid(),
+      recordType: z.string(),
+      recordId: z.uuid(),
+      priced: notMoney(z.boolean()),
+      fileIds: z.array(z.uuid()).max(500),
+      // The customer of the file's record (platform/files/record-scope.ts fileLivePartyId), as file.available carries it.
+      partyId: livePartyId(),
+    }),
+    live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
+  }),
+  // ---- end B-CP-014
 ] as const

@@ -67,8 +67,11 @@ export const attachmentView = output({
   contentType: z.string(),
   sizeBytes: z.number().int(),
   status: z.enum(FILE_STATUSES),
-  /** B-TH-083: a measurement sheet this office reader may not open — no name ("Measurement sheet — you cannot open it"). */
-  locked: z.literal('MEASUREMENTS').optional(),
+  /**
+   * B-TH-083: a measurement sheet this office reader may not open — no name ("Measurement sheet — you cannot open it").
+   * B-CP-023: PRICED — a file that shows prices, for a reader who does not see prices — no name ("Priced document — you cannot open it").
+   */
+  locked: z.enum(['MEASUREMENTS', 'PRICED']).optional(),
 })
 export type AttachmentView = z.infer<typeof attachmentView>
 

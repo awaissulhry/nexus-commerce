@@ -84,6 +84,8 @@ export interface CardMessage {
   // ---- B-TH-231: files the reader may not see are counted ("One file you cannot open"); B-TH-083: sheets they may not open.
   hiddenFiles?: number
   lockedSheets?: number
+  /** B-CP-014: files that show prices, locked for this reader: "Priced document — you cannot open it", counted, never named. */
+  lockedPriced?: number
   // ---- end B-TH-231
   // ---- B-TH-236 (B-TH-049, B-TH-050): the price typed in the amount field (an office note; price readers only), what it answers
   // or corrects, the newest message that corrects it ("Corrected below"), and whether the reader wrote it (Correct is one's own).
@@ -238,13 +240,16 @@ export interface CardFiles {
   hidden: number
   /** B-TH-083 (B-TH-231): measurement sheets the reader may not open: "Measurement sheet — you cannot open it". */
   sheets: number
+  /** B-CP-014: priced documents the reader may not open: "Priced document — you cannot open it" (absent: none). */
+  priced?: number
 }
 
 /** `counted`: B-TH-231 — the message's files the API left out for this reader, and its sheets locked for them. */
-export function cardFiles(files: readonly CardFile[], canReadFiles: boolean, all = false, counted: { readonly hidden?: number; readonly sheets?: number } = {}): CardFiles {
+export function cardFiles(files: readonly CardFile[], canReadFiles: boolean, all = false, counted: { readonly hidden?: number; readonly sheets?: number; /* B-CP-014 */ readonly priced?: number } = {}): CardFiles {
   const extra = counted.hidden ?? 0
   const sheets = counted.sheets ?? 0
-  if (!canReadFiles) return { photos: [], others: [], held: [], more: 0, hidden: files.length + extra + sheets, sheets: 0 }
+  const priced = counted.priced ?? 0 // B-CP-014
+  if (!canReadFiles) return { photos: [], others: [], held: [], more: 0, hidden: files.length + extra + sheets + priced, sheets: 0 }
   const shown = all ? [...files] : files.slice(0, FILES_SHOWN)
   return {
     photos: shown.filter((file) => file.status === 'AVAILABLE' && PICTURES.has(file.contentType)),
@@ -253,6 +258,7 @@ export function cardFiles(files: readonly CardFile[], canReadFiles: boolean, all
     more: all ? 0 : Math.max(0, files.length - FILES_SHOWN),
     hidden: extra,
     sheets,
+    ...(priced > 0 ? { priced } : {}), // B-CP-014
   }
 }
 
@@ -390,10 +396,10 @@ export const skipReasonKey = (reason: string): string => ((SKIP_REASON_CODES as 
  * `erased`); nothing more when it only carries files (an empty text with files is NEVER the erased card); nothing when it has neither
  * (its files are counted below: "1 file you cannot open").
  */
-export function bodyKind(message: Pick<CardMessage, 'erased' | 'body' | 'files'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets'>>): 'erased' | 'text' | 'files' | 'empty' {
+export function bodyKind(message: Pick<CardMessage, 'erased' | 'body' | 'files'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets' | /* B-CP-014 */ 'lockedPriced'>>): 'erased' | 'text' | 'files' | 'empty' {
   if (message.erased) return 'erased'
   if (message.body.trim() !== '') return 'text'
-  return message.files.length > 0 || (message.hiddenFiles ?? 0) > 0 || (message.lockedSheets ?? 0) > 0 ? 'files' : 'empty'
+  return message.files.length > 0 || (message.hiddenFiles ?? 0) > 0 || (message.lockedSheets ?? 0) > 0 || (message.lockedPriced ?? 0) > 0 ? 'files' : 'empty'
 }
 
 /**

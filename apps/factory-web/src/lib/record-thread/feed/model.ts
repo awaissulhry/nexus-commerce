@@ -314,10 +314,10 @@ export const hiddenNewLine = (hiddenNew: number | undefined): { readonly count: 
  * A folded message's one line (B-TH-255): its first words; an erased message says so ("Message removed (privacy request)"); a message
  * of files only names how many ("2 files"), never an empty line that looks erased.
  */
-export function foldedGist(message: Pick<CardMessage, 'body' | 'files' | 'erased'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets'>>): { readonly text: string } | { readonly key: string; readonly count?: number } {
+export function foldedGist(message: Pick<CardMessage, 'body' | 'files' | 'erased'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets' | /* B-CP-014 */ 'lockedPriced'>>): { readonly text: string } | { readonly key: string; readonly count?: number } {
   if (message.erased) return { key: 'erased.short' }
   const gist = gistOf(message.body)
   if (gist.trim() !== '') return { text: gist }
-  const files = message.files.length + (message.hiddenFiles ?? 0) + (message.lockedSheets ?? 0)
+  const files = message.files.length + (message.hiddenFiles ?? 0) + (message.lockedSheets ?? 0) + (message.lockedPriced ?? 0) // B-CP-014
   return files > 0 ? { key: 'filesOnly.line', count: files } : { text: '' }
 }

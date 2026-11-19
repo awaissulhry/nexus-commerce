@@ -294,6 +294,7 @@ async function storePaper(files: FilesRuntime, caller: CommandCaller, context: O
     body: spec.pdf,
     // Values for customs: the office's only (the broker's link serves it through its own route).
     visibility: ['OFFICE'],
+    priced: true, // B-CP-015 (customer page lane): the commercial invoice, CN22 and CN23 declare the goods' values
   })
   const { result } = await command(caller, { name: spec.commandName, idempotencyKey: spec.idempotencyKey, input: spec.input }, async (tools) => {
     const { tx, audit, emit, now } = tools
