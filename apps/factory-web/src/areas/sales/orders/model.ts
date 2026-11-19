@@ -543,10 +543,12 @@ export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.fr
 // F-OP-117 (10-order-page §6, §7, §8; review R-22): Changes counts the ONE waiting list's rows (`changes`: changesBadgeOf of the card,
 // null before the production read — never a made-up 0); Money and Shipments the order read's own badges (B-OP-020: issued invoices and
 // credit notes + open deposit requests; shipments not cancelled carrying this order's lines), the chain's counts in an older answer.
-export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null } = {}): number | null {
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
   if (tab === 'lines') return order.lines.length
   if (tab === 'production') return order.chain.workOrders.length
   if (tab === 'changes') return counts.changes ?? null
+  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
+  if (tab === 'money' && counts.viewInvoices === false) return order.badges ? order.badges.money.openDeposits : null
   if (tab === 'money') return order.badges ? order.badges.money.invoices + order.badges.money.openDeposits : order.chain.invoices.length
   if (tab === 'shipments') return order.badges ? order.badges.shipments : order.chain.shipments.length
   // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).

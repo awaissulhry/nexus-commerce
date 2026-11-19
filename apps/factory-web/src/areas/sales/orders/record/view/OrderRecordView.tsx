@@ -229,7 +229,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ }), // F-SA-237: the files the reader may open
+    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */, viewInvoices: model.can.viewInvoices /* F-OP-306 */ }), // F-SA-237: the files the reader may open
   }))
   // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
   useEffect(() => {

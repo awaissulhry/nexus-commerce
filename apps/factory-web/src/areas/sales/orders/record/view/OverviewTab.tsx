@@ -580,10 +580,13 @@ function LinkedCard({ order, model }: { order: Order; model: OrderRecordModel })
       <ul className="fw-so-linked" aria-label={t('overview.linked.title')}>
         {records.map((entry, index) => {
           const label = t(`overview.linked.${entry.key}`)
-          const value = entry.held ? t(entry.held.key) : entry.words ? t(entry.words.key, entry.words.params) : String(entry.count ?? '—')
+          const value = entry.words ? t(entry.words.key, entry.words.params) : String(entry.count ?? '—')
           return (
             <li key={`${entry.key}-${index}`}>
-              {entry.href ? (
+              {entry.held ? (
+                // F-OP-306 (walk #21): a list held for this reader says the Money tab's own sentence, alone (no label, no number).
+                <span className="fw-so-countbtn is-plain">{t(entry.held.key)}</span>
+              ) : entry.href ? (
                 // F-OP-210: no prefetch (a tab address changes with the dock's scope).
                 <TabLink className="fw-so-countbtn" href={entry.href}>
                   <span>{label}</span> <strong>{value}</strong>

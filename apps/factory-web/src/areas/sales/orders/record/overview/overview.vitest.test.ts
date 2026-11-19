@@ -198,7 +198,7 @@ describe('Overview’s facts (F-SA-233)', () => {
     expect(byKey('returns')).toMatchObject({ count: 0, href: null })
     expect(byKey('sameQuote')).toMatchObject({ href: '/w/demo/sales/orders/o2' })
     const held = linkedRecordsOf({ order: value, prefix: '/w/demo', can: { viewQuotes: false, viewInvoices: false }, work: null, complaints: null, returns: null, sameQuote: [] })
-    expect(held.records.find((entry) => entry.key === 'invoices')).toEqual({ key: 'invoices', count: null, words: null, href: null, held: { key: 'overview.linked.invoicesHeld' } })
+    expect(held.records.find((entry) => entry.key === 'invoices')).toEqual({ key: 'invoices', count: null, words: null, href: null, held: { key: 'money.noInvoiceRight' } }) // F-OP-306: the Money tab's own sentence
     expect(held.records.some((entry) => entry.key === 'complaints' || entry.key === 'returns')).toBe(false)
     expect(held.records.find((entry) => entry.key === 'quote')?.href ?? null).toBeNull()
   })
@@ -562,3 +562,28 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
   })
 })
 // ---- end F-OP-304
+
+// ---- F-OP-306 (walk #21): invoices for a reader without invoices.view — one rule and one wording on Money and Overview -----------
+describe('F-OP-306: no invoice row and no invoice number without invoices.view; the Money tab\'s one sentence in both places', () => {
+  it('Money lists no invoice and says the sentence; Overview › Linked records says the same sentence alone; the Money badge counts deposits only', async () => {
+    const { tabCountOf } = await import('../../model')
+    for (const locale of ['en', 'it'] as const) {
+      const sentence = locale === 'en' ? 'Invoices are shown to people who see invoices.' : 'Le fatture sono visibili a chi vede le fatture.'
+      const moneyHtml = draw('w2a-margin-no-grain', locale)
+      expect(textOf(moneyHtml)).toContain(sentence)
+      expect(moneyHtml).not.toContain('id="about-Invoice-') // no invoice row
+      const overview = textOf(draw('f-op-301-so2-overview', locale)).replace(/\s+/g, ' ')
+      expect(overview).toContain(sentence)
+      expect(overview).not.toMatch(/needs the invoices right|serve il permesso fatture/)
+    }
+    // Who sees invoices still sees their rows and their count.
+    const finance = draw('w2a-margin')
+    expect(textOf(finance)).not.toContain('Invoices are shown to people who see invoices.')
+    expect(finance).toContain('id="about-Invoice-')
+    const badged = { ...order('SHIPPED'), badges: { money: { invoices: 2, openDeposits: 1 }, shipments: 4 } }
+    expect(tabCountOf('money', badged, { viewInvoices: false })).toBe(1)
+    expect(tabCountOf('money', badged, { viewInvoices: true })).toBe(3)
+    expect(tabCountOf('money', order('SHIPPED'), { viewInvoices: false })).toBeNull()
+  })
+})
+// ---- end F-OP-306

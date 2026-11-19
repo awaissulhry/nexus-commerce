@@ -558,7 +558,8 @@ export function linkedRecordsOf(input: LinkedInput): { readonly records: readonl
           : []),
     { key: 'workOrders', count: workCount, words: null, href: workCount > 0 ? tab('production') : null, held: null },
     { key: 'shipments', count: order.chain.shipments.length, words: null, href: order.chain.shipments.length > 0 ? tab('shipments') : null, held: null },
-    can.viewInvoices ? { key: 'invoices', count: order.chain.invoices.length, words: null, href: order.chain.invoices.length > 0 ? tab('money', 'invoices') : null, held: null } : { key: 'invoices', count: null, words: null, href: null, held: phrase('overview.linked.invoicesHeld') },
+    // F-OP-306 (walk #21): without invoices.view no number and the Money tab's own sentence (one rule, one wording for both).
+    can.viewInvoices ? { key: 'invoices', count: order.chain.invoices.length, words: null, href: order.chain.invoices.length > 0 ? tab('money', 'invoices') : null, held: null } : { key: 'invoices', count: null, words: null, href: null, held: phrase('money.noInvoiceRight') },
     { key: 'deposit', count: null, words: phrase(`gate.state.${gate.state}`), href: tab('money'), held: null },
     ...(input.complaints !== null ? [{ key: 'complaints' as const, count: input.complaints, words: null, href: input.complaints > 0 ? tab('shipments') : null, held: null }] : []),
     ...(input.returns !== null ? [{ key: 'returns' as const, count: input.returns, words: null, href: input.returns > 0 ? tab('shipments') : null, held: null }] : []),
