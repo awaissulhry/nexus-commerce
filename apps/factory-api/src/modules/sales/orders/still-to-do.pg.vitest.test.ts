@@ -184,7 +184,9 @@ describe('B-OP-025: a production task is ticked off from the order only by its o
     await planted([
       { sql: `INSERT INTO "ChangeOrder" (id, "tenantId", "companyId", number, "styleId", "fromRevisionId", title, reason, "authorId", status, "releasedAt") VALUES ($1, $2, $3, $4, $5, $6, 'Made-up: new pocket', 'Made-up: the pocket moves.', $7, 'RELEASED', now())`, values: [changeOrder, T, workOrder.companyId, `ECO-T025-${changeOrder.slice(-6)}`, world.styleId, newId(), officeId] },
       { sql: `INSERT INTO "ChangeOrderItem" (id, "tenantId", "changeOrderId", seq, kind, "workOrderId", disposition) VALUES ($1, $2, $3, 10, 'WORK_IN_PROGRESS', $4, 'REWORK')`, values: [newId(), T, changeOrder, world.workOrder] },
-      { sql: `INSERT INTO "Task" (id, "tenantId", "companyId", "siteId", "partyId", title, "recordType", "recordId", "recordLabel", "assigneeId", status, "createdById") VALUES ($1, $2, $3, $4, $5, 'Made-up: open the rework', 'WorkOrder', $6, 'WO', $7, 'OPEN', $8)`, values: [taskId, T, workOrder.companyId, workOrder.siteId, P1, world.workOrder, assigneeId, officeId] },
+      // op-fx3: as the release writes it (product/changes/hooks.ts): assigned to a person by the releaser, at a time — the tasks guard
+      // refuses an assignee without who and when on the next write (planted rows skip the guards on insert only).
+      { sql: `INSERT INTO "Task" (id, "tenantId", "companyId", "siteId", "partyId", title, "recordType", "recordId", "recordLabel", "assigneeId", "assignedById", "assignedAt", status, "createdById") VALUES ($1, $2, $3, $4, $5, 'Made-up: open the rework', 'WorkOrder', $6, 'WO', $7, $8, now(), 'OPEN', $8)`, values: [taskId, T, workOrder.companyId, workOrder.siteId, P1, world.workOrder, assigneeId, officeId] },
     ])
     return taskId
   }
