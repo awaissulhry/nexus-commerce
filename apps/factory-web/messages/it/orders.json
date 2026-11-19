@@ -772,13 +772,10 @@
     "ready": "L'ordine è pronto da spedire.",
     "closed": "L'ordine è chiuso.",
     "sdiSent": "Inviata allo SDI: la sua risposta compare qui quando arriva.",
-    "amended": "Modifica {revision} applicata.",
-    "amendedReaccept": "Modifica {revision} applicata. Il totale imponibile è cambiato: il cliente deve accettare di nuovo l'ordine — avvisalo.",
     "reopened": "Le righe sono state riaperte.",
     "cancelled": "L'ordine è stato annullato.",
     "healthRaised": "Portato a A rischio: il cliente lo legge con il motivo.",
     "healthCleared": "Segnalazione tolta: parlano di nuovo le date.",
-    "amendedTold": "Modifica {revision} applicata; scritta anche nella conversazione dell'ordine.",
     "amendedNotTold": "Modifica {revision} applicata; le parole non sono state scritte nella conversazione dell'ordine: scrivile lì.",
     "amendedNotReached": "Modifica {revision} applicata; nessun modo di raggiungere {customer}: aggiungi un contatto."
   },
@@ -826,20 +823,14 @@
     "count_other": "{count} cambiamenti",
     "barLabel": "Bozza della modifica",
     "discard": "Scarta",
-    "review": "Rivedi",
-    "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non rivedi e applichi la modifica.",
+    "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non applichi la modifica.",
     "header": "Dati dell'ordine",
     "customerRef": "Ordine del cliente",
     "requestedDate": "Data richiesta dal cliente",
     "requestedHint": "Oggi o dopo; vuota: nessuna.",
-    "reviewTitle": "Rivedi la modifica {revision} di {number}",
-    "reading": "Verifica della modifica con il server della fabbrica…",
     "failed": "Non è stato possibile verificare la modifica.",
     "problems_one": "{count} cosa blocca la modifica:",
     "problems_other": "{count} cose bloccano la modifica:",
-    "summary_one": "Cambia {count} riga.",
-    "summary_other": "Cambiano {count} righe.",
-    "summaryMoney": "Imponibile {before} → {after} ({delta}).",
     "reaccept": "Il totale imponibile cambia: il cliente deve accettare di nuovo l'ordine. L'ordine mostra «in attesa del cliente»; il link di accettazione non c'è ancora, quindi avvisa tu il cliente.",
     "noReaccept": "Il totale imponibile non cambia: il cliente non deve accettare di nuovo.",
     "tableLabel": "Righe prima → dopo",
@@ -863,6 +854,36 @@
     "tell": {
       "words": "Parole per il cliente (facoltative)",
       "hint": "Se spunti, vanno come nostro messaggio nella conversazione dell'ordine dopo la modifica. Mai un prezzo a parole."
+    }
+  },
+  "edit": {
+    "appliesAtOnce": "Si applica subito — senza approvazione",
+    "showAll": "Mostra tutte le modifiche",
+    "strip": {
+      "reading": "Calcolo di cosa cambia…",
+      "pieces": "Capi {before} → {after} ({delta})",
+      "net": "Imponibile {before} → {after} ({delta})",
+      "told": "{customer} viene avvisato",
+      "notTold": "{customer} non viene avvisato",
+      "wo": {
+        "change": "{number} {before} → {after}",
+        "cancel": "{number} annullato",
+        "new": "Un nuovo ordine di lavoro: {after} capi",
+        "someone": "Un ordine di lavoro",
+        "now": "segue subito",
+        "waits": "attende la produzione — decidi in questa pagina",
+        "reprint": "il foglio di lavorazione si ristampa"
+      }
+    },
+    "done": {
+      "plain": "Modifica {revision} applicata.",
+      "plainTold": "Modifica {revision} applicata · {customer} avvisato.",
+      "changed": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed}.",
+      "changedTold": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · {customer} avvisato.",
+      "waits": "Modifica {revision} applicata · in attesa della produzione: {waits} — decidi in questa pagina.",
+      "waitsTold": "Modifica {revision} applicata · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato.",
+      "both": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina.",
+      "bothTold": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato."
     }
   },
   "editor": {

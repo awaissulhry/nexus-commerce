@@ -11,11 +11,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money, unitPrice } from '../../../quotes/model'
-// F-SA-242: the same tick as the review window — the words for the customer also written in the order's conversation.
-import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import type { ImpactItem, Order } from '../../api'
 import {
-  amendPairs,
   cancelConfirmHeld,
   changeLabel,
   closableLines,
@@ -25,24 +22,17 @@ import {
   IMPACT_LINKED,
   impactWords,
   inWorkOrdersOf,
-  issuePhrases,
   moneyChange,
   namesOf,
-  sizesText,
   type CompareRow,
 } from '../../daily-model'
-import { dayInstant, type Phrase } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { DialogProblem, Frame } from './Dialogs'
-// ---- B-W2b-323: a frozen change is offered as a priced change ----
-import { FrozenOffer } from '../../changes-depth/view/ChangesDepth'
-import { frozenProblemsOf } from '../../depth/model'
 
 /**
  * The order studio's daily dialogs (B-W2a-50; the DS ReviewChangesModal, ActionConfirm and ConfirmPhraseField spoke
- * English only, so these are composed from the DS Modal, SummaryTable, KeyValue and Banner, named here):
- *  - Review amendment (ReviewChangesModal, composed): the lines old → new by size, the money change (price), the reason,
- *    "the customer must accept again" when the net total changes; Apply with the order's version.
+ * English only, so these are composed from the DS Modal, SummaryTable, KeyValue and Banner, named here; F-OP-106: the amendment's
+ * review is no dialog any more — its parts are the Lines tab's "What changes" strip, ONE Apply):
  *  - Close remaining lines / Reopen lines (ActionConfirm, composed): the lines and sizes that will not be made or
  *    shipped, the reason, the reversal.
  *  - Cancel order (ActionConfirm, composed): the impact check — what stops it, what it changes, what it leaves behind —
@@ -51,143 +41,6 @@ import { frozenProblemsOf } from '../../depth/model'
  */
 
 const close = (actions?: OrderRecordActions) => () => actions?.onDialog?.(null)
-
-function Words({ phrases }: { phrases: Phrase[] }) {
-  const t = useT('orders')
-  return (
-    <ul className="fw-so-list">
-      {phrases.map((entry, index) => (
-        <li key={`${entry.key}-${index}`}>{t(entry.key, entry.params)}</li>
-      ))}
-    </ul>
-  )
-}
-
-// ---- Review amendment -------------------------------------------------------------------------------------------------
-
-export function AmendReviewDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
-  const locale = useLocale()
-  const amend = model.amend
-  const [reason, setReason] = useState(model.draft?.reason ?? '')
-  // F-SA-242: words for the customer (optional) and the tick (on when typed); never automatic, never a price typed in words.
-  const [tellWords, setTellWords] = useState('')
-  const [tellChosen, setTellChosen] = useState<boolean | null>(null)
-  if (!amend) return null
-  const tick = { chosen: tellChosen, reach: model.portalGone ? ('none' as const) : ('portal' as const) }
-  const tellOn = (tellChosen ?? tellWords.trim() !== '') && tick.reach === 'portal' && tellWords.trim() !== ''
-  const review = amend.review
-  const pairs = amendPairs(amend.lines, order)
-  const label = (index: number) => {
-    const draft = pairs[index]?.draft
-    if (!draft) return null
-    const names = namesOf(draft, order, amend.styles[draft.styleId])
-    return `${names.style} · ${names.colour}`
-  }
-  const preview = review?.preview ?? null
-  // B-W2b-323: the freeze rules' refusals are said apart (with the priced change's offer), the others by place as before.
-  const frozenPaths = new Set(preview && !preview.ok ? preview.problems.filter((issue) => frozenProblemsOf([issue]).length > 0).map((issue) => issue.path) : [])
-  const problems = preview && !preview.ok ? issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), label) : []
-  const diff = preview?.diff ?? null
-  const change = diff ? moneyChange(diff) : null
-  const held = model.busy
-    ? t('held.busy')
-    : !review || review.phase === 'reading'
-      ? t('amend.held.reading')
-      : review.phase === 'failed'
-        ? t('amend.held.failed')
-        : problems.length > 0 || frozenPaths.size > 0 /* B-W2b-323 */
-          ? t('amend.held.problems')
-          : reason.trim() === ''
-            ? t('amend.held.reason')
-            : null
-  const rows = (diff?.lines ?? []).map((line) => {
-    const name = changeLabel(line, order, amend.styles)
-    const price = diff?.prices?.find((entry) => entry.lineId === line.lineId)
-    return {
-      id: line.lineId,
-      cells: [
-        <span key="l" className="fw-so-cell">
-          {name.what ? t('changes.lineWhat', { line: name.line, what: name.what }) : t('changes.line', { line: name.line })}
-        </span>,
-        <Tag key="c" tone={line.change === 'REMOVED' ? 'danger' : line.change === 'ADDED' ? 'info' : 'warning'}>
-          {t(`changes.kind.${line.change}`)}
-        </Tag>,
-        sizesText(line.sizes) || t('changes.sizesSame'),
-        t('changes.pieces', { before: line.piecesBefore, after: line.piecesAfter }),
-        ...(model.can.price ? [price?.unitPrice ? `${unitPrice(price.unitPrice.before, order.currency, locale)} → ${unitPrice(price.unitPrice.after, order.currency, locale)}` : t('changes.priceSame')] : []),
-      ],
-    }
-  })
-  const columns = [t('changes.col.line'), t('changes.col.change'), t('changes.col.sizes'), t('changes.col.pieces'), ...(model.can.price ? [t('changes.col.price')] : [])]
-  return (
-    <Frame
-      title={t('amend.reviewTitle', { revision: amend.revision, number: order.number })}
-      held={held}
-      go={() => actions?.onAmendApply?.(reason.trim(), tellOn ? tellWords.trim() : null)}
-      goLabel={model.busy ? t('common.working') : t('amend.apply')}
-      onClose={close(actions)}
-      problem={<DialogProblem model={model} />}
-      size="xl"
-    >
-      {!review || review.phase === 'reading' ? (
-        <p className="fw-so-hint" role="status">
-          <Spinner size={14} /> {t('amend.reading')}
-        </p>
-      ) : review.phase === 'failed' ? (
-        <Banner
-          tone="danger"
-          title={review.problem ? t(review.problem.key, review.problem.params) : t('amend.failed')}
-          action={
-            <Button size="sm" onClick={() => actions?.onAmendReview?.()}>
-              {t('common.retry')}
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          {/* B-W2b-323: frozen by the production stage — "Send as a priced change" (or it cannot change any more). */}
-          {preview && !preview.ok && <FrozenOffer order={order} problems={preview.problems} model={model.depth} onPriced={actions?.onPricedOffer} />}
-          {problems.length > 0 && (
-            <>
-              <Banner tone="danger" title={t('amend.problems', { count: problems.length })} />
-              <Words phrases={problems} />
-            </>
-          )}
-          {diff && (
-            <>
-              <p className="fw-so-hint">{change ? t('amend.summaryMoney', { before: money(change.before, order.currency, locale), after: money(change.after, order.currency, locale), delta: `${change.delta >= 0 ? '+' : '−'}${money(Math.abs(change.delta), order.currency, locale)}` }) : t('amend.summary', { count: diff.lines.length })}</p>
-              {diff.reacceptanceNeeded ? <Banner tone="warning" title={t('amend.reaccept')} /> : <Banner tone="info" title={t('amend.noReaccept')} />}
-              {rows.length > 0 && <SummaryTable label={t('amend.tableLabel')} columns={columns} rows={rows} density="roomy" stackOnPhone />}
-              {diff.header.length > 0 && (
-                <KeyValue
-                  dense
-                  labelCase="sentence"
-                  items={diff.header.map((entry) => ({
-                    label: t(`amend.field.${entry.field}`),
-                    value: `${entry.field === 'requestedDate' && entry.before ? formatDate(dayInstant(entry.before), { locale }) : (entry.before ?? '—')} → ${entry.field === 'requestedDate' && entry.after ? formatDate(dayInstant(entry.after), { locale }) : (entry.after ?? '—')}`,
-                  }))}
-                />
-              )}
-            </>
-          )}
-          <Field label={t('amend.reason')} hint={t('amend.reasonHint')}>
-            <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
-          </Field>
-          {/* F-SA-242 (14-change-flow §2.10, §4.2): the customer is told only when the person writes it — the words, and the tick. */}
-          {order.party && (
-            <>
-              <Field label={t('amend.tell.words')} hint={t('amend.tell.hint')}>
-                <Textarea value={tellWords} onChange={(event) => setTellWords(event.target.value)} rows={2} maxLength={2000} />
-              </Field>
-              <ConversationTick id={`amend-${order.id}`} tick={tick} words={tellWords} customer={order.party.legalName} onTick={setTellChosen} />
-            </>
-          )}
-        </>
-      )}
-    </Frame>
-  )
-}
 
 // ---- Close remaining lines / Reopen lines ------------------------------------------------------------------------------
 

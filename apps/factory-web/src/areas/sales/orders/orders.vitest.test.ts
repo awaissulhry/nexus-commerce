@@ -1182,3 +1182,142 @@ describe('F-OP-111: Split into new orders — each size capped at what may move,
   })
 })
 // ---- end F-OP-111
+
+// ---- F-OP-106 (order page N2; 10-order-page §4.1; review R-4): the "What changes" strip, ONE Apply ------------------------------
+describe('F-OP-106: the What changes strip — fed by the preview of THIS draft, the work orders by the reader\'s rights, ONE Apply', () => {
+  const production = order('IN_PRODUCTION')
+  const black = lineOf(production, 10)
+  const words = { en: 'WO-0312 is on hold: lift the hold first, then apply the change.', it: 'WO-0312 è in pausa: togli prima la pausa, poi applica la modifica.' }
+  // B-OP-013's plan as the API answers it to Sales: the DRAFT follows (orders.manage), the RELEASED one waits (no workorders.manage).
+  const plan = [
+    { workOrderId: 'wo-draft', number: 'WO-0311', status: 'DRAFT', route: 'SET_DRAFT_CELLS' as const, cells: [{ size: '48', from: 2, to: 1, cut: 0, salesOrderLineId: black.id }], appliesNow: true, held: null, reprint: false },
+    { workOrderId: 'wo-released', number: 'WO-0312', status: 'RELEASED', route: 'LOWER_RELEASED' as const, cells: [{ size: '50', from: 2, to: 1, cut: 0, salesOrderLineId: black.id }], appliesNow: false, held: words, reprint: true },
+  ]
+  const draftOfTyped = () => {
+    const lines = withCells(draftOf(production), { [black.id]: { '48': 1, '50': 1, '52': 2, '54': 2 } })
+    return { lines, customerRef: production.customerRef ?? '', requestedDate: production.requestedDate ?? '' }
+  }
+  const previewOf = (over: Record<string, unknown> = {}) => ({ ...AMEND_PREVIEW, plan, ...over }) as typeof AMEND_PREVIEW
+  const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+
+  it('a DRAFT work order follows now for Sales, a RELEASED one waits for production — said with the API\'s why; a planner\'s follows', async () => {
+    const { amendKeyOf, stripOf } = await import('./daily-model')
+    const { workOrderWords } = await import('./record/view/LinesTab')
+    const draft = draftOfTyped()
+    const key = amendKeyOf(draft, production)
+    const strip = stripOf({ order: production, review: { phase: 'ready', key, preview: previewOf(), problem: null }, key, local: null, price: true, label: () => null })
+    expect(strip.phase).toBe('ready')
+    expect(strip.workOrders.map((wo) => [wo.number, wo.now, wo.before, wo.after])).toEqual([
+      ['WO-0311', true, 2, 1],
+      ['WO-0312', false, 2, 1],
+    ])
+    expect(strip.workOrders.map((wo) => workOrderWords(wo, en, 'en'))).toEqual([
+      'WO-0311 2 → 1 · follows now',
+      'WO-0312 2 → 1 · waits for production — decide on this page · WO-0312 is on hold: lift the hold first, then apply the change. · its work sheet is printed again',
+    ])
+    // The same preview answered to a planner (workorders.manage): the released one follows too, no why.
+    const planner = previewOf({ plan: plan.map((entry) => ({ ...entry, appliesNow: true, held: null })) })
+    const planned = stripOf({ order: production, review: { phase: 'ready', key, preview: planner, problem: null }, key, local: null, price: false, label: () => null })
+    expect(planned.workOrders.every((wo) => wo.now && wo.held === null)).toBe(true)
+    // A work order this reader does not reach has no number: "A work order"; a new one and a cancel say so.
+    const others = stripOf({ order: production, review: { phase: 'ready', key, preview: previewOf({ plan: [{ ...plan[0]!, number: null }, { ...plan[0]!, workOrderId: null, route: 'NEW_DRAFT', cells: [{ size: '48', from: 0, to: 3, cut: 0 }] }, { ...plan[1]!, route: 'CANCEL_WORK_ORDER', appliesNow: true }] }), problem: null }, key, local: null, price: true, label: () => null })
+    expect(others.workOrders.map((wo) => workOrderWords(wo, en, 'en'))).toEqual(['A work order 2 → 1 · follows now', 'A new work order: 3 pieces · follows now', 'WO-0312 cancelled · follows now · its work sheet is printed again'])
+    expect(strip.workOrders[0]!.lineIds).toEqual([black.id])
+  })
+
+  it('pieces always; the net only with the price grain (never shown without it); re-acceptance is information', async () => {
+    const { amendKeyOf, stripOf } = await import('./daily-model')
+    const draft = draftOfTyped()
+    const key = amendKeyOf(draft, production)
+    const ordered = production.lines.reduce((sum, line) => sum + line.quantity, 0)
+    const seen = { phase: 'ready' as const, key, preview: previewOf(), problem: null }
+    const priced = stripOf({ order: production, review: seen, key, local: null, price: true, label: () => null })
+    expect(priced.pieces).toEqual({ before: ordered, after: ordered + 6, delta: 6 })
+    expect(priced.net).toEqual({ before: 624000, after: 894000, delta: 270000 })
+    expect(priced.reaccept).toBe(true)
+    expect(stripOf({ order: production, review: seen, key, local: null, price: false, label: () => null }).net).toBeNull()
+    // The view draws the net only with the grain too.
+    const view = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{model.can.price && strip.net && <span>{change('edit.strip.net'")
+  })
+
+  it('a stale preview is dropped: an answer for another draft never shows (reading until THIS draft\'s comes), nor lands on a newer ask', async () => {
+    const { amendKeyOf, stripOf, tookPreview } = await import('./daily-model')
+    const draft = draftOfTyped()
+    const key = amendKeyOf(draft, production)
+    const older = amendKeyOf({ ...draft, lines: draftOf(production) }, production)
+    expect(older).not.toBe(key)
+    // The strip holds an answer asked for the older draft: it reads "Working out what changes…", never the older numbers.
+    const stale = stripOf({ order: production, review: { phase: 'ready', key: older, preview: previewOf(), problem: null }, key, local: null, price: true, label: () => null })
+    expect(stale.phase).toBe('reading')
+    expect(stale.pieces).toBeNull()
+    expect(stale.workOrders).toEqual([])
+    // An answer comes back after the draft asked again: it is dropped; the one asked for is taken.
+    const asking = { ...draft, review: { phase: 'reading' as const, key, preview: null, problem: null } }
+    expect(tookPreview(asking, { phase: 'ready', key: older, preview: previewOf(), problem: null })).toBe(asking)
+    expect(tookPreview(asking, { phase: 'ready', key, preview: previewOf(), problem: null })?.review?.phase).toBe('ready')
+    expect(tookPreview(null, { phase: 'ready', key, preview: previewOf(), problem: null })).toBeNull()
+    // The key follows the body and the order's version (a re-read order asks again).
+    expect(amendKeyOf(draft, { ...production, version: production.version + 1 })).not.toBe(key)
+  })
+
+  it('Apply waits while it reads, when the read failed, when the API refuses by place, without a reason; the draft\'s own hold first', async () => {
+    const { amendKeyOf, stripHeld, stripOf } = await import('./daily-model')
+    const { AMEND_PREVIEW_PROBLEMS } = await import('./_demo/fixtures')
+    const draft = draftOfTyped()
+    const key = amendKeyOf(draft, production)
+    const of = (review: Parameters<typeof stripOf>[0]['review'], local: { key: string } | null = null) => stripOf({ order: production, review, key, local, price: true, label: () => 'DEMO-JKT-01 · BLK' })
+    expect(stripHeld(of(null), { reason: 'x', busy: false, local: null })?.key).toBe('amend.held.reading')
+    expect(stripHeld(of({ phase: 'reading', key, preview: null, problem: null }), { reason: 'x', busy: false, local: null })?.key).toBe('amend.held.reading')
+    const failed = of({ phase: 'failed', key, preview: null, problem: { key: 'problem.write.unavailable' } })
+    expect(failed.problem).toEqual({ key: 'problem.write.unavailable' })
+    expect(stripHeld(failed, { reason: 'x', busy: false, local: null })?.key).toBe('amend.held.failed')
+    const refused = of({ phase: 'ready', key, preview: { ...AMEND_PREVIEW_PROBLEMS }, problem: null })
+    expect(refused.problems.length).toBeGreaterThan(0)
+    expect(stripHeld(refused, { reason: 'x', busy: false, local: null })?.key).toBe('amend.held.problems')
+    const ready = of({ phase: 'ready', key, preview: previewOf(), problem: null })
+    expect(stripHeld(ready, { reason: '  ', busy: false, local: null })?.key).toBe('amend.held.reason')
+    expect(stripHeld(ready, { reason: 'Two more blacks.', busy: false, local: null })).toBeNull()
+    expect(stripHeld(ready, { reason: 'Two more blacks.', busy: true, local: null })?.key).toBe('held.busy')
+    // Nothing changed yet: nothing is asked (idle), and Apply says why.
+    const idle = of(null, { key: 'amend.held.nothing' })
+    expect(idle.phase).toBe('idle')
+    expect(stripHeld(idle, { reason: 'x', busy: false, local: { key: 'amend.held.nothing' } })?.key).toBe('amend.held.nothing')
+  })
+
+  it('the notice after Apply names the work orders that followed and those that wait, and the customer when told', async () => {
+    const { appliedNotice } = await import('./daily-model')
+    const applied = [{ changeId: 'c1', workOrderId: 'w1', number: 'WO-0311', route: 'SET_DRAFT_CELLS' as const, reprint: false }]
+    const waiting = [{ changeId: 'c2', workOrderId: 'w2', number: 'WO-0312', words }, { changeId: 'c3', workOrderId: null, number: null, words }]
+    expect(appliedNotice(3, { applied: [], waiting: [] }, null)).toEqual({ key: 'edit.done.plain', params: { revision: 3 } })
+    expect(appliedNotice(3, { applied, waiting: [] }, 'Brand Alpha')).toEqual({ key: 'edit.done.changedTold', params: { revision: 3, changed: 'WO-0311', customer: 'Brand Alpha' } })
+    expect(appliedNotice(3, { applied, waiting }, null)).toEqual({ key: 'edit.done.both', params: { revision: 3, changed: 'WO-0311', waits: 'WO-0312, WO-…' } })
+    const notice = appliedNotice(3, { applied, waiting: waiting.slice(0, 1) }, 'Brand Alpha')
+    expect(en(notice.key, notice.params)).toBe('Amendment 3 applied · WO-0311 changed · waiting for production: WO-0312 — decide on this page · Brand Alpha told.')
+  })
+
+  it('the page: ONE Apply (no review dialog), the preview 500 ms after the last edit and on blur, one call at a time', () => {
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('const PREVIEW_AFTER_MS = 500')
+    expect(acts).toContain('if (!draft || !value || asking.current || draftHeld(draft, value)) return')
+    expect(acts).toContain('tookPreview(known, { phase: \'ready\', key, preview, problem: null })')
+    expect(acts).not.toContain("setDialog({ kind: 'amendReview' })")
+    const view = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('onBlur={() => actions?.onAmendPreview?.()}')
+    expect(view).toContain("if (!heldText) actions?.onAmendApply?.()")
+    expect(readFileSync(new URL('./record/view/DailyDialogs.tsx', import.meta.url), 'utf8')).not.toContain('AmendReviewDialog')
+  })
+
+  it('every strip word in it + en with the same placeholders; Italian says "Si applica subito — senza approvazione"', async () => {
+    const { CATALOGUE, placeholdersOf } = await import('../../../lib/i18n/messages')
+    const keys = Object.keys(CATALOGUE.en.orders ?? {}).filter((key) => key.startsWith('edit.'))
+    expect(keys.length).toBeGreaterThan(20)
+    for (const key of keys) {
+      expect(CATALOGUE.it.orders?.[key]?.trim(), `it ${key}`).toBeTruthy()
+      expect(placeholdersOf(CATALOGUE.it.orders?.[key] ?? ''), key).toEqual(placeholdersOf(CATALOGUE.en.orders?.[key] ?? ''))
+    }
+    expect(CATALOGUE.it.orders?.['edit.appliesAtOnce']).toBe('Si applica subito — senza approvazione')
+    for (const gone of ['amend.review', 'amend.reviewTitle', 'notice.amended', 'notice.amendedReaccept', 'notice.amendedTold']) expect(CATALOGUE.en.orders?.[gone], gone).toBeUndefined()
+  })
+})
+// ---- end F-OP-106

@@ -1,12 +1,15 @@
 'use client'
 
-import { createElement, useCallback, useRef, useState, type ReactNode } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { findStyles, getStyle } from '../../quotes/api'
 import { isApiError } from '../../../../lib/api/errors'
 import { applyAmendment, cancelOrder, closeLines, getCancelCheck, previewAmendment, reopenLines, type CancelCheck, type CloseLinesAnswer, type Order } from '../api'
-import { amendLines, draftOf, namesOf, newKey, withCells, type DraftLine } from '../daily-model'
-import { readProblem, writeProblem, type Phrase } from '../model'
+import { draftOf, namesOf, newKey, withCells, type DraftLine } from '../daily-model'
+// F-OP-106: the strip's preview (one body, one key; a stale answer dropped), the notice after Apply.
+import { amendBodyOf, amendKeyOf, appliedNotice, reviewHeld, tookPreview } from '../daily-model'
+import { tellHeld, tickOn } from '../../../home/approvals/requests/model'
+import { readProblem, writeProblem } from '../model'
 // ---- F-OP-111: Split into new orders… (POST …/split; the customer's delivery addresses for a part's Ship to) ----
 import { listShipToAddresses, splitOrder, type ShipToAddress } from '../api'
 import { splitBodyOf, splitRefusals, type SplitRefusal } from '../model'
@@ -25,7 +28,9 @@ export type LinesActsActions = Pick<
   | 'onAmendCells'
   | 'onAmendPrice'
   | 'onAmendHeader'
-  | 'onAmendReview'
+  | 'onAmendPreview' // F-OP-106
+  | 'onAmendReason' // F-OP-106
+  | 'onAmendTell' // F-OP-106
   | 'onAmendApply'
   | 'onComposerQuery'
   | 'onComposerPick'
@@ -38,26 +43,25 @@ export type LinesActsActions = Pick<
   | 'onSplit' // F-OP-111
 >
 
-/** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become). */
+/** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become; daily-model amendBodyOf). */
 export type AmendBody = ReturnType<typeof amendBodyOf>
 
 const part = <T,>(value: T): Part<T> => ({ value, problem: null })
-/** The reason the review's preview is asked with (the preview writes nothing; Apply sends the typed reason). */
+/** The reason the strip's preview is asked with (the preview writes nothing; Apply sends the typed reason). */
 const PREVIEW_REASON = 'Review before applying.'
+/** F-OP-106: the strip asks its preview this long after the last edit (and at once on blur). */
+const PREVIEW_AFTER_MS = 500
 
-function amendBodyOf(draft: AmendState, value: Order) {
-  const customerRef = draft.customerRef.trim() || null
-  const requestedDate = draft.requestedDate || null
-  return {
-    lines: amendLines(draft.lines, value),
-    ...(customerRef !== (value.customerRef ?? null) ? { customerRef } : {}),
-    ...(requestedDate !== (value.requestedDate ?? null) ? { requestedDate } : {}),
-  }
+/** The draft's own hold (a typed price that is not one, no line left, nothing changed): nothing is asked of the API then. */
+const draftHeld = (draft: AmendState, value: Order) => {
+  const body = amendBodyOf(draft, value)
+  return reviewHeld(draft.lines, value, { changed: 'customerRef' in body || 'requestedDate' in body })
 }
 
 /**
  * F-OP-134 (N-5): the Lines tab's acts — B-W2a-50: "Amend order" holds the draft here (each style read for its sizes and colourways;
- * Review asks the API's preview, Apply sends the version as read; F-SA-242: the customer's words through the thread's portal send),
+ * F-OP-106: the strip's preview is asked 500 ms after the last edit and on blur, one call at a time, an answer for an older draft
+ * dropped; ONE Apply sends the version as read, the reason and the words for the customer (F-SA-242: through the thread's portal send)),
  * close and reopen lines, the cancel's impact check when its dialog opens, then the cancel with the typed number; F-OP-111: Split
  * into new orders (the customer's delivery addresses read as it opens, parties.view; a refusal said at its place). Mounted by the
  * container (OrderRecord.tsx), which hands what it returns to the view as plain props; a view never imports it.
@@ -67,7 +71,6 @@ export function useLinesActs(
     /** The order as this render draws it (an amendment's new line is named by it). */
     readonly order: Order | null
     readonly setDialog: (dialog: RecordDialog | null) => void
-    readonly setDialogProblem: (problem: Phrase | null) => void
     /** "Changed by <name> at hh:mm" goes with the draft it was about. */
     readonly clearChanged: () => void
     /** Amend shows the Lines tab (the container writes the address). */
@@ -87,7 +90,7 @@ export function useLinesActs(
   readCancelCheck: () => void
   opened: (next: RecordDialog | null) => void
 } {
-  const { api, orderId, current, write, version, setNotice, load, order, setDialog, setDialogProblem, clearChanged, showLines, pricedStart, permissions } = input
+  const { api, orderId, current, write, version, setNotice, load, order, setDialog, clearChanged, showLines, pricedStart, permissions } = input
   const [amend, setAmend] = useState<AmendState | null>(null)
   const amendRef = useRef<AmendState | null>(null)
   amendRef.current = amend
@@ -129,27 +132,46 @@ export function useLinesActs(
       styles: Object.fromEntries(styleIds.map((styleId) => [styleId, undefined])),
       composer: COMPOSER_EMPTY,
       review: null,
+      reason: '', // F-OP-106
+      tell: { words: '', chosen: null }, // F-OP-106
     })
     showLines()
     for (const styleId of styleIds) void readStyle(styleId)
   }
-  const review = () => {
+  // ---- F-OP-106: the strip's preview — one call at a time; when it comes back the draft is asked again if it moved on meanwhile (an
+  // answer is kept with the key it was asked for: the strip draws it only while that key is the draft's, so a stale one never shows).
+  const asking = useRef(false)
+  const askPreview = useCallback(() => {
     const draft = amendRef.current
     const value = current.current
-    if (!draft || !value) return
-    setDialog({ kind: 'amendReview' })
-    setDialogProblem(null)
-    setAmend((known) => (known ? { ...known, review: { phase: 'reading', preview: null, problem: null } } : known))
-    // The API checks a reason in the preview too: it is asked with a stand-in (nothing is written); the dialog asks the
-    // real reason before Apply, which sends it.
+    if (!draft || !value || asking.current || draftHeld(draft, value)) return
+    const key = amendKeyOf(draft, value)
+    if (draft.review?.key === key && draft.review.phase !== 'failed') return
+    asking.current = true
+    setAmend((known) => (known ? { ...known, review: { phase: 'reading', key, preview: null, problem: null } } : known))
+    // The API checks a reason in the preview too: it is asked with a stand-in (nothing is written); Apply sends the real one.
     previewAmendment(api, orderId, { version: value.version, reason: PREVIEW_REASON, ...amendBodyOf(draft, value) })
-      .then((preview) => setAmend((known) => (known ? { ...known, review: { phase: 'ready', preview, problem: null } } : known)))
+      .then((preview) => setAmend((known) => tookPreview(known, { phase: 'ready', key, preview, problem: null })))
       .catch((error: unknown) => {
         const words = writeProblem(error)
-        setAmend((known) => (known ? { ...known, review: { phase: 'failed', preview: null, problem: words } } : known))
+        setAmend((known) => tookPreview(known, { phase: 'failed', key, preview: null, problem: words }))
         if (words.reload) void load()
       })
-  }
+      .finally(() => {
+        asking.current = false
+        // The draft may have moved on while this one was asked: ask for it now (nothing when it is the same).
+        setTimeout(() => askAgain.current(), 0)
+      })
+  }, [api, orderId, current, load])
+  const askAgain = useRef(askPreview)
+  askAgain.current = askPreview
+  const draftKey = amend && order ? amendKeyOf(amend, order) : null
+  useEffect(() => {
+    if (draftKey === null) return
+    const timer = setTimeout(() => askAgain.current(), PREVIEW_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [draftKey])
+  // ---- end F-OP-106
   const composerQuery = (query: string) => {
     const mine = ++searchSeq.current
     const companyId = current.current?.companyId ?? null
@@ -197,24 +219,31 @@ export function useLinesActs(
     onAmendCells: (styleId, next) => setAmend((known) => (known ? { ...known, lines: withCells(known.lines, Object.fromEntries(Object.entries(next).filter(([key]) => known.lines.some((line) => line.key === key && line.styleId === styleId)))) } : known)),
     onAmendPrice: (key, text) => setAmend((known) => (known ? { ...known, lines: known.lines.map((line) => (line.key === key ? { ...line, price: text } : line)) } : known)),
     onAmendHeader: (field, text) => setAmend((known) => (known ? { ...known, [field]: text } : known)),
-    onAmendReview: review,
-    onAmendApply: (reason, tell) => {
+    // ---- F-OP-106: the strip's own parts; ONE Apply (no second dialog) ----
+    onAmendPreview: () => askAgain.current(),
+    onAmendReason: (text) => setAmend((known) => (known ? { ...known, reason: text } : known)),
+    onAmendTell: (next) => setAmend((known) => (known ? { ...known, tell: { ...known.tell, ...next } } : known)),
+    onAmendApply: () => {
       const draft = amendRef.current
       if (!draft) return
       const key = newIdempotencyKey()
+      const reason = draft.reason.trim()
+      const tick = { chosen: draft.tell.chosen, reach: portalGone ? ('none' as const) : ('portal' as const) }
+      const tell = tickOn(tick, draft.tell.words) && tellHeld(tick, draft.tell.words) === null ? draft.tell.words.trim() : null
       void write(async () => {
         const value = current.current!
         const answer = await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value) }, key)
         setAmend(null)
         clearChanged()
-        setNotice({ tone: 'success', words: { key: answer.amendment.reacceptance === 'NEEDED' ? 'notice.amendedReaccept' : 'notice.amended', params: { revision: answer.amendment.revision } } })
+        // "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production": the work orders followed in the same command.
+        setNotice({ tone: 'success', words: appliedNotice(answer.amendment.revision, answer.workOrders, null) })
         // ---- F-SA-242: ticked, the words go as our message in the order's conversation (the thread's own portal send), after
         // the amendment took; a refusal never undoes the amendment — it is said in the one notice.
         if (tell) {
           const revision = answer.amendment.revision
           try {
             await postPortalReplyKeyed(api, { type: 'SalesOrder', id: orderId }, { body: tell, attachments: [] }, newIdempotencyKey())
-            setNotice({ tone: 'success', words: { key: 'notice.amendedTold', params: { revision } } })
+            setNotice({ tone: 'success', words: appliedNotice(revision, answer.workOrders, value.party?.legalName ?? '') })
           } catch (error) {
             const refusal = portalRefusal(error)
             const gone = refusal === 'notice.portal.NO_PORTAL' || refusal === 'notice.portal.NO_PARTY'

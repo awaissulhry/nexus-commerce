@@ -529,10 +529,12 @@ export const AMEND_PREVIEW: AmendPreview = {
     grossAmountAfter: 1090680,
     reacceptanceNeeded: true,
   },
+  workOrders: null, // F-OP-106: no extra pieces
+  plan: [], // F-OP-106: no work order yet (a confirmed order)
 }
 
 /** The same review refused by the API: a size of a line under what its work orders make (said by place, in words). */
-export const AMEND_PREVIEW_PROBLEMS: AmendPreview = { ok: false, revision: 1, version: 4, problems: [{ path: 'body/lines/0/sizes', message: 'x' }, { path: 'body/lines', message: 'x' }], diff: null }
+export const AMEND_PREVIEW_PROBLEMS: AmendPreview = { ok: false, revision: 1, version: 4, problems: [{ path: 'body/lines/0/sizes', message: 'x' }, { path: 'body/lines', message: 'x' }], diff: null, workOrders: null, plan: [] }
 
 export const SCHEDULE: Schedule = {
   orderId: ORDER_ID,

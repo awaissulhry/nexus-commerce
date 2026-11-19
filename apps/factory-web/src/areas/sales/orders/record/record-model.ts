@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react' // B-W2b-340
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
-import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
-import type { DraftLine } from '../daily-model'
+import type { AmendmentsAnswer, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
+import type { AmendReview, DraftLine } from '../daily-model' // F-OP-106: the strip's preview
 import type { MarginTabModel } from './margin/model'
 import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab } from '../model'
@@ -45,8 +45,8 @@ export const PART_LOADING = { value: null, problem: null } as const
 // at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
 /** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
 export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' }
-/** use-lines-acts: the lines (B-W2a-50: the amendment's review, close and reopen lines, the cancel; F-OP-111: the split). */
-export type LinesDialog = { kind: 'amendReview' } | { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
+/** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
+export type LinesDialog = { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
@@ -86,7 +86,7 @@ export interface ComposerState {
 
 export const COMPOSER_EMPTY: ComposerState = Object.freeze({ query: '', results: null, searching: false, problem: null, chosen: null, picked: [] }) as ComposerState
 
-/** "Amend order" (design order.lines.cards: the lines become an amendment draft until Review → Apply). */
+/** "Amend order" (design order.lines.cards: the lines become an amendment draft; F-OP-106: its strip says what changes, ONE Apply). */
 export interface AmendState {
   /** The number the amendment will get ("Amendment 2 — not applied"). */
   revision: number
@@ -96,8 +96,11 @@ export interface AmendState {
   /** Each style of the draft as read (sizes, colourways, offered sizes): undefined while read, null when it failed. */
   styles: Record<string, StyleDetail | null | undefined>
   composer: ComposerState
-  /** The review dialog's read of the API's preview. */
-  review: { phase: 'reading' | 'ready' | 'failed'; preview: AmendPreview | null; problem: Phrase | null } | null
+  /** F-OP-106: the strip's read of the API's preview (asked 500 ms after the last edit and on blur, for the key of the draft then). */
+  review: AmendReview | null
+  // ---- F-OP-106: the strip's Why (required) and the words for the customer with their tick (null: not touched) ----
+  reason: string
+  tell: { readonly words: string; readonly chosen: boolean | null }
 }
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
@@ -272,9 +275,11 @@ export interface OrderRecordActions {
   onAmendCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onAmendPrice?: (key: string, text: string) => void
   onAmendHeader?: (field: 'customerRef' | 'requestedDate', value: string) => void
-  onAmendReview?: () => void
-  // F-SA-242: `tell` — the words for the customer also written in the order's conversation (null: not ticked).
-  onAmendApply?: (reason: string, tell?: string | null) => void
+  // ---- F-OP-106: the strip — ask its preview now (blur, Try again), Why, the words for the customer and their tick, ONE Apply
+  onAmendPreview?: () => void
+  onAmendReason?: (text: string) => void
+  onAmendTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
+  onAmendApply?: () => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void

@@ -3,6 +3,7 @@ import type { StyleDetail } from '../quotes/api'
 import type {
   AmendLineInput,
   AmendmentDiff,
+  AmendPreview, // F-OP-106
   CancelCheck,
   DailyOrderAction,
   ImpactItem,
@@ -15,7 +16,9 @@ import type {
   OrderStatus,
   PathIssue,
 } from './api'
+import type { Followed, FollowRoute, WorkOrderPlan } from './api' // F-OP-106
 import { isFinal, type OrderAbilities, type Phrase, type Tone } from './model'
+import { frozenProblemsOf } from './depth/model' // F-OP-106: the freeze rules' refusals are the strip's own part
 // B-W2b-374: a new line's options.
 import type { PickBody } from '../quotes/record/configurator/api'
 
@@ -336,6 +339,151 @@ export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'line
   if (changeCount(lines, order) === 0 && !header.changed) return phrase('amend.held.nothing')
   return null
 }
+
+// ---- F-OP-106 (order page N2; 10-order-page §4.1; review R-4): the "What changes" strip — fed by the amendment's preview ----------
+
+/** The draft as the strip reads it (record-model AmendState holds it). */
+export interface AmendDraftLike {
+  readonly lines: readonly DraftLine[]
+  readonly customerRef: string
+  readonly requestedDate: string
+}
+
+/** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become): its lines, and the header that changed. */
+export function amendBodyOf(draft: AmendDraftLike, order: Pick<Order, 'lines' | 'customerRef' | 'requestedDate'>) {
+  const customerRef = draft.customerRef.trim() || null
+  const requestedDate = draft.requestedDate || null
+  return {
+    lines: amendLines(draft.lines, order),
+    ...(customerRef !== (order.customerRef ?? null) ? { customerRef } : {}),
+    ...(requestedDate !== (order.requestedDate ?? null) ? { requestedDate } : {}),
+  }
+}
+
+/** What a preview is about: the body it was asked with, on the order's version (an answer about another one is stale). */
+export const amendKeyOf = (draft: AmendDraftLike, order: Pick<Order, 'lines' | 'customerRef' | 'requestedDate' | 'version'>): string => JSON.stringify([order.version, amendBodyOf(draft, order)])
+
+/** The strip's read of the API's preview, with the key it was asked for. */
+export interface AmendReview {
+  readonly phase: 'reading' | 'ready' | 'failed'
+  readonly key: string
+  readonly preview: AmendPreview | null
+  readonly problem: Phrase | null
+}
+
+/** A preview's answer into the draft; dropped when the draft asked for another body since (its key moved on) or is gone. */
+export function tookPreview<T extends { readonly review: AmendReview | null }>(draft: T | null, next: AmendReview): T | null {
+  if (!draft || draft.review?.key !== next.key) return draft
+  return { ...draft, review: next }
+}
+
+export interface StripChange {
+  readonly before: number
+  readonly after: number
+  readonly delta: number
+}
+
+/** One work order of the strip: what the change does to it and whether it follows now (the API's rule) or waits for production. */
+export interface StripWorkOrder {
+  readonly key: string
+  /** null: a work order this reader does not reach ("A work order"). */
+  readonly number: string | null
+  readonly route: FollowRoute
+  readonly before: number
+  readonly after: number
+  /** It follows in the same click (D1); false: it waits for production — decided on this page. */
+  readonly now: boolean
+  /** Why it waits (the API's words), when it says one. */
+  readonly held: { readonly it: string; readonly en: string } | null
+  readonly reprint: boolean
+  /** The order's lines its cells make (F-OP-109: "WO-0311 loses this line"); none when the preview does not say. */
+  readonly lineIds: readonly string[]
+}
+
+export interface AmendStrip {
+  /** idle: nothing to ask yet (the draft's own hold says why); reading: the preview of THIS draft is not there yet. */
+  readonly phase: 'idle' | 'reading' | 'ready' | 'failed'
+  /** The failed read's words. */
+  readonly problem: Phrase | null
+  /** The order's pieces before → after. */
+  readonly pieces: StripChange | null
+  /** The net before → after (the price grain only; never shown without it). */
+  readonly net: StripChange | null
+  readonly workOrders: readonly StripWorkOrder[]
+  /** The API's refusals by place, in this app's words (the freeze rules' apart, below). */
+  readonly problems: readonly Phrase[]
+  /** The freeze rules' refusals (FrozenOffer says what froze and the way on). */
+  readonly frozen: readonly PathIssue[]
+  /** The net total changes: the customer accepts the order again (information: it blocks nothing). null: not known yet. */
+  readonly reaccept: boolean | null
+  /** The preview's lines old → new and its header (Show all changes). */
+  readonly diff: AmendmentDiff | null
+}
+
+const EMPTY_STRIP = { problem: null, pieces: null, net: null, workOrders: [], problems: [], frozen: [], reaccept: null, diff: null } as const
+
+/** A work order of the preview's plan as the strip says it. */
+export function stripWorkOrderOf(plan: WorkOrderPlan, index: number): StripWorkOrder {
+  const before = plan.cells.reduce((sum, cell) => sum + cell.from, 0)
+  const after = plan.cells.reduce((sum, cell) => sum + cell.to, 0)
+  const lineIds = [...new Set(plan.cells.flatMap((cell) => (cell.salesOrderLineId ? [cell.salesOrderLineId] : [])))]
+  return { key: plan.workOrderId ?? `new-${index}`, number: plan.number, route: plan.route, before, after, now: plan.appliesNow, held: plan.appliesNow ? null : plan.held, reprint: plan.reprint, lineIds }
+}
+
+/**
+ * The strip of a draft: idle while the draft's own hold stands (nothing is asked), reading until the preview of THIS draft is there
+ * (an answer for an older draft is never drawn), its failure, or what changes — pieces, net (price grain), the work orders (each
+ * "follows now" or "waits for production", by the API's rule and the reader's rights: R-4), the refusals by place, re-acceptance.
+ */
+export function stripOf(input: { readonly order: Pick<Order, 'lines'>; readonly review: AmendReview | null; readonly key: string; readonly local: Phrase | null; readonly price: boolean; readonly label: (index: number) => string | null }): AmendStrip {
+  if (input.local) return { phase: 'idle', ...EMPTY_STRIP }
+  const review = input.review
+  if (!review || review.key !== input.key || review.phase === 'reading') return { phase: 'reading', ...EMPTY_STRIP }
+  if (review.phase === 'failed' || !review.preview) return { phase: 'failed', ...EMPTY_STRIP, problem: review.problem }
+  const preview = review.preview
+  const frozenPaths = new Set(preview.ok ? [] : preview.problems.filter((issue) => frozenProblemsOf([issue]).length > 0).map((issue) => issue.path))
+  const diff = preview.diff
+  const ordered = input.order.lines.reduce((sum, line) => sum + line.quantity, 0)
+  const delta = diff ? diff.lines.reduce((sum, line) => sum + (line.piecesAfter - line.piecesBefore), 0) : 0
+  return {
+    phase: 'ready',
+    problem: null,
+    pieces: diff ? { before: ordered, after: ordered + delta, delta } : null,
+    net: input.price && diff ? moneyChange(diff) : null,
+    workOrders: preview.plan.map(stripWorkOrderOf),
+    problems: preview.ok ? [] : issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), input.label),
+    frozen: preview.ok ? [] : preview.problems.filter((issue) => frozenPaths.has(issue.path)),
+    reaccept: diff ? diff.reacceptanceNeeded : null,
+    diff,
+  }
+}
+
+/** Why Apply waits, in this app's words, or null: the work, the draft's own hold, the preview (reading, failed, refused), the reason. */
+export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null }): Phrase | null {
+  if (input.busy) return phrase('held.busy')
+  if (input.local) return input.local
+  if (strip.phase === 'reading' || strip.phase === 'idle') return phrase('amend.held.reading')
+  if (strip.phase === 'failed') return phrase('amend.held.failed')
+  if (strip.problems.length > 0 || strip.frozen.length > 0) return phrase('amend.held.problems')
+  if (input.reason.trim() === '') return phrase('amend.held.reason')
+  return null
+}
+
+/** The work orders an answer names, as numbers ("WO-0311, WO-0312"); one this reader does not reach reads "WO-…". */
+const numbersOf = (entries: readonly { readonly number: string | null }[]): string => entries.map((entry) => entry.number ?? 'WO-…').join(', ')
+
+/**
+ * The notice after Apply: "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production — decide on this page · <Customer>
+ * told" — the work orders that followed in the same command and those that wait (B-OP-012's answer), and the customer when the words
+ * reached them (null: not told).
+ */
+export function appliedNotice(revision: number, followed: Followed, told: string | null): Phrase {
+  const changed = numbersOf(followed.applied)
+  const waits = numbersOf(followed.waiting)
+  const which = changed && waits ? 'both' : changed ? 'changed' : waits ? 'waits' : 'plain'
+  return phrase(`edit.done.${which}${told ? 'Told' : ''}`, { revision, ...(changed ? { changed } : {}), ...(waits ? { waits } : {}), ...(told ? { customer: told } : {}) })
+}
+// ---- end F-OP-106
 
 // ---- the API's refusals, by their place, in this app's words ---------------------------------------------------------------
 
