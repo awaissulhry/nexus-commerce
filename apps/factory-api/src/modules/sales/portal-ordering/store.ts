@@ -58,6 +58,8 @@ export const LINE_COLUMNS = {
   colourText: true,
   quantity: true,
   byPerson: true,
+  // B-CP-076: "Your price", the customer's own net unit price (the price grain: the contracts mark it, the grain filter drops it).
+  brandUnitPrice: true,
 } as const satisfies Prisma.PortalOrderRequestLineSelect
 
 export type RequestRow = Prisma.PortalOrderRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>

@@ -4,6 +4,8 @@ import type { Problem } from './rules' // B-CP-075: each problem's part of the c
 import type { Issue } from '../../core/errors'
 import { MAX_TEXT } from '../quotes/quotes'
 import { lineShapeProblems } from './rules'
+// B-CP-076: the customer's amount of a price (the price check's own rounding).
+import { brandAmountOf } from '../brand-prices/match'
 
 /**
  * The office's side of a portal order request (B-W2b-190, SAL-074 "portal orders arrive as requests"; design
@@ -379,3 +381,61 @@ export function lineMapOf(plan: readonly Pick<PlannedLine, 'requestLineId' | 're
   return [...out.values()]
 }
 // ---- end B-CP-077
+
+// ---- B-CP-076 (customer page plan 11 §1.3 D3; review E3, B4): "Your price" in the draft and its carry on accept --------------
+/**
+ * The customer's own net unit price per draft line (PortalOrderRequestLine.brandUnitPrice, the price grain: typed by its Buyer or
+ * Admin, never by a Designer; frozen at Send with the line). Two readings of it, pure:
+ *
+ *   the draft's value   `draftValueAmount` of the office's Drafts row (review B4: a money-looking name): each line at the price
+ *                       we showed the customer, else the customer's own price, × its pieces, in minor units — null when a line
+ *                       has neither (never a value that leaves a line out) or there is no line
+ *   the carry           accept as an ORDER writes the customer's prices on the order (OrderBrandPrice, source PORTAL) by the
+ *                       accept's line map, never by place: one request line made into one order line → a unit row; made into
+ *                       several → its amount (its price × the pieces made from it) as a line total on the first of them, or — when
+ *                       every request line has its price — one total row for the whole order (the price check then reads the
+ *                       order as a whole and never a false "not equal" on one line). A QUOTE takes nothing (the order made later
+ *                       offers the take-over).
+ */
+
+/** The draft's value at the prices on it, in minor units of its currency (see above); null: a line has no price, or no line. */
+export function draftValueOf(lines: readonly { readonly priceShown: string | null; readonly brandUnitPrice: string | null; readonly pieces: number }[], currency: string): number | null {
+  if (lines.length === 0) return null
+  let sum = 0
+  for (const line of lines) {
+    const price = line.priceShown ?? line.brandUnitPrice
+    const amount = price === null ? null : brandAmountOf({ unitPrice: price, netAmount: null }, line.pieces, currency)
+    if (amount === null) return null
+    sum += amount
+  }
+  return sum
+}
+
+/** A row of the customer's price the accept writes on the order: a line's unit price or line total, or the order's total (no line). */
+export interface CarriedBrandPrice {
+  readonly orderLineId: string | null
+  readonly unitPrice: string | null
+  readonly netAmount: number | null
+  /** The request lines it comes from (the audit names them). */
+  readonly requestLineIds: readonly string[]
+}
+
+/** The customer's prices of an accepted request as rows of the order made from it, by the accept's line map (see above). */
+export function brandPricesOfAccept(input: {
+  readonly currency: string
+  readonly prices: readonly { readonly requestLineId: string; readonly brandUnitPrice: string | null }[]
+  readonly map: readonly { readonly requestLineId: string; readonly into: readonly { readonly lineId: string; readonly pieces: number }[] }[]
+}): CarriedBrandPrice[] {
+  const priceOf = new Map(input.prices.map((entry) => [entry.requestLineId, entry.brandUnitPrice]))
+  const made = input.map.filter((entry) => entry.into.length > 0)
+  const priced = made.filter((entry) => (priceOf.get(entry.requestLineId) ?? null) !== null)
+  if (priced.length === 0) return []
+  const amountOf = (entry: (typeof made)[number]): number =>
+    brandAmountOf({ unitPrice: priceOf.get(entry.requestLineId)!, netAmount: null }, entry.into.reduce((total, line) => total + line.pieces, 0), input.currency) ?? 0
+  const units: CarriedBrandPrice[] = priced.filter((entry) => entry.into.length === 1).map((entry) => ({ orderLineId: entry.into[0]!.lineId, unitPrice: priceOf.get(entry.requestLineId)!, netAmount: null, requestLineIds: [entry.requestLineId] }))
+  const split = priced.filter((entry) => entry.into.length > 1)
+  if (split.length === 0) return units
+  if (priced.length === made.length) return [...units, { orderLineId: null, unitPrice: null, netAmount: made.reduce((total, entry) => total + amountOf(entry), 0), requestLineIds: made.map((entry) => entry.requestLineId) }]
+  return [...units, ...split.map((entry) => ({ orderLineId: entry.into[0]!.lineId, unitPrice: null, netAmount: amountOf(entry), requestLineIds: [entry.requestLineId] }))]
+}
+// ---- end B-CP-076

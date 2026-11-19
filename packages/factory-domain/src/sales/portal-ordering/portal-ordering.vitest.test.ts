@@ -18,6 +18,7 @@ import { MEASURE_BY, MEASURE_BY_WORDS, PEOPLE_IN_SHEET, personRow, personShapePr
 import { customLineProblems, customLineShapeProblems, draftStaleWords, lineHasPieces, linePieces, MTM_CLOSED_WORDS, PROBLEM_CODES, type CustomLineFacts } from './rules'
 import { problemPartOf, problemsByPartOf } from './office'
 import { ACCEPT_MAP_LIMITS, ACCEPT_WORDS, acceptPlanOf, lineMapOf, mappedLineNote, type AcceptLineFacts } from './office' // B-CP-077
+import { brandPricesOfAccept, draftValueOf } from './office' // B-CP-076
 
 const P1 = '00000000-0000-4000-8000-000000000001'
 const P2 = '00000000-0000-4000-8000-000000000002'
@@ -436,3 +437,37 @@ describe('B-CP-077: accept a described or made-to-measure request by its line ma
   })
 })
 // ---- end B-CP-077
+
+// ---- B-CP-076: "Your price" — the draft's value and the carry on accept (pure) -----------------------------------------------
+describe('B-CP-076: the customer’s own price — the draft’s value and its carry onto the order by the line map', () => {
+  it('values a draft at the price shown, else the customer’s own, in minor units; null when a line has neither, or no line', () => {
+    expect(draftValueOf([{ priceShown: '410', brandUnitPrice: '400', pieces: 2 }, { priceShown: null, brandUnitPrice: '390', pieces: 2 }], 'EUR')).toBe(160_000)
+    expect(draftValueOf([{ priceShown: '410', brandUnitPrice: null, pieces: 1 }, { priceShown: null, brandUnitPrice: null, pieces: 1 }], 'EUR')).toBeNull()
+    expect(draftValueOf([], 'EUR')).toBeNull()
+    // The price check's own rounding: half up to the minor unit (1.005 → 1.01).
+    expect(draftValueOf([{ priceShown: '0.335', brandUnitPrice: null, pieces: 3 }], 'EUR')).toBe(101)
+  })
+
+  it('carries by the map, never by place: 1 → 1 a unit row; 1 → n a line total on the first; every line priced → one order total', () => {
+    const map = [
+      { requestLineId: 'c1', into: [{ lineId: 'o10', pieces: 3 }] },
+      { requestLineId: 'r2', into: [{ lineId: 'o20', pieces: 1 }] },
+      { requestLineId: 'd3', into: [{ lineId: 'o30', pieces: 2 }, { lineId: 'o40', pieces: 2 }] },
+    ]
+    const priced = (red: string | null) => [{ requestLineId: 'c1', brandUnitPrice: '401' }, { requestLineId: 'r2', brandUnitPrice: red }, { requestLineId: 'd3', brandUnitPrice: '395.5' }]
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced(null), map })).toEqual([
+      { orderLineId: 'o10', unitPrice: '401', netAmount: null, requestLineIds: ['c1'] },
+      { orderLineId: 'o30', unitPrice: null, netAmount: 158_200, requestLineIds: ['d3'] },
+    ])
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced('402'), map })).toEqual([
+      { orderLineId: 'o10', unitPrice: '401', netAmount: null, requestLineIds: ['c1'] },
+      { orderLineId: 'o20', unitPrice: '402', netAmount: null, requestLineIds: ['r2'] },
+      { orderLineId: null, unitPrice: null, netAmount: 120_300 + 40_200 + 158_200, requestLineIds: ['c1', 'r2', 'd3'] },
+    ])
+    // No line made into several: unit rows only; no price: nothing; a line a copy made nothing from: nothing.
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced('402'), map: map.slice(0, 2) })).toHaveLength(2)
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: [{ requestLineId: 'c1', brandUnitPrice: null }], map })).toEqual([])
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced(null), map: [{ requestLineId: 'c1', into: [] }] })).toEqual([])
+  })
+})
+// ---- end B-CP-076

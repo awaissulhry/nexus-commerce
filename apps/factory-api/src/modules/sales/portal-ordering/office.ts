@@ -39,6 +39,11 @@ import type { CommandTx } from '../../../core/command'
 import { processFiles, type FilesRuntime } from '../../../platform/files/service'
 import { lineTarget } from '../quotes/lines'
 import { carryArtwork } from './accept-artwork'
+// B-CP-076 (customer page plan 11 §1.3 D3): "Your price" in the draft, its value, and its carry onto the order (cp-2b's store).
+import { newId } from '@nexus/factory-domain/core/ids'
+import { brandPricesOfAccept, draftValueOf } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, type PricedOrder } from '../brand-prices/store'
+import { ownPriceView } from './people'
 
 /**
  * The office's side of portal order requests (B-W2b-190, SAL-074; design home.approvals, sales.orders "the request waits
@@ -65,6 +70,12 @@ import { carryArtwork } from './accept-artwork'
  * is off: today's made-to-measure rule); its people stay on the request (the quote links it). The command keeps ONE map, request
  * line → order (or quote) line(s), by id: the answer's `made.lines` and the accept's audit carry it; the customer's logos follow it
  * onto the lines made (./accept-artwork.ts).
+ *
+ * B-CP-076 (customer page plan 11 §1.3 D3; review E3, B4): the customer's own price per line ("Your price", price grain) is read
+ * with each line, counted in the draft's checklist (part 6, price holders only) and its value (`draftValueAmount`); accepted as
+ * an ORDER, the same command writes it onto the order by the line map (OrderBrandPrice, source PORTAL, audited under
+ * OrderBrandPrice with the order as its record: brand-prices/store.ts); a QUOTE takes nothing (the order made later offers the
+ * take-over). The accept itself needs no price key (a Sales worker without prices accepts at the list prices).
  *
  * A decision moves the request from SENT once (its version is the guard; the database allows nothing else), with its
  * audit row and portal_order_request.accepted / .refused. The sales-order state machine is the sales orders' own.
@@ -151,6 +162,8 @@ interface DraftView {
   readonly problems: ReturnType<typeof problemView>[] // B-CP-075: + the part of the checklist and the person
   /** B-CP-072: its logos, references and measurement sheets; a sheet is named only for a reader with sales.measurements.view. */
   readonly files: Record<'logos' | 'references' | 'sheets', OfficeDraftFile[]>
+  /** B-CP-076 (review B4): its value at the prices on it (minor units; price grain: null for a reader without it). */
+  readonly draftValueAmount: number | null
 }
 
 /** B-CP-072: a draft's file as the office reads it; `locked`: a measurement sheet this reader may not open (no name). */
@@ -233,6 +246,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
     const files = draftFilesByPart(ofDraft, row.id)
     const sheetsLocked = !can(actor, SALES_MEASUREMENTS_VIEW, scope)
     const later = [...row.laterParts] as DraftLaterPart[] // B-CP-075
+    const seesPrice = can(actor, grainPermission('price'), scope) // B-CP-076 (review B4)
     const readiness = draftReadiness({
       lines: own.length,
       // B-CP-075: a line's pieces by its kind (sizes; a described total; a by-person line's people, or a sheet on it).
@@ -243,8 +257,8 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       headerProblems: header.filter((entry) => entry.code !== 'NO_LINES' && entry.code !== 'TOO_MANY_LINES').length,
       note: row.note !== null,
       later,
-      // Part 6 "Your price" only for a price holder (review B4); the customer's own price per line comes with B-CP-076.
-      pricedLines: can(actor, grainPermission('price'), scope) ? 0 : null,
+      // Part 6 "Your price" only for a price holder (review B4). B-CP-076: the lines that carry the customer's own price.
+      pricedLines: seesPrice ? own.filter((line) => line.brandUnitPrice !== null).length : null,
       problems: problems.length,
       problemsByPart: problemsByPartOf(problems), // B-CP-075
     })
@@ -262,6 +276,8 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       thread: mayOnThread(actor, THREADS_READ, 'PortalOrderRequest', scope) ? { messages: thread?._count.messages ?? 0, lastAt: iso(thread?.lastMessageAt ?? null), designerAsked: false } : null,
       problems: problems.map(problemView), // B-CP-075: + the part and the person
       files: { logos: files.logos.map((file) => officeFileOf(file, false)), references: files.references.map((file) => officeFileOf(file, false)), sheets: files.sheets.map((file) => officeFileOf(file, sheetsLocked)) },
+      // B-CP-076: each line at the price shown, else the customer's own, × its pieces — only for a price holder.
+      draftValueAmount: asMoney('price', seesPrice ? draftValueOf(own.map((line) => ({ priceShown: isCatalogueLine(line) ? priceOrNull(line.unitPriceShown) : null, brandUnitPrice: priceOrNull(line.brandUnitPrice), pieces: piecesOfLine(line, roster) })), row.currency) : null),
     })
   }
   return out
@@ -360,6 +376,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       sourceOrderLineId: line.sourceOrderLineId,
       /** What the catalogue says of the line today (the price change aside: the office prices again). */
       problems: lineProblems({ id: line.id, sizes, unitPriceShown: shown }, facts, false).map((problem) => ({ code: problem.code, size: problem.size, words: problem.words })),
+      brandUnitPrice: ownPriceView(line), // B-CP-076: the customer's own price (price grain)
     }
   })
   // ---- B-CP-075: the described and made-to-measure lines with their people; a measurement sheet is named only with
@@ -516,6 +533,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     await checkMapped(tx, current, plan.lines)
     const byId = new Map(read.map((line) => [line.id, line]))
     let lineMap: AcceptLineMapEntry[]
+    let brandPrices = 0 // B-CP-076: the customer's prices the order took over
     // end B-CP-077
     // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting the request
     // approves it first, in this command (the order or quote may then use it).
@@ -547,7 +565,28 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       salesOrderId = outcome.orderId
       made = { number: outcome.number, dropped: [], warnings: [...plan.warnings] }
       // B-CP-077: the order's lines are made in the plan's order, one for each planned line.
-      lineMap = lineMapOf(plan.lines, await tx.salesOrderLine.findMany({ where: { orderId: outcome.orderId }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } }))
+      const orderLines = await tx.salesOrderLine.findMany({ where: { orderId: outcome.orderId }, select: { id: true, seq: true, quantity: true }, orderBy: { seq: 'asc' } })
+      lineMap = lineMapOf(plan.lines, orderLines)
+      // ---- B-CP-076: the customer's prices carried onto the order by the map, in this command (never by place); never converted.
+      const priced: PricedOrder = { id: outcome.orderId, companyId: current.companyId, partyId: current.partyId }
+      const currency = (await tx.salesOrder.findUniqueOrThrow({ where: { id: outcome.orderId }, select: { currency: true } })).currency
+      const pieces = new Map(orderLines.map((line) => [line.id, Number(line.quantity)]))
+      const carry = brandPricesOfAccept({
+        currency,
+        prices: read.map((line) => ({ requestLineId: line.id, brandUnitPrice: priceOrNull(line.brandUnitPrice) })),
+        map: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, into: entry.into.map((line) => ({ lineId: line.lineId, pieces: pieces.get(line.lineId) ?? 0 })) })),
+      })
+      if (carry.length > 0 && currency !== current.currency) made.warnings.push(`The customer's prices are in ${current.currency}, the order in ${currency}: they were not carried (a price is never converted).`)
+      else {
+        for (const entry of carry) {
+          const data = { id: newId(), companyId: current.companyId, partyId: current.partyId, salesOrderId: outcome.orderId, salesOrderLineId: entry.orderLineId, unitPrice: entry.unitPrice, netAmount: entry.netAmount, currency, source: 'PORTAL' as const, sourceFileId: null, note: null, enteredById: null, enteredAt: now }
+          await tx.orderBrandPrice.create({ data: { ...data, createdAt: now, updatedAt: now }, select: { id: true } })
+          auditBrandPrice(tools, priced, { action: 'brandPrices.fromRequest', after: { ...brandPriceAuditView({ ...data, version: 1 }), requestId: current.id, requestLineIds: [...entry.requestLineIds] } })
+        }
+        if (carry.length > 0) announceBrandPrices(tools, priced)
+        brandPrices = carry.length
+      }
+      // ---- end B-CP-076
     } else {
       const party = await tx.party.findUniqueOrThrow({ where: { id: current.partyId }, select: { language: true, paymentTermsId: true, paymentTerms: true, defaultDepositPct: true } })
       const outcome = await duplicateInto(
@@ -596,7 +635,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', typed), lineMap: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, requestSeq: entry.requestSeq, into: entry.into.map((line) => line.lineId) })) },
     })
     tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
-    return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap /* B-CP-077 */ }
+    return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap /* B-CP-077 */, brandPrices /* B-CP-076 */ }
   }, { ...COMMAND_SETTINGS, clock })
   // B-CP-077: the request's logos carried to what it became (after the command: the order stands even when a file cannot be copied).
   const artwork = await carryArtwork(() => files ?? processFiles(), caller, { id: row.id, companyId: row.companyId, partyId: row.partyId, number: row.number }, result)

@@ -21,6 +21,8 @@ import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } from '../../../platform/auth/portal/testing/portal'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+// B-CP-076: an office person of the ready-made roles through the app (the grain filter: M-CP-1).
+import { addUser, Browser as OfficeBrowser, enrolTotp } from '../../../platform/auth/sessions/testing/harness'
 import { processImporters } from '../../../platform/imports/registry'
 import { SOURCES } from '../../insights/sources'
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
@@ -589,3 +591,137 @@ describe('B-CP-070: the Designer starts, fills and discards its own drafts; neve
   })
 })
 // ---- end B-CP-070
+
+// ---- B-CP-076 (customer page plan 11 §1.3 D3; review E3, B4; walls M-CP-1, M-CP-2, W-CP-1): "Your price" and its carry -------------
+describe('B-CP-076: "Your price" in the draft, frozen at Send, carried onto the order by the accept’s line map', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  // A Sales worker of the ready-made roles (no price grain since B-CP-011), signed in through the app (its grain filter).
+  let salesDesk: OfficeBrowser
+  const CUSTOMER_PRICE_KEYS = /"(brandUnitPrice|draftValueAmount|brandPrices)":/
+  const priceOf = async (lineId: string) => (await one<{ price: string | null }>('SELECT "brandUnitPrice"::text AS price FROM "PortalOrderRequestLine" WHERE id = $1', [lineId])).price
+
+  beforeAll(async () => {
+    const user = await addUser(h, tenant, { email: 'sam.sales.cp076@example.com', role: 'sales' })
+    salesDesk = new OfficeBrowser(h.app)
+    expect((await salesDesk.signIn(NS, user.email, user.password)).status).toBe(200)
+    await enrolTotp(h, salesDesk)
+    h.clock.set(new Date(Date.now() - 2_000))
+  }, 120_000)
+
+  /** A draft of P1: a black line (Your price `black`), a red line (Your price `red`), a described line of 4 pieces at 395.50; sent or not. */
+  async function pricedRequest(ref: string, prices: { black: string | null; red: string | null }, send: boolean): Promise<Json> {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { customerRef: ref }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    const lines = await ok(browsers.buyer, 'POST', `${url}/lines`, {
+      version: made.request.version,
+      lines: [
+        { styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 1 }], brandUnitPrice: prices.black },
+        { styleId: jkt02, colourwayId: red02, sizes: [{ size: '54', quantity: 1 }], brandUnitPrice: prices.red },
+      ],
+    })
+    const described = await ok(browsers.buyer, 'POST', `${url}/custom-lines`, { version: lines.request.version, line: { kind: 'DESCRIBED', description: 'Made-up team jackets, our logo on the back', quantity: 4, brandUnitPrice: '395.5' } })
+    const black = lines.request.lines.find((line: Json) => line.colourway.id === blk02).id
+    const red = lines.request.lines.find((line: Json) => line.colourway.id === red02).id
+    const out = { id: made.request.id, url, black, red, described: described.request.customLines[0].id, version: described.request.version }
+    if (!send) return out
+    const sent = await ok(browsers.buyer, 'POST', `${url}/send`, { version: described.request.version })
+    return { ...out, version: sent.request.version, number: sent.request.number }
+  }
+  const map = (request: Json) => [{ lineId: request.described, into: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 2 }] }, { styleId: jkt02, colourwayId: red02, sizes: [{ size: '52', quantity: 2 }] }] }]
+
+  it('a Buyer types Your price with the line; the Designer sends none (403) and reads none (M-CP-2); frozen once sent', async () => {
+    const draft = await pricedRequest('PO-T-076A', { black: '400', red: null }, false)
+    const read = await ok(browsers.buyer, 'GET', draft.url)
+    expect(read.request.lines.find((line: Json) => line.id === draft.black)).toMatchObject({ brandUnitPrice: '400.00', unitPriceShown: '410.00' })
+    expect(read.request.lines.find((line: Json) => line.id === draft.red).brandUnitPrice).toBeNull()
+    expect(read.request.customLines[0]).toMatchObject({ id: draft.described, brandUnitPrice: '395.50' })
+    const changed = await ok(browsers.buyer, 'PUT', `${draft.url}/lines/${draft.black}`, { version: read.request.version, brandUnitPrice: '401' })
+    expect(changed.request.lines.find((line: Json) => line.id === draft.black).brandUnitPrice).toBe('401.00')
+    expect(await priceOf(draft.black)).toBe('401.000000')
+    // At least 0 (400 in words).
+    expect((await call(browsers.buyer, 'PUT', `${draft.url}/lines/${draft.black}`, { version: changed.request.version, brandUnitPrice: '-1' })).status).toBe(400)
+    // M-CP-2: the Designer fills the same draft: a body with Your price is refused by its path (403), even null; no answer has it.
+    const added = await call(browsers.designer, 'POST', `${draft.url}/lines`, { version: changed.request.version, lines: [{ styleId: jkt01, colourwayId: blk01, sizes: [{ size: '50', quantity: 1 }], brandUnitPrice: '1' }] })
+    expect(added.status, JSON.stringify(added.body)).toBe(403)
+    expect((added.body.error.issues as Json[]).map((issue) => issue.path)).toEqual(['lines/0/brandUnitPrice'])
+    const cleared = await call(browsers.designer, 'PUT', `${draft.url}/custom-lines/${draft.described}`, { version: changed.request.version, brandUnitPrice: null })
+    expect(cleared.status).toBe(403)
+    expect(JSON.stringify(await ok(browsers.designer, 'GET', draft.url))).not.toMatch(CUSTOMER_PRICE_KEYS)
+    // The Designer's own change of the line keeps the customer's price (absent keeps it).
+    const noted = await ok(browsers.designer, 'PUT', `${draft.url}/custom-lines/${draft.described}`, { version: changed.request.version, note: 'Made-up: the sizes follow' })
+    expect(JSON.stringify(noted)).not.toMatch(CUSTOMER_PRICE_KEYS)
+    expect(await priceOf(draft.described)).toBe('395.500000')
+    // Frozen at Send, with the line.
+    const sent = await ok(browsers.buyer, 'POST', `${draft.url}/send`, { version: noted.request.version })
+    expect((await call(browsers.buyer, 'PUT', `${draft.url}/lines/${draft.black}`, { version: sent.request.version, brandUnitPrice: '1' })).status).toBe(409)
+    expect(await priceOf(draft.black)).toBe('401.000000')
+    // W-CP-1: another customer reads none of it.
+    expect((await call(browsers.other, 'GET', draft.url)).status).toBe(404)
+  })
+
+  it('M-CP-1: the office reads Your price and the draft’s value as a price holder; as Sales worker neither, and part 6 is not counted', async () => {
+    const draft = await pricedRequest('PO-T-076M', { black: '400', red: '405' }, false)
+    const holder = (await listOfficeRequests(office(), { status: 'DRAFT', partyId: P1 })).requests.find((row) => row.id === draft.id)!
+    // 410.00 × 3 and 410.00 × 1 at the price shown, the described line at its own 395.50 × 4: 1230.00 + 410.00 + 1582.00.
+    expect(holder.draft).toMatchObject({ draftValueAmount: 322_200, readiness: { of: 7 } })
+    expect(holder.draft!.readiness.parts.find((part) => part.part === 'PRICE')?.state).toBe('READY')
+    const record = await officeRequestView(office(), draft.id)
+    expect(record.request.lines.map((line) => line.brandUnitPrice)).toEqual(['400.00', '405.00'])
+    expect(record.request.draft).toMatchObject({ draftValueAmount: 322_200 })
+    const list = await salesDesk.send('GET', `/sales/order-requests?status=DRAFT&partyId=${P1}`)
+    expect(list.status, JSON.stringify(list.body)).toBe(200)
+    expect(JSON.stringify(list.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
+    expect((list.body.requests as Json[]).find((row) => row.id === draft.id).draft.readiness.of).toBe(6)
+    const one076 = await salesDesk.send('GET', `/sales/order-requests/${draft.id}`)
+    expect(one076.status).toBe(200)
+    expect(JSON.stringify(one076.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
+  })
+
+  it('accepted as an ORDER, the customer’s prices land by the line map: 1 → 1 a unit row, 1 → 2 a line total on the first; audited; as a QUOTE none', async () => {
+    const sent = await pricedRequest('PO-T-076O', { black: '401', red: null }, true)
+    const accepted = await acceptRequest(office(), sent.id, { version: sent.version, as: 'ORDER', map: map(sent) })
+    const orderId = accepted.made.salesOrderId!
+    expect(accepted.made.brandPrices).toBe(2)
+    const lines = await admin<{ id: string; seq: number }>('SELECT id, seq FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq', [orderId])
+    expect(lines.map((line) => line.seq)).toEqual([10, 20, 30, 40])
+    const rows = await admin<{ line: string | null; unitPrice: string | null; netAmount: number | null; source: string; enteredById: string | null; currency: string }>(
+      `SELECT "salesOrderLineId" AS line, "unitPrice"::text AS "unitPrice", "netAmount", source::text, "enteredById", currency FROM "OrderBrandPrice" WHERE "salesOrderId" = $1 ORDER BY "netAmount" NULLS FIRST`,
+      [orderId],
+    )
+    // The black line (request line 1 → order line 10): its unit price. The red one had none. The described line (request line 3 → order
+    // lines 30 and 40): 395.50 × 4 as a line total on the first, never a unit price spread by place.
+    expect(rows).toEqual([
+      { line: lines[0]!.id, unitPrice: '401.000000', netAmount: null, source: 'PORTAL', enteredById: null, currency: 'EUR' },
+      { line: lines[2]!.id, unitPrice: null, netAmount: 158_200, source: 'PORTAL', enteredById: null, currency: 'EUR' },
+    ])
+    // Audited under OrderBrandPrice with the order as its record (never on the order's own timeline); one event, ids only.
+    const audits = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordType" = 'OrderBrandPrice' AND "recordId" = $1 AND action = 'brandPrices.fromRequest'`, [orderId])
+    expect(audits).toHaveLength(2)
+    for (const audit of audits) expect(audit.after).toMatchObject({ source: 'PORTAL', requestId: sent.id })
+    const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'sales_order.brand_price_changed' AND subject = $1`, [orderId])
+    expect(events.map((event) => Object.keys(event.payload).sort())).toEqual([['orderId', 'partyId']])
+    // Every line priced: the 1 → 1 lines keep their unit price, and the whole order one total (the check reads the order as a whole).
+    const all = await pricedRequest('PO-T-076T', { black: '401', red: '402' }, true)
+    const whole = await acceptRequest(office(), all.id, { version: all.version, as: 'ORDER', map: map(all) })
+    const totals = await admin<{ line: string | null; unitPrice: string | null; netAmount: number | null }>(`SELECT "salesOrderLineId" AS line, "unitPrice"::text AS "unitPrice", "netAmount" FROM "OrderBrandPrice" WHERE "salesOrderId" = $1 ORDER BY "unitPrice" NULLS LAST`, [whole.made.salesOrderId])
+    expect(totals.map((row) => [row.line === null, row.unitPrice, row.netAmount])).toEqual([
+      [false, '401.000000', null],
+      [false, '402.000000', null],
+      [true, null, 120_300 + 40_200 + 158_200],
+    ])
+    // A QUOTE takes nothing (the order made from it later offers the take-over).
+    const before = (await admin('SELECT id FROM "OrderBrandPrice" WHERE "partyId" = $1', [P1])).length
+    const quoted = await pricedRequest('PO-T-076Q', { black: '401', red: '402' }, true)
+    const quote = await acceptRequest(office(), quoted.id, { version: quoted.version, as: 'QUOTE', map: map(quoted) })
+    expect(quote.made).toMatchObject({ as: 'QUOTE', brandPrices: 0 })
+    expect((await admin('SELECT id FROM "OrderBrandPrice" WHERE "partyId" = $1', [P1])).length).toBe(before)
+  })
+
+  it('the accept needs no price key: a Sales worker accepts through the app at the list prices, and the customer’s prices still land', async () => {
+    const sent = await pricedRequest('PO-T-076S', { black: '401', red: null }, true)
+    const accepted = await salesDesk.send('POST', `/sales/order-requests/${sent.id}/accept`, { version: sent.version, as: 'ORDER', map: map(sent) })
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
+    expect(JSON.stringify(accepted.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
+    expect((await admin('SELECT id FROM "OrderBrandPrice" WHERE "salesOrderId" = $1', [accepted.body.made.salesOrderId])).length).toBe(2)
+  })
+})
+// ---- end B-CP-076
