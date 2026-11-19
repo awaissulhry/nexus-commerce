@@ -28,6 +28,8 @@ import { PROFILE_RECORD } from '../mtm/store'
 import { officeContextOf } from './access'
 import { officeOrder } from './moves'
 import type { OrderRow } from './store'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * B-SA-036 (Sales page plan N9, P14, R7; 13-backend B11; review BW-1): EVERY file of one sales order for the office, by where it
@@ -225,7 +227,8 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
   const inspectionOf = new Map(inspections.map((row) => [row.id, row]))
   const defects = workOrderIds.length === 0 ? [] : await db.inspectionDefect.findMany({ where: { workOrderId: { in: workOrderIds } }, select: { id: true, workOrderId: true, inspectionId: true } })
   const checks = inspections.length === 0 ? [] : await db.inspectionCheckResult.findMany({ where: { inspectionId: { in: inspections.map((row) => row.id) } }, select: { id: true, inspectionId: true } })
-  const shipments = await db.shipment.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
+  // B-OP-043 (order page N6): a shared shipment's files show on every order it carries (made for it or carrying its garments).
+  const shipments = await db.shipment.findMany({ where: shipmentsOfOrderWhere(order.id), select: { id: true, number: true } })
   const ddts = shipments.length === 0 ? [] : await db.ddt.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { id: true, number: true } })
   const invoices = await db.invoice.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
   const returns = await db.returnAuthorisation.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })

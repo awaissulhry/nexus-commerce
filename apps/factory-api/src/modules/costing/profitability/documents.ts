@@ -13,6 +13,8 @@ import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf } from '../../product/materials/store'
+// B-OP-045 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * The order profitability report's documents (B-W2b-416; FIN-053; design finance.margins pop:order "Documents (W2b):
@@ -115,12 +117,27 @@ export async function orderDocuments(caller: CommandCaller, orderId: string): Pr
     })
 
     // ---- freight: charged to the customer and what the carrier charged us, per shipment -----------------------------------
+    // B-OP-045 (order page N6, lines-derived): the shipments made for it or carrying its garments; a shared shipment's freight
+    // (charged and cost) is this order's by the net value of its own lines on it (one order: all of it, as before).
     const shipments = await db.shipment.findMany({
-      where: { salesOrderId: order.id, status: { not: 'CANCELLED' } },
+      where: { ...shipmentsOfOrderWhere(order.id), status: { not: 'CANCELLED' } },
       select: { id: true, number: true, status: true, shippedAt: true, carrierName: true, freightCharge: true, freightCost: true, freightCostCurrency: true },
       orderBy: [{ number: 'asc' }],
     })
+    const shipLines = shipments.length === 0 ? [] : await db.shipmentLine.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { shipmentId: true, quantity: true, salesOrderLine: { select: { orderId: true, quantity: true, netAmount: true } } } })
+    const shareOf = (shipmentId: string): number => {
+      const mine = shipLines.filter((line) => line.shipmentId === shipmentId)
+      const valueOf = (line: (typeof mine)[number]) => (line.salesOrderLine.quantity > 0 ? (line.salesOrderLine.netAmount * line.quantity) / line.salesOrderLine.quantity : 0)
+      const own = mine.filter((line) => line.salesOrderLine.orderId === order.id)
+      if (own.length === mine.length) return 1
+      const total = mine.reduce((sum, line) => sum + valueOf(line), 0)
+      if (total > 0) return own.reduce((sum, line) => sum + valueOf(line), 0) / total
+      const pieces = mine.reduce((sum, line) => sum + line.quantity, 0)
+      return pieces > 0 ? own.reduce((sum, line) => sum + line.quantity, 0) / pieces : 0
+    }
+    const shareAmount = (amount: number | null, share: number): number | null => (amount === null ? null : share === 1 ? amount : Math.round(amount * share))
     const freightRows = shipments.map((row) => {
+      const share = shareOf(row.id) // B-OP-045
       if (sees.shipping && row.freightCost !== null && row.freightCostCurrency !== order.currency) notes.add('OTHER_CURRENCY')
       if (sees.shipping && row.freightCost === null && (row.status === 'SHIPPED' || row.status === 'DELIVERED')) notes.add('FREIGHT_COST_MISSING')
       return {
@@ -128,9 +145,9 @@ export async function orderDocuments(caller: CommandCaller, orderId: string): Pr
         date: romeDay(row.shippedAt),
         carrier: row.carrierName,
         chargeCurrency: order.currency,
-        charge: asMoney('price', row.freightCharge),
+        charge: asMoney('price', shareAmount(row.freightCharge, share)),
         costCurrency: row.freightCostCurrency,
-        cost: asMoney('cost', row.freightCost),
+        cost: asMoney('cost', shareAmount(row.freightCost, share)),
       }
     })
 

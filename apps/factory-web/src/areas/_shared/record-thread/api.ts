@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { browserAddress } from '../../../lib/api/browser-address' // F-OP-126: a store address through the browser's path
 import type { ApiClient } from '../../../lib/api/client'
 import { messageSchema, threadSchema, type RecordKey } from '../../../record-panels/api'
 import { CHECK_WARNINGS, RECIPIENT_KINDS, type SendCheck } from '../../../lib/record-thread/send-check/model'
@@ -396,10 +397,14 @@ const orderFileSchema = z.object({
   alsoOn: z.array(orderFileRef),
   alsoOnOther: z.number(),
   inThread: z.object({ messageId: z.string() }).nullable(),
+  // F-OP-125 (B-OP-050): who added it — an office person or this order's customer by name; the floor never by a worker's name.
+  addedBy: z.object({ kind: z.enum(['PERSON', 'FLOOR', 'CUSTOMER']), name: z.string().nullable() }).nullable().default(null),
 })
+// F-OP-125 (B5): the newest MTM worksheet of each made-to-measure line (sent only with the measurements right; else counted).
+const orderWorksheetSchema = z.object({ documentId: z.string(), profileId: z.string(), line: z.object({ id: z.string(), seq: z.number() }), version: z.number(), number: z.string().nullable(), language: z.string(), createdAt: z.string() })
 export const orderFilesSchema = z.object({
   order: z.object({ id: z.string(), number: z.string() }),
-  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), leftOut: z.number(), measurementsLeftOut: z.number() })),
+  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), /* F-OP-125 (B5) */ worksheets: z.array(orderWorksheetSchema).default([]), leftOut: z.number(), measurementsLeftOut: z.number() })),
   total: z.number(),
   truncated: z.boolean(),
 })
@@ -412,8 +417,39 @@ export function readOrderFiles(api: ApiClient, orderId: string, signal?: AbortSi
 const openSchema = z.object({ open: z.object({ mode: z.enum(['inline', 'download']), method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }) })
 
 /** POST /sales/orders/:orderId/files/:fileId/open — ONE of them, found again in the same read (body data: the opening is recorded). */
-export async function openOrderFile(api: ApiClient, orderId: string, fileId: string, mode: 'preview' | 'download'): Promise<{ mode: 'inline' | 'download'; url: string }> {
+export async function openOrderFile(api: ApiClient, orderId: string, fileId: string, mode: 'preview' | 'download'): Promise<{ mode: 'inline' | 'download'; url: string; /* F-OP-127: the viewer reads its bytes */ headers: Record<string, string>; expiresAt: string }> {
   const answer = await api.post(`/sales/orders/${enc(orderId)}/files/${enc(fileId)}/open`, { body: { mode }, schema: openSchema, idempotencyKey: globalThis.crypto.randomUUID() })
-  return { mode: answer.open.mode, url: answer.open.url }
+  return { mode: answer.open.mode, url: answer.open.url, headers: answer.open.headers, expiresAt: answer.open.expiresAt }
 }
 // ── end F-SA-237
+
+// ── F-OP-126 (order page N7; review R-14; B-OP-050): the previews of the cards in view, in ONE call ──
+const presignedAddress = z.object({ url: z.string(), expiresAt: z.string() })
+export const orderFilePreviewsSchema = z.object({
+  previews: z.array(
+    z.object({
+      fileId: z.string(),
+      versionNo: z.number(),
+      kind: z.enum(['PICTURE', 'PDF', 'OTHER', 'LOCKED']),
+      /** PICTURE: the ~320 px small preview (never the original); null until it is made. */
+      small: presignedAddress.nullable(),
+      /** PDF: at most 3 MiB — page 1 drawn in the browser from `inline`. */
+      pdfDrawable: z.boolean(),
+      inline: presignedAddress.nullable(),
+      /** This call's addresses were spent: ask for it again. */
+      later: z.boolean(),
+    }),
+  ),
+})
+export type OrderFilePreview = z.infer<typeof orderFilePreviewsSchema>['previews'][number]
+
+/**
+ * POST /sales/orders/:orderId/files/previews {fileIds 1–24} (orders.view): the cards in view only — an id the reader may not open is
+ * simply absent; body data never has an address. Never the generic /files/:id/preview. The addresses go through the browser's path.
+ */
+export async function readOrderFilePreviews(api: ApiClient, orderId: string, fileIds: readonly string[], signal?: AbortSignal): Promise<OrderFilePreview[]> {
+  const answer = await api.post(`/sales/orders/${enc(orderId)}/files/previews`, { body: { fileIds: [...fileIds] }, schema: orderFilePreviewsSchema, signal })
+  // A picture's small address is an <img> src (through the browser's path); a PDF's inline address is read as bytes by the store's reader.
+  return answer.previews.map((preview) => ({ ...preview, small: preview.small ? { url: browserAddress(preview.small.url), expiresAt: preview.small.expiresAt } : null }))
+}
+// ── end F-OP-126

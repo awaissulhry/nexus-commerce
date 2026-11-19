@@ -24,6 +24,8 @@ import { lockInvoicing } from './locks'
 import { depositInvoicesOf, orderPrices } from './store'
 // B-W2b-330 (SAL-181): the orders' fees, invoiced once.
 import { feeLinesFor } from '../../sales/price-waterfall/fee-invoicing'
+// B-OP-045 (order page N6, lines-derived): the orders a shipment carries.
+import { orderIdsOfShipments, ordersOfShipment } from '../../shipping/shipments/orders-of'
 
 /**
  * Goods shipped WITHOUT a DDT (B-W2b-GB02, G148; B-W1-51's gap "a shipment shipped without a DDT is not in the list"):
@@ -125,7 +127,9 @@ export async function queueWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInp
   if (rows.length === 0) return []
   const prices = await orderPrices(db, rows.map((row) => row.salesOrderLineId))
   const open = shipments.filter((shipment) => rows.some((row) => row.ddtId === shipment.id))
-  const orderIds = [...new Set(open.map((shipment) => shipment.salesOrderId))]
+  // B-OP-045 (order page N6): every order each shipment carries (its lines' orders, the first first).
+  const carried = await orderIdsOfShipments(db, open)
+  const orderIds = [...new Set(open.flatMap((shipment) => carried.get(shipment.id) ?? [shipment.salesOrderId]))]
   const paid = orderIds.length > 0 ? await db.paymentAllocation.findMany({ where: { depositRequest: { orderId: { in: orderIds } } }, select: { amount: true, depositRequest: { select: { orderId: true } } } }) : []
   const orders = new Map((await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } })).map((order) => [order.id, order]))
   return open.map((shipment) => {
@@ -150,17 +154,17 @@ export async function queueWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInp
           drafts: row.invoices.filter((invoice) => invoice.draft).map((invoice) => invoice.invoiceId),
         }
       })
-    const order = orders.get(shipment.salesOrderId)
+    const carriedIds = carried.get(shipment.id) ?? [shipment.salesOrderId]
     return {
       shipmentId: shipment.id,
       number: shipment.number,
       shippedOn: shipment.shippedOn!,
       companyId: shipment.companyId,
       partyId: shipment.partyId,
-      orders: order ? [{ id: order.id, number: order.number }] : [],
+      orders: carriedIds.flatMap((id) => (orders.has(id) ? [{ id, number: orders.get(id)!.number }] : [])), // B-OP-045
       lines,
       valueAmount: asMoney('price', lines.reduce((sum, line) => sum + (line.netAmount ?? 0), 0)),
-      depositPaidAmount: asMoney('price', paid.filter((row) => row.depositRequest?.orderId === shipment.salesOrderId).reduce((sum, row) => sum + row.amount, 0)),
+      depositPaidAmount: asMoney('price', paid.filter((row) => !!row.depositRequest?.orderId && carriedIds.includes(row.depositRequest.orderId)).reduce((sum, row) => sum + row.amount, 0)),
       drafts: [...new Set(lines.flatMap((line) => line.drafts))],
       deadline: withoutDdtDeadline({ number: shipment.number, date: shipment.shippedOn! }, today),
       freight: { amount: asMoney('price', shipment.freightCharge), currency: shipment.currency },
@@ -172,6 +176,8 @@ export async function queueWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInp
 
 export interface FromShipmentInput {
   readonly shipmentId: string
+  /** B-OP-045: the order whose goods of the shipment this draft bills (required when it carries several). */
+  readonly salesOrderId?: string | undefined
   readonly causale?: string | null | undefined
   readonly payment?: PaymentInput | null | undefined
   readonly internalNote?: string | null | undefined
@@ -200,15 +206,24 @@ export async function createFromShipment(caller: CommandCaller, body: FromShipme
 
 async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scope: { companyId: string; partyId: string }, plan: Awaited<ReturnType<typeof draftPlanOf>>): Promise<FromShipmentAnswer> {
   const { tx } = tools
-  const head = await tx.shipment.findUnique({ where: { id: body.shipmentId }, select: { number: true, status: true, ddtRequired: true, salesOrderId: true } })
+  const head = await tx.shipment.findUnique({ where: { id: body.shipmentId }, select: { id: true, number: true, status: true, ddtRequired: true, salesOrderId: true } })
   if (!head) throw new NotFoundError('Shipment not found.')
   if (head.ddtRequired) throw new ConflictError(`Shipment ${head.number} travels with a DDT: invoice its DDT (Invoice shipped goods).`)
   if (head.status === 'CANCELLED' || head.status === 'RETURNED') throw new ConflictError(`Shipment ${head.number} is ${head.status === 'CANCELLED' ? 'cancelled' : 'returned'}: there is nothing to invoice.`)
-  // The goods of an order shipped without a DDT are placed in the order they left: one command at a time per order.
-  await lockInvoicing(tx, tools.context, 'shipment', [head.salesOrderId])
+  // B-OP-045 (order page N6; P9: one invoice per order): the order this draft bills — the one asked (it must be on the
+  // shipment: else as an unknown order), else its one order; several orders and none asked: 400 in words.
+  const carried = await ordersOfShipment(tx, head)
+  if (body.salesOrderId !== undefined && !carried.includes(body.salesOrderId)) throw new NotFoundError('Sales order not found.')
+  if (body.salesOrderId === undefined && carried.length > 1) throw new ValidationError(`Shipment ${head.number} carries several orders: choose the order this invoice bills (one invoice per order).`, [{ path: 'body/salesOrderId', message: 'Required: the shipment carries several orders.' }])
+  const billed = body.salesOrderId ?? carried[0]!
+  // The goods of an order shipped without a DDT are placed in the order they left: one command at a time per order (every
+  // order the shipment carries, B-OP-045).
+  await lockInvoicing(tx, tools.context, 'shipment', carried)
   const [shipment] = await shipmentsWithoutDdt(tx, { id: body.shipmentId })
   const all = await leftWithoutDdt(tx, [shipment!])
-  const left = all.filter((row) => row.toInvoice.gt(0))
+  // B-OP-045: only the billed order's lines (another order of the shipment gets its own invoice).
+  const orderOfLine = await orderPrices(tx, all.map((row) => row.salesOrderLineId))
+  const left = all.filter((row) => row.toInvoice.gt(0) && orderOfLine.get(row.salesOrderLineId)?.orderId === billed)
   if (left.length === 0) {
     const holders = [...new Map(all.flatMap((row) => row.invoices).map((invoice) => [invoice.invoiceId, invoice])).values()]
     const issued = holders.filter((invoice) => !invoice.draft).map((invoice) => invoice.number)
@@ -220,7 +235,8 @@ async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scop
           : `Shipment ${shipment!.number} carries nothing to invoice yet: pack its garments first.`,
     )
   }
-  const placedAny = all.some((row) => row.invoiced.gt(0) || row.inDraft.gt(0))
+  // B-OP-045: another invoice of the billed order's goods (the freight goes once, with the first order's goods).
+  const placedAny = all.filter((row) => orderOfLine.get(row.salesOrderLineId)?.orderId === billed).some((row) => row.invoiced.gt(0) || row.inDraft.gt(0))
 
   // The goods lines, priced from the order and taxed for the customer today (the DDT draft's builder, no DDT named).
   const prices = await orderPrices(tx, left.map((row) => row.salesOrderLineId))
@@ -237,7 +253,9 @@ async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scop
   const freightLeft: FromShipmentAnswer['freight'] = []
   const amount = shipment!.freightCharge
   if (amount !== null && amount > 0) {
-    if (placedAny) freightLeft.push({ reason: `Another invoice bills goods of shipment ${shipment!.number} already: add its freight there, or type it here.` })
+    // B-OP-045: the freight goes once, on the first order's invoice.
+    if (billed !== head.salesOrderId) freightLeft.push({ reason: `The freight of shipment ${shipment!.number} goes on the invoice of its first order.` })
+    else if (placedAny) freightLeft.push({ reason: `Another invoice bills goods of shipment ${shipment!.number} already: add its freight there, or type it here.` })
     else if ('path' in goodsVat) freightLeft.push({ reason: goodsVat.message })
     else if (shipment!.currency !== currency) freightLeft.push({ reason: `The freight of shipment ${shipment!.number} is in ${shipment!.currency}, the invoice in ${currency}: type the line.` })
     else

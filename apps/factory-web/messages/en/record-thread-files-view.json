@@ -147,5 +147,14 @@
     "noneOwn": "Only the order's own office-only files are shared from here.",
     "openFailed": "The file could not be opened: try again.",
     "shareFailed": "Sharing did not go through: try again."
+  },
+  "card": {
+    "bodyData": "Body data — opening is recorded",
+    "addedBy": "added by {name}",
+    "addedByFloor": "added by the floor",
+    "download": "Download",
+    "downloadOf": "Download {name}",
+    "worksheet": "Worksheet · line {line} · v{version}",
+    "largePdf": "Large PDF: open it to see it"
   }
 }

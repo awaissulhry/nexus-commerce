@@ -16,6 +16,8 @@ import { lockMoney } from './locks'
 import { settleOrders } from '../invoicing/from-shipment/settlement'
 import { allocateInCommand, checkPayment, insertPayment, recordingCommand } from './payments'
 import { assertMay, mayOn, officeContextOf, paymentDetail, readPayment, type PaymentDetail } from './store'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../shipping/shipments/orders-of'
 
 /**
  * "Deposit received" (B-W1-28; FIN-066, FIN-121; Q12: an acconto paid by bank transfer; A2 SCR-082 "Record a payment"
@@ -65,7 +67,8 @@ export interface DepositReceivedAnswer {
 /** The day the order's first goods left (a shipment SHIPPED or later), or null. */
 async function goodsLeftOn(db: CommandTx, orderId: string | null): Promise<string | null> {
   if (!orderId) return null
-  const first = await db.shipment.findFirst({ where: { salesOrderId: orderId, shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } })
+  // B-OP-043 (order page N6): any shipment made for it or carrying its garments.
+  const first = await db.shipment.findFirst({ where: { ...shipmentsOfOrderWhere(orderId), shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } })
   return first?.shippedAt ? businessDate(first.shippedAt) : null
 }
 

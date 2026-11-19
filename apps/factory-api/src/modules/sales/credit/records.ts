@@ -67,6 +67,7 @@ async function resolve(db: Reader, recordType: CreditRecordType, recordId: strin
       return { recordType: 'WorkOrder', recordId: workOrder.id, label: workOrder.number, companyId: workOrder.companyId, step: 'RELEASE', parties: cells.map((cell) => cell.partyId!).sort(), subject: null, exclude: [] }
     }
     case 'Shipment': {
+      // B-OP-043 (order page N6): fine as the first order — every order a shipment carries is of its one customer (the line FK).
       const shipment = await db.shipment.findUnique({ where: { id: recordId }, select: { id: true, number: true, companyId: true, salesOrder: { select: { partyId: true } } } })
       if (!shipment) return null
       return { recordType: 'Shipment', recordId: shipment.id, label: shipment.number, companyId: shipment.companyId, step: 'SHIPMENT', parties: shipment.salesOrder ? [shipment.salesOrder.partyId] : [], subject: null, exclude: [] }

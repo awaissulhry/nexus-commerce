@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
+import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { Order, OrderLine } from '../api'
 import { amendKeyOf, draftOf, newKey, type AmendReview, type DraftLine } from '../daily-model'
@@ -59,6 +60,15 @@ import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
 import { LINKS_FULL, LINKS_MANAGER, LINKS_NONE, linksModel } from './links/fixtures'
 import { BRAND_ALPHA, type BrandFixture } from '../../../../lib/testing/two-brands'
 import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
+// ---- F-OP-217: the dock's scopes in the design screen (the pick band in the one card, General, a work order's notes, All of)
+import { Button } from '@nexus/ui/primitives'
+import { useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { designAllOfCustomer, designDockedThread } from '../../../_shared/record-frame/fixtures'
+import { ThreadPick, useDockTop, type ThreadChoice } from '../../../_shared/record-thread/ThreadPick'
+import { ALL_OF_CUSTOMER_NS } from '../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
+import type { ScopeChoice } from './dock/model'
+// ---- end F-OP-217
 // B-W2b-380 (XF6:02): cost changed since priced on the lines.
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
@@ -109,14 +119,60 @@ const ORDER_BRAND: BrandFixture = {
 
 function OrderThread() {
   const frame = useRecordFrame()
+  const top = useDockTop() // F-OP-217: under a design pick, the band is the card's first (none without one)
   const model = dockedThread(ORDER_BRAND, { width: frame?.width ?? null }, true)
-  return createElement(ThreadCase, { model, onWidth: frame?.choose })
+  return createElement(ThreadCase, { model, onWidth: frame?.choose, top })
 }
 
 /** The element a design case passes to OrderRecordView as its `thread`. */
 export const orderDesignThread = () => createElement(OrderThread)
 
-type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined } | { role: Role; draft: NewOrderModel; record?: undefined }
+type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined; /** F-OP-217: the dock's scope (absent: the order's thread alone). */ dock?: DockScope } | { role: Role; draft: NewOrderModel; record?: undefined; dock?: undefined }
+
+// ---- F-OP-217 (order page plan N4; 11-dock §2, §3, §7): the dock's scopes in SCR-039 — the pick band inside the ONE card on This order,
+// <Customer> (general), a work order's notes (office only: its line in the office tone) and All of <Customer> (read only: its Head, the
+// compact lines, the foot "Read only. Write in:"). Design only: the page's OrderDock draws the same parts from its reads.
+type DockScope = 'order' | 'general' | 'wo' | 'all'
+const DESIGN_WO = 'WO-00021'
+
+function DesignDock({ scope, prefix }: { scope: DockScope; prefix: string }) {
+  const t = useT('orders')
+  const rt = useT('record-thread')
+  const customer = ORDER_BRAND.tradeName
+  const icon = (Icon: typeof Eye) => createElement(Icon, { size: 14, 'aria-hidden': true })
+  const choices: ThreadChoice<ScopeChoice>[] = [
+    { value: 'order', label: t('record.dock.order'), icon: icon(ShoppingBag), count: 2, line: t('record.dock.orderLine', { customer }) },
+    { value: 'general', label: t('record.dock.general', { customer }), short: t('record.dock.writeGeneral'), icon: icon(Building2), count: 1, line: t('record.dock.generalLine', { customer }) },
+    { value: 'workOrders', label: t('record.dock.workOrders'), icon: icon(Lock), tone: 'office', line: t('record.dock.workOrderLine', { wo: DESIGN_WO }) },
+    { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: icon(Eye), line: rt('allOfCustomer.line', { customer }) },
+  ]
+  const foot = createElement(
+    Fragment,
+    null,
+    createElement('span', null, `${t('record.dock.readOnly')}. ${t('record.dock.writeIn')}`),
+    createElement(Button, { size: 'sm', variant: 'secondary' }, t('record.dock.order')),
+    createElement(Button, { size: 'sm', variant: 'secondary' }, t('record.dock.writeGeneral')),
+  )
+  const shown =
+    scope === 'all'
+      ? designAllOfCustomer({
+          label: `${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`,
+          prefix,
+          customer: { id: '0190f0e2-7a00-7000-8000-0000000000c1', name: customer, code: ORDER_BRAND.code },
+          order: { id: ORDER_ID, number: ORDER_BRAND.numbers.order, ownNumber: 12 },
+          other: { id: '0190f0e2-7a00-7000-8000-0000000000c2', number: 'SO-2026-0061' },
+          at: '2026-11-19T10:30:00.000Z',
+          foot,
+        })
+      : scope === 'general'
+        ? designDockedThread({ recordType: 'Party', record: ORDER_BRAND.code, party: { name: customer, role: 'customer' } })
+        : scope === 'wo'
+          ? designDockedThread({ recordType: 'WorkOrder', record: DESIGN_WO, party: null })
+          : orderDesignThread()
+  const value: ScopeChoice = scope === 'wo' ? 'workOrders' : scope
+  return createElement(WithMessages, { namespaces: [...ALL_OF_CUSTOMER_NS, 'orders'] }, createElement(ThreadPick<ScopeChoice>, { label: t('record.dock.label'), choices, value, children: shown }))
+}
+// ---- end F-OP-217
 
 const CHAIN_SDI = (code: Parameters<typeof sdi>[0], action: Parameters<typeof sdi>[1], canSend = false) => ({ [TD02_ID]: { value: sdi(code, action, canSend), problem: null } })
 
@@ -330,7 +386,9 @@ const W2B_323 = [
 
 function OrderDesign({ model }: { model: RecordCase }) {
   if (model.draft) return inShell('/sales/orders/new', createElement(NewOrderView, { model: model.draft }), model.role)
-  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread: orderDesignThread() }), model.role)
+  // F-OP-217: a case may dock a scope of the pick (the order page's dock), else the order's thread alone.
+  const thread = model.dock ? createElement(DesignDock, { scope: model.dock, prefix: model.record.prefix }) : orderDesignThread()
+  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread }), model.role)
 }
 
 // ---- F-SA-243: Brand Alpha asks on this order (M 40 → 36); a change accepted yesterday still has a work-order change for planning
@@ -565,5 +623,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_SA_243,
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
+    // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----
+    { id: 'f-op-217-dock-order', label: 'F-OP-217 · Sales · Dock: the pick band inside the card on This order (2 new), the whose-line', model: { ...base('sales', production, { tab: 'overview' }), dock: 'order' } },
+    { id: 'f-op-217-dock-general', label: 'F-OP-217 · Sales · Dock: Moto Demo (general) — the customer’s general thread, the pick band in its card', model: { ...base('sales', production, { tab: 'overview' }), dock: 'general' } },
+    { id: 'f-op-217-dock-work-order', label: 'F-OP-217 · Sales · Dock: a work order’s notes — office only, the whose-line in the office tone, no mail', model: { ...base('sales', production, { tab: 'production' }), dock: 'wo' } },
+    { id: 'f-op-217-dock-all', label: 'F-OP-217 · Sales · Dock: All of Moto Demo — read only: its Head, compact lines (the customer’s, ours, an office note, General, another order with files), the foot “Read only. Write in:”', model: { ...base('sales', production, { tab: 'lines' }), dock: 'all' } },
   ],
 })

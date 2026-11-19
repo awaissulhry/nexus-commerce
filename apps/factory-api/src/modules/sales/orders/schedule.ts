@@ -12,6 +12,8 @@ import { lockAll } from '../../payments/locks'
 import { quotePartyOf } from '../quotes/store'
 import { officeOrder } from './moves'
 import { asDay, dayOf, dayOrNull, lockOrder, type OrderRow, type Reader } from './store'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * An order's payment schedule (B-W2a-30; SAL-216; the design's order.money.schedule card): its SalesOrderMilestone rows,
@@ -349,7 +351,8 @@ export async function requestStep(caller: CommandCaller, orderId: string, milest
     if (!(OPENABLE as readonly string[]).includes(locked.status)) {
       throw new InvalidStateError(`Order ${order.number} is ${locked.status.toLowerCase().replace('_', ' ')}: a step before shipping is opened only while nothing has left (confirmed, in production or ready).`)
     }
-    const left = await tx.shipment.findFirst({ where: { salesOrderId: order.id, shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } })
+    // B-OP-043 (order page N6): goods of the order left on any shipment made for it or carrying its garments.
+    const left = await tx.shipment.findFirst({ where: { ...shipmentsOfOrderWhere(order.id), shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } })
     if (left?.shippedAt) {
       throw new InvalidStateError(`Goods of order ${order.number} left on ${businessDate(left.shippedAt)}: what is still due is paid on the goods' invoice, not as an advance before shipping.`)
     }

@@ -158,6 +158,8 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
       if (event.to !== 'SHIPPED') return []
       // ── th3b follow-up 5 (threads plan §0.5, counts do not leak): the customer reads its own order's number ("A delivery of your
       // order 12 has shipped", chip "#12"), never the office's shipment series (SH-…); the link stays the shipment's.
+      // B-OP-044 (order page N6): fine as the first order — the fan-out makes ONE notice per person per event, so a shared
+      // shipment's notice names the order it was made for (its own customer's), like the tracking link (R-18).
       const shipment = await context.tx.shipment.findUnique({ where: { id: event.shipmentId }, select: { id: true, companyId: true, partyId: true, salesOrder: { select: { id: true, customerSeq: true } } } })
       if (!shipment) return []
       const named = orderNamed(shipment.salesOrder)

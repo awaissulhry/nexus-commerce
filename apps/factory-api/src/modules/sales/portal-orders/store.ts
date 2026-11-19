@@ -3,6 +3,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import type { ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
 import type { PromiseMove } from '@nexus/factory-domain/sales/portal-orders/promise'
+// B-OP-044 (order page N6, lines-derived): a shipment's orders are its lines' orders.
+import { orderIdsOfShipments, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * The reads of customer orders in the portal (B-W2b-175). Two kinds, never mixed in one query:
@@ -120,18 +122,28 @@ export const SHIPMENT_SELECT = {
 } as const satisfies Prisma.ShipmentSelect
 export type PortalShipmentRow = Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_SELECT }>
 
-/** The shipments of these orders (every status: the caller decides what it shows). */
-export const readShipments = (db: Reader, orderIds: readonly string[]): Promise<PortalShipmentRow[]> =>
-  orderIds.length === 0 ? Promise.resolve([]) : db.shipment.findMany({ where: { salesOrderId: { in: [...orderIds] } }, select: SHIPMENT_SELECT, orderBy: [{ number: 'asc' }] })
+// ── B-OP-044 (order page N6, lines-derived): an order's shipments are those made for it and those carrying its garments ──
+/** A shipment as the portal reads it, with every order it carries (its lines' orders, the first first: the customer's own). */
+export type PortalShipment = PortalShipmentRow & { readonly salesOrderIds: readonly string[] }
+
+/** The shipments of these orders (every status: the caller decides what it shows), each with the orders it carries. */
+export async function readShipments(db: Reader, orderIds: readonly string[]): Promise<PortalShipment[]> {
+  if (orderIds.length === 0) return []
+  const rows = await db.shipment.findMany({ where: shipmentsOfOrdersWhere(orderIds), select: SHIPMENT_SELECT, orderBy: [{ number: 'asc' }] })
+  const carried = await orderIdsOfShipments(db, rows)
+  return rows.map((row) => ({ ...row, salesOrderIds: carried.get(row.id) ?? [row.salesOrderId] }))
+}
+
+// ── end B-OP-044 ──
 
 /** Shipments whose garments count as shipped (they left; a RETURNED one came back): modules/sales/orders' LEFT. */
 export const LEFT = ['SHIPPED', 'DELIVERED'] as const
 export const hasLeft = (status: string): boolean => (LEFT as readonly string[]).includes(status)
 
-/** Pieces of each order line and size on these shipments. */
-export async function shippedPieces(db: Reader, shipmentIds: readonly string[]): Promise<{ lineId: string; size: string; quantity: number }[]> {
+/** Pieces of each order line and size on these shipments (B-OP-044: only these orders' lines, when given). */
+export async function shippedPieces(db: Reader, shipmentIds: readonly string[], /* B-OP-044 */ orderIds?: readonly string[]): Promise<{ lineId: string; size: string; quantity: number }[]> {
   if (shipmentIds.length === 0) return []
-  const rows = await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: [...shipmentIds] } }, _sum: { quantity: true } })
+  const rows = await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: [...shipmentIds] }, ...(orderIds ? { salesOrderLine: { orderId: { in: [...orderIds] } } } : {}) }, _sum: { quantity: true } })
   return rows.map((row) => ({ lineId: row.salesOrderLineId, size: row.size, quantity: row._sum.quantity ?? 0 }))
 }
 

@@ -15,6 +15,8 @@ import { serverClock } from '../../../core/time'
 import { officeContextOf } from '../store'
 import type { CANDIDATE_HELD_REASONS } from './contract'
 import { invoicedOf, orderPrices, presetsOf, readDdts, shippedOf, type DdtRow } from './store'
+// B-OP-045 (order page N6, lines-derived): an order's shipments through their lines.
+import { orderIdsOfShipments, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * B-TH-062 (threads plan TH-4, N21; features SHEET.overall-F07 "Invoice shipped goods (finance)", O-SAL-ORD-REC.body-F08):
@@ -34,8 +36,9 @@ import { invoicedOf, orderPrices, presetsOf, readDdts, shippedOf, type DdtRow } 
  *     shipment is invoiced on its own, POST /invoicing/invoices/from-shipment), what is left sits in a draft already (the
  *     drafts named), or everything shipped is invoiced.
  *
- * A DDT carries the goods of one order only (the database's rule: a shipment line ships a line of the shipment's order), so a
- * chosen order's DDT never brings an unchosen order's goods into the draft.
+ * B-OP-045 (order page N6, lines-derived): a DDT may carry the goods of several orders of one customer (its shipment's lines'
+ * orders); only the chosen orders' lines are read, so a chosen order's DDT never brings an unchosen order's goods into the
+ * draft, and each draft lists one row per (DDT, order). While N6 is held off a DDT carries one order.
  */
 
 type HeldReason = (typeof CANDIDATE_HELD_REASONS)[number]
@@ -67,11 +70,15 @@ export async function fromDdtsCandidates(caller: CommandCaller, orderIds: readon
     const ddts =
       visible.length === 0
         ? []
-        : await readDdts(client, { AND: [scope as Prisma.DdtWhereInput, { cancellations: { none: {} }, shipment: { status: { in: [...LEFT] }, salesOrderId: { in: visible } } }] }, 500)
-    const rows = notInvoiced(await shippedOf(client, ddts), await invoicedOf(client, ddts.map((ddt) => ddt.id)))
+        : await readDdts(client, { AND: [scope as Prisma.DdtWhereInput, { cancellations: { none: {} }, shipment: { status: { in: [...LEFT] }, ...shipmentsOfOrdersWhere(visible) } }] }, 500)
+    // B-OP-045: the chosen orders' lines only.
+    const rows = notInvoiced(await shippedOf(client, ddts, visible), await invoicedOf(client, ddts.map((ddt) => ddt.id)))
     const ddtOf = new Map(ddts.map((ddt) => [ddt.id, ddt]))
     const ready: Ready[] = rows.filter((row) => row.toInvoice.gt(0)).map((row) => ({ row, ddt: ddtOf.get(row.ddtId)! }))
     const prices = await orderPrices(client, ready.map((entry) => entry.row.salesOrderLineId))
+    // B-OP-045: each row's order is its line's (a shared DDT carries several).
+    const linePrices = await orderPrices(client, rows.map((row) => row.salesOrderLineId))
+    const orderOfRow = (row: NotInvoicedRow): string | null => linePrices.get(row.salesOrderLineId)?.orderId ?? null
     const partyIds = [...new Set(ready.map((entry) => entry.ddt.partyId))]
     const parties = new Map((await client.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, legalName: true } })).map((party) => [party.id, party]))
     const presets = await presetsOf(client, partyIds)
@@ -95,7 +102,9 @@ export async function fromDdtsCandidates(caller: CommandCaller, orderIds: readon
         return unit === null ? sum : sum + toMinorUnits(lineAmount(new Dec(unit), entry.row.toInvoice), currency)
       }, 0)
       const choice = chooseInvoiceType(groupDdts.map((ddt) => ({ number: ddt.number, date: ddt.date })), today, undefined, 'body/docType', presets.get(partyId)?.preset ?? 'TD01')
-      const orderIdsOf = [...new Set(groupDdts.map((ddt) => ddt.salesOrderId))]
+      // B-OP-045: the orders of the group's own lines, and one row per (DDT, order).
+      const orderIdsOf = [...new Set(entries.flatMap((entry) => (orderOfRow(entry.row) ? [orderOfRow(entry.row)!] : [])))]
+      const pairs = groupDdts.flatMap((ddt) => [...new Set(entries.filter((entry) => entry.ddt.id === ddt.id).flatMap((entry) => (orderOfRow(entry.row) ? [orderOfRow(entry.row)!] : [])))].map((orderId) => ({ ddt, orderId })))
       return {
         partyId,
         companyId,
@@ -104,13 +113,13 @@ export async function fromDdtsCandidates(caller: CommandCaller, orderIds: readon
         month,
         currency,
         orders: orderIdsOf.map((id) => ({ id, number: numberOf.get(id) ?? '' })).sort((a, b) => a.number.localeCompare(b.number)),
-        ddts: groupDdts.map((ddt) => ({
+        ddts: pairs.map(({ ddt, orderId }) => ({
           ddtId: ddt.id,
           number: ddt.number,
           date: ddt.date,
           shipmentNumber: ddt.shipmentNumber,
-          orderNumber: numberOf.get(ddt.salesOrderId) ?? '',
-          garments: garmentsOf(entries.filter((entry) => entry.ddt.id === ddt.id)).toString(),
+          orderNumber: numberOf.get(orderId) ?? '',
+          garments: garmentsOf(entries.filter((entry) => entry.ddt.id === ddt.id && orderOfRow(entry.row) === orderId)).toString(),
         })),
         garments: garmentsOf(entries).toString(),
         valueAmount: asMoney('price', value),
@@ -121,17 +130,15 @@ export async function fromDdtsCandidates(caller: CommandCaller, orderIds: readon
     drafts.sort((a, b) => a.legalName.localeCompare(b.legalName) || a.month.localeCompare(b.month) || a.companyId.localeCompare(b.companyId))
 
     // The chosen orders with nothing a new draft takes, and why.
-    const readyOrders = new Set(ready.map((entry) => entry.ddt.salesOrderId))
+    const readyOrders = new Set(ready.flatMap((entry) => (orderOfRow(entry.row) ? [orderOfRow(entry.row)!] : [])))
     const waiting = orders.filter((order) => !readyOrders.has(order.id))
-    const withoutDdt =
-      waiting.length === 0
-        ? new Set<string>()
-        : new Set(
-            (await client.shipment.findMany({ where: { salesOrderId: { in: waiting.map((order) => order.id) }, status: { in: [...LEFT] }, ddts: { none: {} } }, select: { salesOrderId: true } })).map((shipment) => shipment.salesOrderId),
-          )
+    // B-OP-045: a waiting order's shipments that left without a DDT — made for it or carrying its garments.
+    const leftWithout = waiting.length === 0 ? [] : await client.shipment.findMany({ where: { ...shipmentsOfOrdersWhere(waiting.map((order) => order.id)), status: { in: [...LEFT] }, ddts: { none: {} } }, select: { id: true, salesOrderId: true } })
+    const carriedWithout = await orderIdsOfShipments(client, leftWithout)
+    const withoutDdt = new Set(leftWithout.flatMap((shipment) => carriedWithout.get(shipment.id) ?? [shipment.salesOrderId]))
     const held = waiting
       .map((order) => {
-        const mine = rows.filter((row) => ddtOf.get(row.ddtId)?.salesOrderId === order.id)
+        const mine = rows.filter((row) => orderOfRow(row) === order.id)
         const inDraft = mine.filter((row) => row.notInvoiced.gt(0) && row.inDraft.gt(0))
         const reason: HeldReason = mine.length === 0 ? (withoutDdt.has(order.id) ? 'SHIPPED_WITHOUT_DDT' : 'NOTHING_SHIPPED') : inDraft.length > 0 ? 'IN_DRAFT' : 'INVOICED'
         const drafts = [...new Set(inDraft.flatMap((row) => row.invoices.filter((invoice) => invoice.draft).map((invoice) => invoice.invoiceId)))]

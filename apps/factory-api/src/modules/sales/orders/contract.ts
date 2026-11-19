@@ -268,6 +268,14 @@ export const orderView = output({
         mayTypeTracking: output({ allowed: z.boolean(), code: z.enum([...OWN_TRANSPORT_REFUSALS, 'NO_RIGHT']).nullable(), why: z.string().nullable() }),
         withheld: z.array(z.enum(['shipments.detail'])),
         // ── end B-OP-023 ──
+        // ── B-OP-043 (order page N6, lines-derived): a shipment is on the order when it carries its garments (or was made for it) ──
+        /** Every order it carries, the first (the one it was made for) first; all of this order's customer. */
+        orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable() })),
+        /** NEXUS, or ELSEWHERE (recorded as made outside Nexus, with its paper DDT). */
+        origin: z.enum(['NEXUS', 'ELSEWHERE']),
+        /** The paper DDT of a shipment made elsewhere (Nexus issued none); null otherwise. */
+        externalDdt: output({ number: z.string(), date: z.iso.date() }).nullable(),
+        // ── end B-OP-043 ──
       }),
     ),
     invoices: z.array(output({ id: id(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), /** A TD02: the deposit request it bills. */ depositRequestId: id().nullable() })),

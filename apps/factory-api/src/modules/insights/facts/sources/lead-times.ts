@@ -7,6 +7,8 @@ import { familyOf, leadDays, orderShippedOn, type LeadKind } from '@nexus/factor
 import { dueOf } from '@nexus/factory-domain/insights/kpis/otif'
 import { PRODUCT_TYPES } from '@nexus/factory-domain/product/styles/rules'
 import { numberOf, type DayFact, type Reader, type Source } from '../rows'
+// B-OP-045 (order page N6, lines-derived): the orders a shipment carries.
+import { orderIdsOfShipments } from '../../../shipping/shipments/orders-of'
 
 /**
  * The lead-times source (B-W2b-429; ANA-014; measures leadtimes.<kind>_days and leadtimes.<kind>_orders; rules factory-domain
@@ -74,9 +76,13 @@ export async function readLeadOrders(db: Reader, input: { readonly kind: LeadKin
       if (sent) ended.push({ order, fromDay: businessDate(sent, input.timeZoneOf(order.companyId)), toDay: dayOf(order.orderDate) })
     }
   } else if (input.kind === 'ORDER_TO_SHIP') {
-    const shipments = await db.shipment.findMany({ where: { salesOrder: scope, status: { in: ['SHIPPED', 'DELIVERED'] }, shippedAt: { gte: start, lt: end } }, select: { salesOrderId: true }, distinct: ['salesOrderId'] })
-    const orderIds = shipments.map((row) => row.salesOrderId)
-    const orders = orderIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: ORDER_SELECT })
+    // B-OP-045 (order page N6, lines-derived): the orders that shipped in the span — made for or carried on a shipment (its
+    // lines' orders); each order's own lines then give its shipped day as before.
+    const shipments = await db.shipment.findMany({ where: { OR: [{ salesOrder: scope }, { lines: { some: { salesOrderLine: { order: scope } } } }], status: { in: ['SHIPPED', 'DELIVERED'] }, shippedAt: { gte: start, lt: end } }, select: { id: true, salesOrderId: true } })
+    const carried = await orderIdsOfShipments(db, shipments)
+    const candidateIds = [...new Set(shipments.flatMap((row) => carried.get(row.id) ?? [row.salesOrderId]))]
+    const orders = candidateIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { AND: [scope, { id: { in: candidateIds } }] }, select: ORDER_SELECT })
+    const orderIds = orders.map((row) => row.id)
     const lines = await linesOf(db, orderIds)
     const shipped = new Map<string, { day: BusinessDate; quantity: number }[]>()
     const lineIds = [...lines.values()].flat().map((line) => line.id)

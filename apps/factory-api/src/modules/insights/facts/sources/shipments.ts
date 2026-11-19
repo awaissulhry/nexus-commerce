@@ -3,6 +3,8 @@ import { eachDay } from '@nexus/factory-domain/calendars/dates'
 import { businessDate, businessDayRange } from '@nexus/factory-domain/core/time'
 import { measureOf } from '@nexus/factory-domain/insights/kpis/measures'
 import { numberOf, type DayFact, type Source } from '../rows'
+// B-OP-045 (order page N6, lines-derived): the earliest promise of the orders a shipment carries.
+import { earliestPromisesOf } from '../../../shipping/shipments/orders-of'
 
 /**
  * The shipments source (B-W2b-428; measures shipments.shipped, shipments.on_time): the company's shipments that left
@@ -26,16 +28,19 @@ export const shipmentsSource: Source = async (db, { company, from, to, now, wher
         },
       ],
     },
-    select: { shippedAt: true, salesOrder: { select: { promiseDate: true } } },
+    select: { id: true, salesOrderId: true, shippedAt: true, salesOrder: { select: { promiseDate: true } } },
   })
+  // B-OP-045 (order page N6): a shipment that carries several orders is on time by the earliest promise among them.
+  const promiseOf = await earliestPromisesOf(db, found)
   const days = new Map(eachDay(from, last).map((day) => [day, { shipped: 0, onTime: 0 }]))
   for (const row of found) {
-    if (!row.shippedAt || !row.salesOrder.promiseDate) continue
+    const promise = promiseOf.get(row.id) ?? row.salesOrder.promiseDate
+    if (!row.shippedAt || !promise) continue
     const day = businessDate(row.shippedAt, company.timezone)
     const sums = days.get(day)
     if (!sums) continue
     sums.shipped += 1
-    if (day <= row.salesOrder.promiseDate.toISOString().slice(0, 10)) sums.onTime += 1
+    if (day <= promise.toISOString().slice(0, 10)) sums.onTime += 1
   }
   const daily: DayFact[] = []
   for (const [day, sums] of days) {

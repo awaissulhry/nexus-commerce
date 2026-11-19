@@ -13,6 +13,8 @@ import { officeContextOf } from './access'
 import { officeOrder } from './moves'
 import { instalmentsOfOrder } from './schedule'
 import { asDay, dayOrNull } from './store'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * Delivered moves the order (B-W2b-398; LOG-067 "Delivered status driving terms"; design sales.orders record › Shipments,
@@ -45,7 +47,8 @@ export interface DeliveredMove {
  */
 export async function deliveredMoveInCommand(tools: CommandTools, order: { readonly id: string; readonly companyId: string; readonly paymentTermsId: string | null }): Promise<DeliveredMove> {
   const { tx, now } = tools
-  const arrived = await tx.shipment.findMany({ where: { salesOrderId: order.id, status: 'DELIVERED' }, select: { deliveredAt: true } })
+  // B-OP-043 (order page N6): the order's shipments made for it or carrying its garments (factory_order_shipments' set).
+  const arrived = await tx.shipment.findMany({ where: { ...shipmentsOfOrderWhere(order.id), status: 'DELIVERED' }, select: { deliveredAt: true } })
   const last = Math.max(0, ...arrived.map((row) => row.deliveredAt?.getTime() ?? 0))
   const deliveredAt = last > 0 && last <= now.getTime() ? new Date(last) : now
   const day = businessDate(deliveredAt)
@@ -74,7 +77,8 @@ export async function getDeliveries(caller: CommandCaller, orderId: string) {
   return caller.withClient(async (db) => {
     const head = await db.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { id: true, number: true, status: true, deliveredAt: true } })
     const shipments = await db.shipment.findMany({
-      where: { salesOrderId: order.id, status: { in: ['SHIPPED', 'DELIVERED', 'RETURNED'] } },
+      // B-OP-043: made for it or carrying its garments.
+      where: { ...shipmentsOfOrderWhere(order.id), status: { in: ['SHIPPED', 'DELIVERED', 'RETURNED'] } },
       select: { id: true, number: true, status: true, siteId: true, partyId: true, companyId: true, carrierName: true, shippedAt: true, deliveredAt: true, podSignedBy: true, podAt: true, podFileId: true },
       orderBy: { number: 'asc' },
     })

@@ -18,6 +18,8 @@ import type { Place, Reader } from '../portal-returns/store'
 import { announceRepairPhoto, completeRepairPhoto, openRepairFile, type RepairPhotoUpload } from './photos'
 import { createRequestInCommand, planRequest, type RepairRequestBody } from './request'
 import { customerRepairs, customerRepairView, readCustomerRepair } from './views'
+// B-OP-044 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../../shipping/shipments/orders-of'
 
 /**
  * "Report a problem" › Repair or alteration by link (B-W2b-342; follow-ups RR1:01 "The claim link offers Repair with its
@@ -55,8 +57,11 @@ const systemOf = (request: FastifyRequest, link: { readonly tenantId: string }):
 
 async function scopeOf(db: Reader, link: LinkSession): Promise<ClaimScope> {
   if (link.record.type === 'SalesOrder') return { salesOrderId: link.record.id, shipmentId: null }
-  const shipment = await db.shipment.findUnique({ where: { id: link.record.id }, select: { salesOrderId: true, partyId: true } })
-  return { salesOrderId: shipment?.salesOrderId ?? null, shipmentId: link.record.id }
+  const shipment = await db.shipment.findUnique({ where: { id: link.record.id }, select: { id: true, salesOrderId: true, partyId: true } })
+  // B-OP-044 (order page N6): a shipment of one order keeps the link to that order; a shared one to its own lines only
+  // (request.ts checks the garment's line is on the shipment).
+  const orders = shipment ? await ordersOfShipment(db, shipment) : []
+  return { salesOrderId: orders.length === 1 ? orders[0]! : null, shipmentId: link.record.id }
 }
 
 /** The repairs this link opened, from the audit rows its submits wrote on it. */
