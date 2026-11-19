@@ -14,7 +14,9 @@ import { StageStrip } from '../../../../../lib/production/view/StageStrip'
 import { WaitingOnPill } from '../../../../../lib/production/view/WaitingOnPill'
 import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
 import type { Order } from '../../api'
-import { dayInstant } from '../../model'
+import { dayInstant, promiseHeld } from '../../model' // F-OP-104: promiseHeld
+import { amendHeld } from '../../daily-model' // F-OP-104
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame' // F-OP-104: the owner door
 import {
   bandHealthOf,
   exFactoryOf,
@@ -74,7 +76,7 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
       {/* F-SA-233: the facts beside each other (a card grid that follows the body's width, never dead space). */}
       <div className="fw-so-overview-cards">
         <PeopleCard order={order} model={model} actions={actions} />
-        <NextDatesCard order={order} model={model} />
+        <NextDatesCard order={order} model={model} actions={actions} />
         <RequestsCard order={order} model={model} actions={actions} rows={rows} />
         <LinkedCard order={order} model={model} />
         <FactsCard order={order} model={model} />
@@ -87,6 +89,7 @@ function WhereItIs({ order, model, actions, rows }: { order: Order; model: Order
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-104: the stages' door keeps the dock's scope
   const state = model.production ?? null
   const read = readOf(state)
   const headline = read?.headline ?? null
@@ -121,13 +124,15 @@ function WhereItIs({ order, model, actions, rows }: { order: Order; model: Order
       </div>
       {loading ? <Skeleton width={260} height={24} /> : <p className="fw-so-headline">{sentence}</p>}
       <KeyValue dense labelCase="sentence" columns={2} items={facts} />
+      {/* F-OP-104: the stages are one real link to Production's work orders (the ex-factory date and its moves are the facts' line). */}
       <StageStrip
         face="office"
         layout="auto"
         label={t('overview.where')}
         {...strip}
         note={preparing ? t(preparing.key) : (strip.note ?? null)}
-        promise={headline?.promise.date ?? order.promiseDate ? { date: (headline?.promise.date ?? order.promiseDate)!, history: order.promiseHistory.map((move) => ({ on: move.at, from: move.from, to: move.to, reason: null })) } : null}
+        stageHref={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#work-orders`}
+        stageLinkLabel={t('doors.stages', { stage: strip.stage ? w.t(`parts.stage.${strip.stage}`) : w.t('parts.stage.unknown') })}
         loading={loading}
         problem={state?.status === 'failed'}
         onRetry={() => actions?.onRetryProduction?.()}
@@ -245,6 +250,8 @@ function LineSizes({ order, row, rows, label, stage, model, actions }: { order: 
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-210
+  const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const read = readOf(model.production)
   const sizes = lineSizesOf(row, read?.lines ?? [], read?.dates ?? null, label)
   const extraWords = (count: number) => (count > 0 ? t('overview.madeExtra', { count }) : '—')
@@ -256,9 +263,15 @@ function LineSizes({ order, row, rows, label, stage, model, actions }: { order: 
       subtitle={stage}
       nav={{ ids: rows.map((entry) => entry.id), current: row.id, onGo: (id) => actions?.onOpenLine?.(id), noun: t('overview.sizes.noun') }}
       footer={
-        <Button size="sm" asChild>
-          <Link href={`${model.prefix}/sales/orders/${order.id}?tab=lines`}>{t('overview.sizes.openLines')}</Link>
-        </Button>
+        // F-OP-104: beside Open in Lines, Open in Production (the line's place there); both keep the dock's scope.
+        <span className="fw-so-inline">
+          <Button size="sm" asChild>
+            <TabLink href={tabHref(recordHref, 'lines', search)}>{t('overview.sizes.openLines')}</TabLink>
+          </Button>
+          <Button size="sm" asChild>
+            <TabLink href={`${tabHref(recordHref, 'production', search)}#line-${row.lineIds[0] ?? row.id}`}>{t('doors.openInProduction')}</TabLink>
+          </Button>
+        </span>
       }
     >
       {sizes.units !== null ? (
@@ -306,6 +319,8 @@ function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecor
   const t = useT('orders')
   const notes = useT(NOTES_NS)
   const locale = useLocale()
+  const frame = useRecordFrame() // F-OP-104: "Answers the customer · Change…" is the conversation's owner door
+  const customer = order.party?.legalName ?? ''
   const state = model.production ?? null
   const read = readOf(state)
   const people = read?.people ?? null
@@ -316,8 +331,33 @@ function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecor
   const items = [
     ...(people
       ? [
-          { label: t('overview.people.backup'), value: people.backup?.name ?? '—' },
-          { label: t('overview.people.answers'), value: people.answersCustomer?.name ?? '—' },
+          // F-OP-104: the backup is the customer's own setting (for every order of it): read here, changed on its page.
+          {
+            label: t('overview.people.backup'),
+            value: (
+              <span className="fw-so-stack-tight">
+                <span>{people.backup?.name ?? '—'}</span>
+                <span className="fw-so-cell-sub">
+                  {t('doors.backupFor', { customer })} ·{' '}
+                  <Link className="fw-so-link" href={`${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}>
+                    {t('doors.backupElsewhere', { customer })}
+                  </Link>
+                </span>
+              </span>
+            ),
+          },
+          // F-OP-104: who answers the customer is the order conversation's owner — its own dialog, opened from here (the frame's door).
+          {
+            label: t('overview.people.answers'),
+            value: (
+              <span className="fw-so-inline">
+                <span>{people.answersCustomer?.name ?? '—'}</span>
+                <Button size="sm" variant="quiet" heldReason={frame?.openDoor ? null : t('waiting.noThread')} onClick={() => frame?.openDoor?.('owner')}>
+                  {t('doors.change')}
+                </Button>
+              </span>
+            ),
+          },
         ]
       : []),
     { label: t('overview.people.madeBy'), value: madeBy ? t('overview.people.madeByOn', { name: madeBy, date: formatDate(order.createdAt, { locale }) }) : formatDate(order.createdAt, { locale }) },
@@ -350,22 +390,30 @@ function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecor
   )
 }
 
-/** O4 Next dates (P16): the next three to come, late first in amber; "All dates ›" opens Production › Dates & milestones. */
-function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel }) {
+/**
+ * O4 Next dates (P16): the next three to come, late first in amber; "All dates ›" opens Production › Dates & milestones.
+ * F-OP-104 (10-order-page §3.4): the order's own two dates under them, each with Change… in place — the promise (the Change promise
+ * dialog, order or lines) and the requested date (edit mode on Lines, its field focused). Gates and milestones stay read-only.
+ */
+function NextDatesCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const d = useT(DEPTH)
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-210
   const state = model.production ?? null
   const read = readOf(state)
-  const rows = nextDatesOf(read?.dates ?? null, order.promiseDate)
+  const rows = nextDatesOf(read?.dates ?? null, null) // F-OP-104: the promise has its own row below
   const day = (value: string) => formatDate(dayInstant(value), { locale })
+  const promiseWait = promiseHeld(order, model.can)
+  const requestedWait = amendHeld(order, model.can)
+  const busy = model.busy ? t('held.busy') : null
   return (
     <Card padded>
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('overview.dates.title')}</h2>
-        <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/orders/${order.id}?tab=production#dates`}>
+        <TabLink className="fw-so-link fw-so-hint" href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#dates`}>
           {t('overview.dates.all')}
-        </Link>
+        </TabLink>
       </div>
       {!state || state.status === 'loading' ? (
         <Skeleton height={44} />
@@ -398,6 +446,27 @@ function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel
           })}
         </ul>
       )}
+      {/* F-OP-104: the order's own dates, each changed in place. */}
+      <ul className="fw-so-datelist" aria-label={t('doors.ownDates')}>
+        <li>
+          <span>{t('dates.promised')}</span>
+          <span className="fw-so-inline">
+            <span className="fw-so-cell-sub">{order.promiseDate ? day(order.promiseDate) : '—'}</span>
+            <Button size="sm" variant="quiet" heldReason={busy ?? (promiseWait ? t(promiseWait.key, promiseWait.params) : null)} onClick={() => actions?.onDialog?.({ kind: 'promise' })}>
+              {t('doors.change')}
+            </Button>
+          </span>
+        </li>
+        <li>
+          <span>{t('dates.requested')}</span>
+          <span className="fw-so-inline">
+            <span className="fw-so-cell-sub">{order.requestedDate ? day(order.requestedDate) : '—'}</span>
+            <Button size="sm" variant="quiet" heldReason={busy ?? (requestedWait ? t(requestedWait.key, requestedWait.params) : null)} onClick={() => actions?.onRequestedChange?.()}>
+              {t('doors.change')}
+            </Button>
+          </span>
+        </li>
+      </ul>
     </Card>
   )
 }
@@ -468,6 +537,7 @@ function RequestsCard({ order, model, actions, rows }: { order: Order; model: Or
 /** O6 Linked records: count buttons, each a real link; a list without its right is held in words with no number; left-out work orders counted. */
 function LinkedCard({ order, model }: { order: Order; model: OrderRecordModel }) {
   const t = useT('orders')
+  const search = useSearchParams()?.toString() ?? '' // F-OP-104: the order's own tabs keep the dock's scope
   const read = readOf(model.production)
   const links = model.links && model.links.state === 'ready' ? model.links.links : null
   const { records, workOrdersLeftOut } = linkedRecordsOf({
@@ -479,6 +549,7 @@ function LinkedCard({ order, model }: { order: Order; model: OrderRecordModel })
     returns: links?.returns ? links.returns.length : null,
     sameQuote: model.depth?.depth.value?.sameQuote ?? [],
     madeFrom: model.madeFromReading ? undefined : (model.madeFrom ?? null),
+    search,
   })
   return (
     <Card padded>
@@ -490,9 +561,10 @@ function LinkedCard({ order, model }: { order: Order; model: OrderRecordModel })
           return (
             <li key={`${entry.key}-${index}`}>
               {entry.href ? (
-                <Link className="fw-so-countbtn" href={entry.href}>
+                // F-OP-210: no prefetch (a tab address changes with the dock's scope).
+                <TabLink className="fw-so-countbtn" href={entry.href}>
                   <span>{label}</span> <strong>{value}</strong>
-                </Link>
+                </TabLink>
               ) : (
                 <span className="fw-so-countbtn is-plain">
                   <span>{label}</span> <strong>{value}</strong>

@@ -1771,5 +1771,13 @@
       "money": "Money ›",
       "changes": "Changes ›"
     }
+  },
+  "doors": {
+    "stages": "Open the work orders in Production · now {stage}",
+    "openInProduction": "Open in Production",
+    "change": "Change…",
+    "ownDates": "The order's own dates",
+    "backupFor": "for every order of {customer}",
+    "backupElsewhere": "Change it on {customer}'s page ›"
   }
 }

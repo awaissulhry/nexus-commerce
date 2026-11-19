@@ -343,6 +343,8 @@ export interface OrderRecordActions {
   /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
   onRetryProduction?: () => void
   onOpenLine?: (rowId: string | null) => void
+  /** F-OP-104: Next dates' requested date "Change…" — edit mode on Lines with its field focused. */
+  onRequestedChange?: () => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
 }

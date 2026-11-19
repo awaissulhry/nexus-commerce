@@ -7,6 +7,7 @@ import type { BrandHealth, BrandStage, Dates, Headline, OrderProduction, Product
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
 import type { OpenApproval } from '../../api'
 import { stillRowsOf, type StillRowOf } from '../changes/model'
+import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-104: the tab links keep the dock's scope (F-OP-210)
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview's rules, without
@@ -287,6 +288,9 @@ export function placeWords(place: NonNullable<OrderProduction['people']>['places
   return [place.site?.name ?? place.site?.code, place.line?.name ?? place.line?.code, place.team?.name ?? place.team?.code].filter((part): part is string => !!part).join(' · ')
 }
 
+/** F-OP-104: the requested date's field on Lines in edit mode (its id: Next dates' "Change…" focuses it). */
+export const REQUESTED_FIELD_ID = 'amend-requested-date'
+
 /** One of the next dates (the order's own milestones, late first; the ex-factory day when fewer than three wait). */
 export interface NextDate {
   readonly id: string
@@ -462,6 +466,8 @@ interface LinkedInput {
   readonly sameQuote: readonly { readonly id: string; readonly number: string }[]
   /** B-TH-228: the request an order was made from straight (no quote between); undefined: still read (nothing claimed). */
   readonly madeFrom?: { readonly id: string; readonly number: string } | null
+  /** F-OP-104: the page's address terms now (a tab link keeps the dock's scope, tabHref); absent: none. */
+  readonly search?: string
 }
 
 /**
@@ -472,6 +478,8 @@ interface LinkedInput {
 export function linkedRecordsOf(input: LinkedInput): { readonly records: readonly LinkedRecord[]; readonly workOrdersLeftOut: number } {
   const { order, prefix, can } = input
   const record = `${prefix}/sales/orders/${order.id}`
+  // F-OP-104 (F-OP-210, R-19): the order's own tabs through tabHref — the dock's scope kept.
+  const tab = (name: string, anchor?: string) => `${tabHref(record, name, input.search ?? '')}${anchor ? `#${anchor}` : ''}`
   const quote = order.chain.quote
   const work = input.work ?? null
   const workCount = work ? work.workOrders.length + work.mtm.reduce((sum, group) => sum + group.workOrders, 0) : order.chain.workOrders.length
@@ -484,12 +492,12 @@ export function linkedRecordsOf(input: LinkedInput): { readonly records: readonl
         : input.madeFrom === null
           ? [{ key: 'quote' as const, count: null, words: phrase('chain.noQuote'), href: null, held: null }]
           : []),
-    { key: 'workOrders', count: workCount, words: null, href: workCount > 0 ? `${record}?tab=production` : null, held: null },
-    { key: 'shipments', count: order.chain.shipments.length, words: null, href: order.chain.shipments.length > 0 ? `${record}?tab=shipments` : null, held: null },
-    can.viewInvoices ? { key: 'invoices', count: order.chain.invoices.length, words: null, href: order.chain.invoices.length > 0 ? `${record}?tab=money#invoices` : null, held: null } : { key: 'invoices', count: null, words: null, href: null, held: phrase('overview.linked.invoicesHeld') },
-    { key: 'deposit', count: null, words: phrase(`gate.state.${gate.state}`), href: `${record}?tab=money`, held: null },
-    ...(input.complaints !== null ? [{ key: 'complaints' as const, count: input.complaints, words: null, href: input.complaints > 0 ? `${record}?tab=shipments` : null, held: null }] : []),
-    ...(input.returns !== null ? [{ key: 'returns' as const, count: input.returns, words: null, href: input.returns > 0 ? `${record}?tab=shipments` : null, held: null }] : []),
+    { key: 'workOrders', count: workCount, words: null, href: workCount > 0 ? tab('production') : null, held: null },
+    { key: 'shipments', count: order.chain.shipments.length, words: null, href: order.chain.shipments.length > 0 ? tab('shipments') : null, held: null },
+    can.viewInvoices ? { key: 'invoices', count: order.chain.invoices.length, words: null, href: order.chain.invoices.length > 0 ? tab('money', 'invoices') : null, held: null } : { key: 'invoices', count: null, words: null, href: null, held: phrase('overview.linked.invoicesHeld') },
+    { key: 'deposit', count: null, words: phrase(`gate.state.${gate.state}`), href: tab('money'), held: null },
+    ...(input.complaints !== null ? [{ key: 'complaints' as const, count: input.complaints, words: null, href: input.complaints > 0 ? tab('shipments') : null, held: null }] : []),
+    ...(input.returns !== null ? [{ key: 'returns' as const, count: input.returns, words: null, href: input.returns > 0 ? tab('shipments') : null, held: null }] : []),
     ...input.sameQuote.map((other) => ({ key: 'sameQuote' as const, count: null, words: phrase('overview.linked.sameQuoteValue', { number: other.number }), href: `${prefix}/sales/orders/${other.id}`, held: null })),
   ]
   return { records, workOrdersLeftOut: work?.workOrdersLeftOut ?? 0 }

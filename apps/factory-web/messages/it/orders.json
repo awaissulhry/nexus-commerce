@@ -1771,5 +1771,13 @@
       "money": "Importi ›",
       "changes": "Modifiche ›"
     }
+  },
+  "doors": {
+    "stages": "Apri gli ordini di lavoro in Produzione · ora {stage}",
+    "openInProduction": "Apri in Produzione",
+    "change": "Cambia…",
+    "ownDates": "Le date dell'ordine",
+    "backupFor": "per tutti gli ordini di {customer}",
+    "backupElsewhere": "Cambialo nella pagina di {customer} ›"
   }
 }

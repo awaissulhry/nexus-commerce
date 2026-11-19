@@ -378,3 +378,80 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
   })
 })
 // ---- end F-OP-103
+
+// ---- F-OP-104 (order page plan N1; 10-order-page §3.1, §3.3, §3.4; review N-1, R-19): Overview's doors ----------------------------
+describe('F-OP-104: Overview doors — the stages a real link, Open in Production, the dates changed in place, who answers the customer', () => {
+  it('StageStrip: with stageHref the stages are ONE real link (its name; the promise is the page\'s); production pages keep it as it was', async () => {
+    const { createElement } = await import('react')
+    const { render } = await import('../../../../../lib/record-thread/parts/testing')
+    const { StageStrip } = await import('../../../../../lib/production/view/StageStrip')
+    const promise = { date: '2026-12-15', history: [{ on: '2026-11-10', from: '2026-12-09', to: '2026-12-15', reason: null }] }
+    const href = '/w/demo/sales/orders/o1?tab=production&thread=all#work-orders'
+    const door = render(createElement(StageStrip, { face: 'office', stage: 'SEWING', promise, stageHref: href, stageLinkLabel: 'Open the work orders in Production · now Sewing' }))
+    expect(door).toContain(`href="${href.replace(/&/g, '&amp;')}"`)
+    expect(door).toContain('aria-label="Open the work orders in Production · now Sewing"')
+    expect(door).toContain('class="fw-prp-strip-go"')
+    // A link holds no other control: the promise's history (a disclosure) is not inside it.
+    expect(door).not.toContain('<details')
+    const plain = render(createElement(StageStrip, { face: 'office', stage: 'SEWING', promise }))
+    expect(plain).not.toContain('<a ')
+    expect(plain).toContain('<details')
+    // No stage known: no link (nothing to open), the "—" as before.
+    expect(render(createElement(StageStrip, { face: 'office', stage: null, stageHref: href }))).not.toContain('<a ')
+    const css = readFileSync(new URL('../../../../../lib/production/production-parts.css', import.meta.url), 'utf8')
+    expect(css).toContain('.fw-prp-strip-go:focus-visible')
+  })
+
+  it('linked records: the order\'s own tabs through tabHref — the dock\'s scope kept, the narrow view\'s terms dropped', () => {
+    const value = order('SHIPPED')
+    const linked = linkedRecordsOf({ order: value, prefix: '/w/demo', can: { viewQuotes: true, viewInvoices: true }, work: null, complaints: 1, returns: 0, sameQuote: [], search: 'tab=overview&thread=all&open=r1' })
+    const byKey = (key: string) => linked.records.find((entry) => entry.key === key)!
+    expect(byKey('complaints').href).toBe(`/w/demo/sales/orders/${value.id}?tab=shipments&thread=all`)
+    expect(byKey('deposit').href).toBe(`/w/demo/sales/orders/${value.id}?tab=money&thread=all`)
+    if (value.chain.invoices.length > 0) expect(byKey('invoices').href).toBe(`/w/demo/sales/orders/${value.id}?tab=money&thread=all#invoices`)
+  })
+
+  it('the overview draws its doors: the stages\' link, Open the dates, Change… on the promise and the requested date, the backup\'s page', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('overview', locale)
+      const text = textOf(html)
+      expect(html).toContain('class="fw-prp-strip-go"')
+      expect(html).toMatch(/href="[^"]*\?tab=production[^"]*#work-orders"/)
+      expect(html).toMatch(/href="[^"]*\?tab=production[^"]*#dates"/)
+      expect(text).toContain(locale === 'en' ? 'Change…' : 'Cambia…')
+      expect(text).toContain(locale === 'en' ? 'Promised' : 'Promesso')
+      expect(text).toContain(locale === 'en' ? 'Requested' : 'Richiesto')
+    }
+    const source = readFileSync(new URL('../view/OverviewTab.tsx', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/\?tab=/)
+    expect(source).toContain("onClick={() => frame?.openDoor?.('owner')}")
+    expect(source).toContain("onClick={() => actions?.onDialog?.({ kind: 'promise' })}")
+    expect(source).toContain('onClick={() => actions?.onRequestedChange?.()}')
+    expect(source).toContain("#line-${row.lineIds[0] ?? row.id}")
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    expect(model).not.toMatch(/`\$\{record\}\?tab=/)
+  })
+
+  it('the requested date\'s Change…: edit mode on Lines, its field focused (the container\'s one focus); the field carries the id', async () => {
+    const { REQUESTED_FIELD_ID } = await import('./model')
+    const acts = readFileSync(new URL('../use-overview-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('input.startAmend?.()')
+    expect(acts).toContain('input.focus?.(REQUESTED_FIELD_ID)')
+    const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })')
+    const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(lines).toContain('<DateField id={REQUESTED_FIELD_ID}')
+    expect(REQUESTED_FIELD_ID).toBe('amend-requested-date')
+    // The view never imports an acts hook (view-boundaries rule 2): the id lives in the pure model.
+    expect(lines).not.toContain("from '../use-overview-acts'")
+  })
+
+  it('the words exist in both languages (office "tu")', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['doors.openInProduction', 'doors.change', 'doors.ownDates']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      for (const [key, params] of [['doors.stages', { stage: 'x' }], ['doors.backupFor', { customer: 'Brand Alpha' }], ['doors.backupElsewhere', { customer: 'Brand Alpha' }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-104
