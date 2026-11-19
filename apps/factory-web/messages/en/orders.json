@@ -552,9 +552,38 @@
       "number": "Shipment",
       "status": "State",
       "shipped": "Left",
-      "delivered": "Delivered"
+      "delivered": "Delivered",
+      "carrier": "Carrier",
+      "tracking": "Tracking"
     },
-    "moneyDoor": "Invoices and payments are on Money ›"
+    "moneyDoor": "Invoices and payments are on Money ›",
+    "carrier": {
+      "ownVan": "Our own van",
+      "collects": "The customer collects",
+      "manual": "{carrier}, booked by hand",
+      "named": "{name}"
+    },
+    "noLive": "No live tracking",
+    "copy": "Copy",
+    "copied": "Copied",
+    "trackingOpen": "Tracking number…",
+    "showCancelled": "Show {count} cancelled",
+    "hideCancelled": "Hide cancelled",
+    "tracking": {
+      "held": {
+        "LABELLED": "A carrier label is bought: void the labels first.",
+        "NOT_A_CARRIER": "Only a carrier shipment takes a typed tracking number.",
+        "NOT_A_CARRIER_LEFT": "Only a carrier shipment takes a typed tracking number. The goods have left.",
+        "CANCELLED": "The shipment is cancelled.",
+        "CARRIER_TRACKED": "The carrier's own tracking follows it: nothing to type.",
+        "NO_RIGHT": "A warehouse person adds tracking.",
+        "other": "Not possible now."
+      },
+      "door": {
+        "shipment": "Open the shipment ›",
+        "arrange": "Change how it travels…"
+      }
+    }
   },
   "shipStatus": {
     "DRAFT": "Draft",
