@@ -348,7 +348,7 @@ describe('order events name their customer (B-SA-001)', () => {
   // (money.price, never orders.view: a Sales worker or a Production manager has no price to re-read), or not at all (the alert's
   // own event: the screens re-read on brand_price_changed). They name the order's customer like every order event.
   const MONEY_WALLED: Readonly<Record<string, 'money.price' | null>> = { 'sales_order.brand_price_changed': 'money.price', 'sales_order.brand_price_changed_by_customer': null }
-  const LIVE_ORDER_EVENTS = ORDER_EVENTS.filter((type) => definitionOf(type).live !== undefined)
+  const LIVE_ORDER_EVENTS = ORDER_EVENTS.filter((type) => definitionOf(type).live !== null)
   // ── end B-CP-017 / B-CP-021 ──
   const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
   const messageOf = (type: string, payload: Record<string, unknown>) => {
