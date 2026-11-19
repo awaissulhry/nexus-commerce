@@ -31,6 +31,7 @@
     "golden-threads": { "group": "golden", "min": 81 },
     "golden-sales-page": { "group": "golden", "min": 11 },
     "golden-production": { "group": "golden", "min": 16 },
+    "golden-money-wall": { "group": "golden", "min": 23, "$comment": "B-CP-022: the money-wall sweep's 23 steps (every step must run)" },
     "browser": { "group": "browser", "min": 27, "$comment": "the browser golden flow's stages (01-customer … 16-close, th1a … th7, end checks)" }
   },
   "quickCheck": {

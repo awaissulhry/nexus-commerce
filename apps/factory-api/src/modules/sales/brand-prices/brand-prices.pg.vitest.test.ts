@@ -148,7 +148,7 @@ const audits = (orderId: string) => admin<Json>(`SELECT action, "recordType", "r
 const outbox = (orderId: string) => admin<Json>(`SELECT type, version, "tenantId", "companyId", "siteId", subject, payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'sales_order.brand_price_changed' AND subject = $2 ORDER BY "occurredAt", id`, [T, orderId])
 
 beforeAll(async () => {
-  h = await startHarness('sales_brand_prices_cp017')
+  h = await startHarness('cp017_brand_prices') // B-CP-022: test-database labels are at most 20 characters
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
     await module.seed({ db: h.database, namespace: NS })
