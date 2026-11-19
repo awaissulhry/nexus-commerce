@@ -671,7 +671,7 @@ describe('B-CP-076: "Your price" in the draft, frozen at Send, carried onto the 
     const list = await salesDesk.send('GET', `/sales/order-requests?status=DRAFT&partyId=${P1}`)
     expect(list.status, JSON.stringify(list.body)).toBe(200)
     expect(JSON.stringify(list.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
-    expect((list.body.requests as Json[]).find((row) => row.id === draft.id).draft.readiness.of).toBe(6)
+    expect((list.body.requests as Json[]).find((row) => row.id === draft.id)!.draft.readiness.of).toBe(6)
     const one076 = await salesDesk.send('GET', `/sales/order-requests/${draft.id}`)
     expect(one076.status).toBe(200)
     expect(JSON.stringify(one076.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
