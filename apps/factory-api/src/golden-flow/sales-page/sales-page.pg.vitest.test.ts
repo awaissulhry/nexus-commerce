@@ -1008,16 +1008,18 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
  * The order page's API flow in the same world, after the sales page's (S0–Z): every act the order page makes on Alpha's orders,
  * each step ending with the brand wall (`pageWall`: Beta's buyer, `office.p2` and Bice read none of it by any door, their lists hold
  * none of it, then `betaGetsNothing`: bells, live messages and every answer they got scanned for Alpha's markers, the order page's
- * words and records among them). Two more office people: Olga (the Owner: every right, she decides) and Wanda (the warehouse:
- * shipping.manage and shipping.ddt.issue, never shipping.holds.release).
+ * words and records among them). Three more office people: Olga (the Owner: every right), Fina (Finance: she decides the yes) and
+ * Wanda (the warehouse: shipping.manage and shipping.ddt.issue, never shipping.holds.release). Lane rule (Sales = no price): every
+ * act with prices is the Owner's or Finance's; Sales (Bea) keeps the no-price acts (O1's quantity change: the DRAFT follows, D1).
  *
  *   O0  the scene: Olga and Wanda; the shipping seed's ids (SEED-SO-0002's free black 52, SEED-SO-0003's free jacket); the order
  *       page seed's SEED-SH-0004 (two of Alpha's orders on one DRAFT, made past the guards); the tracking notes join the worker
  *   O1  an office amend under Sales (Bea, no workorders.manage): the preview says what each work order does — the DRAFT follows in
  *       the click, the RELEASED one waits in words; the amend does exactly that; Sales may not apply the waiting one; Carla applies
  *       it on its own page (Lower to the order, the reprint mark); the floor note names the work order and no person
- *   O2  an approval decided in place: a made-up SALES_ORDER rule holds the order Bea types (PENDING_APPROVAL); the order read lists
- *       the request — held for its asker (her own request, she may withdraw it), allowed for Olga; Olga's yes in place confirms it
+ *   O2  an approval decided in place: a made-up SALES_ORDER rule holds the order Olga types with its prices (PENDING_APPROVAL); the
+ *       order read lists the request — held for its asker (her own request, the Owner included), allowed for Fina; Fina's yes in
+ *       place confirms it
  *   O3  the settlement share on a shared TD24 (two of Alpha's orders on one issued monthly invoice, partly paid, its freight apart:
  *       the world's set-up, as B-OP-022's): each order reads its own share, the same as its row in Sales › Orders
  *   O4  a shipment made elsewhere of SEED-SO-0002's free black 52 while Alpha is on a credit hold: Wanda is refused in words and
@@ -1030,7 +1032,7 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
  *   O8  AFTER the switch (B-OP-047; runs once MULTI_ORDER_OFF is gone): one shipment made for two of Alpha's orders through the API
  *       (SEED-SO-0002's black 52 moved off SEED-SH-0004, SEED-SO-0003's free jacket): both orders' reads carry it with both orders;
  *       the DDT names one order reference per order; its freight once, each order its share
- *   OW  the wall at the end: nothing Beta's people got names Alpha; Alpha's buyer never reads Olga's or Wanda's names
+ *   OW  the wall at the end: nothing Beta's people got names Alpha; Alpha's buyer never reads Olga's, Fina's or Wanda's names
  *   OZ  no route answered 500 and no handler failed during the order page's flow
  *
  * Not through a route, each named where it is done: the people's back-dated roles and the two seeds (the world's set-up), the shared
@@ -1056,8 +1058,9 @@ const TRACKING = ['T-OP71-TRK-0001', 'T-OP71-TRK-0002'] as const
 const LINKS = ['https://track.example.com/T-OP71-TRK-0001', 'https://track.example.com/T-OP71-TRK-0002'] as const
 const PAGE_WORDS = [AMEND_REASON, APPROVAL_PO, HOLD_WORDS, HOLD_REASON, ELSEWHERE_NOTE, PAPER_DDT, ...TRACKING, ...LINKS]
 
-/** The Owner and the warehouse (O0). */
+/** The Owner, Finance and the warehouse (O0). */
 let olga: Office
+let fina: Office
 let wanda: Office
 
 /** The order page's records of the flow (filled as the steps make them). */
@@ -1174,9 +1177,10 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     P.seenA = seen.A.length
     P.unexpected = unexpected.length
     olga = await world.officePerson('olga.owner@sa89-office.example.com', 'owner')
+    fina = await world.officePerson('fina.finance@sa89-office.example.com', 'finance')
     wanda = await world.officePerson('wanda.warehouse@sa89-office.example.com', 'warehouse')
     // World set-up (as S0's): their roles hold on the harness clock and the server clock alike.
-    await world.replica([{ sql: `UPDATE "RoleAssignment" SET "validFrom" = now() - interval '1 day' WHERE "userId" = ANY($1::uuid[])`, values: [[olga.id, wanda.id]] }])
+    await world.replica([{ sql: `UPDATE "RoleAssignment" SET "validFrom" = now() - interval '1 day' WHERE "userId" = ANY($1::uuid[])`, values: [[olga.id, fina.id, wanda.id]] }])
     // The worker's tracking notes (B-OP-030) join the in-process handlers.
     handlers = [...handlers, trackingNotesHandler()]
   }, LONG)
@@ -1259,37 +1263,38 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     await pageWall('O1')
   })
 
-  it('O2 an approval decided in place: the request held for its asker, allowed for the Owner; her yes on the order page confirms it', async () => {
-    // A made-up rule: every order typed for company A waits for the Owner's yes (switched off again at the end of the step).
-    const ownerRole = await one<{ id: string }>(`SELECT id::text AS id FROM "Role" WHERE "tenantId" = $1 AND key = 'owner'`, [T()])
-    const rule = (await stepped(olga, 'POST', '/approvals/rules', { kind: 'SALES_ORDER', companyId: world.w.companyId, name: 'Made-up: every typed order waits for the Owner', condition: { combinator: 'and', rows: [{ id: 'r1', field: 'orderValue', operator: 'gt', value: '1' }] }, approver: { roleId: ownerRole.id }, sequence: 3, dueHours: 24 }, 201)).rule as Json
+  it('O2 an approval decided in place: the request held for its asker (the Owner included), allowed for Finance; its yes on the order page confirms it', async () => {
+    // Lane rule (Sales = no price): an order typed with its prices is the Owner's here, its yes Finance's (Fina).
+    // A made-up rule: every order typed for company A waits for Finance's yes (switched off again at the end of the step).
+    const financeRole = await one<{ id: string }>(`SELECT id::text AS id FROM "Role" WHERE "tenantId" = $1 AND key = 'finance'`, [T()])
+    const rule = (await stepped(olga, 'POST', '/approvals/rules', { kind: 'SALES_ORDER', companyId: world.w.companyId, name: 'Made-up: every typed order waits for Finance', condition: { combinator: 'and', rows: [{ id: 'r1', field: 'orderValue', operator: 'gt', value: '1' }] }, approver: { roleId: financeRole.id }, sequence: 3, dueHours: 24 }, 201)).rule as Json
     await stepped(olga, 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
     const typed = { companyId: world.w.companyId, partyId: world.ids.a, customerRef: APPROVAL_PO, lines: [{ styleId: G.privateStyle, colourwayId: seedUuid(NS, 'production:colourway:JKT-02:BLK'), unitPrice: '100', sizes: [{ size: '50', quantity: 2 }] }] }
-    const waiting = (await ok(bea, 'POST', '/sales/orders/manual', typed, 201)).order as Json
+    const waiting = (await ok(olga, 'POST', '/sales/orders/manual', typed, 201)).order as Json
     expect(waiting.status).toBe('PENDING_APPROVAL')
     P.approvalOrder = waiting.id as string
     await settle()
 
-    // The asker reads her own request held (nobody approves their own request) and may take it back.
-    const asker = (await ok(bea, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
+    // The asker reads her own request held (nobody approves their own request, the Owner included) and may take it back.
+    const asker = (await ok(olga, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
     const own = (asker.openApprovals as Json[]).find((row) => row.kind === 'SALES_ORDER')!
     expect(own).toMatchObject({ requester: { me: true }, approve: { allowed: false }, reject: { allowed: false }, withdraw: { allowed: true, why: null } })
     expect(asker.live.ids.approvalTaskIds).toContain(own.taskId)
     P.taskId = own.taskId as string
-    expect([403, 409]).toContain((await call(bea, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: own.version, comment: null })).status)
+    expect([403, 409]).toContain((await call(olga, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: own.version, comment: null })).status)
     // Bice decides nothing of it; a person limited to Beta reads neither the order nor the request.
     expect([403, 404]).toContain((await call(bice, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: own.version, comment: null })).status)
     await asBeta('GET', `/approvals/tasks/${P.taskId}`, undefined, 404)
 
-    // The Owner reads it allowed, and says yes in place (a step-up first when the rule asks one).
-    const owner = (await ok(olga, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
-    const row = (owner.openApprovals as Json[]).find((entry) => entry.taskId === P.taskId)!
+    // Finance reads it allowed, and says yes in place (a step-up first when the rule asks one).
+    const approver = (await ok(fina, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
+    const row = (approver.openApprovals as Json[]).find((entry) => entry.taskId === P.taskId)!
     expect(row).toMatchObject({ kind: 'SALES_ORDER', requester: { me: false }, approver: { me: true }, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false } })
-    if (row.requireStepUp) await olga.stepUp()
-    await ok(olga, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: row.version, comment: 'Made-up: confirmed from the order page.' })
-    const after = (await ok(olga, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
+    if (row.requireStepUp) await fina.stepUp()
+    await ok(fina, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: row.version, comment: 'Made-up: confirmed from the order page.' })
+    const after = (await ok(fina, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
     expect(after).toMatchObject({ status: 'CONFIRMED', openApprovals: [], openApprovalsHidden: 0 })
-    expect((await ok(bea, 'GET', `/sales/orders/${P.approvalOrder}`)).order.openApprovals).toEqual([])
+    expect((await ok(olga, 'GET', `/sales/orders/${P.approvalOrder}`)).order.openApprovals).toEqual([])
 
     const current = (await ok(olga, 'GET', `/approvals/rules/${rule.id}`)).rule as Json
     await stepped(olga, 'PUT', `/approvals/rules/${rule.id}`, { version: current.version, active: false })
@@ -1523,11 +1528,11 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     await pageWall('O8')
   })
 
-  it('OW the wall at the end: nothing Beta’s people got names Alpha; Alpha’s buyer never reads the Owner’s or the warehouse’s names', async () => {
+  it('OW the wall at the end: nothing Beta’s people got names Alpha; Alpha’s buyer never reads the Owner’s, Finance’s or the warehouse’s names', async () => {
     const markers = await alphaMarkers()
     expect(leaksIn(seen.B, markers)).toEqual([])
     await liveWall('OW')
-    const people: Marker[] = (await admin<{ id: string; email: string; name: string }>('SELECT id::text AS id, email, "displayName" AS name FROM "User" WHERE id = ANY($1::uuid[])', [[olga.id, wanda.id, carla.id]])).flatMap((row) => [
+    const people: Marker[] = (await admin<{ id: string; email: string; name: string }>('SELECT id::text AS id, email, "displayName" AS name FROM "User" WHERE id = ANY($1::uuid[])', [[olga.id, fina.id, wanda.id, carla.id]])).flatMap((row) => [
       { label: 'office person id', text: row.id },
       { label: 'office person address', text: row.email },
       { label: 'office person name', text: row.name },
