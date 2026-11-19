@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
-import { asMoney, type Money } from '@nexus/factory-domain/money/marked'
+import { asMoney, asMoneyKeys, type Money } from '@nexus/factory-domain/money/marked'
 import type { PriceCheckTotal, PriceMatch } from '@nexus/factory-domain/sales/brand-prices/match'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { ExportLocale } from '@nexus/factory-domain/views/exports'
@@ -114,7 +114,7 @@ export async function brandPriceSummary(caller: CommandCaller, query: { readonly
       if (match === 'NOT_EQUAL') priceNotEqualCount++
       else if (match === 'NO_BRAND_PRICE') priceMissingCount++
     }
-    return { partyId: query.partyId, priceNotEqualCount, priceMissingCount }
+    return asMoneyKeys('price', { partyId: query.partyId, priceNotEqualCount, priceMissingCount }) // B-CP-018: every key is the price grain
   })
 }
 
