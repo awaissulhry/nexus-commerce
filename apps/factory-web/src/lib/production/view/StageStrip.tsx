@@ -1,5 +1,6 @@
 'use client'
 
+import NextLink from 'next/link'
 import { PauseCircle } from 'lucide-react'
 import { EmptyState } from '@nexus/ui/components'
 import { MilestoneTracker, type MilestonePromise, type MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
@@ -25,6 +26,14 @@ export interface StageStripProps extends StageStripInput {
   /** The stages could not be read: only this part says so, with Try again. */
   problem?: boolean
   onRetry?: () => void
+  /**
+   * F-OP-104 (10-order-page §3.1): where the stages open (the order page's `?tab=production#work-orders`, built with tabHref): the
+   * stages become ONE real link (its focus ring; Enter follows it; ⌘-click opens a new tab). The promise line is then the page's
+   * own (a link holds no other control). Production's pages leave it out: their strip stays as it is.
+   */
+  stageHref?: string | null
+  /** The link's name for a screen reader ("Open the work orders in Production · now Sewing"). */
+  stageLinkLabel?: string
 }
 
 /**
@@ -34,7 +43,7 @@ export interface StageStripProps extends StageStripInput {
  * plan §8: the tracker has no blocked state; until the Owner's word the mark lives here). Unknown stage: "—", never step
  * 1. Office dates read "Planned"; the customer's "Expected by". Never interactive except the date's history.
  */
-export function StageStrip({ face, layout = 'auto', label, promise, loading, problem, onRetry, ...input }: StageStripProps) {
+export function StageStrip({ face, layout = 'auto', label, promise, loading, problem, onRetry, stageHref, stageLinkLabel, ...input }: StageStripProps) {
   const w = useProductionWords()
   const ds = useDsWords()
   const name = label ?? w.t('parts.stage.label')
@@ -79,10 +88,18 @@ export function StageStrip({ face, layout = 'auto', label, promise, loading, pro
     </Pill>
   ) : null
   // The full form puts the mark above the steps (the current step's line says why); the row form puts it after the dots.
+  // F-OP-104: with a door the stages are one real link (no prefetch: a record page's tab address changes with the dock's scope).
+  const tracker = <MilestoneTracker steps={milestones} promise={layout === 'compact' || stageHref ? null : milestonePromise} layout={layout} label={name} labels={labels} />
   return (
     <div className="fw-prp-strip" data-layout={layout} data-blocked={input.blocked ? 'true' : undefined}>
       {layout === 'compact' ? null : blocked}
-      <MilestoneTracker steps={milestones} promise={layout === 'compact' ? null : milestonePromise} layout={layout} label={name} labels={labels} />
+      {stageHref ? (
+        <NextLink href={stageHref} prefetch={false} className="fw-prp-strip-go" aria-label={stageLinkLabel ?? name}>
+          {tracker}
+        </NextLink>
+      ) : (
+        tracker
+      )}
       {layout === 'compact' ? blocked : null}
     </div>
   )

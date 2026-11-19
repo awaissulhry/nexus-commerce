@@ -22,6 +22,20 @@
   align-self: flex-start;
 }
 
+/* F-OP-104: the stages as one real link (the order page's Overview): the tracker's own look, a focus ring, no underline. */
+.fw-prp-strip-go {
+  display: block;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--nds-radius-xs);
+}
+
+.fw-prp-strip-go:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
 .fw-prp-unknown {
   color: var(--nds-text-muted);
 }
