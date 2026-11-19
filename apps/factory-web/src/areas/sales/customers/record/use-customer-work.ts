@@ -83,6 +83,30 @@ export function workEntry(base: string, partyId: string, params: Params): string
   return changed ? `${base}?${query.toString()}` : null
 }
 
+// ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ------------------
+
+/** The Work view each Overview tile counts (its door shows exactly those rows): Open orders, In production, Late. */
+export const WORK_DOORS = Object.freeze({ open: 'rows=open', inProduction: 'status=IN_PRODUCTION', late: 'late=true' } as const)
+
+/** A tile's door: the record's Work tab on the view the tile counts (the entry then adds the lock, once). */
+export const workDoor = (recordHref: string, door: keyof typeof WORK_DOORS): string => `${recordHref}?tab=work&${WORK_DOORS[door]}`
+
+/**
+ * The count beside each Views ▾ item, from the ONE count read the strip already makes (the board of this customer: the API walls it
+ * to the customer, never a filter in the browser): All orders (every state), In production, Late. A view the read does not count
+ * (Waiting on us) gets no number — never a guess. Nothing while the read is not ready.
+ */
+export function workViewCounts(board: Read<OrderBoard>): Readonly<Record<string, number>> | null {
+  if (board.status !== 'ready') return null
+  const value = board.value
+  return {
+    all: value.byStatus.reduce((sum, entry) => sum + entry.count, 0),
+    IN_PRODUCTION: value.byStatus.find((entry) => entry.status === 'IN_PRODUCTION')?.count ?? 0,
+    late: value.tiles.find((tile) => tile.key === 'late')?.count ?? 0,
+  }
+}
+// ---- end F-CP-103
+
 // ---- the strip's tiles ------------------------------------------------------------------------------------------------
 
 /** A tile's read: reading ("—", never 0), its count (0 is an answer; `more`: a capped read, "100+"), failed (that tile only). */

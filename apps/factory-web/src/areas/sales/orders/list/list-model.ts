@@ -161,6 +161,8 @@ export interface OrdersListModel {
    * `actions.onHostView`.
    */
   hostViews?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly active?: boolean }> | null
+  /** F-CP-103 (review A4): the count beside each Views ▾ item, by view id, from the host's one count read (absent id: no number). */
+  viewCounts?: Readonly<Record<string, number>> | null
   /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
   preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */

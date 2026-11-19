@@ -35,6 +35,7 @@ import type { RowView } from '../../orders/model'
 import type { OrdersListModel } from '../../orders/list/list-model'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ counts
 import { WaitingStrip } from './view/WaitingStrip'
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
 // ---- end F-SA-276
@@ -122,6 +123,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     locked: { party: true, kind: false },
     listKey: 'sales.orders',
     views: workViewsOf({ price: work.price !== false }), // F-CP-101
+    viewCounts: workViewCounts(work.reads.board), // F-CP-103
     defaultRows: WORK_DEFAULT_ROWS,
     preset: workPreset(view, null),
     toolbarLink: { href: `/w/DEMO/production/work-orders?party=${party.id}`, label: t('customers.band.workOrders', { customer: name }) },

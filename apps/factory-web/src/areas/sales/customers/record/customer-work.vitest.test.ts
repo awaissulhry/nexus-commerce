@@ -11,6 +11,11 @@ import { valueOf } from './view/WaitingStrip'
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
 import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
 import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
+// ---- F-CP-103 ----
+import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
+import { OPEN_ORDERS } from '../../../parties/_shared/model'
+import { workDoor, workViewCounts } from './use-customer-work'
+// ---- end F-CP-103
 // F-SA-279: the dock follows the row
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
@@ -588,3 +593,57 @@ describe('F-CP-101: All orders by default, written once', () => {
   })
 })
 // ---- end F-CP-101
+
+// ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ----------------
+describe('F-CP-103: each tile opens the rows it counts; the Views counts come from the one count read', () => {
+  const RECORD = `/w/acme/sales/customers/${ALPHA}`
+  const viewOf = (href: string) => rowsFromAddress(new URL(`https://x${href}`).searchParams)
+
+  it('Open orders → rows=open, In production → status=IN_PRODUCTION, Late → late=true (the views the tiles count)', () => {
+    expect(workDoor(RECORD, 'open')).toBe(`${RECORD}?tab=work&rows=open`)
+    expect(workDoor(RECORD, 'inProduction')).toBe(`${RECORD}?tab=work&status=IN_PRODUCTION`)
+    expect(workDoor(RECORD, 'late')).toBe(`${RECORD}?tab=work&late=true`)
+    expect([viewOf(workDoor(RECORD, 'open')), viewOf(workDoor(RECORD, 'inProduction')), viewOf(workDoor(RECORD, 'late'))]).toEqual(['open', 'IN_PRODUCTION', 'late'])
+    // The rows each door reads are the rows its tile counts: Open = the open states, Late = open and promised before today.
+    expect([...OPEN_ORDERS].sort()).toEqual([...OPEN_STATUSES].sort())
+    expect(rowsQuery('open', '', null, ALPHA)).toMatchObject({ open: true, partyId: ALPHA })
+    expect(rowsQuery('IN_PRODUCTION', '', null, ALPHA)).toMatchObject({ status: 'IN_PRODUCTION', partyId: ALPHA })
+    expect(rowsQuery('late', '', null, ALPHA)).toMatchObject({ late: true, partyId: ALPHA })
+    const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    for (const door of ['open', 'inProduction', 'late']) expect(view).toContain(`href: workDoor(recordHref, '${door}')`)
+  })
+
+  it('a door arrives with its view: the entry adds the lock once and no default beside the view (fx-12)', () => {
+    for (const door of ['open', 'inProduction', 'late'] as const) {
+      const query = workDoor(BASE, door).split('?')[1]!
+      const once = workEntry(BASE, ALPHA, params(query))!
+      const written = new URL(`https://x${once}`).searchParams
+      expect(written.get('party'), door).toBe(ALPHA)
+      expect(written.getAll('rows').length + written.getAll('status').length + written.getAll('late').length, door).toBe(1)
+      expect(workEntry(BASE, ALPHA, params(once.split('?')[1]!)), door).toBeNull()
+    }
+  })
+
+  it('the counts: All orders (every state), In production, Late from the strip\'s board read; nothing while it reads; Waiting on us no number', () => {
+    expect(workViewCounts({ status: 'reading' })).toBeNull()
+    expect(workViewCounts({ status: 'failed' })).toBeNull()
+    const ready = { status: 'ready' as const, value: { byStatus: [{ status: 'CONFIRMED', count: 3 }, { status: 'IN_PRODUCTION', count: 7 }, { status: 'CLOSED', count: 32 }], lanes: [], tiles: [{ key: 'late', count: 2, filter: {} }], asOf: '2026-11-19T10:00:00Z' } } as never
+    const counts = workViewCounts(ready)!
+    expect(counts).toEqual({ all: 42, IN_PRODUCTION: 7, late: 2 })
+    const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const sheet = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
+    const items = builtInViewsOf({ customer: { id: ALPHA, name: 'Brand Alpha' }, locked: { party: true, kind: false }, views: workViewsOf({ price: true }), viewCounts: counts }, orders, sheet)
+    expect(items.map((item) => [item.label, item.count ?? null])).toEqual([['All orders', '42'], ['In production', '7'], ['Waiting on us', null], ['Late', '2']])
+    // The page names the customer: no "Orders of Brand Alpha" line under each item on its own page.
+    expect(items.some((item) => item.hint)).toBe(false)
+  })
+
+  it('no second read: the Work tab hands the sheet the strip\'s read (brand wall: the API walls it to this customer)', () => {
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('viewCounts: workViewCounts(work.reads.board)')
+    expect(tab).not.toMatch(/getBoard\(/)
+    const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("board: () => run('board', () => getBoard(api, '', undefined, partyId))")
+  })
+})
+// ---- end F-CP-103

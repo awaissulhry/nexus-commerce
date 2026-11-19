@@ -164,3 +164,26 @@ describe('F-CP-102: host views in Views ▾; the "Showing" line and the empty wo
   })
 })
 // ---- end F-CP-102
+
+// ---- F-CP-103 (review A4): a built-in view's count at its item's end ------------------------------------------------------------------
+describe('F-CP-103: the Views menu writes each view\'s count beside its name', () => {
+  it('a counted view draws its name and its number; an uncounted one only its name; the trigger keeps the name', () => {
+    const builtIns = { items: [{ id: 'all', label: 'All orders', count: '1.204' }, { id: 'waiting:us', label: 'Waiting on us' }], active: 'all', onPick: () => undefined }
+    const items = columnsMenuItems(lists, { answer: answer([]), problem: null, active: null, changed: false, asBuilt: true, builtIns }, act)
+    const counted = items.find((item) => item.id === 'b-all')!
+    const html = renderToString(createElement('div', null, counted.label as never))
+    expect(html).toContain('All orders')
+    expect(html).toContain('fw-lt-builtin-count')
+    expect(html).toContain('1.204')
+    expect(items.find((item) => item.id === 'b-waiting:us')?.label).toBe('Waiting on us')
+    expect(counted.checked).toBe(true)
+  })
+
+  it('the sheet writes the counts in the person\'s language (no count: no number)', () => {
+    const written = builtInViewsOf({ customer: null, views: ['all', 'late'], viewCounts: { all: 1204 } }, orders, sheet, (value) => `n${value}`)
+    expect(written.map((item) => item.count ?? null)).toEqual(['n1204', null])
+    const source = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('builtInViewsOf(model, t, s, (value) => formatNumber(value, locale)')
+  })
+})
+// ---- end F-CP-103

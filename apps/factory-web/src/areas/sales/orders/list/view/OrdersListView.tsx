@@ -12,6 +12,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
+import { formatNumber } from '../../../../../lib/i18n/format' // F-CP-103: the Views ▾ counts
 import type { Locale } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -458,7 +459,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
-          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
+          builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
@@ -694,12 +695,18 @@ export function hostEmptyOf(model: Pick<OrdersListModel, 'empty' | 'rows'>, narr
 // F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
 // F-SA-276: + "Waiting on us" (`waiting=us` with the open orders); a host's `views` names which it offers, in its order.
 // F-CP-102: + the host's own views (model.hostViews: Drafts of <customer>, Not equal), each where `views` names its id.
-export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views' | 'hostViews'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
-  const name = model.customer?.name ?? null
+// F-CP-103 (review A4): + each view's count from the host's one count read (model.viewCounts; `number` writes it in the person's
+// language); on a page locked to one customer no "Orders of <customer>" line under each (the page names the customer: picture 20).
+export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views' | 'hostViews' | 'viewCounts' | 'locked'>, t: Translate, s: Translate, number: (value: number) => string = String): Array<{ id: string; label: string; hint?: string; count?: string }> {
+  const name = model.locked?.party ? null : (model.customer?.name ?? null)
   const hint = name ? { hint: s('views.ofCustomer', { customer: name }) } : {}
   const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }, ...(model.hostViews ?? []).map((view) => ({ id: view.id, label: view.label }))]
-  if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW && !model.hostViews?.some((own) => own.id === view.id))
-  return model.views.flatMap((id) => all.filter((view) => view.id === id))
+  const counted = (view: { id: string; label: string; hint?: string }) => {
+    const count = model.viewCounts?.[view.id]
+    return count === undefined ? view : { ...view, count: number(count) }
+  }
+  if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW && !model.hostViews?.some((own) => own.id === view.id)).map(counted)
+  return model.views.flatMap((id) => all.filter((view) => view.id === id)).map(counted)
 }
 
 /** F-SA-221: the built-in view "Made-to-measure" (`kind=mtm` + the open orders). */

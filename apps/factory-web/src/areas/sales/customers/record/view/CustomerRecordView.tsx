@@ -18,6 +18,7 @@ import { CUSTOMER_MONEY_NAMESPACE } from '../../money/model'
 import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overview'
 import { MoneyTab } from './MoneyTab' // F-SA-273
 import { overdueOf } from '../../money/model' // F-SA-273
+import { workDoor } from '../use-customer-work' // F-CP-103: each tile opens the view it counts
 
 /**
  * SCR-033 Customer record (design sales.customers "records: Customer"; F-SA-270, sales page plan N5, picks P10, R5): the customer's
@@ -275,7 +276,7 @@ const OPEN_ORDER_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION', 'REA
 
 /**
  * F-SA-272 (11-customer-page §4): who they are, how they stand, who looks after them — Key numbers (at most 6, each a door: Open
- * orders · In production · Late → Work, Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
+ * orders · In production · Late → Work on the view each counts (F-CP-103), Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
  * open returns and claims), the custom fields (the frame's, on this tab only); beside it Status, Who looks after <customer> (the
  * supervisor and backup, moved from Portal settings), Next steps, VIES, the team and the requirements in force, the main contacts.
  * Ordered in <year>, Returns in <year> and Free credit went to Money; the Now card to Work and Quotes & incoming.
@@ -287,7 +288,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
   const year = String(new Date().getUTCFullYear())
   const numbers = keyNumbers(model.quotes, model.orders, year)
   const amount = (value: number | null | undefined, currency: string | null) => (can.price && value !== null && value !== undefined && currency ? money(value, currency, locale) : null)
-  const tabHref = (tab: string) => `${sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)}?tab=${tab}`
+  const recordHref = sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)
+  const tabHref = (tab: string) => `${recordHref}?tab=${tab}`
   const today = new Date().toISOString().slice(0, 10)
   const orders = model.orders.items && !model.orders.more ? model.orders.items : null
   const ordersHint = t(model.orders.problem ? 'tile.unknown' : 'numbers.reading')
@@ -298,14 +300,14 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
             label: t('numbers.backlog'),
             value: numbers.backlog ? String(numbers.backlog.count) : '—',
             hint: numbers.backlog ? [t('numbers.units', { count: numbers.backlog.units }), amount(numbers.backlog.amount, numbers.backlog.currency)].filter(Boolean).join(' · ') : ordersHint,
-            href: tabHref('work'),
+            href: workDoor(recordHref, 'open'), // F-CP-103: the open orders it counts
           },
-          { label: t('numbers.inProduction'), value: orders ? String(orders.filter((order) => order.status === 'IN_PRODUCTION').length) : '—', hint: orders ? t('numbers.inProductionHint') : ordersHint, href: tabHref('work') },
+          { label: t('numbers.inProduction'), value: orders ? String(orders.filter((order) => order.status === 'IN_PRODUCTION').length) : '—', hint: orders ? t('numbers.inProductionHint') : ordersHint, href: workDoor(recordHref, 'inProduction') /* F-CP-103 */ },
           {
             label: t('numbers.late'),
             value: orders ? String(orders.filter((order) => OPEN_ORDER_STATES.includes(order.status) && order.promiseDate !== null && order.promiseDate < today).length) : '—',
             hint: orders ? t('numbers.lateHint') : ordersHint,
-            href: tabHref('work'),
+            href: workDoor(recordHref, 'late'), // F-CP-103: the late orders it counts
           },
         ]
       : []),

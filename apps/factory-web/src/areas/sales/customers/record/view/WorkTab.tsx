@@ -21,6 +21,7 @@ import { ORDERS_LIST_KEY, sheetAddress, useOrdersSheet, type OrdersSheetHost } f
 import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/OrdersListView'
 import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
+import { workViewCounts } from '../use-customer-work' // F-CP-103: the Views ▾ counts from the strip's one count read
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -160,6 +161,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const model: OrdersListModel = {
     ...sheet.model,
     views: workViewsOf(sheet.model.can), // F-CP-101: All orders first; Drafts / Not equal join with their steps
+    viewCounts: workViewCounts(work.reads.board), // F-CP-103: "All orders 42 · In production 7 …" — no second read
     preset: workPreset(rows, waiting),
     marks: work.marks,
     doorHref: door.hrefOf,
