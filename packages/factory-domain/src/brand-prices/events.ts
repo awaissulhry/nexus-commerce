@@ -27,4 +27,21 @@ export const brandPriceChanged = defineEvent({
   live,
 })
 
-export const events = [brandPriceChanged] as const
+// ── B-CP-021 (customer page plan C3; design customer-page 11 §1.2 "Notification"; review F4): the customer changed its own prices ──
+/**
+ *   sales_order.brand_price_changed_by_customer   the customer gave, changed or took away its own prices of an order in its portal
+ *                                                 (apps/factory-api modules/sales/brand-prices/portal.ts, beside
+ *                                                 brand_price_changed): ONE alert to the order's maker and the Owner, each only while
+ *                                                 they hold the price grain over the order (modules/sales/brand-prices/notices.ts)
+ *
+ * Office only and no live rule (the screens re-read on brand_price_changed). Ids only: never an amount, a state or a count.
+ */
+export const brandPriceChangedByCustomer = defineEvent({
+  type: 'sales_order.brand_price_changed_by_customer',
+  context: 'brand-prices',
+  description: 'The customer changed its own prices of a sales order in its portal (one alert to the price holders who keep the order).',
+  payload: z.strictObject({ orderId: z.uuid(), partyId: livePartyId() }),
+})
+// ── end B-CP-021 ──
+
+export const events = [brandPriceChanged, /* B-CP-021 */ brandPriceChangedByCustomer] as const

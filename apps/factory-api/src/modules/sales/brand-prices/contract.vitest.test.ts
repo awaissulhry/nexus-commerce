@@ -10,6 +10,7 @@ import { filterForGrains, unheldMoneyInput } from '@nexus/factory-domain/money/f
 import { grainOfSchema } from '@nexus/factory-domain/money/marked'
 import { listOrdersContract } from '../orders/contract' // B-CP-018
 import { priceCheckContract, priceCheckView, saveBrandPricesContract, summaryContract, takeOverContract } from './contract'
+import { portalPriceCheckContract, portalPriceCheckView, portalSaveBrandPricesContract } from './contract' // B-CP-019
 
 /**
  * The customer's price contracts (customer page lane B-CP-017; review B4: every key money-marked, the note included) and the
@@ -151,3 +152,45 @@ describe("sales_order.brand_price_changed: ids only, live only to price holders 
     expect(liveViewFor(message, as('owner', [ALPHA]), EVENT_CATALOGUE)?.fields).toEqual({ orderId: ORDER })
   })
 })
+
+// ── B-CP-019: the portal's own price check (the customer's Buyer, Finance, Admin; review C3) ──
+describe('B-CP-019 every key of the portal price check is the price grain; no office person, note or file in it', () => {
+  const portalRow = { id: ROW, unitPrice: '100', netAmount: null, currency: 'EUR', source: 'CUSTOMER_PO', sourceWords: { it: "Dal vostro ordine d'acquisto", en: 'From your PO' }, note: null, enteredAt: '2026-11-19T08:00:00.000Z', version: 1 }
+  const portalAnswer = {
+    orderId: ORDER,
+    currency: 'EUR',
+    lines: [{ lineId: LINE, seq: 10, label: 'JKT-01 BLK', pieces: 6, ourUnitPrice: '110', ourAmount: 66_000, brandAmount: 60_000, priceMatch: 'NOT_EQUAL', priceDiff: 6_000, row: portalRow }],
+    total: { ourPrice: 66_000, brandPrice: 60_000, priceMatch: 'NOT_EQUAL', priceDiff: 6_000, priceNotEqualLines: 1, priceMissingLines: 0, priceOtherCurrency: 0, row: null },
+    mayWrite: { allowed: true, why: null },
+  }
+
+  it('the answer and the body: every key at every depth', () => {
+    expect(keyCount(portalPriceCheckView)).toBeGreaterThan(30)
+    expect(unmarkedKeys(portalPriceCheckView)).toEqual([])
+    expect(unmarkedKeys(portalSaveBrandPricesContract.body)).toEqual([])
+    expect(portalPriceCheckContract.response[200]).toBe(portalPriceCheckView)
+    expect(portalSaveBrandPricesContract.response[200]).toBe(portalPriceCheckView)
+  })
+
+  it('review C3: a row carries no office person, no file and no office number — the source in words only', () => {
+    const rowKeys = Object.keys(((portalPriceCheckView.shape.total as unknown as z.ZodOptional<z.ZodObject>).unwrap().shape.row as unknown as z.ZodOptional<z.ZodNullable<z.ZodObject>>).unwrap().unwrap().shape)
+    expect(rowKeys.sort()).toEqual(['currency', 'enteredAt', 'id', 'netAmount', 'note', 'source', 'sourceWords', 'unitPrice', 'version'])
+    expect(Object.keys(portalPriceCheckView.shape)).not.toContain('number')
+    expect(Object.keys(portalPriceCheckView.shape)).not.toContain('fromRequest')
+  })
+
+  it('a no-price reader (a brand Designer, Viewer or Production person) is sent nothing; a body with a price is refused key by key', () => {
+    expect(filterForGrains(portalPriceCheckView, portalAnswer, new Set())).toEqual({})
+    expect(filterForGrains(portalPriceCheckView, portalAnswer, new Set<Grain>(['price']))).toEqual(portalAnswer)
+    const body = { currency: 'EUR', rows: [{ lineId: LINE, unitPrice: '100', note: 'Our PO 88' }], remove: [] }
+    const paths = unheldMoneyInput(portalSaveBrandPricesContract.body, body, new Set()).map((issue) => issue.path)
+    expect(paths).toEqual(expect.arrayContaining(['currency', 'rows', 'rows/0/lineId', 'rows/0/unitPrice', 'rows/0/note', 'remove']))
+    expect(unheldMoneyInput(portalSaveBrandPricesContract.body, body, new Set<Grain>(['price']))).toEqual([])
+  })
+
+  it('a line is always named: the order’s total stays the factory’s', () => {
+    expect(portalSaveBrandPricesContract.body.safeParse({ rows: [{ lineId: null, netAmount: 100 }] }).success).toBe(false)
+    expect(portalSaveBrandPricesContract.body.safeParse({ rows: [{ lineId: LINE, netAmount: 100, source: 'OFFICE' }] }).success).toBe(false)
+  })
+})
+// ── end B-CP-019 ──

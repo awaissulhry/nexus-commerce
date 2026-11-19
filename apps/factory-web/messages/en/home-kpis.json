@@ -179,7 +179,8 @@
     "hr": "HR",
     "safety_officer": "Safety officer",
     "company_doctor": "Company doctor",
-    "read_only": "Read only"
+    "read_only": "Read only",
+    "designer": "Factory designer"
   },
   "owner": {
     "unknown": "An office role"

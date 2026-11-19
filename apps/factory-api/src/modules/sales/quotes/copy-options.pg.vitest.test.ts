@@ -146,7 +146,8 @@ describe('what a chosen value of a group takes (XF3:05)', () => {
     const [leather] = await admin<{ id: string; colour: string }>(`SELECT i.id, c.id AS colour FROM "Item" i JOIN "ItemColour" c ON c."itemId" = i.id WHERE i.code = 'SEED-LEA-100' AND c.code = 'RED' AND i."tenantId" = $1`, [tenant])
     const [red] = await admin<{ id: string }>(`SELECT id FROM "Colour" WHERE code = 'SEED-RED' AND "tenantId" = $1`, [tenant])
     let quote = (await ok('seller', 'GET', `/sales/quotes/${quoteId}`)).quote
-    quote = (await ok('seller', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.perfFront, itemId: leather!.id, itemColourId: leather!.colour }, { valueId: options.valueIds.name, text: 'ROSSI' }, { valueId: options.valueIds.linerYes }] })).quote
+    // B-CP-026 (Owner answer A, strict): an options save that may move the line's price is a price holder's (the owner here).
+    quote = (await ok('owner', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.perfFront, itemId: leather!.id, itemColourId: leather!.colour }, { valueId: options.valueIds.name, text: 'ROSSI' }, { valueId: options.valueIds.linerYes }] })).quote
     takes = await ok('keeper', 'GET', `/product/option-groups/${perf}/takes`)
     expect(takes).toMatchObject({ picking: { colours: 0, materials: 1 }, may: { change: true, held: null } })
     // COLOUR while a chosen option picks a material: 409 in words, nothing changed.
@@ -179,9 +180,11 @@ describe('the options travel with every copy (XF3:01)', () => {
     quote = (await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }] }, 201)).quote
     const sourceLine = quote.lines[0].id
     // Liner +60 and front perforation +5 % of the list's 420 (21): priced through the waterfall to 501.
-    quote = (await ok('seller', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] })).quote
-    // B-CP-011: the seller's answer holds no price; the Owner reads 501.
-    expect(quote.lines[0]).not.toHaveProperty('unitPrice')
+    // B-CP-026 (Owner answer A, strict): the options move the price: the seller is held in words; the Owner configures the line.
+    expect((await refused('seller', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] }, 403)).issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    quote = (await ok('owner', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] })).quote
+    // B-CP-011: the seller's read holds no price; the Owner reads 501.
+    expect((await ok('seller', 'GET', `/sales/quotes/${quote.id}`)).quote.lines[0]).not.toHaveProperty('unitPrice')
     expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('501')
     const source = await rowsOf('QuoteLineOption', sourceLine)
     // Today the front perforation costs more: the copy keeps the 21 it was sold with (its price, 501, holds them).
@@ -205,7 +208,8 @@ describe('the options travel with every copy (XF3:01)', () => {
     let quote = (await ok('seller', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     quote = (await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }] }, 201)).quote
     const lineId = quote.lines[0].id
-    quote = (await ok('seller', 'PUT', `${q(quote.id, lineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
+    // B-CP-026: the liner moves the price: the Owner configures it (the seller is held in words).
+    quote = (await ok('owner', 'PUT', `${q(quote.id, lineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
     expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
     // W1's typed price drops the waterfall: the line is at its list again (420), the liner frozen beside it.
     // B-CP-011: the typed price is the Owner's (a Sales worker's is refused).

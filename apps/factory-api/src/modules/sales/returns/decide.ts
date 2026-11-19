@@ -38,6 +38,11 @@ import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 import { REMAKE_DEFAULT_OUTCOME, remakeDecisionFor } from '../fittings/remake'
 // B-W2b-368 (XF1:03): the preview offers REMAKE for a made-to-measure unit's line.
 import { remakeChoicesOf, type RemakeChoice } from './outcomes/remake'
+// B-CP-026: a return's credit is decided by a price holder only.
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
+import { mayOn } from './access'
 
 /**
  * The decision (B-W2a-43; SAL-341 "Disposition decides the outcome"; design rma.inspection "Each line inspected and
@@ -248,6 +253,12 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
     const planned = await planDecisions(tx, rma, body)
     const problems = planned.flatMap((entry) => entry.problems)
     if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'Some lines cannot be decided like this.', problems)
+    // ── B-CP-026 (Owner answer A, the money wall): a credit is an amount (the line's value less any fee) the person without the
+    // price grain cannot see: a credit-only decision, or any line whose credit is more than nothing, is held in words (nothing is
+    // decided, moved or credited); a price holder decides it. A repair, a replacement, a scrap without credit go as before.
+    const creditLine = planned.find((entry) => entry.disposition === 'CREDIT_ONLY' || entry.creditAmount > 0)
+    if (creditLine && !mayOn(context, grainPermission('price') as Permission, rma)) throw blindPriceHeld(`body/lines/${creditLine.index}/disposition`)
+    // ── end B-CP-026 ──
 
     // The stock first: one CUSTOMER_RETURN into its place per line whose goods go into stock (the SKU's FINISHED item), valued
     // at its frozen standard as a production receipt is (a month with a restocked return can then be closed for good).
