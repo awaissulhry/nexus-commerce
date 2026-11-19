@@ -3,6 +3,7 @@ import { recordDockedThread, type RecordDockedInput } from '../../../lib/record-
 import type { HeadModel } from '../../../lib/record-thread/head/model'
 import { ThreadCase } from '../../../lib/record-thread/ThreadCase'
 import { useRecordFrame } from './RecordFrame'
+import { useDockTop } from '../record-thread/ThreadPick' // F-OP-202: a design case's dock pick, drawn inside the card as on the page
 
 /**
  * B-TH-257…264 (TH-6 part A; the rule of picture 38) — design only: the made-up docked thread a record page's design case passes to
@@ -11,7 +12,8 @@ import { useRecordFrame } from './RecordFrame'
  */
 function DesignThread({ input, head }: { input: RecordDockedInput; head?: Partial<HeadModel> }) {
   const frame = useRecordFrame()
-  return createElement(ThreadCase, { model: recordDockedThread(input, { width: frame?.width ?? null, ...head }), onWidth: frame?.choose })
+  const top = useDockTop() // F-OP-202
+  return createElement(ThreadCase, { model: recordDockedThread(input, { width: frame?.width ?? null, ...head }), onWidth: frame?.choose, top })
 }
 
 /** The element a record page's design case passes to its view as its `thread` (its type, its number, its party or none). */

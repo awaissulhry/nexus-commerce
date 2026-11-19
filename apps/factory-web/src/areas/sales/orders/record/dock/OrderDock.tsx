@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Building2, Eye, FolderKanban, Lock, ShoppingBag } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Select } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { readUnreadWith } from '../../../../../lib/last-message-cell/api'
@@ -12,7 +13,7 @@ import { useLiveBus } from '../../../../../shell/live/use-live'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
 import type { DockedHost } from '../../../../_shared/record-thread/DockedOfficeThread' // F-SA-244
-import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
+import { PickedDockColumn, ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 import { messageHrefOf } from '../../../../_shared/record-thread/all-of-customer/model'
@@ -28,6 +29,8 @@ import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, 
  * says who reads what is written there. The scope lives in the address (`?thread=…`, a replace: Back keeps it); each conversation
  * keeps its own draft (each is its own thread: its server draft and this device's); the box starts on Office note (rule 34).
  * A party-limited person sees only this order's customer (the page's own wall: they reach the order, so its customer).
+ * F-OP-203 (order page plan N4; 11-dock §0.1): every scope sits in the dock's ONE card — the pick band first inside it (ThreadPick
+ * hands it down), the Head, the body that scrolls, the foot; All of <customer> is that card too (PickedDockColumn).
  */
 export interface OrderDockProps {
   readonly order: { readonly id: string; readonly number: string; readonly companyId: string; readonly partyId: string; readonly partyName: string; readonly partyCode: string | null }
@@ -52,6 +55,7 @@ export function OrderDock(props: OrderDockProps) {
 
 function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* F-SA-244 */ }: OrderDockProps) {
   const t = useT('orders')
+  const rt = useT('record-thread') // F-OP-203: the short "All"
   const api = useOfficeApi()
   const session = useOfficeSession()
   const frame = useRecordFrame()
@@ -120,16 +124,18 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   const segments = choicesOffered(offer)
   const project = scope.kind === 'project' ? projects.find((one) => one.id === scope.id) : undefined
   const workOrder = scope.kind === 'wo' ? ownWork.find((one) => one.id === scope.id) : undefined
+  // F-OP-203: each segment with its icon, its short words for a narrow card and its "N new" as a pill (the pick's own), never in the words.
   const choices: ThreadChoice<ScopeChoice>[] = segments.map((segment) => {
-    if (segment === 'order') return { value: 'order', label: withNew(t('record.dock.order'), fresh(order.id)), line: t('record.dock.orderLine', { customer }) }
-    if (segment === 'general') return { value: 'general', label: withNew(t('record.dock.general', { customer }), fresh(order.partyId)), line: t('record.dock.generalLine', { customer }) }
+    if (segment === 'order') return { value: 'order', label: t('record.dock.order'), icon: <ShoppingBag size={14} aria-hidden />, count: fresh(order.id), line: t('record.dock.orderLine', { customer }) }
+    if (segment === 'general') return { value: 'general', label: t('record.dock.general', { customer }), short: t('record.dock.writeGeneral'), icon: <Building2 size={14} aria-hidden />, count: fresh(order.partyId), line: t('record.dock.generalLine', { customer }) }
     if (segment === 'projects') {
       const label = projects.length === 1 ? projects[0]!.number : t('record.dock.projects')
-      return { value: 'projects', label: withNew(label, freshOf(offer.projects)), line: t('record.dock.projectLine', { project: project?.number ?? projects[0]?.number ?? '', customer }) }
+      return { value: 'projects', label, short: t('record.dock.projects'), icon: <FolderKanban size={14} aria-hidden />, count: freshOf(offer.projects), line: t('record.dock.projectLine', { project: project?.number ?? projects[0]?.number ?? '', customer }) }
     }
-    if (segment === 'workOrders') return { value: 'workOrders', label: withNew(t('record.dock.workOrders'), freshOf(offer.workOrders)), line: t('record.dock.workOrderLine', { wo: workOrder?.number ?? ownWork[0]?.number ?? '' }) }
+    // Office only: its line in the office tone.
+    if (segment === 'workOrders') return { value: 'workOrders', label: t('record.dock.workOrders'), icon: <Lock size={14} aria-hidden />, count: freshOf(offer.workOrders), tone: 'office', line: t('record.dock.workOrderLine', { wo: workOrder?.number ?? ownWork[0]?.number ?? '' }) }
     // The feed says itself that it is read only and how to write (its own line).
-    return { value: 'all', label: t('record.dock.all', { customer }), title: t('record.dock.readOnly'), line: null }
+    return { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: null }
   })
   const extra =
     scope.kind === 'project' && projects.length > 1 ? (
@@ -163,20 +169,24 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     // Office only: no party (never shared with a customer); a note may go to the floor with its tick.
     shown = <OfficeRecordThread key={`wo-${workOrder.id}`} docked record={{ type: 'WorkOrder', id: workOrder.id, companyId: order.companyId, siteId: workOrder.siteId }} title={`${workOrder.number}${workOrder.style ? ` · ${workOrder.style}` : ''}`} recordLabel={workOrder.number} party={null} recordHref={`${prefix}/production/work-orders/${encodeURIComponent(workOrder.id)}`} />
   } else if (scope.kind === 'all') {
+    // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls, the foot.
     shown = (
-      <div className="fw-so-dock-all">
-        <AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />
-        {/* Writing always goes into ONE conversation: the two the person may pick here. */}
-        <p className="fw-so-dock-write">
-          <span>{t('record.dock.writeIn')}</span>
-          <Button size="sm" variant="secondary" onClick={() => go(ORDER_SCOPE)}>
-            {t('record.dock.order')}
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => go({ kind: 'general' })}>
-            {t('record.dock.writeGeneral')}
-          </Button>
-        </p>
-      </div>
+      <PickedDockColumn
+        label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}
+        body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />}
+        foot={
+          // Writing always goes into ONE conversation: the two the person may pick here.
+          <>
+            <span>{t('record.dock.writeIn')}</span>
+            <Button size="sm" variant="secondary" onClick={() => go(ORDER_SCOPE)}>
+              {t('record.dock.order')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => go({ kind: 'general' })}>
+              {t('record.dock.writeGeneral')}
+            </Button>
+          </>
+        }
+      />
     )
   } else {
     shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} {...(changeSide ? { changeSide } : {}) /* F-SA-244 */} />

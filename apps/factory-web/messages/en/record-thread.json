@@ -94,5 +94,9 @@
         "REQUEST": "{number} · Your request {seq}"
       }
     }
+  },
+  "dock": {
+    "newCount_one": "1 new",
+    "newCount_other": "{count} new"
   }
 }
