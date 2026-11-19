@@ -1,13 +1,12 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { ApiError } from '../../../../lib/api/errors'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
 import type { Accountants } from './api'
 import { designScreen } from './fixtures'
-import { accountantRows, blankInvite, changeHeld, changeSaveHeld, endHeld, inviteBody, inviteHeld, inviteProblems, laterEndHeld, NS, OWNER_GIVES, OWNER_LATER, readsAsOwner, rowHeld, writeProblemKey } from './model'
+import { accountantRows, blankInvite, changeHeld, changeSaveHeld, endHeld, inviteBody, inviteHeld, inviteProblems, laterEndHeld, mayGive, NS, OWNER_GIVES, OWNER_LATER, rowHeld, writeProblemKey } from './model'
 
 /**
  * Accountant access on Finance › Close (B-W2b-201; SCR-268-office), the pure part: one list of every firm's accountants, what
@@ -35,8 +34,10 @@ const ANSWER: Pick<Accountants, 'firms' | 'may'> = {
     { party: { id: id(1), code: 'STUDIO', name: 'Studio Esempio', everyCompany: false }, portalOn: true, people: [person(11, 'Zoe Esempio', 'ACTIVE'), person(12, 'Anna Esempio', 'DEACTIVATED'), person(13, 'Bruno Esempio', 'INVITED')] },
     { party: { id: id(2), code: 'REVISORI', name: 'Revisori Fittizi', everyCompany: true }, portalOn: false, people: [] },
   ],
-  may: { manage: true },
+  // F-CP-159 (follow-up 13): finance manages the access, the Owner gives it (`give`).
+  may: { manage: true, give: false },
 }
+const OWNER_MAY: Accountants['may'] = { manage: true, give: true }
 
 describe('who has access', () => {
   it('every firm’s accountants in one list, by name; those whose access ended only when asked, last', () => {
@@ -55,11 +56,11 @@ describe('who has access', () => {
     expect(changeHeld(ended!, true)).toBe('office.held.left')
     expect(endHeld(invited!, true)).toBeNull()
     expect(endHeld({ ...invited!, invitationExpiresAt: null }, true)).toBe('office.held.expired')
-    // F-CP-159: the Owner gives the access (the other holds as before).
-    expect(inviteHeld(null, true)).toBe('office.held.reading')
-    expect(inviteHeld({ ...ANSWER, may: { manage: false } }, true)).toBe('office.held.noManage')
-    expect(inviteHeld({ firms: [], may: { manage: true } }, true)).toBe('office.held.noFirm')
-    expect(inviteHeld(ANSWER, true)).toBeNull()
+    // F-CP-159: the Owner gives the access (the API's `may.give`, follow-up 13; the other holds as before).
+    expect(inviteHeld(null)).toBe('office.held.reading')
+    expect(inviteHeld({ ...ANSWER, may: { manage: false, give: true } })).toBe('office.held.noManage')
+    expect(inviteHeld({ firms: [], may: OWNER_MAY })).toBe('office.held.noFirm')
+    expect(inviteHeld({ ...ANSWER, may: OWNER_MAY })).toBeNull()
   })
 })
 
@@ -91,18 +92,20 @@ describe('the invite', () => {
 describe('F-CP-159: only the Owner gives the accountant access (it sees our prices)', () => {
   const tOf = (locale: 'it' | 'en', ns: string) => createTranslator(locale, CATALOGUE[locale][ns] ?? {})
 
-  it('reads the Owner from every office permission: the Owner yes, finance, Sales and the administrator no', () => {
-    expect(readsAsOwner(templateOf('owner')!.permissions)).toBe(true)
-    for (const key of ['finance', 'sales', 'admin', 'read_only']) expect(readsAsOwner(templateOf(key)!.permissions), key).toBe(false)
-    expect(readsAsOwner([])).toBe(false)
+  // follow-up 13: who gives it is the API's `may.give` (a live holder of the Owner role), never guessed from the session.
+  it('reads who gives the access from the list’s may.give: the Owner yes, finance no, nobody before the list is read', () => {
+    expect(mayGive({ may: OWNER_MAY })).toBe(true)
+    expect(mayGive({ may: { manage: true, give: false } })).toBe(false)
+    expect(mayGive({ may: { manage: false, give: false } })).toBe(false)
+    expect(mayGive(null)).toBe(false)
   })
 
-  it('holds Give access for anyone who is not the Owner, before any other reason but the reading', () => {
-    expect(inviteHeld(ANSWER, false)).toBe(OWNER_GIVES)
-    expect(inviteHeld({ ...ANSWER, may: { manage: false } }, false)).toBe(OWNER_GIVES)
-    expect(inviteHeld({ firms: [], may: { manage: true } }, false)).toBe(OWNER_GIVES)
-    expect(inviteHeld(null, false)).toBe('office.held.reading')
-    expect(inviteHeld(ANSWER, true)).toBeNull()
+  it('holds Give access for anyone the API does not let give it, before any other reason but the reading', () => {
+    expect(inviteHeld(ANSWER)).toBe(OWNER_GIVES)
+    expect(inviteHeld({ ...ANSWER, may: { manage: false, give: false } })).toBe(OWNER_GIVES)
+    expect(inviteHeld({ firms: [], may: { manage: true, give: false } })).toBe(OWNER_GIVES)
+    expect(inviteHeld(null)).toBe('office.held.reading')
+    expect(inviteHeld({ ...ANSWER, may: OWNER_MAY })).toBeNull()
   })
 
   it('a later end is the Owner’s; an earlier end, the same day and an access with no end stay finance’s', () => {
@@ -155,6 +158,8 @@ describe('F-CP-159: only the Owner gives the accountant access (it sees our pric
     }
     expect(entryOf('as-sales').role).toBe('sales')
     expect(entryOf('as-owner').model.owner).toBe(true)
+    // follow-up 13: every case reads `owner` from its answer's may.give (the view holds Give access with it)
+    for (const entry of designScreen.cases) expect(entry.model.model.owner, entry.id).toBe(entry.model.role === 'owner')
     expect(draw('as-owner')).not.toContain(t('en')(OWNER_GIVES))
     for (const id of ['invite', 'invite-filled', 'invite-every-company', 'invite-refused', 'step-up', 'done', 'change']) expect(entryOf(id).model.owner, id).toBe(true)
     // the change pop-ups (a dialog draws only in the browser): a later day held in words, an earlier day saves, the refusal in words
