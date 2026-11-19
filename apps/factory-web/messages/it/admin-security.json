@@ -163,7 +163,7 @@
       "lock": {
         "none": "Si può cambiare",
         "floor": "Un ruolo di reparto: i suoi fattori sono il tablet e il PIN",
-        "money": "Vede costi o margini: sempre richiesto",
+        "money": "Vede prezzi, costi o margini: sempre richiesto",
         "template": "Il ruolo predefinito lo chiede sempre"
       },
       "held": {
@@ -184,7 +184,7 @@
       "toRoles": "Ruoli e permessi",
       "refusal": {
         "floor": "Un ruolo di reparto non chiede mai il doppio fattore: i fattori del reparto sono il tablet e il PIN.",
-        "money": "Un ruolo che vede costi o margini chiede sempre il doppio fattore.",
+        "money": "Un ruolo che vede prezzi, costi o margini chiede sempre il doppio fattore.",
         "template": "Questo ruolo predefinito chiede sempre il doppio fattore.",
         "already": "Questo ruolo chiede già il doppio fattore.",
         "notAsked": "Questo ruolo non chiede il doppio fattore.",

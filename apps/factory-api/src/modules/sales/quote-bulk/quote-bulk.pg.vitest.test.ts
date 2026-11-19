@@ -53,7 +53,8 @@ const roleOf = (key: string): Permission[] => {
   return [...role.permissions, ...grainsOf(role.grains)]
 }
 // The seller (the sales role), the planner (no quotes) and someone who only reads quotes.
-const PEOPLE: Record<string, Permission[]> = { seller: roleOf('sales'), planner: roleOf('planner'), viewer: ['quotes.view'] as Permission[] }
+// B-CP-011 (the money wall): the seller sends and sees no price any more; a pasted price is the Owner's.
+const PEOPLE: Record<string, Permission[]> = { seller: roleOf('sales'), owner: roleOf('owner'), planner: roleOf('planner'), viewer: ['quotes.view'] as Permission[] }
 const IDS: Record<string, string> = Object.fromEntries(Object.keys(PEOPLE).map((key) => [key, newId()]))
 const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
   Object.entries(PEOPLE).map(([key, permissions]) => {
@@ -131,7 +132,8 @@ describe('size curves (SAL-269, Sales settings › Size curves)', () => {
 describe('lines pasted from a sheet (SAL-160)', () => {
   it('shows what lands and what cannot, cell by cell, then writes the same', async () => {
     const text = ['Style\tColourway\t50\t52\t54\t56\tPrice', 'SEED-JKT-01\tBLK\t\t6\t\t\t', 'SEED-JKT-01\tRed\t1\tx\t3\t2\t401.50', 'SEED-NOPE\tBLK\t1\t\t\t\t'].join('\n')
-    const preview = await ok('seller', 'POST', `${q(quote.id)}/lines/paste`, { version: quote.version, text, preview: true })
+    // B-CP-011: a sheet with a Price column is pasted by the Owner (the price is his; was the seller).
+    const preview = await ok('owner', 'POST', `${q(quote.id)}/lines/paste`, { version: quote.version, text, preview: true })
     expect(preview.counts).toEqual({ rows: 3, added: 1, changed: 1, skipped: 1, cellsLanded: 3, cellsLeftOut: 2 })
     expect(preview.rows.map((row: Json) => [row.row, row.action, row.priceFrom])).toEqual([
       [2, 'CHANGE', 'KEPT'],
@@ -143,13 +145,15 @@ describe('lines pasted from a sheet (SAL-160)', () => {
     expect(preview.rows[2].words).toBe('Row 4: SEED-NOPE is not a style this company sells.')
     // Nothing written by the review.
     expect(grid(lineOf((await ok('seller', 'GET', q(quote.id))).quote, BLK))).toEqual({ '50': 2, '52': 4, '54': 2 })
-    const done = await ok('seller', 'POST', `${q(quote.id)}/lines/paste`, { version: quote.version, text })
+    const done = await ok('owner', 'POST', `${q(quote.id)}/lines/paste`, { version: quote.version, text })
     quote = done.quote
     expect(grid(lineOf(quote, BLK))).toEqual({ '50': 2, '52': 6, '54': 2 })
     expect(lineOf(quote, RED)).toMatchObject({ unitPrice: '401.5', quantity: 4 })
     expect(grid(lineOf(quote, RED))).toEqual({ '50': 1, '54': 3 })
+    // B-CP-011: the seller reads the same line without its price.
+    expect(lineOf((await ok('seller', 'GET', q(quote.id))).quote, RED)).not.toHaveProperty('unitPrice')
     // A stale review is refused.
-    await refused('seller', 'POST', `${q(quote.id)}/lines/paste`, { version: quote.version - 1, text, preview: true }, 409)
+    await refused('owner', 'POST', `${q(quote.id)}/lines/paste`, { version: quote.version - 1, text, preview: true }, 409)
   })
 })
 

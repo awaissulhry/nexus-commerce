@@ -25,6 +25,11 @@ import { HEALTH_WORDS, OFFICE_WAITING_WORDS, STAGE_WORDS } from '@nexus/factory-
 import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
+// B-CP-018: the price check's term and columns (the price grain only).
+import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
+import { PRICE_MATCHES, type PriceMatch } from '@nexus/factory-domain/sales/brand-prices/match'
+import { PRICE_CHECK_EXPORT_WORDS, priceCheckExport } from '../../../modules/sales/brand-prices/columns'
+import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
 
 /**
  * Sales › Orders (SCR-038, `/sales/orders`): the export of the list as the screen shows it. The address is the list's
@@ -70,6 +75,10 @@ import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
  * `whereItIs` (the plain stage and the shown health: "Sewing · At risk"), `waitingOn` (who it waits on), `held` and `supervisor` (Me /
  * Someone else / Not set, never a name: a column only for a person holding workorders.view, empty for an order the person's
  * workorders.view does not reach).
+ *
+ * B-CP-018 (customer page plan C2d; screen = file): `?priceMatch=NOT_EQUAL|NO_BRAND_PRICE|EQUAL` narrows the file as it narrows the
+ * screen (another value: refused in words; a person without the price grain is refused the file in the list's own words), and the
+ * file writes `ourPrice`, `brandPrice`, `priceMatch` and `priceDiff` (modules/sales/brand-prices columns.ts), each of the price grain.
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
@@ -212,6 +221,14 @@ function waitingTerm(address: URLSearchParams): Pick<ListFilters, 'waiting'> {
   return { waiting: value }
 }
 
+// ── B-CP-018 (customer page plan C2d; screen = file) ──
+/** The `priceMatch` term of the address, or nothing; another value is refused (the file would not follow the screen). */
+function priceMatchTerm(address: URLSearchParams): Pick<ListFilters, 'priceMatch'> {
+  const value = oneOf<PriceMatch>(address, 'priceMatch', PRICE_MATCHES)
+  return value ? { priceMatch: value } : {}
+}
+// ── end B-CP-018 ──
+
 /** The Where it is cell: the plain stage and the shown health ("Sewing · At risk"); nothing kept yet: empty. */
 function whereText(row: Row, words: (code: string) => string): string | null {
   const production = row.production
@@ -242,7 +259,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
     const profile = idTerm(address, ['profile', 'profileId'], 'rider') // B-SA-021
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
@@ -251,7 +268,8 @@ export const salesOrders = defineExportSource<Query, Row>({
     return { ...kept, open: 'true', q }
   },
   // B-SA-021: the rider term only for a reader of measurements (the list's own words; the read refuses it too).
-  refusal: (actor, query) => (query.profile && !holds(actor, SALES_MEASUREMENTS_VIEW) ? RIDER_TERM_REFUSAL : null),
+  // B-CP-018: and the price check term only for a price holder (the list's own words; the read refuses it too).
+  refusal: (actor, query) => (query.profile && !holds(actor, SALES_MEASUREMENTS_VIEW) ? RIDER_TERM_REFUSAL : null) ?? (query.priceMatch && !heldGrains(actor).has('price') ? NOT_A_PRICE_HOLDER : null),
   async read(caller, query, cursor, limit) {
     // B-TH-059: the file counts the progress (its Progress column).
     // B-SA-070: and the production columns.
@@ -315,6 +333,9 @@ export const salesOrders = defineExportSource<Query, Row>({
     held: { value: (row, words) => (row.production?.held ? words('held.yes') : null) },
     supervisor: { permission: WORKORDERS_VIEW, value: (row, words) => (row.production?.supervisorMark ? words(`supervisor.${row.production.supervisorMark}`) : null) },
     // ── end B-SA-070 ──
+    // ── B-CP-018: Our price, Customer's price, Price check, Difference (the price grain: left out and named for anyone else) ──
+    ...priceCheckExport<Row>(),
+    // ── end B-CP-018 ──
   },
   words: {
     it: {
@@ -350,6 +371,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       'supervisor.ME': 'Io',
       'supervisor.SOMEONE_ELSE': "Un'altra persona",
       'supervisor.NOT_SET': 'Non impostato',
+      ...PRICE_CHECK_EXPORT_WORDS.it, // B-CP-018
     },
     en: {
       'status.PENDING_APPROVAL': 'Waiting for a yes', // B-TH-008; Round 5 (R9): the catalogue's word, as the pill, the lane and the tile
@@ -384,6 +406,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       'supervisor.ME': 'Me',
       'supervisor.SOMEONE_ELSE': 'Someone else',
       'supervisor.NOT_SET': 'Not set',
+      ...PRICE_CHECK_EXPORT_WORDS.en, // B-CP-018
     },
   },
 })

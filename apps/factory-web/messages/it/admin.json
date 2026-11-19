@@ -1166,6 +1166,10 @@
         "name": "Sola lettura",
         "description": "Vede ogni schermata del proprio ambito e non cambia nulla; non vede importi."
       },
+      "designer": {
+        "name": "Designer della fabbrica",
+        "description": "Lavora su loghi, grafiche e campioni con i clienti; non vede soldi."
+      },
       "operator": {
         "name": "Operatore",
         "description": "Lavora su una postazione con un dispositivo registrato; vede solo il proprio cottimo (le tariffe pubblicate per lui)."

@@ -62,6 +62,9 @@ const fromTemplate = (name: string): SessionContext => {
 const SESSIONS: Record<string, SessionContext> = {
   finance: fromTemplate('finance'),
   sales: fromTemplate('sales'),
+  // B-CP-011 (the money wall): Sales holds no grain now; a role the Owner names to see prices (Sales' permissions with the price
+  // and margin grains, as the Sales template had them) sees prices and margins, never a cost.
+  pricedSales: office([grant([...templateOf('sales')!.permissions, 'money.price', 'money.margin'])]),
   production: fromTemplate('production_manager'),
   warehouse: fromTemplate('warehouse'),
   // Costs only, and no invoices, payments or shipments: those groups are held.
@@ -152,9 +155,15 @@ describe('the order profitability report with every document (FIN-053)', () => {
     expect(answer.notes).toEqual(['NOT_ISSUED'])
   })
 
-  it('by grain and permission: sales see prices and no cost; a role without invoices, payments or shipments sees them held; out of scope is not found', async () => {
+  it('by grain and permission: a role named to see prices sees them and no cost, sales sees neither (B-CP-011); a role without invoices, payments or shipments sees them held; out of scope is not found', async () => {
+    const priced = await docs('pricedSales', 'SEED-SO-0002')
+    expect(priced.invoices.rows[0]).toHaveProperty('forOrder', 80_000)
+    expect(keysOf(priced.costs)).not.toContain('amount')
+    expect(priced.freight.rows[0]).not.toHaveProperty('cost')
+    expect(priced.totals).not.toHaveProperty('freightCost')
+    // B-CP-011 (the money wall): Sales sees no price either.
     const sales = await docs('sales', 'SEED-SO-0002')
-    expect(sales.invoices.rows[0]).toHaveProperty('forOrder', 80_000)
+    expect(sales.invoices.rows[0]).not.toHaveProperty('forOrder')
     expect(keysOf(sales.costs)).not.toContain('amount')
     expect(sales.freight.rows[0]).not.toHaveProperty('cost')
     expect(sales.totals).not.toHaveProperty('freightCost')
@@ -191,10 +200,14 @@ describe('orders below the margin floor (FIN-050; KA3:01 the Sales settings floo
     expect((await ok('finance', '/costing/margins?floor=below')).rows.map((row: Json) => row.order.number)).toEqual(['SEED-SO-0001', 'SEED-SO-0002'])
     // The order's profitability says the same.
     expect(await ok('finance', `/costing/margins/orders/${await orderOf('SEED-SO-0002')}`)).toMatchObject({ belowFloor: true, floor: { pct: '29', from: 'ROLE' } })
-    // Sales hold the margin grain: they see the flag and the floor, never a cost.
-    const sales = await ok('sales', '/costing/margins?floor=below')
-    expect(sales.rows[0]).toMatchObject({ belowFloor: true, floor: { pct: '29' } })
-    expect(sales.tiles.belowFloor).toBe(2)
+    // A role named to see margins (B-CP-011: no longer Sales) sees the flag and the floor, never a cost.
+    const priced = await ok('pricedSales', '/costing/margins?floor=below')
+    expect(priced.rows[0]).toMatchObject({ belowFloor: true, floor: { pct: '29' } })
+    expect(priced.tiles.belowFloor).toBe(2)
+    // B-CP-011 (the money wall): Sales holds no margin grain: neither the floor nor the flag.
+    const sales = await ok('sales', '/costing/margins')
+    expect(keysOf(sales)).not.toContain('floor')
+    expect(keysOf(sales)).not.toContain('belowFloor')
   })
 
   it('never sends the floor or the flag without the margin grain (the production manager reads margins with costing.view only)', async () => {

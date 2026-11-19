@@ -43,6 +43,11 @@ import { approveWaitingInCommand } from '../portal-ordering/address-check'
 import { acceptedWithCounter, officeAnswersOf, type CounterState } from '@nexus/factory-domain/sales/change-requests/counter'
 import type { RequestStatus } from '@nexus/factory-domain/sales/change-requests/rules'
 import { agreedDateOf, answerableIn, counterOfRow, counterStateIn } from './counter'
+// B-CP-026: a priced counter-offer the customer agreed is accepted by a price holder only.
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
+import { counterPriced } from '@nexus/factory-domain/sales/change-requests/counter'
 import {
   readCounterStates,
   askedColourwayNames, // B-PR-27a
@@ -533,6 +538,11 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   // read before the command (planning/promise-keep acceptProposals). fix-pr-5 (lead decision): the accept is the decision, so the
   // proposal is made in its command under the accepter's orders.manage (asserted above), not planning.promise.manage (byAccept).
   const asked = await caller.withClient((client) => client.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS }))
+  // ── B-CP-026 (Owner answer A, the money wall): the customer said yes to a counter-offer that carries a price (its fee):
+  // accepting it carries the price out, so a person who does not see prices is held in words (nothing changes); a price holder
+  // accepts it. A counter of a date or words only is accepted as before. The counter is written once (OPEN → COUNTERED).
+  if (asked && asked.status === 'COUNTERED' && counterPriced(counterOfRow(asked)) && !can(actorOf(context), grainPermission('price') as Permission, { companyId: order.companyId, partyId: order.partyId })) throw blindPriceHeld('request/counterFee')
+  // ── end B-CP-026 ──
   const splitProposals: AcceptProposals | null =
     asked?.kind === 'SPLIT_SHIPMENT'
       ? await caller.withClient(async (client) => {

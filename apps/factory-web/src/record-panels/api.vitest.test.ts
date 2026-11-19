@@ -141,7 +141,9 @@ describe('B-CP-014: the PRICED lock (a file that shows prices, for a reader who 
   it('a record’s files: a priced document locked for this reader parses — no name, no checksum — and stays locked as a thread file', async () => {
     const { api } = client(() => json(200, { files: [{ ...FILE, status: 'AVAILABLE', originalName: '', sha256: '', priced: true, locked: 'PRICED' }] }))
     const [file] = (await listFiles(api, RECORD)).files
-    expect(file).toMatchObject({ originalName: '', sha256: '', locked: 'PRICED' })
+    // The page keeps no checksum of any file (fileSchema has none): the API's blank one never reaches it.
+    expect(file).toMatchObject({ originalName: '', locked: 'PRICED' })
+    expect(file).not.toHaveProperty('sha256')
     expect(fromApiFile(file!)).toMatchObject({ name: '', locked: 'PRICED' })
     expect(fromApiFile(file!).sheet).toBeUndefined()
   })

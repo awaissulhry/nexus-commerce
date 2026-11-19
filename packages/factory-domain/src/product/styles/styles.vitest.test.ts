@@ -311,7 +311,8 @@ describe('contracts, permissions and events', () => {
     expect(FACTORY_PERMISSIONS.isDeclared(PRODUCT_STYLES_MANAGE)).toBe(true)
     const holders = (permission: string) => ROLE_TEMPLATES.filter((template) => template.permissions.includes(permission as never)).map((template) => template.key)
     expect(holders(PRODUCT_STYLES_MANAGE)).toEqual(['owner', 'production_manager'])
-    expect(holders(PRODUCT_STYLES_VIEW)).toEqual(['owner', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor', 'read_only'])
+    // B-CP-016: + the Factory designer (it reads the styles it works on with customers).
+    expect(holders(PRODUCT_STYLES_VIEW)).toEqual(['owner', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor', 'read_only', 'designer'])
     for (const type of ['style.created', 'style.updated', 'style.status_changed', 'style.colourways_changed', 'style.skus_changed', 'style.revision_created', 'size_scale.created', 'size_scale.changed']) {
       expect(EVENT_CATALOGUE.find(type, 1)?.live?.permission).toBe(PRODUCT_STYLES_VIEW)
     }

@@ -5,6 +5,10 @@ import { customLineProblems, customLineShapeProblems, linePieces, type CustomLin
 import type { CommandTx } from '../../../core/command'
 import type { CustomerCatalogue } from './catalogue'
 import { draftFilesWhere, type DraftFileRow, type LineRow, type PersonRow, type Reader, type RequestRow } from './store'
+// B-CP-076: "Your price" on a described or made-to-measure line (the price grain).
+import { asMoney } from '@nexus/factory-domain/money/marked'
+import { priceShown } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { priceOrNull } from './store'
 
 /**
  * B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2): a draft's lines of the customer's own kinds — DESCRIBED
@@ -119,8 +123,18 @@ export function customLineView(line: LineRow & { readonly kind: CustomLineKind }
     peopleInSheet: line.byPerson && own.length === 0 && sheetLines.has(line.id),
     note: line.note,
     problems: customLineProblems(customLineFactsOf(line, people, sheetLines, catalogue, mtm)).map(problemView),
+    brandUnitPrice: ownPriceView(line), // B-CP-076
   }
 }
+
+// ---- B-CP-076 (customer page plan 11 §1.3 D3): the customer's own net unit price of a line, as the answers show it (price grain) ----
+export const ownPriceView = (line: Pick<LineRow, 'brandUnitPrice'>) => {
+  const price = priceOrNull(line.brandUnitPrice)
+  return asMoney('price', price === null ? null : priceShown(price))
+}
+/** "Your price" as a body sends it: absent keeps it, null clears it (only a person with the price grain sends it: the grain filter). */
+export type OwnPriced = { readonly brandUnitPrice?: string | null | undefined }
+// ---- end B-CP-076
 
 // ---- checking and writing ---------------------------------------------------------------------------------------------------
 
@@ -158,9 +172,9 @@ export function customLineData(line: CustomLineInput) {
 }
 
 /** Writes a described or made-to-measure line and its sizes (partner scope, inside the draft's command). */
-export async function insertCustomLine(tx: CommandTx, row: RequestRow, line: CustomLineInput, seq: number, actorId: string, now: Date): Promise<string> {
+export async function insertCustomLine(tx: CommandTx, row: RequestRow, line: CustomLineInput & OwnPriced /* B-CP-076 */, seq: number, actorId: string, now: Date): Promise<string> {
   const id = newId()
-  await tx.portalOrderRequestLine.create({ data: { id, partyId: row.partyId, requestId: row.id, seq, kind: line.kind, ...customLineData(line), sourceOrderLineId: null, unitPriceShown: null, createdById: actorId, createdAt: now, updatedAt: now }, select: { id: true } })
+  await tx.portalOrderRequestLine.create({ data: { id, partyId: row.partyId, requestId: row.id, seq, kind: line.kind, ...customLineData(line), sourceOrderLineId: null, unitPriceShown: null, brandUnitPrice: line.brandUnitPrice ?? null /* B-CP-076 */, createdById: actorId, createdAt: now, updatedAt: now }, select: { id: true } })
   const sizes = line.sizes ?? []
   if (sizes.length > 0) await tx.portalOrderRequestSize.createMany({ data: sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId: id, size: ask.size.trim(), quantity: ask.quantity, createdById: actorId, createdAt: now, updatedAt: now })) })
   return id

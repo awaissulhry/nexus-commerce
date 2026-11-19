@@ -141,7 +141,9 @@ describe('the order waits for the factory review, in words (XF1:02)', { timeout:
     rev1 = (await ok('sales', 'POST', '/sales/mtm/profiles', { partyId: S.r1, riderName: RIDER, garmentType: 'JACKET', measurements: values, takenAt: ago(1), measuredByUserId: PEOPLE.sales, measuredPlace: 'Made-up showroom', privacyNoticeRef: 'Made-up notice v1', privacyNoticeAt: ago(2) }, 201)).profile.id
     const quote = (await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: S.r1 }, 201)).quote
     quoteId = quote.id
-    await ok('sales', 'POST', `/sales/quotes/${quoteId}/lines/made-to-measure`, { version: quote.version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev1, unitPrice: '610' }, 201)
+    // B-CP-011 (the money wall): the sales role may not send a typed price (refused, nothing written); the owner types it.
+    await no('sales', 'POST', `/sales/quotes/${quoteId}/lines/made-to-measure`, { version: quote.version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev1, unitPrice: '610' }, 403)
+    await ok('owner', 'POST', `/sales/quotes/${quoteId}/lines/made-to-measure`, { version: quote.version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev1, unitPrice: '610' }, 201)
     await ok('sales', 'POST', `/sales/quotes/${quoteId}/lines`, { version: await quoteVersion(quoteId), styleId: S.jkt01, colourwayId: S.blk, sizes: [{ size: '52', quantity: 2 }] }, 201)
     const version = await one<{ id: string }>(`SELECT id FROM "QuoteVersion" WHERE "quoteId" = $1 ORDER BY revision DESC LIMIT 1`, [quoteId])
     const accepted = await one<{ billTo: Json; shipTo: Json }>(`SELECT v."billTo", v."shipTo" FROM "QuoteVersion" v JOIN "Quote" q ON q.id = v."quoteId" WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0001'`, [T])

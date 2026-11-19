@@ -84,10 +84,16 @@ describe('reports obey data permissions (ANA-034)', () => {
     expect(libraryState(actor('owner'), meta({ needs: 'cost' })).state).toBe('READY')
   })
 
-  it('leaves out the columns of grains the person lacks and names them (S2: sales see margin %, never cost)', () => {
+  // B-CP-011: Sales holds no grain now (the money wall): no price, cost or margin column. A price and margin role (only the
+  // Owner gives it) shows the value and margin %, never cost.
+  it('leaves out the columns of grains the person lacks and names them (Sales: no money; a price and margin role: margin %, never cost)', () => {
     const sales = columnsFor(actor('sales'), COLUMNS)
-    expect(sales.shown.map((column) => column.key)).toEqual(['order', 'status', 'units', 'netAmount', 'marginPct', 'efficiencyPct'])
-    expect(sales.leftOut).toEqual(['cost'])
+    expect(sales.shown.map((column) => column.key)).toEqual(['order', 'status', 'units', 'efficiencyPct'])
+    expect(sales.leftOut).toEqual(['price', 'cost', 'margin'])
+    expect(sales.leftOutColumns).toEqual(['netAmount', 'costNow', 'marginPct'])
+    const priced = columnsFor(actor('sales', [grainPermission('price') as Permission, grainPermission('margin') as Permission]), COLUMNS)
+    expect(priced.shown.map((column) => column.key)).toEqual(['order', 'status', 'units', 'netAmount', 'marginPct', 'efficiencyPct'])
+    expect(priced.leftOut).toEqual(['cost'])
     const planner = columnsFor(actor('planner'), COLUMNS)
     expect(planner.leftOut).toEqual(['price', 'cost', 'margin'])
     expect(planner.leftOutColumns).toEqual(['netAmount', 'costNow', 'marginPct'])

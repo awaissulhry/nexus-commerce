@@ -79,6 +79,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   inspector: office(PEOPLE.inspector, [fromTemplate('quality_inspector')]),
   inspector2: office(PEOPLE.inspector2, [fromTemplate('quality_inspector')]),
   sales: office(PEOPLE.sales, [fromTemplate('sales')]),
+  /** B-CP-011 (the money wall): the same sales person with a role the Owner names to see prices (the price and margin grains, as
+   *  the Sales template had them; a custom role): the same rows, with their value and margin %, never a cost. */
+  salesPriced: office(PEOPLE.sales, [{ ...fromTemplate('sales'), permissions: [...templateOf('sales')!.permissions, grainPermission('price') as Permission, grainPermission('margin') as Permission] }]),
   finance: office(PEOPLE.finance, [fromTemplate('finance')]),
   nobody: office(PEOPLE.nobody, [{ permissions: ['home.view'], companies: 'all', sites: 'all', parties: 'all' }]),
   noHome: office(newId(), [{ permissions: ['orders.view', 'orders.manage'], companies: 'all', sites: 'all', parties: 'all' }]),
@@ -409,12 +412,14 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
     expect(itemOf(receiver, ids.blockedLot)).toBeDefined()
   })
 
-  it('sales: its customers’ late and at-risk orders with their value, never a cost; no release, no invoice, no approval it asked', async () => {
+  it('sales: its customers’ late and at-risk orders without their value (B-CP-011; a role named to see prices: with it), never a cost; no release, no invoice, no approval it asked', async () => {
     const answer = await today('sales')
     expect(kindsOf(answer)).toEqual(['MAIL_TO_SORT', 'ORDER_PROMISE'])
-    expect(itemOf(answer, ids.lateOrder)).toMatchObject({ state: 'LATE', figures: { currency: 'EUR', netAmount: expect.any(Number) } })
+    // B-CP-011 (the money wall): Sales holds no grain: the row has no figures; the same person named to see prices reads the value.
+    expect(itemOf(answer, ids.lateOrder)).toMatchObject({ state: 'LATE', figures: null })
+    expect(itemOf(await today('salesPriced'), ids.lateOrder)).toMatchObject({ state: 'LATE', figures: { currency: 'EUR', netAmount: expect.any(Number) } })
     expect(itemOf(answer, ids.riskOrder)).toMatchObject({ state: 'AT_RISK', severity: 'MEDIUM', group: 'THIS_WEEK', due: { days: 2, word: 'SOON' } })
-    const text = JSON.stringify(answer)
+    const text = JSON.stringify(await today('salesPriced'))
     expect(text).not.toContain('purchaseAmount')
     expect(text).not.toContain('marginAmount')
     expect(itemOf(answer, ids.quote)).toBeUndefined()
@@ -497,8 +502,14 @@ describe('the flow strip', () => {
 })
 
 describe('waiting on others', () => {
-  it('sales waits for the approval it asked (margin %, never the margin amount); the buyer for its supplier', async () => {
-    const sales = await ok('sales', '/home/waiting-on-others')
+  it('sales waits for the approval it asked (B-CP-011: no figure; a role named to see prices: the margin %, never the margin amount); the buyer for its supplier', async () => {
+    // B-CP-011 (the money wall): Sales holds no grain: the row and its sentence hold no figure.
+    const blind = await ok('sales', '/home/waiting-on-others')
+    expect(blind.items).toHaveLength(1)
+    expect(blind.items[0]).toMatchObject({ kind: 'APPROVAL_REQUEST', record: { id: ids.quote }, waitingFor: 'An approver of quotes', ageDays: 1, figures: null })
+    expect(blind.items[0].sentence).not.toContain('(margin')
+    expect(blind.items[0].sentence).not.toContain('%')
+    const sales = await ok('salesPriced', '/home/waiting-on-others')
     expect(sales.items).toHaveLength(1)
     expect(sales.items[0]).toMatchObject({ kind: 'APPROVAL_REQUEST', record: { id: ids.quote }, waitingFor: 'An approver of quotes', ageDays: 1, figures: { netAmount: 624000, marginPct: '14.25' } })
     expect(sales.items[0].figures).not.toHaveProperty('marginAmount')
