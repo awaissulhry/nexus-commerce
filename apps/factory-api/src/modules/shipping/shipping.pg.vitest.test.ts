@@ -84,6 +84,8 @@ const SESSIONS: Record<string, SessionContext> = {
   floorNoPack: floor(A.siteA1, A.companyA, ['floor.work']),
   // B-W2b-F35: who keeps the compliance requirements and reads a gate's answer.
   rules: office(A.tenant, [grant(['compliance.certificates.view', 'compliance.requirements.manage'])]),
+  // op-fx2 (end check): Finance keeps a site's freight rule and reads the freight in money (the warehouse sees no price).
+  finance: office(A.tenant, [grant(['shipping.view', 'shipping.settings.view', 'shipping.freight.manage', 'money.price'])]),
 }
 
 type Json = Record<string, any>
@@ -245,9 +247,12 @@ describe('a shipment from released goods only (LOG-001, LOG-002, GAP-002)', () =
     expect((joined.lines as Json[]).map((entry) => entry.workOrderSizeId).sort()).toEqual([cells().blk52, cells().jacket].sort())
     const jacketLine = (joined.lines as Json[]).find((entry) => entry.workOrderSizeId === cells().jacket)!
     expect((await ok('warehouse', 'DELETE', `/shipping/shipments/${s1}/lines/${jacketLine.id}`)).shipment.lines).toHaveLength(1)
-    const line = (await ok('warehouse', 'GET', `/shipping/shipments/${s1}`)).shipment.lines[0]
+    const read = (await ok('warehouse', 'GET', `/shipping/shipments/${s1}`)).shipment
+    const line = read.lines[0]
+    // op-fx2 (end check): made (1), joined (2) and left (3) above — every write moves the shipment's version.
+    expect(read.version).toBe(3)
     expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { quantity: 2 }, 409)).code).toBe('conflict')
-    expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { version: 99, quantity: 1 }, 409)).message).toMatch(/changed since it was read \(version 99\); it is now at version 1/)
+    expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { version: 99, quantity: 1 }, 409)).message).toMatch(/changed since it was read \(version 99\); it is now at version 3/)
     const removed = (await ok('warehouse', 'DELETE', `/shipping/shipments/${s1}/lines/${line.id}`)).shipment
     expect(removed.lines).toEqual([])
     expect((await readyCell('warehouse', cells().blk52))?.shippable).toBe(1)
@@ -597,18 +602,23 @@ describe('B-OP-041: a shared shipment shows on both orders in the shipping core'
     const found = ((await ok('warehouse', 'GET', `/shipping/queue/search?q=${encodeURIComponent(so3)}`)).shipments as Json[]).find((row) => row.id === shared.id)
     expect(found).toMatchObject({ salesOrderId: orders().so2, matchedBy: expect.arrayContaining(['ORDER']) })
     expect(found!.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
+    // op-fx2 (end check): today's queue lists what is due (promised for the site's today or before), and the seeded promises
+    // are weeks ahead — the second order's line (the jacket) is promised for today, so the shared shipment is due.
+    const siteToday = (await ok('warehouse', 'GET', `/shipping/queue/today?siteId=${A.siteA1}`)).site.today as string
+    await forced('UPDATE "SalesOrderLine" SET "promiseDate" = $2::date WHERE id = (SELECT "salesOrderLineId" FROM "ShipmentLine" WHERE id = $1)', [shared.jacket, siteToday])
     const today = ((await ok('warehouse', 'GET', `/shipping/queue/today?siteId=${A.siteA1}`)).shipments as Json[]).find((row) => row.id === shared.id)
     expect(today?.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
   })
 
   it('freight: free from on the sum of the nets of every order it carries (one currency)', async () => {
     await forced('UPDATE "SalesOrder" SET "netAmount" = 60000 WHERE id = ANY($1::uuid[])', [[orders().so2, orders().so3]])
-    await ok('warehouse', 'PUT', `/shipping/sites/${A.siteA1}/freight-rule`, { rule: 'PER_SHIPMENT', amount: 1500, freeFrom: 100000 })
-    const freight = (await ok('warehouse', 'GET', `/shipping/shipments/${shared.id}`)).shipment.freight
+    // op-fx2 (end check): the rule and the freight in money are Finance's (shipping.freight.manage, money.price).
+    await ok('finance', 'PUT', `/shipping/sites/${A.siteA1}/freight-rule`, { rule: 'PER_SHIPMENT', amount: 1500, freeFrom: 100000 })
+    const freight = (await ok('finance', 'GET', `/shipping/shipments/${shared.id}`)).shipment.freight
     expect(freight.byRule).toMatchObject({ charge: 0, basis: 'FREE_FROM' })
     // One order alone (60 000 < 100 000) still pays the rule's amount.
     const { shipment: alone } = await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: orders().so2, siteId: A.siteA1 }, 201)
-    expect(alone.freight.byRule).toMatchObject({ charge: 1500, basis: 'PER_SHIPMENT' })
+    expect((await ok('finance', 'GET', `/shipping/shipments/${alone.id}`)).shipment.freight.byRule).toMatchObject({ charge: 1500, basis: 'PER_SHIPMENT' })
     await ok('warehouse', 'POST', `/shipping/shipments/${alone.id}/cancel`, { version: alone.version, reason: 'Test: one order alone' })
   })
 
