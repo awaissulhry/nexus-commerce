@@ -122,7 +122,7 @@ const orderId = async (number: string): Promise<string> => (await admin<{ id: st
 const ids: Record<string, string> = {}
 
 beforeAll(async () => {
-  db = await migratedDatabase('shipment-orders')
+  db = await migratedDatabase('shipment_orders')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: ns })
   seedA = await seedShipping({ db: database, namespace: ns })
@@ -321,7 +321,7 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
     expect(child.salesOrderId).toBe(so2())
     expect(child.salesOrders.map((order: Json) => order.id)).toEqual([so2(), so3()])
     expect(from.salesOrders.map((order: Json) => order.id)).toEqual([so2()])
-    const changes = await admin<{ subject: string; payload: Json }>(`SELECT subject::text AS subject, payload FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = ANY($1::uuid[]) ORDER BY "occurredAt", id`, [[ids.shared, child.id]])
+    const changes = await admin<{ subject: string; payload: Json }>(`SELECT subject::text AS subject, payload FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = ANY($1::text[]) ORDER BY "occurredAt", id`, [[ids.shared, child.id]]) // op-fx2: subject is a text column
     expect(changes.map((row) => [row.subject, row.payload.change, row.payload.salesOrderIds])).toEqual([
       [child.id, 'ADDED', [so2(), so3()]],
       [ids.shared, 'REMOVED', [so2()]],
