@@ -2134,7 +2134,7 @@
     "production_brand_override": "Decidere al posto di un cliente o annullare ciò che ha fatto, con un motivo che legge (una seconda persona se il suo interruttore è acceso, mai chi ha chiesto); riportare un suo ordine a Normale, bloccarlo o sbloccarlo",
     "projects_manage": "Creare progetti (lavoro su più modelli, campioni e ordini, o senza ancora un record), modificarli, metterli in pausa, chiuderli con il loro esito e riaprirli, collegarne i record e aggiungerne o toglierne le persone, comprese quelle del portale dell'azienda esterna",
     "portal_colleagues_view": "Vedere gli utenti del portale della propria organizzazione e i loro ruoli",
-    "portal_colleagues_manage": "Amministratore del portale della propria organizzazione: invitare colleghi, cambiare ruoli, disattivare",
+    "portal_colleagues_manage": "Amministratore del portale della propria organizzazione: invitare colleghi, cambiare ruoli, disattivare; l'amministratore di un cliente può anche inviare di nuovo o ritirare un invito, sospendere o riattivare l'accesso e aggiungere le proprie persone ai propri progetti",
     "portal_comment": "Scrivere messaggi sui documenti che il ruolo mostra",
     "portal_upload": "Inviare file sui documenti che il ruolo mostra",
     "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",

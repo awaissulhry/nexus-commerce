@@ -1,13 +1,16 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { officeAuthOf } from '../sessions/office-auth'
-import { changeColleague, colleagues, deactivateColleague, inviteColleague, myAccess } from './colleagues'
+import { changeColleague, colleagues, deactivateColleague, inviteColleague, myAccess, pauseColleague, resendColleagueInvitation, revokeColleagueInvitation } from './colleagues'
 import {
   changeContract,
   colleagueChangeContract,
   colleagueDeactivateContract,
   colleagueInviteContract,
+  colleagueResendContract,
+  colleagueRevokeContract,
   colleaguesContract,
+  colleagueStatusContract,
   inviteContract,
   myAccessContract,
   organisationsContract,
@@ -42,6 +45,8 @@ import { changePerson, changeProduction, changeSettings, changeStatus, invitePer
  * POST  /portal/colleagues                                     the admin invites a colleague
  * PATCH /portal/colleagues/:userId                             the admin changes a colleague's role
  * POST  /portal/colleagues/:userId/deactivate                  the admin deactivates a colleague
+ * POST  /portal/colleagues/:userId/invitation[/revoke]         B-CP-073: a customer's admin sends an invitation again, or withdraws it
+ * POST  /portal/colleagues/:userId/{suspend|reactivate}        B-CP-073: a customer's admin pauses access or gives it back
  */
 export default defineRoutes('auth-partners', manifest, async (app) => {
   // Paths stay literal, one call each (scripts/factory/check-route-manifest.mjs reads them).
@@ -66,4 +71,9 @@ export default defineRoutes('auth-partners', manifest, async (app) => {
   app.post('/portal/colleagues', { schema: colleagueInviteContract }, (request) => inviteColleague(app, request, request.body, idempotencyKeyFrom(request)))
   app.patch('/portal/colleagues/:userId', { schema: colleagueChangeContract }, (request) => changeColleague(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
   app.post('/portal/colleagues/:userId/deactivate', { schema: colleagueDeactivateContract }, (request) => deactivateColleague(app, request, request.params.userId, request.body))
+  // B-CP-073
+  app.post('/portal/colleagues/:userId/invitation', { schema: colleagueResendContract }, (request) => resendColleagueInvitation(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/colleagues/:userId/invitation/revoke', { schema: colleagueRevokeContract }, (request) => revokeColleagueInvitation(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/colleagues/:userId/suspend', { schema: colleagueStatusContract }, (request) => pauseColleague(app, request, request.params.userId, request.body, 'suspend', idempotencyKeyFrom(request)))
+  app.post('/portal/colleagues/:userId/reactivate', { schema: colleagueStatusContract }, (request) => pauseColleague(app, request, request.params.userId, request.body, 'reactivate', idempotencyKeyFrom(request)))
 })

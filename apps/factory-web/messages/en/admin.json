@@ -2134,7 +2134,7 @@
     "production_brand_override": "Decide for a customer or undo what it did, with a reason it reads (a second person when its switch is on, never who asked); set its order back to Regular, lock or unlock it",
     "projects_manage": "Make projects (work on several styles, samples and orders, or with no record yet), change them, put them on hold, close them with their outcome and reopen them, link their records and add or remove their people, the outside company's portal people included",
     "portal_colleagues_view": "See your organisation's portal users and their roles",
-    "portal_colleagues_manage": "Your organisation's portal admin: invite colleagues, change roles, deactivate",
+    "portal_colleagues_manage": "Your organisation's portal admin: invite colleagues, change roles, deactivate; a customer's admin also sends an invitation again or withdraws it, pauses or gives back access, and adds its own people to its projects",
     "portal_comment": "Write messages on the records the role shows",
     "portal_upload": "Send files on the records the role shows",
     "portal_approve": "Approve, accept or sign on the records the role shows",
