@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { carrierOf, httpsOrNull, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from './model'
+// F-OP-121: where Create shipment… leads.
+import { createShipmentDoor } from './model'
+import { canOf, order } from '../../_demo/fixtures'
 
 /**
  * F-OP-119 (order page plan N5) — the Shipments tab's rows, pure: who carries each shipment, its tracking, the tracking door held
@@ -88,3 +91,18 @@ describe('cancelled shipments behind "Show N cancelled"', () => {
     expect(shownShipments([row()], false).cancelled).toBe(0)
   })
 })
+
+// ── F-OP-121 (order page plan N6): where Create shipment… leads ──────────────────────────────────────────────────────────────────
+describe('F-OP-121: Create shipment… opens in place on the order page', () => {
+  const ready = order('READY', { progress: { ...order('READY').progress, released: 6, shipped: 2 } })
+  it('in place with the container, else Warehouse’s New shipment with this order chosen', () => {
+    expect(createShipmentDoor(ready, canOf('owner'), '/f', true)).toEqual({ kind: 'inPlace' })
+    expect(createShipmentDoor(ready, canOf('owner'), '/f', false)).toEqual({ kind: 'warehouse', href: `/f/warehouse/shipments?new=1&order=${encodeURIComponent(ready.id)}` })
+  })
+  it('nothing without released garments left to ship, on a final order, or without shipping.manage', () => {
+    expect(createShipmentDoor({ ...ready, progress: { ...ready.progress, shipped: 6 } }, canOf('owner'), '/f', true)).toBeNull()
+    expect(createShipmentDoor({ ...ready, status: 'CANCELLED' }, canOf('owner'), '/f', true)).toBeNull()
+    expect(createShipmentDoor(ready, canOf('sales'), '/f', true)).toBeNull()
+  })
+})
+// ── end F-OP-121 ──

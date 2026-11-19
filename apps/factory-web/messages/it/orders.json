@@ -246,7 +246,8 @@
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
     "changePromise": "Cambia data promessa…",
-    "close": "Chiudi ordine…"
+    "close": "Chiudi ordine…",
+    "createShipment": "Crea spedizione…"
   },
   "action": {
     "promise": "Cambia data promessa…",
@@ -583,7 +584,9 @@
         "shipment": "Apri la spedizione ›",
         "arrange": "Cambia come viaggia…"
       }
-    }
+    },
+    "created": "{number} creata (bozza)",
+    "createdDoor": "Imballala e spediscila in Magazzino ›"
   },
   "shipStatus": {
     "DRAFT": "Bozza",

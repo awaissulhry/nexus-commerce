@@ -5,6 +5,10 @@ import type { Backorder, ShipmentLine, ShipmentOrder } from './api'
 // F-OP-130 (order page N6): the hold of several orders in one shipment, said in the screen's words (B-OP-047 deletes both).
 import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
 import type { JoinVerdict } from './api'
+// F-OP-121: New shipment's model (the orders it would carry) and the ready orders.
+import type { ReadyOrder } from './api'
+import type { NewShipmentModel } from './list/list-model'
+import { JOIN_PROBLEM_CODES } from '@nexus/factory-domain/shipping/shipments'
 import { SHIPMENT_STATUSES } from './api'
 
 /**
@@ -609,9 +613,11 @@ export interface LineGroup {
 export function lineGroups(shipment: Pick<Shipment, 'salesOrderId' | 'salesOrder' | 'salesOrders' | 'lines'>, backorders: readonly Pick<Backorder, 'order' | 'lines'>[] | null): LineGroup[] {
   const orders = shipmentOrders(shipment)
   if (orders.length === 1) return [{ order: orders[0]!, lines: [...shipment.lines] }]
-  const whose = lineOrderIds(backorders ?? [])
-  const groups: LineGroup[] = orders.map((order) => ({ order, lines: shipment.lines.filter((line) => whose.get(line.salesOrderLineId) === order.id) }))
-  const unknown = shipment.lines.filter((line) => !orders.some((order) => order.id === whose.get(line.salesOrderLineId)))
+  const read = lineOrderIds(backorders ?? [])
+  // F-OP-121 (lead addition): the office's read names each line's order; the backorder read stays the fallback.
+  const orderOf = (line: ShipmentLine): string | undefined => line.salesOrderId ?? read.get(line.salesOrderLineId)
+  const groups: LineGroup[] = orders.map((order) => ({ order, lines: shipment.lines.filter((line) => orderOf(line) === order.id) }))
+  const unknown = shipment.lines.filter((line) => !orders.some((order) => order.id === orderOf(line)))
   return [...groups.filter((group) => group.lines.length > 0), ...(unknown.length > 0 ? [{ order: null, lines: unknown }] : [])]
 }
 
@@ -626,12 +632,29 @@ export const takeOffHeld = (group: LineGroup): Phrase | null => (group.lines.som
 /**
  * Why an order may not join (null: it may), for its held row: while several orders in one shipment are held off, that hold in
  * the screen's own words (`shipOrders.later`; B-OP-047 deletes MULTI_ORDER_OFF and this branch); any other reason — another
- * address, another site, another currency, a hold on the customer … — the screen's "Cannot join" with the API's sentence (the
- * real reason, which names the order and the places) as its detail.
+ * address, another site, another currency, a hold on the customer … — by its code in the screen's own words (`shipOrders.why.*`,
+ * F-OP-121 lead addition: the API's English sentence is never on screen); an answer without a code: "Cannot join".
  */
 export function joinHeld(verdict: JoinVerdict): (Phrase & { detail: string | null }) | null {
   if (verdict.allowed) return null
-  if (verdict.why === MULTI_ORDER_OFF) return { key: 'shipOrders.later', detail: null }
-  return { key: 'shipOrders.cannotJoin', detail: verdict.why }
+  if (verdict.code === 'MULTI_ORDER_OFF' || verdict.why === MULTI_ORDER_OFF) return { key: 'shipOrders.later', detail: null }
+  // F-OP-121 (lead addition): the reason's code in the screen's own words (it + en), never the API's English sentence.
+  if (verdict.code && (JOIN_PROBLEM_CODES as readonly string[]).includes(verdict.code)) return { key: `shipOrders.why.${verdict.code}`, detail: null }
+  return { key: 'shipOrders.cannotJoin', detail: null }
 }
 
+// ── F-OP-121 (order page plan N6): New shipment — the orders it would carry, and the customer's others beside it ─────────────────
+
+/** The orders the shipment would carry: the chosen one, then the other orders added (ship together), as read. */
+export function ordersOfNew(model: Pick<NewShipmentModel, 'orders' | 'salesOrderId' | 'others'>): ReadyOrder[] {
+  const ids = [model.salesOrderId, ...(model.others ?? [])].filter((id): id is string => !!id)
+  return ids.flatMap((id) => (model.orders ?? []).filter((order) => order.salesOrderId === id))
+}
+
+/** The other orders of the customer offered beside this one (ship together), each with why it is held (null: it may join). */
+export function togetherRows(model: Pick<NewShipmentModel, 'orders' | 'salesOrderId' | 'together'>): { order: ReadyOrder; held: ReturnType<typeof joinHeld> }[] {
+  if (!model.together) return []
+  return (model.orders ?? []).filter((order) => order.salesOrderId !== model.salesOrderId).map((order) => ({ order, held: order.shipsWith ? joinHeld(order.shipsWith) : { key: 'shipOrders.cannotJoin', detail: null } }))
+}
+
+// ── end F-OP-121 ──

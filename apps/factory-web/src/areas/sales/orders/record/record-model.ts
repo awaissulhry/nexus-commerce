@@ -170,7 +170,7 @@ export interface OrderRecordModel {
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
   /** F-SA-239: the parts that changed under typed work (their last change names who: the order read's `lastChange`). */
   changed: { at: string; parts?: readonly string[]; by?: string | null } | null
-  notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
+  notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase; /* F-OP-121: a door the notice offers (Pack and ship it in Warehouse ›) */ door?: { href: string; words: Phrase } } | null
   busy: boolean
   dialog: RecordDialog | null
   /** A refused write while its dialog is open: said inside the dialog (what was typed stays). */
@@ -226,6 +226,8 @@ export interface OrderRecordModel {
   files?: OrderFilesModel | null
   /** F-OP-119: the tracking dialog of the one shipment opened on Shipments (its container: use-shipments-acts); null: none open. */
   shipmentTracking?: ReactNode | null
+  /** F-OP-121: Warehouse's New shipment, opened in place (its container). */
+  newShipment?: ReactNode | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
   /**
@@ -260,6 +262,8 @@ export interface OrderRecordActions {
   makeWorkOrders?: MakeWorkOrdersActions
   /** F-OP-119: open the tracking number of a shipment of the order (Shipments: row ⋯, or Enter on its Tracking cell). */
   onShipmentTracking?: (shipmentId: string) => void
+  /** F-OP-121: Create shipment… in place (this order and the customer's others beside it). */
+  onCreateShipment?: () => void
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

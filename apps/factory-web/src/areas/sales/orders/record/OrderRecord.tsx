@@ -344,7 +344,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       production.again()
     },
   })
-  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */ })
+  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
   const money = useMoneyActs({
     ...actsBase,
     permissions: session.permissions,

@@ -59,6 +59,12 @@ export interface NewShipmentModel {
   busy: boolean
   /** A refused create, said inside the dialog. */
   refused: { words: Phrase; detail?: string | null } | null
+  // ── F-OP-121 (order page plan N6): Create shipment… from the order page ──
+  /** The order page's mode: `salesOrderId` fixed, the same customer's other open orders beside it (ship together, each with its verdict). */
+  together?: boolean
+  /** The other orders added to this shipment (only ones their verdict allows; none while several orders are held off). */
+  others?: string[]
+  // ── end F-OP-121 ──
 }
 
 /** B-W2a-71 (design sh-grid selection row "Print 4 DDTs"): the selected shipments' live DDTs on their site's document printer. */
@@ -88,6 +94,8 @@ export interface ShipmentsListActions {
   onNewAll?: () => void
   onNewDelivery?: (next: { transportBy?: TransportBy; carrierCode?: string; serviceCode?: string }) => void
   onNewCreate?: () => void
+  /** F-OP-121: ship together — add (or take off) another order of the customer (only one its verdict allows). */
+  onNewOther?: (salesOrderId: string, on: boolean) => void
   // B-W2a-71
   onPrintDdts?: (ids: string[]) => void
   onPrintDdtsGo?: () => void

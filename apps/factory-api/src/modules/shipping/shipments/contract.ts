@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
-import { MAX_LINES_PER_REQUEST } from '@nexus/factory-domain/shipping/shipments'
+import { JOIN_PROBLEM_CODES, MAX_LINES_PER_REQUEST } from '@nexus/factory-domain/shipping/shipments'
 import { fileView } from '../../../platform/files/contract'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { TRANSPORT_EVIDENCE_STATUSES } from '@nexus/factory-domain/shipping/evidence/evidence'
@@ -26,7 +26,12 @@ const garments = () => z.number().int().min(1).max(100_000)
 const lineInput = input({ workOrderSizeId: id(), quantity: garments() })
 
 /** B-OP-040 / B-OP-070: may it join (ship together): allowed, or why not (factory-domain joinProblems, the first reason). */
-export const joinVerdictSchema = output({ allowed: z.boolean(), why: z.string().nullable() })
+export const joinVerdictSchema = output({
+  allowed: z.boolean(),
+  /** F-OP-121 (lead addition): the first reason's code — the screens word it (it + en); `why` stays the API's English sentence. */
+  code: z.enum(JOIN_PROBLEM_CODES).nullable(),
+  why: z.string().nullable(),
+})
 
 export const readyContract = defineContract({
   querystring: input({

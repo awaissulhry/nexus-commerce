@@ -13,11 +13,12 @@ import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
-import { createShipmentHref, gridOf, mayCreateShipment, styleGroups } from '../../model'
+import { gridOf, styleGroups } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PointsAtOrder } from '../links/view/OrderLinks' // F-SA-230: Complaints & returns live here
 // F-OP-119 (order page plan N5): each row's carrier and tracking, the tracking door, the cancelled rows behind "Show N".
 import { carrierOf, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from '../shipments/model'
+import { createShipmentDoor } from '../shipments/model' // F-OP-121
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
 
@@ -48,6 +49,7 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
   const shown = shownShipments(order.chain.shipments, showCancelled)
   const search = useSearchParams()?.toString() ?? ''
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
+  const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const carrierText = (row: ShipmentRow): string => {
     const carrier = carrierOf(row)
     return carrier ? t(carrier.key, carrier.params) : '—'
@@ -79,9 +81,15 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
       <Card padded>
         <div className="fw-so-card-head">
           <h2 className="fw-so-h2">{t('ship.listTitle')}</h2>
-          {mayCreateShipment(order, model.can) && (
+          {/* F-OP-121: Create shipment… in place (this order and the customer's others); without the container, Warehouse's page. */}
+          {createDoor?.kind === 'inPlace' && (
+            <Button size="sm" variant="primary" onClick={() => actions?.onCreateShipment?.()}>
+              {t('step.createShipment')}
+            </Button>
+          )}
+          {createDoor?.kind === 'warehouse' && (
             <Button size="sm" variant="primary" asChild>
-              <Link href={createShipmentHref(model.prefix, order.id)}>{t('action.createShipment')}</Link>
+              <Link href={createDoor.href}>{t('action.createShipment')}</Link>
             </Button>
           )}
         </div>
@@ -120,6 +128,7 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
         )}
       </Card>
       {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
+      {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
       {delivered}
       <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
       <p className="fw-so-hint">

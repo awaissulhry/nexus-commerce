@@ -1,5 +1,7 @@
 import type { Order } from '../../api'
 import type { Phrase } from '../../model'
+// F-OP-121: where Create shipment… leads.
+import { createShipmentHref, mayCreateShipment, type OrderAbilities } from '../../model'
 
 /**
  * F-OP-119 (order page plan N5; 10-order-page §8.1, §8.2; review R-7) — the Shipments tab's rows, pure: who carries each shipment
@@ -64,3 +66,16 @@ export function shownShipments(rows: readonly ShipmentRow[], showCancelled: bool
   const cancelled = rows.filter((row) => row.status === 'CANCELLED').length
   return { rows: showCancelled ? [...rows] : rows.filter((row) => row.status !== 'CANCELLED'), cancelled }
 }
+
+// ── F-OP-121 (order page plan N6): where Create shipment… leads ──────────────────────────────────────────────────────────────────
+export type CreateShipmentDoor = { readonly kind: 'inPlace' } | { readonly kind: 'warehouse'; readonly href: string }
+
+/**
+ * Released garments not shipped yet and the right to make a shipment: opened in place on the order page (its container mounts
+ * Warehouse's New shipment), else Warehouse's page with this order chosen; null: nothing to offer.
+ */
+export function createShipmentDoor(order: Pick<Order, 'id' | 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>, prefix: string, inPlace: boolean): CreateShipmentDoor | null {
+  if (!mayCreateShipment(order, can)) return null
+  return inPlace ? { kind: 'inPlace' } : { kind: 'warehouse', href: createShipmentHref(prefix, order.id) }
+}
+// ── end F-OP-121 ──

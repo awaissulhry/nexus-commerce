@@ -1499,3 +1499,24 @@ describe('F-OP-109: a line\'s text and Remove line in edit mode; a removed line 
   })
 })
 // ---- end F-OP-109
+
+// ---- F-OP-121 (order page plan N6): Create shipment… is the band's next step once garments are released and not shipped ----
+describe('F-OP-121: Create shipment… in place', () => {
+  const ready = (status: 'READY' | 'PARTLY_SHIPPED', released: number, shipped: number) => order(status, { progress: { ...order(status).progress, released, shipped } })
+  it('Ready / Partly shipped with released garments not shipped, and shipping.manage → Create shipment…', () => {
+    expect(nextStep(ready('READY', 4, 0), canOf('owner'))).toEqual({ kind: 'createShipment', held: null })
+    expect(nextStep(ready('PARTLY_SHIPPED', 4, 2), canOf('owner'))).toEqual({ kind: 'createShipment', held: null })
+    // Nothing more released than shipped, or no right to make a shipment (Sales): the promise as before.
+    expect(nextStep(ready('READY', 2, 2), canOf('owner')).kind).toBe('changePromise')
+    expect(nextStep(ready('READY', 4, 0), canOf('sales')).kind).toBe('changePromise')
+    expect(nextStep(ready('READY', 4, 0), canOf('sales')).held).toBeNull()
+  })
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['step.createShipment', 'ship.createdDoor']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('ship.created', { number: 'SH-0091' }), locale).toContain('SH-0091')
+    }
+  })
+})
+// ---- end F-OP-121
