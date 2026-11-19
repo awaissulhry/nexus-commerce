@@ -1716,7 +1716,66 @@
   },
   "wo": {
     "makeNext": "Crea il prossimo: {style}",
-    "made": "{number} creato (bozza)"
+    "made": "{number} creato (bozza)",
+    "col": {
+      "priority": "Priorità",
+      "acts": "Azioni"
+    },
+    "acts": "Azioni per {number}",
+    "dueOf": "Consegna di {number}",
+    "priorityOf": "Priorità di {number}",
+    "priorityHint": "Più alta viene prima",
+    "rushOf": "Urgenza per {number}",
+    "heldHold": "Lo fa la produzione — un pianificatore o il responsabile di produzione",
+    "heldHint": "Date di consegna, priorità, urgenza e azioni degli ordini di lavoro: lo fa la produzione — un pianificatore o il responsabile di produzione.",
+    "act": {
+      "note": "Nota…",
+      "hold": "Metti in sospeso…",
+      "lift": "Togli il blocco…",
+      "release": "Rilascia…",
+      "split": "Dividi…",
+      "cancel": "Annulla…",
+      "close": "Chiudi…",
+      "reopen": "Riapri…"
+    },
+    "note": {
+      "title": "Nota su {number}",
+      "label": "Nota",
+      "hint": "Stampata sul foglio dell’ordine di lavoro per il reparto; il cliente non la legge mai.",
+      "save": "Salva la nota",
+      "saved": "Nota salvata su {number}"
+    },
+    "reading": "Lettura di {number}…",
+    "readingShort": "Lettura dell’ordine di lavoro…",
+    "readFailed": "Impossibile leggere {number}",
+    "notice": {
+      "held": "{number} è in sospeso: il reparto è avvisato",
+      "lifted": "{number}: blocco tolto",
+      "released": "{number} rilasciato: il reparto può iniziare",
+      "cancelled": "{number} annullato: i suoi pezzi tornano alle righe dell’ordine",
+      "split": "{number} diviso: creato {child} (bozza)",
+      "closed": "{number} chiuso",
+      "reopened": "{number} riaperto"
+    },
+    "checksOpen_one": "{count} controllo blocca il rilascio",
+    "checksOpen_other": "{count} controlli bloccano il rilascio",
+    "release": {
+      "credit": "Il cliente ha superato il fido: il rilascio attende un sì sul fido.",
+      "gate": "Un controllo di conformità blocca il rilascio: vedi Conformità › Blocchi ai controlli.",
+      "refused_one": "Il controllo di rilascio lo blocca: {count} controllo è cambiato da quando è stato letto — vedi l’elenco.",
+      "refused_other": "Il controllo di rilascio lo blocca: {count} controlli sono cambiati da quando sono stati letti — vedi l’elenco."
+    },
+    "link": {
+      "planning": "Apri in Pianificazione ›",
+      "open": "Apri l’ordine di lavoro"
+    },
+    "heldReopen": "Lo fa la produzione — il responsabile di produzione",
+    "cancel": {
+      "check": "Cosa incontra l’annullamento",
+      "notNow": "In questo stato l’ordine di lavoro non si annulla",
+      "issued": "Prelevato per l’ordine (resta su di esso finché non viene reso a mano): {items}",
+      "atWorkshop": "Presso un laboratorio: {numbers}"
+    }
   },
   "approval": {
     "confirm": "Conferma l'ordine",

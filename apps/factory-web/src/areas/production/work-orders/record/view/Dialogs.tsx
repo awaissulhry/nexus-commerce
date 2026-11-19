@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Printer, XCircle } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
-import { Button, Checkbox, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, RadioCard, Select, Spinner } from '@nexus/ui/primitives' // F-OP-114: Checkbox went with Release
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'
-import { correctHold, onlyMaterialShort, quantityText, REPRINT_REASONS, type ReprintReason } from '../../../_shared/model'
+import { correctHold, quantityText, REPRINT_REASONS, type ReprintReason } from '../../../_shared/model' // F-OP-114: onlyMaterialShort went with Release
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
+// F-OP-114: Release lives in lib/production/work-order-acts (one copy: the record and the order page).
+import { ReleaseDialog as SharedReleaseDialog } from '../../../../../lib/production/work-order-acts/view/ReleaseDialog'
 
 const reasonLength = (text: string, min: number, max: number) => {
   const length = text.trim().length
@@ -40,67 +42,10 @@ export function RecordDialogs({ workOrder, model, actions }: { workOrder: WorkOr
   }
 }
 
+// F-OP-114: ONE Release dialog — lib/production/work-order-acts (the order page's row ⋯ draws the same, with the check list); the record
+// draws its check on Overview and hands the dialog its parts.
 function ReleaseDialog({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
-  const t = useT('production')
-  const material = onlyMaterialShort(model.check.value)
-  const [override, setOverride] = useState(model.draft?.override ?? false)
-  const [reason, setReason] = useState(model.draft?.reason ?? '')
-  const needsReason = material
-  const reasonOk = reasonLength(reason, 3, 500)
-  const held = model.busy ? t('held.busy') : needsReason && !override ? t('release.overrideNeeded') : needsReason && !reasonOk ? t('release.reasonShort') : null
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialog?.(null)}
-      title={t('release.title', { number: workOrder.number })}
-      size="md"
-      footer={
-        <>
-          <span className="grow" />
-          <Button size="sm" onClick={() => actions?.onDialog?.(null)}>
-            {t('common.cancel')}
-          </Button>
-          <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.onRelease?.(needsReason ? reason.trim() : null)} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {model.busy ? <Spinner size={12} /> : null} {t('release.go')}
-          </Button>
-        </>
-      }
-    >
-      <form
-        className="fw-pr-dialog"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!held) actions?.onRelease?.(needsReason ? reason.trim() : null)
-        }}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !held) {
-            event.preventDefault()
-            actions?.onRelease?.(needsReason ? reason.trim() : null)
-          }
-        }}
-      >
-        {model.dialogProblem && <Banner tone="danger" title={t(model.dialogProblem.key, model.dialogProblem.params)} />}
-        <p>{t('release.body', { revision: workOrder.revision?.revision ?? '—' })}</p>
-        <ul className="fw-pr-list">
-          <li>{t('release.reachCells', { count: workOrder.cells.length, pieces: workOrder.pieces })}</li>
-          <li>{t('release.reachOps', { count: workOrder.spec.operations.length })}</li>
-          <li>{t('release.reachMaterials', { count: workOrder.spec.materials.length })}</li>
-        </ul>
-        <p className="fw-pr-hint">{t('release.reversal')}</p>
-        {material && (
-          <>
-            <Banner tone="warning" title={t('release.short')} />
-            <Checkbox checked={override} onChange={(event) => setOverride(event.target.checked)} label={t('release.override')} />
-            {override && (
-              <Field label={t('release.reason')} hint={t('release.reasonHint')} error={reason.length > 0 && !reasonOk ? t('release.reasonShort') : undefined}>
-                <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={500} />
-              </Field>
-            )}
-          </>
-        )}
-      </form>
-    </Modal>
-  )
+  return <SharedReleaseDialog workOrder={workOrder} check={model.check} busy={model.busy} problem={model.dialogProblem} draft={model.draft ? { override: model.draft.override ?? false, reason: model.draft.reason ?? '' } : null} onCancel={() => actions?.onDialog?.(null)} onRelease={actions?.onRelease} onRetry={() => actions?.onRetryPart?.('check')} />
 }
 
 function MoveDialog({ workOrder, move, model, actions }: { workOrder: WorkOrder; move: 'start' | 'complete'; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {

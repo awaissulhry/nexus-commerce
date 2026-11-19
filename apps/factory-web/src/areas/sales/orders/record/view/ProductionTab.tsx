@@ -57,6 +57,23 @@ const WORK_ORDERS_NS = 'production-work-orders'
 import { DiscussDoor } from './Discuss'
 import { floorToldAt } from '../told' // F-SA-244: "Told the floor at hh:mm" per work order (never who saw it)
 import { rowAnchor } from '../dock/discuss'
+// ---- F-OP-113 (10-order-page §5.2; R-11): the work-order rows' acts — Due · Priority · Rush in place, the row ⋯ (DS Menu), a
+// shared row read-only with its words; the dialogs are the lib's (lib/production/work-order-acts/view), fed by the container ----
+import { MoreHorizontal } from 'lucide-react'
+import { Menu } from '@nexus/ui/components'
+import { FilterChip, Select } from '@nexus/ui/primitives'
+import { CellSaveMark, DateField } from '../../../../../lib/i18n/ds-parts'
+import { useScopedT } from '../../../../../lib/i18n/provider'
+import { laterOf, priorityChoices, rowActsOf, stableRows, type RowActs } from '../../../../../lib/production/work-order-acts/model'
+import { WorkOrderActsDialogs } from '../../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs'
+// ---- end F-OP-113
+// ---- F-OP-115: the row ⋯'s links (the planning board at the work order, the work order's own page); the gate's Money door is a
+// tab link (F-OP-210: the dock's scope kept, no prefetch) ----
+import { useSearchParams } from 'next/navigation'
+import { HELD_FOR_SALES, planningHref } from '../../../../../lib/production/work-order-acts/model'
+import { tabHref } from '../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../lib/tab-link/TabLink'
+// ---- end F-OP-115
 
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
@@ -106,7 +123,8 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
   const workOrderHref = (row: { id: string; number: string }) => `${model.prefix}${recordAddress({ type: 'WorkOrder', id: row.id, label: row.number, companyId: order.companyId }, OFFICE_PAGES)}`
 
   return (
-    <Card padded>
+    // F-OP-115 (A11's Overview doors): the address #work-orders lands here.
+    <Card padded id="work-orders" className="fw-so-anchor">
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('production.title')}</h2>
         {mayMake && (
@@ -117,6 +135,8 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
       </div>
       {/* F-OP-112: the Production page's New work order dialog, its order fixed (the style step; Create stays on this page). */}
       {make?.dialog && <NewWorkOrderDialog model={make.dialog} can={make.can} actions={actions?.makeWorkOrders?.dialog} />}
+      {/* F-OP-113: the dialog a work-order row's ⋯ opened (on the work order read afresh). */}
+      {model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}
       {!state || state.status === 'loading' ? (
         <div className="fw-so-stack" aria-busy="true">
           {[0, 1].map((index) => (
@@ -129,7 +149,7 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
         work.workOrders.length === 0 && work.mtm.length === 0 ? (
           <EmptyState title={t('production.empty.title')} description={t('production.empty.body')} />
         ) : (
-          <OwnWorkOrders work={work} model={model} href={workOrderHref} order={order /* F-SA-266 */} />
+          <OwnWorkOrders work={work} model={model} actions={actions /* F-OP-113 */} href={workOrderHref} order={order /* F-SA-266 */} />
         )
       ) : order.chain.workOrders.length === 0 ? (
         <EmptyState title={t('production.empty.title')} description={t('production.empty.body')} />
@@ -159,23 +179,43 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
   )
 }
 
-/** The work orders with the order's own pieces, and the made-to-measure groups (one row per style × colourway). */
-function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderRecordModel; href: (row: { id: string; number: string }) => string; order: Order }) {
+/**
+ * The work orders with the order's own pieces, and the made-to-measure groups (one row per style × colourway).
+ * F-OP-113: rows stable by number; Due, Priority and Rush in place (with workorders.manage over the work order; held otherwise, the
+ * row's ⋯ saying who does it); the row ⋯ (DS Menu); "Told the floor at hh:mm" after a write that reaches the floor; a work order
+ * shared with other customers is read-only here — its link and "Shared with other customers: change it on its page" (R-11).
+ */
+function OwnWorkOrders({ work, model, actions, href, order }: { work: Work; model: OrderRecordModel; actions?: OrderRecordActions; href: (row: { id: string; number: string }) => string; order: Order }) {
   const t = useT('orders')
   const r = useT(WORK_ORDERS_NS)
+  const scoped = useScopedT('orders') // F-OP-113: a phrase may name another catalogue (production:error.changed)
   const locale = useLocale()
+  // ---- F-OP-113 ----
+  const acts = model.workOrderActs ?? null
+  const act = actions?.workOrderActs
+  const offers = new Map<string, RowActs>(work.workOrders.map((row) => [row.id, acts ? rowActsOf(row, acts.can) : { shared: row.sharedWithOtherCustomers ? (row.rights?.why ?? null) : null, inline: null, menu: [] }]))
+  // F-OP-115: the hint speaks of Production's people only (a planner reading "only the production manager reopens" sees it on the ⋯).
+  const heldForReader = [...offers.values()].some((offer) => offer.inline?.held || offer.menu.some((entry) => entry.held?.key === HELD_FOR_SALES.key))
+  // ---- end F-OP-113
   const words = productionWordsFor(locale)
   const totals = new Map((model.workOrders?.value ?? []).map((row) => [row.id, row.pieces]))
   const readiness = new Map((model.readiness?.value ?? []).map((row) => [row.workOrderId, row]))
   const named = (entry: { code: string; name: string } | null) => (entry ? entry.name || entry.code : null)
   const toldChanges = model.told?.value?.changes ?? [] // F-SA-244
-  const rows = work.workOrders.map((row) => {
+  const rows = stableRows(work.workOrders).map((row) => {
     const { figure, notCounted } = ownProgress(row.own, row.status)
     const figureWords = words(figure.words.key, figure.words.params)
     const where = [named(row.site), named(row.line), ...row.workshops.map((shop) => shop.name)].filter((part): part is string => !!part).join(' · ')
     const madeFor = madeForOf(row.own, totals.get(row.id) ?? null, row.alsoMakes, row.sharedWithOtherCustomers, row.cutWithOtherWork)
     const ready = readiness.get(row.id) ?? null
-    const floorAt = floorToldAt(toldChanges, row.id) // F-SA-244
+    // F-SA-244; F-OP-113: + a write of this page that reached the floor (the later of the two).
+    const floorAt = laterOf(floorToldAt(toldChanges, row.id), acts?.toldAt[row.id])
+    // ---- F-OP-113: what the row offers its reader, its in-place save ----
+    const offer = offers.get(row.id)!
+    const inline = offer.inline && !offer.inline.held ? offer.inline : null
+    const save = acts?.saves[row.id] ?? null
+    const saving = (field: 'due' | 'priority' | 'rush') => <CellSaveMark state={save?.field === field ? 'saving' : null} />
+    // ---- end F-OP-113
     return {
       id: row.id,
       cells: [
@@ -190,10 +230,17 @@ function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderR
           <span className="fw-so-inline">
             <Pill tone={WO_TONE[row.status as keyof typeof WO_TONE] ?? 'neutral'}>{t(`woStatus.${row.status}`)}</Pill>
             {row.held && <Tag tone="warning">{t('production.held')}</Tag>}
-            {row.rush && <Tag tone="danger">{t('production.rush')}</Tag>}
+            {row.rush && !inline /* F-OP-113: in place it is the Rush chip */ && <Tag tone="danger">{t('production.rush')}</Tag>}
           </span>
           {/* F-SA-244 (R2): when the floor of this work order was last told about a change of the order — never who saw it. */}
           {floorAt && <span className="fw-so-cell-sub">{t('told.floorAt', { time: formatTime(floorAt, { locale }) })}</span>}
+          {/* F-OP-113 (R-11): a work order shared with other customers is changed on its own page only. */}
+          {offer.shared && <span className="fw-so-cell-sub">{say(offer.shared, locale)}</span>}
+          {save?.problem && (
+            <span className="fw-so-cell-sub" role="alert">
+              {scoped(save.problem.key, save.problem.params)}
+            </span>
+          )}
         </span>,
         <span key="st" className="fw-so-cell">
           <span>{row.style?.code ?? '—'}</span>
@@ -216,7 +263,14 @@ function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderR
             </span>
           ))}
         </span>,
-        row.due ? (
+        // F-OP-113: Due in place (a day; empty: no due date), marked while it saves.
+        inline ? (
+          <span key="d" className="fw-so-inline">
+            <DateField value={row.due ?? ''} onChange={(day) => act?.onDue?.(row, day || null)} clearable ariaLabel={t('wo.dueOf', { number: row.number })} />
+            {saving('due')}
+            {row.daysLate !== null && row.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: row.daysLate })}</Tag>}
+          </span>
+        ) : row.due ? (
           <span key="d" className="fw-so-inline">
             {formatDate(dayInstant(row.due), { locale })}
             {row.daysLate !== null && row.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: row.daysLate })}</Tag>}
@@ -224,7 +278,54 @@ function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderR
         ) : (
           '—'
         ),
+        // F-OP-113: Priority (higher comes first) and the Rush chip in place; read-only words otherwise.
+        inline ? (
+          <span key="pr" className="fw-so-inline">
+            <Select size="sm" value={String(row.priority ?? 0)} onChange={(event) => act?.onPriority?.(row, Number(event.target.value))} aria-label={t('wo.priorityOf', { number: row.number })} title={t('wo.priorityHint')}>
+              {priorityChoices(row.priority).map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </Select>
+            {saving('priority')}
+            <FilterChip pressed={row.rush} onClick={() => act?.onRush?.(row, !row.rush)} aria-label={t('wo.rushOf', { number: row.number })}>
+              {t('production.rush')}
+            </FilterChip>
+            {saving('rush')}
+          </span>
+        ) : (
+          <span key="pr">{row.priority ?? '—'}</span>
+        ),
         ready ? r(ready.word === 'EXPECTED' && ready.date ? 'readiness.EXPECTED_on' : `readiness.${ready.word}`, ready.date ? { date: formatDate(dayInstant(ready.date), { locale }) } : undefined) : '—',
+        // F-OP-113: the row ⋯ — each act open, or held with who does it (a shared row has none: its link only).
+        ...(acts
+          ? [
+              offer.menu.length > 0 ? (
+                <Menu
+                  key="acts"
+                  align="right"
+                  label={<MoreHorizontal size={16} aria-hidden />}
+                  triggerProps={{ 'aria-label': t('wo.acts', { number: row.number }) }}
+                  items={[
+                    ...offer.menu.map((entry) => ({
+                      id: entry.act,
+                      label: t(`wo.act.${entry.act}`),
+                      disabled: !!entry.held,
+                      description: entry.held ? scoped(entry.held.key, entry.held.params) : undefined,
+                      onSelect: entry.held ? undefined : () => act?.onAct?.(row, entry.act),
+                    })),
+                    // F-OP-115: line, workshop, start and outside operations are Planning's (its board, at this work order); the
+                    // work order's own page. Real links (⌘-click opens a tab).
+                    ...((offer.links ?? []).length > 0 ? [{ id: 'links', separator: true }] : []),
+                    ...(offer.links ?? []).map((link) => ({ id: `link-${link}`, label: t(`wo.link.${link}`), href: link === 'planning' ? planningHref(model.prefix, row.id) : href(row) })),
+                  ]}
+                />
+              ) : (
+                ''
+              ),
+            ]
+          : []),
       ],
     }
   })
@@ -248,18 +349,24 @@ function OwnWorkOrders({ work, model, href, order }: { work: Work; model: OrderR
         )
       })(),
       '—',
+      '—', // F-OP-113: a made-to-measure group is many work orders: each is changed on its own page
       '—',
+      ...(acts ? [''] : []),
     ],
   }))
   return (
-    <SummaryTable
-      label={t('production.title')}
-      columns={[t('production.col.number'), t('production.col.style'), t('production.col.own'), t('production.col.progress'), t('production.col.due'), t('production.col.materials')]}
-      rows={[...rows, ...mtm]}
-      density="roomy"
-      stackOnPhone
-      align={['left', 'left', 'left', 'left', 'right', 'left']}
-    />
+    <>
+      <SummaryTable
+        label={t('production.title')}
+        columns={[t('production.col.number'), t('production.col.style'), t('production.col.own'), t('production.col.progress'), t('production.col.due'), t('wo.col.priority') /* F-OP-113 */, t('production.col.materials'), ...(acts ? [t('wo.col.acts')] : [])]}
+        rows={[...rows, ...mtm]}
+        density="roomy"
+        stackOnPhone
+        align={['left', 'left', 'left', 'left', 'right', 'left', 'left', ...(acts ? (['right'] as const) : [])]}
+      />
+      {/* F-OP-113: a reader who may not change them reads who does (the row ⋯ says it again per act). */}
+      {heldForReader && <p className="fw-so-hint">{t('wo.heldHint')}</p>}
+    </>
   )
 }
 
@@ -272,6 +379,7 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
   const t = useT('orders')
   const d = useT(DEPTH)
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-115: the tab link keeps the address's terms (the dock's scope)
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const held = promiseHeld(order, model.can)
   const gate = depositGate(order)
@@ -326,7 +434,8 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
         </div>
         {request && (
           <Button size="sm" asChild>
-            <Link href={`${model.prefix}/sales/orders/${order.id}?tab=money`}>{t('gate.money')}</Link>
+            {/* F-OP-115: a tab link (F-OP-210) — the dock's scope kept, never prefetched; was a plain `?tab=money` link. */}
+            <TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>
           </Button>
         )}
       </div>
@@ -357,7 +466,8 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
           id: line.id,
           cells: [
             // F-SA-266: a line's dates discussed by the line's reference (the customer reads its own words, never a price).
-            <span key="l" className="fw-so-inline">
+            // F-OP-115 (A11's Overview doors): the address #line-<lineId> lands on the line's row.
+            <span key="l" className="fw-so-inline fw-so-anchor" id={`line-${line.id}`} tabIndex={-1}>
               {`${line.style?.code ?? '—'} · ${line.colourway ? `${line.colourway.code} ${line.colourway.name}` : '—'}`}
               <DiscussDoor order={order} part={t('discuss.line', { seq: line.seq, name: `${line.style?.code ?? '—'} ${line.colourway?.name ?? ''}`.trim() })} target={{ kind: 'SalesOrderLine', id: line.id }} />
             </span>,
@@ -450,7 +560,8 @@ function HoldsQualityCard({ order, model, actions }: { order: Order; model: Orde
   return (
     <div className="fw-so-stack">
       {model.health && model.health.orders.length > 0 && <HealthCard model={model.health} daysLate={order.daysLate} actions={actions?.health} />}
-      <Card padded>
+      {/* F-OP-115 (A11's Overview doors): the address #holds lands here. */}
+      <Card padded id="holds" className="fw-so-anchor">
         <h2 className="fw-so-h2">{t('production.quality.title')}</h2>
         {!read ? (
           <Skeleton height={44} />

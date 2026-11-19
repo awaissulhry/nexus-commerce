@@ -13,6 +13,8 @@ import { FAILED_STATE, LOADING_STATE, ready, WORK_READ } from './overview/fixtur
 import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
 // F-SA-235b
 import { designScreen as workOrderScreen } from '../../../production/work-orders/record/fixtures'
+// F-OP-115: the work-order row's rules (lib/production/work-order-acts)
+import { actsCanOf, cancelHeld, planningHref, rowActsOf, type ActsRow } from '../../../../lib/production/work-order-acts/model'
 
 /**
  * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
@@ -308,3 +310,174 @@ describe('F-OP-112: Make work orders… in place — the style step, the next st
   })
 })
 // ---- end F-OP-112
+
+// ---- F-OP-113 (10-order-page §5.2; review R-11, B6): the work-order rows — in place, the row ⋯, a shared row read-only ------------
+describe('F-OP-113: the work-order rows act in place; a work order shared with other customers offers nothing but its link', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('a planner: rows by number, Due · Priority · Rush in place on each own work order, the row ⋯; the floor’s told time', () => {
+    const html = draw('wo-acts-manager')
+    const text = textOf(html)
+    // Stable by number, whatever order the read gave (WO-00022 came first).
+    expect(text.indexOf('WO-00019')).toBeLessThan(text.indexOf('WO-00021'))
+    expect(text.indexOf('WO-00021')).toBeLessThan(text.indexOf('WO-00022'))
+    for (const number of ['WO-00021', 'WO-00022']) {
+      expect(html, number).toContain(`aria-label="Priority of ${number}"`)
+      expect(html, number).toContain(`aria-label="Rush for ${number}"`)
+      expect(html, number).toContain(`aria-label="Actions for ${number}"`)
+    }
+    expect(html).toMatch(/aria-label="Rush for WO-00022"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*aria-label="Rush for WO-00022"/)
+    expect(text).toContain('Told the floor at 10:42')
+    expect(text).not.toContain('Production does this')
+  })
+
+  it('a mixed work order is read-only: its link and the words, no field, no ⋯ (never changed from one customer’s order)', () => {
+    const html = draw('wo-acts-manager')
+    expect(textOf(html)).toContain('Shared with other customers: change it on its page.')
+    expect(html).toContain('WO-00019')
+    expect(html).not.toContain('aria-label="Priority of WO-00019"')
+    expect(html).not.toContain('aria-label="Rush for WO-00019"')
+    expect(html).not.toContain('aria-label="Due date of WO-00019"')
+    expect(html).not.toContain('aria-label="Actions for WO-00019"')
+    expect(textOf(draw('wo-acts-manager', 'it'))).toContain('Condiviso con altri clienti: cambialo dalla sua pagina.')
+  })
+
+  it('Sales: the rows as they are, every act held in words — "Production does this — …" (never hidden, never a dead field)', () => {
+    const html = draw('wo-acts-sales')
+    const text = textOf(html)
+    expect(text).toContain('Production does this — a planner or the production manager.')
+    expect(html).not.toContain('aria-label="Priority of WO-00021"')
+    expect(html).not.toContain('aria-label="Rush for WO-00021"')
+    // The ⋯ stays (its acts held with the same words inside): the reader learns who does it.
+    expect(html).toContain('aria-label="Actions for WO-00021"')
+    expect(textOf(draw('wo-acts-sales', 'it'))).toContain('lo fa la produzione — un pianificatore o il responsabile di produzione')
+  })
+
+  it('a saving cell is marked, a refused write is said on its row in words (never the API’s English)', () => {
+    const html = draw('wo-acts-saving')
+    expect(html).toContain('data-state="saving"')
+    expect(textOf(html)).toContain('Someone changed this work order meanwhile')
+  })
+
+  it('without the acts (no work orders right, an older read): the card stays as today — no ⋯ column, no field', () => {
+    const html = draw('production-progress')
+    expect(html).not.toContain('aria-label="Actions for')
+    expect(html).not.toContain('aria-label="Priority of')
+  })
+
+  it('N-5: the hook is mounted by the container; the view draws the lib’s dialogs and imports no fetching hook', () => {
+    const acts = source('./use-production-acts.ts')
+    expect(acts).toContain('useWorkOrderActs(api, permissions,')
+    const tab = source('./view/ProductionTab.tsx')
+    expect(tab).not.toMatch(/from '[^']*use-work-order-acts'/)
+    expect(tab).toContain('<WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />')
+    expect(source('./OrderRecord.tsx')).toContain("rereadWork: () => production.again(['work', 'headline', 'changes'])")
+    // Every write sends the version: the row's (B6) or the newer one a write answered.
+    const hook = source('../../../../lib/production/work-order-acts/use-work-order-acts.ts')
+    expect(hook).toContain('updateWorkOrder(api, row.id, { version: versionOf(row, known.current), ...body })')
+    expect(hook).toContain('updateWorkOrder(api, workOrder.id, { version: workOrder.version, note:')
+  })
+
+  it('the words in it + en', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wo.col.priority', 'wo.col.acts', 'wo.priorityHint', 'wo.heldHold', 'wo.heldHint', 'wo.act.note', 'wo.note.title', 'wo.note.label', 'wo.note.hint', 'wo.note.save', 'wo.note.saved', 'wo.reading', 'wo.readingShort', 'wo.readFailed', 'wo.acts', 'wo.dueOf', 'wo.priorityOf', 'wo.rushOf'])
+        expect(t(key, { number: 'WO-00021' }), `${locale} ${key}`).not.toMatch(/^wo\.|\{/)
+    }
+  })
+})
+// ---- end F-OP-113
+
+// ---- F-OP-115 (10-order-page §5.2; review R-16): the rest of the row — Split, Cancel, Close · Reopen; the links -------------------
+
+describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning › and Open the work order on a work-order row', () => {
+  const planner = actsCanOf(['workorders.view', 'workorders.manage', 'workorders.release', 'workorders.hold', 'planning.view'])
+  const manager = actsCanOf(['workorders.view', 'workorders.manage', 'workorders.reopen'])
+  const rights = { manage: true, release: true, hold: true, why: null }
+  const row = (over: Partial<ActsRow> = {}): ActsRow => ({ id: 'wo-1', number: 'WO-00021', status: 'RELEASED', held: false, rush: false, due: null, sharedWithOtherCustomers: false, version: 3, priority: 0, rights, ...over })
+  const acts = (offer: ReturnType<typeof rowActsOf>) => offer.menu.map((entry) => entry.act)
+
+  it('a draft splits and cancels; a released or started one cancels; a held one does not (lift it first); completed closes; closed reopens', () => {
+    expect(acts(rowActsOf(row({ status: 'DRAFT' }), planner))).toEqual(['note', 'hold', 'release', 'split', 'cancel'])
+    expect(acts(rowActsOf(row({ status: 'IN_PROGRESS' }), planner))).toEqual(['note', 'hold', 'cancel'])
+    expect(acts(rowActsOf(row({ status: 'ON_HOLD', held: true }), planner))).toEqual(['note', 'lift'])
+    expect(acts(rowActsOf(row({ status: 'COMPLETED' }), planner))).toEqual(['note', 'close'])
+    expect(acts(rowActsOf(row({ status: 'CLOSED' }), manager))).toEqual(['note', 'reopen'])
+    expect(rowActsOf(row({ status: 'CLOSED' }), manager).menu.find((entry) => entry.act === 'reopen')!.held).toBeNull()
+    // Only the production manager reopens: a planner reads who does it.
+    expect(rowActsOf(row({ status: 'CLOSED' }), planner).menu.find((entry) => entry.act === 'reopen')!.held).toEqual({ key: 'wo.heldReopen' })
+  })
+
+  it('the links: Open in Planning › (planning.view, an open work order) and Open the work order; a shared row has none; Dispatch never', () => {
+    expect(rowActsOf(row(), planner).links).toEqual(['planning', 'open'])
+    expect(rowActsOf(row(), manager).links).toEqual(['open'])
+    expect(rowActsOf(row({ status: 'CLOSED' }), planner).links).toEqual(['open'])
+    expect(rowActsOf(row({ sharedWithOtherCustomers: true, rights: { manage: false, release: false, hold: false, why: { en: 'x', it: 'x' } } }), planner).links ?? []).toEqual([])
+    expect(planningHref('/w/demo', 'wo-1')).toBe('/w/demo/planning/board?wo=wo-1')
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toMatch(/dispatch/i)
+  })
+
+  it('unit: with cut pieces Cancel… holds with the API’s own words (no picker); nothing cut asks the reason', () => {
+    const refusal = { en: '8 pieces are cut: lower the work order to the cut instead', it: "8 pezzi sono già tagliati: riduci l'ordine di lavoro al tagliato" }
+    expect(cancelHeld({ cancellable: false, refusal }, 'whatever', false, 'en')).toBe(refusal.en)
+    expect(cancelHeld({ cancellable: false, refusal }, '', false, 'it')).toBe(refusal.it)
+    expect(cancelHeld({ cancellable: false, refusal: null }, 'why', false, 'en')).toEqual({ key: 'wo.cancel.notNow' })
+    expect(cancelHeld({ cancellable: true, refusal: null }, '  ', false, 'en')).toEqual({ key: 'production:cancel.reasonNeeded' })
+    expect(cancelHeld({ cancellable: true, refusal: null }, 'Il cliente ha chiuso la stagione.', false, 'en')).toBeNull()
+    expect(cancelHeld(null, 'why', false, 'en')).toEqual({ key: 'production:held.checking' })
+    // The dialog draws no outcome to pick (R-16): the refusal is a Banner, the reason field only when nothing is cut.
+    const dialogs = readFileSync(new URL('../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain('check.refusal ? (')
+    expect(dialogs).not.toMatch(/RadioCard|outcome/)
+  })
+
+  it('Split… and Close… · Reopen… are the production lane’s own (useSplit + SplitDialog, useClose + CloseParts — never a copy)', () => {
+    const hook = readFileSync(new URL('../../../../lib/production/work-order-acts/use-work-order-acts.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("from '../../../areas/production/work-orders/every-shift/use-split'")
+    expect(hook).toContain("from '../../../areas/production/work-orders/close/use-close'")
+    expect(hook).toContain('cancelWorkOrder(api, workOrder.id, workOrder.version, reason.trim())')
+    const dialogs = readFileSync(new URL('../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain('<SplitDialog workOrder={dialog.workOrder.value} model={model.split} actions={actions?.split} />')
+    expect(dialogs).toContain('<CloseParts workOrder={dialog.workOrder.value} model={model.close} actions={actions?.close} />')
+  })
+
+  it('the gate’s Money door is a tab link (F-OP-210: the dock’s scope kept), no plain ?tab= link', () => {
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toContain('?tab=money')
+    expect(tab).toContain("<TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>")
+  })
+
+  it('the words in it + en', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wo.act.split', 'wo.act.cancel', 'wo.act.close', 'wo.act.reopen', 'wo.act.hold', 'wo.act.lift', 'wo.act.release', 'wo.link.planning', 'wo.link.open', 'wo.heldReopen', 'wo.cancel.check', 'wo.cancel.notNow', 'wo.cancel.issued', 'wo.cancel.atWorkshop', 'wo.notice.cancelled', 'wo.notice.split', 'wo.notice.closed', 'wo.notice.reopened', 'wo.notice.held', 'wo.notice.lifted', 'wo.notice.released', 'wo.release.credit', 'wo.release.gate'])
+        expect(t(key, { number: 'WO-00021', child: 'WO-00030', items: 'x', numbers: 'SC-1', count: 2 }), `${locale} ${key}`).not.toMatch(/^wo\.|\{/)
+      expect(t('wo.checksOpen', { count: 2 })).toMatch(/2/)
+      expect(t('wo.release.refused', { count: 1 })).toMatch(/1/)
+    }
+  })
+})
+// ---- end F-OP-115
+
+// ---- F-OP-115 (A11's Overview doors, #1716): the Production tab answers every address the Overview links to ---------------------
+describe('the Overview’s doors land on Production: #work-orders, #holds, #line-<lineId> (and #dates)', () => {
+  it('each anchor is on the page, with room above it when it comes into view', () => {
+    const html = draw('production-progress')
+    for (const id of ['work-orders', 'holds', 'dates', `line-${LINE_BLK}`, `line-${LINE_RED}`]) expect(html, id).toMatch(new RegExp(`id="${id}"`))
+    expect(html).toMatch(/class="[^"]*fw-so-anchor[^"]*" id="work-orders"|id="work-orders"[^>]*class="[^"]*fw-so-anchor/)
+  })
+
+  it('the sources: the Overview links to exactly these, and ProductionTab carries them', () => {
+    const overview = readFileSync(new URL('./view/OverviewTab.tsx', import.meta.url), 'utf8')
+    expect(overview).toContain('#work-orders`')
+    expect(overview).toContain('#line-${row.lineIds[0] ?? row.id}')
+    const doors = readFileSync(new URL('./overview/model.ts', import.meta.url), 'utf8')
+    expect(doors).toContain("anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null")
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('<Card padded id="work-orders" className="fw-so-anchor">')
+    expect(tab).toContain('<Card padded id="holds" className="fw-so-anchor">')
+    expect(tab).toContain('id={`line-${line.id}`}')
+  })
+})
+// ---- end F-OP-115 (A11's anchors)
