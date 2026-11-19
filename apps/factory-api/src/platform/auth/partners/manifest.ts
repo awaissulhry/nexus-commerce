@@ -20,6 +20,13 @@ export const manifest = defineManifest({
   'POST /partners/:partyId/people/:userId/reactivate': { audiences: ['office'], permission: 'partners.manage', scope: 'record' },
   'POST /partners/:partyId/people/:userId/deactivate': { audiences: ['office'], permission: 'partners.manage', scope: 'record' },
   'POST /partners/:partyId/preview': { audiences: ['office'], permission: 'partners.preview', scope: 'record' },
+  // B-CP-078 (customer page plan C7, D12): the factory designer slot — read with partners.view; the pick list and the change with
+  // partners.manage over every company of the customer (the handler; no step-up: a name, no money, no access).
+  'GET /partners/:partyId/factory-designer': { audiences: ['office'], permission: 'partners.view', scope: 'record' },
+  'GET /partners/:partyId/factory-designer/choices': { audiences: ['office'], permission: 'partners.manage', scope: 'record' },
+  'PUT /partners/:partyId/factory-designer': { audiences: ['office'], permission: 'partners.manage', scope: 'record' },
+  // The one name the customer's people may ask in a thread (its own party; a party whose portal is off: 404).
+  'GET /portal/factory-designer': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'GET /portal/access': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'GET /portal/colleagues': { audiences: ['partner'], permission: 'portal.colleagues.view', scope: 'party' },
   'POST /portal/colleagues': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },

@@ -10,6 +10,10 @@ import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
 import { addLinesInCommand, draftChanged, ownRequest, pricesFor, requestView, type NewLine } from './requests'
+// B-CP-075: who saved the draft, and a 409 that names the colleague who changed it meanwhile.
+import { staleDraftError } from './requests'
+import { StaleVersionError } from '../../../core/command'
+import { markEdited } from './store'
 import { dayText, readRequest } from './store'
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
@@ -170,6 +174,7 @@ export async function reorderInto(app: FastifyInstance, request: FastifyRequest,
     const current = await readRequest(tools.tx, row.id)
     if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
     const outcome = await addLinesInCommand(tools, row, lines, prices, reader.session.userId, true)
+    await markEdited(tools.tx, row.id, reader.session.userId, tools.now) // B-CP-075
     tools.audit({
       recordType: 'PortalOrderRequest',
       recordId: row.id,
@@ -178,6 +183,8 @@ export async function reorderInto(app: FastifyInstance, request: FastifyRequest,
     })
     draftChanged(tools, row) // B-CP-071
     return outcome
+  }).catch(async (error: unknown) => {
+    throw error instanceof StaleVersionError ? await staleDraftError(app, request, row.id) : error // B-CP-075
   })
   return { ...(await requestView(app, request, reader, await ownRequest(request, reader, requestId))), added: result.added.length, merged: [...result.merged], kept: [...result.kept], skipped: skipped.map((entry) => ({ ...entry, notices: [...entry.notices] })) }
 }

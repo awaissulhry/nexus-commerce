@@ -58,7 +58,7 @@ const officeWith = (permissions: string[]) => callerFor(h.database, { audience: 
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 let serial = 0
 const call = (who: Who, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown): Promise<Answer> =>
-  browsers[who].send(method as 'POST', url, method === 'GET' || method === 'DELETE' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `cp072-${++serial}` } })
+  browsers[who].send(method as 'POST', url, method === 'GET' || method === 'DELETE' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `cp072-key-${++serial}` } })
 async function ok(who: Who, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown, status = 200): Promise<Json> {
   const answer = await call(who, method, url, body)
   expect(answer.status, `${who} ${method} ${url}: ${JSON.stringify(answer.body)}`).toBe(status)

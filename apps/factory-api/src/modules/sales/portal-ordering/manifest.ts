@@ -25,6 +25,12 @@ export const manifest = defineManifest({
   'POST /portal/order-requests/:requestId/files': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/files/:fileId/complete': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'DELETE /portal/order-requests/:requestId/files/:fileId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  // B-CP-075: described and made-to-measure lines, and the people of a by-person line (a draft's: portal.orderDrafts.edit).
+  'POST /portal/order-requests/:requestId/custom-lines': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'PUT /portal/order-requests/:requestId/custom-lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/:requestId/lines/:lineId/people': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'PUT /portal/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'DELETE /portal/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/send': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'POST /portal/order-requests/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   // Reorder (SAL-072): a past order is the orders' business — kept with portal.orderRequests.manage (a Designer reads no order).

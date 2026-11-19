@@ -45,6 +45,11 @@ import { clearDraftInCommand } from '../draft-keys'
 import { reopenOnSharedMessage } from '../work-state'
 // ---- fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) is never shown, counted or attached.
 import { walledForOutside } from '../../files/content-wall'
+// ---- B-CP-023 (customer page plan, the money wall D6, L1): a priced file on a portal message, for a brand reader without prices.
+import { mayOpenPriced, PRICED_LOCK, seesPrices } from '@nexus/factory-domain/files/priced'
+// ---- end B-CP-023
+// ---- B-CP-079: "Ask the factory designer" rides on the post (checked before it; the note after it).
+import { askDesignerAfterPost, cappedAnswer, planDesignerAsk, type DesignerAskAnswer } from './designer-ask'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -97,7 +102,7 @@ type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_PARTNER }>
 const THREAD_PARTNER = { id: true, companyId: true, siteId: true, partyId: true, recordType: true, recordId: true, status: true } as const satisfies Prisma.ThreadSelect
 type ThreadRow = Prisma.ThreadGetPayload<{ select: typeof THREAD_PARTNER }>
 
-const FILE_PARTNER = { id: true, companyId: true, recordType: true, recordId: true, kind: true, originalName: true, contentType: true, sizeBytes: true, status: true, visibility: true, partyId: true } as const satisfies Prisma.StoredFileSelect
+const FILE_PARTNER = { id: true, companyId: true, recordType: true, recordId: true, kind: true, originalName: true, contentType: true, sizeBytes: true, status: true, visibility: true, partyId: true, /* B-CP-023 */ priced: true } as const satisfies Prisma.StoredFileSelect
 
 /** The audit action of a portal post: its actor is the person who wrote it (`mine`). */
 export const POST_ACTION = 'portal.postMessage'
@@ -131,9 +136,15 @@ async function visibleAttachments(client: FactoryClient | CommandTx, caller: Par
   const ids = [...new Set(fileIds)]
   if (ids.length === 0) return seen
   const viewer = { audience: 'partner' as const, partyId: caller.context.partyId }
+  const sees = seesPrices(caller.actor) // B-CP-023: the brand's Buyer, Finance, Admin (the partner price grain)
   for (const row of await client.storedFile.findMany({ where: { id: { in: ids } }, select: FILE_PARTNER })) {
     if (row.status !== 'AVAILABLE' || !audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] })) continue
     if (!can(caller.actor, FILES_READ, { companyId: row.companyId, partyId: row.partyId })) continue
+    // B-CP-023: a priced file the reader may not open (a Designer, a Viewer) is shown locked — counted, never named (opening is 404).
+    if (!mayOpenPriced(row, sees)) {
+      seen.set(row.id, { id: row.id, kind: row.kind, originalName: '', contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, locked: PRICED_LOCK })
+      continue
+    }
     seen.set(row.id, { id: row.id, kind: row.kind, originalName: row.originalName, contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status })
   }
   return seen
@@ -319,11 +330,13 @@ async function attachmentProblems(tx: CommandTx, caller: PartnerCaller, thread: 
   if (fileIds.length === 0) return []
   const rows = new Map((await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: FILE_PARTNER })).map((row) => [row.id, row]))
   const viewer = { audience: 'partner' as const, partyId: caller.context.partyId }
+  const sees = seesPrices(caller.actor) // B-CP-023
   const problems: Issue[] = []
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = rows.get(fileId)
-    if (!row || walled.has(fileId) /* fix-wall-1: as a wrong id */ || !audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] }) || !can(caller.actor, FILES_READ, { companyId: row.companyId, partyId: row.partyId })) {
+    // B-CP-023: a priced file the writer may not open goes with no message (as a wrong id).
+    if (!row || walled.has(fileId) /* fix-wall-1: as a wrong id */ || !mayOpenPriced(row, sees) /* B-CP-023 */ || !audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] }) || !can(caller.actor, FILES_READ, { companyId: row.companyId, partyId: row.partyId })) {
       problems.push({ path, message: 'File not found.' })
     } else if (row.recordType !== thread.recordType || row.recordId !== thread.recordId) problems.push({ path, message: 'Only a file of this record can be attached.' })
     else if (row.status !== 'AVAILABLE') problems.push({ path, message: `This file is ${row.status}; only an available file can be attached.` })
@@ -340,6 +353,8 @@ function closedRefusal(caller: PartnerCaller): DomainError {
 export interface PartnerPostInput {
   readonly body: string
   readonly attachments?: readonly string[] | undefined
+  /** B-CP-079: also ask the customer's factory designer (one ask per message; ./designer-ask.ts). */
+  readonly askFactoryDesigner?: boolean | undefined
 }
 
 /** POST /portal/threads/<type>/<id>/messages: the person's post into the record's thread (COL-060). */
@@ -368,6 +383,9 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     if (!options.firstOfRequest && !options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
   })
+  // ---- B-CP-079: the ask is checked BEFORE anything is posted (409 in words: nothing is written, the box keeps the text).
+  const askPlan = input.askFactoryDesigner === true ? await planDesignerAsk(request, caller, ref) : null
+  // ---- end B-CP-079
   let thread = opened
   if (!thread) thread = await openThreadFor(request, caller, ref)
   if (thread.status === 'CLOSED') throw closedRefusal(caller)
@@ -430,7 +448,10 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     },
   )
   await touchThread(request, caller, result.thread.id, new Date(result.message.at))
-  return result
+  // ---- B-CP-079: the note that asks the factory designer (over the day's cap: posted without it, and the answer says so).
+  const designerAsk: DesignerAskAnswer | null = askPlan === null ? null : askPlan.capped ? cappedAnswer(caller) : await askDesignerAfterPost(request, caller, ref, result, draft.bodyText, askPlan, idempotencyKey)
+  return { ...result, designerAsk }
+  // ---- end B-CP-079
 }
 
 /** The record's thread made in the tenant's system scope (the partner role cannot insert one), for this party only. */

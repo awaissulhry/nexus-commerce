@@ -6,6 +6,7 @@ import { notMoney } from '@nexus/factory-domain/money/marked'
 import { LIMITS_ASK_KINDS, PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
 import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
+import { DESIGNER_STATES } from '@nexus/factory-domain/auth/partners/designer' // B-CP-078
 
 /**
  * Partner organisations, their people and roles (B-W2b-162). Office: a party's Portal access and the organisations list;
@@ -58,6 +59,8 @@ const settingsView = output({
   portalOn: z.boolean(),
   maxUsers: z.number().int().nullable(),
   allowedRoleKeys: z.array(z.string()),
+  /** B-CP-078: the customer may keep made-to-measure lines in its portal drafts (on by default; drafts only). */
+  mtmDraftsOn: z.boolean(),
   /** 0: no settings row yet (everything off). */
   version: z.number().int(),
 })
@@ -108,6 +111,8 @@ export const settingsContract = defineContract({
     portalOn: z.boolean().optional(),
     maxUsers: z.number().int().min(1).max(1000).nullable().optional(),
     allowedRoleKeys: z.array(roleKey).max(50).optional(),
+    /** B-CP-078: made-to-measure lines in the customer's portal drafts. */
+    mtmDraftsOn: z.boolean().optional(),
     /** The version read (0: no row yet). */
     version: z.number().int().min(0),
   }),
@@ -337,6 +342,33 @@ export const productionChangeContract = defineContract({
   }),
   response: { 200: productionAnswer },
 })
+
+// ---- B-CP-078 (customer page plan C7, D12; review C4): the factory designer slot (office) and the one name the portal reads -------
+const designerPerson = output({ id: id(), name: z.string(), state: z.enum(DESIGNER_STATES), words: wordsView.nullable() })
+const designerAnswer = output({
+  factoryDesigner: output({
+    partyId: id(),
+    designer: designerPerson.nullable(),
+    backup: designerPerson.nullable(),
+    since: instant().nullable(),
+    /** The customer's portal is on (off: the name shows once it is on). */
+    portalOn: z.boolean(),
+    /** The stored version (0: no settings row yet). */
+    version: z.number().int(),
+    /** partners.manage over every company of the customer (no step-up: a name, no money). */
+    mayManage: z.boolean(),
+  }),
+})
+export const factoryDesignerContract = defineContract({ params: partyParams, response: { 200: designerAnswer } })
+export const factoryDesignerChoicesContract = defineContract({ params: partyParams, response: { 200: output({ people: z.array(output({ id: id(), name: z.string(), me: z.boolean() })), complete: z.boolean() }) } })
+export const factoryDesignerChangeContract = defineContract({
+  params: partyParams,
+  body: input({ designerId: id().nullable(), backupId: id().nullable(), version: z.number().int().min(0) }),
+  response: { 200: designerAnswer },
+})
+/** The portal: the designer's display name while active, else the backup's, else null — never an id, an e-mail or a role. */
+export const portalFactoryDesignerContract = defineContract({ response: { 200: output({ name: z.string().nullable() }) } })
+// ---- end B-CP-078
 
 export type InviteBody = z.infer<typeof inviteContract.body>
 export type SettingsBody = z.infer<typeof settingsContract.body>
