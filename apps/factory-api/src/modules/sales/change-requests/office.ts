@@ -27,6 +27,8 @@ import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { isIssueList } from '@nexus/factory-domain/sales/quotes/quotes'
 import { shipToSnapshot } from '@nexus/factory-domain/sales/quotes/send'
+// B-OP-015: an address the customer added in the portal waits for our check before the office uses it.
+import { addressUseProblem } from '@nexus/factory-domain/parties/address-approval'
 import { COMMAND_SETTINGS, runCommand, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import type { Clock } from '../../../core/time'
 import { actorOf } from '../../../core/context'
@@ -255,14 +257,39 @@ async function colourCutOf(db: Reader, tenantId: string, cells: readonly AskedCe
   return null
 }
 
-/** Why the delivery address asked cannot be written on the order now; null when it can. */
-async function shipToProblem(db: Reader, order: Pick<OrderRow, 'id' | 'partyId'>, addressId: string): Promise<Issue | null> {
-  const address = await db.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true, kinds: true } })
+/**
+ * Who asks for a new delivery address: the customer's request (accepted here) or, B-OP-015, the office's own amendment
+ * (sales/orders/amend.ts) — the same rules, each in its own words.
+ */
+export type ShipToAsker = 'REQUEST' | 'OFFICE'
+
+/** B-OP-015: the office's words (the same for an unknown id and another customer's address: the wall). */
+const OFFICE_SHIP_TO_WORDS = {
+  notOurs: 'Not an active delivery address of this customer.',
+  prepared: (number: string) => `Shipment ${number} is being prepared for the order's address: change it on the shipment first.`,
+} as const
+
+/**
+ * Why the delivery address cannot be written on the order now; null when it can: an ACTIVE delivery address of the order's own
+ * customer (B-OP-015, the office: one we approved), and no shipment being prepared for the order's address (by
+ * Shipment.salesOrderId, DRAFT or PACKED).
+ */
+export async function shipToProblem(db: Reader, order: Pick<OrderRow, 'id' | 'partyId'>, addressId: string, asker: ShipToAsker = 'REQUEST'): Promise<Issue | null> {
+  const address = await db.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true, kinds: true, approvalStatus: true } })
   if (!address || address.partyId !== order.partyId || address.status !== 'ACTIVE' || !address.kinds.includes('SHIP_TO')) {
-    return { path: 'request/shipToAddressId/ADDRESS_GONE', message: 'The delivery address asked is no longer in use: refuse the request, or ask the customer for another address.' }
+    return asker === 'OFFICE'
+      ? { path: 'body/shipToAddressId', message: OFFICE_SHIP_TO_WORDS.notOurs }
+      : { path: 'request/shipToAddressId/ADDRESS_GONE', message: 'The delivery address asked is no longer in use: refuse the request, or ask the customer for another address.' }
   }
+  // B-OP-015: an address the customer added in the portal waits for our check (a request's Accept approves its own one).
+  const waits = asker === 'OFFICE' ? addressUseProblem(address.approvalStatus) : null
+  if (waits) return { path: 'body/shipToAddressId', message: waits }
   const busy = await db.shipment.findFirst({ where: { salesOrderId: order.id, status: { in: ['DRAFT', 'PACKED'] } }, select: { number: true }, orderBy: { createdAt: 'asc' } })
-  if (busy) return { path: 'request/shipToAddressId/SHIPMENT_PREPARED', message: `Shipment ${busy.number} is being prepared for the order's address: change it there first, or refuse the request.` }
+  if (busy) {
+    return asker === 'OFFICE'
+      ? { path: 'body/shipToAddressId/SHIPMENT_PREPARED', message: OFFICE_SHIP_TO_WORDS.prepared(busy.number) }
+      : { path: 'request/shipToAddressId/SHIPMENT_PREPARED', message: `Shipment ${busy.number} is being prepared for the order's address: change it there first, or refuse the request.` }
+  }
   return null
 }
 
@@ -317,10 +344,15 @@ async function openRequestIn(tools: CommandTools, requestId: string, version: nu
   return row
 }
 
-/** The new delivery address written on the order (its row already locked by the caller). */
-async function moveShipTo(tools: CommandTools, order: OrderRow, addressId: string, reason: string): Promise<void> {
+/**
+ * The new delivery address written on the order (its row already locked by the caller). B-OP-015: also the office's own amendment's
+ * (`asker` OFFICE: an address that is not the customer's own active one is a 400 in the words of an unknown id; a shipment being
+ * prepared a 409, as for a request).
+ */
+export async function moveShipTo(tools: CommandTools, order: OrderRow, addressId: string, reason: string, asker: ShipToAsker = 'REQUEST'): Promise<void> {
   const { tx, now } = tools
-  const problem = await shipToProblem(tx, order, addressId)
+  const problem = await shipToProblem(tx, order, addressId, asker)
+  if (problem && asker === 'OFFICE' && problem.path === 'body/shipToAddressId') throw new ValidationError(problem.message, [problem])
   if (problem) throw new DomainError('invalid_state', problem.message, [problem])
   const address = await tx.partyAddress.findUniqueOrThrow({ where: { id: addressId }, select: { name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true } })
   const before = (await tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { shipTo: true } })).shipTo

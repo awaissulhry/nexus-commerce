@@ -158,6 +158,8 @@ const amendFields = {
   lines: z.array(amendLine).min(1).max(MAX_QUOTE_LINES),
   /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
   extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
+  /** B-OP-015: a new delivery address, an ACTIVE one of the order's customer (GET /parties/:partyId); none: unchanged. */
+  shipToAddressId: id().nullish(),
 }
 
 // B-SA-042 (R1, Round 4): the extra pieces an amendment would leave (cut beyond the new figures), shown before Apply.
@@ -240,13 +242,25 @@ const amendmentView = output({
 export const previewAmendmentContract = defineContract({
   params: orderParams,
   body: input({ version: version.optional(), ...amendFields }),
-  response: { 200: output({ ok: z.boolean(), revision: z.number().int(), version: z.number().int(), problems: z.array(issue), diff: diffView.nullable(), /* B-SA-042, B-OP-013 */ workOrders: workOrderPreviewView.nullable() }) },
+  response: {
+    200: output({
+      ok: z.boolean(),
+      revision: z.number().int(),
+      version: z.number().int(),
+      problems: z.array(issue),
+      diff: diffView.nullable(),
+      /* B-SA-042, B-OP-013 */ workOrders: workOrderPreviewView.nullable(),
+      /** B-OP-015: the new delivery address asked; `amendment` false: only the address changes (no amendment is written). */
+      shipTo: output({ addressId: id(), amendment: z.boolean() }).nullable(),
+    }),
+  },
 })
 
 export const applyAmendmentContract = defineContract({
   params: orderParams,
   body: input({ version, ...amendFields, reason }),
-  response: { 201: output({ order: orderView, amendment: amendmentView, /* B-OP-012 */ workOrders: followedView }) },
+  // B-OP-015: `amendment` null when only the delivery address changed (it moved alone).
+  response: { 201: output({ order: orderView, amendment: amendmentView.nullable(), /* B-OP-012 */ workOrders: followedView }) },
 })
 
 export const listAmendmentsContract = defineContract({

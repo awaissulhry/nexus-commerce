@@ -37,6 +37,8 @@ import { closeShortPlan } from '@nexus/factory-domain/sales/orders/daily'
 import { reducesDoneInCommand, shortLinesOf } from './close-lines'
 // B-OP-012 (order page plan N2, D1): the work orders follow the amendment in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
+// B-OP-015 (order page plan N1): the delivery address changes with the amendment, by the rule of an accepted request's.
+import { moveShipTo, shipToProblem } from '../change-requests/office'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -71,7 +73,14 @@ export interface AmendBody {
   readonly lines: readonly AmendLineInput[]
   /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures (CHARGE · LEFTOVER · SCRAP); required when there are some. */
   readonly extraOutcome?: ExtraOutcome | null | undefined
+  /** B-OP-015: a new delivery address (an ACTIVE one of the order's customer); none: the order's own stays. */
+  readonly shipToAddressId?: string | null | undefined
 }
+
+/** The plan's words when nothing changes. */
+const NOTHING_CHANGES = 'Nothing changes: the order already looks like this.'
+/** B-OP-015: the plan says only that nothing changes — with a new delivery address, the address is the whole change (no amendment). */
+const onlyTheAddress = (plan: AmendmentPlan | Issue[]): boolean => isIssueList(plan) && plan.length === 1 && plan[0]!.message === NOTHING_CHANGES
 
 const priceOf = (value: { toString(): string } | null): string | null => (value === null ? null : priceText(value.toString()))
 
@@ -340,7 +349,7 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
     priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
   )
   const diff = amendmentDiff(before, after)
-  if (diff.empty) return [{ path: 'body/lines', message: 'Nothing changes: the order already looks like this.' }]
+  if (diff.empty) return [{ path: 'body/lines', message: NOTHING_CHANGES }]
   return { before, after, diff, priced, removed, closing, header, options }
 }
 
@@ -387,9 +396,14 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
     // B-OP-014: a line left out that work orders make is closed short (the apply's own plan).
     const plan = await planAmendment(client, order, order.status, facts, body, now, { closeLeftOut: true })
     const revision = nextRevision((await client.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
+    // B-OP-015: a new delivery address, checked as the apply checks it (only the address changing: no amendment is written).
+    const address = body.shipToAddressId ? await shipToProblem(client, order, body.shipToAddressId, 'OFFICE') : null
+    const addressProblems = address ? [address] : []
+    const shipTo = (amendment: boolean) => (body.shipToAddressId ? { addressId: body.shipToAddressId, amendment } : null)
     if (isIssueList(plan)) {
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
-      return { ok: false, revision, version: order.version, problems: plan, diff: null, workOrders: null }
+      if (body.shipToAddressId && onlyTheAddress(plan)) return { ok: address === null, revision, version: order.version, problems: addressProblems, diff: null, workOrders: null, shipTo: shipTo(false) }
+      return { ok: false, revision, version: order.version, problems: [...plan, ...addressProblems], diff: null, workOrders: null, shipTo: shipTo(true) }
     }
     // B-W2b-309 (SAL-218): what the company's freeze rules hold at the stage production reached, said before Apply.
     const frozen = await previewFrozenProblems(client, order, plan.diff, false)
@@ -397,27 +411,45 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
     // B-OP-013: and what each work order will do — in the same click or waiting, and why (the command's own rule).
     const context = officeContextOf(caller)
     const workOrders = await workOrderPreviewOf(client, context, order, await plannedGap(client, context.tenantId, order, plan, facts.lines), { requireOutcome: true, outcomeChosen: Boolean(body.extraOutcome) })
-    if (frozen.length > 0) return { ok: false, revision, version: order.version, problems: frozen, diff: diffView(plan.diff), workOrders }
-    return { ok: !workOrders.needsOutcome, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff), workOrders }
+    if (frozen.length > 0 || addressProblems.length > 0) return { ok: false, revision, version: order.version, problems: [...frozen, ...addressProblems], diff: diffView(plan.diff), workOrders, shipTo: shipTo(true) }
+    return { ok: !workOrders.needsOutcome, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff), workOrders, shipTo: shipTo(true) }
   })
 }
 
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
-/** orders.manage: apply an amendment (ONE command; see the module's head). B-OP-012: its work orders follow in it where the person may. */
-export async function applyAmendment(caller: CommandCaller, orderId: string, body: AmendBody, idempotencyKey?: string): Promise<{ order: OrderView; amendment: AmendmentView; workOrders: FollowedWorkOrders }> {
+/**
+ * orders.manage: apply an amendment (ONE command; see the module's head). B-OP-012: its work orders follow in it where the person may.
+ * B-OP-015: with a new delivery address it moves in the same command; when only the address changes (the lines and header as they
+ * are), it moves alone — no amendment is written (`amendment` null), the order's row locked at the version read.
+ */
+export async function applyAmendment(caller: CommandCaller, orderId: string, body: AmendBody, idempotencyKey?: string): Promise<{ order: OrderView; amendment: AmendmentView | null; workOrders: FollowedWorkOrders }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  // B-OP-015: read before the command; the version locked in it says nothing changed since.
+  const addressOnly = body.shipToAddressId ? await caller.withClient(async (client) => onlyTheAddress(await planAmendment(client, order, order.status, await readOrderFacts(client, order), body, serverClock.now(), { closeLeftOut: true }))) : false
   const { result } = await withAutoApply((autoApply) =>
     command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+      if (addressOnly) {
+        const locked = await lockOrder(tools.tx, order.id, body.version)
+        const state = amendStateProblem(locked.status)
+        if (state) throw new InvalidStateError(state)
+        await moveShipTo(tools, (await readOrder(tools.tx, order.id))!, body.shipToAddressId!, body.reason!.trim(), 'OFFICE')
+        const none: FollowedWorkOrders = { applied: [], waiting: [] }
+        return { amendmentId: null as string | null, workOrders: none }
+      }
       const done = await amendInCommand(tools, context.tenantId, order, body, { autoApply, /* B-OP-014 */ closeLeftOut: true })
-      return { amendmentId: done.amendmentId, workOrders: done.workOrders } /* plain JSON: never its `before` Map */
+      return { amendmentId: done.amendmentId as string | null, workOrders: done.workOrders } /* plain JSON: never its `before` Map */
     }),
   )
-  const amendment = await caller.withClient(async (client) => {
-    const row = await client.salesOrderAmendment.findUniqueOrThrow({ where: { id: result.amendmentId }, select: AMENDMENT_COLUMNS })
-    return amendmentViewOf(row, await namesOf(client, [row.createdById]))
-  })
+  const amendmentId = result.amendmentId
+  const amendment =
+    amendmentId === null
+      ? null
+      : await caller.withClient(async (client) => {
+          const row = await client.salesOrderAmendment.findUniqueOrThrow({ where: { id: amendmentId }, select: AMENDMENT_COLUMNS })
+          return amendmentViewOf(row, await namesOf(client, [row.createdById]))
+        })
   return { order: await recordAfter(caller, order.id), amendment, workOrders: result.workOrders }
 }
 
@@ -468,6 +500,8 @@ export async function amendInCommand(
   // B-W2b-309: one change at a time, the freeze rules, the customer's materials of removed lines (before any write).
   const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced, putBack: options.putBack === true }
   await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
+  // B-OP-015: a new delivery address with the amendment (an ACTIVE one of the customer; refused while a shipment is being prepared).
+  if (body.shipToAddressId) await moveShipTo(tools, fresh, body.shipToAddressId, body.reason!.trim(), 'OFFICE')
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
   for (const lineId of plan.removed) {
