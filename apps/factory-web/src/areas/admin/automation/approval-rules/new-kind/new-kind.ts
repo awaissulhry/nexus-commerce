@@ -12,10 +12,10 @@ export const NEW_RULE_KIND_PARAM = 'kind'
 /** The address of a new approval rule of one kind. */
 export const newRuleHref = (prefix: string, kind: string): string => `${prefix}/admin/automation?view=approvals&rule=new&${NEW_RULE_KIND_PARAM}=${encodeURIComponent(kind)}`
 
-/** The kind a new rule starts with: the one asked for when the API lists it, else none (null). */
-export function newRuleKindOf(asked: string | null | undefined, kinds: readonly { readonly kind: string }[] | null): string | null {
+/** The kind a new rule starts with: the one asked for when the API lists it, else none (null). B-OP-010: never a kind it no longer offers. */
+export function newRuleKindOf(asked: string | null | undefined, kinds: readonly { readonly kind: string; readonly offered?: boolean | undefined }[] | null): string | null {
   if (!asked || !kinds) return null
-  return kinds.some((entry) => entry.kind === asked) ? asked : null
+  return kinds.some((entry) => entry.kind === asked && entry.offered !== false) ? asked : null
 }
 
 /** The pop-up's first draft: a design case's own, the rule's, else a new rule of the kind it was opened for (one company: that one). */

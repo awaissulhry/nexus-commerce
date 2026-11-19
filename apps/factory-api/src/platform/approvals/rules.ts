@@ -11,6 +11,7 @@ import {
   conditionProblems,
   MEANING_WORDS,
   parseCondition,
+  retiredRuleWords,
   ruleSentence,
   RULE_OPERATORS,
   storedCondition,
@@ -115,6 +116,8 @@ async function ruleViews(db: Reader, actor: Actor, me: string, rules: readonly R
       kind: rule.kind as ApprovalTaskKind,
       kindLabel: kindLabelOf(rule.kind),
       registered: kind !== undefined,
+      // B-OP-010: a rule of a kind nothing asks any more ("Off: office changes apply at once"); null: its kind takes rules.
+      retired: retiredRuleWords(rule.kind),
       name: rule.name,
       sentence: { en: ruleSentence(sentenceInput, 'en'), it: ruleSentence(sentenceInput, 'it') },
       companyId: rule.companyId,
@@ -151,6 +154,9 @@ export function listKinds(caller: CommandCaller) {
     recordType: kind.recordType,
     label: kind.label,
     askable: kind.ask !== null,
+    // B-OP-010: a new rule may be made of it (a kind nothing asks any more is listed for its old rules, never offered).
+    offered: retiredRuleWords(kind.kind) === null,
+    retired: retiredRuleWords(kind.kind),
     fields: kind.fields.map((field) => ({
       id: field.id,
       label: field.label,
@@ -250,6 +256,8 @@ export async function createRule(caller: CommandCaller, body: RuleBody & { kind:
   if (!mayManage(actor, body.companyId)) throw new ForbiddenError()
   const kind = kindOf(body.kind)
   if (!kind) throw refused('NO_KIND', 'body/kind')
+  // B-OP-010: no new rule of a kind nothing asks any more.
+  if (retiredRuleWords(body.kind)) throw refused('RULE_RETIRED', 'refusal/RULE_RETIRED')
   const id = newId()
   await caller.withClient(async (db) => {
     if (body.companyId && !(await db.company.findUnique({ where: { id: body.companyId }, select: { id: true } }))) throw new ValidationError('No such company.', [{ path: 'body/companyId', message: 'No such company.' }])
@@ -319,6 +327,8 @@ export async function updateRule(caller: CommandCaller, ruleId: string, body: Ru
     const issues = await contentProblems(db, context, { kind: rule.kind as ApprovalTaskKind, companyId: rule.companyId, condition: body.condition, approver: body.approver }, serverClock.now())
     if (issues.length) throw new ValidationError(issues[0]!.message, issues)
     if (body.active === true && !kindOf(rule.kind)) throw refused('NO_KIND', 'body/active')
+    // B-OP-010: a rule of a kind nothing asks any more is only switched off (it never fires: nothing asks).
+    if (retiredRuleWords(rule.kind) && Object.entries(body).some(([key, value]) => key !== 'version' && value !== undefined && !(key === 'active' && value === false))) throw refused('RULE_RETIRED', 'refusal/RULE_RETIRED')
     return rule
   })
   const kind = kindOf(rule.kind)
@@ -367,6 +377,8 @@ export async function testRule(caller: CommandCaller, body: { kind: ApprovalTask
   const actor = actorOf(context)
   const kind = kindOf(body.kind)
   if (!kind) throw refused('RULE_OFF_KIND', 'body/kind')
+  // B-OP-010: nothing asks for a kind retired from the rules: there is nothing to test.
+  if (retiredRuleWords(body.kind)) throw refused('RULE_RETIRED', 'refusal/RULE_RETIRED')
   const problems = conditionProblems(body.condition, kind.fields, hiddenFieldsOf(kind.fields, grainsOf(actor)))
   if (problems.length) throw new ValidationError(problems[0]!.message, problems.map((problem) => ({ path: `body/${problem.path}`, message: problem.message })))
   return caller.withClient(async (db) => {

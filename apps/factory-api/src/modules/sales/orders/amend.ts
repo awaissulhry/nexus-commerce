@@ -20,7 +20,7 @@ import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord
 import type { OrderView } from './views'
 // B-W2b-303 (SO1:02): the line rules on an amendment's lines.
 import { amendedLineProblems } from '../orders-depth/line-rules'
-// B-W2b-309 (SAL-218, SAL-219, SAL-221, SAL-190, SAL-306): the freeze rules, the priced change, its extra deposit, the new yes.
+// B-W2b-309 (SAL-218, SAL-219, SAL-221, SAL-190, SAL-306): the freeze rules, the priced change, its extra deposit (B-OP-010: no yes).
 import type { PricedInput } from '@nexus/factory-domain/sales/order-changes/priced'
 import { afterAmendment, amendmentExtras, beforeAmendmentWrites, type ChangeOptions } from '../order-changes/apply'
 import { previewFrozenProblems } from '../order-changes/freeze'
@@ -418,7 +418,7 @@ export async function amendInCommand(
   }
   // B-W2b-309: one change at a time, the freeze rules, the customer's materials of removed lines (before any write).
   const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced, putBack: options.putBack === true }
-  const before309 = await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
+  await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
   for (const lineId of plan.removed) {
@@ -498,8 +498,8 @@ export async function amendInCommand(
   })
   const revision = nextRevision((await tx.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
   const amendmentId = newId()
-  // B-W2b-309: the priced parts and fee, the extra deposit and the new yes the row names (append-only: named at insert).
-  const extras = await amendmentExtras(tools, fresh, { amendmentId, revision, reason: body.reason!.trim(), before: plan.before, after, stage: before309.stage }, changeOptions)
+  // B-W2b-309: the priced parts and fee and the extra deposit the row names (append-only: named at insert). B-OP-010: no yes.
+  const extras = await amendmentExtras(tools, fresh, { revision, before: plan.before, after }, changeOptions)
   await tx.salesOrderAmendment.create({
     data: {
       id: amendmentId,
@@ -519,7 +519,6 @@ export async function amendInCommand(
       ...(extras.priceDeltaLines !== undefined ? { priceDeltaLines: extras.priceDeltaLines } : {}),
       feeAmount: extras.feeAmount,
       depositRequestId: extras.depositRequestId,
-      reapprovalTaskId: extras.reapprovalTaskId,
       requestId: tools.context.requestId,
       createdAt: now,
       createdById: actorId,

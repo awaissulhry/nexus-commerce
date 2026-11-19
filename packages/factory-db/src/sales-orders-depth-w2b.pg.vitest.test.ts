@@ -170,6 +170,8 @@ describe('a priced change after the start (SAL-219, SAL-221, SAL-190)', () => {
   const amend = (changes: Record<string, unknown>) =>
     copyRow(office(), 'SalesOrderAmendment', s.amendmentId, { id: randomUUID(), revision: 100 + Math.floor(Math.random() * 100_000), depositRequestId: null, reapprovalTaskId: null, ...changes })
 
+  // B-OP-010 (order page plan N2; review R-20): office changes apply at once now, and the seed's PENDING SALES_ORDER_CHANGE is
+  // KEPT as a request asked before — it proves the door that still decides an old request in place.
   it('is seeded priced, with its extra deposit and its new yes', async () => {
     const row = await one(`SELECT "priceDeltaLines", "feeAmount", "depositRequestId", "reapprovalTaskId" FROM "SalesOrderAmendment" WHERE id = $1::uuid`, [s.amendmentId])
     expect(row).toEqual({ priceDeltaLines: [{ label: 'One more jacket in 52, cut on its own', orderLineId: s.lineId, amount: 48_000 }], feeAmount: 2_500, depositRequestId: s.extraDepositId, reapprovalTaskId: s.taskIds.reapproval2 })

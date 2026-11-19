@@ -44,6 +44,7 @@ import { BRAND_OVERRIDE_KIND } from './brand-override'
  *   MATERIAL_SUBSTITUTION  a substitute on a work order's BOM line before it is used (B-W2b-298; approved, refused or withdrawn)
  *   SALES_ORDER      a sales order made waiting for a yes, CONFIRMED on the yes, CANCELLED on the no (B-W2b-303)
  *   SALES_ORDER_CHANGE  a confirmed order changed, asking its yes again; the change stays written, a no is put back by a person (B-W2b-309)
+ *                       — B-OP-010: asked no more (office changes apply at once); kept for the old PENDING requests
  *   PURCHASE_ORDER_COMPLIANCE  a purchase order sent without a valid document it needs (B-W2b-377; asked even with no rule)
  *   RECEIPT_OVER_TOLERANCE     a receipt line beyond its delivery tolerance, held until the yes (B-W2b-377; asked even with no rule)
  *   COST_SHEET       a cost sheet version, APPROVED and locked on the yes, the one in force frozen (B-W2b-420; asked of the costing owner with no rule)

@@ -10,7 +10,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { ApprovalRule } from '../api'
-import { NAMESPACE, newHeld, said, sortedRules, switchHeld, type ApprovalRulesModel } from '../model'
+import { isRetired, NAMESPACE, newHeld, said, sortedRules, stateWords, switchHeld, type ApprovalRulesModel } from '../model'
 import { ApprovalRuleDialog, type ApprovalRuleDialogActions } from './ApprovalRuleDialog'
 import '../approval-rules.css'
 
@@ -79,6 +79,7 @@ function Rules({ model, actions }: { model: ApprovalRulesModel; actions?: Approv
             {rule.name}
             {rule.companyName ? ` · ${rule.companyName}` : ` · ${t('rules.everyCompany')}`}
             {!rule.registered ? ` · ${t('rules.notRegistered')}` : ''}
+            {isRetired(rule) ? ` · ${said(rule.retired, locale)}` : '' /* B-OP-010 */}
             {rule.heldReason ? ` · ${t('rules.thresholdHeld')}` : ''}
           </span>
         </span>
@@ -86,10 +87,12 @@ function Rules({ model, actions }: { model: ApprovalRulesModel; actions?: Approv
     const SwitchCell = ({ data: rule }: ICellRendererParams<ApprovalRule>) => {
       if (!rule) return null
       const reason = heldOf(rule)
+      // B-OP-010: a retired kind's rule reads "Off: office changes apply at once" (it never fires, whatever its switch).
+      const state = stateWords(rule, locale)
       return (
         <span className="fw-apr-switch">
           <Toggle size="xs" checked={rule.active} disabled={reason !== null} title={reason ?? undefined} aria-label={t('rules.switch', { rule: rule.name })} onChange={(next) => latest.current.actions?.onSwitch?.(rule, next)} />
-          <Tag tone={rule.active ? 'success' : 'neutral'}>{t(rule.active ? 'rules.on' : 'rules.off')}</Tag>
+          <Tag tone={rule.active && state.key ? 'success' : 'neutral'}>{state.key ? t(state.key) : state.words}</Tag>
           {latest.current.model.saving.includes(rule.id) && <span className="fw-apr-sub">{t('inbox.held.busy')}</span>}
         </span>
       )
@@ -106,7 +109,11 @@ function Rules({ model, actions }: { model: ApprovalRulesModel; actions?: Approv
         headerName: t('rules.col.active'),
         flex: 1,
         minWidth: 150,
-        valueGetter: (params) => (params.data?.active ? t('rules.on') : t('rules.off')),
+        valueGetter: (params) => {
+          if (!params.data) return t('rules.off')
+          const state = stateWords(params.data, locale) // B-OP-010
+          return state.key ? t(state.key) : (state.words ?? '')
+        },
         cellRenderer: SwitchCell,
         suppressKeyboardEvent: (params: { event: KeyboardEvent; editing: boolean; data?: ApprovalRule }) => cellKeys(() => params.data && heldOf(params.data) === null && latest.current.actions?.onSwitch?.(params.data, !params.data.active))(params),
       },
@@ -137,7 +144,7 @@ function Rules({ model, actions }: { model: ApprovalRulesModel; actions?: Approv
           </div>
         </Card>
       ))}
-      {data && data.rules.every((rule) => !rule.active) && data.rules.length > 0 && <Banner tone="info" title={t('rules.allOff')} />}
+      {data && data.rules.every((rule) => !rule.active || isRetired(rule)) && data.rules.length > 0 && <Banner tone="info" title={t('rules.allOff')} />}
       <ListFrame<ApprovalRule>
         label={t('rules.label')}
         title={t('rules.title')}

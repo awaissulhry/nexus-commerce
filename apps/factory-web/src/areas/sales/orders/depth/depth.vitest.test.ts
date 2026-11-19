@@ -368,7 +368,7 @@ describe('the words exist in both languages', () => {
         has(key)
       for (const kind of ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'internal']) has(`problem.read.${kind}`)
       for (const kind of ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'step_up', 'internal', 'invalid', 'moved', 'state', 'season', 'noRecipient', 'letterhead']) has(`problem.write.${kind}`)
-      for (const key of ['notice.priority', 'notice.season', 'notice.seasonCleared', 'notice.asked', 'notice.withdrawn', 'notice.confirmationSame', 'notice.planned', 'notice.putBack', 'notice.putBackDeposit', 'notice.priced', 'notice.pricedWaiting']) has(key)
+      for (const key of ['notice.priority', 'notice.season', 'notice.seasonCleared', 'notice.asked', 'notice.withdrawn', 'notice.confirmationSame', 'notice.planned', 'notice.putBack', 'notice.putBackDeposit', 'notice.priced', /* B-OP-010 */ 'priced.yes.APPLIES_AT_ONCE']) has(key)
       void DOMAIN_MILESTONE_STATES
     }
   })

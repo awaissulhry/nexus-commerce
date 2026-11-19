@@ -145,7 +145,8 @@ export const previewPricedChangeContract = defineContract({
       feeAmount: money.price(z.number().int().nullable()),
       changeAmount: money.price(z.number().int().nullable()),
       deposit: money.price(depositPlan.nullable()),
-      yes: z.enum(['WOULD_ASK', 'NO_RULE', 'NOBODY_TO_ASK']).nullable(),
+      /** B-OP-010: an office change applies at once ("Applies at once — no approval"); null with the problems of no plan. */
+      yes: z.enum(['APPLIES_AT_ONCE']).nullable(),
       stage: output({ stage, words }).nullable(),
     }),
   },

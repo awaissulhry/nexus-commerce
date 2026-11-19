@@ -17,6 +17,8 @@ export function rulesProblem(error: unknown): string {
   if (error.kind === 'invalid' && paths.some((path) => path.includes('approver'))) return 'rules.problem.approver'
   if (error.kind === 'invalid' && paths.some((path) => path.includes('condition'))) return 'rules.problem.condition'
   if (error.kind === 'conflict' && paths.some((path) => path.includes('condition'))) return 'rules.held.money'
+  // B-OP-010: a kind nothing asks any more takes no new rule and no switch on.
+  if (error.kind === 'conflict' && paths.some((path) => path.includes('RULE_RETIRED'))) return 'rules.held.retired'
   if (error.kind === 'conflict') return 'rules.problem.moved'
   if (error.kind === 'invalid') return 'rules.problem.invalid'
   if (['forbidden', 'unavailable', 'rate_limited', 'signed_out', 'step_up'].includes(error.kind)) return `problem.${error.kind}`

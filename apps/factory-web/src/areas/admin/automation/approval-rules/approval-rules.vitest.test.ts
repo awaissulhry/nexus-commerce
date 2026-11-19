@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../../lib/api/errors'
 import { automationAddress, BUILT, viewOf } from '../model'
-import { approvalRulesModel, DEMO_APPROVAL_RULES, DEMO_HELD_RULE, DEMO_KINDS } from './demo'
-import { bodyOf, builderOf, changesOf, conditionOf, draftOf, fieldsOf, newDraft, newHeld, saveHeld, sortedRules, switchHeld } from './model'
+import { approvalRulesModel, DEMO_APPROVAL_RULES, DEMO_HELD_RULE, DEMO_KINDS, DEMO_RETIRED_RULE } from './demo'
+import { bodyOf, builderOf, changesOf, conditionOf, draftOf, fieldsOf, isRetired, newDraft, newHeld, offeredKinds, saveHeld, sortedRules, stateWords, switchHeld } from './model'
+import { newRuleKindOf } from './new-kind/new-kind'
 import { rulesProblem } from './use-approval-rules'
 
 /** Admin › Automation › Approval rules (B-W2b-307; PLT-086, PLT-042, PLT-105): the pop-up's draft and every held reason. */
@@ -87,3 +88,32 @@ describe('the rule pop-up', () => {
     expect(rulesProblem('nope')).toBe('problem.internal')
   })
 })
+
+// ── B-OP-010 (order page plan N2, decision D2; review R-3): office changes apply at once ──
+describe('a kind nothing asks any more: the sales order change (B-OP-010)', () => {
+  it('is not offered for a new rule — not in the pop-up, not from `&kind=`, and New rule holds when no other kind is left', () => {
+    expect(offeredKinds(DEMO_KINDS.kinds).map((kind) => kind.kind)).toEqual(['PURCHASE_ORDER'])
+    expect(newRuleKindOf('SALES_ORDER_CHANGE', DEMO_KINDS.kinds)).toBeNull()
+    expect(newRuleKindOf('PURCHASE_ORDER', DEMO_KINDS.kinds)).toBe('PURCHASE_ORDER')
+    const onlyRetired = { ...DEMO_KINDS, kinds: DEMO_KINDS.kinds.filter((kind) => kind.kind === 'SALES_ORDER_CHANGE') }
+    expect(newHeld(approvalRulesModel({ kinds: { status: 'ready', data: onlyRetired } }))).toBe('rules.held.noKinds')
+  })
+
+  it('an existing rule of it reads "Off: office changes apply at once" whatever its switch, is only switched off, and is never edited', () => {
+    expect(isRetired(DEMO_RETIRED_RULE)).toBe(true)
+    expect(isRetired(DEMO_APPROVAL_RULES[0]!)).toBe(false)
+    expect(stateWords(DEMO_RETIRED_RULE, 'en')).toEqual({ key: null, words: 'Off: office changes apply at once' })
+    expect(stateWords(DEMO_RETIRED_RULE, 'it')).toEqual({ key: null, words: "Disattivata: le modifiche dell'ufficio si applicano subito" })
+    expect(stateWords(DEMO_APPROVAL_RULES[0]!, 'en')).toEqual({ key: 'rules.on', words: null })
+    const state = { manage: true, offline: false, saving: [] as string[] }
+    // Switched on (kept from before): it may be switched off; once off it never goes on again.
+    expect(switchHeld(DEMO_RETIRED_RULE, state)).toBeNull()
+    expect(switchHeld({ ...DEMO_RETIRED_RULE, active: false }, state)).toBe('rules.held.retired')
+    expect(saveHeld(draftOf(DEMO_RETIRED_RULE), { ...free, rule: DEMO_RETIRED_RULE })).toBe('rules.held.retired')
+  })
+
+  it("the API's refusal of a new rule or a switch on is said in the page's words", () => {
+    expect(rulesProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/RULE_RETIRED' }]))).toBe('rules.held.retired')
+  })
+})
+// ── end B-OP-010 ──

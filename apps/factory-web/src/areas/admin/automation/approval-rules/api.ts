@@ -28,7 +28,16 @@ const fieldSchema = z.object({
 })
 export type KindField = z.infer<typeof fieldSchema>
 
-const kindSchema = z.object({ kind: z.string(), recordType: z.string(), label: words, fields: z.array(fieldSchema), askable: z.boolean() })
+const kindSchema = z.object({
+  kind: z.string(),
+  recordType: z.string(),
+  label: words,
+  fields: z.array(fieldSchema),
+  askable: z.boolean(),
+  // B-OP-010: a new rule may be made of it; a kind nothing asks any more is listed for its old rules, with its words.
+  offered: z.boolean().optional(),
+  retired: words.nullable().optional(),
+})
 export type RuleKind = z.infer<typeof kindSchema>
 
 const kindsSchema = z.object({
@@ -49,6 +58,8 @@ export const approvalRuleSchema = z.object({
   kind: z.string(),
   kindLabel: words,
   registered: z.boolean(),
+  /** B-OP-010: its kind asks no yes any more ("Off: office changes apply at once"): it never fires, it is only switched off. */
+  retired: words.nullable().optional(),
   name: z.string(),
   sentence: words,
   companyId: z.string().nullable(),

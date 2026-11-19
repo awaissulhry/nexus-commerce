@@ -11,7 +11,10 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
+// B-OP-010: a request for a yes asked as the amendment asked it before office changes applied at once.
+import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
+import { askApproval } from '../../../platform/approvals/engine'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
@@ -30,8 +33,9 @@ import { REACCEPTANCE_ADAPTER } from '../orders/reacceptance'
  * a block, switched off); an order in production (a work order released, one size cut) read field by field and size by size;
  * a plain amendment of a frozen size refused, of an open size taken; a priced change (its parts, fee, the extra deposit of
  * the growth, the customer asked again) and a blocked price refused even priced; the caparra penitenziale refused while off
- * and asked once switched on; a SALES_ORDER_CHANGE rule on (the change asks its yes, one change at a time, the asker may not
- * decide, a no, the put-back, a yes); the customer's own labels (planned from the BOM, received as an owned lot never valued,
+ * and asked once switched on; B-OP-010: an office change applies at once — a SALES_ORDER_CHANGE rule is never made or switched on
+ * and an old one never asks, while a request asked before still holds the next change (the asker may not decide it, a no, the
+ * put-back, a yes); the customer's own labels (planned from the BOM, received as an owned lot never valued,
  * shared among its orders, one sent back).
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/order-changes/`.
  */
@@ -217,7 +221,7 @@ describe('a priced change after the start, its extra deposit (SAL-219, SAL-221)'
     const row = await orderRow(order.id)
     const body = { version: row.version, reason: 'Made-up: two more in the cut size, cut on their own.', lines: [{ id: line10.id, sizes: sizesOf(line10, { [cutSize]: 5 }) }, { id: line20.id }], labels: { [line10.id]: 'Two more jackets, cut on their own (made-up)' }, fee: '25.00' }
     const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
-    expect(preview).toMatchObject({ ok: true, problems: [], parts: [{ label: 'Two more jackets, cut on their own (made-up)', orderLineId: line10.id, amount: 20000 }], feeAmount: 2500, changeAmount: 22500, yes: 'NO_RULE', stage: { stage: 'CUT' } })
+    expect(preview).toMatchObject({ ok: true, problems: [], parts: [{ label: 'Two more jackets, cut on their own (made-up)', orderLineId: line10.id, amount: 20000 }], feeAmount: 2500, changeAmount: 22500, yes: 'APPLIES_AT_ONCE' /* B-OP-010 */, stage: { stage: 'CUT' } })
     expect(preview.deposit).toMatchObject({ basis: 'ORDER_PERCENT', pct: '30.0000', kind: 'ACCONTO' })
     const applied = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, body, 201)
     expect(applied.change).toMatchObject({ revision: 2, priced: true, feeAmount: 2500, changeAmount: 22500, yes: { state: 'NOT_ASKED' }, customer: { decision: 'NOT_ASKED' }, putBack: { may: false } })
@@ -273,41 +277,74 @@ describe('the non-refundable deposit, switched off (SAL-248)', () => {
   })
 })
 
-// ---- the new yes after an edit (SAL-190) and the put-back --------------------------------------------------------------------
+// ---- B-OP-010: an office change applies at once; an old request for a yes is still decided (SAL-190) and put back -------------
 
-describe('a new yes after an edit of a confirmed order (SAL-190)', () => {
+/**
+ * B-OP-010 (order page plan N2, decision D2; review R-3, R-20): no office change asks the SALES_ORDER_CHANGE yes any more. The kind
+ * stays registered: a request asked before (planted here through the engine, as the old amendment asked it) still holds the
+ * order's next change, is decided in place (a no, then the put-back; a yes) and never by the one who asked it.
+ */
+describe('an office change applies at once; an old request for a yes is still decided (B-OP-010, SAL-190)', () => {
+  const RETIRED = { en: 'Off: office changes apply at once', it: "Disattivata: le modifiche dell'ufficio si applicano subito" }
+  const CONDITION = { combinator: 'and', rows: [{ id: 'r1', field: 'changeValue', operator: 'gt', value: '0' }] }
   let ruleId: string
+  /** A request for a yes on the order's latest change, asked as the amendment asked it before B-OP-010 (the engine, a rule on). */
+  const oldRequest = async (orderId: string) => {
+    const caller = callerFor(h.database, { ...(SESSIONS.sales as Extract<SessionContext, { audience: 'office' }>), requestId: newId() })
+    const { result } = await command(caller, { name: 'orders.amend', input: { orderId, oldRequest: true } }, (tools) => askApproval(tools, { kind: 'SALES_ORDER_CHANGE', recordId: orderId, requester: { userId: PEOPLE.sales } }))
+    expect(result.asked).toBe(true)
+  }
 
-  it('lists SALES_ORDER_CHANGE as a registered kind; a rule on: the change asks its yes, the amendment names it, one change at a time', async () => {
+  it('a rule on: an office change still applies at once — the kind takes no new rule, the old rule never asks, the next change is taken', async () => {
     const kinds = await ok('owner', 'GET', '/approvals/kinds')
-    expect(kinds.kinds.find((kind: Json) => kind.kind === 'SALES_ORDER_CHANGE')).toMatchObject({ recordType: 'SalesOrder', label: { en: 'Sales order change' } })
-    const rule = (await ok('owner', 'POST', '/approvals/rules', { kind: 'SALES_ORDER_CHANGE', companyId: A.companyA, name: 'Every order that grows (made-up)', condition: { combinator: 'and', rows: [{ id: 'r1', field: 'changeValue', operator: 'gt', value: '0' }] }, approver: { roleId: financeRoleId }, sequence: 3, dueHours: 24 }, 201)).rule
-    ruleId = rule.id
-    await ok('owner', 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
+    expect(kinds.kinds.find((kind: Json) => kind.kind === 'SALES_ORDER_CHANGE')).toMatchObject({ recordType: 'SalesOrder', label: { en: 'Sales order change' }, askable: false, offered: false, retired: RETIRED })
+    // No new rule of it, no test of one; nobody asks it from the generic route either.
+    expect(paths(await no('owner', 'POST', '/approvals/rules', { kind: 'SALES_ORDER_CHANGE', companyId: A.companyA, name: 'Every order that grows (made-up)', condition: CONDITION, approver: { roleId: financeRoleId }, sequence: 3, dueHours: 24 }, 409))).toEqual(['refusal/RULE_RETIRED'])
+    expect(paths(await no('owner', 'POST', '/approvals/rules/test', { kind: 'SALES_ORDER_CHANGE', companyId: A.companyA, condition: CONDITION }, 409))).toEqual(['refusal/RULE_RETIRED'])
+    expect(paths(await no('owner', 'POST', '/approvals/requests', { kind: 'SALES_ORDER_CHANGE', recordId: order.id }, 409))).toEqual(['body/kind'])
+    // A rule kept from before, switched on (written as the rules page wrote it then): it reads "Off" in words and never fires.
+    ruleId = newId()
+    await force(
+      `INSERT INTO "ApprovalRule" (id, "tenantId", "companyId", kind, name, condition, "approverRoleId", sequence, "dueHours", active, "createdById", "updatedById") VALUES ($1, $2, $3, 'SALES_ORDER_CHANGE', 'Every order that grows (made-up)', $4::jsonb, $5, 3, 24, true, $6, $6)`,
+      [ruleId, A.tenant, A.companyA, JSON.stringify(CONDITION), financeRoleId, PEOPLE.owner],
+    )
+    const kept = (await ok('owner', 'GET', '/approvals/rules?kind=SALES_ORDER_CHANGE')).rules.find((rule: Json) => rule.id === ruleId)
+    expect(kept).toMatchObject({ active: true, registered: true, retired: RETIRED })
+    expect(paths(await no('owner', 'PUT', `/approvals/rules/${ruleId}`, { version: kept.version, name: 'Renamed (made-up)' }, 409))).toEqual(['refusal/RULE_RETIRED'])
+    // The preview says it applies at once; the change is taken with no request, and the next one right after it.
     const row = await orderRow(order.id)
     const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, { version: row.version, lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }], deposit: null })
-    expect(preview).toMatchObject({ ok: true, yes: 'WOULD_ASK', deposit: null })
+    expect(preview).toMatchObject({ ok: true, yes: 'APPLIES_AT_ONCE', deposit: null })
     const taken = await ok('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: row.version, reason: 'Made-up: one more on line 20.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }] }, 201)
-    const tasks = await changeTasks(order.id)
-    expect(tasks).toEqual([expect.objectContaining({ status: 'PENDING' })])
-    expect((await one<Json>(`SELECT "reapprovalTaskId" FROM "SalesOrderAmendment" WHERE id = $1`, [taken.amendment.id])).reapprovalTaskId).toBe(tasks[0]!.id)
+    expect(await changeTasks(order.id)).toEqual([])
+    expect((await one<Json>(`SELECT "reapprovalTaskId" FROM "SalesOrderAmendment" WHERE id = $1`, [taken.amendment.id])).reapprovalTaskId).toBeNull()
     const list = await ok('reader', 'GET', `/sales/orders/${order.id}/changes`)
-    expect(list.waitingForYes).toMatchObject({ taskId: tasks[0]!.id })
-    expect(list.changes[0]).toMatchObject({ id: taken.amendment.id, priced: false, yes: { state: 'WAITING', words: { en: 'Waiting for a yes' } }, putBack: { may: false } })
-    const again = await no('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: (await orderRow(order.id)).version, reason: 'Made-up: and another.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 4 }) }] }, 409)
-    expect(again.message).toMatch(/last change waits for its yes/)
-    const own = await call('sales', 'POST', `/approvals/tasks/${tasks[0]!.id}/approve`, { version: tasks[0]!.version })
-    expect([403, 409]).toContain(own.statusCode)
+    expect(list.waitingForYes).toBeNull()
+    expect(list.changes[0]).toMatchObject({ id: taken.amendment.id, yes: { state: 'NOT_ASKED' } })
+    const next = await ok('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: (await orderRow(order.id)).version, reason: 'Made-up: and back to two.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20) }] }, 201)
+    expect(next.amendment.revision).toBe(taken.amendment.revision + 1)
+    expect(await changeTasks(order.id)).toEqual([])
+    // Once more one on line 20, the change an old request asks about below.
+    await ok('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: (await orderRow(order.id)).version, reason: 'Made-up: one more on line 20 again.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }] }, 201)
   })
 
-  it("Finance's no: the change stays written and the order says so; put back, it is as before (an earlier priced change still waits for the customer)", async () => {
+  it('an old request still holds the next change; its asker never decides it; Finance\'s no, then put back as before (an earlier priced change still waits for the customer)', async () => {
+    await oldRequest(order.id)
     const [task] = await changeTasks(order.id)
+    expect(task).toMatchObject({ status: 'PENDING' })
+    const list = await ok('reader', 'GET', `/sales/orders/${order.id}/changes`)
+    expect(list.waitingForYes).toMatchObject({ taskId: task!.id })
+    expect(list.changes[0]).toMatchObject({ yes: { state: 'WAITING', words: { en: 'Waiting for a yes' } }, putBack: { may: false } })
+    const again = await no('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: (await orderRow(order.id)).version, reason: 'Made-up: and another.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 4 }) }] }, 409)
+    expect(again.message).toMatch(/last change waits for its yes/)
+    const own = await call('sales', 'POST', `/approvals/tasks/${task!.id}/approve`, { version: task!.version })
+    expect([403, 409]).toContain(own.statusCode)
     await ok('finance', 'POST', `/approvals/tasks/${task!.id}/reject`, { version: task!.version, reasonCode: 'NEEDS_CHANGES', reason: 'Made-up: not this season.' })
     expect(await outbox('sales_order.change_decided', order.id)).toEqual([expect.objectContaining({ decision: 'REJECTED', taskId: task!.id })])
-    const list = await ok('sales', 'GET', `/sales/orders/${order.id}/changes`)
-    const turnedDown = list.changes[0]
+    const after = await ok('sales', 'GET', `/sales/orders/${order.id}/changes`)
+    const turnedDown = after.changes[0]
     expect(turnedDown).toMatchObject({ yes: { state: 'TURNED_DOWN', reason: 'Made-up: not this season.' }, putBack: { may: true, why: null } })
-    expect(list.changes[1].putBack).toMatchObject({ may: false, why: 'Only the latest change is put back.' })
+    expect(after.changes[1].putBack).toMatchObject({ may: false, why: 'Only the latest change is put back.' })
     const back = await ok('sales', 'POST', `/sales/orders/${order.id}/changes/${turnedDown.id}/put-back`, { version: (await orderRow(order.id)).version }, 201)
     expect(back.change).toMatchObject({ yes: { state: 'NOT_ASKED' }, customer: { decision: 'NOT_NEEDED' } })
     expect(back.change.reason).toMatch(/^Put back as before revision \d+: its yes was refused\.$/)
@@ -319,9 +356,12 @@ describe('a new yes after an edit of a confirmed order (SAL-190)', () => {
     await no('sales', 'POST', `/sales/orders/${order.id}/changes/${turnedDown.id}/put-back`, { version: (await orderRow(order.id)).version }, 409)
   })
 
-  it("Finance's yes is kept on the order; the rule off again", async () => {
+  it("an old request's yes is kept on the order; the old rule is switched off and never on again", async () => {
     const row = await orderRow(order.id)
     await ok('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: row.version, reason: 'Made-up: one more on line 20 after all.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }] }, 201)
+    // Applied at once: nothing asked it.
+    expect((await changeTasks(order.id)).filter((task) => task.status === 'PENDING')).toEqual([])
+    await oldRequest(order.id)
     const pending = (await changeTasks(order.id)).find((task) => task.status === 'PENDING')!
     await ok('finance', 'POST', `/approvals/tasks/${pending.id}/approve`, { version: pending.version })
     const list = await ok('reader', 'GET', `/sales/orders/${order.id}/changes`)
@@ -329,7 +369,10 @@ describe('a new yes after an edit of a confirmed order (SAL-190)', () => {
     expect(list.waitingForYes).toBeNull()
     expect(await outbox('sales_order.change_decided', order.id)).toEqual([expect.objectContaining({ decision: 'REJECTED' }), expect.objectContaining({ decision: 'APPROVED', taskId: pending.id })])
     const rule = await one<{ version: number }>(`SELECT version FROM "ApprovalRule" WHERE id = $1`, [ruleId])
-    await ok('owner', 'PUT', `/approvals/rules/${ruleId}`, { version: rule.version, active: false })
+    const off = (await ok('owner', 'PUT', `/approvals/rules/${ruleId}`, { version: rule.version, active: false })).rule
+    expect(off).toMatchObject({ active: false, retired: RETIRED })
+    expect(paths(await no('owner', 'PUT', `/approvals/rules/${ruleId}`, { version: off.version, active: true }, 409))).toEqual(['refusal/RULE_RETIRED'])
+    await refreshLines()
   })
 })
 
