@@ -284,6 +284,8 @@ export const shipmentSchema = z.object({
   shippedAt: z.string().nullable(),
   deliveredAt: z.string().nullable(),
   expectedDeliveryAt: z.string().nullable().optional(),
+  // F-OP-124 (B-OP-031): the number typed for a carrier booked by hand (no carrier feeds it: "No live tracking").
+  typedTrackingNumber: z.string().nullable().optional(),
   ddt: z.object({ number: z.string(), date: z.string() }).nullable(),
   milestones: z.array(z.object({ key: z.enum(SHIPMENT_MILESTONES), words, done: z.boolean(), at: z.string().nullable() })),
   parcels: z.array(z.object({ seq: z.number(), trackingNumber: z.string().nullable(), trackingLink: trackingLink.nullable().optional(), status: z.string().nullable(), words: words.nullable(), lastEvent: trackingEvent.nullable() })),
