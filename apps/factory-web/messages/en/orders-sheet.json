@@ -84,6 +84,11 @@
   "status": {
     "filter": "Show only “{status}” (filters the sheet)"
   },
+  "cols": {
+    "label": "Columns",
+    "work": "Work",
+    "money": "Money"
+  },
   "company": {
     "filter": "Show only {name} (filters the sheet)",
     "unknown": "a company"

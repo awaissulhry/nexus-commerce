@@ -1281,5 +1281,61 @@
       "savedWeek": "Production's answer on {number}: not before week {week}.",
       "takenBack": "Production's answer on {number} taken back."
     }
+  },
+  "catalogueMap": {
+    "title": "Lines to map",
+    "hint": "The customer described these lines, or asked them made to measure: each is made into one or more of our styles. Pick the style and the colourway; the sizes are the line's own unless you type them.",
+    "line": "Line {n} · {kind}",
+    "kind": {
+      "DESCRIBED": "In the customer's words",
+      "MADE_TO_MEASURE": "Made to measure"
+    },
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "people_one": "{count} person on the request (the name stays there)",
+    "people_other": "{count} people on the request (their names stay there)",
+    "peopleInSheet": "People: in the measurement sheet on the request",
+    "ownSizes": "Its sizes: {sizes}",
+    "noSizes": "No sizes yet: type them on the style line",
+    "note": "Their note: {note}",
+    "into": "Style line {m} of line {n}",
+    "sizesHint": "Empty: the line's own sizes (e.g. 50:5 52:10)",
+    "add": "Add a style line",
+    "addMax": "At most {max} style lines for one line",
+    "remove": "Take out style line {m} of line {n}",
+    "noStylesRight": "Your role does not read the styles: a person who does maps these lines.",
+    "stylesReading": "Reading the styles…",
+    "colourFirst": "Pick the style first",
+    "mapOrder": "The line map: what the order gets",
+    "mapQuote": "The line map: what the quote gets",
+    "mapLabel": "Each line of the request and what it becomes",
+    "col": {
+      "asked": "Asked",
+      "becomes": "Becomes"
+    },
+    "notMapped": "Not mapped yet",
+    "mtmHint": "Made to measure: accepted as a quote first (made-to-measure orders have not started). No measurement profile is made: the people stay on the request, which the quote links.",
+    "held": {
+      "madeToMeasure_one": "Line {lines} is made to measure: accept the request as a quote. Its people stay on the request.",
+      "madeToMeasure_other": "Lines {lines} are made to measure: accept the request as a quote. Their people stay on the request.",
+      "quoteOnly": "This portal order is accepted as a quote first.",
+      "unmapped_one": "Line {lines} is not mapped yet: pick the style and the colourway it is made into.",
+      "unmapped_other": "Lines {lines} are not mapped yet: pick the style and the colourway each is made into.",
+      "half": "Line {n}: each style line needs its style and its colourway.",
+      "tooMany": "Line {n} is made into at most {max} style lines.",
+      "badSizes": "Line {n}: the sizes do not read (e.g. 50:5 52:10).",
+      "sizesOfEach": "Line {n} is made into several style lines: type the sizes of each.",
+      "sizesOfPeople": "Line {n}: its people have no size yet (a measurement sheet, or sending later): type the sizes.",
+      "sizesOfTotal": "Line {n} asks {pieces} pieces in all, not yet by size: type the sizes.",
+      "badPrice": "Line {n}: the price is not a price (e.g. 38.50)."
+    },
+    "done": {
+      "logos_one": "{count} logo of the customer carried onto {made}",
+      "logos_other": "{count} logos of the customer carried onto {made}",
+      "logosNot_one": "{count} logo could not be carried: add it by hand",
+      "logosNot_other": "{count} logos could not be carried: add them by hand",
+      "brandPrices_one": "{count} price of the customer taken over onto {made}",
+      "brandPrices_other": "{count} prices of the customer taken over onto {made}"
+    }
   }
 }

@@ -325,14 +325,32 @@ export const CATALOGUE_RECORD: CatalogueRecord = {
     quote: null,
     version: 2,
     lines: [
-      { id: uid('5905', 1), seq: 10, style: PANTS, colourway: { id: uid('5301', 3), code: 'NVY', name: 'Navy' }, sizes: [{ size: 'S', quantity: 4 }, { size: 'M', quantity: 8 }, { size: 'L', quantity: 6 }, { size: 'XL', quantity: 2 }], pieces: 20, unitPriceShown: '38.000000', listPriceNow: '39.500000', amountShown: '760.000000', note: null, problems: [] },
-      { id: uid('5905', 2), seq: 20, style: JACKET, colourway: SAND, sizes: [{ size: '50', quantity: 6 }, { size: '52', quantity: 8 }], pieces: 14, unitPriceShown: '145.000000', listPriceNow: '145.000000', amountShown: '2030.000000', note: null, problems: [{ code: 'SIZE_NOT_OFFERED', size: '56', words: { it: 'La taglia 56 non è più offerta in Sand', en: 'Size 56 is no longer offered in Sand' } }] },
+      { id: uid('5905', 1), seq: 1 /* F-CP-157: request lines are 1, 2, 3 … (the API's own) */, style: PANTS, colourway: { id: uid('5301', 3), code: 'NVY', name: 'Navy' }, sizes: [{ size: 'S', quantity: 4 }, { size: 'M', quantity: 8 }, { size: 'L', quantity: 6 }, { size: 'XL', quantity: 2 }], pieces: 20, unitPriceShown: '38.000000', listPriceNow: '39.500000', amountShown: '760.000000', note: null, problems: [] },
+      { id: uid('5905', 2), seq: 2, style: JACKET, colourway: SAND, sizes: [{ size: '50', quantity: 6 }, { size: '52', quantity: 8 }], pieces: 14, unitPriceShown: '145.000000', listPriceNow: '145.000000', amountShown: '2030.000000', note: null, problems: [{ code: 'SIZE_NOT_OFFERED', size: '56', words: { it: 'La taglia 56 non è più offerta in Sand', en: 'Size 56 is no longer offered in Sand' } }] },
     ],
     summary: { lines: 2, pieces: 34, netShown: '2790.000000' },
   },
   may: { order: true, quote: true, refuse: true },
 }
 // ---- end B-TH-233
+
+// ---- F-CP-157 (customer page plan C5; the API's B-CP-075 / B-CP-077): a portal order with a line in the customer's words and a
+// made-to-measure line — what the accept maps. Made-up people: only their sizes travel here (their names stay on the request).
+export const MAP_RECORD: CatalogueRecord = {
+  ...CATALOGUE_RECORD,
+  request: {
+    ...CATALOGUE_RECORD.request,
+    summary: { lines: 4, pieces: 34 + 30 + 3, netShown: '2790.000000' },
+    customLines: [
+      { id: uid('5906', 1), seq: 3, kind: 'DESCRIBED', description: 'Our logo on the chest, embroidered; a hi-vis band on the back', colourText: 'sand with black trims', style: { ...JACKET }, colourway: null, garmentType: null, quantity: 30, sizes: [{ size: '50', quantity: 10 }, { size: '52', quantity: 12 }, { size: '54', quantity: 8 }], byPerson: false, pieces: 30, people: [], peopleInSheet: false, note: 'As the sample we sent' },
+      { id: uid('5906', 2), seq: 4, kind: 'MADE_TO_MEASURE', description: null, colourText: 'black', style: null, colourway: null, garmentType: { code: 'SUIT', words: { it: 'Tuta in pelle', en: 'Leather suit' } }, quantity: null, sizes: [], byPerson: true, pieces: 3, people: [{ size: '52' }, { size: null }, { size: '50' }], peopleInSheet: false, note: null },
+    ],
+    acceptMap: { lineIds: [uid('5906', 1), uid('5906', 2)], orderHeld: 'Line 4 is made to measure: accept the request as a quote.' },
+  },
+}
+/** The styles the line map offers (the open range; THIS customer's own label would join them, never another's). */
+export const MAP_STYLES: StyleOption[] = [...STYLE_OPTIONS, { id: uid('5101', 9), code: 'OTHER-LBL-01', name: 'Another customer\'s label', sizes: ['M'], status: 'ACTIVE', brand: { id: BRAND.id } }]
+// ---- end F-CP-157
 
 // ---- one inquiry --------------------------------------------------------------------------------------------------------------
 

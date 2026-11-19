@@ -50,6 +50,7 @@ export function CustomerRecordView({
   threadButton,
   onNewOrder,
   onImport,
+  priceDiffer, // F-CP-141
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -83,11 +84,13 @@ export function CustomerRecordView({
   /** F-CP-104: the band's New order and ⋯ Import orders for <customer>… open on this page (the container asks the Work sheet); absent: the old doors. */
   onNewOrder?: () => void
   onImport?: () => void
+  /** F-CP-141: how many of the customer's orders read Not equal (a price holder's only; null: none read, or no price grain). */
+  priceDiffer?: number | null
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -114,6 +117,7 @@ interface CustomerProps {
   threadButton?: string | null // F-SA-279
   onNewOrder?: (() => void) | undefined // F-CP-104
   onImport?: (() => void) | undefined // F-CP-104
+  priceDiffer?: number | null // F-CP-141
 }
 
 function Customer(props: CustomerProps) {
@@ -154,7 +158,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -231,7 +235,7 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           {tab === 'quotes' && quotesIncoming}
           {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} />}
           {/* F-SA-273: Money — key numbers, credit, open invoices, the open orders' deposits and balances, payment terms. */}
-          {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} />}
+          {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} priceDiffer={priceDiffer ?? null /* F-CP-141 */} />}
           {tab === 'people' && (
             // F-SA-274: People & addresses — the contacts ("Has portal access" on an exact e-mail match, ⋯ Invite to the portal…), the
             // people with portal access (moved as is from Portal settings, "Contact" on the same e-mail), the addresses, the riders and

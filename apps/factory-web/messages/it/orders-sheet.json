@@ -84,6 +84,11 @@
   "status": {
     "filter": "Mostra solo “{status}” (filtra il foglio)"
   },
+  "cols": {
+    "label": "Colonne",
+    "work": "Lavoro",
+    "money": "Conti"
+  },
   "company": {
     "filter": "Mostra solo {name} (filtra il foglio)",
     "unknown": "un'azienda"

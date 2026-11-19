@@ -1998,6 +1998,12 @@
       "NOT_EQUAL": "Show only the orders whose prices differ",
       "NO_BRAND_PRICE": "Show only the orders without the customer's price"
     },
+    "chip": {
+      "EQUAL": "Prices equal",
+      "NOT_EQUAL": "Prices differ",
+      "NO_BRAND_PRICE": "No customer price yet"
+    },
+    "showAll": "Show all orders",
     "edit": "Set customer's price…",
     "door": "Set the customer's price of {number}",
     "title": "Customer's price · {number}",

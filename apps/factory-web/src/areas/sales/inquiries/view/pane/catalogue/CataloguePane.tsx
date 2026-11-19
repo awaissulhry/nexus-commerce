@@ -7,6 +7,12 @@ import { Button, Input, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../../../lib/i18n/ds-parts'
 import type { CatalogueRecord, IncomingRow } from '../../../api'
 import { acceptHeld, catalogueHeld, catalogueMain, catalogueOutcome, lineSizes, refuseHeld, REFUSE_MAX, type CatalogueActions, type CatalogueAction, type CatalogueModel } from '../../../catalogue-model'
+// ---- F-CP-157: the accept window's line map ----
+import { Plus, Trash2 } from 'lucide-react'
+import { Select } from '@nexus/ui/primitives'
+import { Combobox } from '../../../../../../lib/i18n/ds-parts'
+import { customWords, lineMapRowsOf, linesToMap, MAP_INTO_MAX, ownSizesOf, type CatalogueDialog } from '../../../catalogue-model'
+// ---- end F-CP-157
 import { priceText, waitingOf, type Phrase } from '../../../model'
 import { isPageKey, NoticeLine, useWords } from '../../../parts'
 import type { PaneNav } from '../RequestPane'
@@ -231,20 +237,37 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
               <SummaryTable
                 label={t('pane.facts.lines')}
                 columns={[t('order.col.n'), t('order.col.style'), t('catalogue.col.sizes'), t('order.col.pieces'), ...(model.can.price ? [t('catalogue.col.shown')] : [])]}
-                rows={request.lines.map((line) => ({
-                  id: line.id,
-                  cells: [
-                    String(line.seq / 10),
-                    `${line.style.code} · ${line.colourway.code}`,
-                    lineSizes(line),
-                    <span key="n" className="fw-inq-num">{line.pieces}</span>,
-                    ...(model.can.price ? [price(line.unitPriceShown)] : []),
-                  ],
-                }))}
+                rows={[
+                  ...request.lines.map((line) => ({
+                    id: line.id,
+                    seq: line.seq,
+                    cells: [
+                      String(line.seq) /* F-CP-157: the request's own place ("Line 2"), as the API names it */,
+                      `${line.style.code} · ${line.colourway.code}`,
+                      lineSizes(line),
+                      <span key="n" className="fw-inq-num">{line.pieces}</span>,
+                      ...(model.can.price ? [price(line.unitPriceShown)] : []),
+                    ],
+                  })),
+                  // F-CP-157: the lines in the customer's own words and made to measure, in the request's order (people: how many only).
+                  ...(request.customLines ?? []).map((line) => ({
+                    id: line.id,
+                    seq: line.seq,
+                    cells: [
+                      String(line.seq),
+                      `${t(`catalogueMap.kind.${line.kind}`)} · ${customWords(line, locale)}`,
+                      line.sizes.length > 0 ? lineSizes(line) : line.byPerson ? (line.peopleInSheet ? t('catalogueMap.peopleInSheet') : t('catalogueMap.people', { count: line.people.length })) : '—',
+                      <span key="n" className="fw-inq-num">{line.pieces}</span>,
+                      ...(model.can.price ? ['—'] : []),
+                    ],
+                  })),
+                ]
+                  .sort((a, b) => a.seq - b.seq)
+                  .map(({ id, cells }) => ({ id, cells }))}
               />
               {request.lines.some((line) => line.problems.length > 0) && (
                 <ul className="fw-inq-lines">
-                  {request.lines.flatMap((line) => line.problems.map((problem, n) => <li key={`${line.id}-${n}`}>{t('catalogue.lineProblem', { n: line.seq / 10, words: problem.words[locale] })}</li>))}
+                  {request.lines.flatMap((line) => line.problems.map((problem, n) => <li key={`${line.id}-${n}`}>{t('catalogue.lineProblem', { n: line.seq /* F-CP-157 */, words: problem.words[locale] })}</li>))}
                 </ul>
               )}
             </section>
@@ -338,19 +361,136 @@ function CatalogueDialogs({ model, actions, record }: { model: CatalogueModel; a
             rows={record.request.lines.map((line) => ({
               id: line.id,
               cells: [
-                String(line.seq / 10),
+                String(line.seq) /* F-CP-157 */,
                 `${line.style.code} · ${line.colourway.code}`,
                 <span key="n" className="fw-inq-num">{line.pieces}</span>,
                 ...(model.can.price
-                  ? [<Input key="p" size="sm" inputMode="decimal" aria-label={`${t('order.col.price')} · ${t('order.col.n')} ${line.seq / 10}`} placeholder={t('order.pricePlaceholder')} value={dialog.draft.prices[line.id] ?? ''} onChange={(event) => actions?.onPrice?.(line.id, event.target.value)} />]
+                  ? [<Input key="p" size="sm" inputMode="decimal" aria-label={`${t('order.col.price')} · ${t('order.col.n')} ${line.seq}`} placeholder={t('order.pricePlaceholder')} value={dialog.draft.prices[line.id] ?? ''} onChange={(event) => actions?.onPrice?.(line.id, event.target.value)} />]
                   : []),
               ],
             }))}
           />
         )}
         {order && <p className="fw-inq-hint">{model.can.price ? `${t('order.priceHint')} (${record.request.currency})` : t('order.priceHidden')}</p>}
+        {/* F-CP-157: the lines in the customer's own words / made to measure, each mapped to the style line(s) it is made into; then
+            the line map — what the order or quote gets — before Accept (held in words until every line is mapped). */}
+        {linesToMap(record).length > 0 && <LineMap model={model} actions={actions} record={record} dialog={dialog} />}
         {record.request.shipTo?.approvalStatus === 'WAITING' && <p className="fw-inq-hint">{t('catalogue.shipToWaiting')}</p>}
       </div>
     </Modal>
   )
 }
+
+// ---- F-CP-157 (customer page plan C5; the API's B-CP-077; lead note 3) --------------------------------------------------------------
+/**
+ * The accept window's line map: each described / made-to-measure line (its words, colours, pieces, how many people — never their
+ * names: they stay on the request) and the style line(s) it is made into — a style of the open range or THIS customer's own label (the
+ * picker never offers another customer's), its colourway, its sizes (empty: the line's own, or its people's), for an ORDER with the
+ * price grain a unit price; then the map itself, every request line and what it becomes. A made-to-measure request is a quote first.
+ */
+function LineMap({ model, actions, record, dialog }: { model: CatalogueModel; actions?: CatalogueActions | undefined; record: CatalogueRecord; dialog: Extract<CatalogueDialog, { kind: 'accept' }> }) {
+  const { t, locale } = useWords()
+  const order = dialog.draft.as === 'ORDER'
+  const lines = linesToMap(record)
+  const styles = dialog.styles ?? null
+  const details = dialog.details ?? {}
+  const options = [...(styles?.items ?? []).map((style) => ({ value: style.id, label: `${style.code} · ${style.name}` }))]
+  const rows = lineMapRowsOf(record, dialog.draft, locale, (styleId) => details[styleId])
+  return (
+    <section className="fw-inq-stack" aria-label={t('catalogueMap.title')}>
+      <h3 className="fw-inq-h3">{t('catalogueMap.title')}</h3>
+      <p className="fw-inq-hint">{t('catalogueMap.hint')}</p>
+      {lines.some((line) => line.kind === 'MADE_TO_MEASURE') && <p className="fw-inq-hint">{t('catalogueMap.mtmHint')}</p>}
+      {styles === null ? <p className="fw-inq-hint">{t('catalogueMap.noStylesRight')}</p> : styles.problem ? <Banner tone="warning" title={t('line.stylesFailed')}>{t(styles.problem)}</Banner> : null}
+      {lines.map((line) => {
+        const own = ownSizesOf(line)
+        const into = dialog.draft.map?.[line.id] ?? []
+        return (
+          <div className="fw-inq-line" key={line.id}>
+            <div className="fw-inq-line-head">
+              <h4 className="fw-inq-h3">{t('catalogueMap.line', { n: line.seq, kind: t(`catalogueMap.kind.${line.kind}`) })}</h4>
+              <span className="fw-inq-hint fw-inq-num">{t('catalogueMap.pieces', { count: line.pieces })}</span>
+            </div>
+            <p className="fw-inq-text">{customWords(line, locale)}</p>
+            <p className="fw-inq-hint">
+              {[line.byPerson ? (line.peopleInSheet || line.people.length === 0 ? t('catalogueMap.peopleInSheet') : t('catalogueMap.people', { count: line.people.length })) : null, own ? t('catalogueMap.ownSizes', { sizes: own.map((row) => `${row.size}:${row.quantity}`).join(' ') }) : t('catalogueMap.noSizes'), line.note ? t('catalogueMap.note', { note: line.note }) : null].filter(Boolean).join(' · ')}
+            </p>
+            {into.map((one, place) => {
+              const read = one.styleId ? details[one.styleId] : undefined
+              const style = read?.status === 'ready' ? read.value : null
+              const choices = one.styleId && !options.some((option) => option.value === one.styleId) ? [...options, { value: one.styleId, label: one.styleLabel ?? t('line.thisStyle') }] : options
+              const label = t('catalogueMap.into', { m: place + 1, n: line.seq })
+              return (
+                <div className="fw-inq-line-grid" key={one.key} role="group" aria-label={label}>
+                  <Field label={t('line.style')}>
+                    {styles && styles.items === null && !styles.problem ? (
+                      <Skeleton height={32} />
+                    ) : (
+                      <Combobox
+                        options={choices}
+                        value={one.styleId ?? ''}
+                        placeholder={styles === null ? t('catalogueMap.noStylesRight') : t('line.style')}
+                        onChange={(value) => {
+                          const styleId = value || null
+                          actions?.onMapInto?.(line.id, one.key, { styleId, styleLabel: styleId ? (choices.find((option) => option.value === value)?.label ?? null) : null })
+                          if (styleId) actions?.onMapStyle?.(styleId)
+                        }}
+                      />
+                    )}
+                  </Field>
+                  <Field label={t('line.colourway')}>
+                    {!one.styleId ? (
+                      <span className="fw-inq-hint">{t('catalogueMap.colourFirst')}</span>
+                    ) : read?.status === 'loading' || !read ? (
+                      <Skeleton height={32} />
+                    ) : (
+                      <Select size="sm" aria-label={`${t('line.colourway')} · ${label}`} value={one.colourwayId ?? ''} onChange={(event) => actions?.onMapInto?.(line.id, one.key, { colourwayId: event.target.value || null })}>
+                        <option value="">{t('line.colourway')}</option>
+                        {(style?.colourways ?? [])
+                          .filter((entry) => entry.status !== 'ARCHIVED' || entry.id === one.colourwayId)
+                          .map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.code} · {entry.name}
+                            </option>
+                          ))}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field label={t('line.sizes')} hint={t('catalogueMap.sizesHint')}>
+                    <Input size="sm" aria-label={`${t('line.sizes')} · ${label}`} value={one.sizesText} placeholder="50:5 52:10" onChange={(event) => actions?.onMapInto?.(line.id, one.key, { sizesText: event.target.value })} />
+                  </Field>
+                  {order && model.can.price && (
+                    <Field label={t('order.col.price')}>
+                      <Input size="sm" inputMode="decimal" aria-label={`${t('order.col.price')} · ${label}`} placeholder={t('order.pricePlaceholder')} value={one.price} onChange={(event) => actions?.onMapInto?.(line.id, one.key, { price: event.target.value })} />
+                    </Field>
+                  )}
+                  <span className="fw-inq-row">
+                    <Button size="sm" variant="quiet" aria-label={t('catalogueMap.remove', { m: place + 1, n: line.seq })} onClick={() => actions?.onMapRemove?.(line.id, one.key)}>
+                      <Trash2 size={14} aria-hidden /> {t('line.removeShort')}
+                    </Button>
+                  </span>
+                </div>
+              )
+            })}
+            <span className="fw-inq-row">
+              <Button size="sm" variant="secondary" heldReason={into.length >= MAP_INTO_MAX ? t('catalogueMap.addMax', { max: MAP_INTO_MAX }) : null} onClick={() => actions?.onMapAdd?.(line.id)}>
+                <Plus size={14} aria-hidden /> {t('catalogueMap.add')}
+              </Button>
+            </span>
+          </div>
+        )
+      })}
+      <h3 className="fw-inq-h3">{order ? t('catalogueMap.mapOrder') : t('catalogueMap.mapQuote')}</h3>
+      <SummaryTable
+        label={t('catalogueMap.mapLabel')}
+        stackOnPhone
+        columns={[t('order.col.n'), t('catalogueMap.col.asked'), t('order.col.pieces'), t('catalogueMap.col.becomes')]}
+        rows={rows.map((row) => ({
+          id: row.id,
+          cells: [String(row.n), row.kind === 'CATALOGUE' ? row.asked : `${t(`catalogueMap.kind.${row.kind}`)} · ${row.asked}`, <span key="n" className="fw-inq-num">{row.pieces}</span>, row.becomes.length > 0 ? row.becomes.join(' · ') : t('catalogueMap.notMapped')],
+        }))}
+      />
+    </section>
+  )
+}
+// ---- end F-CP-157

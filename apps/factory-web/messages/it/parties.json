@@ -188,8 +188,11 @@
       "gone": "{record} non è più tra «{view}»",
       "view": {
         "waitingUs": "Tocca a noi",
-        "drafts": "Bozze di {customer}"
+        "drafts": "Bozze di {customer}",
+        "notEqual": "Prezzi diversi"
       },
+      "priceDiffer_one": "Prezzi diversi su {count} ordine ›",
+      "priceDiffer_other": "Prezzi diversi su {count} ordini ›",
       "dock": {
         "label": "Quale conversazione",
         "general": "{customer} (generale)",

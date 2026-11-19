@@ -16,6 +16,8 @@ import { NAMESPACE as SHEET_NS } from '../../../../orders/list/sheet/model'
 import { builtInActive, builtInViewsOf, pickBuiltIn } from '../../../../orders/list/view/OrdersListView'
 import type { DraftRow } from '../api'
 import { draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue, type DraftsRead, type Words } from '../model'
+import { draftValueOf } from '../model' // F-CP-141 (follow-up 6): the draft's own value when the API sends it
+import { money } from '../../../../quotes/model' // F-CP-141: minor units
 
 /**
  * F-CP-107 (customer page plan D10; 10-customer-page §6; picture 22's office list) — "Drafts of <customer>": the customer's portal drafts,
@@ -150,7 +152,12 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
               minWidth: 104,
               hide: !wide,
               type: 'rightAligned',
-              valueGetter: (params) => (params.data?.netShown ? priceText(params.data.netShown, params.data.currency, INTL_LOCALE[locale]) : '—'),
+              // F-CP-141 (follow-up 6): B-CP-076's draft value (minor units) when present, else the net at the prices shown.
+              valueGetter: (params) => {
+                const value = params.data ? draftValueOf(params.data) : null
+                if (!value || !params.data) return '—'
+                return 'minor' in value ? money(value.minor, params.data.currency, locale) : priceText(value.decimal, params.data.currency, INTL_LOCALE[locale])
+              },
             } satisfies ColDef<DraftRow>,
           ]
         : []),

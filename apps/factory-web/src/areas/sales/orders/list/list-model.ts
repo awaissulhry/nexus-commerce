@@ -124,6 +124,11 @@ export interface OrdersListModel {
   group?: 'party' | null
   /** The door terms beside the rows view (a total opened exactly its rows): each a chip with ✕. */
   extra?: ExtraTerms | null
+  /**
+   * F-CP-141 (money wall): the address names the price check term and the reader sees no price (a shared saved view, a link): no read
+   * carries it, no rows are read — the sheet says so in ONE line ("Amounts are shown to people who see prices") with Show all orders.
+   */
+  priceHeld?: boolean
   /** The view's figures from the server (null while read or not asked; the problem in words when it failed). */
   summary?: { value: OrderSummary | null; problem: string | null } | null
   /** The grouped view: each customer's rows read so far (by customer id), and the groups folded shut. */
@@ -173,6 +178,11 @@ export interface OrdersListModel {
   preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null
+  /**
+   * F-CP-105: "Columns: Work · Money" at the toolbar's start — the columns shown now (the host's view preset, or the money columns);
+   * the host gives it only with the price grain (absent: no toggle at all). Picked through `actions.onColumnSet`.
+   */
+  columnSet?: { readonly value: 'work' | 'money' } | null
   // ---- end F-SA-276
   // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
   assign?: AssignSupervisorModel | null
@@ -246,7 +256,9 @@ export interface OrdersListActions {
   onExtra?: (extra: ExtraTerms) => void
   // F-CP-140: the Price check cell's funnel — narrows the sheet to the orders whose check reads so (the host gives it with the
   // `priceMatch` term, F-CP-141; without it the cell's words stand alone).
-  onPriceMatch?: (match: PriceMatch) => void
+  // F-CP-141: the term in ONE write — no `view`: the funnel (narrows the view shown); with `view`: that view and the term alone (the
+  // Not equal view: rows=all); null drops it (leaving the Not equal view for `view`). A price holder's only (absent otherwise).
+  onPriceMatch?: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
   /** The columns on screen changed (the Progress column reads the floor only while shown). */
   onShownColumns?: (ids: readonly string[]) => void
   onInvoiceShipped?: (ids: readonly string[]) => void
@@ -269,6 +281,10 @@ export interface OrdersListActions {
   onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
   /** F-CP-102: one of the host's own views picked in Views ▾ (model.hostViews). */
   onHostView?: (id: string) => void
+  /** F-CP-105: "Columns: Work · Money" picked (the host writes its page term `cols`). */
+  onColumnSet?: (set: 'work' | 'money') => void
+  /** F-CP-105: a host's own kept page term set (null: dropped) in one write through the sheet (every other term kept). */
+  onPageTerm?: (name: string, value: string | null) => void
   // ---- F-SA-280 ----
   onAssignSupervisor?: (ids: readonly string[]) => void
   supervisor?: AssignSupervisorActions

@@ -57,6 +57,10 @@ import { designScreen as recordScreen } from './record/fixtures'
 // B-TH-233: Incoming over every door.
 import { CATALOGUE_RECORD, CATALOGUE_ROW, CHANGE_ROW, INCOMING_ROWS, listOf, repliesOf } from './demo/fixtures'
 import { acceptBodyOf, acceptDraftOf, acceptHeld, catalogueHeld, catalogueMain, catalogueOutcome, refuseHeld } from './catalogue-model'
+// ---- F-CP-157 ----
+import { acceptDone, customWords, lineMapRowsOf, linesToMap, mapStylesOf, orderHeldOf, ownSizesOf, type AcceptDraft, type MapInto } from './catalogue-model'
+import { JACKET_DETAIL, MAP_RECORD, MAP_STYLES } from './demo/fixtures'
+// ---- end F-CP-157
 import { approvalsHref, CUSTOMER_REPLIES, incomingRowOf, LIST_TILES, mergePages, navIdsOf, numberWithCompany, placeOf, replyHref, replyWaiting, rowHref, THREAD_TYPE } from './model'
 import { designScreen as paneScreen } from './view/pane/fixtures'
 // ---- F-SA-277: the Incoming list lifted for the customer's Quotes & incoming (pane 'host'; two lists apart) ----
@@ -496,7 +500,7 @@ describe('B-TH-233 Incoming over every door', () => {
     expect(catalogueHeld(CATALOGUE_RECORD, 'refuse', owner233, true)).toEqual({ key: 'held.offline' })
     const production = inquiriesCan(ROLE_PERMISSIONS.production)
     for (const action of ['order', 'quote', 'refuse'] as const) expect(catalogueHeld(CATALOGUE_RECORD, action, production, false)).toEqual({ key: 'catalogue.held.right', params: { right: 'right.orders.manage' } })
-    expect(words('en')['catalogue.held.right']).toContain('Only sales can accept or refuse a catalogue order')
+    expect(words('en')['catalogue.held.right']).toContain('Only sales can accept or refuse a portal order') // F-CP-157: "Portal order" (B-CP-077's words)
     expect(catalogueHeld(CATALOGUE_RECORD, 'quote', { orders: true, quotes: false }, false)).toEqual({ key: 'held.needs', params: { right: 'right.quotes.manage' } })
     expect(catalogueHeld({ ...CATALOGUE_RECORD, may: { order: false, quote: true, refuse: true } }, 'order', owner233, false)).toEqual({ key: 'held.notNow' })
     const withdrawn = { ...CATALOGUE_RECORD, request: { ...CATALOGUE_RECORD.request, status: 'WITHDRAWN' as const } }
@@ -691,3 +695,137 @@ describe('F-SA-277: the Incoming list lifted — the locked container, the page 
   })
 })
 // ---- end F-SA-277
+
+// ---- F-CP-157 (customer page plan C5; the API's B-CP-077; lead note 3: no profile per person in v1): the office accept window maps
+// each described / made-to-measure line to the style line(s) it is made into — held in words until mapped, the line map shown before
+// Accept, a made-to-measure request accepted as a QUOTE only, the people never copied (only how many). Money wall M-CP-1 "as Sales
+// worker": no price key in the body. Brand wall W-CP-3: the picker never offers another customer's own label.
+describe('F-CP-157: the accept window maps the lines in the customer\'s words and made to measure', () => {
+  const OWNER = inquiriesCan(ROLE_PERMISSIONS.owner)
+  const SALES_WORKER = { ...inquiriesCan(ROLE_PERMISSIONS.sales), price: false } // the Sales role after B-CP-011
+  const [described, mtm] = MAP_RECORD.request.customLines!
+  const jacket = { styleId: JACKET_DETAIL.id, styleLabel: JACKET_DETAIL.code, colourwayId: JACKET_DETAIL.colourways[1]!.id }
+  const into = (over: Partial<MapInto> = {}): MapInto => ({ key: `k-${Math.random()}`, styleId: null, styleLabel: null, colourwayId: null, sizesText: '', price: '', ...over })
+  const withMap = (draft: AcceptDraft, map: Record<string, MapInto[]>): AcceptDraft => ({ ...draft, map: { ...(draft.map ?? {}), ...map } })
+  const describedOnly = { ...MAP_RECORD, request: { ...MAP_RECORD.request, customLines: [described!], acceptMap: { lineIds: [described!.id], orderHeld: null } } }
+
+  it('the window starts with one style line per line to map: the style the line names as a hint, never its colourway', () => {
+    const draft = acceptDraftOf(MAP_RECORD, 'QUOTE', OWNER)
+    expect(Object.keys(draft.map ?? {})).toEqual([described!.id, mtm!.id])
+    expect(draft.map![described!.id]![0]).toMatchObject({ styleId: described!.style!.id, colourwayId: null })
+    expect(draft.map![mtm!.id]![0]).toMatchObject({ styleId: null, colourwayId: null })
+    expect(acceptDraftOf(CATALOGUE_RECORD, 'QUOTE', OWNER).map).toBeUndefined()
+    expect(linesToMap(MAP_RECORD).map((line) => line.seq)).toEqual([3, 4])
+  })
+
+  it('held in words until every line is mapped, by place; a made-to-measure request is a quote only (the order held, the pane too)', () => {
+    const quote = acceptDraftOf(MAP_RECORD, 'QUOTE', OWNER)
+    expect(acceptHeld(MAP_RECORD, quote, OWNER, false)).toEqual({ key: 'catalogueMap.held.unmapped', params: { lines: '3, 4', count: 2 } })
+    expect(acceptHeld(MAP_RECORD, withMap(quote, { [described!.id]: [into(jacket)] }), OWNER, false)).toEqual({ key: 'catalogueMap.held.unmapped', params: { lines: '4', count: 1 } })
+    const order = acceptDraftOf(MAP_RECORD, 'ORDER', OWNER)
+    expect(acceptHeld(MAP_RECORD, withMap(order, { [described!.id]: [into(jacket)], [mtm!.id]: [into({ ...jacket, sizesText: '50:1 52:2' })] }), OWNER, false)).toEqual({ key: 'catalogueMap.held.madeToMeasure', params: { lines: '4', count: 1 } })
+    expect(catalogueHeld(MAP_RECORD, 'order', OWNER, false)).toEqual({ key: 'catalogueMap.held.madeToMeasure', params: { lines: '4', count: 1 } })
+    expect(catalogueMain(MAP_RECORD, OWNER)).toBe('quote')
+    expect(orderHeldOf(describedOnly)).toBeNull()
+    expect(orderHeldOf({ ...describedOnly, request: { ...describedOnly.request, acceptMap: { lineIds: [described!.id], orderHeld: 'x' } } })).toEqual({ key: 'catalogueMap.held.quoteOnly' })
+  })
+
+  it('the sizes: the line\'s own (or its people\'s when each has one) for one style line; several need each one\'s; words by place', () => {
+    const quote = acceptDraftOf(MAP_RECORD, 'QUOTE', OWNER)
+    const mapped = (mtmInto: MapInto[], describedInto: MapInto[] = [into(jacket)]) => acceptHeld(MAP_RECORD, withMap(quote, { [described!.id]: describedInto, [mtm!.id]: mtmInto }), OWNER, false)
+    // Line 4's people: one has no size yet (a sheet / later) — the office names the sizes.
+    expect(mapped([into(jacket)])).toEqual({ key: 'catalogueMap.held.sizesOfPeople', params: { n: 4, pieces: 3 } })
+    expect(mapped([into({ ...jacket, sizesText: '50:1 52:2' })])).toBeNull()
+    expect(mapped([into({ ...jacket, sizesText: '50:x' })])).toEqual({ key: 'catalogueMap.held.badSizes', params: { n: 4 } })
+    expect(mapped([into({ ...jacket, sizesText: '50:1 52:2' })], [into(jacket), into(jacket)])).toEqual({ key: 'catalogueMap.held.sizesOfEach', params: { n: 3 } })
+    expect(mapped([into({ ...jacket, sizesText: '50:1 52:2' })], [into(jacket), into({ styleId: jacket.styleId })])).toEqual({ key: 'catalogueMap.held.half', params: { n: 3 } })
+    expect(ownSizesOf(described!)).toEqual([{ size: '50', quantity: 10 }, { size: '52', quantity: 12 }, { size: '54', quantity: 8 }])
+    expect(ownSizesOf({ ...mtm!, people: [{ size: '52' }, { size: '50' }, { size: '52' }] })).toEqual([{ size: '52', quantity: 2 }, { size: '50', quantity: 1 }])
+    expect(ownSizesOf(mtm!)).toBeNull()
+    const total = { ...described!, sizes: [], quantity: 30 }
+    expect(acceptHeld({ ...describedOnly, request: { ...describedOnly.request, customLines: [total] } }, withMap(acceptDraftOf(describedOnly, 'ORDER', OWNER), { [described!.id]: [into(jacket)] }), OWNER, false)).toEqual({ key: 'catalogueMap.held.sizesOfTotal', params: { n: 3, pieces: 30 } })
+  })
+
+  it('the accept body: the map for a quote and an order; a unit price only for an ORDER with the price grain (as Sales worker: no price key)', () => {
+    const quote = withMap(acceptDraftOf(MAP_RECORD, 'QUOTE', OWNER), { [described!.id]: [into(jacket)], [mtm!.id]: [into({ ...jacket, sizesText: '50:1 52:2' })] })
+    expect(acceptBodyOf(MAP_RECORD, quote, OWNER)).toEqual({
+      version: MAP_RECORD.request.version,
+      as: 'QUOTE',
+      map: [
+        { lineId: described!.id, into: [{ styleId: jacket.styleId, colourwayId: jacket.colourwayId }] },
+        { lineId: mtm!.id, into: [{ styleId: jacket.styleId, colourwayId: jacket.colourwayId, sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 2 }] }] },
+      ],
+    })
+    const order = withMap(acceptDraftOf(describedOnly, 'ORDER', OWNER), { [described!.id]: [into({ ...jacket, price: '139,00' })] })
+    expect(acceptHeld(describedOnly, order, OWNER, false)).toBeNull()
+    expect(acceptBodyOf(describedOnly, order, OWNER).map).toEqual([{ lineId: described!.id, into: [{ styleId: jacket.styleId, colourwayId: jacket.colourwayId, unitPrice: '139.00' }] }])
+    const sales = withMap(acceptDraftOf(describedOnly, 'ORDER', SALES_WORKER), { [described!.id]: [into({ ...jacket, price: '139.00' })] })
+    const body = acceptBodyOf(describedOnly, sales, SALES_WORKER)
+    expect(JSON.stringify(body)).not.toMatch(/unitPrice|price/i)
+    expect(body.map).toEqual([{ lineId: described!.id, into: [{ styleId: jacket.styleId, colourwayId: jacket.colourwayId }] }])
+    // A request without such lines sends no map (the catalogue accept as before).
+    expect(acceptBodyOf(CATALOGUE_RECORD, acceptDraftOf(CATALOGUE_RECORD, 'QUOTE', OWNER), OWNER)).toEqual({ version: 2, as: 'QUOTE' })
+    expect(acceptHeld(describedOnly, withMap(acceptDraftOf(describedOnly, 'ORDER', OWNER), { [described!.id]: [into({ ...jacket, price: 'abc' })] }), OWNER, false)).toEqual({ key: 'catalogueMap.held.badPrice', params: { n: 3 } })
+  })
+
+  it('the line map before Accept: every request line in its order and what it becomes; "Not mapped yet" until it is', () => {
+    const draft = withMap(acceptDraftOf(MAP_RECORD, 'QUOTE', OWNER), { [described!.id]: [into(jacket)] })
+    const rows = lineMapRowsOf(MAP_RECORD, draft, 'en', (styleId) => (styleId === JACKET_DETAIL.id ? { status: 'ready', value: JACKET_DETAIL } : undefined))
+    expect(rows.map((row) => row.n)).toEqual([1, 2, 3, 4])
+    expect(rows[2]).toMatchObject({ kind: 'DESCRIBED', becomes: [`${JACKET_DETAIL.code} · SND · 50:10 52:12 54:8`] })
+    expect(rows[2]!.asked).toContain('sand with black trims')
+    expect(rows[3]).toMatchObject({ kind: 'MADE_TO_MEASURE', asked: 'Leather suit · black', becomes: [] })
+    expect(rows[0]!.becomes[0]).toContain(CATALOGUE_RECORD.request.lines[0]!.style.code)
+    expect(customWords(mtm!, 'it')).toBe('Tuta in pelle · black')
+  })
+
+  it('brand wall W-CP-3: the picker offers the open range and this customer\'s own label only; no person\'s name reaches the window', () => {
+    const offered = mapStylesOf(MAP_STYLES, MAP_RECORD.request.party.id)
+    expect(offered.some((style) => style.code === 'OTHER-LBL-01')).toBe(false)
+    expect(offered.length).toBe(MAP_STYLES.length - 1)
+    expect(mapStylesOf([{ ...MAP_STYLES[2]!, brand: { id: MAP_RECORD.request.party.id } }], MAP_RECORD.request.party.id)).toHaveLength(1)
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    expect(api).toContain('people: z.array(z.object({ size: z.string().nullable() }))')
+  })
+
+  it('the receipt: what was made, the customer\'s logos carried (or not), the customer\'s prices taken over (price holders)', () => {
+    const made = { as: 'QUOTE' as const, salesOrderId: null, quoteId: 'q1', number: 'QT-DEMO-00012', dropped: [{ seq: 3, size: '56', reason: 'x' }], warnings: [], lines: [], artwork: { carried: [{ sourceFileId: 'f1', name: 'logo.ai' }, { sourceFileId: 'f2', name: 'back.ai' }], notCarried: [] }, brandPrices: 0 }
+    expect(acceptDone(made, 'RQ-1')).toEqual({
+      phrase: { key: 'catalogue.done.quote', params: { made: 'QT-DEMO-00012', number: 'RQ-1' } },
+      lines: [{ key: 'catalogue.done.droppedSize', params: { n: 3, size: '56' } }, { key: 'catalogueMap.done.logos', params: { count: 2, made: 'QT-DEMO-00012' } }],
+      warn: true,
+    })
+    const order = acceptDone({ ...made, as: 'ORDER', dropped: [], artwork: { carried: [], notCarried: [{ sourceFileId: 'f3', name: 'x.ai', reason: 'gone' }] }, brandPrices: 2 }, 'RQ-1')
+    expect(order.lines).toEqual([{ key: 'catalogueMap.done.logosNot', params: { count: 1 } }, { key: 'catalogueMap.done.brandPrices', params: { count: 2, made: 'QT-DEMO-00012' } }])
+    expect(acceptDone({ ...made, dropped: [], artwork: { carried: [{ sourceFileId: 'f1', name: 'logo.ai' }], notCarried: [] } }, 'RQ-1').warn).toBe(false)
+  })
+
+  it('the "Portal order" word, and every new word in both languages (placeholders kept)', () => {
+    expect(words('en')['catalogue.title']).toContain('Portal order')
+    expect(words('it')['catalogue.title']).toContain('Ordine dal portale')
+    const keys = ['title', 'hint', 'line', 'kind.DESCRIBED', 'kind.MADE_TO_MEASURE', 'pieces_one', 'pieces_other', 'people_one', 'people_other', 'peopleInSheet', 'ownSizes', 'noSizes', 'note', 'into', 'sizesHint', 'add', 'addMax', 'remove', 'noStylesRight', 'colourFirst', 'mapOrder', 'mapQuote', 'mapLabel', 'col.asked', 'col.becomes', 'notMapped', 'mtmHint', 'held.madeToMeasure_one', 'held.madeToMeasure_other', 'held.quoteOnly', 'held.unmapped_one', 'held.unmapped_other', 'held.half', 'held.tooMany', 'held.badSizes', 'held.sizesOfEach', 'held.sizesOfPeople', 'held.sizesOfTotal', 'held.badPrice', 'done.logos_one', 'done.logos_other', 'done.logosNot_one', 'done.logosNot_other', 'done.brandPrices_one', 'done.brandPrices_other']
+    const holes = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort()
+    for (const key of keys) {
+      const en = words('en')[`catalogueMap.${key}`]
+      const it = words('it')[`catalogueMap.${key}`]
+      expect(en, `en ${key}`).toBeTruthy()
+      expect(it, `it ${key}`).toBeTruthy()
+      expect(holes(it!), key).toEqual(holes(en!))
+    }
+  })
+
+  it('the design cases: as Owner the map and its held words; as Sales worker no price field (M-CP-1)', () => {
+    const html = (id: string) => render(listScreen as DesignScreen<unknown>, listScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const owner = html('cp-157-accept-map')
+    expect(owner).toContain('Lines to map')
+    expect(owner).toContain('Not mapped yet')
+    expect(owner).toContain('The line map: what the quote gets')
+    expect(owner).not.toContain('OTHER-LBL-01')
+    const order = html('cp-157-accept-map-order')
+    expect(order).toContain('Unit price')
+    const sales = html('cp-157-accept-map-sales')
+    expect(sales).toContain('Lines to map')
+    expect(sales).not.toContain('Unit price')
+  })
+})
+// ---- end F-CP-157

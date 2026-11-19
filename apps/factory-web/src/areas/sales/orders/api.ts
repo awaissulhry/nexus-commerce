@@ -255,6 +255,10 @@ export interface OrderQuery {
   waiting?: 'us' | null
   /** F-SA-276: only these rows (≤ 50: a live read again of the rows in view, values in place). */
   ids?: readonly string[] | null
+  // ── F-CP-141 (customer page plan C2d; the API's B-CP-018): the price check term — the list, its totals and its file read it (never
+  // the board); a price holder's only (403 in words otherwise: the sheet never sends it for anyone else) ──
+  priceMatch?: PriceMatch | null
+  // ── end F-CP-141 ──
   q?: string
   cursor?: string | null
   limit?: number
@@ -286,6 +290,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       production: query.production ? 'true' : undefined, // F-SA-275
       waiting: query.waiting ?? undefined, // F-SA-276
       ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
+      priceMatch: query.priceMatch ?? undefined, // F-CP-141
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -363,6 +368,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       kind: query.kind ?? undefined, // F-SA-221
       profile: query.profile ?? undefined, // F-SA-222
       waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
+      priceMatch: query.priceMatch ?? undefined, // F-CP-141: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },

@@ -69,3 +69,17 @@
   outline: 2px solid var(--nds-primary);
   outline-offset: 1px;
 }
+
+/* F-CP-105: "Columns: Work · Money" at the Orders sheet toolbar's start — its visible label beside the DS SegmentedControl. */
+.fw-pc-cols {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pc-cols-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
